@@ -97,6 +97,7 @@ class SecurityScansController extends Controller
         WpCoreChecksumVerifier $checksums,
         SecurityScanRecorder $recorder,
     ): RedirectResponse {
+        set_time_limit(300); // 5 minutes for security scans (Pressable commands need 120s + buffer)
         $type = (string) $request->input('type', 'all');
         $ranLabels = [];
 
