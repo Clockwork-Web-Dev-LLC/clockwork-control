@@ -1,0 +1,14 @@
+{
+    "name": "clockwork/core",
+    "description": "Shared module kernel: ModuleServiceProvider, ModuleRegistry, and the CloudProvider/HostingProvider contracts every other Clockwork module implements.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Core\\": "src/"
+        }
+    }
+}

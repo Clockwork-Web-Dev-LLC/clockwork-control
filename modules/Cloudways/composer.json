@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/cloudways",
+    "description": "Cloudways HostingProvider + CloudProvider module for Clockwork Control Panel — real servers hosting multiple apps each, with full SSH access, matching the SpinupWP shape.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Cloudways\\": "src/"
+        }
+    }
+}

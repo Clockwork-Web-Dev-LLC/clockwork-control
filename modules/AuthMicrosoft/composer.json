@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/auth-microsoft",
+    "description": "Microsoft 365 / Entra ID OAuth authentication module for Clockwork Control Panel",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\AuthMicrosoft\\": "src/"
+        }
+    }
+}

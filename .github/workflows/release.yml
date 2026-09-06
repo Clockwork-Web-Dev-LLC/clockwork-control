@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG.md
+        id: release_notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Extracting release notes for version ${VERSION}..."
+
+          # Extract notes between ## [VERSION] and the next ## [ heading
+          NOTES=$(awk "/^## \[v?${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba')
+
+          if [ -z "$NOTES" ]; then
+            echo "No dedicated section found for ${VERSION} in CHANGELOG.md; falling back to commit message."
+            NOTES=$(git log -1 --pretty=format:"%B")
+          fi
+
+          # Multiline output delimiter for GITHUB_OUTPUT
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          TITLE: "Clockwork Control ${{ github.ref_name }}"
+          BODY: ${{ steps.release_notes.outputs.notes }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$TITLE" \
+            --notes "$BODY"

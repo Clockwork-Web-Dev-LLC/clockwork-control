@@ -1,0 +1,499 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/CheckBlacklists.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/CheckCloudflare.php
+
+		-
+			message: '#^Parameter \#2 \$stuckForSeconds of method App\\Services\\Chat\\ChatNotifier\:\:companionReachable\(\) expects int\|null, float given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Console/Commands/DetectStuckCompanionState.php
+
+		-
+			message: '#^Parameter \#2 \$syntax of method Carbon\\Carbon\:\:diffForHumans\(\) expects array\|int\|null, true given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Console/Commands/DetectStuckCompanionState.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/DetectWpPlugins.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/EnsureCompanionTrustProxy.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/ExtractWpConfigs.php
+
+		-
+			message: '#^Parameter \#1 \$results of method App\\Services\\Sites\\OrphanSiteFinder\:\:persist\(\) expects Illuminate\\Support\\Collection\<int, array\{site\: App\\Models\\Site, classification\: string, parent\: App\\Models\\Site\|null, matched_domain\: string\|null\}\>, Illuminate\\Support\\Collection\<int, array\{site\: App\\Models\\Site, classification\: string, parent\: App\\Models\\Site\|null, matched_domain\: string\|null\}\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Console/Commands/FindOrphanSites.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/IngestRotatedLogs.php
+
+		-
+			message: '#^Call to function unset\(\) contains undefined variable \$filtered\.$#'
+			identifier: unset.variable
+			count: 1
+			path: app/Console/Commands/IngestRotatedLogs.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Console/Commands/InstallCompanion.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$domain\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Console/Commands/NightlyUpdateSummary.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>domain" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Console/Commands/NightlyUpdateSummary.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/PushCompanionBackupsReport.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/PushCompanionTraffic.php
+
+		-
+			message: '#^Parameter \#1 \$site of method App\\Services\\Chat\\ChatNotifier\:\:pluginUpdateFailed\(\) expects App\\Models\\Site, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Console/Commands/ReapStaleUpdateJobs.php
+
+		-
+			message: '#^Method App\\Console\\Commands\\RollupTraffic\:\:buildBotRegex\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Console/Commands/RollupTraffic.php
+
+		-
+			message: '#^Property App\\Console\\Commands\\RollupTraffic\:\:\$botRegex \(string\|null\) is never assigned string so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: app/Console/Commands/RollupTraffic.php
+
+		-
+			message: '#^Property App\\Console\\Commands\\RollupTraffic\:\:\$botRegex is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Console/Commands/RollupTraffic.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/ScanWp7Truncation.php
+
+		-
+			message: '#^Offset ''php_in_uploads…'' on array\{php_in_uploads_suppressed\: list\<mixed\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Console/Commands/SuppressMalwarePath.php
+
+		-
+			message: '#^Offset ''php_in_uploads…'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Console/Commands/SuppressMalwarePath.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{\}\) to function array_values is empty, call has no effect\.$#'
+			identifier: arrayValues.empty
+			count: 1
+			path: app/Console/Commands/SuppressMalwarePath.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between \*NEVER\* and \*NEVER\* will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Console/Commands/SuppressMalwarePath.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Console/Commands/TailNginxLogs.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/CapacityController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/IssuesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$poll_status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/OperationsUpdatesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$polled_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/OperationsUpdatesController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\ReviewQueueController\:\:aggregateByIp\(\) should return Illuminate\\Support\\Collection\<int, array\{ip\: string, total_occurrences\: int, sites\: array\<int, string\>, servers\: array\<int, array\{id\: int, name\: string\}\>, multi_server\: bool, latest_at\: Illuminate\\Support\\Carbon\|null, source\: string, entry_ids\: array\<int, int\>\}\> but returns Illuminate\\Support\\Collection\<int, array\{ip\: string, total_occurrences\: int, sites\: list\<mixed\>, servers\: list\<array\{id\: int, name\: string\}\>, multi_server\: bool, latest_at\: Illuminate\\Support\\Carbon\|null, source\: string, entry_ids\: array\<mixed\>\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Http/Controllers/ReviewQueueController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>timestamp" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/ReviewQueueController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Server\:\:\$timezone\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/ServerUpdateController.php
+
+		-
+			message: '#^Cannot call method format\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Controllers/Sites/DomainExpirationController.php
+
+		-
+			message: '#^Cannot call method toIso8601String\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Controllers/Sites/DomainExpirationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$server\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Offset ''ok'' on array\{ok\: false, error\: string\}\|array\{ok\: true, history_runs\: int\<0, max\>, schedules\: int\<0, max\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Offset ''ok'' on array\{ok\: false, error\: string\}\|array\{ok\: true, plugins\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>bytes_sent" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>requests" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status_2xx" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status_3xx" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status_4xx" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status_5xx" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>top_paths" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>unique_ips" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>visits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/SitesController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$domain\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/UpdatesController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\PluginUpdateJob\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 2
+			path: app/Http/Controllers/UpdatesController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Models/Site.php
+
+		-
+			message: '#^Cannot call method lessThanOrEqualTo\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Models/Site.php
+
+		-
+			message: '#^Cannot call method diffInDays\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Services/Domains/DomainExpirationChecker.php
+
+		-
+			message: '#^Cannot call method diffInHours\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: app/Services/Domains/DomainExpirationChecker.php
+
+		-
+			message: '#^Offset ''method'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''path'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''protocol'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''referer'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''size'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''ua'' on array\{0\: non\-falsy\-string, ip\: non\-empty\-string, 1\: non\-empty\-string, time\: non\-empty\-string, 2\: non\-empty\-string, method\: non\-empty\-string, 3\: non\-empty\-string, path\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Logs/NginxLogParser.php
+
+		-
+			message: '#^Offset ''php_in_uploads…'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/Security/CompanionMalwareScanner.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{\}\) to function array_values is empty, call has no effect\.$#'
+			identifier: arrayValues.empty
+			count: 1
+			path: app/Services/Security/CompanionMalwareScanner.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between 0 and 0 will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: app/Services/Security/WpCoreChecksumVerifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Services/Security/WpVulnerabilityClient.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:monitored\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Sites/OrphanSiteFinder.php
+
+		-
+			message: '#^Method App\\Services\\Sites\\OrphanSiteFinder\:\:find\(\) should return Illuminate\\Support\\Collection\<int, array\{site\: App\\Models\\Site, classification\: string, parent\: App\\Models\\Site\|null, matched_domain\: string\|null\}\> but returns Illuminate\\Support\\Collection\<int, array\{site\: App\\Models\\Site, classification\: string, parent\: App\\Models\\Site, matched_domain\: string\}\|array\{site\: App\\Models\\Site, classification\: string, parent\: null, matched_domain\: null\}\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Sites/OrphanSiteFinder.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Services/Sites/WpConfigExtractor.php
+
+		-
+			message: '#^Offset 1 on array\{non\-falsy\-string, ''''\|numeric\-string, non\-empty\-string, non\-empty\-string\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Services/Ssh/CredentialFeedParser.php
+
+		-
+			message: '#^Property App\\Models\\Site\:\:\$cert_expires_at \(Illuminate\\Support\\Carbon\|null\) does not accept Carbon\\CarbonImmutable\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Services/Ssl/SslChecker.php
+
+		-
+			message: '#^Called ''count'' on Laravel collection, but could have been retrieved as a query\.$#'
+			identifier: larastan.noUnnecessaryCollectionCall
+			count: 1
+			path: app/Support/IssueCounter.php
+
+		-
+			message: '#^Cannot call method format\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Expires'', value\: mixed, short\: true\}, array\{title\: ''Registrar'', value\: mixed, short\: true\}\}\|non\-empty\-string and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Expires'', value\: mixed, short\: true\}, array\{title\: ''Registrar'', value\: mixed, short\: true\}\}\|string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Expires'', value\: mixed, short\: true\}, array\{title\: ''Renews'', value\: mixed, short\: true\}, array\{title\: ''Cert source'', value\: mixed, short\: true\}\}\|non\-empty\-string and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Expires'', value\: mixed, short\: true\}, array\{title\: ''Renews'', value\: mixed, short\: true\}, array\{title\: ''Cert source'', value\: mixed, short\: true\}\}\|string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Reason'', value\: string, short\: true\}, array\{title\: ''Snippet'', value\: string, short\: false\}\}\|string and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}, array\{title\: ''Reason'', value\: string, short\: true\}, array\{title\: ''Snippet'', value\: string, short\: false\}\}\|string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}\}\|string and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{array\{title\: ''Site'', value\: mixed, short\: true\}, array\{title\: ''Server'', value\: mixed, short\: true\}\}\|string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 10
+			path: modules/Core/src/Support/WebhookChatNotifier.php
+
+		-
+			message: '#^Offset ''default'' on array\{label\: ''Backup relay silent'', description\: ''The offsite \(S3…'', default\: true\}\|array\{label\: ''Backup relay…'', description\: ''The backup relay is…'', default\: true\}\|array\{label\: ''Companion recovered'', description\: ''A site previously…'', default\: true\}\|array\{label\: ''Companion…'', description\: ''Companion mu\-plugin…'', default\: true\}\|array\{label\: ''Contact form failing'', description\: ''Contact form smoke…'', default\: true\}\|array\{label\: ''Contact form…'', description\: ''Contact form smoke…'', default\: true\}\|array\{label\: ''Domain expiration…'', description\: ''Domain expiration…'', default\: true\}\|array\{label\: ''IP blocked'', description\: ''fail2ban auto…'', default\: true\}\|array\{label\: ''LLAR auto\-installed'', description\: ''Limit Login…'', default\: true\}\|array\{label\: ''Malware finding…'', description\: ''A security scan …'', default\: true\}\|array\{label\: ''Plugin auto\-update…'', description\: ''Nightly plugin…'', default\: true\}\|array\{label\: ''Queue worker…'', description\: ''The com\.clockwork…'', default\: true\}\|array\{label\: ''SEO indexability…'', description\: ''A production site…'', default\: true\}\|array\{label\: ''SEO indexability…'', description\: ''A site previously…'', default\: true\}\|array\{label\: ''Server update failed'', description\: ''A queued apt\-get…'', default\: true\}\|array\{label\: ''Site recovered'', description\: ''Uptime probe…'', default\: true\}\|array\{label\: ''Site went down'', description\: ''Uptime probe…'', default\: true\}\|array\{label\: ''SSL state changed'', description\: ''Certificate state…'', default\: true\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: modules/Mattermost/src/MattermostSettingsController.php
+
+		-
+			message: '#^Offset ''default'' on array\{label\: ''Backup relay silent'', description\: ''The offsite \(S3…'', default\: true\}\|array\{label\: ''Backup relay…'', description\: ''The backup relay is…'', default\: true\}\|array\{label\: ''Companion recovered'', description\: ''A site previously…'', default\: true\}\|array\{label\: ''Companion…'', description\: ''Companion mu\-plugin…'', default\: true\}\|array\{label\: ''Contact form failing'', description\: ''Contact form smoke…'', default\: true\}\|array\{label\: ''Contact form…'', description\: ''Contact form smoke…'', default\: true\}\|array\{label\: ''Domain expiration…'', description\: ''Domain expiration…'', default\: true\}\|array\{label\: ''IP blocked'', description\: ''fail2ban auto…'', default\: true\}\|array\{label\: ''LLAR auto\-installed'', description\: ''Limit Login…'', default\: true\}\|array\{label\: ''Malware finding…'', description\: ''A security scan …'', default\: true\}\|array\{label\: ''Plugin auto\-update…'', description\: ''Nightly plugin…'', default\: true\}\|array\{label\: ''Queue worker…'', description\: ''The com\.clockwork…'', default\: true\}\|array\{label\: ''SEO indexability…'', description\: ''A production site…'', default\: true\}\|array\{label\: ''SEO indexability…'', description\: ''A site previously…'', default\: true\}\|array\{label\: ''Server update failed'', description\: ''A queued apt\-get…'', default\: true\}\|array\{label\: ''Site recovered'', description\: ''Uptime probe…'', default\: true\}\|array\{label\: ''Site went down'', description\: ''Uptime probe…'', default\: true\}\|array\{label\: ''SSL state changed'', description\: ''Certificate state…'', default\: true\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: modules/Slack/src/SlackSettingsController.php

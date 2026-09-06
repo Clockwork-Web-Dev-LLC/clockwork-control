@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/azure",
+    "description": "Azure CloudProvider module for Clockwork Control Panel — VM metrics, size tiers, IP matching.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Azure\\": "src/"
+        }
+    }
+}

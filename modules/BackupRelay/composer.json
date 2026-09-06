@@ -1,0 +1,14 @@
+{
+    "name": "clockwork/backup-relay",
+    "description": "Cross-provider backup relay and S3 Glacier archival module.",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Modules\\BackupRelay\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.4",
+        "clockwork/core": "*"
+    }
+}

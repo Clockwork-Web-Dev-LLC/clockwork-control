@@ -1,0 +1,16 @@
+{
+    "name": "clockwork/auth-google",
+    "description": "Google OAuth authentication module for Clockwork Control Panel",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev",
+        "laravel/socialite": "^5.27"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\AuthGoogle\\": "src/"
+        }
+    }
+}

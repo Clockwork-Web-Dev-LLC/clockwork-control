@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/llar",
+    "description": "Limit Login Attempts Reloaded brute-force login attack protection and lockout log ingest module for Clockwork Control Panel",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Llar\\": "src/"
+        }
+    }
+}

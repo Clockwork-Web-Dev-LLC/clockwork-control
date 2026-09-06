@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/client-slack",
+    "description": "Sends a subset of alerts to a per-site Slack webhook a client configures themselves in wp-admin.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\ClientSlack\\": "src/"
+        }
+    }
+}

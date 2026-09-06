@@ -1,0 +1,16 @@
+{
+    "name": "clockwork/twilio",
+    "description": "Twilio SMS on-call paging for site-down/up alerts on care-plan sites — an independently installable SmsNotifier module.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev",
+        "twilio/sdk": "^8.11"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Twilio\\": "src/"
+        }
+    }
+}

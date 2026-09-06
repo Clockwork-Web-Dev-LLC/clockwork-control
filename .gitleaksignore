@@ -1,0 +1,63 @@
+# Known-safe findings, allowlisted by exact gitleaks fingerprint — never a
+# blanket rule/path exception. Add a new entry only after confirming by hand
+# that the flagged value is genuinely not a secret.
+
+# .env.testing's APP_KEY is a dedicated test-only key, committed on purpose
+# (see .env.testing's own header comment) — it only ever encrypts the
+# throwaway in-memory sqlite test database, never production data.
+.env.testing:laravel-app-key:18
+
+# ReencryptSecretsTest.php's SSH private key fixture is a literal placeholder
+# string ("fixture-only-not-real") between real PEM header/footer lines, used
+# to prove Server::ssh_private_key round-trips through a simulated APP_KEY
+# rotation — matched by gitleaks' private-key rule on the PEM markers alone,
+# not on any actual key material. The test's own file-header comment explains
+# every value here is a random per-run fixture, never a real key.
+tests/Feature/Console/ReencryptSecretsTest.php:private-key:51
+
+# contributing.md's WP Engine .env example uses the human-readable
+# placeholder "your-api-password" (18 chars) — long enough to clear
+# clockwork-env-secret-assignment's 16-char length heuristic despite being
+# an obvious non-secret (hyphenated words, not a real credential shape).
+# The doc's own preceding callout explicitly instructs contributors to
+# paste real credentials into .env only, never into this file.
+resources/docs/getting-started/contributing.md:clockwork-env-secret-assignment:83
+
+# ContactFormsModuleTest.php's companion_secret fixture value ("valid-secret-1234")
+# is a literal test placeholder, not a real Companion HMAC secret — the test
+# only checks eligibility logic (companion_installed + a non-empty secret
+# column), never sends this value anywhere.
+tests/Unit/Modules/ContactFormsModuleTest.php:generic-api-key:42
+
+# ServiceApiLimitsControllerTest.php's credential fixture values are
+# synthetic test-only placeholders (shaped like a DigitalOcean token and a
+# GitHub OAuth secret) exercising EnvCredentialManager::save() against a
+# throwaway temp .env file — never a real credential, never sent anywhere.
+# (Deliberately not quoted verbatim here — the literal strings themselves
+# match the same generic-api-key pattern this file exists to allowlist.)
+tests/Feature/Controllers/ServiceApiLimitsControllerTest.php:generic-api-key:288
+tests/Feature/Controllers/ServiceApiLimitsControllerTest.php:generic-api-key:438
+
+# .env.example's APP_KEY is a freshly-generated, valid-format placeholder
+# (base64:...==, real base64 so the installer's own "already valid?" check
+# passes) committed on purpose so a bare `composer install` with no .env
+# edits boots and can serve the /install wizard — see plans/installer.md's
+# "pre-boot bootability" requirement. It's a template value with zero
+# real-world binding, encrypting nothing until an operator's install run
+# replaces it with a freshly-generated key (InstallerController::install()).
+.env.example:laravel-app-key:3
+
+# InstallerWizardTest.php's 'GOCSPX-secret123' is a literal test fixture for
+# the Google OAuth step's client_secret field — shaped like a real Google
+# client secret prefix so the step's validation/prefill logic is actually
+# exercised, but the value itself is an obvious placeholder, never sent
+# anywhere, never a real credential.
+tests/Feature/Installer/InstallerWizardTest.php:generic-api-key:73
+
+# AnonymizedSnapshotSeeder::fakeSshKey() generates a fresh dummy SSH key
+# (real PEM header/footer wrapped around "DEMO-KEY-NOT-REAL-" + random hex)
+# every time the marketing-screenshot demo DB is seeded, so composer
+# screenshots never needs a real SSH key at rest — matched by gitleaks'
+# private-key rule on the PEM markers alone, same false-positive shape as
+# ReencryptSecretsTest.php above.
+database/seeders/AnonymizedSnapshotSeeder.php:private-key:105

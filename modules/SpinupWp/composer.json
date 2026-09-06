@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/spinupwp",
+    "description": "SpinupWP HostingProvider module for Clockwork Control Panel — self-managed WordPress hosting with full SSH access.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\SpinupWp\\": "src/"
+        }
+    }
+}

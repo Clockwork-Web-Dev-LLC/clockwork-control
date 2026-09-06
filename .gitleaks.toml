@@ -1,0 +1,32 @@
+title = "Clockwork gitleaks config"
+
+# Extends gitleaks' built-in ruleset (AWS/GitHub/Stripe/etc.) rather than
+# replacing it. Added on top because a real incident (commit 1b4fc08,
+# 2026-09-02 cleanup) proved the defaults alone miss this app's actual
+# secret shapes: a Laravel APP_KEY and a leaked SpinupWP token both scanned
+# clean under gitleaks' out-of-the-box rules.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "laravel-app-key"
+description = "Laravel APP_KEY (base64: prefixed cipher key)"
+regex = '''APP_KEY\s*=\s*base64:[A-Za-z0-9+/]{40,}=*'''
+tags = ["key", "laravel"]
+
+[[rules]]
+id = "clockwork-env-secret-assignment"
+description = "A CLOCKWORK_*_TOKEN/KEY/SECRET/PASSWORD env assignment with a real-looking (16+ char) value — not a comment, not a short placeholder like '...' or 'false'"
+regex = '''(?m)^CLOCKWORK_[A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD)=[A-Za-z0-9+/_.=-]{16,}$'''
+tags = ["clockwork", "env"]
+
+# Dedicated, human-reviewed throwaway env files — same filename allowlist
+# .githooks/pre-commit already grants (.env.testing). Its APP_KEY only ever
+# encrypts/decrypts a disposable test database, never a real secret, so its
+# APP_KEY line legitimately trips the laravel-app-key rule above without being
+# a real leak.
+[allowlist]
+description = "Dedicated throwaway env files reviewed to contain zero real secrets"
+paths = [
+    '''^\.env\.testing$''',
+]

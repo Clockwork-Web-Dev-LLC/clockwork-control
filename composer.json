@@ -1,0 +1,328 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "clockwork-web-dev/clockwork-control",
+    "type": "project",
+    "description": "Self-hosted fleet control panel for WordPress agencies \u2014 server health, uptime, SSL, security, and performance across DigitalOcean/Hetzner/Azure servers and SpinupWP/Pressable hosting.",
+    "keywords": [
+        "laravel",
+        "wordpress",
+        "monitoring",
+        "fleet-management",
+        "control-panel",
+        "hosting"
+    ],
+    "homepage": "https://clockworkcontrol.com",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Aaron Reimann",
+            "homepage": "https://clockworkcontrol.com",
+            "role": "Creator & Lead Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "bopoda/robots-txt-parser": "^2.5",
+        "clockwork/auth-github": "@dev",
+        "clockwork/auth-google": "@dev",
+        "clockwork/auth-microsoft": "@dev",
+        "clockwork/azure": "@dev",
+        "clockwork/backup-relay": "@dev",
+        "clockwork/bill-com": "@dev",
+        "clockwork/client-slack": "@dev",
+        "clockwork/cloudways": "@dev",
+        "clockwork/contact-forms": "@dev",
+        "clockwork/core": "@dev",
+        "clockwork/digitalocean": "@dev",
+        "clockwork/gridpane": "@dev",
+        "clockwork/gtmetrix": "@dev",
+        "clockwork/hetzner": "@dev",
+        "clockwork/kinsta": "@dev",
+        "clockwork/linode": "@dev",
+        "clockwork/llar": "@dev",
+        "clockwork/mattermost": "@dev",
+        "clockwork/pagespeed-insights": "@dev",
+        "clockwork/pressable": "@dev",
+        "clockwork/slack": "@dev",
+        "clockwork/spinupwp": "@dev",
+        "clockwork/sucuri": "@dev",
+        "clockwork/twilio": "@dev",
+        "clockwork/vultr": "@dev",
+        "clockwork/wpengine": "@dev",
+        "doctrine/dbal": "^4.4",
+        "jeremykendall/php-domain-parser": "^6.4",
+        "laravel/framework": "^13.0",
+        "laravel/socialite": "^5.27",
+        "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.32",
+        "phpseclib/phpseclib": "^3.0",
+        "symfony/http-client": "^8.0",
+        "symfony/mailgun-mailer": "^8.0",
+        "twilio/sdk": "^8.11"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "modules/BackupRelay",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Azure",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Hetzner",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/DigitalOcean",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Pressable",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/SpinupWp",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/WPEngine",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Kinsta",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Cloudways",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/GridPane",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Mattermost",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Slack",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/BillCom",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/ClientSlack",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Twilio"
+        },
+        {
+            "type": "path",
+            "url": "modules/Vultr",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Linode",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/GTmetrix",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/AuthGoogle",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/AuthGitHub",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/AuthMicrosoft",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/PageSpeedInsights",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Sucuri",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/ContactForms",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/Llar",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.0",
+        "laravel/pail": "^1.2.5",
+        "laravel/pao": "^1.0.6",
+        "laravel/pint": "^1.27",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "pestphp/pest": "^4.6",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.1",
+        "phpunit/phpunit": "^12.5.12"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Modules\\Llar\\": "modules/Llar/src/",
+            "Modules\\BackupRelay\\": "modules/BackupRelay/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "setup": [
+            "composer install",
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php artisan migrate --force",
+            "npm install --ignore-scripts",
+            "npm run build"
+        ],
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
+        ],
+        "test": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test"
+        ],
+        "phpstan": [
+            "vendor/bin/phpstan analyse --memory-limit=2G"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi",
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "@php artisan migrate --graceful --ansi"
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        },
+        "platform": {
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

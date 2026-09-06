@@ -1,0 +1,733 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@400;500;600;700&family=Poppins:wght@400;500;600&family=Roboto:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+@import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
+@import '@fortawesome/fontawesome-free/css/solid.min.css';
+@import '@fortawesome/fontawesome-free/css/regular.min.css';
+@import '@fortawesome/fontawesome-free/css/brands.min.css';
+
+/* Alpine.js x-cloak — hide elements until Alpine has booted so toggleable
+   things (modals, dropdowns) don't flash visible during page render. */
+[x-cloak] { display: none !important; }
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    /* Typography — MiniMax multi-font system */
+    --font-sans: 'DM Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-display: 'Outfit', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-mid: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-data: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+    /* Brand */
+    --color-brand: #1456f0;
+    --color-brand-deep: #17437d;
+    --color-brand-pink: #ea5ec1;
+    --color-brand-sky: #3daeff;
+
+    /* Primary (blue) scale */
+    --color-primary-200: #bfdbfe;
+    --color-primary-light: #60a5fa;
+    --color-primary-500: #3b82f6;
+    --color-primary-600: #2563eb;
+    --color-primary-700: #1d4ed8;
+
+    /* Text */
+    --color-ink: #222222;
+    --color-ink-strong: #18181b;
+    --color-ink-muted: #45515e;
+    --color-ink-soft: #8e8e93;
+    --color-ink-helper: #5f5f5f;
+
+    /* Surfaces */
+    --color-surface: #ffffff;
+    --color-surface-alt: #f0f0f0;
+    --color-surface-dark: #181e25;
+    --color-border-light: #f2f3f5;
+    --color-border: #e5e7eb;
+
+    /* Status (semantic — server health) */
+    --color-status-green: #16a34a;
+    --color-status-green-bg: #e8ffea;
+    --color-status-yellow: #d97706;
+    --color-status-yellow-bg: #fff7ed;
+    --color-status-red: #dc2626;
+    --color-status-red-bg: #fef2f2;
+    --color-status-unknown: #8e8e93;
+    --color-status-unknown-bg: #f3f4f6;
+
+    /* Brand — Cloudflare orange (used for "CF proxy active" pill + cloud icon) */
+    --color-cf-orange: #F38020;
+    --color-cf-orange-bg: #fff4e6;
+
+    /* Radius scale */
+    --radius-card: 16px;
+    --radius-card-lg: 20px;
+    --radius-pill: 9999px;
+
+    /* Shadows */
+    --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.08);
+    --shadow-card-lift: 0 12px 16px -4px rgba(36, 36, 36, 0.08);
+    --shadow-brand-glow: 0 0 15px rgba(44, 30, 116, 0.16);
+}
+
+/* Theme Palette Definitions */
+
+/* 1. Default / Light Scheme */
+:root,
+:root[data-theme="light"] {
+    color-scheme: light;
+    --color-surface: #ffffff;
+    --color-surface-alt: #f4f5f7;
+    --color-surface-dark: #181e25;
+    --color-border-light: #f2f3f5;
+    --color-border: #e5e7eb;
+
+    --color-ink: #222222;
+    --color-ink-strong: #18181b;
+    --color-ink-muted: #45515e;
+    --color-ink-soft: #8e8e93;
+    --color-ink-helper: #5f5f5f;
+
+    --color-status-green: #16a34a;
+    --color-status-green-bg: #e8ffea;
+    --color-status-yellow: #d97706;
+    --color-status-yellow-bg: #fff7ed;
+    --color-status-red: #dc2626;
+    --color-status-red-bg: #fef2f2;
+    --color-status-unknown: #8e8e93;
+    --color-status-unknown-bg: #f3f4f6;
+
+    --color-cf-orange: #F38020;
+    --color-cf-orange-bg: #fff4e6;
+
+    --color-nav-bg: rgba(0, 0, 0, 0.05);
+    --color-nav-hover: rgba(0, 0, 0, 0.08);
+    --color-nav-active-bg: var(--color-ink-strong);
+    --color-nav-active-ink: #ffffff;
+    --color-nav-active-border: transparent;
+
+    --color-btn-primary-bg: var(--color-ink-strong);
+    --color-btn-primary-ink: #ffffff;
+    --color-btn-primary-hover: #000000;
+
+    --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* 2. Dark Scheme (built on staged --color-surface-dark: #181e25) */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-surface: #181e25;
+    --color-surface-alt: #1e2630;
+    --color-surface-dark: #101419;
+    --color-border-light: #252e3a;
+    --color-border: #333e4e;
+
+    --color-ink: #e6e8eb;
+    --color-ink-strong: #f8fafc;
+    --color-ink-muted: #94a3b8;
+    --color-ink-soft: #64748b;
+    --color-ink-helper: #94a3b8;
+
+    --color-primary-200: #1e3a8a;
+    --color-primary-light: #93c5fd;
+    --color-primary-500: #60a5fa;
+    --color-primary-600: #3b82f6;
+    --color-primary-700: #2563eb;
+
+    --color-status-green: #22c55e;
+    --color-status-green-bg: rgba(34, 197, 94, 0.15);
+    --color-status-yellow: #f59e0b;
+    --color-status-yellow-bg: rgba(245, 158, 11, 0.15);
+    --color-status-red: #ef4444;
+    --color-status-red-bg: rgba(239, 68, 68, 0.15);
+    --color-status-unknown: #94a3b8;
+    --color-status-unknown-bg: rgba(148, 163, 184, 0.15);
+
+    --color-cf-orange: #fb923c;
+    --color-cf-orange-bg: rgba(251, 146, 60, 0.15);
+
+    --color-nav-bg: rgba(255, 255, 255, 0.08);
+    --color-nav-hover: rgba(255, 255, 255, 0.14);
+    --color-nav-active-bg: rgba(255, 255, 255, 0.16);
+    --color-nav-active-ink: #ffffff;
+    --color-nav-active-border: rgba(255, 255, 255, 0.22);
+
+    --color-btn-primary-bg: #ffffff;
+    --color-btn-primary-ink: #0f172a;
+    --color-btn-primary-hover: #e2e8f0;
+
+    --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* 3. Midnight Scheme (deep navy / Darcula palette) */
+:root[data-theme="midnight"] {
+    color-scheme: dark;
+    --color-surface: #0f172a;
+    --color-surface-alt: #1e293b;
+    --color-surface-dark: #090e1a;
+    --color-border-light: #1e293b;
+    --color-border: #334155;
+
+    --color-ink: #e2e8f0;
+    --color-ink-strong: #ffffff;
+    --color-ink-muted: #94a3b8;
+    --color-ink-soft: #64748b;
+    --color-ink-helper: #cbd5e1;
+
+    --color-primary-200: #1e3a8a;
+    --color-primary-light: #93c5fd;
+    --color-primary-500: #60a5fa;
+    --color-primary-600: #3b82f6;
+    --color-primary-700: #2563eb;
+
+    --color-status-green: #34d399;
+    --color-status-green-bg: rgba(52, 211, 153, 0.15);
+    --color-status-yellow: #fbbf24;
+    --color-status-yellow-bg: rgba(251, 191, 36, 0.15);
+    --color-status-red: #f87171;
+    --color-status-red-bg: rgba(248, 113, 113, 0.15);
+    --color-status-unknown: #94a3b8;
+    --color-status-unknown-bg: rgba(148, 163, 184, 0.15);
+
+    --color-cf-orange: #fb923c;
+    --color-cf-orange-bg: rgba(251, 146, 60, 0.15);
+
+    --color-nav-bg: rgba(255, 255, 255, 0.08);
+    --color-nav-hover: rgba(255, 255, 255, 0.14);
+    --color-nav-active-bg: rgba(255, 255, 255, 0.16);
+    --color-nav-active-ink: #ffffff;
+    --color-nav-active-border: rgba(255, 255, 255, 0.22);
+
+    --color-btn-primary-bg: #ffffff;
+    --color-btn-primary-ink: #0f172a;
+    --color-btn-primary-hover: #e2e8f0;
+
+    --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* 4. High Contrast Scheme (high-visibility accessibility) */
+:root[data-theme="high-contrast"] {
+    color-scheme: dark;
+    --color-surface: #000000;
+    --color-surface-alt: #121212;
+    --color-surface-dark: #050505;
+    --color-border-light: #71717a;
+    --color-border: #ffffff;
+
+    --color-ink: #ffffff;
+    --color-ink-strong: #ffffff;
+    --color-ink-muted: #e4e4e7;
+    --color-ink-soft: #a1a1aa;
+    --color-ink-helper: #ffffff;
+
+    --color-primary-200: #3b82f6;
+    --color-primary-light: #bfdbfe;
+    --color-primary-500: #93c5fd;
+    --color-primary-600: #60a5fa;
+    --color-primary-700: #3b82f6;
+
+    --color-status-green: #4ade80;
+    --color-status-green-bg: rgba(74, 222, 128, 0.25);
+    --color-status-yellow: #fde047;
+    --color-status-yellow-bg: rgba(253, 224, 71, 0.25);
+    --color-status-red: #f87171;
+    --color-status-red-bg: rgba(248, 113, 113, 0.25);
+    --color-status-unknown: #e4e4e7;
+    --color-status-unknown-bg: rgba(228, 228, 231, 0.25);
+
+    --color-cf-orange: #fdba74;
+    --color-cf-orange-bg: rgba(253, 186, 116, 0.25);
+
+    --color-nav-bg: rgba(255, 255, 255, 0.15);
+    --color-nav-hover: rgba(255, 255, 255, 0.25);
+    --color-nav-active-bg: #ffffff;
+    --color-nav-active-ink: #000000;
+    --color-nav-active-border: #ffffff;
+
+    --color-btn-primary-bg: #ffffff;
+    --color-btn-primary-ink: #000000;
+    --color-btn-primary-hover: #e4e4e7;
+
+    --shadow-card: 0 0 0 1px #ffffff;
+}
+
+/* Form Controls & Checkboxes */
+:root {
+    accent-color: var(--color-primary-600);
+}
+
+:root[data-theme="dark"],
+:root[data-theme="midnight"],
+:root[data-theme="high-contrast"] {
+    accent-color: var(--color-primary-500);
+}
+
+:root[data-theme="dark"] input[type="checkbox"],
+:root[data-theme="midnight"] input[type="checkbox"],
+:root[data-theme="high-contrast"] input[type="checkbox"] {
+    background-color: var(--color-surface-alt);
+    border-color: var(--color-border);
+}
+
+/* Base — dynamic theme background, ink text, DM Sans default */
+html {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+body {
+    min-height: 100vh;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+}
+
+/* MiniMax pill nav button */
+.btn-pill-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    background: var(--color-nav-bg);
+    color: var(--color-ink-strong);
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-pill-nav:hover {
+    background: var(--color-nav-hover);
+}
+
+.btn-pill-nav.is-active {
+    background: var(--color-nav-active-bg);
+    color: var(--color-nav-active-ink);
+    border-color: var(--color-nav-active-border);
+}
+
+/* Primary CTA — dark pill in light mode, crisp contrast in dark mode */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 20px;
+    border-radius: 8px;
+    background: var(--color-btn-primary-bg);
+    color: var(--color-btn-primary-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary:hover {
+    background: var(--color-btn-primary-hover);
+}
+
+/* Status pill (used on server cards) */
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.status-pill .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    display: inline-block;
+}
+
+.status-green {
+    background: var(--color-status-green-bg);
+    color: var(--color-status-green);
+}
+.status-green .status-dot {
+    background: var(--color-status-green);
+}
+
+.status-yellow {
+    background: var(--color-status-yellow-bg);
+    color: var(--color-status-yellow);
+}
+.status-yellow .status-dot {
+    background: var(--color-status-yellow);
+}
+
+.status-red {
+    background: var(--color-status-red-bg);
+    color: var(--color-status-red);
+}
+.status-red .status-dot {
+    background: var(--color-status-red);
+}
+
+.status-unknown {
+    background: var(--color-status-unknown-bg);
+    color: var(--color-status-unknown);
+}
+.status-unknown .status-dot {
+    background: var(--color-status-unknown);
+}
+
+.status-cf {
+    background: var(--color-cf-orange-bg);
+    color: var(--color-cf-orange);
+}
+.status-cf .status-dot {
+    background: var(--color-cf-orange);
+}
+
+/* Card — white, soft shadow, generous radius */
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Card border tints — keep width at 1px, swap the color to match server status.
+   Healthy stays the default neutral grey from `.card` so it doesn't read as
+   visually loud — only watch/alert/unknown earn a colored border. */
+.card-status-yellow  { border-color: var(--color-status-yellow); }
+.card-status-red     { border-color: var(--color-status-red); }
+.card-status-unknown { border-color: var(--color-status-unknown); }
+
+.card-link:hover {
+    box-shadow: var(--shadow-card-lift);
+    transform: translateY(-2px);
+}
+
+/* Setup Wizard Service Cards: 3-State Styling */
+.service-row {
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-ink-strong);
+}
+
+/* Light Mode Defaults */
+:root[data-theme="light"] .service-row.bg-white,
+:root:not([data-theme]) .service-row.bg-white {
+    border: 1px solid var(--color-border-light) !important;
+    background: #ffffff !important;
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="light"] .service-row.border-emerald-500,
+:root[data-theme="light"] .service-row.border-emerald-600,
+:root:not([data-theme]) .service-row.border-emerald-500,
+:root:not([data-theme]) .service-row.border-emerald-600 {
+    border: 1px solid #10b981 !important;
+    background: linear-gradient(135deg, rgba(240, 253, 244, 0.75) 0%, rgba(236, 253, 245, 0.4) 45%, rgba(209, 250, 229, 0.2) 100%) !important;
+    background-color: #f8fdfa !important;
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="light"] .service-row.border-rose-600,
+:root:not([data-theme]) .service-row.border-rose-600 {
+    border: 1px solid #e11d48 !important;
+    background: linear-gradient(135deg, rgba(255, 241, 242, 0.95) 0%, rgba(255, 228, 230, 0.5) 40%, rgba(254, 226, 226, 0.65) 100%) !important;
+    background-color: #fff1f2 !important;
+    color: var(--color-ink-strong) !important;
+}
+
+/* Dark, Midnight, and High-Contrast Themes */
+:root[data-theme="dark"] .service-row,
+:root[data-theme="midnight"] .service-row,
+:root[data-theme="high-contrast"] .service-row {
+    background: var(--color-surface) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="dark"] .service-row.bg-white,
+:root[data-theme="midnight"] .service-row.bg-white,
+:root[data-theme="high-contrast"] .service-row.bg-white {
+    border: 1px solid var(--color-border) !important;
+    background: var(--color-surface) !important;
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="dark"] .service-row.border-emerald-500,
+:root[data-theme="dark"] .service-row.border-emerald-600,
+:root[data-theme="midnight"] .service-row.border-emerald-500,
+:root[data-theme="midnight"] .service-row.border-emerald-600,
+:root[data-theme="high-contrast"] .service-row.border-emerald-500,
+:root[data-theme="high-contrast"] .service-row.border-emerald-600 {
+    border: 1px solid rgba(16, 185, 129, 0.6) !important;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(13, 148, 136, 0.08) 100%) !important;
+    background-color: #122320 !important;
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="dark"] .service-row.border-rose-600,
+:root[data-theme="midnight"] .service-row.border-rose-600,
+:root[data-theme="high-contrast"] .service-row.border-rose-600 {
+    border: 1px solid rgba(225, 29, 72, 0.6) !important;
+    background: linear-gradient(135deg, rgba(225, 29, 72, 0.16) 0%, rgba(239, 68, 68, 0.08) 100%) !important;
+    background-color: #241318 !important;
+    color: var(--color-ink-strong) !important;
+}
+
+/* Fallback for OS Dark Mode if data-theme attribute is not explicitly set */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .service-row {
+        background: var(--color-surface) !important;
+        border: 1px solid var(--color-border) !important;
+        color: var(--color-ink-strong) !important;
+    }
+
+    :root:not([data-theme="light"]) .service-row.bg-white {
+        border: 1px solid var(--color-border) !important;
+        background: var(--color-surface) !important;
+        color: var(--color-ink-strong) !important;
+    }
+
+    :root:not([data-theme="light"]) .service-row.border-emerald-500,
+    :root:not([data-theme="light"]) .service-row.border-emerald-600 {
+        border: 1px solid rgba(16, 185, 129, 0.6) !important;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(13, 148, 136, 0.08) 100%) !important;
+        background-color: #122320 !important;
+        color: var(--color-ink-strong) !important;
+    }
+
+    :root:not([data-theme="light"]) .service-row.border-rose-600 {
+        border: 1px solid rgba(225, 29, 72, 0.6) !important;
+        background: linear-gradient(135deg, rgba(225, 29, 72, 0.16) 0%, rgba(239, 68, 68, 0.08) 100%) !important;
+        background-color: #241318 !important;
+        color: var(--color-ink-strong) !important;
+    }
+}
+
+/* Setup Wizard Guidance Banners: Dark & Midnight Mode Adaptations */
+:root[data-theme="dark"] #fleet-source-card.bg-emerald-50\/90,
+:root[data-theme="midnight"] #fleet-source-card.bg-emerald-50\/90,
+:root[data-theme="high-contrast"] #fleet-source-card.bg-emerald-50\/90,
+:root[data-theme="dark"] #vps-guidance-card.bg-emerald-50\/90,
+:root[data-theme="midnight"] #vps-guidance-card.bg-emerald-50\/90,
+:root[data-theme="high-contrast"] #vps-guidance-card.bg-emerald-50\/90 {
+    background: rgba(16, 185, 129, 0.12) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+    color: var(--color-ink) !important;
+}
+
+:root[data-theme="dark"] #fleet-source-card.bg-amber-50\/90,
+:root[data-theme="midnight"] #fleet-source-card.bg-amber-50\/90,
+:root[data-theme="high-contrast"] #fleet-source-card.bg-amber-50\/90,
+:root[data-theme="dark"] #vps-guidance-card.bg-amber-50\/90,
+:root[data-theme="midnight"] #vps-guidance-card.bg-amber-50\/90,
+:root[data-theme="high-contrast"] #vps-guidance-card.bg-amber-50\/90 {
+    background: rgba(245, 158, 11, 0.12) !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+    color: var(--color-ink) !important;
+}
+
+:root[data-theme="dark"] #vps-guidance-card.bg-blue-50\/80,
+:root[data-theme="midnight"] #vps-guidance-card.bg-blue-50\/80,
+:root[data-theme="high-contrast"] #vps-guidance-card.bg-blue-50\/80 {
+    background: rgba(59, 130, 246, 0.12) !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+    color: var(--color-ink) !important;
+}
+
+:root[data-theme="dark"] #fleet-source-title,
+:root[data-theme="midnight"] #fleet-source-title,
+:root[data-theme="high-contrast"] #fleet-source-title,
+:root[data-theme="dark"] #vps-guidance-title,
+:root[data-theme="midnight"] #vps-guidance-title,
+:root[data-theme="high-contrast"] #vps-guidance-title {
+    color: var(--color-ink-strong) !important;
+}
+
+:root[data-theme="dark"] #fleet-source-text,
+:root[data-theme="dark"] #fleet-source-text strong,
+:root[data-theme="dark"] #fleet-source-text span,
+:root[data-theme="midnight"] #fleet-source-text,
+:root[data-theme="midnight"] #fleet-source-text strong,
+:root[data-theme="midnight"] #fleet-source-text span,
+:root[data-theme="high-contrast"] #fleet-source-text,
+:root[data-theme="high-contrast"] #fleet-source-text strong,
+:root[data-theme="high-contrast"] #fleet-source-text span,
+:root[data-theme="dark"] #vps-guidance-text,
+:root[data-theme="dark"] #vps-guidance-text strong,
+:root[data-theme="dark"] #vps-guidance-text span,
+:root[data-theme="midnight"] #vps-guidance-text,
+:root[data-theme="midnight"] #vps-guidance-text strong,
+:root[data-theme="midnight"] #vps-guidance-text span,
+:root[data-theme="high-contrast"] #vps-guidance-text,
+:root[data-theme="high-contrast"] #vps-guidance-text strong,
+:root[data-theme="high-contrast"] #vps-guidance-text span {
+    color: var(--color-ink) !important;
+}
+
+:root[data-theme="dark"] #fleet-source-icon-box,
+:root[data-theme="midnight"] #fleet-source-icon-box,
+:root[data-theme="high-contrast"] #fleet-source-icon-box,
+:root[data-theme="dark"] #vps-guidance-icon-box,
+:root[data-theme="midnight"] #vps-guidance-icon-box,
+:root[data-theme="high-contrast"] #vps-guidance-icon-box {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #fleet-source-card.bg-emerald-50\/90,
+    :root:not([data-theme="light"]) #vps-guidance-card.bg-emerald-50\/90 {
+        background: rgba(16, 185, 129, 0.12) !important;
+        border-color: rgba(16, 185, 129, 0.35) !important;
+        color: var(--color-ink) !important;
+    }
+    :root:not([data-theme="light"]) #fleet-source-card.bg-amber-50\/90,
+    :root:not([data-theme="light"]) #vps-guidance-card.bg-amber-50\/90 {
+        background: rgba(245, 158, 11, 0.12) !important;
+        border-color: rgba(245, 158, 11, 0.35) !important;
+        color: var(--color-ink) !important;
+    }
+    :root:not([data-theme="light"]) #vps-guidance-card.bg-blue-50\/80 {
+        background: rgba(59, 130, 246, 0.12) !important;
+        border-color: rgba(59, 130, 246, 0.35) !important;
+        color: var(--color-ink) !important;
+    }
+    :root:not([data-theme="light"]) #fleet-source-title,
+    :root:not([data-theme="light"]) #vps-guidance-title {
+        color: var(--color-ink-strong) !important;
+    }
+    :root:not([data-theme="light"]) #fleet-source-text,
+    :root:not([data-theme="light"]) #fleet-source-text strong,
+    :root:not([data-theme="light"]) #fleet-source-text span,
+    :root:not([data-theme="light"]) #vps-guidance-text,
+    :root:not([data-theme="light"]) #vps-guidance-text strong,
+    :root:not([data-theme="light"]) #vps-guidance-text span {
+        color: var(--color-ink) !important;
+    }
+    :root:not([data-theme="light"]) #fleet-source-icon-box,
+    :root:not([data-theme="light"]) #vps-guidance-icon-box {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+}
+
+/* Display heading utility */
+.display-heading {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+/* Disclosure summaries we render as chips/buttons — drop the default triangle marker */
+[data-settings-menu] > summary,
+.disclosure-summary {
+    list-style: none;
+}
+
+[data-settings-menu] > summary::-webkit-details-marker,
+.disclosure-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* iOS-style switch. Fixed 44×24 track with a 20px white knob that
+   slides 0 → 20px between off/on. Defined in real CSS rather than
+   inline so the dimensions can't be squashed by surrounding layout
+   (the Tailwind utility version was collapsing the track to a circle
+   inside narrow table cells). Off = red, on = green; the same
+   component can carry any boolean state in the app — just toggle the
+   .cw-switch--on class. */
+.cw-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 9999px;
+    background-color: #dc2626;             /* red-600 — OFF */
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color 150ms ease-out;
+    -webkit-appearance: none;
+       -moz-appearance: none;
+            appearance: none;
+}
+.cw-switch:focus-visible {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 2px;
+}
+.cw-switch--on {
+    background-color: #16a34a;             /* green-600 — ON */
+}
+.cw-switch--busy {
+    opacity: 0.6;
+    cursor: wait;
+}
+.cw-switch__knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+    transition: transform 150ms ease-out;
+    pointer-events: none;
+}
+.cw-switch--on .cw-switch__knob {
+    transform: translateX(20px);
+}
+
+/* Same switch, form-control variant: when the label wraps a real
+   checkbox (Mattermost notification settings), drive the visual
+   state from :checked instead of the --on class. */
+.cw-switch:has(input[type="checkbox"]:checked) {
+    background-color: #16a34a;
+}
+.cw-switch:has(input[type="checkbox"]:checked) .cw-switch__knob {
+    transform: translateX(20px);
+}
+.cw-switch:has(input[type="checkbox"]:focus-visible) {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: 2px;
+}
+
+/* Installer Celebration Confetti */
+@keyframes confetti-fall {
+    0% {
+        transform: translateY(-20px) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(320px) rotate(720deg);
+        opacity: 0;
+    }
+}
+
+.confetti-piece {
+    position: absolute;
+    top: 0;
+    width: 10px;
+    height: 14px;
+    border-radius: 2px;
+    animation: confetti-fall 3.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .confetti-piece {
+        animation: none !important;
+        display: none !important;
+    }
+}
+

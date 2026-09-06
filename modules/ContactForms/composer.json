@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/contact-forms",
+    "description": "Automated synthetic end-to-end testing and delivery verification for WordPress contact forms via Clockwork Companion.",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Modules\\ContactForms\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "clockwork/core": "@dev"
+    }
+}

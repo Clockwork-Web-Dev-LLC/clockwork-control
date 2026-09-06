@@ -1,0 +1,116 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Only the badge-update step (push-to-main only, see below) needs write
+# access, to commit .github/badges/coverage.json back via the default
+# GITHUB_TOKEN — no extra secret/PAT required. Every other step only reads.
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, bcmath, curl, openssl, tokenizer, xml, ctype, json
+          # pcov over Xdebug: coverage-only, no step-debugger overhead — the
+          # right choice for a CI run that only ever needs the numbers.
+          coverage: pcov
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: php artisan key:generate --ansi
+
+      - name: Check code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan)
+        run: composer phpstan
+
+      - name: Run tests with coverage (Pest)
+        # --min=0 : reporting, not gatekeeping — the plan for this phase is
+        # visibility (a real number in the job summary + badge), not an
+        # enforced coverage floor that would need a considered, separately-
+        # chosen threshold to be meaningful rather than arbitrary.
+        # --exclude-group=network : one test (TwilioCheckTest) makes a real
+        # round-trip to Twilio's live API — the Twilio SDK hard-instantiates
+        # its own cURL-based HTTP client with no injectable seam, so it can't
+        # be faked without touching app/ code (see that test's own docblock).
+        # Excluded here to keep CI itself fully hermetic and immune to
+        # Twilio-side flakiness; run it locally without this flag when you
+        # want that extra confidence.
+        run: vendor/bin/pest --coverage --min=0 --coverage-clover=coverage.xml --exclude-group=network
+
+      - name: Add coverage summary to the job
+        run: |
+          php -r '
+            $xml = simplexml_load_file("coverage.xml");
+            $metrics = $xml->project->metrics;
+            $covered = (int) $metrics["coveredstatements"];
+            $total = (int) $metrics["statements"];
+            $pct = $total > 0 ? round($covered / $total * 100, 1) : 0;
+            file_put_contents(getenv("GITHUB_STEP_SUMMARY"), "### Coverage: {$pct}% ({$covered}/{$total} statements)\n", FILE_APPEND);
+            file_put_contents("coverage-pct.txt", $pct);
+          '
+
+      # Push-to-main only: PRs (including from forks, which get a read-only
+      # token) never get write access, so this step would silently no-op
+      # there anyway — gating it explicitly keeps that intent visible rather
+      # than relying on GitHub's fork-token behavior alone.
+      - name: Update coverage badge data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p .github/badges
+          php -r '
+            $pct = (float) file_get_contents("coverage-pct.txt");
+            $color = $pct >= 80 ? "brightgreen" : ($pct >= 60 ? "yellow" : "red");
+            $badge = [
+                "schemaVersion" => 1,
+                "label" => "coverage",
+                "message" => $pct . "%",
+                "color" => $color,
+            ];
+            file_put_contents(".github/badges/coverage.json", json_encode($badge, JSON_PRETTY_PRINT) . "\n");
+          '
+
+      - name: Commit updated badge data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update coverage badge [skip ci]'
+          file_pattern: .github/badges/coverage.json

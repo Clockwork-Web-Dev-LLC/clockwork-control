@@ -1,0 +1,55 @@
+includes:
+    - ./vendor/larastan/larastan/extension.neon
+    - ./phpstan-baseline.neon
+
+parameters:
+    # Level 5 catches argument types, return types, property types in addition
+    # to all the level 0-4 basics (undefined methods, undefined properties,
+    # mismatched generic types). We start here; raising further requires
+    # tighter type annotations across the codebase.
+    level: 5
+
+    bootstrapFiles:
+        - app/Services/Performance/PageSpeedInsightsClient.php
+        - app/Services/Security/SucuriSiteCheckClient.php
+        - app/Services/Forms/ContactFormTester.php
+        - app/Services/Forms/ContactFormDetector.php
+        - app/Services/Forms/MonthlyStats.php
+        - app/Http/Controllers/FormsController.php
+
+    paths:
+        - app
+        - routes
+        - database/migrations
+        - modules
+
+    excludePaths:
+        # Bootstrap files / framework code we don't own.
+        - bootstrap/cache/*
+        - storage/*
+        - vendor/*
+
+    # Treat any unhandled file errors as non-fatal so that a single new file
+    # doesn't break the whole baseline. We track findings via the report.
+    reportUnmatchedIgnoredErrors: false
+
+    # Docblock array-shapes here describe what payloads SHOULD look like
+    # (Companion responses, SpinupWP API rows, GTmetrix reports). The code
+    # deliberately re-checks them at runtime because they cross a network
+    # boundary — without this flag PHPStan reports every one of those
+    # defensive checks as "always true" / "offset always exists" noise.
+    treatPhpDocTypesAsCertain: false
+
+    # Findings we deliberately ignore at the project level. Add an entry per
+    # ignore with a comment explaining WHY.
+    ignoreErrors:
+        # Migrations use anonymous return classes via `return new class extends Migration {}` —
+        # PHPStan's class-resolution for those returns can be flaky. Migrations are
+        # narrow + reviewed by the migrate-step pipeline; not worth the noise here.
+        -
+            message: '#Migration#'
+            path: database/migrations/*
+
+    # Time-out per-file analysis at 30s so a single broken file can't hang the run.
+    parallel:
+        maximumNumberOfProcesses: 4

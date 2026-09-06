@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/slack",
+    "description": "Slack incoming-webhook chat notifications — one of several independently installable notification-channel modules (see also clockwork/mattermost).",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Slack\\": "src/"
+        }
+    }
+}

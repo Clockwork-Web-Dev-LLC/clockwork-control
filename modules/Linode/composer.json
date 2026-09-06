@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/linode",
+    "description": "Linode (Akamai) CloudProvider module for Clockwork Control Panel — instance metrics, size tiers, IP matching.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Linode\\": "src/"
+        }
+    }
+}

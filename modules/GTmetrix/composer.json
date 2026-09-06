@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/gtmetrix",
+    "description": "GTmetrix REST API v2 performance scanning module for Clockwork Control Panel",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\GTmetrix\\": "src/"
+        }
+    }
+}
