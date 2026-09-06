@@ -19,7 +19,7 @@ Nothing new — this is plain Markdown files, one Blade template edit, one PHP c
 
 ## Step 1 — `DISCLAIMER.md` (new file, repo root)
 
-Create `/Users/aaronr/Development/clockwork-control/DISCLAIMER.md` with exactly this content:
+Create `DISCLAIMER.md` (repo root) with exactly this content:
 
 ```markdown
 # Security, Support & Liability Disclaimer
@@ -49,7 +49,7 @@ For how to report a security vulnerability (different from the above), see [SECU
 
 ## Step 2 — `SECURITY.md` (new file, repo root)
 
-GitHub gives `SECURITY.md` special UI treatment (a "Report a vulnerability" link in the repo's Security tab) — it is for vulnerability *disclosure process*, not the liability disclaimer above. Keep them fully separate files. Create `/Users/aaronr/Development/clockwork-control/SECURITY.md`:
+GitHub gives `SECURITY.md` special UI treatment (a "Report a vulnerability" link in the repo's Security tab) — it is for vulnerability *disclosure process*, not the liability disclaimer above. Keep them fully separate files. Create `SECURITY.md` (repo root):
 
 ```markdown
 # Security Policy
@@ -223,7 +223,7 @@ Add a new `<li>` for the disclaimer **immediately above** the "MIT License" `<li
 
 ## Verification
 
-1. `cd /Users/aaronr/Development/clockwork-control && vendor/bin/pint --test resources/views/install/review.blade.php app/Http/Controllers/InstallerController.php` — should pass (Blade files aren't Pint-checked, but the PHP controller is).
+1. `vendor/bin/pint --test resources/views/install/review.blade.php app/Http/Controllers/InstallerController.php` — should pass (Blade files aren't Pint-checked, but the PHP controller is).
 2. Run the existing installer test suite: `php artisan test --filter=Installer` — find and read whatever test currently covers `InstallerController::install()` (search `tests/Feature/Installer/`) and add/update a case asserting `install()` returns a validation error (422/redirect-with-errors) when `disclaimer_accepted` is missing, and succeeds + writes `disclaimer.accepted_at`/`disclaimer.accepted_version` via `Settings` when it's present. Match the existing test file's style exactly — don't invent a new testing pattern.
 3. Manually load `/install` through to step 9 in a browser (or via the existing Dusk/browser test setup if one already drives the installer) and confirm: the submit button is disabled until the checkbox is checked, and checking it enables submit.
 4. In the Astro repo: `cd ~/Projects/clockworkcontrol.com-astro && npm run build` — must complete with no errors. Then `npm run preview` and manually check `/intended-usage#disclaimer` renders and the footer's new "Disclaimer" link works and lands on that anchor.
