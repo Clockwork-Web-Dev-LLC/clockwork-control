@@ -35,9 +35,7 @@
     <header class="border-b border-[var(--color-border-light)] bg-[var(--color-surface)] sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-6">
             <a href="{{ route('dashboard') }}" class="flex items-center gap-2 mr-4">
-                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-brand)] text-white">
-                    <i class="fa-solid fa-clock text-sm"></i>
-                </span>
+                <i class="fa-solid fa-clock text-xl text-[var(--color-brand)]"></i>
                 <span class="font-display text-lg font-semibold tracking-tight text-[var(--color-ink-strong)]">Clockwork Control</span>
             </a>
 

@@ -24,10 +24,8 @@
     <!-- Header -->
     <header class="border-b border-[var(--color-border-light)] bg-[var(--color-surface)]/80 backdrop-blur sticky top-0 z-30">
         <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[var(--color-brand)] text-white shadow-sm">
-                    <i class="fa-solid fa-clock text-sm"></i>
-                </span>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-clock text-xl text-[var(--color-brand)]"></i>
                 <span class="font-display text-lg font-semibold tracking-tight text-[var(--color-ink-strong)]">Clockwork Control</span>
                 <span class="text-xs px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] font-medium border border-[var(--color-border-light)]">Installer</span>
             </div>
