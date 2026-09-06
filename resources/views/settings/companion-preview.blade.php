@@ -406,7 +406,7 @@
                             @endif
                         @endif
 
-                        <span class="clockwork-admin__version">v1.33.0</span>
+                        <span class="clockwork-admin__version">v1.34.0</span>
                     </div>
                 </header>
 
@@ -519,7 +519,7 @@
                             @endif
                         </div>
                         <div>
-                            <span>Companion v1.33.0 · REST protocol v1</span>
+                            <span>Companion v1.34.0 · REST protocol v1</span>
                         </div>
                     </div>
                 </div>

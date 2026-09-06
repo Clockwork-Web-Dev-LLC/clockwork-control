@@ -230,7 +230,7 @@ class SystemUpdateService
      */
     public function getCompanionFleetStatus(): array
     {
-        $bundledVersion = ltrim((string) config('clockwork.companion.version', '1.33.0'), 'v');
+        $bundledVersion = ltrim((string) config('clockwork.companion.version', '1.34.0'), 'v');
 
         $sites = Site::query()
             ->hostMonitored()

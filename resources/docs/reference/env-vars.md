@@ -303,7 +303,7 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 | `CLOCKWORK_COMPANION_LOCAL_PATH` | `~/Projects/clockwork-companion` | Resolved via `posix_getpwuid` first because `env('HOME')` is null under Herd's php-fpm. |
 | `CLOCKWORK_COMPANION_TIMEOUT` | `30` | Per-call timeout for HTTP to the plugin. |
 | `CLOCKWORK_COMPANION_TIMEOUT_MULTISITE` | `60` | Longer timeout for calls that fan out across every subsite on a multisite install. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.33.0` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.34.0` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
 
 ## Operator identity
 

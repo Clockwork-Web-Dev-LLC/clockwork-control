@@ -337,7 +337,7 @@
                                                 <i class="fa-solid fa-headset mr-1"></i> Get Support
                                             </span>
                                         </template>
-                                        <span class="text-[10px] font-mono text-white/50">v1.33.0</span>
+                                        <span class="text-[10px] font-mono text-white/50">v1.34.0</span>
                                     </div>
                                 </div>
 
@@ -434,7 +434,7 @@
                                 <div class="bg-white text-slate-900 rounded-lg p-3 text-xs border border-slate-200" :class="hidePluginRow ? 'opacity-50' : ''">
                                     <div class="font-bold text-slate-900 text-sm flex items-center justify-between">
                                         <span x-text="pluginName || 'Clockwork Companion'"></span>
-                                        <span class="text-[10px] text-slate-400 font-normal">v1.33.0</span>
+                                        <span class="text-[10px] text-slate-400 font-normal">v1.34.0</span>
                                     </div>
                                     <p class="text-slate-600 text-xs mt-1 leading-relaxed" x-text="pluginDescription"></p>
                                     <div class="mt-2 text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center gap-2">

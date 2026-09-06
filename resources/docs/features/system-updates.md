@@ -53,7 +53,7 @@ Gated behind the same `auth` middleware group as the rest of the app — any all
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Used to build the default releases API URL. |
 | `CLOCKWORK_UPDATES_API_URL` | (derived from the repo above) | Full override. |
 | `CLOCKWORK_UPDATES_CACHE_TTL` | `43200` (12h) | Release-check cache. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.33.0` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.34.0` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
 
 See [Reference → Environment variables](/docs/reference/env-vars#system-updates).
 
