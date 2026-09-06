@@ -27,9 +27,133 @@ In-repo mode runs natively within Clockwork Control with zero external server de
 - **Run Tracking**: Writes execution summaries directly to the `backup_relay_runs` table.
 
 ### 2. External Agent Mode (`external_agent`)
-Preserved for backward compatibility and air-gapped/non-internet-facing environments where a separate droplet runs a private backup agent:
-- **`clockwork:push-backup-relay-targets`** (04:58 UTC) queries enabled sites across all `CAP_BACKUP_RELAY` providers and outputs a schema-versioned `targets.json` (`schema_version: 2`) to the control prefix in S3.
-- **`clockwork:pull-backup-relay-report`** (06:40 UTC) reads `last-report.json`, accepts schema v1 or v2, triggers a deprecation alert if v1 is detected, and records a `BackupRelayRun` row.
+Recommended for production agency fleets with high-bandwidth requirements and air-gapped/non-internet-facing environments. A separate cloud droplet (e.g. $4–$6/mo DigitalOcean or Hetzner VPS) runs the open-source [Clockwork Backup Relay](https://github.com/Clockwork-Web-Dev-LLC/clockwork-backup-relay) CLI agent (MIT licensed).
+
+**Why use an external droplet?**
+1. **Bandwidth Isolation**: Large backup archives stream directly between Pressable and S3 in the datacenter, never consuming the operator's local office internet bandwidth or competing with monitoring tasks.
+2. **Credential & Blast-Radius Isolation**: Account-wide Pressable API and AWS write credentials reside strictly on the single-purpose droplet, completely isolated from developer workstations or web-facing servers.
+3. **Zero Inbound Connections**: The monitoring app never opens ports, tunnels, or public webhooks. Both sides communicate exclusively via an S3 control channel.
+
+**The S3 Control Channel Timeline (Sundays & Wednesdays)**:
+- **`04:58 UTC` — Clockwork Control**: `clockwork:push-backup-relay-targets` runs locally, queries all sites with `backup_relay_enabled = 1`, and writes `s3://{bucket}/_control/backup-relay/targets.json` (schema v2).
+- **`05:00 UTC` — External Droplet**: Cron runs `bin/relay.php`. It reads `targets.json`, checks S3 (`HeadObject`) for existing archives to avoid redundant downloads, streams new snapshots from Pressable directly to S3 Glacier Instant Retrieval (`{domain}/fs/{date}.bz2` and `{domain}/db/{date}.sql`), generates 5-day presigned S3 download links, and writes `last-report.json` and `download-links.json` to S3.
+- **`06:32 UTC` — Clockwork Control**: `clockwork:pressable-backups-report` pulls `download-links.json` and pushes the offsite archive download links to each site's WordPress Companion plugin (`wp-admin/admin.php?page=clockwork-backups`).
+- **`06:40 UTC` — Clockwork Control**: `clockwork:pull-backup-relay-report` reads `last-report.json`, logs the completed run to `backup_relay_runs`, and updates the dashboard.
+
+> [!NOTE]
+> **Dashboard UI Note**: In `external_agent` mode, the droplet reports aggregate run metrics (`sites_total`, `sites_archived`, `sites_failed`) rather than per-site database updates. As a result, the "Last Archived" column in the site targets table will display `—`. Full run health and completed archive counts are tracked in the **Last Relay Run** card and **Relay Run History** table at the bottom of the page.
+
+---
+
+## Setting up the DigitalOcean Backup Relay Droplet
+
+The external agent is available as a standalone repository: [clockwork-backup-relay](https://github.com/Clockwork-Web-Dev-LLC/clockwork-backup-relay) (MIT licensed).
+
+### 1. Provision the Droplet
+- **Provider**: DigitalOcean (or any cloud VPS provider).
+- **OS**: Ubuntu 24.04 LTS (or 22.04 LTS).
+- **Size**: Basic Droplet with **1 vCPU, 1 GB RAM, 25 GB SSD** ($4–$6/month). Streaming operates in small, bounded memory chunks; 1 GB RAM is plenty.
+- **Region**: Select a region close to your Pressable datacenter or S3 bucket (e.g. `nyc3` or `sfo3`).
+
+### 2. Install Dependencies
+SSH into the fresh droplet:
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y php-cli php-curl php-mbstring composer git unzip
+```
+
+### 3. Service User & Application Directory
+Create a dedicated system user and clone the repository:
+```bash
+sudo adduser --system --group --home /opt/clockwork-backup-relay relay
+sudo git clone https://github.com/Clockwork-Web-Dev-LLC/clockwork-backup-relay.git /opt/clockwork-backup-relay
+cd /opt/clockwork-backup-relay
+sudo composer install --no-dev --optimize-autoloader
+sudo chown -R relay:relay /opt/clockwork-backup-relay
+```
+
+### 4. Configure Environment Variables
+Copy `.env.example` to `.env` and restrict permissions:
+```bash
+sudo cp .env.example .env
+sudo chmod 600 .env
+sudo chown relay:relay .env
+sudo nano .env
+```
+
+Configure your credentials:
+```dotenv
+# Pressable OAuth2 API credentials (client_credentials grant)
+PRESSABLE_CLIENT_ID=your_pressable_client_id
+PRESSABLE_CLIENT_SECRET=your_pressable_client_secret
+PRESSABLE_AUTH_URL=https://my.pressable.com/auth/token
+PRESSABLE_BASE_URL=https://my.pressable.com/v1
+
+# Destination S3 Bucket & Control Prefix (matches Clockwork Control)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=us-east-2
+S3_BUCKET=your-agency-pressable-backups
+S3_CONTROL_PREFIX=_control/backup-relay
+```
+
+### 5. S3 Bucket & Lifecycle Setup (AWS)
+1. **Create Bucket**:
+   ```bash
+   aws s3api create-bucket \
+     --bucket your-agency-pressable-backups \
+     --region us-east-2 \
+     --create-bucket-configuration LocationConstraint=us-east-2
+   ```
+2. **Lifecycle Rule (90-Day Retention)**:
+   Create `lifecycle.json`:
+   ```json
+   {
+     "Rules": [
+       {
+         "ID": "expire-backups-after-90-days",
+         "Filter": {},
+         "Status": "Enabled",
+         "Expiration": { "Days": 90 }
+       }
+     ]
+   }
+   ```
+   Apply the policy:
+   ```bash
+   aws s3api put-bucket-lifecycle-configuration \
+     --bucket your-agency-pressable-backups \
+     --lifecycle-configuration file://lifecycle.json
+   ```
+3. **IAM Least-Privilege Policy**:
+   Grant the IAM user permissions to `s3:ListBucket` on the bucket and `s3:PutObject`, `s3:GetObject`, `s3:AbortMultipartUpload` on `arn:aws:s3:::your-bucket/*`.
+
+### 6. Verification & Test Commands
+Run the offline test to verify everything is wired correctly without needing real credentials:
+```bash
+php bin/relay.php --offline-test
+```
+Run a dry-run test to verify real Pressable authentication and S3 connectivity without downloading or uploading payloads:
+```bash
+php bin/relay.php --dry-run
+```
+
+### 7. Configure Crontab
+Configure the relay to execute twice weekly (Sundays and Wednesdays at 05:00 UTC):
+```bash
+sudo crontab -u relay -e
+```
+Add the cron line:
+```cron
+0 5 * * 0,3 cd /opt/clockwork-backup-relay && /usr/bin/php bin/relay.php >> /var/log/clockwork-backup-relay.log 2>&1
+```
+
+Create and permission the log file:
+```bash
+sudo touch /var/log/clockwork-backup-relay.log
+sudo chown relay:relay /var/log/clockwork-backup-relay.log
+sudo chmod 664 /var/log/clockwork-backup-relay.log
+```
 
 ## Provider Generality
 
