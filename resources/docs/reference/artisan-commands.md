@@ -19,7 +19,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 
 | Command | Purpose | Example |
 |---|---|---|
-| `clockwork:add-user` | Add or restore a user on the auth allowlist. Idempotent. | `php artisan clockwork:add-user alice@example.com --name=Alice` |
+| `clockwork:add-user` | Add or restore a user on the auth allowlist with optional display name and local password. Idempotent. | `php artisan clockwork:add-user alice@example.com --name=Alice --password=secret` |
+| `clockwork:set-password` | Set or reset an operator's local password via masked CLI prompt or option. | `php artisan clockwork:set-password alice@example.com` |
 | `clockwork:sync-allowed-bots` | Pull arcjet/well-known-bots → `allowed_bots`. | `php artisan clockwork:sync-allowed-bots` |
 | `clockwork:digitalocean-test` | Verify the DO token + list droplets. | `php artisan clockwork:digitalocean-test` |
 | `clockwork:hetzner-test` | Verify the Hetzner Cloud token + list servers in the project. | `php artisan clockwork:hetzner-test` |

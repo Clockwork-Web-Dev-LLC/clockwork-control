@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionLog;
+use App\Models\User;
+use App\Services\ActionLog\ActionLogger;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Modules\Core\ModuleRegistry;
 
 /**
- * Renders /login and handles /logout. Delegates OAuth dances to
- * registered AuthProvider modules (Google, GitHub, Microsoft).
+ * Renders /login and handles local password sign-in and /logout.
+ * Delegates OAuth dances to registered AuthProvider modules (Google, GitHub, Microsoft).
  */
 class LoginController extends Controller
 {
@@ -31,6 +35,68 @@ class LoginController extends Controller
                 fn ($provider) => $provider->isConfigured(),
             )),
         ]);
+    }
+
+    public function login(Request $request, ActionLogger $logger): RedirectResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'string', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $email = strtolower(trim($credentials['email']));
+        $user = User::where('email', $email)->first();
+
+        if (! $user) {
+            return back()
+                ->withInput($request->only('email', 'remember'))
+                ->with('login_denial', 'Invalid email or password.');
+        }
+
+        if (! $user->isActive()) {
+            $logger->record(
+                actionType: ActionLog::TYPE_LOGIN,
+                summary: "Blocked password login for revoked operator {$email}.",
+                ok: false,
+                actor: $email,
+            );
+
+            return back()
+                ->withInput($request->only('email', 'remember'))
+                ->with('login_denial', 'Your account has been revoked. Please contact an administrator.');
+        }
+
+        if ($user->password === null || $user->password === '') {
+            return back()
+                ->withInput($request->only('email', 'remember'))
+                ->with('login_denial', 'This account is configured for Single Sign-On. Please sign in with your configured OAuth provider, or ask an administrator to set a local password.');
+        }
+
+        if (! Hash::check($credentials['password'], $user->password)) {
+            $logger->record(
+                actionType: ActionLog::TYPE_LOGIN,
+                summary: "Failed password login attempt for {$email}.",
+                ok: false,
+                actor: $email,
+            );
+
+            return back()
+                ->withInput($request->only('email', 'remember'))
+                ->with('login_denial', 'Invalid email or password.');
+        }
+
+        Auth::login($user, $request->boolean('remember'));
+        $user->forceFill(['last_login_at' => now()])->save();
+        $request->session()->regenerate();
+
+        $logger->record(
+            actionType: ActionLog::TYPE_LOGIN,
+            summary: "Operator {$email} signed in via password.",
+            ok: true,
+            actor: $email,
+        );
+
+        return redirect()->intended(route('dashboard'));
     }
 
     public function logout(Request $request): RedirectResponse

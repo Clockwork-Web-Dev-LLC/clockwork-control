@@ -46,6 +46,7 @@ use Illuminate\Support\Facades\Route;
 
 // Public — auth flow only. Everything else is gated below.
 Route::get('/login', [LoginController::class, 'show'])->name('login');
+Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1')->name('login.attempt');
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 
@@ -72,6 +73,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/settings/users', [UsersSettingsController::class, 'store'])->name('settings.users.store');
     Route::patch('/settings/users/{user}/revoke', [UsersSettingsController::class, 'revoke'])->name('settings.users.revoke');
     Route::patch('/settings/users/{user}/restore', [UsersSettingsController::class, 'restore'])->name('settings.users.restore');
+    Route::patch('/settings/users/{user}/password', [UsersSettingsController::class, 'updatePassword'])->name('settings.users.password');
 
     // Appearance & theme preferences
     Route::post('/settings/appearance', [AppearanceSettingsController::class, 'update'])->name('settings.appearance.update');

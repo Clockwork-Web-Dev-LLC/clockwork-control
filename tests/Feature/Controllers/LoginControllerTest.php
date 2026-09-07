@@ -77,3 +77,138 @@ describe('logout (POST /logout)', function () {
         $followUp->assertRedirect(route('login'));
     });
 });
+
+describe('login (POST /login)', function () {
+    it('authenticates an active user with valid email and password', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create([
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+            'revoked_at' => null,
+        ]);
+
+        $response = $this->post(route('login.attempt'), [
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+        expect($user->fresh()->last_login_at)->not->toBeNull();
+    });
+
+    it('authenticates with case-insensitive and trimmed email', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create([
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+            'revoked_at' => null,
+        ]);
+
+        $response = $this->post(route('login.attempt'), [
+            'email' => '  KaReNa@Example.com  ',
+            'password' => 'secret1234',
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+    });
+
+    it('sets remember cookie when remember is checked', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create([
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+            'revoked_at' => null,
+        ]);
+
+        $response = $this->post(route('login.attempt'), [
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+            'remember' => '1',
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+        $response->assertCookie(Auth::guard()->getRecallerName());
+    });
+
+    it('rejects invalid password', function () {
+        User::factory()->create([
+            'email' => 'karena@example.com',
+            'password' => 'secret1234',
+        ]);
+
+        $response = $this->from(route('login'))->post(route('login.attempt'), [
+            'email' => 'karena@example.com',
+            'password' => 'wrong-password',
+        ]);
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', 'Invalid email or password.');
+        $this->assertGuest();
+    });
+
+    it('rejects unknown email without leaking existence', function () {
+        $response = $this->from(route('login'))->post(route('login.attempt'), [
+            'email' => 'nobody@example.com',
+            'password' => 'some-password',
+        ]);
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', 'Invalid email or password.');
+        $this->assertGuest();
+    });
+
+    it('rejects revoked user even with valid password', function () {
+        User::factory()->create([
+            'email' => 'revoked@example.com',
+            'password' => 'secret1234',
+            'revoked_at' => now(),
+        ]);
+
+        $response = $this->from(route('login'))->post(route('login.attempt'), [
+            'email' => 'revoked@example.com',
+            'password' => 'secret1234',
+        ]);
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', 'Your account has been revoked. Please contact an administrator.');
+        $this->assertGuest();
+    });
+
+    it('guides user with null password to their OAuth provider', function () {
+        User::factory()->create([
+            'email' => 'oauthonly@example.com',
+            'password' => null,
+            'revoked_at' => null,
+        ]);
+
+        $response = $this->from(route('login'))->post(route('login.attempt'), [
+            'email' => 'oauthonly@example.com',
+            'password' => 'any-password',
+        ]);
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', function ($msg) {
+                return str_contains($msg, 'Single Sign-On');
+            });
+        $this->assertGuest();
+    });
+
+    it('throttles login attempts after 5 failures within one minute', function () {
+        for ($i = 0; $i < 5; $i++) {
+            $this->post(route('login.attempt'), [
+                'email' => 'baduser@example.com',
+                'password' => 'wrongpass',
+            ]);
+        }
+
+        $response = $this->post(route('login.attempt'), [
+            'email' => 'baduser@example.com',
+            'password' => 'wrongpass',
+        ]);
+
+        $response->assertStatus(429);
+    });
+});

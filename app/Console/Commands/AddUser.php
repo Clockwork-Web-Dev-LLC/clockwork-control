@@ -16,8 +16,9 @@ use InvalidArgumentException;
 class AddUser extends Command
 {
     protected $signature = 'clockwork:add-user
-                            {email : Email address (must match the Google account they will sign in with)}
-                            {--name= : Display name (Google will overwrite this on first login)}';
+                            {email : Email address of the user}
+                            {--name= : Display name}
+                            {--password= : Optional local password (min 8 characters)}';
 
     protected $description = 'Add or restore a user on the Clockwork allowlist.';
 
@@ -25,9 +26,16 @@ class AddUser extends Command
     {
         $email = (string) $this->argument('email');
         $name = $this->option('name');
+        $password = $this->option('password');
+
+        if ($password !== null && strlen($password) < 8) {
+            $this->error('Password must be at least 8 characters.');
+
+            return self::FAILURE;
+        }
 
         try {
-            $result = $provisioner->addOrRestore($email, $name, actor: 'cli');
+            $result = $provisioner->addOrRestore($email, $name, actor: 'cli', password: $password);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 
@@ -39,9 +47,13 @@ class AddUser extends Command
         match ($result['status']) {
             'restored' => $this->info("Restored {$email} (was revoked)."),
             'updated' => $this->info("{$email} already on the allowlist; name updated."),
-            'created' => (function () use ($email) {
+            'created' => (function () use ($email, $password) {
                 $this->info("Added {$email} to the allowlist.");
-                $this->line('They can now sign in at /login with the Google account whose primary email matches.');
+                if ($password) {
+                    $this->line('They can now sign in at /login with their email and password.');
+                } else {
+                    $this->line('They can now sign in at /login with their configured Single Sign-On provider.');
+                }
             })(),
         };
 

@@ -1,6 +1,6 @@
 @extends('layouts.install')
 
-@section('title', 'Google OAuth Setup')
+@section('title', 'Single Sign-On Setup')
 
 @section('content')
 <div class="card p-6 md:p-8 shadow-sm">
@@ -10,11 +10,14 @@
                 <i class="fa-brands fa-google"></i>
             </span>
             <h1 class="font-display text-2xl font-bold tracking-tight text-[var(--color-ink-strong)]">
-                Step 5: Google OAuth Authentication
+                Step 5: Single Sign-On (Google OAuth)
             </h1>
+            <span class="ml-auto text-xs px-2.5 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border)] font-medium">
+                Optional
+            </span>
         </div>
         <p class="text-sm text-[var(--color-ink-muted)]">
-            Clockwork Control uses Google OAuth to authenticate operators against a strict allowlist. This step is required for any user to log in.
+            Connect Google OAuth for one-click team sign-in. You can also skip this and set a local password on the next step (or configure Google, GitHub, and Microsoft later in Settings).
         </p>
     </div>
 
@@ -29,7 +32,7 @@
     <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/60 text-xs mb-6 space-y-2">
         <div class="font-semibold text-[var(--color-ink-strong)] flex items-center gap-1.5">
             <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
-            How to set up Google Credentials:
+            Setting up Google OAuth:
         </div>
         <ol class="list-decimal list-inside space-y-1 text-[var(--color-ink-muted)]">
             <li>Open the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-[var(--color-brand)] underline font-medium inline-flex items-center gap-1">Google Cloud Console <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i></a>.</li>
@@ -56,8 +59,7 @@
             <input type="text"
                    name="client_id"
                    value="{{ old('client_id', $data['client_id'] ?? '') }}"
-                   required
-                   placeholder="1234567890-abcdef.apps.googleusercontent.com"
+                   placeholder="1234567890-abcdef.apps.googleusercontent.com (Leave blank to skip)"
                    class="w-full px-3.5 py-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]" />
         </div>
 
@@ -68,8 +70,7 @@
             <input type="password"
                    name="client_secret"
                    value="{{ old('client_secret', $data['client_secret'] ?? '') }}"
-                   required
-                   placeholder="GOCSPX-••••••••••••••••"
+                   placeholder="GOCSPX-•••••••••••••••• (Leave blank to skip)"
                    class="w-full px-3.5 py-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]" />
         </div>
 
@@ -92,11 +93,19 @@
                 <span>Back</span>
             </a>
 
-            <button type="submit"
-                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--color-brand)] text-white font-medium text-sm hover:bg-[var(--color-brand)]/90 transition-all shadow-sm cursor-pointer">
-                <span>Continue</span>
-                <i class="fa-solid fa-arrow-right text-xs"></i>
-            </button>
+            <div class="flex items-center gap-3">
+                <button type="submit"
+                        formaction="{{ route('install.google.skip') }}"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]/80 transition-all cursor-pointer">
+                    <span>Skip for now</span>
+                </button>
+
+                <button type="submit"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[var(--color-brand)] text-white font-medium text-sm hover:bg-[var(--color-brand)]/90 transition-all shadow-sm cursor-pointer">
+                    <span>Continue</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </div>
         </div>
     </form>
 </div>

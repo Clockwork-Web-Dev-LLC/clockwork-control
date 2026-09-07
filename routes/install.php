@@ -20,6 +20,7 @@ Route::middleware(['web', 'throttle:30,1'])->prefix('install')->name('install.')
 
     Route::get('/google', [InstallerController::class, 'google'])->name('google');
     Route::post('/google', [InstallerController::class, 'saveGoogle'])->name('google.save');
+    Route::post('/google/skip', [InstallerController::class, 'skipGoogle'])->name('google.skip');
 
     Route::get('/admin', [InstallerController::class, 'admin'])->name('admin');
     Route::post('/admin', [InstallerController::class, 'saveAdmin'])->name('admin.save');

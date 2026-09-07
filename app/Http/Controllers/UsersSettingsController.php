@@ -38,6 +38,7 @@ class UsersSettingsController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
+            'password' => ['nullable', 'string', 'min:8'],
         ]);
 
         $email = strtolower(trim($data['email']));
@@ -47,7 +48,11 @@ class UsersSettingsController extends Controller
 
         if ($user) {
             $wasRevoked = $user->revoked_at !== null;
-            $user->forceFill(['name' => $name, 'revoked_at' => null])->save();
+            $updates = ['name' => $name, 'revoked_at' => null];
+            if (! empty($data['password'])) {
+                $updates['password'] = $data['password'];
+            }
+            $user->forceFill($updates)->save();
 
             if ($wasRevoked) {
                 $logger->record(
@@ -69,18 +74,37 @@ class UsersSettingsController extends Controller
         $user->forceFill([
             'name' => $name,
             'email' => $email,
-            'password' => null,
+            'password' => ! empty($data['password']) ? $data['password'] : null,
         ])->save();
 
         $logger->record(
             actionType: ActionLog::TYPE_USER_ADDED,
-            summary: "Added {$email} to allowlist.",
+            summary: "Added {$email} to allowlist.".(! empty($data['password']) ? ' (local password set)' : ''),
             ok: true,
             actor: (string) (Auth::user()->email ?? 'manual'),
         );
 
         return redirect()->route('settings.users.index')
-            ->with('status', "Added {$email}. They can now sign in with their Google account.");
+            ->with('status', "Added {$email}. They can now sign in".(! empty($data['password']) ? ' with their password.' : ' with their Google account.'));
+    }
+
+    public function updatePassword(Request $request, User $user, ActionLogger $logger): RedirectResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->forceFill(['password' => $data['password']])->save();
+
+        $logger->record(
+            actionType: ActionLog::TYPE_USER_PASSWORD_CHANGED,
+            summary: "Updated password for {$user->email}.",
+            ok: true,
+            actor: (string) (Auth::user()->email ?? 'manual'),
+        );
+
+        return redirect()->route('settings.users.index')
+            ->with('status', "Updated password for {$user->email}.");
     }
 
     public function revoke(User $user, ActionLogger $logger): RedirectResponse

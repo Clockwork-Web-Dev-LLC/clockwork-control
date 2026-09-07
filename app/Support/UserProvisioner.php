@@ -18,7 +18,7 @@ class UserProvisioner
      *
      * @return array{user: User, status: 'created'|'restored'|'updated'}
      */
-    public function addOrRestore(string $email, ?string $name = null, string $actor = 'cli'): array
+    public function addOrRestore(string $email, ?string $name = null, string $actor = 'cli', ?string $password = null): array
     {
         $email = strtolower(trim($email));
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -30,10 +30,14 @@ class UserProvisioner
 
         if ($existing) {
             $wasRevoked = $existing->revoked_at !== null;
-            $existing->forceFill([
+            $updates = [
                 'name' => $name,
                 'revoked_at' => null,
-            ])->save();
+            ];
+            if ($password !== null && $password !== '') {
+                $updates['password'] = $password;
+            }
+            $existing->forceFill($updates)->save();
 
             if ($wasRevoked) {
                 $this->logger->record(
@@ -53,16 +57,35 @@ class UserProvisioner
         $user->forceFill([
             'name' => $name,
             'email' => $email,
-            'password' => null,
+            'password' => ($password !== null && $password !== '') ? $password : null,
         ])->save();
 
         $this->logger->record(
             actionType: ActionLog::TYPE_USER_ADDED,
-            summary: "Added {$email} to allowlist via {$actor}.",
+            summary: "Added {$email} to allowlist via {$actor}.".($password ? ' (local password set)' : ''),
             ok: true,
             actor: $actor,
         );
 
         return ['user' => $user, 'status' => 'created'];
+    }
+
+    /**
+     * Set or update an operator's local password.
+     */
+    public function setPassword(User $user, string $password, string $actor = 'cli'): void
+    {
+        if (strlen($password) < 8) {
+            throw new InvalidArgumentException('Password must be at least 8 characters.');
+        }
+
+        $user->forceFill(['password' => $password])->save();
+
+        $this->logger->record(
+            actionType: ActionLog::TYPE_USER_PASSWORD_CHANGED,
+            summary: "Updated password for {$user->email} via {$actor}.",
+            ok: true,
+            actor: $actor,
+        );
     }
 }

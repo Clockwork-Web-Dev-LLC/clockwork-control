@@ -51,21 +51,32 @@ If you find yourself writing a **core-app** route outside that group, stop and r
 
 **Module routes:** Modules with their own settings pages (Mattermost, Slack, Bill.com, ClientSlack, …) load routes from their own `routes/web.php` via `loadRoutesFrom()` in their `ServiceProvider::register()`, and — because `loadRoutesFrom()` doesn't inherit the app's route-group middleware automatically — each module explicitly wraps its own routes in `Route::middleware(['web', 'auth'])->group(...)` itself (e.g. `modules/Mattermost/routes/web.php`). The auth gate still applies everywhere; it's just enforced per-module now instead of solely by the one `routes/web.php` closure. A new module's settings routes need to remember this wrapper themselves — nothing enforces it structurally, so a module that forgets it would silently expose an unauthenticated route.
 
-## Login is OAuth (Google, GitHub, Microsoft)
+## Login (Local Password & Modular OAuth)
 
-The public flow, using Google as the example (GitHub and Microsoft Entra ID follow the identical shape via `Laravel\Socialite`, at `/auth/github/*` and `/auth/microsoft/*` respectively):
+Clockwork Control supports both direct local email/password authentication and modular Single Sign-On (Google, GitHub, Microsoft Entra ID).
 
-1. User clicks "Sign in with Google" on `/login`. POST through `LoginController` redirects to `/auth/google/redirect`.
-2. `GoogleAuthController::redirect` hands off to `Laravel\Socialite` Google driver, which 302s to `accounts.google.com`.
-3. Google authenticates the user and 302s back to `/auth/google/callback?code=...`.
-4. `GoogleAuthController::callback` exchanges the code for a token, fetches the user info, and hands the email + provider ID off to `App\Services\Auth\OAuthLoginHandler::handle()` — the shared logic every provider's callback delegates to for allowlist lookup, identity sync, and audit logging.
+### Local Password Authentication
+1. User enters their email and password on `/login` and clicks "Sign in" (POST to `/login`, routed to `LoginController::login`).
+2. The route is protected by session middleware and rate limiting (`throttle:5,1`).
+3. `LoginController` validates credentials:
+   - If user does not exist: returns generic `"Invalid email or password."` error.
+   - If user exists but is revoked (`revoked_at !== null`): logs failed attempt in `ActionLog` and bounces with a revocation notice.
+   - If user exists but has no password (`password === null`): informs user that the account is configured for SSO.
+   - If password does not match `Hash::check()`: logs failed attempt in `ActionLog` and returns `"Invalid email or password."`.
+4. On success: logs in with `Auth::login()`, updates `last_login_at = now()`, regenerates session (`session()->regenerate()`), logs `ActionLog::TYPE_LOGIN`, and redirects to intended destination (defaulting to `/`).
+
+### Modular OAuth Single Sign-On
+1. User clicks the provider button on `/login` (e.g., "Sign in with Google", "Sign in with GitHub", "Sign in with Microsoft").
+2. The controller hands off to `Laravel\Socialite`, which 302s to the external provider.
+3. The provider authenticates the user and returns to the provider's callback route.
+4. The provider callback exchanges the code for a token and delegates to `App\Services\Auth\OAuthLoginHandler::handle()` for allowlist lookup, identity sync, and audit logging.
 5. Match + not revoked → log them in, redirect to `/`. No match (or revoked) → bounce back to `/login` with a denial banner. **No auto-provisioning** — an administrator adds users via `/settings/users` or `clockwork:add-user`.
 
-Each provider is its own module (`Modules\AuthGoogle`, `Modules\AuthGitHub`, `Modules\AuthMicrosoft`) implementing `Modules\Core\Contracts\AuthProvider`, contributed to `ModuleRegistry::authProviders()`. `users` is the same allowlist regardless of which provider a login came through — there's one team, three doors. The login page only renders a provider's button when its OAuth credentials are actually configured (`Route::has()` + credential presence, not just the module being enabled), so an unconfigured provider simply doesn't appear rather than erroring on click.
+The login page only renders an OAuth provider's button when its credentials are actively configured (`Route::has()` + credential presence), avoiding broken buttons. If no OAuth providers are credentialed, `/login` simply renders the clean local email/password sign-in form.
 
 Optional Workspace pinning: setting `GOOGLE_HD=your-agency.com` causes Google to limit the account picker to that domain. Off by default so personal accounts work for testing.
 
-Login + add/revoke/restore events all land in `action_logs` (`TYPE_LOGIN`, `TYPE_USER_ADDED`, `TYPE_USER_REVOKED`, `TYPE_USER_RESTORED`).
+Login + add/revoke/restore/password-change events all land in `action_logs` (`TYPE_LOGIN`, `TYPE_USER_ADDED`, `TYPE_USER_REVOKED`, `TYPE_USER_RESTORED`, `TYPE_USER_PASSWORD_CHANGED`).
 
 `/install/*` (the pre-auth setup wizard) sits outside this auth gate entirely — it's guarded instead by `EnforceInstallerGate` middleware, which blocks access once installation is complete (a `storage/installed` sentinel file) so the wizard can't be re-run against a live instance without deliberately reopening it via `clockwork:installer:reopen`.
 

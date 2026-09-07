@@ -81,8 +81,12 @@
                 <a href="{{ route('install.google') }}" class="text-xs text-[var(--color-brand)] hover:underline">Edit</a>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div><span class="text-[var(--color-ink-soft)] block">Client ID:</span> <span class="font-mono text-[var(--color-ink-strong)] truncate block">{{ $wizard['google']['client_id'] ?? '' }}</span></div>
-                <div><span class="text-[var(--color-ink-soft)] block">Hosted Domain:</span> <span class="font-mono text-[var(--color-ink-strong)]">{{ $wizard['google']['hd'] ?: 'Any Domain (No restriction)' }}</span></div>
+                @if (!empty($wizard['google']['skipped']) || empty($wizard['google']['client_id']))
+                    <div class="col-span-2 text-[var(--color-ink-muted)] italic">Skipped — using local password authentication (SSO can be configured later in Settings).</div>
+                @else
+                    <div><span class="text-[var(--color-ink-soft)] block">Client ID:</span> <span class="font-mono text-[var(--color-ink-strong)] truncate block">{{ $wizard['google']['client_id'] ?? '' }}</span></div>
+                    <div><span class="text-[var(--color-ink-soft)] block">Hosted Domain:</span> <span class="font-mono text-[var(--color-ink-strong)]">{{ $wizard['google']['hd'] ?: 'Any Domain (No restriction)' }}</span></div>
+                @endif
             </div>
         </div>
 
@@ -94,9 +98,19 @@
                 </span>
                 <a href="{{ route('install.admin') }}" class="text-xs text-[var(--color-brand)] hover:underline">Edit</a>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div><span class="text-[var(--color-ink-soft)] block">Name:</span> <span class="font-medium text-[var(--color-ink-strong)]">{{ $wizard['admin']['name'] ?? '' }}</span></div>
                 <div><span class="text-[var(--color-ink-soft)] block">Email:</span> <span class="font-mono text-[var(--color-ink-strong)]">{{ $wizard['admin']['email'] ?? '' }}</span></div>
+                <div>
+                    <span class="text-[var(--color-ink-soft)] block">Password:</span>
+                    @if (!empty($wizard['admin']['password']))
+                        <span class="font-mono text-[var(--color-status-green)] flex items-center gap-1">
+                            <i class="fa-solid fa-circle-check text-[10px]"></i> Configured
+                        </span>
+                    @else
+                        <span class="text-[var(--color-ink-muted)] italic">SSO-only</span>
+                    @endif
+                </div>
             </div>
         </div>
 

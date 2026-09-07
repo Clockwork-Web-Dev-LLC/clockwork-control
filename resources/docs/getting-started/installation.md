@@ -41,8 +41,8 @@ Navigate to `http://localhost:8000` (or your configured server domain). Because 
 2. **Database Connection**: Configure MySQL / MariaDB host, port, database, and credentials. Includes a live connection test button.
 3. **Application Identity**: Set your panel's title, public URL, and timezone.
 4. **Outbound Mail (Optional)**: Configure SMTP for alerts and notifications, or skip to default to the log driver.
-5. **Google OAuth (Required)**: Enter your Google Client ID, Client Secret, and optional Google Workspace hosted domain.
-6. **Administrator Account**: Provision your first admin email and name. This email will be granted allowlist access upon completion.
+5. **Single Sign-On / Google OAuth (Optional)**: Enter your Google Client ID, Client Secret, and optional Google Workspace hosted domain, or skip for now to use local password authentication (SSO can also be configured or changed anytime in Settings).
+6. **Administrator Account & Local Password**: Provision your first administrator email and name. If Google OAuth was skipped, set a secure local password (minimum 8 characters) to sign in immediately. If Google OAuth was configured, setting a local password is an optional emergency fallback.
 7. **Hosting Provider Quick-Connect (Optional)**: Select your primary infrastructure (SpinupWP, Forge, RunCloud, Pressable, WP Engine, Kinsta, or Custom VPS).
 8. **Review & Confirm**: Review all settings with masked secrets. Clicking **Install & Complete Setup** will:
    - Generate a fresh cryptographically secure `APP_KEY`

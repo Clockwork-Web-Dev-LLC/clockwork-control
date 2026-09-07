@@ -2,6 +2,7 @@
 
 use App\Models\ActionLog;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -228,6 +229,59 @@ describe('UsersSettingsController', function () {
 
             $self->refresh();
             expect($self->revoked_at)->toBeNull();
+        });
+    });
+
+    describe('password management', function () {
+        it('allows storing a user with an initial local password', function () {
+            $admin = User::factory()->create();
+
+            $response = $this->actingAs($admin)->post(route('settings.users.store'), [
+                'email' => 'localoperator@example.com',
+                'name' => 'Local Operator',
+                'password' => 'secretPass123!',
+            ]);
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('status', 'Added localoperator@example.com. They can now sign in with their password.');
+
+            $user = User::query()->where('email', 'localoperator@example.com')->firstOrFail();
+            expect($user->password)->not->toBeNull();
+            expect(Hash::check('secretPass123!', $user->password))->toBeTrue();
+        });
+
+        it('updates user password via patch route', function () {
+            $admin = User::factory()->create();
+            $target = User::factory()->create([
+                'email' => 'targetoperator@example.com',
+                'password' => 'oldpassword123',
+            ]);
+
+            $response = $this->actingAs($admin)->patch(route('settings.users.password', $target), [
+                'password' => 'newSecretPass456!',
+                'password_confirmation' => 'newSecretPass456!',
+            ]);
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('status', 'Updated password for targetoperator@example.com.');
+
+            $target->refresh();
+            expect(Hash::check('newSecretPass456!', $target->password))->toBeTrue();
+
+            $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_PASSWORD_CHANGED)->firstOrFail();
+            expect($log->summary)->toBe('Updated password for targetoperator@example.com.');
+        });
+
+        it('rejects password updates that do not match confirmation or are too short', function () {
+            $admin = User::factory()->create();
+            $target = User::factory()->create();
+
+            $response = $this->actingAs($admin)->patch(route('settings.users.password', $target), [
+                'password' => 'short',
+                'password_confirmation' => 'mismatch',
+            ]);
+
+            $response->assertSessionHasErrors(['password']);
         });
     });
 });

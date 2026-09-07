@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\ActionLog;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 /*
 |--------------------------------------------------------------------------
@@ -49,6 +50,32 @@ describe('creating a new user', function () {
             ->expectsOutputToContain("'not-an-email' doesn't look like a valid email address.");
 
         expect(User::where('email', 'not-an-email')->exists())->toBeFalse();
+    });
+
+    it('creates a user with a local password when --password option is given', function () {
+        $this->artisan('clockwork:add-user', [
+            'email' => 'withpass@example.com',
+            '--password' => 'secret1234',
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Added withpass@example.com to the allowlist.')
+            ->expectsOutputToContain('sign in at /login with their email and password');
+
+        $user = User::where('email', 'withpass@example.com')->first();
+        expect($user)->not->toBeNull();
+        expect($user->password)->not->toBeNull();
+        expect(Hash::check('secret1234', $user->password))->toBeTrue();
+    });
+
+    it('rejects passwords shorter than 8 characters', function () {
+        $this->artisan('clockwork:add-user', [
+            'email' => 'shortpass@example.com',
+            '--password' => 'short',
+        ])
+            ->assertFailed()
+            ->expectsOutputToContain('Password must be at least 8 characters.');
+
+        expect(User::where('email', 'shortpass@example.com')->exists())->toBeFalse();
     });
 });
 

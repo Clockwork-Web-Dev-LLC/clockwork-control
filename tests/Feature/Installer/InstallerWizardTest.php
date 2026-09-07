@@ -4,6 +4,10 @@ use App\Http\Middleware\EnforceInstallerGate;
 use App\Installer\InstallerEnvWriter;
 use App\Models\User;
 use App\Support\Settings;
+use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\RendersAuthenticatedPages;
+
+uses(RendersAuthenticatedPages::class);
 
 describe('InstallerWizard', function () {
     $tempEnv = null;
@@ -78,10 +82,39 @@ describe('InstallerWizard', function () {
         $response->assertRedirect(route('install.admin'));
 
         expect(session('install.wizard.google.client_id'))->toBe('123456.apps.googleusercontent.com');
+        expect(session('install.wizard.google.skipped'))->toBeFalse();
     });
 
-    it('saves step 6 admin user configuration to session', function () {
+    it('allows skipping step 5 google oauth', function () {
+        $response = $this->post(route('install.google.skip'));
+
+        $response->assertRedirect(route('install.admin'));
+
+        expect(session('install.wizard.google.skipped'))->toBeTrue();
+    });
+
+    it('saves step 6 admin user configuration with local password to session', function () {
         $response = $this->post(route('install.admin.save'), [
+            'email' => 'admin@agency.test',
+            'name' => 'Lead Operator',
+            'password' => 'secretPassword123!',
+            'password_confirmation' => 'secretPassword123!',
+        ]);
+
+        $response->assertRedirect(route('install.hosting'));
+
+        expect(session('install.wizard.admin.email'))->toBe('admin@agency.test');
+        expect(session('install.wizard.admin.password'))->toBe('secretPassword123!');
+    });
+
+    it('allows omitting password when google oauth is configured', function () {
+        $response = $this->withSession([
+            'install.wizard.google' => [
+                'client_id' => '123456.apps.googleusercontent.com',
+                'client_secret' => 'test-secret',
+                'skipped' => false,
+            ],
+        ])->post(route('install.admin.save'), [
             'email' => 'admin@agency.test',
             'name' => 'Lead Operator',
         ]);
@@ -89,6 +122,7 @@ describe('InstallerWizard', function () {
         $response->assertRedirect(route('install.hosting'));
 
         expect(session('install.wizard.admin.email'))->toBe('admin@agency.test');
+        expect(session('install.wizard.admin.password'))->toBeNull();
     });
 
     it('saves step 7 hosting quick-connect choice to session', function () {
@@ -233,6 +267,70 @@ describe('InstallerWizard', function () {
 
         $envContents = file_get_contents($tempEnv);
         expect($envContents)->toContain('CLOCKWORK_TELEMETRY_ENABLED=true');
+    });
+
+    it('executes full installation with skipped google oauth and provisions admin with working local password', function () use (&$tempEnv) {
+        $this->withSession([
+            'install.wizard' => [
+                'database' => [
+                    'host' => '127.0.0.1',
+                    'port' => 3306,
+                    'database' => 'clockwork_prod',
+                    'username' => 'root',
+                    'password' => '',
+                ],
+                'app' => [
+                    'name' => 'Karena Agency Fleet',
+                    'url' => 'https://fleet.agency.test',
+                    'timezone' => 'UTC',
+                ],
+                'mail' => [
+                    'skipped' => true,
+                ],
+                'google' => [
+                    'skipped' => true,
+                    'client_id' => '',
+                    'client_secret' => '',
+                    'hd' => null,
+                ],
+                'admin' => [
+                    'name' => 'Karena Operator',
+                    'email' => 'karena@agency.test',
+                    'password' => 'localSecretPass123!',
+                ],
+                'hosting' => [
+                    'provider' => 'skip',
+                ],
+            ],
+        ]);
+
+        $response = $this->post(route('install.run'), [
+            'disclaimer_accepted' => '1',
+            'telemetry_opt_in' => '0',
+        ]);
+
+        $response->assertRedirect(route('install.done'));
+        expect(file_exists(EnforceInstallerGate::sentinelPath()))->toBeTrue();
+
+        $user = User::where('email', 'karena@agency.test')->firstOrFail();
+        expect($user->name)->toBe('Karena Operator')
+            ->and($user->password)->not->toBeNull()
+            ->and(Hash::check('localSecretPass123!', $user->password))->toBeTrue();
+
+        $envContents = file_get_contents($tempEnv);
+        expect($envContents)->toContain('GOOGLE_CLIENT_ID=')
+            ->and($envContents)->not->toContain('GOOGLE_CLIENT_ID=google-client-id');
+
+        // Verify the operator can now immediately sign in with their new password
+        EnforceInstallerGate::fake(true);
+        $this->mockIssueCounterZero();
+        $loginResponse = $this->post(route('login.attempt'), [
+            'email' => 'karena@agency.test',
+            'password' => 'localSecretPass123!',
+        ]);
+
+        $loginResponse->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
     });
 
     it('renders step 9 done screen', function () {

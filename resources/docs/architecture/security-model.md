@@ -31,22 +31,25 @@ The network posture above assumes the machine itself is safe. It might not be �
 
 ## Human auth
 
-- **OAuth only, no passwords.** Google, GitHub, and Microsoft (Entra ID) are supported — each implements `Modules\Core\Contracts\AuthProvider` in its own module (`AuthGoogle`/`AuthGitHub`/`AuthMicrosoft`) and shares one allowlist/audit path through `App\Services\Auth\OAuthLoginHandler`. `App\Http\Controllers\Auth\GoogleAuthController` is a thin `redirect()`/`callback()` delegator to `GoogleAuthProvider`. `LoginController` only shows a provider's button once it's actually configured, so an uncredentialed module doesn't offer a broken sign-in path.
-- **The `users` table is the allowlist**, regardless of which provider verified the person. A row exists ⇒ allowed; `revoked_at IS NULL` ⇒ active. **No auto-provisioning** — the verified email must already match a row, or the callback bounces back to `/login` with a denial banner.
-- **Bootstrap and recovery** via `clockwork:add-user <email> [--name=]`. Idempotent — restores revoked rows. Always-works escape hatch when the UI is locked out.
+- **Dual Auth: Local Password & Allowlisted OAuth.** Local email/password authentication is universally available, alongside modular OAuth single sign-on (Google, GitHub, and Microsoft Entra ID).
+  - **Local Passwords**: Stored as Bcrypt/Argon2 hashes via Eloquent's `hashed` cast on `users.password`. Handled securely at `POST /login` with rate limiting (`throttle:5,1`) and session regeneration.
+  - **OAuth Providers**: Each implements `Modules\Core\Contracts\AuthProvider` in its own module (`AuthGoogle`/`AuthGitHub`/`AuthMicrosoft`) and shares one allowlist/audit path through `App\Services\Auth\OAuthLoginHandler`. `LoginController` only shows a provider's button once it's actually configured, avoiding broken sign-in paths when SSO is not set up.
+- **The `users` table is the allowlist**, regardless of whether the operator authenticates via local password or OAuth. A row exists ⇒ allowed; `revoked_at IS NULL` ⇒ active. **No auto-provisioning** — the user must already exist on the allowlist, or login is denied with an informative banner.
+- **Bootstrap and recovery** via `clockwork:add-user <email> [--name=] [--password=]` and `clockwork:set-password <email> [--password=]`. Idempotent — restores revoked rows and sets or resets operator credentials via masked CLI prompts. Always-works escape hatch when the UI is locked out.
 - **Optional Workspace pin** — `GOOGLE_HD=your-agency.com` restricts the Google account picker to that domain. Off by default so personal accounts work for testing.
-- **Revoke does not kill active sessions.** A revoked user keeps their existing session until logout/expiry. If you ever need to harden this, add a per-request middleware that re-checks `revoked_at`. Login + add/revoke/restore all land in `action_logs`.
+- **Revoke does not kill active sessions.** A revoked user keeps their existing session until logout/expiry, but is blocked at any subsequent password or OAuth authentication attempt. Login + add/revoke/restore/password-change all land in `action_logs`.
 
 ### Users settings page (`/settings/users`)
 
 `App\Http\Controllers\UsersSettingsController` is the UI for the allowlist described above — a row in `users` *is* the allowlist, and this page is where an admin edits that table without touching `clockwork:add-user` from a shell.
 
-- **`index`** lists every user (active and revoked), active first (`orderBy('revoked_at')` — NULLs sort first), then by email.
-- **`store`** (`POST /settings/users`) adds a new allowlist row, or — if the email already exists and is revoked — restores it (clears `revoked_at`, updates the name) rather than erroring on a duplicate. Logs `TYPE_USER_ADDED` or `TYPE_USER_RESTORED` accordingly.
+- **`index`** lists every user (active and revoked), active first (`orderBy('revoked_at')` — NULLs sort first), then by email. Indicates whether the user has a local password configured, SSO only, or both.
+- **`store`** (`POST /settings/users`) adds a new allowlist row with an optional initial password, or — if the email already exists and is revoked — restores it (clears `revoked_at`, updates name and optional password) rather than erroring on a duplicate. Logs `TYPE_USER_ADDED` or `TYPE_USER_RESTORED` accordingly.
+- **`updatePassword`** (`PATCH /settings/users/{user}/password`) allows administrators to set or change an operator's local password directly from the UI. Logs `TYPE_USER_PASSWORD_CHANGED`.
 - **`revoke`** (`PATCH /settings/users/{user}/revoke`) sets `revoked_at = now()`. **Blocked at the controller for self-revoke** — `Auth::id() === $user->id` bounces back with an error rather than letting you lock yourself out of the UI, since the artisan recovery path doesn't help if you can't reach the host to run it. Logs `TYPE_USER_REVOKED`.
 - **`restore`** (`PATCH /settings/users/{user}/restore`) clears `revoked_at` for an already-revoked user. Logs `TYPE_USER_RESTORED`.
 
-All four actions go through `App\Services\ActionLog\ActionLogger` with the acting admin's email as `actor`, landing in `action_logs` alongside every other audited action — see [Architecture → Data model](/docs/architecture/data-model).
+All user actions go through `App\Services\ActionLog\ActionLogger` with the acting admin's email as `actor`, landing in `action_logs` alongside every other audited action — see [Architecture → Data model](/docs/architecture/data-model).
 
 ## App-side encrypted columns
 

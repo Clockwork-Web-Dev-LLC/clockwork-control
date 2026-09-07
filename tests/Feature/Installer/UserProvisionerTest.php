@@ -3,6 +3,7 @@
 use App\Models\ActionLog;
 use App\Models\User;
 use App\Support\UserProvisioner;
+use Illuminate\Support\Facades\Hash;
 
 describe('UserProvisioner', function () {
     it('creates a new operator on the allowlist with null password', function () {
@@ -44,5 +45,36 @@ describe('UserProvisioner', function () {
         $provisioner = app(UserProvisioner::class);
 
         $provisioner->addOrRestore('invalid-not-an-email');
+    })->throws(InvalidArgumentException::class);
+
+    it('creates an operator with a hashed local password', function () {
+        $provisioner = app(UserProvisioner::class);
+
+        $result = $provisioner->addOrRestore('localpass@agency.test', 'Pass User', 'installer', 'strongSecret123!');
+
+        expect($result['status'])->toBe('created')
+            ->and($result['user']->password)->not->toBeNull()
+            ->and(Hash::check('strongSecret123!', $result['user']->password))->toBeTrue();
+    });
+
+    it('updates password for existing operator via setPassword', function () {
+        $user = User::factory()->create(['email' => 'setpass@agency.test', 'password' => null]);
+        $provisioner = app(UserProvisioner::class);
+
+        $provisioner->setPassword($user, 'updatedSecretPass123!', actor: 'cli');
+
+        expect($user->fresh()->password)->not->toBeNull()
+            ->and(Hash::check('updatedSecretPass123!', $user->fresh()->password))->toBeTrue();
+
+        $log = ActionLog::where('action_type', ActionLog::TYPE_USER_PASSWORD_CHANGED)->first();
+        expect($log)->not->toBeNull();
+        expect($log->summary)->toContain('setpass@agency.test');
+    });
+
+    it('rejects passwords shorter than 8 characters in setPassword', function () {
+        $user = User::factory()->create();
+        $provisioner = app(UserProvisioner::class);
+
+        $provisioner->setPassword($user, 'short');
     })->throws(InvalidArgumentException::class);
 });

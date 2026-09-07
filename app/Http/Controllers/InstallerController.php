@@ -401,13 +401,31 @@ class InstallerController extends Controller
 
     public function saveGoogle(Request $request): RedirectResponse
     {
+        // If credentials are completely blank, treat as skip
+        if (empty($request->input('client_id')) && empty($request->input('client_secret'))) {
+            return $this->skipGoogle($request);
+        }
+
         $validated = $request->validate([
             'client_id' => ['required', 'string'],
             'client_secret' => ['required', 'string'],
             'hd' => ['nullable', 'string'],
         ]);
 
+        $validated['skipped'] = false;
         $request->session()->put('install.wizard.google', $validated);
+
+        return redirect()->route('install.admin');
+    }
+
+    public function skipGoogle(Request $request): RedirectResponse
+    {
+        $request->session()->put('install.wizard.google', [
+            'skipped' => true,
+            'client_id' => '',
+            'client_secret' => '',
+            'hd' => '',
+        ]);
 
         return redirect()->route('install.admin');
     }
@@ -424,6 +442,8 @@ class InstallerController extends Controller
         }
 
         $saved = (array) $request->session()->get('install.wizard.admin', []);
+        $google = (array) $request->session()->get('install.wizard.google', []);
+        $isGoogleConfigured = ! empty($google['client_id']) && empty($google['skipped']);
 
         $email = ! empty($saved['email']) ? $saved['email'] : ($existingAdmin instanceof User ? $existingAdmin->email : (string) config('mail.from.address', ''));
         $name = ! empty($saved['name']) ? $saved['name'] : ($existingAdmin instanceof User ? $existingAdmin->name : (string) config('mail.from.name', ''));
@@ -435,18 +455,31 @@ class InstallerController extends Controller
 
         return view('install.admin', [
             'data' => $data,
+            'isGoogleConfigured' => $isGoogleConfigured,
             'step' => 6,
         ]);
     }
 
     public function saveAdmin(Request $request): RedirectResponse
     {
+        $google = (array) $request->session()->get('install.wizard.google', []);
+        $isGoogleConfigured = ! empty($google['client_id']) && empty($google['skipped']);
+
+        $passwordRules = $isGoogleConfigured
+            ? ['nullable', 'string', 'min:8', 'confirmed']
+            : ['required', 'string', 'min:8', 'confirmed'];
+
         $validated = $request->validate([
             'email' => ['required', 'email'],
             'name' => ['required', 'string', 'max:100'],
+            'password' => $passwordRules,
         ]);
 
-        $request->session()->put('install.wizard.admin', $validated);
+        $request->session()->put('install.wizard.admin', [
+            'email' => $validated['email'],
+            'name' => $validated['name'],
+            'password' => ! empty($validated['password']) ? $validated['password'] : null,
+        ]);
 
         return redirect()->route('install.hosting');
     }
@@ -813,13 +846,13 @@ class InstallerController extends Controller
             'SESSION_DRIVER' => 'database',
             'CACHE_STORE' => 'database',
             'QUEUE_CONNECTION' => 'database',
-            'GOOGLE_CLIENT_ID' => $google['client_id'] ?? '',
-            'GOOGLE_CLIENT_SECRET' => $google['client_secret'] ?? '',
-            'GOOGLE_REDIRECT_URI' => rtrim($appUrl, '/').'/auth/google/callback',
+            'GOOGLE_CLIENT_ID' => ! empty($google['skipped']) ? '' : ($google['client_id'] ?? ''),
+            'GOOGLE_CLIENT_SECRET' => ! empty($google['skipped']) ? '' : ($google['client_secret'] ?? ''),
+            'GOOGLE_REDIRECT_URI' => (! empty($google['client_id']) && empty($google['skipped'])) ? rtrim($appUrl, '/').'/auth/google/callback' : '',
             'CLOCKWORK_TELEMETRY_ENABLED' => $request->boolean('telemetry_opt_in') ? 'true' : 'false',
         ];
 
-        if (! empty($google['hd'])) {
+        if (! empty($google['hd']) && empty($google['skipped'])) {
             $envData['GOOGLE_HD'] = $google['hd'];
         }
 
@@ -877,6 +910,7 @@ class InstallerController extends Controller
             email: $admin['email'],
             name: $admin['name'],
             actor: 'installer',
+            password: $admin['password'] ?? null,
         );
 
         // Record the disclaimer acknowledgment durably (not just a log line,
