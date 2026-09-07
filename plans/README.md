@@ -27,6 +27,8 @@ rest) → **theme-system** → **installer** → **backup-relay-generalization**
 
 - [`feature-roadmap-board.md`](./feature-roadmap-board.md) — **Live Feature Roadmap & Kanban Board**, tracking
   candidate features, free public APIs, and ecosystem integrations across 5 research domains.
+- [`module-submission-workflow.md`](./module-submission-workflow.md) — Architecture and implementation plan
+  for the community module submission flow, intake forms, automated feed validation, and in-app directory UX.
 - [`rdap-domain-expiration.md`](./rdap-domain-expiration.md) — Automated domain expiration & registrar tracking
   via the free ICANN RDAP bootstrap API (`rdap.org`), with multi-tier warnings (30/14/7 days).
 - [`accidental-noindex-watchdog.md`](./accidental-noindex-watchdog.md) — Sentinel monitoring production sites for

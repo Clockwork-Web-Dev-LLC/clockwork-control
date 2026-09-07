@@ -15,7 +15,7 @@ This board tracks candidate features, API integrations, and new modules discover
 ├──────────────────────────────┼──────────────────────────────┼──────────────────────────────┼──────────────────────────────┤
 │ • WP.org Closed Plugin Audit │ • RDAP Domain Expiration     │ • Web Installer (/install)   │ • 5-Pillar Docs Reorg        │
 │ • Server DNSBL / Blacklists  │ • Accidental noindex Watcher │ • Theme System (Dark Mode)   │ • Backup Relay Weekly Policy │
-│ • PHP / WP End-of-Life Stats │                              │ • Backup Relay Generalize    │ • Pressable Droplet Cadence  │
+│ • PHP / WP End-of-Life Stats │ • Module Submission Workflow │ • Backup Relay Generalize    │ • Pressable Droplet Cadence  │
 │ • Visual Fleet Grid (mShots) │                              │ • SemVer & Version Release   │ • Dark/Light Contrast Fixes  │
 │ • Green Web Carbon Audit     │                              │                              │                              │
 │ • DoH Global Propagation     │                              │                              │                              │
@@ -27,7 +27,7 @@ This board tracks candidate features, API integrations, and new modules discover
 
 ---
 
-## 📐 Priority 1: Planned Modules (Detailed Specs Available)
+## 📐 Priority 1: Planned Modules & Architecture (Detailed Specs Available)
 
 ### 1. RDAP Domain Expiration & Registrar Module (`modules/DomainExpiration`)
 - **Full Specification**: [`plans/rdap-domain-expiration.md`](./rdap-domain-expiration.md)
@@ -40,6 +40,11 @@ This board tracks candidate features, API integrations, and new modules discover
 - **Summary**: Automated sentinel that probes production sites for search engine blockers (`<meta name="robots" content="noindex">`, `X-Robots-Tag: noindex`, or `Disallow: /` in `/robots.txt`).
 - **Key Advantage**: Solves the single most expensive post-launch mistake agencies make (leaving staging `noindex` enabled on production).
 - **Severity**: Immediate Critical P0 alert on `/issues` and chat channels.
+
+### 3. Community Module Submission Workflow (`clockworkcontrol.com` & `/settings/modules`)
+- **Full Specification**: [`plans/module-submission-workflow.md`](./module-submission-workflow.md)
+- **Summary**: Intake pipeline for third-party and community module authors: GitHub Issue template (`submit_module.yml`), automated JSON schema validation for `api/modules.json`, trust tier audit standards (`official`, `verified`, `community`), and in-app submission guidance modal.
+- **Key Advantage**: Closes the broken intake loop where the in-app "Submit a Module" button currently has no destination or automated ingestion pipeline.
 
 ---
 

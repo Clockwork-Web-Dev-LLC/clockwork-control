@@ -2,13 +2,13 @@
 title: Module Directory
 section: Features
 order: 91
-updated: 2026-09-04
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [modules, directory, ecosystem, settings, integrations]
 tracks: [app/Http/Controllers/ModuleDirectoryController.php, modules/Core/src/ModuleDirectoryClient.php]
 ---
 
-Lives at **`/settings/modules`** (gear menu → API credentials → "Browse Directory" or via Settings). Browse, inspect, and track official and community modules available for Clockwork Control (Control Panel).
+Lives at **`/settings/modules`** (gear menu → API credentials → "Browse Directory", or via Settings Hub → Integrations & Alerts). Browse, inspect, and track official and community modules available for Clockwork Control (Control Panel).
 
 The directory is backed by the public metadata feed at `https://clockworkcontrol.com/api/modules.json`, hosted and statically served by `clockworkcontrol.com`. It provides real-time visibility into new integrations, trust tiers, capabilities, and update statuses without requiring an application upgrade.
 
@@ -34,16 +34,20 @@ The application interacts with the feed through `Modules\Core\ModuleDirectoryCli
 3. **Offline Fallback**: If no cached data exists and the network is unavailable, the client seamlessly falls back to the local `ModuleCatalog::bundled()` (`modules/Core/src/ModuleCatalog.php`) so the directory page never fails or renders blank.
 4. **On-Demand Cache Refresh**: Clicking "Check for Updates" triggers `POST /settings/modules/refresh`, which flushes the cache and fetches fresh metadata from the upstream feed.
 
-## Controller & View
+## Controller & View Architecture
 
 * **`ModuleDirectoryController::index()`**: Retrieves feed items, reconciles them with local `InstalledModule` models to compute installation and activation status, and passes category groupings to the view.
 * **UI Features**:
-  * **Instant Live Search**: Alpine.js client-side search filtering by module name, ID, and description.
-  * **Category Navigation**: Filter across Cloud Providers, Hosting, Notifications, Authentication, Performance, Security (ManageWP Suite), and Billing.
+  * **Header Search Bar**: Prominently located in the top-right header actions slot (`x-model="searchQuery"`), leaving the category tabs bar 100% of horizontal space to scroll cleanly without collisions.
+  * **Settings Sub-Tabs**: Integrated with `settings._tabs.blade.php`, highlighting the *Integrations & Alerts* tab and linking back to the unified Settings Hub.
+  * **Full-Width Category Navigation**: Filter across Cloud Providers, Hosting, Notifications, Authentication, Performance, Security (ManageWP Suite), and Billing.
   * **Trust Badges**: Visual indicators for `Official`, `Verified`, `Community`, and `Testing`.
   * **Status Pills**: Distinguishes between `Active`, `Installed`, and available modules.
   * **Direct Actions**: Links to credential configuration for installed modules or GitHub repositories for new/community modules.
 
-## Community Modules & Contributions
+## Community Modules & Submission Workflow
 
-Developers can publish their own modules to GitHub. By tagging their repository with `clockworkcontrol-module`, community extensions become discoverable. Modules reviewed and merged via pull request to `clockworkcontrol.com-astro` are added to the official feed.
+Developers can build and publish their own modules to GitHub. Community intake follows the architecture outlined in [`plans/module-submission-workflow.md`](plans/module-submission-workflow.md):
+1. **Repository Standards**: Packages implement `Modules\Core\ModuleServiceProvider` and tag their public GitHub repository with `clockworkcontrol-module`.
+2. **Intake & Verification**: Authors submit via GitHub Issue template (`submit_module.yml`) or the marketing site.
+3. **Feed Schema Validation**: Submitted packages undergo automated JSON schema testing before inclusion in the upstream directory feed.

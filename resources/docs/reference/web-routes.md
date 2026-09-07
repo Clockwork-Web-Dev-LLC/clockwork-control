@@ -2,13 +2,13 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
 ---
 
-Every URL the app serves, grouped by area. All routes except the auth flow sit inside one `Route::middleware(['auth'])->group(...)` wrapper in `routes/web.php`. There's no stateless/machine-facing API in this app — the backup-relay droplet (see [Features → Backup relay](/docs/features/backup-relay)) never calls this app directly, so it needed no routes of its own.
+Listing of every registered HTTP route in `routes/web.php`, grouped by feature area. Public vs. auth-gated boundaries are explicit. See [Architecture → Request lifecycle](/docs/architecture/request-lifecycle) for the middleware pipeline that processes each request.
 
 **Note on module routes:** Not every URL below is defined directly in `routes/web.php`. Modular routes (such as `/settings/bill-com`, `/settings/mattermost`, and `/settings/slack`) reside in their owning module's `routes/web.php` (`modules/BillCom`, `modules/Mattermost`, `modules/Slack`), loaded via `loadRoutesFrom()` and each explicitly wrapped in `Route::middleware(['web', 'auth'])` — see [Architecture → Request lifecycle](/docs/architecture/request-lifecycle#the-auth-gate-core-routes-vs-module-routes). The URLs and behavior are identical.
 
@@ -147,6 +147,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/settings` | Settings & Operations Hub — 4-quadrant operations command center with real-time tool search. See [Features → Settings Hub](/docs/features/settings-hub). |
 | GET/POST/PATCH | `/settings/users[/{user}/{revoke,restore}]` | Allowlist management. |
 | GET/PATCH/POST | `/settings/ingest[/run-now]` | LLAR/Wordfence pull cadence + manual run. |
 | GET | `/settings/wordpress-plugins` | Fleet WP plugin inventory. |

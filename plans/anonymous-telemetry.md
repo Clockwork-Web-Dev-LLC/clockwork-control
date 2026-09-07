@@ -4,13 +4,12 @@
 
 ## Why, and exact scope (read this before anything else)
 
-The maintainer wants aggregate, non-identifying visibility into real-world usage — nothing more. Confirmed final scope, explicitly narrowed by the maintainer to exactly three signals:
+The maintainer wants aggregate, non-identifying visibility into real-world usage — nothing more. Confirmed final scope, explicitly narrowed by the maintainer to exactly two signals:
 
 1. **How many sites** a given install manages (bucketed count, never exact).
-2. **Which hosting platform(s)** those sites/servers run on (e.g. SpinupWP vs Pressable vs DigitalOcean vs Hetzner — "platform" mix, bucketed).
-3. **Which optional modules** are enabled (module ids only).
+2. **Which optional modules** are enabled (module ids only).
 
-**That's it.** No server counts, no app version, no anything else — the maintainer was explicit: *"the telemetry is vague numbers, like how many sites are being used, and which platform, and that's it! I think that is the least they can offer."* Do not add fields beyond the three above without asking first — this scope was deliberately trimmed down from an earlier, broader draft.
+**That's it.** No hosting-provider mix, no server counts, no app version, no anything else. Do not add fields beyond the two above without asking first.
 
 Never included, under any circumstance: domains, IPs, emails, org/client names, tags/notes, server hostnames, file paths, git remotes, API keys/tokens, provider account IDs, named individuals, exact (unbucketed) counts.
 
@@ -28,12 +27,11 @@ Never included, under any circumstance: domains, IPs, emails, org/client names, 
 Append a new block at the very end of the file, right before the final closing `];` (after the existing `'seo' => [...]` block):
 
 ```php
-    // Anonymous usage telemetry — opt-in, off by default. Sends only a
-    // bucketed site count, hosting-provider mix, and enabled-module list.
-    // Never domains, IPs, emails, or any other identifying data. See
-    // resources/docs/reference/env-vars.md for the full disclosure.
+    // Anonymous usage telemetry — enabled by default. Sends only a
+    // bucketed site count and enabled-module list. Never domains, IPs,
+    // credentials, hosting platforms, or any other identifying data.
     'telemetry' => [
-        'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', false),
+        'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', true),
         'endpoint' => env('CLOCKWORK_TELEMETRY_ENDPOINT', 'https://telemetry.clockworkcontrol.com/v1/report'),
     ],
 ```

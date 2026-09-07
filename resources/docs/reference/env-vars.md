@@ -342,10 +342,10 @@ Added in the modularization roadmap's Phase 8, replacing what used to be a hardc
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_TELEMETRY_ENABLED` | `false` | Opt-in anonymous usage reporting — off unless enabled during install or later in Settings → Maintenance. |
+| `CLOCKWORK_TELEMETRY_ENABLED` | `true` | Anonymous usage reporting — on by default; can be disabled during install or in Settings → Maintenance. |
 | `CLOCKWORK_TELEMETRY_ENDPOINT` | `https://telemetry.clockworkcontrol.com/v1/report` | Where the weekly report is sent, if enabled. |
 
-Clockwork Control can optionally send a small, anonymous usage report once a week — a bucketed site count, hosting-platform mix, and which optional modules are enabled. It never includes site URLs, content, credentials, or IP data. This is opt-in: it stays off unless you enable it during install or later in Settings → Maintenance. Set `CLOCKWORK_TELEMETRY_ENABLED=false` (the default) to keep this instance fully offline with no external calls.
+Clockwork Control sends a small, anonymous usage report once a week containing only two data points: a bucketed site count (e.g. `1-5`, `6-25`) and which optional modules are enabled. It never includes site URLs, hosting platforms, content, credentials, or IP data. You can toggle this anytime in Settings → Maintenance or set `CLOCKWORK_TELEMETRY_ENABLED=false` to keep this instance fully offline.
 
 See [DISCLAIMER.md](/DISCLAIMER.md) for the full data-handling commitment.
 

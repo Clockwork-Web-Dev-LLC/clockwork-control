@@ -2,7 +2,7 @@
 title: Domain expiration tracking
 section: Features
 order: 65
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [domains, rdap, expiration, registrars, monitoring]
 tracks: [app/Services/Domains/**, app/Console/Commands/CheckDomainExpirations.php]
@@ -28,11 +28,11 @@ State transitions are persisted to `sites.domain_expiration_state_changed_at` an
 - **`/issues`** — `#section-domain-expiration` card table displays all sites in `yellow` and `red` states, along with expiration date, days remaining, registrar, and an inline Recheck button.
 - **Chat channels (Mattermost / Slack)** — alerts sent when a domain transitions into `yellow` or `red`, or recovers back to `green`.
 
-## Root domain extraction & RDAP lookup
+## Root domain extraction & RDAP lookup (`RdapClient`)
 
 Clockwork extracts root registered domains using the Public Suffix List via `jeremykendall/php-domain-parser`, accurately resolving multi-part TLDs (e.g. `sub.example.co.uk` → `example.co.uk`).
 
-Lookups query the canonical RDAP bootstrap endpoint (`https://rdap.org/domain/{domain}`), follow HTTP 302 redirects to authoritative registry endpoints (e.g. Verisign, PIR), and parse:
+Outbound RDAP requests are handled by `RdapClient` (`app/Services/Domains/RdapClient.php`). Lookups query the canonical RDAP bootstrap endpoint (`https://rdap.org/domain/{domain}`), follow HTTP 302 redirects to authoritative registry endpoints (e.g. Verisign, PIR), and parse:
 - Expiration date from `events[action=expiration]`
 - Registrar name from `entities[role=registrar].vcardArray`
 - Lifecycle status from `status[]` (`redemptionPeriod`, `pendingDelete`)

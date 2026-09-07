@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -190,6 +190,16 @@ Symfony Mailgun transport. Only active when `MAIL_MAILER=mailgun`. Sends contact
 ## Arcjet — `https://raw.githubusercontent.com/arcjet/well-known-bots/main/well-known-bots.json`
 
 Plain GET, no auth. Refreshed daily at 03:00 into `allowed_bots`.
+
+## ICANN RDAP — `https://rdap.org`
+
+`app/Services/Domains/RdapClient.php` (`RdapClient`) · Public ICANN Registration Data Access Protocol (RFC 7483 / 9083), no authentication key required.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/domain/{domain}` | Resolves domain registration, registrar vCard, and expiration timestamp. Follows 302 redirects to authoritative TLD registries (e.g. Verisign, PIR). |
+
+Driven by `clockwork:check-domain-expirations` daily at 06:05 UTC. Rate-limited to 10 requests per 10 seconds, with automated 2-hour backoff upon HTTP 429/503 responses from specific TLD endpoints. See [Features → Domain expiration tracking](/docs/features/domain-expiration).
 
 ## LM Studio — `http://localhost:1234/v1` (loopback only)
 
