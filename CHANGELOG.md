@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Comment Moderation module** (`modules/CommentModeration`): browse, filter, and moderate WordPress comments (approve, hold, spam, trash, delete) via the Companion plugin, plus a weekly scheduled bulk cleanup of old spam/trash.
+- **Code Snippets module** (`modules/CodeSnippets`): sandboxed PHP execution workbench with preset and custom snippets, runnable across one or more sites at once.
+- **Site Maintenance module** (`modules/SiteMaintenance`): toggle WordPress maintenance mode on/off without SSH access, with a custom headline and message.
+- **Client Management module** (`modules/ClientManagement`): a client directory with per-client site assignment, feeding the existing Client Reports module.
+- **Client Reports module** (`modules/ClientReports`): automated executive client reporting — updates, uptime, security, backups, performance, and forms into white-labeled reports.
+- **Settings Hub** (`/settings`): a centralized 4-quadrant operations overview (Configuration, Integrations, Operations, System) with live tool search, plus a unified secondary tab navigation across settings pages.
+- **Ignore/suppress SEO indexability alerts** (`/issues`): operators can mark a known-intentional noindex (an internal intranet, a volunteer portal, etc.) as reviewed instead of it permanently sitting in the active issues list, with an Active/Ignored tab toggle and a reason-capturing modal.
+- Real-time search filtering on the Module Directory page.
+
+### Changed
+- **Anonymous usage telemetry is now on by default** (previously opt-in/off by default), still a one-click opt-out in Settings or via `CLOCKWORK_TELEMETRY_ENABLED=false`. The payload now sends exact site and server counts (previously bucketed only — buckets are retained alongside the exact counts for backwards compatibility) plus a per-module breakdown of servers and sites. Never domains, IPs, emails, or database contents.
+- Maintenance page redesigned with roll-up stat tiles, a per-module server/site breakdown table, and a copyable JSON payload inspector; database size now displays in GB above 1,024 MB.
+- Card background lightened from pure white to `#f9f9f9` in light mode (dark mode unaffected).
+- Removed the "Expand / Collapse all" bulk toggle from the docs sidebar.
+- Client Reports navigation icon standardized to `fa-solid fa-file-lines`.
+
+### Fixed
+- Increased the PHP execution timeout for the security-scan endpoint.
+- Restored six `ClockworkCompanionClient` methods (`comments()`, `moderateComments()`, `cleanupComments()`, `maintenanceMode()`, `setMaintenanceMode()`, `executeCodeSnippet()`) that were dropped during the modularization refactor above, which had left Comment Moderation, Code Snippets, and Site Maintenance non-functional.
+- Fixed missing Composer autoload registration for the four new modules — their classes could not be loaded outside of static analysis.
+- Fixed a route-name collision at `/settings/modules` that made the pre-existing Module Directory page unreachable; module enable/disable now correctly surfaces all bundled modules at `/setup/modules`.
+
 ## [1.1.0] - 2026-09-05
 
 ### Added
