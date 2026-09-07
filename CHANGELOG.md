@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-07
+
+### Fixed
+- Fixed a redirect loop trapping fresh installs at `/setup`: completing setup only ever saved credentials, never actually imported a fleet, so an operator with zero servers/sites would get bounced straight back to `/setup` by the dashboard's fresh-install gate the instant setup finished. Setup now runs the relevant fleet-source import (SpinupWP, Pressable, GridPane) automatically before redirecting, and falls back to the manual "Add a server" page instead of the gate if the fleet is still empty afterward.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
