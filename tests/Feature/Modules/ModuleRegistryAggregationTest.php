@@ -44,10 +44,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 26 registered modules', function () {
+    it('aggregates a manifest from every one of the 30 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(26);
+        expect($manifests)->toHaveCount(30);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -78,6 +78,10 @@ describe('ModuleRegistry aggregation', function () {
             'auth_google',
             'auth_github',
             'auth_microsoft',
+            'comment-moderation',
+            'code-snippets',
+            'site-maintenance',
+            'client-management',
         ]);
     });
 

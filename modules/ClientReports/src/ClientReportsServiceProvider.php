@@ -12,8 +12,11 @@ class ClientReportsServiceProvider extends ModuleServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'client-reports');
+
+        if ($this->enabled()) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
 
         $this->commands([
             SendScheduledClientReports::class,

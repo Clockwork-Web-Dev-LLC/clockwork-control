@@ -260,7 +260,14 @@
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
             "Modules\\Llar\\": "modules/Llar/src/",
-            "Modules\\BackupRelay\\": "modules/BackupRelay/src/"
+            "Modules\\BackupRelay\\": "modules/BackupRelay/src/",
+            "Modules\\CommentModeration\\": "modules/CommentModeration/src/",
+            "Modules\\CodeSnippets\\": "modules/CodeSnippets/src/",
+            "Modules\\CodeSnippets\\Database\\Seeders\\": "modules/CodeSnippets/database/seeders/",
+            "Modules\\SiteMaintenance\\": "modules/SiteMaintenance/src/",
+            "Modules\\ClientManagement\\": "modules/ClientManagement/src/",
+            "Modules\\ClientManagement\\Database\\Factories\\": "modules/ClientManagement/database/factories/",
+            "Modules\\ClientReports\\": "modules/ClientReports/src/"
         }
     },
     "autoload-dev": {

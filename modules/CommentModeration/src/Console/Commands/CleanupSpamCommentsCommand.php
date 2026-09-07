@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Throwable;
 
-class CleanupSpamComments extends Command
+class CleanupSpamCommentsCommand extends Command
 {
     protected $signature = 'clockwork:cleanup-spam-comments
         {--site= : Limit to a single site (id or domain)}

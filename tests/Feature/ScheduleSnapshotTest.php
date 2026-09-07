@@ -31,6 +31,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:check-robots-txt',
         'clockwork:check-site-uptime',
         'clockwork:check-ssl-certs',
+        'clockwork:cleanup-spam-comments',
         'clockwork:composer-audit',
         'clockwork:detect-contact-forms',
         'clockwork:detect-stuck-companion-state',

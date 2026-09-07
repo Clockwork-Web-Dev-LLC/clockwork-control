@@ -1,5 +1,5 @@
 {
-  "id": "client-reports",
+  "id": "client_reports",
   "name": "Client Reports",
   "version": "1.0.0",
   "description": "Automated executive client reporting aggregating updates, uptime, security, backups, performance, and forms into white-labeled reports",

@@ -2,8 +2,8 @@
 
 namespace Modules\CodeSnippets\Database\Seeders;
 
-use App\Models\CodeSnippet;
 use Illuminate\Database\Seeder;
+use Modules\CodeSnippets\Models\CodeSnippet;
 
 class CodeSnippetSeeder extends Seeder
 {

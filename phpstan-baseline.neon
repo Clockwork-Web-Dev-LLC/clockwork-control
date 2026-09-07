@@ -163,6 +163,12 @@ parameters:
 			path: app/Http/Controllers/IssuesController.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>domain" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/IssuesController.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$poll_status\.$#'
 			identifier: property.notFound
 			count: 1
@@ -419,6 +425,24 @@ parameters:
 			identifier: larastan.noUnnecessaryCollectionCall
 			count: 1
 			path: app/Support/IssueCounter.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<non\-falsy\-string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: modules/ClientManagement/src/Http/Controllers/ClientsController.php
+
+		-
+			message: '#^Parameter \#1 \$view of function view expects view\-string\|null, string given\.$#'
+			identifier: argument.type
+			count: 2
+			path: modules/ClientReports/src/Http/Controllers/ClientReportsController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>status" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: modules/ClientReports/src/Services/ClientReportCompiler.php
 
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'

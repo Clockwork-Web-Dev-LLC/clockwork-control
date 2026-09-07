@@ -238,6 +238,131 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Fetch paginated, filtered comments for the moderation UI.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{
+     *     comments: array<int, array<string, mixed>>,
+     *     total: int,
+     *     total_pages: int,
+     *     page: int,
+     *     per_page: int,
+     *     counts: array<string, int>,
+     * }
+     */
+    public function comments(array $filters = []): array
+    {
+        return $this->getJson('/comments', $filters);
+    }
+
+    /**
+     * Perform moderation action on one or more comments.
+     * Actions: approve, hold, spam, trash, delete.
+     *
+     * @param  array<int, int>  $commentIds
+     * @return array{
+     *     action: string,
+     *     success_count: int,
+     *     fail_count: int,
+     *     results: array<int, array{id: int, ok: bool, error?: string}>,
+     * }
+     */
+    public function moderateComments(array $commentIds, string $action): array
+    {
+        return $this->postJson('/comments/moderate', [
+            'comment_ids' => array_values(array_map('intval', $commentIds)),
+            'action' => $action,
+        ]);
+    }
+
+    /**
+     * Purge spam and trash comments older than the specified number of days.
+     *
+     * @return array{
+     *     purged_spam: int,
+     *     purged_trash: int,
+     *     total_purged: int,
+     *     older_than_days: int,
+     * }
+     */
+    public function cleanupComments(int $olderThanDays = 30): array
+    {
+        return $this->postJson('/comments/cleanup', [
+            'older_than_days' => max(0, $olderThanDays),
+        ]);
+    }
+
+    /**
+     * Get maintenance mode status and configuration.
+     *
+     * @return array{
+     *     enabled: bool,
+     *     title: string,
+     *     message: string,
+     *     bypass_param: string,
+     *     bypass_key_configured: bool,
+     *     updated_at: ?string,
+     * }
+     */
+    public function maintenanceMode(): array
+    {
+        return $this->getJson('/maintenance-mode');
+    }
+
+    /**
+     * Enable or disable maintenance mode.
+     *
+     * @return array{
+     *     enabled: bool,
+     *     title: string,
+     *     message: string,
+     *     bypass_param: string,
+     *     bypass_key_configured: bool,
+     *     updated_at: ?string,
+     * }
+     */
+    public function setMaintenanceMode(bool $enabled, ?string $title = null, ?string $message = null, ?string $secretKey = null): array
+    {
+        $body = ['enabled' => $enabled];
+        if ($title !== null) {
+            $body['title'] = $title;
+        }
+        if ($message !== null) {
+            $body['message'] = $message;
+        }
+        if ($secretKey !== null) {
+            $body['secret_key'] = $secretKey;
+        }
+
+        return $this->postJson('/maintenance-mode', $body);
+    }
+
+    /**
+     * Execute arbitrary PHP code in a sandboxed output-buffered context on the WordPress site.
+     *
+     * @return array{
+     *     ok: bool,
+     *     output: string,
+     *     return_value: mixed,
+     *     duration_ms: float,
+     *     memory_used_bytes: int,
+     *     error?: string,
+     *     file?: string,
+     *     line?: int,
+     * }
+     */
+    public function executeCodeSnippet(string $code, int $timeout = 30): array
+    {
+        return $this->postJson('/code-snippet', [
+            'code' => $code,
+            'timeout' => $timeout,
+        ], [
+            'timeout' => $timeout + 5,
+            'retries' => 1,
+        ]);
+    }
+
+    /**
      * Mint a one-time SSO magic-link URL on the WP side. The URL, when
      * visited in a browser, logs the named user in via wp_set_auth_cookie
      * and redirects to $redirectTo.

@@ -93,7 +93,7 @@
                         Code Snippets
                     </a>
                     @endif
-                    @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-reports'))
+                    @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client_reports'))
                     <a href="{{ route('client-reports.index') }}"
                        class="btn-pill-nav {{ request()->routeIs('client-reports.*') ? 'is-active' : '' }}">
                         <i class="fa-solid fa-file-lines"></i>
@@ -536,7 +536,7 @@
                                     @endif
                                 @endisset
                             </a>
-                            @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-reports'))
+                            @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client_reports'))
                             <a href="{{ route('client-reports.index') }}"
                                class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('client-reports.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
                                 <span class="flex items-center gap-3">

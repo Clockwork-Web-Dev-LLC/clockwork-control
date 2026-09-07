@@ -2,14 +2,28 @@
 
 namespace Modules\ClientManagement;
 
-use Illuminate\Support\ServiceProvider;
+use Modules\Core\ModuleManifest;
+use Modules\Core\ModuleServiceProvider;
 
-class ClientManagementServiceProvider extends ServiceProvider
+class ClientManagementServiceProvider extends ModuleServiceProvider
 {
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'client-management');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        if ($this->enabled()) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
+    }
+
+    public function manifest(): ModuleManifest
+    {
+        return new ModuleManifest(
+            id: 'client-management',
+            name: 'Client Management',
+            description: 'Organize WordPress sites by client, with a client directory and per-client site assignment.',
+            status: ModuleManifest::STATUS_VERIFIED,
+        );
     }
 }
