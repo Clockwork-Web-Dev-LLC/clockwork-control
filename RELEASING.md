@@ -69,20 +69,21 @@ Open [`CHANGELOG.md`](./CHANGELOG.md):
 3. Leave an empty `## [Unreleased]` block at the top for future work.
 
 ### 3. Bump the Application Version
-Update the default version in:
-1. `config/clockwork.php`:
-   ```php
-   'version' => env('CLOCKWORK_VERSION', 'X.Y.Z'),
-   ```
-2. `.env.example`:
-   ```env
-   CLOCKWORK_VERSION=X.Y.Z
-   ```
+Update the literal version string in `config/clockwork.php`:
+```php
+'version' => 'X.Y.Z',
+```
+This is deliberately **not** env-backed — it's which code is checked out, not
+install-specific runtime config, so it must come from the code itself and
+update automatically on every `git pull`. Never reintroduce an
+`env('CLOCKWORK_VERSION', ...)` wrapper here or a `CLOCKWORK_VERSION` line in
+`.env.example` — either one lets a self-hoster's real `.env` silently pin the
+reported version forever, since updates never touch `.env` by design.
 
 ### 4. Commit and Tag
 Commit the version bump and tag the release:
 ```bash
-git add CHANGELOG.md config/clockwork.php .env.example
+git add CHANGELOG.md config/clockwork.php
 git commit -m "chore: release vX.Y.Z"
 git tag -a vX.Y.Z -m "Clockwork Control vX.Y.Z"
 ```

@@ -1,8 +1,17 @@
 <?php
 
 return [
-    // Application release version (SemVer).
-    'version' => env('CLOCKWORK_VERSION', '1.2.1'),
+    // Application release version (SemVer). Deliberately NOT env()-backed —
+    // this is which code is checked out, not install-specific runtime
+    // config, so it must come from the code itself and update automatically
+    // on every git pull. A CLOCKWORK_VERSION in .env would silently pin this
+    // to whatever it was at install time forever, since updates never touch
+    // .env by design — exactly the trap a real install hit, where the
+    // Updates page kept reporting a stale version release after release
+    // despite the code (and every other artifact of the update) being
+    // genuinely current. Bump the literal string below at each release
+    // per RELEASING.md; do not reintroduce an env() wrapper here.
+    'version' => '1.2.1',
 
     'arcjet' => [
         'bots_url' => env(

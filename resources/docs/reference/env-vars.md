@@ -353,7 +353,6 @@ See [DISCLAIMER.md](/DISCLAIMER.md) for the full data-handling commitment.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_VERSION` | `1.0.0` | This installation's own installed Core version (SemVer). Compared against the latest GitHub release to decide whether `/settings/updates` shows "up to date" or an update banner. Bump this yourself after a manual update if you're not relying on the git-tag-driven release flow. |
 | `CLOCKWORK_UPDATE_CHANNEL` | `stable` | Cosmetic label only, shown on the updates page — doesn't currently filter which GitHub releases are considered. |
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Repo slug used to build the default releases API URL below. Change this if you're running a fork. |
 | `CLOCKWORK_UPDATES_API_URL` | `https://api.github.com/repos/Clockwork-Web-Dev-LLC/clockwork-control/releases/latest` | Full override for the release-check endpoint, in case `CLOCKWORK_UPDATE_REPO` alone isn't enough (e.g. a private mirror). |

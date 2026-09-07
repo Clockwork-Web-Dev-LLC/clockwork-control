@@ -14,13 +14,13 @@ Lives at **`/settings/updates`** (gear menu → System Updates, also reachable v
 
 Three sections, one page:
 
-1. **Core & bundled modules** — your installed version (`CLOCKWORK_VERSION`, default `1.0.0`) vs. the latest GitHub release for this repo. Up to date shows a green checkmark card with your current git branch/commit; an update available shows an amber card with the release name, changelog body, and an **Update Now** button.
+1. **Core & bundled modules** — your installed version (`config('clockwork.version')`, a literal string in `config/clockwork.php` — not an env var, so it can't drift from what's actually checked out) vs. the latest GitHub release for this repo. Up to date shows a green checkmark card with your current git branch/commit; an update available shows an amber card with the release name, changelog body, and an **Update Now** button.
 2. **Companion plugin (fleet)** — how many monitored sites have the mu-plugin installed, how many are on the bundled version (`CLOCKWORK_COMPANION_VERSION`) vs. an older one. Purely informational here — actually rolling Companion out to sites is `clockwork:companion-fleet-deploy` / `clockwork:install-companion`, not this page.
 3. **Module Directory** — a jump link to `/settings/modules`.
 
 ## Checking for updates
 
-`SystemUpdateService::checkForUpdates()` hits `CLOCKWORK_UPDATES_API_URL` (default: this repo's GitHub Releases API) and compares the tag against `CLOCKWORK_VERSION` via `version_compare()`. Cached 12h (`CLOCKWORK_UPDATES_CACHE_TTL`) so the page doesn't hit GitHub on every load — **Check Again** bypasses the cache. A network failure or rate-limit degrades gracefully (shows a "could not reach update server" notice) rather than crashing the page. Same check runs via `php artisan clockwork:check-updates`.
+`SystemUpdateService::checkForUpdates()` hits `CLOCKWORK_UPDATES_API_URL` (default: this repo's GitHub Releases API) and compares the tag against `config('clockwork.version')` via `version_compare()`. Cached 12h (`CLOCKWORK_UPDATES_CACHE_TTL`) so the page doesn't hit GitHub on every load — **Check Again** bypasses the cache. A network failure or rate-limit degrades gracefully (shows a "could not reach update server" notice) rather than crashing the page. Same check runs via `php artisan clockwork:check-updates`.
 
 ## Applying an update
 
@@ -46,9 +46,10 @@ Gated behind the same `auth` middleware group as the rest of the app — any all
 
 ## Config
 
+The installed version itself is deliberately **not** an env var — it's `config('clockwork.version')`, a literal string bumped in `config/clockwork.php` at each release (see [RELEASING.md](/RELEASING.md)). Env-backing it would let a self-hoster's `.env` silently pin the reported version forever, since updates never touch `.env` by design.
+
 | Env var | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_VERSION` | `1.0.0` | This installation's own version. |
 | `CLOCKWORK_UPDATE_CHANNEL` | `stable` | Cosmetic label on the page; doesn't filter releases yet. |
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Used to build the default releases API URL. |
 | `CLOCKWORK_UPDATES_API_URL` | (derived from the repo above) | Full override. |

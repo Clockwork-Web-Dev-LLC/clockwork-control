@@ -1,5 +1,16 @@
 # Plan: Versioning & release cadence
 
+> **Amendment (2026-09-07, after v1.2.1):** this plan's original design made
+> `CLOCKWORK_VERSION` an env var (`env('CLOCKWORK_VERSION', 'X.Y.Z')` in
+> `config/clockwork.php`, plus a matching line in `.env.example`). That design
+> was reversed after it caused a real bug on a self-hosted install: a
+> `CLOCKWORK_VERSION` line surviving in someone's real `.env` silently pinned
+> the reported version forever, since updates never touch `.env` by design —
+> every update genuinely succeeded while `/settings/updates` kept reporting
+> stale. The version is now a plain literal string in `config/clockwork.php`
+> with no `env()` wrapper and no `.env.example` entry — see RELEASING.md
+> (current) rather than the "Mechanics" section below for the real process.
+
 ## Context
 
 `app/Services/Updates/SystemUpdateService.php` already implements a complete self-update system,
