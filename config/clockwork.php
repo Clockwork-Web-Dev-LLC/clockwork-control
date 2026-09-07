@@ -2,7 +2,7 @@
 
 return [
     // Application release version (SemVer).
-    'version' => env('CLOCKWORK_VERSION', '1.1.0'),
+    'version' => env('CLOCKWORK_VERSION', '1.2.0'),
 
     'arcjet' => [
         'bots_url' => env(

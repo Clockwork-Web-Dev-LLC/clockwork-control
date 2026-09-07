@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-07
+
 ### Added
 - **Comment Moderation module** (`modules/CommentModeration`): browse, filter, and moderate WordPress comments (approve, hold, spam, trash, delete) via the Companion plugin, plus a weekly scheduled bulk cleanup of old spam/trash.
 - **Code Snippets module** (`modules/CodeSnippets`): sandboxed PHP execution workbench with preset and custom snippets, runnable across one or more sites at once.
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings Hub** (`/settings`): a centralized 4-quadrant operations overview (Configuration, Integrations, Operations, System) with live tool search, plus a unified secondary tab navigation across settings pages.
 - **Ignore/suppress SEO indexability alerts** (`/issues`): operators can mark a known-intentional noindex (an internal intranet, a volunteer portal, etc.) as reviewed instead of it permanently sitting in the active issues list, with an Active/Ignored tab toggle and a reason-capturing modal.
 - Real-time search filtering on the Module Directory page.
+- **Remove-server action surfaced automatically**: when a poll confirms a server's provider_id no longer exists at its cloud provider (DigitalOcean, Hetzner, etc.), the server's detail page now shows a banner with a one-click "Remove from Clockwork" action (still typed-name-confirmed and cascade-deleting), regardless of which tab is open. Previously this required knowing the Settings tab had a delete button at all. Self-clears if the next poll succeeds, so a transient API hiccup never falsely flags a live server.
 
 ### Changed
 - **Anonymous usage telemetry is now on by default** (previously opt-in/off by default), still a one-click opt-out in Settings or via `CLOCKWORK_TELEMETRY_ENABLED=false`. The payload now sends exact site and server counts (previously bucketed only — buckets are retained alongside the exact counts for backwards compatibility) plus a per-module breakdown of servers and sites. Never domains, IPs, emails, or database contents.
@@ -23,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Card background lightened from pure white to `#f9f9f9` in light mode (dark mode unaffected).
 - Removed the "Expand / Collapse all" bulk toggle from the docs sidebar.
 - Client Reports navigation icon standardized to `fa-solid fa-file-lines`.
+- **Main navigation decluttered**: Code Snippets and Clients moved from top-level nav pills into the gear/Settings menu (both now contribute via the same module-nav-item mechanism Client Reports already used).
 
 ### Fixed
 - Increased the PHP execution timeout for the security-scan endpoint.
