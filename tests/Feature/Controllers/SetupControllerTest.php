@@ -8,6 +8,7 @@ use App\Support\EnvCredentialManager;
 use Illuminate\Support\Facades\Http;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
+use Modules\Core\ModuleStateResolver;
 use Tests\Concerns\RendersAuthenticatedPages;
 use Tests\Fixtures\SpinupWpFixtures;
 
@@ -242,20 +243,43 @@ describe('Step 2: Configure selected services (GET/POST /setup/configure)', func
     it('only displays configuration cards for services selected in Step 1', function () {
         $user = User::factory()->create();
 
-        // Enable only DigitalOcean and Slack
-        InstalledModule::create(['module_id' => 'digitalocean', 'name' => 'DigitalOcean', 'enabled' => true]);
-        InstalledModule::create(['module_id' => 'slack', 'name' => 'Slack', 'enabled' => true]);
-        InstalledModule::create(['module_id' => 'azure', 'name' => 'Azure', 'enabled' => false]);
-        InstalledModule::create(['module_id' => 'kinsta', 'name' => 'Kinsta', 'enabled' => false]);
+        // Mirror what step1Save actually does on a real submission: every
+        // bundled module gets an explicit InstalledModule row (enabled only
+        // for what was selected), not just the handful this test cares
+        // about — leaving the rest unrecorded means they fall back to
+        // isEnabled()'s default of `true`, which would defeat the very
+        // filtering this test means to verify (e.g. the unrelated
+        // auth_microsoft module, whose guide text also happens to mention
+        // "Azure AD", would render as "configured" too).
+        //
+        // ModuleStateResolver also memoizes installed_modules on first
+        // access, which every module's own ModuleServiceProvider::register()
+        // already triggered during this test's app bootstrap — before this
+        // test body runs — so an explicit flush() is required for these rows
+        // to actually take effect. See
+        // tests/Feature/Modules/ModuleEnableDisableTest.php for the same
+        // pattern applied directly against the resolver.
+        $selected = ['digitalocean', 'slack'];
+        foreach (ModuleCatalog::bundled() as $id => $item) {
+            InstalledModule::create([
+                'module_id' => $id,
+                'name' => $item['manifest']->name,
+                'enabled' => in_array($id, $selected, true),
+            ]);
+        }
+        app(ModuleStateResolver::class)->flush();
 
         $response = $this->actingAs($user)->get(route('setup.step2'));
 
+        // Azure's real manifest name is just "Azure" (not "Azure (Virtual
+        // Machines)" — that string never appears anywhere on this page).
         $response->assertOk()
             ->assertSee('Configure your selected services')
             ->assertSee('DigitalOcean')
             ->assertSee('Slack')
             ->assertSee('Get API Key')
-            ->assertDontSee('Azure (Virtual Machines)');
+            ->assertDontSee('Azure')
+            ->assertDontSee('Kinsta');
     });
 
     it('saves entered API credentials and redirects to servers.create when a cloud-only setup leaves the fleet empty', function () {
