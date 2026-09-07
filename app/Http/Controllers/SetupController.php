@@ -11,11 +11,13 @@ use App\Support\EnvCredentialManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleStateResolver;
+use Throwable;
 
 class SetupController extends Controller
 {
@@ -456,6 +458,54 @@ class SetupController extends Controller
             }
         }
 
+        // The dashboard route redirects back here whenever the fleet is
+        // completely empty (RedirectToSetupIfFreshInstall) — without this,
+        // a freshly-configured install bounces the operator straight back
+        // to /setup the instant step2Save redirects to dashboard, since
+        // saving credentials alone never actually imports anything. Run
+        // every fleet-source import now so the very first redirect lands
+        // somewhere real.
+        if (Server::count() === 0 && Site::count() === 0) {
+            $this->attemptFleetSourceImports();
+        }
+
+        // Still nothing after a best-effort import (e.g. only cloud-VPS
+        // credentials were entered, which have no "sites" of their own to
+        // import, or the entered credentials were wrong) — send the
+        // operator somewhere productive instead of letting the dashboard
+        // gate bounce them straight back to /setup with no way out.
+        if (Server::count() === 0 && Site::count() === 0) {
+            return redirect()->route('servers.create')
+                ->with('status', 'Setup completed, but no servers were found yet. Add one manually below, or double-check your credentials and use "Refresh from SpinupWP" once you have a server.');
+        }
+
         return redirect()->route('dashboard')->with('status', 'Setup completed! Your active fleet integrations are ready.');
+    }
+
+    /**
+     * Best-effort: run every fleet-source import command. Each one already
+     * no-ops safely (FAILURE exit, no exception) when its own credentials
+     * aren't configured, so it's safe to always attempt all three rather
+     * than guess which one(s) the operator just filled in.
+     */
+    protected function attemptFleetSourceImports(): void
+    {
+        foreach (['clockwork:import-spinupwp', 'clockwork:import-pressable', 'clockwork:import-gridpane'] as $command) {
+            try {
+                Artisan::call($command);
+            } catch (Throwable) {
+                // A single provider's import failing (bad credentials,
+                // network issue) must not block the others or the redirect
+                // that follows.
+            }
+        }
+
+        if (Server::count() > 0 || Site::count() > 0) {
+            try {
+                Artisan::call('clockwork:poll-servers');
+            } catch (Throwable) {
+                // Non-fatal — the next scheduled poll picks it up.
+            }
+        }
     }
 }

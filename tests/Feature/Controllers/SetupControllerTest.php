@@ -5,9 +5,11 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\CredentialResolver;
 use App\Support\EnvCredentialManager;
+use Illuminate\Support\Facades\Http;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
 use Tests\Concerns\RendersAuthenticatedPages;
+use Tests\Fixtures\SpinupWpFixtures;
 
 uses(RendersAuthenticatedPages::class);
 
@@ -256,7 +258,14 @@ describe('Step 2: Configure selected services (GET/POST /setup/configure)', func
             ->assertDontSee('Azure (Virtual Machines)');
     });
 
-    it('saves entered API credentials and redirects to dashboard with success message', function () {
+    it('saves entered API credentials and redirects to servers.create when a cloud-only setup leaves the fleet empty', function () {
+        // DigitalOcean alone has no "sites" of its own to import — it only
+        // provides metrics for servers a hosting-panel import (SpinupWP/
+        // Pressable/GridPane) already knows about. Regression coverage for
+        // the bug where a fresh install with only cloud-VPS credentials
+        // configured would bounce forever between /setup and the dashboard
+        // (RedirectToSetupIfFreshInstall sends an empty fleet straight back
+        // to /setup, and saving credentials alone never populates one).
         $user = User::factory()->create();
 
         InstalledModule::create(['module_id' => 'digitalocean', 'name' => 'DigitalOcean', 'enabled' => true]);
@@ -265,11 +274,44 @@ describe('Step 2: Configure selected services (GET/POST /setup/configure)', func
             'value_digitalocean_token' => 'dop_v1_test_token_12345',
         ]);
 
-        $response->assertRedirect(route('dashboard'))
-            ->assertSessionHas('status', 'Setup completed! Your active fleet integrations are ready.');
+        $response->assertRedirect(route('servers.create'))
+            ->assertSessionHas('status', 'Setup completed, but no servers were found yet. Add one manually below, or double-check your credentials and use "Refresh from SpinupWP" once you have a server.');
 
         $resolver = app(CredentialResolver::class);
         expect($resolver->get('digitalocean.token'))->toBe('dop_v1_test_token_12345');
+        expect(Server::count())->toBe(0);
+        expect(Site::count())->toBe(0);
+    });
+
+    it('auto-imports the fleet and redirects to dashboard when SpinupWP credentials are entered', function () {
+        $user = User::factory()->create();
+
+        InstalledModule::create(['module_id' => 'spinupwp', 'name' => 'SpinupWP', 'enabled' => true]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server(['id' => 111, 'name' => 'web1', 'ip_address' => '203.0.113.5']),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::site(['id' => 222, 'server_id' => 111, 'domain' => 'client-one.example.com']),
+                ]),
+                200
+            ),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('setup.step2.save'), [
+            'value_spinupwp_token' => 'swp-test-token',
+        ]);
+
+        $response->assertRedirect(route('dashboard'))
+            ->assertSessionHas('status', 'Setup completed! Your active fleet integrations are ready.');
+
+        expect(Server::count())->toBe(1);
+        expect(Site::count())->toBe(1);
     });
 });
 
