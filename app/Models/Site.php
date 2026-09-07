@@ -481,6 +481,18 @@ class Site extends Model
         return $this->belongsTo(Client::class);
     }
 
+    public function ignoredIssues(): HasMany
+    {
+        return $this->hasMany(IgnoredIssue::class);
+    }
+
+    public function isIssueIgnored(string $issueType): bool
+    {
+        return $this->relationLoaded('ignoredIssues')
+            ? $this->ignoredIssues->contains('issue_type', $issueType)
+            : $this->ignoredIssues()->where('issue_type', $issueType)->exists();
+    }
+
     /**
      * Identity check — "is this specifically Pressable" (native UI tools,
      * transport quirks like edge-cache purging, import guards). For a

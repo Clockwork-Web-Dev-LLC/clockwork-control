@@ -295,9 +295,21 @@
     @endif
 
     {{-- SEO INDEXABILITY --}}
-    @if ($seoIssues->isNotEmpty())
-        <section id="section-seo-indexability" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+    @if ($seoIssues->isNotEmpty() || $ignoredSeoIssues->isNotEmpty())
+        <section id="section-seo-indexability" class="card overflow-hidden mb-6" x-data="{
+            activeTab: 'active',
+            ignoreModalOpen: false,
+            targetSiteId: null,
+            targetDomain: '',
+            ignoreReason: '',
+            openIgnore(id, domain) {
+                this.targetSiteId = id;
+                this.targetDomain = domain;
+                this.ignoreReason = '';
+                this.ignoreModalOpen = true;
+            }
+        }">
+            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-magnifying-glass text-[var(--color-status-red)] mr-2"></i>
@@ -307,72 +319,273 @@
                         Red = production site blocking search engines · Gray = staging environment protected from search.
                     </p>
                 </div>
-                <span class="status-pill status-red">{{ $totals['seo_blocked'] }}</span>
+                <div class="flex items-center gap-3">
+                    <div class="inline-flex items-center p-0.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-xs">
+                        <button type="button"
+                                @click="activeTab = 'active'"
+                                :class="activeTab === 'active' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                                class="px-2.5 py-1 rounded-md transition-all inline-flex items-center gap-1.5 cursor-pointer">
+                            <span>Active Issues</span>
+                            @if ($totals['seo_blocked'] > 0)
+                                <span class="status-pill status-red text-[10px] py-0 px-1.5 leading-tight">{{ $totals['seo_blocked'] }}</span>
+                            @else
+                                <span class="status-pill status-green text-[10px] py-0 px-1.5 leading-tight">0</span>
+                            @endif
+                        </button>
+                        <button type="button"
+                                @click="activeTab = 'ignored'"
+                                :class="activeTab === 'ignored' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                                class="px-2.5 py-1 rounded-md transition-all inline-flex items-center gap-1.5 cursor-pointer">
+                            <span>Ignored / Suppressed</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-medium {{ $ignoredSeoIssues->isNotEmpty() ? 'bg-[var(--color-surface-subtle)] text-[var(--color-ink-strong)] border border-[var(--color-border-light)]' : 'text-[var(--color-ink-muted)]' }}">
+                                {{ $ignoredSeoIssues->count() }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="status" class="px-5 py-2">Status</x-sort-th>
-                        <x-sort-th key="reason" class="px-5 py-2">Blocked vector</x-sort-th>
-                        <th class="px-5 py-2">Snippet</th>
-                        <x-sort-th key="checked" class="px-5 py-2">Checked</x-sort-th>
-                        <th class="px-5 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($seoIssues as $s)
-                        @php
-                            $isStaging = $s->server?->isStaging() ?? false;
-                            $pillClass = $isStaging ? 'status-gray' : 'status-red';
-                            $statusLabel = $s->seoStatusLabel();
-                            $reasonLabel = match ($s->seo_blocked_reason) {
-                                'meta_noindex' => 'Meta noindex',
-                                'header_noindex' => 'X-Robots-Tag',
-                                'robots_disallow_all' => 'robots.txt Disallow',
-                                default => $s->seo_blocked_reason ?? 'Blocked',
-                            };
-                        @endphp
-                        <tr data-site-row="{{ $s->id }}"
-                            data-sort-site="{{ $s->domain }}"
-                            data-sort-server="{{ $s->server?->name ?? '' }}"
-                            data-sort-status="{{ $isStaging ? 'staging' : 'production' }}"
-                            data-sort-reason="{{ $s->seo_blocked_reason }}"
-                            data-sort-checked="{{ $s->seo_checked_at?->getTimestamp() ?? '' }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
-                            </td>
-                            <td class="px-5 py-2 cell-status">
-                                <span class="status-pill {{ $pillClass }} text-[10px]">{{ $statusLabel }}</span>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-medium text-[var(--color-ink)] cell-reason">
-                                {{ $reasonLabel }}
-                            </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] font-mono cell-snippet">
-                                @if ($s->seo_blocked_snippet)
-                                    <code class="bg-[var(--color-surface-subtle)] px-1.5 py-0.5 rounded text-[11px]">{{ Str::limit($s->seo_blocked_snippet, 55) }}</code>
-                                @else
-                                    <span class="text-[var(--color-ink-soft)]">—</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] cell-checked">
-                                {{ $s->seo_checked_at?->diffForHumans() ?? 'never' }}
-                            </td>
-                            <td class="px-5 py-2 text-right">
-                                <button type="button"
-                                        class="preflight-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50"
-                                        data-url="{{ route('sites.seo.preflight', $s) }}">
-                                    <i class="fa-solid fa-rotate"></i> Pre-flight check
-                                </button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+
+            {{-- ACTIVE SEO ISSUES TABLE --}}
+            <div x-show="activeTab === 'active'">
+                @if ($seoIssues->isEmpty())
+                    <div class="p-8 text-center text-xs text-[var(--color-ink-muted)]">
+                        <i class="fa-solid fa-circle-check text-emerald-500 text-lg mb-2 block"></i>
+                        No active SEO indexability issues across the fleet.
+                        @if ($ignoredSeoIssues->isNotEmpty())
+                            <span class="block mt-1">
+                                ({{ $ignoredSeoIssues->count() }} {{ Str::plural('site', $ignoredSeoIssues->count()) }} currently suppressed in <button type="button" @click="activeTab = 'ignored'" class="text-[var(--color-brand)] underline hover:text-[var(--color-brand-dark)] cursor-pointer">Ignored</button>)
+                            </span>
+                        @endif
+                    </div>
+                @else
+                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
+                                <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                                <x-sort-th key="status" class="px-5 py-2">Status</x-sort-th>
+                                <x-sort-th key="reason" class="px-5 py-2">Blocked vector</x-sort-th>
+                                <th class="px-5 py-2">Snippet</th>
+                                <x-sort-th key="checked" class="px-5 py-2">Checked</x-sort-th>
+                                <th class="px-5 py-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($seoIssues as $s)
+                                @php
+                                    $isStaging = $s->server?->isStaging() ?? false;
+                                    $pillClass = $isStaging ? 'status-gray' : 'status-red';
+                                    $statusLabel = $s->seoStatusLabel();
+                                    $reasonLabel = match ($s->seo_blocked_reason) {
+                                        'meta_noindex' => 'Meta noindex',
+                                        'header_noindex' => 'X-Robots-Tag',
+                                        'robots_disallow_all' => 'robots.txt Disallow',
+                                        default => $s->seo_blocked_reason ?? 'Blocked',
+                                    };
+                                @endphp
+                                <tr data-site-row="{{ $s->id }}"
+                                    data-sort-site="{{ $s->domain }}"
+                                    data-sort-server="{{ $s->server?->name ?? '' }}"
+                                    data-sort-status="{{ $isStaging ? 'staging' : 'production' }}"
+                                    data-sort-reason="{{ $s->seo_blocked_reason }}"
+                                    data-sort-checked="{{ $s->seo_checked_at?->getTimestamp() ?? '' }}">
+                                    <td class="px-5 py-2 font-data">
+                                        <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs font-data">
+                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                    </td>
+                                    <td class="px-5 py-2 cell-status">
+                                        <span class="status-pill {{ $pillClass }} text-[10px]">{{ $statusLabel }}</span>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs font-medium text-[var(--color-ink)] cell-reason">
+                                        {{ $reasonLabel }}
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] font-mono cell-snippet">
+                                        @if ($s->seo_blocked_snippet)
+                                            <code class="bg-[var(--color-surface-subtle)] px-1.5 py-0.5 rounded text-[11px]">{{ Str::limit($s->seo_blocked_snippet, 55) }}</code>
+                                        @else
+                                            <span class="text-[var(--color-ink-soft)]">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] cell-checked">
+                                        {{ $s->seo_checked_at?->diffForHumans() ?? 'never' }}
+                                    </td>
+                                    <td class="px-5 py-2 text-right">
+                                        <div class="flex items-center justify-end gap-2.5">
+                                            <button type="button"
+                                                    class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] inline-flex items-center gap-1 cursor-pointer"
+                                                    title="Ignore this alert if noindex is intentional"
+                                                    @click="openIgnore({{ $s->id }}, '{{ $s->domain }}')">
+                                                <i class="fa-solid fa-eye-slash text-[11px]"></i>
+                                                <span>Ignore</span>
+                                            </button>
+                                            <button type="button"
+                                                    class="preflight-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer"
+                                                    data-url="{{ route('sites.seo.preflight', $s) }}">
+                                                <i class="fa-solid fa-rotate"></i>
+                                                <span>Pre-flight check</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+            </div>
+
+            {{-- IGNORED SEO ISSUES TABLE --}}
+            <div x-show="activeTab === 'ignored'" x-cloak>
+                @if ($ignoredSeoIssues->isEmpty())
+                    <div class="p-8 text-center text-xs text-[var(--color-ink-muted)]">
+                        <i class="fa-solid fa-info-circle text-[var(--color-ink-soft)] text-lg mb-2 block"></i>
+                        No SEO indexability issues are currently ignored.
+                    </div>
+                @else
+                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
+                                <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                                <th class="px-5 py-2">Blocked Vector</th>
+                                <th class="px-5 py-2">Ignore Reason</th>
+                                <x-sort-th key="ignored_at" class="px-5 py-2">Ignored Date</x-sort-th>
+                                <th class="px-5 py-2 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($ignoredSeoIssues as $item)
+                                @php
+                                    $site = $item->site;
+                                    $reasonLabel = match ($site?->seo_blocked_reason) {
+                                        'meta_noindex' => 'Meta noindex',
+                                        'header_noindex' => 'X-Robots-Tag',
+                                        'robots_disallow_all' => 'robots.txt Disallow',
+                                        default => $site?->seo_blocked_reason ?? 'Blocked',
+                                    };
+                                @endphp
+                                <tr data-sort-site="{{ $site?->domain ?? '' }}"
+                                    data-sort-server="{{ $site?->server?->name ?? '' }}"
+                                    data-sort-ignored_at="{{ $item->created_at?->getTimestamp() ?? '' }}">
+                                    <td class="px-5 py-2 font-data">
+                                        @if ($site)
+                                            <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
+                                        @else
+                                            <span class="text-[var(--color-ink-muted)]">Deleted Site #{{ $item->site_id }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-2 text-xs font-data">
+                                        @if ($site?->server)
+                                            <a href="{{ route('servers.show', $site->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $site->server->name }}</a>
+                                        @else
+                                            <span class="text-[var(--color-ink-soft)]">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink)] font-medium">
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--color-surface-subtle)] text-[11px] border border-[var(--color-border-light)]">
+                                            <i class="fa-solid fa-ban text-[var(--color-ink-muted)] text-[10px]"></i>
+                                            {{ $reasonLabel }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-strong)]">
+                                        @if ($item->reason)
+                                            <span class="font-medium text-[var(--color-ink-strong)]">{{ $item->reason }}</span>
+                                        @else
+                                            <span class="text-[var(--color-ink-soft)] italic">No reason provided</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data">
+                                        {{ $item->created_at?->format('M j, Y') }}
+                                        @if ($item->user)
+                                            <span class="text-[11px] text-[var(--color-ink-muted)]">by {{ $item->user->name }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-2 text-right">
+                                        <div class="flex items-center justify-end gap-2.5">
+                                            <form method="POST" action="{{ route('issues.unignore', $item) }}" class="inline">
+                                                @csrf
+                                                <button type="submit"
+                                                        class="btn-pill-nav text-xs cursor-pointer"
+                                                        title="Resume monitoring and alerting for this site">
+                                                    <i class="fa-solid fa-play text-emerald-600 text-[10px]"></i>
+                                                    <span>Resume monitoring</span>
+                                                </button>
+                                            </form>
+                                            @if ($site)
+                                                <button type="button"
+                                                        class="preflight-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer"
+                                                        data-url="{{ route('sites.seo.preflight', $site) }}">
+                                                    <i class="fa-solid fa-rotate"></i>
+                                                    <span>Pre-flight</span>
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+            </div>
+
+            {{-- IGNORE MODAL --}}
+            <div x-show="ignoreModalOpen"
+                 x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
+                 @keydown.escape.window="ignoreModalOpen = false">
+                <div class="card p-5 max-w-md w-full bg-[var(--color-surface)] shadow-xl border border-[var(--color-border-light)] rounded-xl"
+                     @click.outside="ignoreModalOpen = false">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-eye-slash"></i>
+                            </span>
+                            <div>
+                                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">Ignore SEO Indexability Alert</h3>
+                                <p class="text-xs text-[var(--color-ink-muted)] font-data" x-text="targetDomain"></p>
+                            </div>
+                        </div>
+                        <button type="button" @click="ignoreModalOpen = false" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-[var(--color-ink-muted)] mb-4 leading-relaxed">
+                        Suppressing this alert hides the site from <code class="text-[11px] px-1 py-0.5 rounded bg-[var(--color-surface-subtle)]">/issues</code> and decrements the navigation badge. You can review all ignored sites and resume monitoring anytime.
+                    </p>
+
+                    <form method="POST" action="{{ route('issues.ignore') }}">
+                        @csrf
+                        <input type="hidden" name="issue_type" value="seo_indexability">
+                        <input type="hidden" name="site_id" :value="targetSiteId">
+
+                        <div class="mb-4">
+                            <label class="block text-[11px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold mb-1.5">
+                                Reason for ignoring (optional)
+                            </label>
+                            <input type="text"
+                                   name="reason"
+                                   x-model="ignoreReason"
+                                   placeholder="e.g. Internal employee intranet, volunteer portal, deliberate noindex"
+                                   class="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] placeholder:text-[var(--color-ink-muted)] focus:outline-hidden focus:ring-2 focus:ring-[var(--color-brand)]/20 focus:border-[var(--color-brand)]">
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-border-light)]">
+                            <button type="button"
+                                    @click="ignoreModalOpen = false"
+                                    class="btn-pill-nav text-xs cursor-pointer">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="btn-primary text-xs font-medium cursor-pointer">
+                                <i class="fa-solid fa-eye-slash text-[11px]"></i>
+                                <span>Ignore Alert</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
             <script>
                 (function () {

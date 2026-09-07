@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ContactFormTest;
+use App\Models\IgnoredIssue;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
@@ -12,6 +13,7 @@ use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\WpConfigExtractor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 use Throwable;
@@ -105,9 +107,18 @@ class IssuesController extends Controller
             ->orderBy('domain_expires_at')
             ->get();
 
+        // Ignored SEO indexability records
+        $ignoredSeoIssues = IgnoredIssue::query()
+            ->where('issue_type', IgnoredIssue::TYPE_SEO_INDEXABILITY)
+            ->with(['site.server', 'user'])
+            ->latest()
+            ->get();
+
+        $ignoredSeoSiteIds = $ignoredSeoIssues->pluck('site_id')->filter();
+
         // SEO indexability issues (production blocking + staging protected).
         // KEEP IN SYNC with App\Support\IssueCounter::total().
-        $seoIssues = Site::query()
+        $allSeoIssues = Site::query()
             ->with(['server:id,name,is_ignored', 'server.tags:id,name,slug'])
             ->where('is_inactive', false)
             ->where('seo_monitoring_enabled', true)
@@ -116,6 +127,7 @@ class IssuesController extends Controller
             ->orderBy('seo_checked_at', 'desc')
             ->get();
 
+        $seoIssues = $allSeoIssues->reject(fn (Site $s) => $ignoredSeoSiteIds->contains($s->id))->values();
         $seoBlockedCount = $seoIssues->reject(fn (Site $s) => (bool) $s->server?->isStaging())->count();
 
         // Server health: status=red
@@ -317,6 +329,7 @@ class IssuesController extends Controller
             'sslIssues',
             'domainExpirationIssues',
             'seoIssues',
+            'ignoredSeoIssues',
             'unhealthyServers',
             'hotServers',
             'cfMisconfigured',
@@ -397,5 +410,52 @@ class IssuesController extends Controller
         $unhealthy = Server::query()->monitored()->where('status', 'red')->count();
 
         return response()->json(['ok' => true, 'unhealthy' => $unhealthy]);
+    }
+
+    public function ignore(Request $request): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'issue_type' => ['required', 'string', 'in:seo_indexability'],
+            'site_id' => ['nullable', 'integer', 'exists:sites,id'],
+            'server_id' => ['nullable', 'integer', 'exists:servers,id'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $ignoredIssue = IgnoredIssue::updateOrCreate(
+            [
+                'issue_type' => $validated['issue_type'],
+                'site_id' => $validated['site_id'] ?? null,
+            ],
+            [
+                'server_id' => $validated['server_id'] ?? null,
+                'reason' => $validated['reason'] ?? null,
+                'ignored_by_user_id' => $request->user()?->id,
+            ]
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Issue ignored successfully.',
+                'ignored_issue' => $ignoredIssue->load(['site.server', 'user']),
+            ]);
+        }
+
+        return back()->with('status', 'Issue ignored successfully.');
+    }
+
+    public function unignore(IgnoredIssue $ignoredIssue, Request $request): JsonResponse|RedirectResponse
+    {
+        $domain = $ignoredIssue->site?->domain ?? 'Target';
+        $ignoredIssue->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => "Restored {$domain} to active monitoring.",
+            ]);
+        }
+
+        return back()->with('status', "Restored {$domain} to active monitoring.");
     }
 }

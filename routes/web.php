@@ -174,6 +174,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/issues/poll-servers', [IssuesController::class, 'pollServers'])->name('issues.poll-servers');
     Route::post('/issues/fetch-all-db-creds', [IssuesController::class, 'fetchAllDbCreds'])->name('issues.fetch-all-db-creds');
     Route::delete('/issues/orphans/{siteId}', [IssuesController::class, 'destroyOrphan'])->name('issues.orphans.destroy');
+    Route::post('/issues/ignore', [IssuesController::class, 'ignore'])->name('issues.ignore');
+    Route::post('/issues/unignore/{ignoredIssue}', [IssuesController::class, 'unignore'])->name('issues.unignore');
 
     Route::get('/capacity', [CapacityController::class, 'index'])->name('capacity.index');
     Route::get('/capacity/settings', [CapacityController::class, 'settings'])->name('capacity.settings');

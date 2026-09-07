@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\ContactFormTest;
+use App\Models\IgnoredIssue;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
@@ -77,11 +78,13 @@ class IssueCounter
 
         // SEO indexability: production sites blocking search engines.
         // Staging-tagged sites are excluded (staging sites are expected to block indexing).
+        // Ignored sites are explicitly suppressed by operators.
         // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
         $seoBlocked = Site::query()
             ->where('is_inactive', false)
             ->where('seo_monitoring_enabled', true)
             ->where('seo_indexable', false)
+            ->whereNotIn('id', IgnoredIssue::query()->where('issue_type', IgnoredIssue::TYPE_SEO_INDEXABILITY)->select('site_id'))
             ->hostMonitored()
             ->count();
 
