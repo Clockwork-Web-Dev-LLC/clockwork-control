@@ -85,7 +85,8 @@ describe('bulkUpdate (POST /servers/credentials)', function () {
             'passwords' => [$server->id => 'another-pw'],
         ]);
 
-        $response->assertSessionHas('status', 'Updated SSH credentials on 1 server(s). Verified 0, 1 failed verification.');
+        $response->assertSessionHas('status_error', 'Updated SSH credentials on 1 server(s). Verified 0, 1 failed verification.');
+        $response->assertSessionMissing('status');
         expect($server->fresh()->ssh_password)->toBe('another-pw');
     });
 
@@ -144,6 +145,35 @@ describe('update (PATCH /servers/{server}/credentials)', function () {
 
         $rawPassword = DB::table('servers')->where('id', $server->id)->value('ssh_password');
         expect($rawPassword)->not->toBe('new-strong-password');
+    });
+
+    it('flashes status_error (not status) when the SSH test fails, even though credentials still saved', function () {
+        $server = Server::factory()->create([
+            'ssh_user' => 'clockwork-deploy',
+            'ssh_port' => 22,
+            'ssh_password' => 'old-password',
+        ]);
+
+        $this->mock(SshClient::class)
+            ->shouldReceive('test')
+            ->once()
+            ->withArgs(fn (Server $s) => $s->is($server))
+            ->andReturn(['ok' => false, 'message' => 'password rejected (server may have PasswordAuthentication disabled)']);
+
+        $response = $this->actingAs(User::factory()->create())->patch(route('servers.credentials.update', $server), [
+            'ssh_user' => 'deploy',
+            'ssh_port' => 2222,
+            'ssh_password' => 'new-strong-password',
+        ]);
+
+        $response->assertRedirect(route('servers.show', $server));
+        $response->assertSessionHas('status_error', 'Credentials updated. SSH test failed: password rejected (server may have PasswordAuthentication disabled)');
+        $response->assertSessionMissing('status');
+
+        // The password is still saved even though the test failed — this
+        // flash is reporting SSH reachability, not whether the save itself
+        // succeeded.
+        expect($server->fresh()->ssh_password)->toBe('new-strong-password');
     });
 
     it('clears the stored password when clear_password is set, without calling SSH', function () {

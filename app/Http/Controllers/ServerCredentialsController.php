@@ -71,7 +71,7 @@ class ServerCredentialsController extends Controller
 
         return redirect()
             ->route('servers.credentials.bulk')
-            ->with('status', $msg);
+            ->with($failed > 0 ? 'status_error' : 'status', $msg);
     }
 
     public function edit(Server $server): View
@@ -109,16 +109,20 @@ class ServerCredentialsController extends Controller
         $server->save();
 
         $message = 'Credentials updated.';
+        $sshFailed = false;
         if ($credentialsChanged && $server->ssh_password) {
             $result = $ssh->test($server->fresh());
-            $message .= ' '.($result['ok']
-                ? 'SSH verified.'
-                : 'SSH test failed: '.($result['message'] ?? 'unknown error'));
+            if ($result['ok']) {
+                $message .= ' SSH verified.';
+            } else {
+                $sshFailed = true;
+                $message .= ' SSH test failed: '.($result['message'] ?? 'unknown error');
+            }
         }
 
         return redirect()
             ->route('servers.show', $server)
-            ->with('status', $message);
+            ->with($sshFailed ? 'status_error' : 'status', $message);
     }
 
     public function test(Server $server, SshClient $ssh): JsonResponse
@@ -298,6 +302,6 @@ class ServerCredentialsController extends Controller
 
         return redirect()
             ->route('servers.credentials.bulk')
-            ->with('status', $msg);
+            ->with($failed > 0 ? 'status_error' : 'status', $msg);
     }
 }
