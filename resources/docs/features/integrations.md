@@ -2,13 +2,13 @@
 title: Integrations settings
 section: Features
 order: 89
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, credentials, settings, modularization, rate-limits, env]
 tracks: [app/Http/Controllers/IntegrationCredentialsController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, app/Support/CredentialResolver.php, app/Models/IntegrationCredential.php, modules/*/src/*ServiceProvider.php]
 ---
 
-Lives at **`/settings/integrations`** (gear menu → API credentials). Provides credential management and connection monitoring for all supported cloud VPS providers, hosting platforms, and external service APIs. A "Browse Directory" button links directly to the [Module Directory](/docs/features/module-directory) at `/settings/modules`.
+Lives at **`/settings/integrations`** (gear menu → API credentials, or via the centralized [Settings Hub](/docs/features/settings-hub) at `/settings`, under Integrations & Alerts). Provides credential management and connection monitoring for all supported cloud VPS providers, hosting platforms, and external service APIs. A "Browse Directory" button links directly to the [Module Directory](/docs/features/module-directory) at `/settings/modules`.
 
 ## Root `.env` Credential Architecture: `EnvCredentialManager`
 

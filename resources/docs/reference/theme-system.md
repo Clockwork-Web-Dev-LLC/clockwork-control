@@ -2,7 +2,7 @@
 title: Theme System
 section: Reference
 order: 25
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, frontend, css, themes, ui]
 tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php]
@@ -51,7 +51,7 @@ Each named palette is defined as a scoped selector block on the root element:
 }
 ```
 
-Components (`.card`, `.btn-pill-nav`, `.status-pill`, `.cw-switch`) reference these variables directly, instantly adapting to whatever `data-theme` attribute is active on `<html>`.
+Components (`.btn-pill-nav`, `.status-pill`, `.cw-switch`) reference these variables directly, instantly adapting to whatever `data-theme` attribute is active on `<html>`. `.card` is the one exception: its light-mode background is a hardcoded `#f9f9f9` (a deliberately subtler tone than `--color-surface`'s pure white) with an explicit `:root[data-theme="dark"] .card` override falling back to `--color-surface` in dark mode.
 
 ### 2. Zero-FOUC Head Script (`layouts/app.blade.php`)
 

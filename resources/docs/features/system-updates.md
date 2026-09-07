@@ -2,13 +2,13 @@
 title: System updates
 section: Features
 order: 92
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [system-updates, self-update, core, companion, releases]
 tracks: [app/Services/Updates/**, app/Http/Controllers/SystemUpdatesController.php, app/Console/Commands/CheckSystemUpdates.php, app/Console/Commands/ApplySystemUpdate.php, resources/views/settings/updates.blade.php, routes/web.php]
 ---
 
-Lives at **`/settings/updates`** (gear menu → Maintenance → Updates). This is Clockwork Control updating *itself* — not to be confused with [Features → Updates](/docs/features/updates), the fleet-wide page for updating plugins/themes/core on the WordPress sites you manage. Same word, two completely different systems; the naming collision is unfortunate but the URLs (`/updates` vs `/settings/updates`) keep them apart.
+Lives at **`/settings/updates`** (gear menu → System Updates, also reachable via the centralized [Settings Hub](/docs/features/settings-hub) at `/settings` under System & Workspace). This is Clockwork Control updating *itself* — not to be confused with [Features → Updates](/docs/features/updates), the fleet-wide page for updating plugins/themes/core on the WordPress sites you manage. Same word, two completely different systems; the naming collision is unfortunate but the URLs (`/updates` vs `/settings/updates`) keep them apart.
 
 ## What it shows
 

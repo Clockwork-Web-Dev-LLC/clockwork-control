@@ -2,7 +2,7 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**]
@@ -112,6 +112,8 @@ form-subscriptions, post-update-verify
 
 Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin.
 
+Two of the newer app-side modules gate on capability strings not yet reflected in the list above (pending confirmation of the current plugin-side version): `code-snippets` (Code Snippets execution) and `comments-moderation` (Comment Moderation, checked by the weekly cleanup command). Site Maintenance has no dedicated capability string — it gates only on `companion_installed`.
+
 ## Routes
 
 Read-only GETs (HMAC-signed):
@@ -120,6 +122,8 @@ Read-only GETs (HMAC-signed):
 - `/snapshot` — composes `/plugins` + `/admins` + `/wp-cron` + `/comments-summary` in-process; cached 15 min into `sites.companion_snapshot` JSON column
 - `/plugins`, `/admins`, `/wp-cron`, `/comments-summary` — granular reads
 - `/lockouts`, `/wordfence-blocks` — what the SSH+SQL fallback used to read
+- `/comments` — paginated, filterable comment listing for the Comment Moderation module (`ClockworkCompanionClient::comments()`)
+- `/maintenance-mode` — current maintenance-mode status and config for the Site Maintenance module (`maintenanceMode()`)
 
 Mutating POSTs (HMAC-signed):
 
@@ -132,6 +136,10 @@ Mutating POSTs (HMAC-signed):
 - `/malware-scan` — run the in-WP malware probe (PHP-in-uploads, obfuscated-eval signatures, recently-touched wp-config). Returns findings as `{findings: [{kind, path, evidence}], scanned_at, scanned_files_count}`. Called nightly by `clockwork:run-companion-malware-scans`. Bypasses Cloudflare entirely — replaces SiteCheck's role on CF-fronted sites where Sucuri's external scanner gets 403'd at the edge. SSH wp-cli fallback exists for sites without the Companion installed.
 - `/post-update-verify` — post-update state verification and repair (v1.21.3+). Clockwork POSTs the expected active-plugin list and active theme after every successful update. Companion compares against current WordPress state, re-activates any plugin that went inactive, restores the theme if it changed, and returns a `{ok, repairs: [{type, slug, detail}]}` payload. Gated on the `post-update-verify` capability; sites with older Companion versions skip this call silently.
 - `/security-summary-report` — Pressable-only vulnerability alerts + Defensive Mode status (v1.31.6+). Clockwork pushes known plugin/theme CVEs (Pressable's own feed) and edge-cache Defensive Mode's on/off state; Companion stores it in `wp_options['clockwork_companion_pressable_security_summary']` and renders it on the Security admin page. Defensive Mode is status-only by design — no client-facing toggle. Called daily by `clockwork:pressable-security-summary-report`.
+- `/comments/moderate` — bulk approve/hold/spam/trash/delete on one or more comment IDs (`moderateComments()`), driving the Comment Moderation dashboard tab
+- `/comments/cleanup` — purge spam and trash comments older than N days (`cleanupComments()`); called weekly by `clockwork:cleanup-spam-comments`
+- `/maintenance-mode` — enable/disable maintenance mode with an optional custom title, message, and bypass secret key (`setMaintenanceMode()`)
+- `/code-snippet` — execute a snippet of PHP in a sandboxed, output-buffered context and return its output, return value, and timing (`executeCodeSnippet()`); powers the Code Snippets workbench
 
 ## Snapshot cache
 

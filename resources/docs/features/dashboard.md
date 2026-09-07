@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]
@@ -72,6 +72,7 @@ Several feature areas surface on the `/issues` page rather than the main dashboa
 - **Patches Available** rows now include a **Reboot now** button. Clicking it triggers the same confirm-then-POST reboot flow as the server detail page without needing to scroll down to the Reboot Required section. Useful when `reboot_required` hasn't flipped on the row yet but you know an apt upgrade just ran.
 - **Orphaned sites** (sites with no SpinupWP record and not archived) now have a **Remove** button with an "Are you sure" confirmation — archives the site row rather than hard-deleting it.
 - **SSH credentials** — servers missing SSH credentials surface on the Issues page. Each row has an inline action: **Test SSH** (AJAX, fires `POST /servers/{id}/test`, shows pass/fail inline without a page reload) if a password is already stored, or **Add password** (links to the credentials edit page) if none is on record yet.
+- **Ignored issues workflow** — operators can suppress a specific alert (e.g. an intentional `noindex` flagged by SEO Indexability) by clicking **Ignore** and optionally recording a reason in a modal. The card moves to an **Ignored** tab with a one-click **Resume monitoring** action, and the suppressed site is excluded from `IssueCounter`'s total so it stops inflating the header nav badge. See [Architecture → Data model](/docs/architecture/data-model) for the `ignored_issues` table this is backed by.
 
 ## Per-site CPU collection toggle
 

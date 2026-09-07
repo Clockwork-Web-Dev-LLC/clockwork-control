@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -142,6 +142,10 @@ One row per run of the backup relay pipeline that archives off-host site backups
 ### `bill_com_customers` + `bill_com_care_plan_items`
 
 Local cache of the daily Bill.com sync. Customers PK is Bill.com's own ID (`0cu...`); items PK is Bill.com's Item ID. Drives `sites.care_plan_enabled` automation.
+
+### `ignored_issues`
+
+Suppresses one specific issue type on an active, fully-monitored site or server without archiving it or flipping `is_inactive` — see [Features → Inactive sites](/docs/features/inactive-sites) for how this compares to the other "quiet down" mechanisms. Columns: `issue_type` (indexed string, e.g. `IgnoredIssue::TYPE_SEO_INDEXABILITY` = `seo_indexability`), `site_id` (nullable FK to `sites`, cascades on delete), `server_id` (nullable FK to `servers`, cascades on delete), `reason` (nullable, operator's free-text note), `ignored_by_user_id` (nullable FK to `users`, null on delete). A unique constraint on `(issue_type, site_id)` means re-ignoring the same issue on the same site updates the existing row instead of duplicating it. Written and read by `IssuesController::ignore()`/`unignore()`; `IssueCounter` and the `/issues` index both exclude matching rows from their active counts.
 
 ## Encrypted columns
 

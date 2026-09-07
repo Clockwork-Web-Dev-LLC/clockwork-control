@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -345,7 +345,7 @@ Added in the modularization roadmap's Phase 8, replacing what used to be a hardc
 | `CLOCKWORK_TELEMETRY_ENABLED` | `true` | Anonymous usage reporting — on by default; can be disabled during install or in Settings → Maintenance. |
 | `CLOCKWORK_TELEMETRY_ENDPOINT` | `https://telemetry.clockworkcontrol.com/v1/report` | Where the weekly report is sent, if enabled. |
 
-Clockwork Control sends a small, anonymous usage report once a week containing only two data points: a bucketed site count (e.g. `1-5`, `6-25`) and which optional modules are enabled. It never includes site URLs, hosting platforms, content, credentials, or IP data. You can toggle this anytime in Settings → Maintenance or set `CLOCKWORK_TELEMETRY_ENABLED=false` to keep this instance fully offline.
+Clockwork Control sends a small, anonymous usage report once a week: exact site and server counts, the list of enabled modules, and a per-module breakdown of how many sites/servers each one covers (e.g. how many sites are on SpinupWP vs. Pressable, how many servers are on DigitalOcean vs. Hetzner). Legacy bucketed counts (`1-5`, `6-25`, etc.) are also included for backwards compatibility with older report consumers. It never includes site URLs, hosting credentials, content, or IP data. You can toggle this anytime in Settings → Maintenance or set `CLOCKWORK_TELEMETRY_ENABLED=false` to keep this instance fully offline.
 
 See [DISCLAIMER.md](/DISCLAIMER.md) for the full data-handling commitment.
 

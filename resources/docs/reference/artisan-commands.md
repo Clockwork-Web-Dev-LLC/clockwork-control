@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -38,6 +38,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:import-gridpane` | Idempotent GridPane server + site import, linking WordPress sites to their parent servers. Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-gridpane --dry-run` |
 | `clockwork:reconcile-provider` | Match `provider_id`-less servers against DO/Hetzner/Azure/Vultr/Linode inventory and fill provider + size columns. Idempotent. | `php artisan clockwork:reconcile-provider` |
 | `clockwork:find-orphan-sites` | Detect sites whose SpinupWP linkage was lost. | `php artisan clockwork:find-orphan-sites` |
+| `clockwork:installer:reopen` | Disaster recovery: remove the `storage/installed` sentinel so `/install` becomes reachable again on a live instance. | `php artisan clockwork:installer:reopen --force` |
 
 ## Health + metrics
 
@@ -50,6 +51,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:check-site-uptime` | HTTP probe each monitored site. | `php artisan clockwork:check-site-uptime` |
 | `clockwork:backfill-uptime-seed` | One-off: seed initial uptime state on first run. | `php artisan clockwork:backfill-uptime-seed` |
 | `clockwork:pull-site-metrics` | Pull per-site CPU/memory hourly rollups from Companion (`resource-sampler` cap) into `site_metrics`. | `php artisan clockwork:pull-site-metrics` |
+| `clockwork:check-domain-expirations` | Check domain registration expiration dates via ICANN RDAP and alert on impending expiration. | `php artisan clockwork:check-domain-expirations` |
+| `clockwork:check-robots-txt` | Check `/robots.txt` directives across monitored sites for search-engine disallow rules. | `php artisan clockwork:check-robots-txt` |
 
 ## Logs + ingest
 
@@ -83,15 +86,19 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:backfill-companion-action-log` | Re-push `action_log` rows missing from a site's Companion mirror (post-reinstall recovery). | `php artisan clockwork:backfill-companion-action-log` |
 | `clockwork:ensure-companion-trust-proxy` | Idempotently define `CLOCKWORK_COMPANION_TRUST_PROXY` in wp-config.php on care-plan auto-update sites. | `php artisan clockwork:ensure-companion-trust-proxy` |
 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-chosen form-test subscriptions from Companion into `contact_form_tests` (`created_by=client`). | `php artisan clockwork:sync-companion-form-subscriptions` |
+| `clockwork:cleanup-spam-comments` | Bulk-purge spam and trash comments older than N days (default 30) from every Companion-equipped site advertising the `comments-moderation` capability. Runs weekly. | `php artisan clockwork:cleanup-spam-comments --days=30` |
+| `clockwork:send-client-reports` | Generate and email scheduled white-labeled client reports for care-plan sites. `--site=` limits to one; `--force` bypasses the due-date check. | `php artisan clockwork:send-client-reports --site=example.com` |
 | `clockwork:build-companion-tarball` | Produce signed `.tgz` + `.sha256` for `dist_url` mode. | `php artisan clockwork:build-companion-tarball --out=~/Downloads` |
 | `clockwork:refresh-companion-snapshot` | Pull `/snapshot` per site → `companion_snapshot` JSON column. Purges Pressable's edge cache first (best-effort) — otherwise a stale cached response can mask a real update. | `php artisan clockwork:refresh-companion-snapshot` |
 | `clockwork:refresh-companion-capabilities` | Refresh `companion_capabilities` per site. Same Pressable edge-cache purge as the snapshot refresh above. | `php artisan clockwork:refresh-companion-capabilities` |
+| `clockwork:push-companion-branding` | Push white-label branding configuration (logo, company name, support email) to Companion-equipped WordPress sites. | `php artisan clockwork:push-companion-branding` |
 | `clockwork:push-companion-backups` | Push SpinupWP config + DO Spaces history per site. | `php artisan clockwork:push-companion-backups` |
 | `clockwork:pressable-backups-report` | Pressable counterpart — pushes real backup run history from Pressable's own `/backups` endpoint. No 30/90-day retention filter applied (Pressable's API has no pagination to request more than it hands back). | `php artisan clockwork:pressable-backups-report` |
 | `clockwork:pressable-traffic-report` | Pushes Pressable's period-total traffic stats (today/yesterday/current+last month/last 12 months) to Companion's Traffic page. No daily breakdown — structurally different from the nginx-log rollup the SpinupWP command sources from. | `php artisan clockwork:pressable-traffic-report` |
 | `clockwork:pressable-security-summary-report` | Pushes Pressable's own plugin/theme CVE feed + Defensive Mode status to Companion's Security page. Pressable-only capability, no SpinupWP equivalent. | `php artisan clockwork:pressable-security-summary-report` |
 | `clockwork:push-backup-relay-targets` | Writes the Pressable + care-plan site list to S3 (`{S3_BUCKET}/{prefix}/targets.json`) for the standalone backup-relay droplet to read — no direct connection to that droplet. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:push-backup-relay-targets` |
 | `clockwork:pull-backup-relay-report` | Reads the backup-relay droplet's last run summary back from S3 and records it to `backup_relay_runs` + `Settings`, deduped by `finished_at`. Also checks staleness every run (6+ days since the last recorded run → `backup_relay_stale` alert once; a fresh run after → `backup_relay_recovered` once). | `php artisan clockwork:pull-backup-relay-report` |
+| `clockwork:backup-relay-run` | In-repo backup relay mode's own runner — archives enabled sites' backups to S3 Glacier natively via `ArchiveSiteBackupJob`, no external droplet involved. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:backup-relay-run` |
 | `clockwork:rotate-companion-secret` | Rotate per-site HMAC secret. | `php artisan clockwork:rotate-companion-secret --all` |
 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. | `php artisan clockwork:detect-contact-forms` |
 | `clockwork:test-contact-forms` | Run the due contact-form tests across the fleet (care-plan only). `--site=X` bypasses the care-plan filter; `--form=ID` targets a single contact_form_tests row; `--force` bypasses the frequency-due check. | `php artisan clockwork:test-contact-forms --force --site=example.com` |
@@ -152,3 +159,4 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:reencrypt-secrets` | Re-encrypts every `'encrypted'`-cast column (SSH keys, DB passwords, Companion secrets, integration credentials) under the current `APP_KEY`. Run once, immediately after rotating `APP_KEY`, while the old key is still in `APP_PREVIOUS_KEYS` — bypasses Eloquent's dirty-tracking (which no-ops `save()` for unchanged plaintext) via a direct `Crypt::encryptString()` + raw `DB::table()->update()` per row. | `php artisan clockwork:reencrypt-secrets` |
 | `clockwork:check-updates` | Check the GitHub Releases API for a newer Clockwork Control Core version, and print the Companion fleet rollout breakdown. Same data `/settings/updates` shows. `--force` bypasses the 12h cache. See [Features → System updates](/docs/features/system-updates). | `php artisan clockwork:check-updates --force` |
 | `clockwork:self-update` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. Prompts for confirmation unless `--force`. | `php artisan clockwork:self-update --force` |
+| `clockwork:send-telemetry` | Sends the anonymous usage report (exact site/server counts, per-module breakdown, enabled modules — nothing else) to the project maintainer. On by default (`CLOCKWORK_TELEMETRY_ENABLED=true`); disable anytime via Settings → Maintenance or the env var. Runs weekly. | `php artisan clockwork:send-telemetry` |

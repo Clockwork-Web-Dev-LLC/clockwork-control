@@ -2,10 +2,10 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
-tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php]
+tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
 ---
 
 Every artisan command the scheduler runs, in chronological order through a UTC day. `php artisan schedule:list` is the actual source of truth — most entries are declared directly in `routes/console.php`, but as of Phase 7 of the modularization roadmap, a module can contribute its own via a `scheduledTasks()` override on its service provider (`clockwork:import-spinupwp` and the three `clockwork:pressable-*-report` commands below now live in `SpinupWpServiceProvider`/`PressableServiceProvider` this way; `routes/console.php` calls `ModuleRegistry::scheduleAll()` once, at the end, to pull all of them in). Their listed times and behavior are unchanged by the move. The scheduler not running is a load-bearing failure mode — if any of these stop firing, [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck) is your starting point.
@@ -124,10 +124,12 @@ The scheduler and queue worker both run as launchd services. The queue worker is
 | Day / time | Command | What it does |
 |---|---|---|
 | Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's SpinupWP `upgrade_required` gate. That flag only ever gets set by the SpinupWP mirror import, so this weekly sweep ensures directly-provisioned cloud servers (DigitalOcean/Azure/Hetzner) are consistently polled. |
+| Sun 05:15 | `clockwork:cleanup-spam-comments` | Purge stale spam and trash comments across Companion-equipped sites, via `CommentModerationServiceProvider::scheduledTasks()`. |
 | Sun 05:30 | `clockwork:refresh-fail2ban-ignoreip` | Refresh CF ranges + fleet IPs in every server's jail. |
 | Sun 05:30 | `clockwork:scan-wp7-truncation --repair` | Sweep + auto-repair WP 7.0 upgrades that left `wp-includes/php-ai-client/` files with truncated names. |
 | Sun 05:45 | `clockwork:refresh-cloudflare-real-ip` | Push the nginx CF-Connecting-IP snippet **and its sites-enabled bridge** — the conf.d file alone is inert on SpinupWP boxes. See [Integrations → Cloudflare](/docs/integrations/cloudflare). |
 | Mon 06:00 | `clockwork:composer-audit` | Composer dependency vulnerability scan. |
+| Mon 06:15 | `clockwork:send-telemetry` | Anonymous usage report to the project maintainer. On by default (`CLOCKWORK_TELEMETRY_ENABLED=true`); disable in Settings → Maintenance or via env. See [Reference → env vars](/docs/reference/env-vars). |
 | Mon 06:30 | `clockwork:security-check --ssh --quiet-ok` | System security audit. |
 
 ## Monthly
