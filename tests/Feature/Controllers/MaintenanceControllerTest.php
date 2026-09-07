@@ -38,6 +38,7 @@ namespace App\Http\Controllers {
 namespace {
 
     use App\Models\User;
+    use App\Support\Settings;
     use Illuminate\Support\Facades\DB;
     use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -72,7 +73,35 @@ namespace {
 
             $response->assertOk()
                 ->assertSee('Database backup')
-                ->assertSee('50.0 MB');
+                ->assertSee('50.0 MB')
+                ->assertSee('Anonymous usage telemetry')
+                ->assertSee('Managed Sites')
+                ->assertSee('Connected Servers')
+                ->assertSee('Active Modules')
+                ->assertSee('Zero-Knowledge Guarantee');
+        });
+
+        it('displays disabled telemetry banner and payload inspector when telemetry is disabled', function () {
+            app(Settings::class)->put('telemetry.enabled', false);
+
+            DB::partialMock()
+                ->shouldReceive('connection')
+                ->andReturn(tap(Mockery::mock(), function ($conn) {
+                    $conn->shouldReceive('selectOne')->once()->andReturn((object) ['total' => 1048576]);
+                }));
+
+            $response = $this->actingAs(User::factory()->create())
+                ->get(route('settings.maintenance.index'));
+
+            $response->assertOk()
+                ->assertSee('Telemetry is currently off')
+                ->assertSee('Re-enable Telemetry')
+                ->assertSee('sites_count')
+                ->assertSee('servers_count')
+                ->assertSee('modules_enabled')
+                ->assertSee('module_site_counts')
+                ->assertSee('module_server_counts')
+                ->assertDontSee('hosting_provider_mix');
         });
 
         it('streams a gzipped mysqldump download without ever invoking the real passthru/mysqldump', function () {

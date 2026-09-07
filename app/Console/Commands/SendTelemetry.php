@@ -12,7 +12,7 @@ class SendTelemetry extends Command
 {
     protected $signature = 'clockwork:send-telemetry';
 
-    protected $description = 'Send the opt-in anonymous usage report (site count, hosting mix, enabled modules — nothing else) to the project maintainer.';
+    protected $description = 'Send the anonymous usage report (site count and enabled modules — nothing else) to the project maintainer. On by default; disable anytime via settings or CLOCKWORK_TELEMETRY_ENABLED=false.';
 
     public function handle(TelemetryPayloadBuilder $builder): int
     {

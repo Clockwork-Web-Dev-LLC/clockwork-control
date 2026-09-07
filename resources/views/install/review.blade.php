@@ -162,10 +162,10 @@
     <!-- Anonymous Telemetry Opt-in Card -->
     <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/30 text-xs text-[var(--color-ink-muted)] mb-4">
         <label class="flex items-start gap-2.5 cursor-pointer">
-            <input type="checkbox" name="telemetry_opt_in" value="1" form="install-review-form"
+            <input type="checkbox" name="telemetry_opt_in" value="1" checked form="install-review-form"
                    class="mt-0.5 rounded border-[var(--color-border-light)]">
             <span>
-                <strong class="text-[var(--color-ink-strong)]">Help improve Clockwork Control</strong> — send a small anonymous usage report about once a week: roughly how many sites this install manages, which hosting platforms they're on, and which optional modules are enabled. No site URLs, credentials, content, or IP data are ever included. Off by default; change this anytime in Settings &rarr; Maintenance.
+                <strong class="text-[var(--color-ink-strong)]">Help improve Clockwork Control</strong> — send a small anonymous usage report about once a week: roughly how many sites this install manages and which optional modules are enabled. No site URLs, credentials, hosting platforms, content, or IP data are ever included. On by default; change this anytime in Settings &rarr; Maintenance.
             </span>
         </label>
     </div>

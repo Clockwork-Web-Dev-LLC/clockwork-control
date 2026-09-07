@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Telemetry\TelemetryPayloadBuilder;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class MaintenanceController extends Controller
 {
-    public function index(): View
+    public function index(Settings $settings, TelemetryPayloadBuilder $telemetryBuilder): View
     {
         $cfg = config('database.connections.'.config('database.default'));
         $dbInfo = [
@@ -42,9 +43,35 @@ class MaintenanceController extends Controller
                 [$dbInfo['name']],
             )?->total;
 
+        $telemetryEnabled = (bool) $settings->get('telemetry.enabled', config('clockwork.telemetry.enabled', true));
+        $telemetryPayload = rescue(
+            fn () => $telemetryBuilder->build(),
+            fn () => [
+                'schema_version' => 1,
+                'install_id' => 'pending-initial-run',
+                'sent_at' => now()->startOfHour()->toIso8601String(),
+                'sites_count' => 0,
+                'servers_count' => 0,
+                'sites_count_bucket' => '0',
+                'servers_count_bucket' => '0',
+                'modules_enabled' => [],
+                'module_site_counts' => [],
+                'module_server_counts' => [],
+            ],
+            report: false
+        );
+        $moduleBreakdown = rescue(
+            fn () => $telemetryBuilder->moduleBreakdown(),
+            fn () => [],
+            report: false
+        );
+
         return view('settings.maintenance', [
             'dbInfo' => $dbInfo,
             'totalBytes' => $totalBytes,
+            'telemetryEnabled' => $telemetryEnabled,
+            'telemetryPayload' => $telemetryPayload,
+            'moduleBreakdown' => $moduleBreakdown,
         ]);
     }
 

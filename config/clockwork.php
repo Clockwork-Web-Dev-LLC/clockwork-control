@@ -462,12 +462,12 @@ return [
         'robots_txt_timeout' => (int) env('CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT', 10),
     ],
 
-    // Anonymous usage telemetry — opt-in, off by default. Sends only a
-    // bucketed site count, hosting-provider mix, and enabled-module list.
-    // Never domains, IPs, emails, or any other identifying data. See
-    // resources/docs/reference/env-vars.md for the full disclosure.
+    // Anonymous usage telemetry — enabled by default, easily disabled anytime.
+    // Sends only a bucketed site count and list of enabled module IDs.
+    // Never domains, IPs, emails, database contents, or any identifying data.
+    // See resources/docs/reference/env-vars.md for the full disclosure.
     'telemetry' => [
-        'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', false),
+        'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', true),
         'endpoint' => env('CLOCKWORK_TELEMETRY_ENDPOINT', 'https://telemetry.clockworkcontrol.com/v1/report'),
     ],
 ];

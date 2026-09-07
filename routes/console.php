@@ -487,8 +487,8 @@ Schedule::command('clockwork:send-telemetry')
     ->withoutOverlapping(60)
     ->onOneServer()
     ->runInBackground()
-    ->when(fn () => (bool) config('clockwork.telemetry.enabled', false)
-        && (bool) app(Settings::class)->get('telemetry.enabled', false));
+    ->when(fn () => (bool) config('clockwork.telemetry.enabled', true)
+        && (bool) app(Settings::class)->get('telemetry.enabled', true));
 
 // Every module's own scheduledTasks() contribution (SpinupWp's nightly
 // import, Pressable's 3 report commands, etc.) — registration order
