@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-07
+
+### Fixed
+- **Sites page and dashboard no longer show hosting panels you don't use.** The `/sites` provider tabs, filter, and counts, and the main dashboard's fleet-wide refresh button, hardcoded SpinupWP/Pressable as the only possible options — an operator running e.g. GridPane + Vultr saw tabs and refresh actions for panels they'd never enabled. Both now derive from whichever hosting-provider modules are actually enabled, and work with any of the 6 hosting-provider modules (SpinupWP, Pressable, WP Engine, Kinsta, Cloudways, GridPane) without hardcoding a specific set.
+- Fixed the server detail page always showing "Refresh from SpinupWP" and posting to the SpinupWP import even on a GridPane-managed server; it now shows whichever panel actually owns that server's fleet inventory.
+- Fixed SSH test failures (single-server, bulk, and paste-and-import credential updates) always flashing with success/green styling regardless of outcome — failures now flash as an error.
+- Fixed a stale `CLOCKWORK_VERSION` left in a real `.env` file silently overriding the actual installed version shown on `/settings/updates`, even after a successful update. The installed version now always comes from the code itself, never from `.env`.
+- Fixed self-update failing under `php artisan serve` (which strips `HOME`/`COMPOSER_HOME` from its subprocesses), leaving `composer install` with no home directory to write its cache/config to.
+- Fixed a pre-existing test (`SetupControllerTest`) that asserted against a string that never appears on the page, silently masking a real gap in Step 2's service-enablement filtering.
+
 ## [1.2.1] - 2026-09-07
 
 ### Fixed

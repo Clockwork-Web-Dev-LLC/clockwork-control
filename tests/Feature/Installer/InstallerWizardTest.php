@@ -228,7 +228,7 @@ describe('InstallerWizard', function () {
 
         $settings = app(Settings::class);
         expect($settings->get('disclaimer.accepted_at'))->not->toBeNull()
-            ->and($settings->get('disclaimer.accepted_version'))->toBe('1.2.1')
+            ->and($settings->get('disclaimer.accepted_version'))->toBe('1.2.2')
             ->and($settings->get('telemetry.enabled'))->toBeTrue();
 
         $envContents = file_get_contents($tempEnv);
