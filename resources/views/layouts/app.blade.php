@@ -86,25 +86,11 @@
                             @endif
                         @endisset
                     </a>
-                    @if (Route::has('snippets.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('code-snippets'))
-                    <a href="{{ route('snippets.index') }}"
-                       class="btn-pill-nav {{ request()->routeIs('snippets.*') ? 'is-active' : '' }}">
-                        <i class="fa-solid fa-code"></i>
-                        Code Snippets
-                    </a>
-                    @endif
                     @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client_reports'))
                     <a href="{{ route('client-reports.index') }}"
                        class="btn-pill-nav {{ request()->routeIs('client-reports.*') ? 'is-active' : '' }}">
                         <i class="fa-solid fa-file-lines"></i>
                         Reports
-                    </a>
-                    @endif
-                    @if (Route::has('clients.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-management'))
-                    <a href="{{ route('clients.index') }}"
-                       class="btn-pill-nav {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
-                        <i class="fa-solid fa-users"></i>
-                        Clients
                     </a>
                     @endif
                     @if (Route::has('forms.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms'))
@@ -545,15 +531,6 @@
                                 </span>
                             </a>
                             @endif
-                            @if (Route::has('clients.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-management'))
-                            <a href="{{ route('clients.index') }}"
-                               class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('clients.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
-                                <span class="flex items-center gap-3">
-                                    <i class="fa-solid fa-users w-4 text-center text-[var(--color-ink-muted)]"></i>
-                                    <span>Clients</span>
-                                </span>
-                            </a>
-                            @endif
                             @if (Route::has('forms.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms'))
                             <a href="{{ route('forms.index') }}"
                                class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('forms.*') || request()->routeIs('sites.forms.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
@@ -566,15 +543,6 @@
                                         <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-semibold bg-[var(--color-status-red)] text-white">{{ $failingFormsCount }}</span>
                                     @endif
                                 @endisset
-                            </a>
-                            @endif
-                            @if (Route::has('snippets.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('code-snippets'))
-                            <a href="{{ route('snippets.index') }}"
-                               class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('snippets.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
-                                <span class="flex items-center gap-3">
-                                    <i class="fa-solid fa-code w-4 text-center text-[var(--color-ink-muted)]"></i>
-                                    <span>Code Snippets</span>
-                                </span>
                             </a>
                             @endif
                         </div>
@@ -622,6 +590,18 @@
                                 <i class="fa-solid fa-book text-[var(--color-ink-muted)] w-3.5 text-center"></i>
                                 <span class="truncate">Docs</span>
                             </a>
+                            @if (Route::has('snippets.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('code-snippets'))
+                            <a href="{{ route('snippets.index') }}" class="p-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] flex items-center gap-2 border border-transparent hover:border-[var(--color-border-light)] transition-colors">
+                                <i class="fa-solid fa-code text-[var(--color-ink-muted)] w-3.5 text-center"></i>
+                                <span class="truncate">Code Snippets</span>
+                            </a>
+                            @endif
+                            @if (Route::has('clients.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-management'))
+                            <a href="{{ route('clients.index') }}" class="p-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] flex items-center gap-2 border border-transparent hover:border-[var(--color-border-light)] transition-colors">
+                                <i class="fa-solid fa-users text-[var(--color-ink-muted)] w-3.5 text-center"></i>
+                                <span class="truncate">Clients</span>
+                            </a>
+                            @endif
                         </div>
                     </div>
                 </div>

@@ -4,6 +4,7 @@ namespace Modules\ClientManagement;
 
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
+use Modules\Core\NavItem;
 
 class ClientManagementServiceProvider extends ModuleServiceProvider
 {
@@ -25,5 +26,16 @@ class ClientManagementServiceProvider extends ModuleServiceProvider
             description: 'Organize WordPress sites by client, with a client directory and per-client site assignment.',
             status: ModuleManifest::STATUS_VERIFIED,
         );
+    }
+
+    public function navItems(): array
+    {
+        return [
+            new NavItem(
+                label: 'Clients',
+                icon: 'fa-solid fa-users',
+                route: 'clients.index',
+            ),
+        ];
     }
 }

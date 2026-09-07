@@ -4,6 +4,7 @@ namespace Modules\CodeSnippets;
 
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
+use Modules\Core\NavItem;
 
 class CodeSnippetsServiceProvider extends ModuleServiceProvider
 {
@@ -25,5 +26,16 @@ class CodeSnippetsServiceProvider extends ModuleServiceProvider
             description: 'Execute sandboxed PHP code on one or more WordPress sites via the Companion plugin, with preset and custom snippets.',
             status: ModuleManifest::STATUS_VERIFIED,
         );
+    }
+
+    public function navItems(): array
+    {
+        return [
+            new NavItem(
+                label: 'Code Snippets',
+                icon: 'fa-solid fa-code',
+                route: 'snippets.index',
+            ),
+        ];
     }
 }
