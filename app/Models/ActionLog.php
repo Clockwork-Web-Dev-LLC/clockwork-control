@@ -99,6 +99,15 @@ class ActionLog extends Model
 
     public const TYPE_INSTALLER_REOPENED = 'installer_reopened';
 
+    // ManageWP parity features (Comment Moderation, Code Snippets, Site Maintenance)
+    public const TYPE_COMMENTS_MODERATED = 'comments_moderated';
+
+    public const TYPE_COMMENTS_CLEANUP = 'comments_cleanup';
+
+    public const TYPE_CODE_SNIPPET_EXECUTED = 'code_snippet_executed';
+
+    public const TYPE_MAINTENANCE_MODE_TOGGLED = 'maintenance_mode_toggled';
+
     /**
      * The four update-job kinds, grouped for the maintenance-history
      * "All updates" quick filter — kept here so any future caller that

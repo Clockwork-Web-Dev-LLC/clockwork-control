@@ -8,9 +8,13 @@ use Modules\AuthMicrosoft\MicrosoftAuthServiceProvider;
 use Modules\Azure\AzureServiceProvider;
 use Modules\BackupRelay\BackupRelayServiceProvider;
 use Modules\BillCom\BillComServiceProvider;
+use Modules\ClientManagement\ClientManagementServiceProvider;
 use Modules\ClientSlack\ClientSlackServiceProvider;
 use Modules\Cloudways\CloudwaysServiceProvider;
+use Modules\CodeSnippets\CodeSnippetsServiceProvider;
+use Modules\CommentModeration\CommentModerationServiceProvider;
 use Modules\ContactForms\ContactFormsServiceProvider;
+use Modules\SiteMaintenance\SiteMaintenanceServiceProvider;
 use Modules\Core\CoreServiceProvider;
 use Modules\DigitalOcean\DigitalOceanServiceProvider;
 use Modules\GridPane\GridPaneServiceProvider;
@@ -36,6 +40,12 @@ return [
     // resolve ModuleRegistry out of the container during their own
     // register().
     CoreServiceProvider::class,
+    // ManageWP parity features & client management
+    CommentModerationServiceProvider::class,
+    CodeSnippetsServiceProvider::class,
+    SiteMaintenanceServiceProvider::class,
+    ClientManagementServiceProvider::class,
+    // Hosting providers
     AzureServiceProvider::class,
     HetznerServiceProvider::class,
     DigitalOceanServiceProvider::class,

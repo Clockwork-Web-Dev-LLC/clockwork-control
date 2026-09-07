@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Modules\BillCom\BillComCustomer;
+use Modules\ClientManagement\Models\Client;
 use Modules\Core\Contracts\HostingProvider;
 
 /**
@@ -71,6 +72,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?Carbon $contact_form_test_subscribed_at
  * @property ?Carbon $contact_form_test_unsubscribed_at
  * @property ?string $client_email
+ * @property ?int $client_id
  * @property bool $care_plan_enabled
  * @property bool $backup_relay_enabled
  * @property ?Carbon $backup_relay_last_archived_at
@@ -472,6 +474,11 @@ class Site extends Model
     public function billComCustomer(): BelongsTo
     {
         return $this->belongsTo(BillComCustomer::class, 'bill_com_customer_id');
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     /**
