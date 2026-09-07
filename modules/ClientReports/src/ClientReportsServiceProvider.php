@@ -36,7 +36,7 @@ class ClientReportsServiceProvider extends ModuleServiceProvider
         return [
             new NavItem(
                 label: 'Client reports',
-                icon: 'fa-file-invoice',
+                icon: 'fa-solid fa-file-lines',
                 route: 'client-reports.index',
             ),
         ];

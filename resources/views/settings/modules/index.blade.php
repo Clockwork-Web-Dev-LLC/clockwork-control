@@ -19,6 +19,22 @@
         <x-page-header title="Module directory"
             subtitle="Browse official bundled integrations and community extensions indexed in our directory feed. Official modules are tested and bundled; community packages can be added from GitHub.">
             <x-slot:actions>
+                <!-- Search Input in Header -->
+                <div class="relative w-64 sm:w-72">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ink-muted)]"></i>
+                    <input type="text"
+                           x-model="searchQuery"
+                           placeholder="Search modules, tags, author..."
+                           class="w-full pl-8 pr-8 py-1.5 text-xs rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] placeholder:text-[var(--color-ink-muted)] focus:outline-hidden focus:ring-2 focus:ring-[var(--color-brand)]/20 focus:border-[var(--color-brand)] transition-all">
+                    <button type="button"
+                            x-show="searchQuery.length > 0"
+                            @click="searchQuery = ''"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]"
+                            aria-label="Clear search">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+
                 <form method="POST" action="{{ route('settings.modules.refresh') }}" class="inline">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-sm">
@@ -36,6 +52,8 @@
                 </a>
             </x-slot:actions>
         </x-page-header>
+
+        @include('settings._tabs')
 
         @if (session('status'))
             <div class="card p-4 mb-6 status-green flex items-center gap-2">
@@ -64,34 +82,22 @@
             </div>
         </div>
 
-        <!-- Filter Bar & Search -->
-        <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
-            <!-- Category Tabs (Pill Nav) -->
-            <div class="flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-                @foreach ($categories as $catKey => $catLabel)
-                    <button type="button"
-                            @click="activeCategory = '{{ $catKey }}'"
-                            class="btn-pill-nav text-xs whitespace-nowrap cursor-pointer"
-                            :class="activeCategory === '{{ $catKey }}' ? 'is-active' : ''">
-                        {{ $catLabel }}
-                    </button>
-                @endforeach
-            </div>
-
-            <!-- Live Search Input -->
-            <div class="relative min-w-[240px] max-w-sm">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)] text-xs"></i>
-                <input type="text"
-                       x-model="searchQuery"
-                       placeholder="Search modules, tags, or author..."
-                       class="w-full pl-9 pr-8 py-1.5 text-xs rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink-strong)] placeholder:text-[var(--color-ink-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-500)]" />
+        <!-- Category Tabs (Pill Nav) -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-2 mb-6 scrollbar-none">
+            @foreach ($categories as $catKey => $catLabel)
                 <button type="button"
-                        x-show="searchQuery.length > 0"
-                        @click="searchQuery = ''"
-                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] text-xs">
-                    <i class="fa-solid fa-xmark"></i>
+                        @click="activeCategory = '{{ $catKey }}'"
+                        class="btn-pill-nav text-xs whitespace-nowrap cursor-pointer flex-shrink-0"
+                        :class="activeCategory === '{{ $catKey }}' ? 'is-active' : ''">
+                    {{ $catLabel }}
                 </button>
-            </div>
+            @endforeach
+        </div>
+
+        <!-- Filter query active indicator -->
+        <div x-cloak x-show="searchQuery.trim().length > 0" class="text-xs text-[var(--color-ink-muted)] mb-4 -mt-2 flex items-center justify-between">
+            <span>Filtering modules by <strong class="text-[var(--color-ink-strong)] font-semibold" x-text="'&ldquo;' + searchQuery + '&rdquo;'"></strong></span>
+            <button type="button" @click="searchQuery = ''; activeCategory = 'all'" class="text-[var(--color-brand)] hover:underline font-medium">Reset filters</button>
         </div>
 
         <!-- Module Cards Grid -->

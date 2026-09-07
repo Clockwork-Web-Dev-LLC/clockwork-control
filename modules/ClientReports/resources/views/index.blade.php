@@ -6,7 +6,7 @@
 <div class="mb-6 flex items-center justify-between flex-wrap gap-4">
     <div>
         <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] flex items-center gap-2">
-            <i class="fa-solid fa-file-invoice text-[var(--color-brand)]"></i>
+            <i class="fa-solid fa-file-lines text-[var(--color-brand)]"></i>
             Client Reports
         </h1>
         <p class="text-xs text-[var(--color-ink-soft)] mt-1">

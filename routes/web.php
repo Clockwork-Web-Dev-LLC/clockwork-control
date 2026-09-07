@@ -29,6 +29,7 @@ use App\Http\Controllers\ServerUpdateController;
 use App\Http\Controllers\ServiceApiLimitsController;
 use App\Http\Controllers\Settings\BackupRelaySettingsController;
 use App\Http\Controllers\Settings\ModuleSettingsController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\Sites\DomainExpirationController;
 use App\Http\Controllers\Sites\SeoPreflightController;
@@ -303,6 +304,9 @@ Route::middleware(['auth'])->group(function () {
     // Unarchive uses a string id + withoutGlobalScopes() inside the controller
     // because the route-model binder would 404 on archived sites.
     Route::post('/sites/{siteId}/unarchive', [SitesController::class, 'unarchive'])->name('sites.unarchive');
+
+    // Settings Hub — centralized overview across configuration, integrations, operations, and system
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
 
     // Settings — ingest schedule (LLAR pull + future ingest sources)
     Route::get('/settings/ingest', [IngestSettingsController::class, 'index'])->name('settings.ingest.index');
