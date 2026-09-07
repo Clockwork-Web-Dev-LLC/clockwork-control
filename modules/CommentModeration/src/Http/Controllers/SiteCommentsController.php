@@ -1,8 +1,8 @@
 <?php
 
 namespace Modules\CommentModeration\Http\Controllers;
-use App\Http\Controllers\Controller;
 
+use App\Http\Controllers\Controller;
 use App\Models\ActionLog;
 use App\Models\Site;
 use App\Services\ActionLog\ActionLogger;

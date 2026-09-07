@@ -38,12 +38,12 @@ class ModuleSettingsController extends Controller
         if ($validated['enabled']) {
             $enabledModules[] = $validated['module_id'];
         } else {
-            $enabledModules = array_filter($enabledModules, fn($id) => $id !== $validated['module_id']);
+            $enabledModules = array_filter($enabledModules, fn ($id) => $id !== $validated['module_id']);
         }
 
         // In a real implementation, this would persist to config/modules.php or a database
         cache()->put('modules.enabled', array_unique($enabledModules), 86400);
 
-        return back()->with('status', "Module '{$validated['module_id']}' " . ($validated['enabled'] ? 'enabled' : 'disabled') . '.');
+        return back()->with('status', "Module '{$validated['module_id']}' ".($validated['enabled'] ? 'enabled' : 'disabled').'.');
     }
 }
