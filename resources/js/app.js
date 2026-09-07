@@ -155,11 +155,6 @@ Alpine.data('docsSidebar', (initialOpen = {}) => ({
     isSectionOpen(name) {
         return !!this.openSections[name];
     },
-    toggleAll(expand) {
-        Object.keys(this.openSections).forEach(k => {
-            this.openSections[k] = expand;
-        });
-    },
 }));
 
 Alpine.data('docsSearch', (index = []) => ({

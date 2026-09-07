@@ -36,20 +36,11 @@
 
 <aside class="docs-sidebar" x-data="docsSidebar({{ \Illuminate\Support\Js::from($initialOpen) }})">
     <div class="docs-sidebar__inner">
-        <div class="flex items-center justify-between mb-3">
-            <a href="{{ route('docs.index') }}" class="docs-sidebar__home mb-0">
+        <div class="mb-3">
+            <a href="{{ route('docs.index') }}" class="docs-sidebar__home">
                 <i class="fa-solid fa-book text-[var(--color-primary-600)]"></i>
                 <span>Documentation Home</span>
             </a>
-            <div class="flex items-center gap-1.5 text-[11px] text-[var(--color-ink-soft)]">
-                <button type="button" @click="toggleAll(true)" class="hover:text-[var(--color-ink-strong)] cursor-pointer" title="Expand all sections">
-                    Expand
-                </button>
-                <span>&bull;</span>
-                <button type="button" @click="toggleAll(false)" class="hover:text-[var(--color-ink-strong)] cursor-pointer" title="Collapse all sections">
-                    Collapse
-                </button>
-            </div>
         </div>
 
         {{-- Interactive Search with Category Badges --}}
@@ -171,10 +162,7 @@
             return {
                 openSections: initialOpen || {},
                 toggleSection(name) { this.openSections[name] = !this.openSections[name]; },
-                isSectionOpen(name) { return !!this.openSections[name]; },
-                toggleAll(expand) {
-                    Object.keys(this.openSections).forEach(k => { this.openSections[k] = expand; });
-                }
+                isSectionOpen(name) { return !!this.openSections[name]; }
             };
         };
     }

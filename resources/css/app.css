@@ -11,6 +11,7 @@
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../../modules/**/*.blade.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
@@ -389,13 +390,17 @@ body {
     background: var(--color-cf-orange);
 }
 
-/* Card — white, soft shadow, generous radius */
+/* Card — subtle background, soft shadow, generous radius */
 .card {
-    background: var(--color-surface);
+    background: #f9f9f9;
     border: 1px solid var(--color-border-light);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
     transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+:root[data-theme="dark"] .card {
+    background: var(--color-surface);
 }
 
 /* Card border tints — keep width at 1px, swap the color to match server status.
