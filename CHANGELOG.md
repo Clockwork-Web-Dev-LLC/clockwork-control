@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-09-07
+
+### Added
+- **Local email/password authentication**, always available alongside the existing modular OAuth providers (Google, GitHub, Microsoft). Google OAuth was previously a mandatory blocker in the web installer — an operator without a Google Cloud Console project, OAuth Consent Screen, and redirect URI already configured couldn't get past Step 5, and `/login` had no fallback at all if no OAuth provider was configured, leaving them completely locked out of the app they'd just installed. The installer's Google step now has a "Skip for now" option, and the admin-account step only requires a password when Google was actually skipped; `/login` always shows the local sign-in form, with OAuth buttons appended below a divider only when at least one provider is actually configured.
+- `php artisan clockwork:set-password <email>` — CLI password recovery/reset (masked prompt or `--password=`), and `clockwork:add-user` gains a matching `--password=` option.
+- `/settings/users` can set an initial password when adding a teammate, and reset any existing operator's password via a modal.
+
 ## [1.2.2] - 2026-09-07
 
 ### Fixed
