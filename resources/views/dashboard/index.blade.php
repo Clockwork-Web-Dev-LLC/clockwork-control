@@ -67,14 +67,30 @@
                     {{ $meta['label'] }} {{ $statusCounts[$status] ?? 0 }}
                 </span>
             @endforeach
-            <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="ml-2 inline">
-                @csrf
-                <button type="submit" class="btn-pill-nav"
-                        title="Re-pull servers + sites from SpinupWP API. Reflects new servers and site moves immediately."
-                        onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                    <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
-                </button>
-            </form>
+            {{-- One button per enabled hosting-panel module that owns servers
+                 and has a fleet-wide refresh action wired up — an operator
+                 running only GridPane should never see a SpinupWP button
+                 (it wouldn't touch their fleet at all), and vice versa. --}}
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
+                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="ml-2 inline">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav"
+                            title="Re-pull servers + sites from SpinupWP API. Reflects new servers and site moves immediately."
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
+                    </button>
+                </form>
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane'))
+                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="ml-2 inline">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav"
+                            title="Re-pull servers + sites from GridPane API. Reflects new servers and site moves immediately."
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from GridPane</span>
+                    </button>
+                </form>
+            @endif
             <a href="{{ route('servers.create') }}" class="btn-pill-nav ml-2">
                 <i class="fa-solid fa-plus"></i> Add server
             </a>

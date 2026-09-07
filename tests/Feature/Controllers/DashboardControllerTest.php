@@ -3,6 +3,8 @@
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
+use Modules\Core\InstalledModule;
+use Modules\Core\ModuleStateResolver;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -33,6 +35,40 @@ describe('DashboardController', function () {
             ->get(route('dashboard'));
 
         $response->assertOk()->assertSee('web1.example.com');
+    });
+
+    it('shows only the Refresh from SpinupWP fleet action when GridPane is disabled', function () {
+        // ModuleStateResolver is a request-scoped singleton that memoizes
+        // installed_modules on first access — every module's own
+        // ModuleServiceProvider::register() already triggered that first
+        // access during this test's own app bootstrap, before this test
+        // body even runs, so a plain InstalledModule::create() here has no
+        // effect until the memoized cache is explicitly flushed. See
+        // tests/Feature/Modules/ModuleEnableDisableTest.php for the same
+        // pattern applied directly against the resolver.
+        $server = Server::factory()->create(['name' => 'web1a.example.com']);
+        Site::factory()->spinupwp()->create(['server_id' => $server->id]);
+        InstalledModule::create(['module_id' => 'gridpane', 'name' => 'GridPane', 'enabled' => false]);
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('Refresh from SpinupWP')
+            ->assertDontSee('Refresh from GridPane');
+    });
+
+    it('shows only the Refresh from GridPane fleet action when SpinupWP is disabled', function () {
+        $server = Server::factory()->create(['name' => 'web1b.example.com', 'provider' => 'gridpane']);
+        Site::factory()->spinupwp()->create(['server_id' => $server->id]);
+        InstalledModule::create(['module_id' => 'spinupwp', 'name' => 'SpinupWP', 'enabled' => false]);
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('Refresh from GridPane')
+            ->assertDontSee('Refresh from SpinupWP');
     });
 
     it('renders servers.show for each allowed tab', function (string $tab) {
