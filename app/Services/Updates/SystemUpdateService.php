@@ -293,10 +293,12 @@ class SystemUpdateService
             ];
         }
 
+        $subprocessEnv = $this->subprocessEnv();
+
         // 2. Git Fetch & Pull (if git repo)
         if ($gitInfo['is_git']) {
             $branch = $gitInfo['branch'] ?: 'main';
-            $result = Process::path($basePath)->timeout(120)->run(['git', 'pull', 'origin', $branch]);
+            $result = Process::path($basePath)->timeout(120)->env($subprocessEnv)->run(['git', 'pull', 'origin', $branch]);
 
             $success = $result->successful();
             $steps[] = [
@@ -315,7 +317,7 @@ class SystemUpdateService
         }
 
         // 3. Composer dependencies (new/updated packages the pulled release may need)
-        $composerResult = Process::path($basePath)->timeout(300)->run(['composer', 'install', '--no-dev', '--optimize-autoloader']);
+        $composerResult = Process::path($basePath)->timeout(300)->env($subprocessEnv)->run(['composer', 'install', '--no-dev', '--optimize-autoloader']);
         $composerSuccess = $composerResult->successful();
         $steps[] = [
             'step' => 'Installing updated dependencies (composer install --no-dev)',
@@ -378,6 +380,43 @@ class SystemUpdateService
         return [
             'success' => true,
             'steps' => $steps,
+        ];
+    }
+
+    /**
+     * HOME/COMPOSER_HOME to explicitly merge into the git/composer
+     * subprocesses above, on top of whatever the ambient environment
+     * already provides. `php artisan serve` run without `--no-reload`
+     * strips almost every environment variable from its worker process
+     * (to support hot-reload-on-.env-change) — HOME and COMPOSER_HOME
+     * aren't on its allowlist, so Composer has nowhere to write its
+     * cache/config and this step fails, purely as an artifact of which
+     * dev server happens to be in front of PHP. A real php-fpm/nginx
+     * deployment doesn't have this problem, but self-update should work
+     * regardless of how the operator is running the app.
+     *
+     * @return array<string, string>
+     */
+    private function subprocessEnv(): array
+    {
+        $home = getenv('HOME') ?: null;
+        $composerHome = getenv('COMPOSER_HOME') ?: null;
+
+        if ($home !== null && $composerHome !== null) {
+            return ['HOME' => $home, 'COMPOSER_HOME' => $composerHome];
+        }
+
+        // Fall back to a directory Clockwork already controls and knows is
+        // writable — storage/ must already be writable for the app to run
+        // at all — rather than trusting the ambient environment.
+        $fallbackHome = storage_path('app/subprocess-home');
+        if (! is_dir($fallbackHome)) {
+            @mkdir($fallbackHome, 0755, recursive: true);
+        }
+
+        return [
+            'HOME' => $home ?: $fallbackHome,
+            'COMPOSER_HOME' => $composerHome ?: $fallbackHome.'/composer',
         ];
     }
 }

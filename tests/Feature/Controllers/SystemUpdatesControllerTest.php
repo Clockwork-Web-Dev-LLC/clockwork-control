@@ -140,6 +140,69 @@ it('handles operator-triggered apply update action safely', function () {
     Process::assertRan(fn ($process) => is_array($process->command) && str($process->command[0] ?? '')->contains('composer'));
 });
 
+it('forwards HOME/COMPOSER_HOME to the git and composer subprocesses regardless of the ambient environment', function () {
+    // Regression coverage: `php artisan serve` run without --no-reload
+    // strips almost every env var (including HOME) from its worker
+    // process to support hot-reload-on-.env-change, leaving Composer with
+    // nowhere to write its cache/config and this step failing — purely as
+    // an artifact of which dev server happens to be in front of PHP.
+    Process::fake();
+
+    $this->mockIssueCounterZero();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('settings.updates.apply'));
+
+    Process::assertRan(function ($process) {
+        if (! is_array($process->command) || ! str($process->command[0] ?? '')->contains('git')) {
+            return false;
+        }
+
+        return ! empty($process->environment['HOME']) && ! empty($process->environment['COMPOSER_HOME']);
+    });
+
+    Process::assertRan(function ($process) {
+        if (! is_array($process->command) || ! str($process->command[0] ?? '')->contains('composer')) {
+            return false;
+        }
+
+        return ! empty($process->environment['HOME']) && ! empty($process->environment['COMPOSER_HOME']);
+    });
+});
+
+it('falls back to a Clockwork-owned directory when HOME/COMPOSER_HOME are entirely unset', function () {
+    // Proves the actual bug scenario, not just that *some* ambient HOME
+    // gets threaded through: with both unset (exactly what an unpatched
+    // `php artisan serve` worker sees), the fallback must still produce a
+    // real, writable, non-empty path rather than leaving Composer stranded.
+    $originalHome = getenv('HOME');
+    $originalComposerHome = getenv('COMPOSER_HOME');
+    putenv('HOME');
+    putenv('COMPOSER_HOME');
+
+    try {
+        Process::fake();
+        $this->mockIssueCounterZero();
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('settings.updates.apply'));
+
+        Process::assertRan(function ($process) {
+            if (! is_array($process->command) || ! str($process->command[0] ?? '')->contains('composer')) {
+                return false;
+            }
+
+            return ($process->environment['HOME'] ?? '') === storage_path('app/subprocess-home')
+                && ($process->environment['COMPOSER_HOME'] ?? '') === storage_path('app/subprocess-home').'/composer';
+        });
+
+        expect(is_dir(storage_path('app/subprocess-home')))->toBeTrue();
+    } finally {
+        $originalHome === false ? putenv('HOME') : putenv("HOME={$originalHome}");
+        $originalComposerHome === false ? putenv('COMPOSER_HOME') : putenv("COMPOSER_HOME={$originalComposerHome}");
+    }
+});
+
 it('aborts the apply action without touching git or composer when the working copy is dirty', function () {
     Process::fake([
         'git status --porcelain' => Process::result(' M app/Foo.php'),
