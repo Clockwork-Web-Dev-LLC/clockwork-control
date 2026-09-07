@@ -2,7 +2,7 @@
 title: Weird Stats
 section: Features
 order: 140
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [stats, analytics, security, traffic, dashboard]
 tracks: [app/Http/Controllers/WeirdStatsController.php, app/Services/Stats/WeirdStatsAggregator.php, app/Console/Commands/WarmWeirdStats.php, resources/views/settings/weird-stats.blade.php, resources/views/settings/weird-stats/**]

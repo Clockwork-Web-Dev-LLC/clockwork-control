@@ -2,7 +2,7 @@
 title: SSH + fail2ban
 section: Integrations
 order: 120
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, ssh, fail2ban, security, bans, pressable]
 tracks: [app/Services/Ssh/**, app/Services/Fail2ban/**, app/Http/Controllers/ServerProvisionController.php, app/Console/Commands/ProcessPendingBans.php, app/Console/Commands/RefreshFail2banIgnoreip.php, app/Console/Commands/SweepCfBans.php]

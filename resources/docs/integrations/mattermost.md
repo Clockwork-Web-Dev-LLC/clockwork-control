@@ -2,7 +2,7 @@
 title: Mattermost
 section: Integrations
 order: 60
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, mattermost, notifications, alerts, slack]
 tracks: [modules/Mattermost/src/**, app/Console/Commands/MattermostTest.php, app/Services/Chat/**]

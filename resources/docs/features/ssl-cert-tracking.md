@@ -2,7 +2,7 @@
 title: SSL cert tracking
 section: Features
 order: 60
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [ssl, certificates, lets-encrypt, monitoring, pressable]
 tracks: [app/Services/Ssl/**, app/Console/Commands/CheckSslCerts.php]

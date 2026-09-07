@@ -2,7 +2,7 @@
 title: GTmetrix
 section: Integrations
 order: 79
-updated: 2026-09-04
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, gtmetrix, care-plan, pressable]
 tracks: [modules/GTmetrix/src/GtmetrixClient.php, modules/GTmetrix/src/GTmetrixServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]

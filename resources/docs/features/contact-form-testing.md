@@ -2,7 +2,7 @@
 title: Contact form testing
 section: Features
 order: 70
-updated: 2026-09-04
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [contact-forms, companion, testing, care-plan, slack, modules]
 tracks: [modules/ContactForms/src/Commands/{TestContactForms,DetectContactForms,SyncCompanionFormSubscriptions}.php, modules/ContactForms/src/ContactFormsServiceProvider.php, modules/ContactForms/src/ContactFormTester.php, modules/ContactForms/src/FormsController.php, app/Http/Controllers/FormsController.php, app/Models/ContactFormTest.php, resources/views/dashboard/forms/index.blade.php]

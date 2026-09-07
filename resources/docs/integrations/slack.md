@@ -2,7 +2,7 @@
 title: Slack
 section: Integrations
 order: 61
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, slack, notifications, alerts, pressable]
 tracks: [modules/Slack/src/**, app/Services/Chat/**, resources/views/settings/slack.blade.php]

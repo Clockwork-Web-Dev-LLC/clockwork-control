@@ -2,7 +2,7 @@
 title: Server updates + reboots
 section: Features
 order: 110
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [updates, reboot, ssh, ops, fleet, tags]
 tracks: [app/Http/Controllers/ServerUpdateController.php, app/Http/Controllers/OperationsUpdatesController.php, app/Http/Controllers/TagsController.php, app/Console/Commands/ProcessServerUpdates.php, app/Console/Commands/PollSystemUpdates.php, app/Console/Commands/ReapStaleServerUpdates.php, app/Services/Servers/ServerUpdater.php]

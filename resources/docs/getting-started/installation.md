@@ -2,7 +2,7 @@
 title: Installation & Setup
 section: Getting Started
 order: 15
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [getting-started, install, setup, wizard, self-hosted]
 tracks: [app/Installer/InstallerEnvWriter.php, app/Http/Controllers/InstallerController.php, routes/install.php, app/Http/Middleware/EnforceInstallerGate.php]

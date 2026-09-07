@@ -2,7 +2,7 @@
 title: Ingest pipeline
 section: Architecture
 order: 30
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [architecture, ingest, fail2ban, security]
 tracks: [app/Services/Llar/**, app/Services/Wordfence/**, app/Services/Logs/**, app/Services/Fail2ban/**, app/Console/Commands/Pull*.php, app/Console/Commands/AutoApproveRepeats.php, app/Console/Commands/ProcessPendingBans.php, app/Http/Controllers/IngestSettingsController.php]

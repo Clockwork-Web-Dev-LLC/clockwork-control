@@ -2,7 +2,7 @@
 title: Sucuri SiteCheck
 section: Integrations
 order: 95
-updated: 2026-09-04
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, security, sucuri, malware, care-plan, pressable, modularization]
 tracks: [modules/Sucuri/src/SucuriSiteCheckClient.php, modules/Sucuri/src/SucuriServiceProvider.php, app/Console/Commands/ScanSiteCheck.php]

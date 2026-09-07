@@ -2,7 +2,7 @@
 title: Fleet Integrations Setup
 section: Features
 order: 5
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [setup, onboarding, first-run, modularization, env, credentials, rate-limits]
 tracks: [app/Http/Controllers/SetupController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, resources/views/setup/**]

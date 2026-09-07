@@ -2,7 +2,7 @@
 title: The docs site itself
 section: Internal
 order: 10
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [internal, docs, meta, tooling]
 tracks: [app/Http/Controllers/DocsController.php, app/Http/Controllers/Controller.php, app/Services/Docs/**, resources/views/docs/**]

@@ -2,7 +2,7 @@
 title: URLhaus + Spamhaus DBL
 section: Integrations
 order: 90
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, security, blacklist, urlhaus, spamhaus]
 tracks: [app/Services/Security/BlacklistChecker.php]

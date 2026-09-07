@@ -2,7 +2,7 @@
 title: Google Safe Browsing
 section: Integrations
 order: 85
-updated: 2026-09-05
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [integrations, security, blacklist, google]
 tracks: [app/Services/Security/BlacklistChecker.php]
