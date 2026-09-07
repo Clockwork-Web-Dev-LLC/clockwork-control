@@ -8,15 +8,19 @@ use Modules\Core\ModuleRegistry;
 /**
  * Resolves Site::hosting_provider to its HostingProvider adapter.
  *
- * As of Phase 6, every registered provider (SpinupWp, Pressable) is
- * module-sourced via ModuleRegistry — Phase 5 injected SpinupWpHostingProvider
- * directly here since SpinupWp wasn't a module yet; that asymmetry is gone
- * now that it is.
+ * Every registered provider (SpinupWp, Pressable, WPEngine, Kinsta,
+ * Cloudways, GridPane) is module-sourced via ModuleRegistry, which only
+ * collects a module's contribution when that module is actually enabled
+ * (ModuleServiceProvider::register() gates on enabled() before registering
+ * anything). all() is therefore already "enabled hosting providers only" —
+ * callers that need to show operators only the providers they've actually
+ * turned on (e.g. SitesController's provider tabs/filter) can use it
+ * directly rather than re-deriving enablement themselves.
  *
- * No NullHostingProvider fallback here — unlike servers.provider,
- * sites.hosting_provider is a required, non-nullable column with exactly
- * two values in this codebase today, both handled. resolve() throws
- * rather than silently misroute if that ever stops being true.
+ * No NullHostingProvider fallback here — sites.hosting_provider is a
+ * required, non-nullable column, and resolve() throws rather than silently
+ * misroute if it's ever asked to resolve a value with no registered
+ * provider (e.g. a disabled module whose sites are still in the DB).
  */
 class HostingProviderRegistry
 {

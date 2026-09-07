@@ -2,17 +2,17 @@
 title: Sites (fleet view)
 section: Features
 order: 15
-updated: 2026-09-06
+updated: 2026-09-07
 author: Aaron Reimann
 tags: [sites, fleet, pressable, spinupwp, hosting]
-tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/sites.blade.php]
+tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
 ---
 
-`/sites` is the fleet-wide site list that works across both hosting providers. It exists because [the main dashboard](/docs/features/dashboard) is server-first — every card is a server — and Pressable sites have no server to hang a card off of. Before this page, Pressable sites were invisible in the nav entirely.
+`/sites` is the fleet-wide site list that works across every hosting provider you have enabled. It exists because [the main dashboard](/docs/features/dashboard) is server-first — every card is a server — and Pressable sites have no server to hang a card off of. Before this page, Pressable sites were invisible in the nav entirely.
 
 ## What you see
 
-Paginated (50/page), searchable by domain, filterable by hosting provider (**All / SpinupWP / Pressable**) with a live count on each filter chip. Each row shows:
+Paginated (50/page), searchable by domain, filterable by hosting provider with a live count on each filter chip — but only for providers whose module is currently enabled. Run just GridPane + Vultr? You'll only ever see **All / GridPane** as filter options, never SpinupWP or Pressable tabs, even if old `sites.hosting_provider` rows for a since-disabled panel still exist in the database (the "All" tab still counts and shows those rows — enablement only hides the filter/tab UI, not real infrastructure). With one or zero hosting-provider modules enabled, the tab bar doesn't render at all — there's no meaningful choice to offer. See `App\Services\HostingProvider\HostingProviderRegistry::all()`, which is already enablement-gated via `ModuleRegistry` and is what `SitesController::index()` builds tabs/counts/the `?provider=` filter from. Each row shows:
 
 **Search filters instantly as you type** — no need to hit Enter. It's a client-side filter over the currently-loaded page's rows (matching against a lowercased `domain + server name` string baked into each row's `data-search` attribute), with a small clear (×) button that appears once you've typed something. Since it only filters what's already on the page, finding a match outside the visible 50 still needs a real server-side query (Enter, or the search icon). The same instant-filter pattern is also on [Features → Review queue](/docs/features/review-queue) (bans) and [Features → Contact form testing](/docs/features/contact-form-testing) (forms).
 

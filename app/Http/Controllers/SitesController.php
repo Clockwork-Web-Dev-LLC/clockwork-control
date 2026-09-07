@@ -15,6 +15,7 @@ use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
+use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
@@ -49,10 +50,18 @@ class SitesController extends Controller
      */
     public function index(Request $request): View
     {
+        // Only providers whose module is actually enabled — an operator
+        // running just GridPane + Vultr should never see SpinupWP/Pressable
+        // tabs (or be able to filter by them), regardless of what this
+        // fleet's `sites.hosting_provider` column happens to contain.
+        // HostingProviderRegistry::all() is already enablement-gated: each
+        // module only registers a HostingProvider contribution when its own
+        // ModuleServiceProvider::enabled() check passes.
+        $enabledProviders = app(HostingProviderRegistry::class)->all();
+        $enabledProviderIds = array_map(fn ($p) => $p->id(), $enabledProviders);
+
         $provider = $request->query('provider', 'all');
-        $provider = in_array($provider, [Site::HOSTING_PROVIDER_SPINUPWP, Site::HOSTING_PROVIDER_PRESSABLE], true)
-            ? $provider
-            : null;
+        $provider = in_array($provider, $enabledProviderIds, true) ? $provider : null;
 
         $q = trim((string) $request->query('q', ''));
 
@@ -64,15 +73,20 @@ class SitesController extends Controller
             ->paginate(50)
             ->withQueryString();
 
-        $counts = [
-            'all' => Site::query()->count(),
-            Site::HOSTING_PROVIDER_SPINUPWP => Site::query()->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)->count(),
-            Site::HOSTING_PROVIDER_PRESSABLE => Site::query()->where('hosting_provider', Site::HOSTING_PROVIDER_PRESSABLE)->count(),
-        ];
+        $counts = ['all' => Site::query()->count()];
+        $providerTabs = ['all' => 'All'];
+        foreach ($enabledProviders as $hp) {
+            $counts[$hp->id()] = Site::query()->where('hosting_provider', $hp->id())->count();
+            $providerTabs[$hp->id()] = $hp->label();
+        }
 
         return view('dashboard.sites', [
             'sites' => $sites,
             'counts' => $counts,
+            // Only worth showing tabs when there's an actual choice — one
+            // (or zero) enabled hosting-provider module means "All" and the
+            // single provider are the same set.
+            'providerTabs' => count($enabledProviders) > 1 ? $providerTabs : [],
             'activeProvider' => $provider ?? 'all',
             'q' => $q,
         ]);

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
+use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
@@ -20,6 +21,7 @@ use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Modules\Core\Contracts\HostingProvider;
 use Modules\Pressable\PressableClient;
 use Modules\SpinupWp\SpinupWpClient;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -87,6 +89,57 @@ describe('index', function () {
         $searched = $this->actingAs(User::factory()->create())
             ->get(route('sites.index', ['q' => 'alpha-site']));
         $searched->assertOk()->assertSee('alpha-site.test')->assertDontSee('beta-pressable.test');
+    });
+
+    it('only shows tabs/counts/filter for enabled hosting-provider modules — not every provider with data', function () {
+        // Regression coverage: an operator running only GridPane + Vultr
+        // must never see SpinupWP/Pressable tabs, be able to filter by
+        // them, or have their counts included — regardless of what
+        // sites.hosting_provider values happen to exist in the DB (e.g.
+        // leftover rows from before GridPane was the only enabled panel).
+        //
+        // HostingProviderRegistry::all() is mocked directly (rather than
+        // driving this through real InstalledModule rows + module
+        // enablement) because ModuleRegistry's contents are fixed by each
+        // module's own one-time ModuleServiceProvider::register() call
+        // during this test's application bootstrap — which happens before
+        // this test body runs, so it can't be changed by writing
+        // installed_modules afterward without manually re-registering
+        // every affected module (see ModuleEnableDisableTest.php). Mocking
+        // the registry isolates what this test actually cares about: does
+        // SitesController correctly build tabs/counts/filter from whatever
+        // enabled providers it's given.
+        Site::factory()->spinupwp()->create(['domain' => 'legacy-spinupwp.test']);
+        Site::factory()->pressable()->create(['domain' => 'legacy-pressable.test']);
+        Site::factory()->gridpane()->create(['domain' => 'active-gridpane.test']);
+
+        $gridpane = Mockery::mock(HostingProvider::class);
+        $gridpane->shouldReceive('id')->andReturn(Site::HOSTING_PROVIDER_GRIDPANE);
+        $gridpane->shouldReceive('label')->andReturn('GridPane');
+        $this->mock(HostingProviderRegistry::class, function ($mock) use ($gridpane) {
+            $mock->shouldReceive('all')->andReturn([$gridpane]);
+        });
+
+        $response = $this->actingAs(User::factory()->create())->get(route('sites.index'));
+
+        // "All" still shows every real site regardless of whether its
+        // provider's module is currently enabled — disabling a panel's
+        // credentials shouldn't make Clockwork forget infrastructure that
+        // genuinely still exists (e.g. mid-migration between panels). Only
+        // the filter/tab UI is enablement-gated, not the underlying data.
+        $response->assertOk()
+            ->assertSee('active-gridpane.test')
+            ->assertSee('legacy-spinupwp.test')
+            ->assertSee('legacy-pressable.test')
+            ->assertDontSee('id="sites-provider-tabs"', false); // only 1 enabled provider — tab bar itself doesn't render
+
+        // Filtering by a disabled provider must not silently apply the
+        // filter — falls back to "all" instead of returning zero rows.
+        $filtered = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['provider' => Site::HOSTING_PROVIDER_SPINUPWP]));
+        $filtered->assertOk()
+            ->assertSee('legacy-spinupwp.test')
+            ->assertSee('active-gridpane.test');
     });
 
     it('renders the live search input, clear button, and data-search attributes', function () {

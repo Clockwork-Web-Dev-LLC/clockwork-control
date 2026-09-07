@@ -28,24 +28,19 @@
         </form>
     </div>
 
-    <div class="flex items-center gap-2 flex-wrap mb-6" id="sites-provider-tabs">
-        <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mr-1">Host:</span>
-        @php
-            $providerTabs = [
-                'all' => 'All',
-                \App\Models\Site::HOSTING_PROVIDER_SPINUPWP => 'SpinupWP',
-                \App\Models\Site::HOSTING_PROVIDER_PRESSABLE => 'Pressable',
-            ];
-        @endphp
-        @foreach ($providerTabs as $key => $label)
-            <a href="{{ route('sites.index', array_filter(['provider' => $key === 'all' ? null : $key, 'q' => $q ?: null])) }}"
-               class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border
-                      {{ $activeProvider === $key ? 'bg-[var(--color-nav-active-bg)] text-[var(--color-nav-active-ink)] border-[var(--color-nav-active-border)]' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border-transparent hover:bg-[var(--color-border-light)]' }}">
-                {{ $label }}
-                <span class="opacity-70">{{ $counts[$key] ?? 0 }}</span>
-            </a>
-        @endforeach
-    </div>
+    @if (count($providerTabs) > 1)
+        <div class="flex items-center gap-2 flex-wrap mb-6" id="sites-provider-tabs">
+            <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mr-1">Host:</span>
+            @foreach ($providerTabs as $key => $label)
+                <a href="{{ route('sites.index', array_filter(['provider' => $key === 'all' ? null : $key, 'q' => $q ?: null])) }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border
+                          {{ $activeProvider === $key ? 'bg-[var(--color-nav-active-bg)] text-[var(--color-nav-active-ink)] border-[var(--color-nav-active-border)]' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border-transparent hover:bg-[var(--color-border-light)]' }}">
+                    {{ $label }}
+                    <span class="opacity-70">{{ $counts[$key] ?? 0 }}</span>
+                </a>
+            @endforeach
+        </div>
+    @endif
 
     <div class="card overflow-hidden" id="sites-list-card">
         <div id="sites-no-match" class="p-10 text-center text-[var(--color-ink-soft)] {{ $sites->isEmpty() ? '' : 'hidden' }}">
