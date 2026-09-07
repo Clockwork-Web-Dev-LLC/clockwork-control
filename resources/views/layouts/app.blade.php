@@ -85,6 +85,27 @@
                         @endif
                     @endisset
                 </a>
+                @if (Route::has('snippets.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('code-snippets'))
+                <a href="{{ route('snippets.index') }}"
+                   class="btn-pill-nav {{ request()->routeIs('snippets.*') ? 'is-active' : '' }}">
+                    <i class="fa-solid fa-code"></i>
+                    Code Snippets
+                </a>
+                @endif
+                @if (Route::has('client-reports.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-reports'))
+                <a href="{{ route('client-reports.index') }}"
+                   class="btn-pill-nav {{ request()->routeIs('client-reports.*') ? 'is-active' : '' }}">
+                    <i class="fa-solid fa-file-chart-line"></i>
+                    Reports
+                </a>
+                @endif
+                @if (Route::has('clients.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-management'))
+                <a href="{{ route('clients.index') }}"
+                   class="btn-pill-nav {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
+                    <i class="fa-solid fa-users"></i>
+                    Clients
+                </a>
+                @endif
                 @if (Route::has('forms.index') && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms'))
                 <a href="{{ route('forms.index') }}"
                    class="btn-pill-nav {{ request()->routeIs('forms.*') || request()->routeIs('sites.forms.*') ? 'is-active' : '' }}">
@@ -164,6 +185,11 @@
                            class="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('settings.integrations.*') ? 'bg-[var(--color-surface-alt)]' : '' }}">
                             <i class="fa-solid fa-plug text-[var(--color-ink-muted)] w-4"></i>
                             API credentials
+                        </a>
+                        <a href="{{ route('settings.modules.index') }}"
+                           class="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('settings.modules.*') ? 'bg-[var(--color-surface-alt)]' : '' }}">
+                            <i class="fa-solid fa-puzzle-piece text-[var(--color-ink-muted)] w-4"></i>
+                            Modules
                         </a>
                         {{-- Module-contributed nav links (Modules\Core\ModuleRegistry::navItems())
                              — Modules\BillCom\BillComServiceProvider contributes "Bill.com sync",

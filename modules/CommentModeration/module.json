@@ -1,0 +1,10 @@
+{
+  "id": "comment-moderation",
+  "name": "Comment Moderation",
+  "version": "1.0.0",
+  "description": "Manage WordPress comments via Companion plugin",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["comments-moderation"],
+  "namespace": "Modules\\CommentModeration"
+}

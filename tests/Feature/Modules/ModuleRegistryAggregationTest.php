@@ -44,10 +44,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 25 registered modules', function () {
+    it('aggregates a manifest from every one of the 26 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(25);
+        expect($manifests)->toHaveCount(26);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -68,6 +68,7 @@ describe('ModuleRegistry aggregation', function () {
             'twilio',
             'bill_com',
             'client_slack',
+            'client_reports',
             'gtmetrix',
             'psi',
             'sucuri',

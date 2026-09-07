@@ -9,6 +9,7 @@ use Modules\Azure\AzureServiceProvider;
 use Modules\BackupRelay\BackupRelayServiceProvider;
 use Modules\BillCom\BillComServiceProvider;
 use Modules\ClientManagement\ClientManagementServiceProvider;
+use Modules\ClientReports\ClientReportsServiceProvider;
 use Modules\ClientSlack\ClientSlackServiceProvider;
 use Modules\Cloudways\CloudwaysServiceProvider;
 use Modules\CodeSnippets\CodeSnippetsServiceProvider;
@@ -45,6 +46,7 @@ return [
     CodeSnippetsServiceProvider::class,
     SiteMaintenanceServiceProvider::class,
     ClientManagementServiceProvider::class,
+    ClientReportsServiceProvider::class,
     // Hosting providers
     AzureServiceProvider::class,
     HetznerServiceProvider::class,

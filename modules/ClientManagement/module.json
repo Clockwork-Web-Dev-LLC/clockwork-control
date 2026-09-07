@@ -1,0 +1,11 @@
+{
+  "id": "client-management",
+  "name": "Client Management",
+  "version": "1.0.0",
+  "description": "Organize sites by client with per-client billing and reporting",
+  "enabled": true,
+  "requires": ["core"],
+  "optional_requires": ["client-reports"],
+  "capabilities": ["client-management"],
+  "namespace": "Modules\\ClientManagement"
+}

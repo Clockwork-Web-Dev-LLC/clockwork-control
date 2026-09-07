@@ -1,0 +1,10 @@
+{
+  "id": "site-maintenance",
+  "name": "Site Maintenance",
+  "version": "1.0.0",
+  "description": "Toggle WordPress maintenance mode without SSH access",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["maintenance-mode"],
+  "namespace": "Modules\\SiteMaintenance"
+}

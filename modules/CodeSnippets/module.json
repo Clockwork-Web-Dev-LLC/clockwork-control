@@ -1,0 +1,10 @@
+{
+  "id": "code-snippets",
+  "name": "Code Snippets",
+  "version": "1.0.0",
+  "description": "Execute sandboxed PHP code on WordPress sites",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["code-snippets"],
+  "namespace": "Modules\\CodeSnippets"
+}

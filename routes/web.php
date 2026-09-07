@@ -28,6 +28,7 @@ use App\Http\Controllers\ServersController;
 use App\Http\Controllers\ServerUpdateController;
 use App\Http\Controllers\ServiceApiLimitsController;
 use App\Http\Controllers\Settings\BackupRelaySettingsController;
+use App\Http\Controllers\Settings\ModuleSettingsController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\Sites\DomainExpirationController;
 use App\Http\Controllers\Sites\SeoPreflightController;
@@ -74,6 +75,10 @@ Route::middleware(['auth'])->group(function () {
 
     // Appearance & theme preferences
     Route::post('/settings/appearance', [AppearanceSettingsController::class, 'update'])->name('settings.appearance.update');
+
+    // Module management
+    Route::get('/settings/modules', [ModuleSettingsController::class, 'index'])->name('settings.modules.index');
+    Route::post('/settings/modules/toggle', [ModuleSettingsController::class, 'toggle'])->name('settings.modules.toggle');
 
     Route::get('/', [DashboardController::class, 'index'])
         ->middleware(RedirectToSetupIfFreshInstall::class)

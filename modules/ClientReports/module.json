@@ -1,0 +1,11 @@
+{
+  "id": "client-reports",
+  "name": "Client Reports",
+  "version": "1.0.0",
+  "description": "Automated executive client reporting aggregating updates, uptime, security, backups, performance, and forms into white-labeled reports",
+  "enabled": true,
+  "requires": ["core"],
+  "optional_requires": ["client-management"],
+  "capabilities": ["client-reports"],
+  "namespace": "Modules\\ClientReports"
+}
