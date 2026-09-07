@@ -12,6 +12,18 @@
 
     $tier = app(CloudProviderRegistry::class)->resolve($server->provider)->sizeTier($server->size_slug);
     $hasSpecs = $server->vcpus || $server->memory_mb || $server->disk_gb;
+
+    // Which control panel actually owns this server's fleet inventory —
+    // determines which "Refresh from X" action/label is correct. A server
+    // can only ever be managed by one panel, so spinupwp_id (the field
+    // clockwork:import-spinupwp itself sets and cross-references) takes
+    // priority; GridPane-provisioned servers are identified by provider
+    // instead, since GridPane has no separate server-level id column.
+    $refreshPanel = match (true) {
+        $server->spinupwp_id !== null => 'spinupwp',
+        $server->provider === Server::PROVIDER_GRIDPANE => 'gridpane',
+        default => null,
+    };
 @endphp
 
 <div class="mb-6">
@@ -133,17 +145,31 @@
                 </span>
             @endif
             </div>
-            {{-- On-demand SpinupWP refresh — picks up newly-added servers and
-                 site moves between servers. Same command the scheduler runs at
-                 03:30 daily, just triggered now. Takes 10–30 seconds. --}}
-            <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="mt-2">
-                @csrf
-                <button type="submit" class="btn-pill-nav text-xs"
-                        title="Re-pull servers + sites from SpinupWP API. Reflects new servers and site moves immediately."
-                        onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                    <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
-                </button>
-            </form>
+            {{-- On-demand fleet-inventory refresh from whichever control panel
+                 actually manages this server — picks up newly-added servers and
+                 site moves between servers. Same command the scheduler runs
+                 daily, just triggered now. Takes 10–30 seconds. Hidden entirely
+                 for servers with no owning panel (added manually, or a cloud-VPS
+                 provider with no panel of its own) — there's nothing to refresh. --}}
+            @if ($refreshPanel === 'spinupwp')
+                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="mt-2">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            title="Re-pull servers + sites from SpinupWP API. Reflects new servers and site moves immediately."
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
+                    </button>
+                </form>
+            @elseif ($refreshPanel === 'gridpane')
+                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="mt-2">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            title="Re-pull servers + sites from GridPane API. Reflects new servers and site moves immediately."
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from GridPane</span>
+                    </button>
+                </form>
+            @endif
         </div>
     </div>
 

@@ -36,6 +36,58 @@ class ServersController extends Controller
     }
 
     /**
+     * Run `clockwork:import-gridpane` on demand — the GridPane counterpart
+     * to refreshFromSpinupWp() above, for servers managed through GridPane
+     * instead of SpinupWP.
+     */
+    public function refreshFromGridPane(Request $request): RedirectResponse
+    {
+        $result = $this->runGridPaneImport();
+
+        if ($result['ok']) {
+            return back()->with('status', 'Refreshed from GridPane. '.$result['summary']);
+        }
+
+        return back()->with('status_error', 'GridPane refresh failed. '.$result['summary']);
+    }
+
+    /**
+     * Runs `clockwork:import-gridpane` then `clockwork:poll-servers`. See
+     * runSpinupWpImport() below for why the poll step is chained on.
+     *
+     * @return array{ok: bool, summary: string}
+     */
+    protected function runGridPaneImport(): array
+    {
+        try {
+            $importExit = Artisan::call('clockwork:import-gridpane');
+            $importOutput = trim((string) Artisan::output());
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'summary' => 'error: '.$e->getMessage()];
+        }
+
+        $importSummary = $this->extractSummaryLines($importOutput, ['Servers:', 'Sites:']);
+
+        if ($importExit !== 0) {
+            return ['ok' => false, 'summary' => $importSummary ?: 'no summary'];
+        }
+
+        $pollSummary = '';
+        try {
+            Artisan::call('clockwork:poll-servers');
+            $pollOutput = trim((string) Artisan::output());
+            $pollLine = $this->extractSummaryLines($pollOutput, ['Done.']);
+            $pollSummary = $pollLine ? 'Polled: '.preg_replace('/^Done\.\s*/', '', $pollLine) : '';
+        } catch (\Throwable $e) {
+            $pollSummary = 'Poll skipped: '.$e->getMessage();
+        }
+
+        $summary = trim($importSummary.($pollSummary ? ' · '.$pollSummary : ''));
+
+        return ['ok' => true, 'summary' => $summary ?: 'no summary'];
+    }
+
+    /**
      * Runs `clockwork:import-spinupwp` then `clockwork:poll-servers` so a
      * just-added server gets its status (green/yellow/red) immediately
      * instead of sitting at the bottom of the dashboard as "unknown" until

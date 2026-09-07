@@ -106,6 +106,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/servers/refresh-spinupwp', [ServersController::class, 'refreshFromSpinupWp'])
         ->name('servers.refreshFromSpinupWp');
+    Route::post('/servers/refresh-gridpane', [ServersController::class, 'refreshFromGridPane'])
+        ->name('servers.refreshFromGridPane');
 
     // Tab-aware server detail. The {tab?} segment is constrained to known tab names so other
     // /servers/{server}/* routes (edit, test, provision, etc.) still resolve normally — Laravel

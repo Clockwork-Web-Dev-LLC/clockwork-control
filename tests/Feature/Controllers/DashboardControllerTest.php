@@ -89,4 +89,45 @@ describe('DashboardController', function () {
 
         $response->assertOk()->assertDontSee('no longer exists at');
     });
+
+    it('shows a Refresh from SpinupWP action for a server with a spinupwp_id', function () {
+        $server = Server::factory()->create(['name' => 'web6.example.com', 'spinupwp_id' => 12345]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()
+            ->assertSee('Refresh from SpinupWP')
+            ->assertDontSee('Refresh from GridPane');
+    });
+
+    it('shows a Refresh from GridPane action, not SpinupWP, for a GridPane-provider server', function () {
+        $server = Server::factory()->create([
+            'name' => 'web7.example.com',
+            'spinupwp_id' => null,
+            'provider' => Server::PROVIDER_GRIDPANE,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()
+            ->assertSee('Refresh from GridPane')
+            ->assertDontSee('Refresh from SpinupWP');
+    });
+
+    it('hides both refresh actions for a server managed by neither panel', function () {
+        $server = Server::factory()->create([
+            'name' => 'web8.example.com',
+            'spinupwp_id' => null,
+            'provider' => 'digitalocean',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()
+            ->assertDontSee('Refresh from SpinupWP')
+            ->assertDontSee('Refresh from GridPane');
+    });
 });

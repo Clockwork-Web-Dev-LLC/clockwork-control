@@ -154,6 +154,38 @@ describe('ServersController', function () {
         });
     });
 
+    describe('refreshFromGridPane', function () {
+        it('flashes a success status when the import + poll succeed', function () {
+            Artisan::shouldReceive('call')->once()->with('clockwork:import-gridpane')->andReturn(0);
+            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
+            Artisan::shouldReceive('output')->twice()->andReturn(
+                'Servers: {"created":1,"updated":0,"unchanged":0}'."\n".'Sites: {"created":3}',
+                'Done. green=1 yellow=0 red=0 unknown=0 errors=0 deleted=0',
+            );
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('servers.refreshFromGridPane'));
+
+            $response->assertSessionHas('status', function ($msg) {
+                return str_starts_with($msg, 'Refreshed from GridPane.')
+                    && str_contains($msg, 'Servers: {"created":1');
+            });
+            $response->assertSessionMissing('status_error');
+        });
+
+        it('flashes a status_error when the import fails, and never calls poll-servers', function () {
+            Artisan::shouldReceive('call')->once()->with('clockwork:import-gridpane')->andReturn(1);
+            Artisan::shouldReceive('call')->with('clockwork:poll-servers')->never();
+            Artisan::shouldReceive('output')->once()->andReturn('GRIDPANE_API_KEY is not configured in .env or Settings.');
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('servers.refreshFromGridPane'));
+
+            $response->assertSessionHas('status_error', 'GridPane refresh failed. no summary');
+            $response->assertSessionMissing('status');
+        });
+    });
+
     describe('toggleIgnore', function () {
         it('turns ignore ON, sets the reason, and redirects to servers.show by default', function () {
             $server = Server::factory()->create(['is_ignored' => false]);

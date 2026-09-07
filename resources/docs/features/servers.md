@@ -5,7 +5,7 @@ order: 12
 author: Aaron Reimann
 updated: 2026-09-07
 tags: [servers, ssh, credentials, inventory, fleet]
-tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
+tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---
 
 Two controllers own the server row itself, as opposed to what happens to it once it exists: `ServersController` (create/remove/ignore/auto-ban toggles/health recheck) and `ServerCredentialsController` (SSH user/port/password, one at a time or in bulk). Neither had a doc page before this one — everything else in Features assumes a server already exists and has working SSH.
@@ -20,9 +20,11 @@ Almost every SpinupWP server arrives via `clockwork:import-spinupwp`, not throug
 
 Use this form for one-off additions. For several servers at once, the page itself links to the **bulk paste-and-import flow** (`/servers/credentials/feed`, below) instead.
 
-## Refresh from SpinupWP, on demand
+## Refresh from SpinupWP / GridPane, on demand
 
-The **Refresh from SpinupWP** button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFromSpinupWp`) runs `clockwork:import-spinupwp` synchronously, then `clockwork:poll-servers` so a brand-new server gets a real status immediately instead of sitting at "unknown" until the next scheduled tick. Import is the gating step: if it fails, poll is skipped and the whole action reports failure. If import succeeds but poll throws, the action still reports success — the user's actual intent (refresh the server/site list) was met, poll is a bonus. The flash message concatenates the artisan output's `Servers:` / `Sites:` / `Done. ...` summary lines so you get real numbers, not just "done."
+The server detail page header shows a **Refresh from SpinupWP** or **Refresh from GridPane** button — whichever control panel actually manages that server's fleet inventory (`$server->spinupwp_id !== null` for SpinupWP; `$server->provider === Server::PROVIDER_GRIDPANE` for GridPane, since GridPane has no separate server-level id column). Neither button renders for a server managed by neither (hand-added, or a cloud-VPS provider with no panel of its own) — there's nothing to refresh.
+
+Each button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFromSpinupWp`, `POST /servers/refresh-gridpane` → `refreshFromGridPane`) runs the matching `clockwork:import-*` command synchronously, then `clockwork:poll-servers` so a brand-new server gets a real status immediately instead of sitting at "unknown" until the next scheduled tick. Import is the gating step: if it fails, poll is skipped and the whole action reports failure. If import succeeds but poll throws, the action still reports success — the user's actual intent (refresh the server/site list) was met, poll is a bonus. The flash message concatenates the artisan output's `Servers:` / `Sites:` / `Done. ...` summary lines so you get real numbers, not just "done."
 
 ## Removing a server
 
