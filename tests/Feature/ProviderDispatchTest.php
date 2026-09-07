@@ -159,7 +159,54 @@ class ProviderDispatchTest extends TestCase
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'monitoring/metrics/droplet/cpu') && ($r['host_id'] ?? null) === '444');
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'api.hetzner.cloud/v1/servers/111'));
 
-        $this->assertSame(Server::STATUS_UNKNOWN, $unknown->fresh()->status);
+        // NullCloudProvider::isDeletedAtProvider() always returns false — this
+        // server's STATUS_UNKNOWN comes from a *successful* poll returning all-null
+        // metrics (nothing to poll against), not the deleted-at-provider branch, so
+        // provider_missing_since is correctly never set for it.
+        $unknown->refresh();
+        $this->assertSame(Server::STATUS_UNKNOWN, $unknown->status);
+        $this->assertNull($unknown->provider_missing_since);
+    }
+
+    public function test_provider_missing_since_is_preserved_across_repeated_deleted_polls_and_cleared_on_recovery(): void
+    {
+        config(['clockwork.digitalocean.token' => 'test-do-token']);
+
+        // A single Http::fake() using a sequence for the droplets list — a
+        // *second* Http::fake() call for an already-faked URL pattern would
+        // NOT override the first (Laravel checks fakes in registration
+        // order and uses the first match), so three separate poll runs need
+        // three queued responses on one fake registration.
+        Http::fake([
+            'api.digitalocean.com/v2/droplets*' => Http::sequence()
+                ->push(['droplets' => [], 'links' => []])
+                ->push(['droplets' => [], 'links' => []])
+                ->push(['droplets' => [['id' => 999]], 'links' => []]),
+            'api.digitalocean.com/*' => Http::response(['data' => ['result' => []]]),
+        ]);
+
+        $server = $this->pollableServer(Server::PROVIDER_DIGITALOCEAN, '999');
+
+        $this->artisan('clockwork:poll-servers')->assertSuccessful();
+        $server->refresh();
+        $this->assertSame(Server::STATUS_UNKNOWN, $server->status);
+        $firstDetected = $server->provider_missing_since;
+        $this->assertNotNull($firstDetected);
+
+        // A second poll while still absent from the provider must not
+        // re-stamp the timestamp — it should keep recording when this was
+        // FIRST noticed missing, not the most recent check.
+        $this->travel(1)->hour();
+        $this->artisan('clockwork:poll-servers')->assertSuccessful();
+        $server->refresh();
+        $this->assertTrue($firstDetected->equalTo($server->provider_missing_since));
+
+        // Recovery: the droplet reappears in DO's own inventory (e.g. a
+        // transient API blip, not a real deletion) — the flag must clear on
+        // the next successful poll.
+        $this->artisan('clockwork:poll-servers')->assertSuccessful();
+        $server->refresh();
+        $this->assertNull($server->provider_missing_since);
     }
 
     private function server(string $provider, ?string $sizeSlug = null): Server

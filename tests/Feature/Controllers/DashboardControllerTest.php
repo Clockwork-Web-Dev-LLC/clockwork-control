@@ -62,4 +62,31 @@ describe('DashboardController', function () {
 
         $response->assertNotFound();
     });
+
+    it('shows the provider-missing banner with a remove action once a poll confirms the server is gone at its provider', function () {
+        $server = Server::factory()->create([
+            'name' => 'web4.example.com',
+            'provider' => 'digitalocean',
+            'provider_missing_since' => now()->subDay(),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()
+            ->assertSee('no longer exists at')
+            ->assertSee(route('servers.destroy', $server), false);
+    });
+
+    it('does not show the provider-missing banner for a server currently polling fine', function () {
+        $server = Server::factory()->create([
+            'name' => 'web5.example.com',
+            'provider_missing_since' => null,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()->assertDontSee('no longer exists at');
+    });
 });

@@ -31,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property bool $is_ignored
  * @property ?string $ignore_reason
  * @property ?Carbon $last_polled_at
+ * @property ?Carbon $provider_missing_since set the first time a poll finds this server's provider_id absent from the cloud provider's own inventory; cleared on the next successful poll
  * @property ?Carbon $last_alert_at
  * @property ?Carbon $last_ssh_ok_at
  * @property ?Carbon $clockwork_jail_provisioned_at
@@ -156,6 +157,7 @@ class Server extends Model
             'reboot_required' => 'boolean',
             'last_wordfence_pull_at' => 'datetime',
             'last_polled_at' => 'datetime',
+            'provider_missing_since' => 'datetime',
             'last_alert_at' => 'datetime',
             'last_ssh_ok_at' => 'datetime',
             'clockwork_jail_provisioned_at' => 'datetime',

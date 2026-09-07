@@ -147,6 +147,30 @@
         </div>
     </div>
 
+    @if ($server->provider_missing_since)
+        <div class="mt-4 p-4 rounded-[var(--radius-card)] status-red flex items-start gap-3">
+            <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+            <div class="flex-1">
+                <div class="font-medium text-[var(--color-ink-strong)] mb-0.5">This server no longer exists at {{ $server->provider_label }}</div>
+                <div>Missing from {{ $server->provider_label }}'s own inventory since {{ $server->provider_missing_since->diffForHumans() }} — it was likely decommissioned there. If that's expected, remove it from Clockwork below; it'll keep failing every poll until then.</div>
+            </div>
+            <form method="POST" action="{{ route('servers.destroy', $server) }}"
+                  onsubmit="
+                      var name = prompt('Type the server name to confirm deletion:\n\n{{ $server->name }}');
+                      if (name === null) return false;
+                      this.querySelector('input[name=confirm_name]').value = name;
+                      return confirm('FINAL CONFIRMATION: permanently remove {{ $server->name }} from Clockwork? This cascade-deletes {{ $server->sites()->count() }} site(s) and all related data.');
+                  ">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="confirm_name" value="">
+                <button type="submit" class="btn-pill-nav" style="color: var(--color-status-red); border-color: var(--color-status-red);">
+                    <i class="fa-solid fa-trash"></i> Remove from Clockwork
+                </button>
+            </form>
+        </div>
+    @endif
+
     @if ($server->is_ignored)
         <div class="mt-4 p-4 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)] text-sm text-[var(--color-ink-muted)] flex items-start gap-3">
             <i class="fa-solid fa-circle-info text-[var(--color-ink-soft)] mt-0.5"></i>

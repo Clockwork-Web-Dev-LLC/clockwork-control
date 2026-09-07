@@ -86,6 +86,7 @@ class PollServers extends Command
             if ($provider->isDeletedAtProvider($server, $aliveIds)) {
                 $server->status = Server::STATUS_UNKNOWN;
                 $server->last_polled_at = $now;
+                $server->provider_missing_since ??= $now;
                 $server->save();
                 $stats['deleted']++;
                 $stats[Server::STATUS_UNKNOWN]++;
@@ -114,6 +115,7 @@ class PollServers extends Command
             $previous = $server->status;
             $server->status = $status;
             $server->last_polled_at = $now;
+            $server->provider_missing_since = null;
 
             if ($status === Server::STATUS_RED && $previous !== Server::STATUS_RED) {
                 $server->last_alert_at = $now;
