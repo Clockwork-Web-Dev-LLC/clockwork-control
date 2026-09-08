@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\BackupRelay\Services\GlacierUploader;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
@@ -222,5 +223,53 @@ class BackupRelaySettingsController extends Controller
         }
 
         return back()->with($isSuccess ? 'status' : 'error', $msg);
+    }
+
+    public function archives(Site $site, BackupArchiveEnumerator $enumerator): JsonResponse
+    {
+        $data = $enumerator->forSite($site);
+
+        return response()->json(array_merge([
+            'success' => true,
+            'site_id' => $site->id,
+            'domain' => $site->domain,
+        ], $data));
+    }
+
+    public function download(Site $site, Request $request, BackupArchiveEnumerator $enumerator): mixed
+    {
+        $rawKey = $request->query('key');
+        if (! $rawKey) {
+            abort(400, 'Missing key parameter.');
+        }
+
+        $key = base64_decode((string) $rawKey, true);
+        if ($key === false || $key === '') {
+            abort(400, 'Invalid key encoding.');
+        }
+
+        // Security check: ensure object key belongs to this site
+        $archivePrefix = rtrim((string) config('clockwork.backup_relay.archive_prefix', 'archives'), '/');
+        $validPrefix1 = "{$archivePrefix}/{$site->domain}/";
+        $validPrefix2 = "{$site->domain}/";
+
+        if (! str_starts_with($key, $validPrefix1) && ! str_starts_with($key, $validPrefix2)) {
+            abort(403, 'Unauthorized access to archive object.');
+        }
+
+        $disk = $enumerator->disk();
+        if (! $disk->exists($key)) {
+            abort(404, 'Archive object not found in S3.');
+        }
+
+        try {
+            if (method_exists($disk, 'temporaryUrl')) {
+                return redirect()->away($disk->temporaryUrl($key, now()->addHours(1)));
+            }
+        } catch (Throwable) {
+            // Stream through if temporaryUrl is unsupported
+        }
+
+        return $disk->download($key, basename($key));
     }
 }

@@ -337,6 +337,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/settings/backup-relay', [BackupRelaySettingsController::class, 'index'])->name('settings.backup-relay.index');
     Route::patch('/settings/backup-relay', [BackupRelaySettingsController::class, 'update'])->name('settings.backup-relay.update');
     Route::post('/settings/backup-relay/run-now', [BackupRelaySettingsController::class, 'runNow'])->name('settings.backup-relay.runNow');
+    Route::get('/settings/backup-relay/sites/{site}/archives', [BackupRelaySettingsController::class, 'archives'])->name('settings.backup-relay.archives');
+    Route::get('/settings/backup-relay/sites/{site}/download', [BackupRelaySettingsController::class, 'download'])->name('settings.backup-relay.download');
 
     // Mattermost and Slack per-event opt-out routes moved to
     // modules/Mattermost/routes/web.php and modules/Slack/routes/web.php.

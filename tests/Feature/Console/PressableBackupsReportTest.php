@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Models\Site;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -160,6 +161,69 @@ describe('clockwork:pressable-backups-report — happy path', function () {
             return $body['offsite_archive'] === null;
         });
         Log::shouldHaveReceived('warning')->with('companion.pressable_backups_report.offsite_manifest_unreadable', \Mockery::type('array'));
+    });
+});
+
+describe('clockwork:pressable-backups-report — offsite S3 archive enrichment (no manifest, backup-relay-enabled site)', function () {
+    it('attaches real presigned URLs and an accurate expiry when off-site archives exist', function () {
+        Storage::fake('s3');
+        Storage::fake('s3-backup-relay');
+        $disk = Storage::disk('s3-backup-relay');
+
+        $site = pbrSite(['backup_relay_enabled' => true]);
+        $disk->put("archives/{$site->domain}/2026-09-06_fs.bz2", str_repeat('A', 1024));
+        $disk->put("archives/{$site->domain}/2026-09-06_db.sql", str_repeat('B', 512));
+
+        pbrMockPressable(function ($mock) {
+            $mock->shouldReceive('siteFilesystemBackups')->once()->andReturn([]);
+            $mock->shouldReceive('siteDatabaseBackups')->once()->andReturn([]);
+        });
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:pressable-backups-report')->assertSuccessful();
+
+        Http::assertSent(function ($request) use ($site) {
+            if ($request->url() !== "https://{$site->domain}/wp-json/clockwork/v1/backups-report") {
+                return false;
+            }
+            $archive = json_decode($request->body(), true)['offsite_archive'];
+
+            $expiresInHours = now()->diffInHours(Carbon::parse($archive['download_expires_at']));
+
+            return $archive['active'] === true
+                && ! empty($archive['fs_download_url'])
+                && ! empty($archive['db_download_url'])
+                && $archive['download_expires_at'] !== null
+                && $expiresInHours >= 23 && $expiresInHours <= 24;
+        });
+    });
+
+    it('does not attach an offsite_archive when the disk cannot mint real presigned URLs, even if matching files exist', function () {
+        Storage::fake('s3');
+        Storage::fake('s3-backup-relay');
+        Storage::disk('s3-backup-relay')->put('archives/no-presigned.example.com/2026-09-06_fs.bz2', 'x');
+
+        $site = pbrSite(['domain' => 'no-presigned.example.com', 'backup_relay_enabled' => true]);
+
+        config(['filesystems.disks.s3-backup-relay.driver' => 'local']);
+
+        pbrMockPressable(function ($mock) {
+            $mock->shouldReceive('siteFilesystemBackups')->once()->andReturn([]);
+            $mock->shouldReceive('siteDatabaseBackups')->once()->andReturn([]);
+        });
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:pressable-backups-report')->assertSuccessful();
+
+        Http::assertSent(function ($request) {
+            return json_decode($request->body(), true)['offsite_archive'] === null;
+        });
     });
 });
 
