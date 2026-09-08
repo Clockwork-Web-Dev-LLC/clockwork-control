@@ -82,7 +82,7 @@ class ClientReportsController extends Controller
     {
         $report->load('site');
 
-        return view('client-reports::report', compact('report'));
+        return view('client-reports::reports.show', compact('report'));
     }
 
     /**
@@ -95,7 +95,7 @@ class ClientReportsController extends Controller
             ->with('site')
             ->firstOrFail();
 
-        return view('client-reports::report', compact('report'));
+        return view('client-reports::reports.show', compact('report'));
     }
 
     /**
