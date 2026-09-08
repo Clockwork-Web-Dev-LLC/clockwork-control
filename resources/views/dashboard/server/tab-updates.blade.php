@@ -17,7 +17,7 @@
                     System updates
                 </h2>
                 <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
-                    Mirrored from SpinupWP daily. Security patches install nightly via unattended-upgrades; this covers everything else.
+                    Polled daily via SSH. Security patches install nightly via unattended-upgrades; this covers everything else.
                 </p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
@@ -36,10 +36,11 @@
         </div>
 
         {{-- Apt-update snapshot — pulled via SSH by clockwork:poll-system-updates
-             (daily 04:15 UTC; only runs against servers SpinupWP flagged with
-             upgrade_required=true). Gives us the count + security split + the
-             actual per-package list that SpinupWP's API doesn't expose, so the
-             operator can see exactly what would change before clicking Run updates. --}}
+             (daily 04:15 UTC; runs against servers SpinupWP flagged with
+             upgrade_required=true, plus every non-SpinupWP-managed server).
+             Gives us the count + security split + the actual per-package list
+             that SpinupWP's API doesn't expose, so the operator can see
+             exactly what would change before clicking Run updates. --}}
         @if ($snapshot)
             <div class="mb-4 rounded-md border border-[var(--color-border-light)] p-3 text-sm">
                 @if ($snapshot->poll_status === \App\Models\ServerUpdateSnapshot::STATUS_OK)
@@ -103,7 +104,7 @@
                         <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
                         <div class="flex-1">
                             <div class="font-medium">Last poll {{ $snapshot->poll_status === \App\Models\ServerUpdateSnapshot::STATUS_SSH_FAILED ? 'failed (SSH)' : 'could not be parsed' }}</div>
-                            <div class="text-xs text-[var(--color-ink-muted)]">{{ $snapshot->polled_at->diffForHumans() }} — counts shown above are from the SpinupWP boolean only.</div>
+                            <div class="text-xs text-[var(--color-ink-muted)]">{{ $snapshot->polled_at->diffForHumans() }} — counts shown above are from the last known upgrade-required flag only.</div>
                             @if ($snapshot->poll_error)
                                 <details class="mt-1">
                                     <summary class="text-xs text-[var(--color-ink-soft)] cursor-pointer">error detail</summary>

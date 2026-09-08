@@ -183,7 +183,7 @@
             <i class="fa-solid fa-server text-4xl text-[var(--color-ink-soft)] mb-3"></i>
             <p class="text-[var(--color-ink-muted)]">No servers imported yet.</p>
             <p class="text-sm text-[var(--color-ink-soft)] mt-2">
-                Run <code class="bg-[var(--color-surface-alt)] px-2 py-0.5 rounded">php artisan clockwork:import-spinupwp</code>.
+                Run an import for your hosting provider (<code class="bg-[var(--color-surface-alt)] px-2 py-0.5 rounded">php artisan clockwork:import-spinupwp</code> or <code class="bg-[var(--color-surface-alt)] px-2 py-0.5 rounded">clockwork:import-gridpane</code>) or <a href="{{ route('servers.create') }}" class="text-[var(--color-primary-600)] hover:underline">add a server manually</a>.
             </p>
         </div>
     @else
