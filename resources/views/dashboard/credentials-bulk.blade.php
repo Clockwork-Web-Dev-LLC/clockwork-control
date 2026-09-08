@@ -3,6 +3,8 @@
 @section('title', 'SSH credentials · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="SSH credentials"
         subtitle="Manage per-server SSH passwords for automation and update tasks. Default user: {{ config('clockwork.ssh.default_user') }}. Existing values are encrypted at rest.">
         <x-slot:actions>
@@ -16,8 +18,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

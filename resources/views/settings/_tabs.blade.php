@@ -73,7 +73,7 @@
     $currentTools = array_filter($categoryTools[$activeKey] ?? [], fn ($item) => Route::has($item['route']));
 @endphp
 
-<div class="mb-6 space-y-3">
+<div class="mb-6 space-y-2.5">
     {{-- Tier 1: Core Settings Pillars --}}
     <div class="flex items-center gap-1 border-b border-[var(--color-border-light)] overflow-x-auto">
         @foreach ($tabs as $t)
@@ -88,20 +88,16 @@
         @endforeach
     </div>
 
-    {{-- Tier 2: Category Tools Sub-Nav (visible when viewing a specific section) --}}
+    {{-- Tier 2: Category Tools Ribbon (visible when viewing a specific section) --}}
     @if (!empty($currentTools) && $activeKey !== 'hub')
-        <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-xs">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--color-ink-soft)] mr-1 flex items-center gap-1">
-                <i class="fa-solid fa-arrow-turn-down text-[9px]"></i>
-                <span>Tools:</span>
-            </span>
+        <div class="p-1 rounded-xl bg-[var(--color-surface-alt)]/70 border border-[var(--color-border-light)] flex items-center gap-1 overflow-x-auto text-xs">
             @foreach ($currentTools as $tool)
                 <a href="{{ route($tool['route']) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all whitespace-nowrap
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap
                           {{ $tool['active']
-                                ? 'bg-[var(--color-ink-strong)] text-white shadow-2xs'
-                                : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-border)]' }}">
-                    <i class="{{ $tool['icon'] }} text-[10px]"></i>
+                                ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] font-semibold shadow-xs border border-[var(--color-border-light)]'
+                                : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface)]/50' }}">
+                    <i class="{{ $tool['icon'] }} text-[11px] {{ $tool['active'] ? 'text-[var(--color-brand)]' : 'text-[var(--color-ink-soft)]' }}"></i>
                     <span>{{ $tool['label'] }}</span>
                 </a>
             @endforeach

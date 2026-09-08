@@ -3,6 +3,8 @@
 @section('title', 'Capacity · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Capacity"
         subtitle="Shared-server pressure, headroom, and visit-threshold overages. Visit count uses WP Engine's definition: DISTINCT IP per UTC day, excluding 403s, static assets, and known bots.">
         <x-slot:actions>
@@ -12,8 +14,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     @if ($sharedTagMissing)
         <div class="card p-6 status-yellow">

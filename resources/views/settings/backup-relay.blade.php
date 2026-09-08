@@ -4,6 +4,8 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8" x-data="backupRelaySettings()">
+    @include('settings._tabs')
+
     {{-- Flash Notifications --}}
     @if (session('status'))
         <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-sm flex items-center gap-3 shadow-2xs">
@@ -80,8 +82,6 @@
             @endif
         </div>
     </div>
-
-    @include('settings._tabs')
 
     {{-- Mode & Configuration Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

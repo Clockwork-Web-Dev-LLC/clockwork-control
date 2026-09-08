@@ -4,6 +4,8 @@
 
 @section('content')
     <div class="mb-8" x-data="{ showSecurityModal: false }">
+        @include('settings._tabs')
+
         <x-page-header title="API credentials"
             subtitle="Store integration API keys here or drop them directly into your local .env file. Values are encrypted at rest and never shown back once saved.">
             <x-slot:actions>
@@ -17,8 +19,6 @@
                 </button>
             </x-slot:actions>
         </x-page-header>
-
-        @include('settings._tabs')
 
         <div class="card p-4 mb-6 border-l-4 border-[var(--color-status-yellow)] bg-[var(--color-status-yellow-bg)] text-xs flex items-start gap-3 max-w-3xl">
             <i class="fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)] text-sm mt-0.5 flex-shrink-0"></i>

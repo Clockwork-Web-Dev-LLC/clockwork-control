@@ -3,6 +3,8 @@
 @section('title', 'Security scans · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Security scans"
         subtitle="Toggle scheduled security scans and trigger one-off runs across the fleet. Sucuri SiteCheck and core checksums target care-plan sites; domain blacklist monitoring protects every site.">
         <x-slot:actions>
@@ -12,8 +14,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

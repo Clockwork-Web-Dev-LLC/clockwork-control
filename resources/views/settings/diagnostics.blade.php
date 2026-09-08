@@ -3,6 +3,8 @@
 @section('title', 'Diagnostics · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Diagnostics"
         subtitle="Connectivity check across every external integration the app uses. Read-only — nothing here sends test mail, posts to chat, or writes to anyone's API.">
         <x-slot:actions>
@@ -14,8 +16,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     {{-- Roll-up metric tiles --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-7xl">

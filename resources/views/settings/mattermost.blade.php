@@ -3,10 +3,10 @@
 @section('title', 'Mattermost notifications · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Mattermost notifications"
         subtitle="Per-event opt-out for chat notifications. Disabled events still log to the database and the Laravel log — only the Mattermost post is suppressed. Toggles save immediately." />
-
-    @include('settings._tabs')
 
     {{-- Integration health pill — useful so the operator knows whether unchecking
          a box actually does anything (no-op if there's no webhook URL set). --}}
