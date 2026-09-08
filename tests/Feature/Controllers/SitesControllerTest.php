@@ -512,15 +512,18 @@ describe('pushCompanionData', function () {
         $response->assertStatus(422)->assertJsonPath('ok', false);
     });
 
-    it('reports per-leg failures cleanly when no capabilities are advertised and there is no spinupwp_id', function () {
+    it('reports per-leg failures cleanly when no capabilities are advertised, skipping backups cleanly on a non-SpinupWP site', function () {
         $site = Site::factory()->pressable()->withCompanionInstalled()->create(['companion_capabilities' => []]);
 
         $response = $this->actingAs(User::factory()->create())->post(route('sites.companion.push-update', $site));
 
-        $response->assertStatus(500);
-        $response->assertJsonPath('ok', false);
+        // Pressable has no SpinupWP backup config to fetch — that's not a
+        // failure, so the backups leg alone makes the overall response ok.
+        $response->assertStatus(200);
+        $response->assertJsonPath('ok', true);
         $response->assertJsonPath('results.snapshot.ok', false);
-        $response->assertJsonPath('results.backups.ok', false);
+        $response->assertJsonPath('results.backups.ok', true);
+        $response->assertJsonPath('results.backups.skipped', true);
         $response->assertJsonPath('results.traffic.ok', false);
     });
 

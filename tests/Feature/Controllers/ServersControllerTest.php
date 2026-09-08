@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use Illuminate\Support\Facades\Artisan;
 use Modules\Core\Contracts\CloudProvider;
+use Modules\SpinupWp\SpinupWpClient;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -59,6 +60,8 @@ describe('ServersController', function () {
 
     describe('store', function () {
         it('creates a server with default ssh user/port, refreshes from SpinupWP, and redirects to servers.show', function () {
+            $this->mock(SpinupWpClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(true));
+
             Artisan::shouldReceive('call')->once()->with('clockwork:import-spinupwp')->andReturn(0);
             Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
             Artisan::shouldReceive('output')->twice()->andReturn(
@@ -93,8 +96,11 @@ describe('ServersController', function () {
         });
 
         it('honors explicit ssh_user/ssh_port/is_ignored overrides', function () {
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-spinupwp')->andReturn(1);
-            Artisan::shouldReceive('output')->once()->andReturn('CLOCKWORK_SPINUPWP_TOKEN is not set in .env.');
+            // No SpinupWP account on this fleet — store() skips the import
+            // entirely and polls directly instead, same as the real test
+            // environment (no CLOCKWORK_SPINUPWP_TOKEN configured).
+            $this->mock(SpinupWpClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
+            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
 
             $this->actingAs(User::factory()->create())->post(route('servers.store'), [
                 'name' => 'custom-server.example.com',
