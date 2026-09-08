@@ -69,6 +69,9 @@ namespace {
             $response->assertOk()
                 ->assertSee('db-primary.example.com')
                 ->assertSee('Fleet server updates');
+            // Regression: this route is part of the "Operations & Tools"
+            // settings tier — the persistent two-tier settings nav must render.
+            $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
         });
 
         it('queues updates for eligible servers and reports skip reasons in the flash message', function () {

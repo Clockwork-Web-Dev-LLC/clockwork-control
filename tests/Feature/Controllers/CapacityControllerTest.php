@@ -44,6 +44,10 @@ describe('CapacityController', function () {
             ->get(route('capacity.index'));
 
         $response->assertOk()->assertSee('shared1.example.com');
+        // Regression: capacity.index is the anchor route for the
+        // "Operations & Tools" settings tier — the persistent two-tier
+        // settings nav must render here too, not just on /capacity/settings.
+        $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
     });
 
     it('shows the missing-tag notice when no Shared tag exists', function () {

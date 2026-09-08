@@ -49,6 +49,9 @@ describe('MaintenanceHistoryController', function () {
             ->assertSee('covered-example.com')
             ->assertSee('billable-example.com')
             ->assertSee($now->format('F Y'));
+        // Regression: this route is part of the "Operations & Tools"
+        // settings tier — the persistent two-tier settings nav must render.
+        $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
 
         // Grand totals: 1 covered action, 1 billable action — the two rows
         // added above, the out-of-month row excluded.

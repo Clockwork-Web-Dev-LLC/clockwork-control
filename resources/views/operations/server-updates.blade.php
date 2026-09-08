@@ -11,6 +11,8 @@
     <x-page-header title="Fleet server updates"
         subtitle="Apt-update snapshot for every non-ignored server. Pick servers to queue one-by-one or all at once. Per-server details on each row link to the server's Updates tab." />
 
+    @include('settings._tabs')
+
     @if (session('status'))
         <div class="mb-4 px-4 py-2 rounded-md bg-[var(--color-status-green)]/10 text-[var(--color-status-green)] text-sm">
             <i class="fa-solid fa-circle-check mr-1"></i> {{ session('status') }}

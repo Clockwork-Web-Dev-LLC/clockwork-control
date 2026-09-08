@@ -13,6 +13,8 @@
         </x-slot:actions>
     </x-page-header>
 
+    @include('settings._tabs')
+
     @if ($sharedTagMissing)
         <div class="card p-6 status-yellow">
             No <code>Shared</code> tag exists. Add one in
