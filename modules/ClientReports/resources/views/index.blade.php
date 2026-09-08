@@ -22,7 +22,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     {{-- Main Reports List --}}
-    <div class="lg:col-span-8 space-y-6">
+    <div class="lg:col-span-8 xl:col-span-9 space-y-6">
         <div class="card p-5">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -71,14 +71,14 @@
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-right whitespace-nowrap">
-                                        <div class="flex items-center justify-end gap-2">
-                                            <a href="{{ route('client-reports.show', $r) }}" target="_blank" class="btn-pill-nav text-xs py-1 px-2.5" title="View / Print">
-                                                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> View
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <a href="{{ route('client-reports.show', $r) }}" target="_blank" class="btn-pill-nav text-xs py-1.5 px-2" title="View / Print">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                             </a>
                                             <form method="POST" action="{{ route('client-reports.send', $r) }}" class="inline" onsubmit="return confirm('Email report to client?');">
                                                 @csrf
-                                                <button type="submit" class="btn-pill-nav text-xs py-1 px-2.5 text-indigo-600 hover:bg-indigo-50" title="Send Email">
-                                                    <i class="fa-solid fa-paper-plane mr-1"></i> Send
+                                                <button type="submit" class="btn-pill-nav text-xs py-1.5 px-2 text-indigo-600 hover:bg-indigo-50" title="Send Email">
+                                                    <i class="fa-solid fa-paper-plane"></i>
                                                 </button>
                                             </form>
                                         </div>
@@ -96,7 +96,7 @@
     </div>
 
     {{-- Right Column: Generate Report Form & Schedules --}}
-    <div class="lg:col-span-4 space-y-6" id="generate-panel">
+    <div class="lg:col-span-4 xl:col-span-3 space-y-6" id="generate-panel">
         {{-- Generate Report Panel --}}
         <div class="card p-5">
             <h2 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] mb-1 flex items-center gap-2">
