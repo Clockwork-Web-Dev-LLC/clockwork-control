@@ -105,4 +105,35 @@ class SiteProviderGatingTest extends TestCase
 
         app(WpCoreChecksumVerifier::class)->verify($site->fresh());
     }
+
+    public function test_resolve_wp_path_prefers_the_recorded_path_over_any_convention(): void
+    {
+        $site = new Site(['domain' => 'x.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'wp_path' => '/custom/path']);
+
+        $this->assertSame('/custom/path', $site->resolveWpPath());
+    }
+
+    public function test_resolve_wp_path_falls_back_to_the_spinupwp_convention(): void
+    {
+        $site = new Site(['domain' => 'spinup.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'wp_path' => null]);
+
+        $this->assertSame('/sites/spinup.example.com/files', $site->resolveWpPath());
+    }
+
+    public function test_resolve_wp_path_falls_back_to_the_gridpane_convention(): void
+    {
+        $site = new Site(['domain' => 'gp.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_GRIDPANE, 'wp_path' => null]);
+
+        $this->assertSame('/var/www/gp.example.com/htdocs', $site->resolveWpPath());
+    }
+
+    public function test_resolve_wp_path_returns_null_for_a_provider_with_no_known_convention(): void
+    {
+        // Cloudways has no on-disk layout coded into resolveWpPath() — an
+        // unrecorded wp_path must be treated as unresolvable, not guessed at
+        // via the SpinupWP/GridPane conventions.
+        $site = new Site(['domain' => 'cw.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CLOUDWAYS, 'wp_path' => null]);
+
+        $this->assertNull($site->resolveWpPath());
+    }
 }

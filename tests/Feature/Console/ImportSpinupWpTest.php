@@ -97,6 +97,7 @@ describe('clockwork:import-spinupwp', function () {
         expect(Site::count())->toBe(1);
         $site = Site::firstOrFail();
         expect($site->domain)->toBe('example.com')
+            ->and($site->hosting_provider)->toBe(Site::HOSTING_PROVIDER_SPINUPWP)
             ->and($site->spinupwp_id)->toBe('67890')
             ->and($site->server_id)->toBe($server->id)
             ->and($site->is_wordpress)->toBeTrue()
