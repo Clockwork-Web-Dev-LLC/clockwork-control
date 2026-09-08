@@ -291,6 +291,35 @@
             </div>
         @endif
 
+        {{-- Section: Traffic Analytics --}}
+        @if (isset($data['traffic']) && !empty($traffic['has_traffic']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-violet-600"></i> Traffic Analytics
+                    </h2>
+                    <span class="text-xs font-semibold text-slate-500">{{ number_format($traffic['total_visits'] ?? 0) }} visits this period</span>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Overall visitor traffic and bandwidth usage recorded by the fleet's edge/CDN layer during the reporting period.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_visits'] ?? 0) }}</div>
+                        <div class="text-[11px] text-slate-500">Total Visits</div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_requests'] ?? 0) }}</div>
+                        <div class="text-[11px] text-slate-500">Total Requests</div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['bandwidth_mb'] ?? 0, 1) }} MB</div>
+                        <div class="text-[11px] text-slate-500">Bandwidth Served</div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- Footer --}}
         <div class="border-t border-slate-200 pt-8 flex items-center justify-between flex-wrap gap-4 text-xs text-slate-400">
             <div>

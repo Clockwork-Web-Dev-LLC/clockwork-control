@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Site;
+use App\Models\SiteTrafficDaily;
 use App\Models\User;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
@@ -79,6 +80,51 @@ describe('generate + show', function () {
         $showResponse->assertOk()
             ->assertSee('clockworkwd.test')
             ->assertSee($report->title);
+    });
+
+    it('shows the Traffic Analytics section when the period had recorded traffic', function () {
+        $site = Site::factory()->create(['domain' => 'traffic-report.test']);
+        $periodStart = now()->subMonth()->startOfMonth();
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => $periodStart->copy()->addDays(5)->toDateString(),
+            'visits' => 1234,
+            'requests' => 5678,
+            'bytes_sent' => 10 * 1024 * 1024,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('client-reports.generate'), [
+            'site_id' => $site->id,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodStart->copy()->endOfMonth()->toDateString(),
+        ]);
+
+        $report = ClientReport::query()->where('site_id', $site->id)->firstOrFail();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('client-reports.show', $report))
+            ->assertOk()
+            ->assertSee('Traffic Analytics')
+            ->assertSee('1,234')
+            ->assertSee('5,678')
+            ->assertSee('10.0 MB');
+    });
+
+    it('hides the Traffic Analytics section entirely when no traffic was recorded for the period', function () {
+        $site = Site::factory()->create(['domain' => 'no-traffic-report.test']);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('client-reports.generate'), [
+            'site_id' => $site->id,
+            'period_start' => now()->subMonth()->startOfMonth()->toDateString(),
+            'period_end' => now()->subMonth()->endOfMonth()->toDateString(),
+        ]);
+
+        $report = ClientReport::query()->where('site_id', $site->id)->firstOrFail();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('client-reports.show', $report))
+            ->assertOk()
+            ->assertDontSee('Traffic Analytics');
     });
 });
 
