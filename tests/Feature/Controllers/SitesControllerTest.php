@@ -14,6 +14,7 @@ use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
 use App\Services\Sites\WpPluginDetector;
+use App\Services\Ssl\LiveCertProbe;
 use App\Services\Ssl\SiteCertRefresher;
 use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeProbeResult;
@@ -267,6 +268,43 @@ describe('recheckCert', function () {
         $response = $this->actingAs(User::factory()->create())->post(route('sites.cert.recheck', $site));
 
         $response->assertStatus(422)->assertJson(['ok' => false, 'message' => 'SpinupWP API token is not configured.']);
+    });
+
+    it('uses LiveCertProbe instead of SiteCertRefresher for a non-CAP_CERT_SYNC (Pressable) site', function () {
+        $site = Site::factory()->pressable()->create(['cert_source' => Site::CERT_SOURCE_LIVE_PROBE, 'cert_state' => Site::SSL_STATE_NONE]);
+
+        $this->mock(SiteCertRefresher::class)->shouldReceive('refresh')->never();
+        $this->mock(LiveCertProbe::class)
+            ->shouldReceive('expiryFor')
+            ->once()
+            ->withArgs(fn (string $domain) => $domain === $site->domain)
+            ->andReturn(\Carbon\CarbonImmutable::now()->addDays(60));
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.cert.recheck', $site));
+
+        $response->assertOk()->assertJsonPath('ok', true);
+        expect($site->fresh()->cert_source)->toBe(Site::CERT_SOURCE_LIVE_PROBE);
+        expect($site->fresh()->cert_expires_at)->not->toBeNull();
+    });
+
+    it('returns 422 when the live probe cannot reach the domain', function () {
+        $site = Site::factory()->pressable()->create(['cert_source' => Site::CERT_SOURCE_LIVE_PROBE]);
+
+        $this->mock(LiveCertProbe::class)->shouldReceive('expiryFor')->once()->andReturn(null);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.cert.recheck', $site));
+
+        $response->assertStatus(422)->assertJsonPath('ok', false);
+    });
+
+    it('refuses to re-probe a site with a manually overridden cert source', function () {
+        $site = Site::factory()->pressable()->create(['cert_source' => Site::CERT_SOURCE_EXTERNAL]);
+
+        $this->mock(LiveCertProbe::class)->shouldReceive('expiryFor')->never();
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.cert.recheck', $site));
+
+        $response->assertStatus(422)->assertJsonPath('ok', false);
     });
 });
 
