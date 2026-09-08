@@ -19,6 +19,7 @@ use App\Services\Ssl\SiteCertRefresher;
 use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeProbeResult;
 use App\Services\Uptime\UptimeStateUpdater;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -278,7 +279,7 @@ describe('recheckCert', function () {
             ->shouldReceive('expiryFor')
             ->once()
             ->withArgs(fn (string $domain) => $domain === $site->domain)
-            ->andReturn(\Carbon\CarbonImmutable::now()->addDays(60));
+            ->andReturn(CarbonImmutable::now()->addDays(60));
 
         $response = $this->actingAs(User::factory()->create())->post(route('sites.cert.recheck', $site));
 
