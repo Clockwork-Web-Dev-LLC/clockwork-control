@@ -43,7 +43,10 @@ class WpPluginDetector
             return ['result' => self::RESULT_FAILED, 'message' => 'Missing site_user or sudo password.', 'llar' => null, 'wordfence' => null];
         }
 
-        $wpPath = $site->wp_path ?: '/sites/'.$site->domain.'/files';
+        $wpPath = $site->resolveWpPath();
+        if ($wpPath === null) {
+            return ['result' => self::RESULT_FAILED, 'message' => 'No wp_path recorded and this hosting provider has no known on-disk convention.', 'llar' => null, 'wordfence' => null];
+        }
 
         // One wp-cli invocation lists every active plugin matching either slug.
         // Single SSH connect, single wp-cli boot — much cheaper than two probes.

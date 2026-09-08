@@ -554,6 +554,26 @@ class Site extends Model
     }
 
     /**
+     * On-disk WordPress root for SSH-based probes (checksum verification,
+     * plugin detection). Prefers the recorded wp_path; only known-convention
+     * providers get a fallback guess — an unrecorded path on a provider
+     * whose on-disk layout isn't known here (e.g. Cloudways) is a real gap,
+     * not something worth guessing at and silently getting wrong.
+     */
+    public function resolveWpPath(): ?string
+    {
+        if ($this->wp_path) {
+            return $this->wp_path;
+        }
+
+        return match ($this->hosting_provider) {
+            self::HOSTING_PROVIDER_SPINUPWP => "/sites/{$this->domain}/files",
+            self::HOSTING_PROVIDER_GRIDPANE => "/var/www/{$this->domain}/htdocs",
+            default => null,
+        };
+    }
+
+    /**
      * Whether traffic reporting is supported for this site.
      *
      * Traffic stats require either:

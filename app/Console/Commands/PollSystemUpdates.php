@@ -10,11 +10,12 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 /**
- * Daily probe of "what apt updates are pending?" — only runs against servers
- * the SpinupWP mirror has already flagged with `upgrade_required = true`,
- * so the SSH footprint is the small subset of the fleet that actually
- * needs the detail. Idempotent: each run upserts one row per server in
- * server_update_snapshots (via the unique server_id constraint).
+ * Daily probe of "what apt updates are pending?" — runs against servers the
+ * SpinupWP mirror has already flagged with `upgrade_required = true`, plus
+ * every non-SpinupWP-managed server (spinupwp_id null), since nothing else
+ * ever sets that flag for GridPane/Hetzner/custom-VPS boxes. Idempotent:
+ * each run upserts one row per server in server_update_snapshots (via the
+ * unique server_id constraint).
  *
  * Operator visibility: the per-server Updates tab reads the latest snapshot
  * to render "12 updates, 3 security, reboot pending: kernel libc6". That
@@ -32,7 +33,16 @@ class PollSystemUpdates extends Command
             ->where('is_ignored', false);
 
         if (! $this->option('all')) {
-            $query->monitored()->where('upgrade_required', true);
+            // upgrade_required is only ever populated by the SpinupWP import
+            // mirror — a GridPane/Hetzner/custom-VPS server never gets it
+            // set to true by anything, so it would otherwise never be
+            // probed until the weekly --all sweep. Always include servers
+            // with no spinupwp_id (i.e. not SpinupWP-managed) alongside
+            // anything SpinupWP has actually flagged.
+            $query->monitored()->where(function ($q) {
+                $q->where('upgrade_required', true)
+                    ->orWhereNull('spinupwp_id');
+            });
         }
 
         if ($filter = $this->option('server')) {
