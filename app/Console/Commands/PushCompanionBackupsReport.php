@@ -9,6 +9,7 @@ use App\Services\DigitalOcean\SpacesClient;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\SpinupWp\SpinupWpClient;
 use Throwable;
 
@@ -108,6 +109,7 @@ class PushCompanionBackupsReport extends Command
                 'history' => $history,
                 'care_plan_enabled' => $onCarePlan,
                 'retention_days' => $retentionDays,
+                'offsite_archive' => $this->offsiteArchiveFor($site),
             ];
 
             try {
@@ -142,6 +144,57 @@ class PushCompanionBackupsReport extends Command
         $this->info($msg);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return ?array{active: bool, last_archived_at: ?string, fs_download_url: ?string, db_download_url: ?string, download_expires_at: ?string}
+     */
+    private function offsiteArchiveFor(Site $site): ?array
+    {
+        if (! $site->backup_relay_enabled) {
+            return null;
+        }
+
+        try {
+            $enumerator = app(BackupArchiveEnumerator::class);
+
+            // This payload is pushed to the Companion plugin's client-facing
+            // wp-admin backups page — a link only works there if it's a real
+            // presigned S3 URL. Without one, getDownloadUrl() falls back to
+            // an operator-authenticated Clockwork Control route, which would
+            // just bounce a client to our login screen. Skip enrichment
+            // entirely rather than hand a client a dead-end link.
+            if (! $enumerator->supportsPresignedUrls()) {
+                return null;
+            }
+
+            $siteData = $enumerator->forSite($site);
+            if (! empty($siteData['archives'])) {
+                $fsUrl = null;
+                $dbUrl = null;
+                foreach ($siteData['archives'] as $arch) {
+                    if ($arch['type'] === 'fs' && ! $fsUrl) {
+                        $fsUrl = $arch['download_url'];
+                    } elseif ($arch['type'] === 'db' && ! $dbUrl) {
+                        $dbUrl = $arch['download_url'];
+                    } elseif (($arch['type'] === 'full' || $arch['type'] === 'archive') && ! $fsUrl) {
+                        $fsUrl = $arch['download_url'];
+                    }
+                }
+
+                return [
+                    'active' => true,
+                    'last_archived_at' => $siteData['last_archived_at'],
+                    'fs_download_url' => $fsUrl,
+                    'db_download_url' => $dbUrl,
+                    'download_expires_at' => now()->addHours(BackupArchiveEnumerator::DOWNLOAD_URL_TTL_HOURS)->toIso8601String(),
+                ];
+            }
+        } catch (Throwable $e) {
+            Log::debug("PushCompanionBackupsReport: Failed to enumerate archives for {$site->domain}: {$e->getMessage()}");
+        }
+
+        return null;
     }
 
     /**

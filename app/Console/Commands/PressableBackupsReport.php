@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\Pressable\PressableClient;
 use Throwable;
 
@@ -106,7 +107,7 @@ class PressableBackupsReport extends Command
                 // available" as "here's everything your host currently
                 // exposes," not a day-count guarantee.
                 'history_scope' => 'available',
-                'offsite_archive' => $this->offsiteArchiveFor($site->domain, $offsiteArchive),
+                'offsite_archive' => $this->offsiteArchiveFor($site->domain, $offsiteArchive, $site),
             ];
 
             try {
@@ -250,21 +251,62 @@ class PressableBackupsReport extends Command
      * @param  array{sites: array<string, array{fs_download_url: ?string, db_download_url: ?string}>, generated_at: ?string, expires_at: ?string}  $manifest
      * @return ?array{active: bool, last_archived_at: ?string, fs_download_url: ?string, db_download_url: ?string, download_expires_at: ?string}
      */
-    private function offsiteArchiveFor(string $domain, array $manifest): ?array
+    private function offsiteArchiveFor(string $domain, array $manifest, ?Site $site = null): ?array
     {
-        if (! isset($manifest['sites'][$domain])) {
-            return null;
+        if (isset($manifest['sites'][$domain])) {
+            $links = $manifest['sites'][$domain];
+
+            return [
+                'active' => true,
+                'last_archived_at' => $manifest['generated_at'],
+                'fs_download_url' => $links['fs_download_url'] ?? null,
+                'db_download_url' => $links['db_download_url'] ?? null,
+                'download_expires_at' => $manifest['expires_at'],
+            ];
         }
 
-        $links = $manifest['sites'][$domain];
+        if ($site && $site->backup_relay_enabled) {
+            try {
+                $enumerator = app(BackupArchiveEnumerator::class);
 
-        return [
-            'active' => true,
-            'last_archived_at' => $manifest['generated_at'],
-            'fs_download_url' => $links['fs_download_url'] ?? null,
-            'db_download_url' => $links['db_download_url'] ?? null,
-            'download_expires_at' => $manifest['expires_at'],
-        ];
+                // This payload is pushed to the Companion plugin's client-facing
+                // wp-admin backups page — a link only works there if it's a real
+                // presigned S3 URL. Without one, getDownloadUrl() falls back to
+                // an operator-authenticated Clockwork Control route, which would
+                // just bounce a client to our login screen. Skip enrichment
+                // entirely rather than hand a client a dead-end link.
+                if (! $enumerator->supportsPresignedUrls()) {
+                    return null;
+                }
+
+                $siteData = $enumerator->forSite($site);
+                if (! empty($siteData['archives'])) {
+                    $fsUrl = null;
+                    $dbUrl = null;
+                    foreach ($siteData['archives'] as $arch) {
+                        if ($arch['type'] === 'fs' && ! $fsUrl) {
+                            $fsUrl = $arch['download_url'];
+                        } elseif ($arch['type'] === 'db' && ! $dbUrl) {
+                            $dbUrl = $arch['download_url'];
+                        } elseif (($arch['type'] === 'full' || $arch['type'] === 'archive') && ! $fsUrl) {
+                            $fsUrl = $arch['download_url'];
+                        }
+                    }
+
+                    return [
+                        'active' => true,
+                        'last_archived_at' => $siteData['last_archived_at'],
+                        'fs_download_url' => $fsUrl,
+                        'db_download_url' => $dbUrl,
+                        'download_expires_at' => now()->addHours(BackupArchiveEnumerator::DOWNLOAD_URL_TTL_HOURS)->toIso8601String(),
+                    ];
+                }
+            } catch (Throwable $e) {
+                Log::debug("PressableBackupsReport: Failed to enumerate archives for {$domain}: {$e->getMessage()}");
+            }
+        }
+
+        return null;
     }
 
     /**

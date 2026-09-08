@@ -5,6 +5,7 @@ namespace Modules\BackupRelay;
 use App\Support\Settings;
 use Illuminate\Console\Scheduling\Schedule;
 use Modules\BackupRelay\Console\RunBackupRelayNow;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\BackupRelay\Services\GlacierUploader;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
@@ -17,6 +18,10 @@ class BackupRelayServiceProvider extends ModuleServiceProvider
 
         $this->app->singleton(GlacierUploader::class, function () {
             return new GlacierUploader;
+        });
+
+        $this->app->singleton(BackupArchiveEnumerator::class, function () {
+            return new BackupArchiveEnumerator;
         });
     }
 

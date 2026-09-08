@@ -247,7 +247,27 @@
                                            class="rounded border-[var(--color-border)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] cursor-pointer disabled:opacity-40">
                                 </td>
                                 <td class="px-6 py-3.5 font-medium">
-                                    <span class="text-[var(--color-ink-strong)]">{{ $site['domain'] }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button"
+                                                @click="toggleExpand({{ $site['id'] }})"
+                                                class="w-6 h-6 flex items-center justify-center rounded text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors cursor-pointer shrink-0"
+                                                title="View offsite S3 Glacier snapshots">
+                                            <i class="fa-solid fa-chevron-right text-xs transition-transform duration-200"
+                                               :class="{ 'rotate-90 text-[var(--color-brand)]': expandedSite === {{ $site['id'] }} }"></i>
+                                        </button>
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <button type="button"
+                                                    @click="toggleExpand({{ $site['id'] }})"
+                                                    class="text-left font-medium text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] transition-colors cursor-pointer truncate">
+                                                {{ $site['domain'] }}
+                                            </button>
+                                            <span x-show="siteArchives[{{ $site['id'] }}]?.total_count > 0"
+                                                  x-cloak
+                                                  class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap"
+                                                  x-text="siteArchives[{{ $site['id'] }}]?.total_count + ' archive' + (siteArchives[{{ $site['id'] }}]?.total_count === 1 ? '' : 's')">
+                                            </span>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-3.5">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-surface-alt)] border border-[var(--color-border)] text-[var(--color-ink-muted)]">
@@ -275,14 +295,165 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-3.5 text-right">
-                                    <button type="button"
-                                            @click="toggleSite({{ $site['id'] }})"
-                                            :disabled="! {{ $site['supports_relay'] ? 'true' : 'false' }}"
-                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                            :class="isSiteEnabled({{ $site['id'] }}) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border)]'">
-                                        <i class="fa-solid" :class="isSiteEnabled({{ $site['id'] }}) ? 'fa-toggle-on text-emerald-500' : 'fa-toggle-off text-[var(--color-ink-soft)]'"></i>
-                                        <span x-text="isSiteEnabled({{ $site['id'] }}) ? 'Enabled' : 'Disabled'"></span>
-                                    </button>
+                                    <div class="inline-flex items-center gap-2 justify-end">
+                                        <button type="button"
+                                                @click="toggleExpand({{ $site['id'] }})"
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors cursor-pointer"
+                                                :class="expandedSite === {{ $site['id'] }} ? 'bg-[var(--color-surface-alt)] text-[var(--color-brand)] border-[var(--color-brand)]/30' : ''"
+                                                title="View S3 Glacier snapshot history">
+                                            <i class="fa-solid fa-box-archive text-[10px]"></i>
+                                            <span x-text="expandedSite === {{ $site['id'] }} ? 'Hide Backups' : 'Backups'"></span>
+                                        </button>
+                                        <button type="button"
+                                                @click="toggleSite({{ $site['id'] }})"
+                                                :disabled="! {{ $site['supports_relay'] ? 'true' : 'false' }}"
+                                                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                                :class="isSiteEnabled({{ $site['id'] }}) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border)]'">
+                                            <i class="fa-solid" :class="isSiteEnabled({{ $site['id'] }}) ? 'fa-toggle-on text-emerald-500' : 'fa-toggle-off text-[var(--color-ink-soft)]'"></i>
+                                            <span x-text="isSiteEnabled({{ $site['id'] }}) ? 'Enabled' : 'Disabled'"></span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            {{-- Expandable S3 Glacier Archives Row --}}
+                            <tr x-show="expandedSite === {{ $site['id'] }} && matchesSearch('{{ $site['domain'] }}', '{{ $site['provider'] }}')"
+                                x-cloak
+                                class="bg-[var(--color-surface-alt)]/40 border-b border-[var(--color-border-light)]">
+                                <td colspan="6" class="p-0">
+                                    <div class="p-5 sm:px-8 border-y border-[var(--color-border-light)] bg-gradient-to-b from-[var(--color-surface-alt)]/70 to-[var(--color-surface)]">
+                                        {{-- Header --}}
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-[var(--color-border-light)] gap-3">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-8 h-8 rounded-lg bg-[var(--color-brand)]/10 text-[var(--color-brand)] flex items-center justify-center font-bold text-sm shrink-0">
+                                                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                                                </div>
+                                                <div>
+                                                    <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)] flex items-center gap-2">
+                                                        <span>S3 Glacier Instant Retrieval Snapshots</span>
+                                                        <span class="font-normal lowercase text-[var(--color-ink-soft)]">— {{ $site['domain'] }}</span>
+                                                    </h4>
+                                                    <p class="text-[11px] text-[var(--color-ink-muted)]">
+                                                        Off-site disaster recovery archives stored in S3 Glacier. Instant retrieval allows immediate secure download.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex items-center gap-2">
+                                                <button type="button"
+                                                        @click="fetchArchives({{ $site['id'] }}, true)"
+                                                        :disabled="loadingArchives[{{ $site['id'] }}]"
+                                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer disabled:opacity-50"
+                                                        title="Re-scan S3 Glacier for new snapshots">
+                                                    <i class="fa-solid fa-arrows-rotate text-[11px]" :class="{ 'fa-spin': loadingArchives[{{ $site['id'] }}] }"></i>
+                                                    <span>Re-scan S3</span>
+                                                </button>
+                                                <button type="button"
+                                                        @click="expandedSite = null"
+                                                        class="inline-flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+                                                        title="Close details">
+                                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {{-- Content --}}
+                                        <div class="pt-4">
+                                            {{-- 1. Loading state --}}
+                                            <div x-show="loadingArchives[{{ $site['id'] }}]" class="py-8 text-center">
+                                                <i class="fa-solid fa-circle-notch fa-spin text-xl text-[var(--color-brand)] mb-2"></i>
+                                                <p class="text-xs font-medium text-[var(--color-ink-strong)]">Scanning S3 Glacier bucket...</p>
+                                                <p class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">Enumerating objects and generating presigned download links for {{ $site['domain'] }}</p>
+                                            </div>
+
+                                            {{-- 2. Error state --}}
+                                            <div x-show="!loadingArchives[{{ $site['id'] }}] && errorArchives[{{ $site['id'] }}]" class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                                    <span x-text="errorArchives[{{ $site['id'] }}]"></span>
+                                                </div>
+                                                <button type="button" @click="fetchArchives({{ $site['id'] }}, true)" class="px-2.5 py-1 rounded bg-rose-500 text-white font-medium hover:bg-rose-600 transition-colors cursor-pointer">
+                                                    Retry
+                                                </button>
+                                            </div>
+
+                                            {{-- 3. Success state --}}
+                                            <div x-show="!loadingArchives[{{ $site['id'] }}] && !errorArchives[{{ $site['id'] }}]">
+                                                {{-- Empty --}}
+                                                <div x-show="!siteArchives[{{ $site['id'] }}]?.archives?.length" class="py-8 px-4 text-center rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60">
+                                                    <div class="w-10 h-10 rounded-full bg-[var(--color-surface-alt)] flex items-center justify-center mx-auto mb-2 text-[var(--color-ink-soft)]">
+                                                        <i class="fa-solid fa-box-open text-base"></i>
+                                                    </div>
+                                                    <p class="text-xs font-semibold text-[var(--color-ink-strong)]">No Off-site S3 Snapshots Found</p>
+                                                    <p class="text-[11px] text-[var(--color-ink-muted)] max-w-md mx-auto mt-1">
+                                                        No Glacier Instant Retrieval archives were found in S3 for <span class="font-medium text-[var(--color-ink-strong)]">{{ $site['domain'] }}</span>. Snapshots will appear here once the backup relay executes.
+                                                    </p>
+                                                </div>
+
+                                                {{-- List --}}
+                                                <div x-show="siteArchives[{{ $site['id'] }}]?.archives?.length" class="space-y-3">
+                                                    {{-- Summary Bar --}}
+                                                    <div class="flex flex-wrap items-center justify-between text-xs text-[var(--color-ink-muted)] px-3.5 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] gap-2">
+                                                        <div class="flex items-center gap-4">
+                                                            <span>Total Snapshots: <strong class="text-[var(--color-ink-strong)]" x-text="siteArchives[{{ $site['id'] }}]?.total_count || 0"></strong></span>
+                                                            <span>Total Storage: <strong class="text-[var(--color-ink-strong)]" x-text="siteArchives[{{ $site['id'] }}]?.total_size_formatted || '0 B'"></strong></span>
+                                                            <span class="hidden sm:inline">Storage Class: <strong class="text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">GLACIER_IR</strong></span>
+                                                        </div>
+                                                        <div class="text-[11px] text-[var(--color-ink-soft)]" x-show="siteArchives[{{ $site['id'] }}]?.last_archived_at_formatted">
+                                                            Latest: <span class="font-medium text-[var(--color-ink-strong)]" x-text="siteArchives[{{ $site['id'] }}]?.last_archived_at_formatted"></span>
+                                                        </div>
+                                                    </div>
+
+                                                    {{-- Snapshots Table --}}
+                                                    <div class="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+                                                        <table class="w-full text-left text-xs">
+                                                            <thead class="bg-[var(--color-surface-alt)] uppercase text-[10px] tracking-wider text-[var(--color-ink-soft)] font-semibold border-b border-[var(--color-border-light)]">
+                                                                <tr>
+                                                                    <th class="px-4 py-2.5">Snapshot Date & Time</th>
+                                                                    <th class="px-4 py-2.5">Component</th>
+                                                                    <th class="px-4 py-2.5">File Name</th>
+                                                                    <th class="px-4 py-2.5 text-right">Size</th>
+                                                                    <th class="px-4 py-2.5 text-right">Action</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody class="divide-y divide-[var(--color-border-light)]">
+                                                                <template x-for="archive in (siteArchives[{{ $site['id'] }}]?.archives || [])" :key="archive.id">
+                                                                    <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                                                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                                                            <div class="font-medium text-[var(--color-ink-strong)]" x-text="archive.archived_at_formatted || 'Unknown Date'"></div>
+                                                                            <div class="text-[10px] text-[var(--color-ink-soft)]" x-text="archive.archived_at_diff || ''"></div>
+                                                                        </td>
+                                                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                                                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold"
+                                                                                  :class="{
+                                                                                      'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20': archive.type === 'fs',
+                                                                                      'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20': archive.type === 'db',
+                                                                                      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20': archive.type === 'full' || archive.type === 'archive'
+                                                                                  }">
+                                                                                <i class="fa-solid" :class="archive.type_icon || 'fa-box-archive'"></i>
+                                                                                <span x-text="archive.type_label"></span>
+                                                                            </span>
+                                                                        </td>
+                                                                        <td class="px-4 py-2.5 font-mono text-[11px] text-[var(--color-ink-muted)] truncate max-w-xs" :title="archive.key" x-text="archive.filename"></td>
+                                                                        <td class="px-4 py-2.5 text-right font-medium text-[var(--color-ink-strong)] whitespace-nowrap" x-text="archive.size_formatted"></td>
+                                                                        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                                                                            <a :href="archive.download_url"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer"
+                                                                               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[var(--color-brand)]/10 text-[var(--color-brand)] hover:bg-[var(--color-brand)] hover:text-white transition-all cursor-pointer shadow-xs">
+                                                                                <i class="fa-solid fa-arrow-down"></i>
+                                                                                <span>Download</span>
+                                                                            </a>
+                                                                        </td>
+                                                                    </tr>
+                                                                </template>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                         @empty
@@ -551,6 +722,11 @@ function backupRelaySettings() {
         enabledSites: @json($sites->where('enabled', true)->pluck('id')->values()),
         supportedSites: @json($sites->where('supports_relay', true)->pluck('id')->values()),
 
+        expandedSite: null,
+        siteArchives: {},
+        loadingArchives: {},
+        errorArchives: {},
+
         get frequencyLabel() {
             if (this.frequency === 'weekly') return '1 a week (Weekly)';
             if (this.frequency === 'twice_weekly') return '2 a week';
@@ -659,6 +835,42 @@ function backupRelaySettings() {
 
         deselectAll() {
             this.enabledSites = [];
+        },
+
+        toggleExpand(siteId) {
+            if (this.expandedSite === siteId) {
+                this.expandedSite = null;
+                return;
+            }
+            this.expandedSite = siteId;
+            if (!this.siteArchives[siteId]) {
+                this.fetchArchives(siteId);
+            }
+        },
+
+        fetchArchives(siteId, force = false) {
+            if (this.loadingArchives[siteId]) return;
+            this.loadingArchives[siteId] = true;
+            this.errorArchives[siteId] = null;
+
+            fetch(`/settings/backup-relay/sites/${siteId}/archives`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch archives from S3`);
+                return res.json();
+            })
+            .then(data => {
+                this.siteArchives[siteId] = data;
+                this.loadingArchives[siteId] = false;
+            })
+            .catch(err => {
+                this.loadingArchives[siteId] = false;
+                this.errorArchives[siteId] = err.message || 'Error loading archives from S3 Glacier';
+            });
         },
 
         matchesSearch(domain, provider) {

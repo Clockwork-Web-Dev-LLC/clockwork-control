@@ -5,8 +5,10 @@ namespace Tests\Feature\Console;
 use App\Models\Server;
 use App\Models\Site;
 use App\Services\DigitalOcean\SpacesClient;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Modules\SpinupWp\SpinupWpClient;
 
 /*
@@ -142,6 +144,81 @@ describe('clockwork:push-companion-backups — happy path', function () {
             $body = json_decode($request->body(), true);
 
             return $body['history'] === [] && $body['schedules'] === [];
+        });
+    });
+});
+
+describe('clockwork:push-companion-backups — offsite S3 archive enrichment', function () {
+    it('attaches real presigned URLs and an accurate expiry when off-site archives exist for a backup-relay-enabled site', function () {
+        Storage::fake('s3-backup-relay');
+        $disk = Storage::disk('s3-backup-relay');
+
+        $site = pcbrSite(['backup_relay_enabled' => true]);
+
+        $disk->put("archives/{$site->domain}/2026-09-06_fs.bz2", str_repeat('A', 1024));
+        $disk->put("archives/{$site->domain}/2026-09-06_db.sql", str_repeat('B', 512));
+
+        pcbrMockSpinup(function ($mock) use ($site) {
+            $mock->shouldReceive('siteBackupConfig')->once()->with($site->spinupwp_id)->andReturn(['files' => true, 'database' => true]);
+        });
+        $this->mock(SpacesClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
+
+        Http::assertSent(function ($request) use ($site) {
+            if ($request->url() !== "https://{$site->domain}/wp-json/clockwork/v1/backups-report") {
+                return false;
+            }
+            $body = json_decode($request->body(), true);
+            $archive = $body['offsite_archive'];
+
+            // download_expires_at must reflect the real ~24h presigned URL
+            // TTL, not be silently null while the link actually expires.
+            $expiresInHours = now()->diffInHours(Carbon::parse($archive['download_expires_at']));
+
+            return $archive['active'] === true
+                && ! empty($archive['fs_download_url'])
+                && ! empty($archive['db_download_url'])
+                && $archive['download_expires_at'] !== null
+                && $expiresInHours >= 23 && $expiresInHours <= 24;
+        });
+    });
+
+    it('does not attach an offsite_archive when the disk cannot mint real presigned URLs, even if matching files exist', function () {
+        Storage::fake('s3-backup-relay');
+        $disk = Storage::disk('s3-backup-relay');
+
+        $site = pcbrSite(['backup_relay_enabled' => true]);
+        $disk->put("archives/{$site->domain}/2026-09-06_fs.bz2", str_repeat('A', 1024));
+
+        // Simulate a disk that isn't actually S3-backed (e.g. misconfigured
+        // driver) — getDownloadUrl() would fall back to an operator-authed
+        // Clockwork Control route, which is useless on the client-facing
+        // Companion page, so the whole payload should be omitted instead.
+        config(['filesystems.disks.s3-backup-relay.driver' => 'local']);
+
+        pcbrMockSpinup(function ($mock) use ($site) {
+            $mock->shouldReceive('siteBackupConfig')->once()->with($site->spinupwp_id)->andReturn(['files' => true, 'database' => true]);
+        });
+        $this->mock(SpacesClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
+
+        Http::assertSent(function ($request) use ($site) {
+            if ($request->url() !== "https://{$site->domain}/wp-json/clockwork/v1/backups-report") {
+                return false;
+            }
+            $body = json_decode($request->body(), true);
+
+            return $body['offsite_archive'] === null;
         });
     });
 });
