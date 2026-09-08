@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
+use Modules\Core\ModuleStateResolver;
 use Modules\SpinupWp\SpinupWpClient;
 
 class ServersController extends Controller
@@ -27,6 +28,10 @@ class ServersController extends Controller
      */
     public function refreshFromSpinupWp(Request $request): RedirectResponse
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('spinupwp')) {
+            return back()->with('status_error', 'SpinupWP is not enabled for this fleet.');
+        }
+
         $result = $this->runSpinupWpImport();
 
         if ($result['ok']) {
@@ -43,6 +48,10 @@ class ServersController extends Controller
      */
     public function refreshFromGridPane(Request $request): RedirectResponse
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('gridpane')) {
+            return back()->with('status_error', 'GridPane is not enabled for this fleet.');
+        }
+
         $result = $this->runGridPaneImport();
 
         if ($result['ok']) {

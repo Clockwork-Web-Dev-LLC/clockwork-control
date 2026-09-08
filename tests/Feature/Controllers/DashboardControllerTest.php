@@ -152,6 +152,34 @@ describe('DashboardController', function () {
             ->assertDontSee('Refresh from SpinupWP');
     });
 
+    it('hides the Refresh from GridPane action on a GridPane-provider server once the module is disabled', function () {
+        $server = Server::factory()->create([
+            'name' => 'web7b.example.com',
+            'spinupwp_id' => null,
+            'provider' => Server::PROVIDER_GRIDPANE,
+        ]);
+        InstalledModule::create(['module_id' => 'gridpane', 'name' => 'GridPane', 'enabled' => false]);
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk()
+            ->assertDontSee('Refresh from GridPane')
+            ->assertDontSee('Refresh from SpinupWP');
+    });
+
+    it('refuses the Refresh from GridPane POST action once the module is disabled', function () {
+        $server = Server::factory()->create(['provider' => Server::PROVIDER_GRIDPANE]);
+        InstalledModule::create(['module_id' => 'gridpane', 'name' => 'GridPane', 'enabled' => false]);
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('servers.refreshFromGridPane'));
+
+        $response->assertRedirect()->assertSessionHas('status_error', 'GridPane is not enabled for this fleet.');
+    });
+
     it('hides both refresh actions for a server managed by neither panel', function () {
         $server = Server::factory()->create([
             'name' => 'web8.example.com',
