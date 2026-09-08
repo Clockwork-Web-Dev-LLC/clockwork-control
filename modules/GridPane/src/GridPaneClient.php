@@ -219,10 +219,12 @@ class GridPaneClient
     /**
      * Auto-paginate through all pages of a GridPane API collection endpoint.
      *
-     * Pacing between pages comes solely from request()'s delayMs gate (every
-     * call goes through get(), which goes through request()) rather than a
-     * second hardcoded sleep here, so an operator-configured delay_ms is
-     * actually honored on multi-page fetches instead of being overridden.
+     * Only paginate() paces itself against delay_ms, between pages — single-
+     * shot calls (get/post/put/delete) go straight through request() with no
+     * sleep, since they never hit the per-endpoint budget that pagination
+     * does. This keeps one-off calls (diagnostic check, a single server/site
+     * lookup, a WP-CLI exec) fast while still honoring the operator-configured
+     * delay_ms on multi-page fetches instead of a hardcoded sleep.
      *
      * @param  array<string, mixed>  $query
      * @return list<array<string, mixed>>
@@ -237,6 +239,10 @@ class GridPaneClient
         do {
             if ($page > $safetyLimit) {
                 throw new RuntimeException("GridPane pagination exceeded {$safetyLimit} pages on {$path}; aborting.");
+            }
+
+            if ($page > 1 && $this->delayMs > 0) {
+                usleep($this->delayMs * 1000);
             }
 
             $pageQuery = $query;
@@ -296,10 +302,6 @@ class GridPaneClient
     {
         if (! $this->isConfigured()) {
             throw new RuntimeException('GridPane API key is not configured.');
-        }
-
-        if ($this->delayMs > 0) {
-            usleep($this->delayMs * 1000);
         }
 
         $request = Http::withToken($this->apiKey)
