@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-08
+
+### Added
+- **Backup relay offsite archive browsing**: `/settings/backup-relay` site rows are now expandable, showing the actual S3 Glacier snapshots for that site (type, size, archived-at, direct download link) instead of just a last-run timestamp. Backed by a new `BackupArchiveEnumerator` service and two new routes (`settings.backup-relay.archives`, `settings.backup-relay.download`).
+- Both Companion backup-report push commands (`clockwork:pressable-backups-report`, `clockwork:push-companion-backups`) now attach real presigned S3 download links to the offsite-archive block on a site's client-facing wp-admin backups page, when no external-agent manifest entry already covers it.
+
+### Fixed
+- Offsite archive listings were showing every S3 object as **0 B** with no timestamp, and occasionally failing with `AccessDenied`: the code was calling `$disk->size()`/`$disk->lastModified()` per object (each a `HeadObject` call needing `s3:GetObject`, which the monitoring IAM user doesn't have). Switched to reading size/timestamp directly off the `ListObjectsV2` listing already fetched for enumeration, which needs only `s3:ListBucket`.
+- Offsite archive links pushed to a client's Companion wp-admin page could silently fall back to an operator-only Clockwork Control login route if the disk wasn't S3-backed, handing the client a dead end. That enrichment is now skipped entirely (rather than emitting a broken link) when a real presigned S3 URL can't be minted.
+- `offsite_archive.download_expires_at` in the Companion payload was hardcoded to `null` in this new fallback path — now reflects the real ~24h presigned-URL expiry.
+- Cleared all 32 pages the docs staleness checker had flagged, correcting content that had drifted out of date (the White Labeling hub, the settings-nav reorder, local email/password auth, the new backup relay archive browsing, and several smaller undocumented additions found along the way: the visual fleet grid + automated site screenshots, the "provider missing" removal banner, and telemetry now being on by default) and re-verifying the rest before bumping their `updated:` date.
+
 ## [1.4.0] - 2026-09-08
 
 ### Added
