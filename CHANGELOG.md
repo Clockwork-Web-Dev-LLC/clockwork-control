@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-08
+
+### Fixed
+- Restored a "Revoked" count tile to the `/settings/users` roll-up stats — it was swapped out for a "Password Ready" tile when local email/password auth shipped in v1.2.3, leaving revoked status visible only per-row. Added back as a 5th tile alongside the others rather than displacing anything.
+
 ## [1.5.0] - 2026-09-08
 
 ### Added
