@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-08
+
+### Added
+- **ManageWP-Style Site Command Center Overview**: Reimagined the single-site Overview tab into a comprehensive 3-column command center widget grid displaying Updates, Uptime, Performance, Backups, Traffic Analytics, Notes, Security & Integrity (with SSL health), SEO Health, and Form Activity.
+- **Draggable & Reorderable Dashboard Cards**: Operators can customize their Command Center layout on a per-site basis via intuitive HTML5 drag-and-drop with optimistic updates, persistence to database, DOM rollback on error, and a one-click reset to default layout.
+- **Visual Fleet Grid View & Automated Screenshots**: Added a toggleable card grid view to the fleet-wide `/sites` directory featuring 16:10 website preview thumbnails, health accent strips, status badges, and client-side live search. Powered by an automated background screenshot capture engine using Automattic mShots, caching to public storage on site creation and scheduled daily.
+- **Compact Site Settings Redesign**: Overhauled `/sites/{site}?tab=settings` from stacked, full-width forms into clean 3-column card modules matching the Command Center aesthetic.
+- **Per-Site Notes**: Added a dedicated scratchpad/notes module per site for operator documentation, internal credentials references, and staging notes.
+- **Client Reports Templates & Scheduling**: Pre-built client report templates, schedule frequency configuration, and automated report generation pipeline.
+
+### Fixed
+- **Uptime calculation**: `computeUptimePercentage()` delegates to canonical `UptimeStatsCalculator` to accurately track downtime intervals across paired events and active outages instead of defaulting to a flat 300s.
+- **Updates widget fallbacks**: Displays accurate plugin and theme update counts from Companion snapshots when available, and gracefully falls back to hosting provider update flags (`wp_plugin_updates`, `wp_theme_updates`) when Companion is not snapshotted.
+- **Layout persistence error handling**: Catches non-2xx responses (including 419 CSRF expiry and validation errors), rolls back DOM card order, and surfaces a clear error toast.
+- **Automattic mShots placeholder filtering**: Detects and rejects mShots "still generating" placeholder images and redirects to prevent caching blank/placeholder previews.
+- **Concurrent screenshot captures**: Scheduled screenshot capture command now dispatches background queue jobs across workers rather than executing blocking sequential HTTP requests.
+
 ## [1.2.3] - 2026-09-07
 
 ### Added
