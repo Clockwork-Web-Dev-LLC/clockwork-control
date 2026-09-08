@@ -6,6 +6,8 @@
     <x-page-header title="Slack notifications"
         subtitle="Per-event opt-out for Slack notifications. Disabled events still log to the database and the Laravel log — only the Slack post is suppressed. Toggles save immediately." />
 
+    @include('settings._tabs')
+
     <div class="card p-4 mb-4 flex items-start gap-3">
         @if ($webhookConfigured)
             <i class="fa-solid fa-circle-check text-[var(--color-status-green)] mt-0.5"></i>

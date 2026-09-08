@@ -9,12 +9,12 @@ use Illuminate\Validation\Rule;
 
 class AppearanceSettingsController extends Controller
 {
-    public const VALID_THEMES = ['system', 'light', 'dark', 'midnight', 'high-contrast'];
+    public const VALID_THEMES = ['system', 'light', 'dark', 'high-contrast'];
 
     public const COOKIE_NAME = 'cw_theme';
 
     /**
-     * Persist operator theme preference (system / light / dark / midnight / high-contrast).
+     * Persist operator theme preference (system / light / dark / high-contrast).
      */
     public function update(Request $request): JsonResponse
     {

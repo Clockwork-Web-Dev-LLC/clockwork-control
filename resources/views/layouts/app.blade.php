@@ -8,6 +8,9 @@
     $initialTheme = ($themeCookie && $themeCookie !== 'system')
         ? $themeCookie
         : (auth()->check() && auth()->user()->theme && auth()->user()->theme !== 'system' ? auth()->user()->theme : 'light');
+    if ($initialTheme === 'midnight') {
+        $initialTheme = 'dark';
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ $initialTheme }}">
@@ -24,6 +27,9 @@
                 var resolved = theme;
                 if (!resolved || resolved === 'system') {
                     resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                if (resolved === 'midnight') {
+                    resolved = 'dark';
                 }
                 document.documentElement.setAttribute('data-theme', resolved);
             } catch (e) {}
@@ -137,7 +143,7 @@
                                 <a href="{{ route('settings.companion.index') }}"
                                    class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('settings.companion.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
                                     <i class="fa-solid fa-paintbrush text-[var(--color-ink-muted)] w-3.5 text-center"></i>
-                                    <span class="truncate">Companion</span>
+                                    <span class="truncate">White Labeling</span>
                                 </a>
                                 <a href="{{ route('settings.tags.index') }}"
                                    class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors {{ request()->routeIs('settings.tags.*') ? 'bg-[var(--color-surface-alt)] font-semibold text-[var(--color-brand)]' : '' }}">
@@ -318,7 +324,7 @@
                                         <span class="text-[11px]">Light</span>
                                     </button>
                                     <button type="button"
-                                            @click.prevent="setTheme(current === 'midnight' ? 'midnight' : (current === 'high-contrast' ? 'high-contrast' : 'dark'))"
+                                            @click.prevent="setTheme(current === 'high-contrast' ? 'high-contrast' : 'dark')"
                                             :class="isDark ? 'bg-[var(--color-surface)] text-sky-400 shadow-xs font-semibold' : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)]'"
                                             class="px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                                             title="Switch to dark mode">
@@ -329,7 +335,7 @@
                             </div>
 
                             <div class="px-4 py-2">
-                                <div class="grid grid-cols-5 gap-1.5">
+                                <div class="grid grid-cols-4 gap-1.5">
                                     <template x-for="scheme in schemes" :key="scheme.key">
                                         <button type="button"
                                                 @click.prevent="setTheme(scheme.key)"
@@ -560,7 +566,7 @@
                         <div class="grid grid-cols-2 gap-1.5 text-xs">
                             <a href="{{ route('settings.companion.index') }}" class="p-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] flex items-center gap-2 border border-transparent hover:border-[var(--color-border-light)] transition-colors">
                                 <i class="fa-solid fa-paintbrush text-[var(--color-ink-muted)] w-3.5 text-center"></i>
-                                <span class="truncate">Companion</span>
+                                <span class="truncate">White Labeling</span>
                             </a>
                             <a href="{{ route('settings.integrations.index') }}" class="p-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] flex items-center gap-2 border border-transparent hover:border-[var(--color-border-light)] transition-colors">
                                 <i class="fa-solid fa-key text-[var(--color-ink-muted)] w-3.5 text-center"></i>

@@ -166,19 +166,6 @@
                             {{ $mod['description'] }}
                         </p>
 
-                        <!-- Capabilities / Tags -->
-                        @if (!empty($mod['capabilities']))
-                            <div class="mt-3.5 pt-3 border-t border-[var(--color-border-light)] space-y-1">
-                                <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-ink-soft)] block">Features</span>
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    @foreach (array_slice($mod['capabilities'], 0, 3) as $cap)
-                                        <span class="inline-block px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] font-data border border-[var(--color-border-light)]">
-                                            {{ $cap }}
-                                        </span>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endif
                     </div>
 
                     <!-- Footer: Status & Actions -->
@@ -206,7 +193,7 @@
 
                         <div class="flex items-center gap-2">
                             @if (!empty($mod['is_bundled']))
-                                <a href="{{ route('settings.integrations.index') }}" class="btn-pill-nav text-xs py-1 px-2.5">
+                                <a href="{{ route('settings.integrations.index') }}#integration-{{ $mod['id'] }}" class="btn-pill-nav text-xs py-1 px-2.5">
                                     Configure
                                 </a>
                             @endif

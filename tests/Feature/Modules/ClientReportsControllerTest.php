@@ -3,6 +3,7 @@
 use App\Models\Site;
 use App\Models\SiteTrafficDaily;
 use App\Models\User;
+use App\Services\Companion\CompanionBrandingManager;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -80,6 +81,32 @@ describe('generate + show', function () {
         $showResponse->assertOk()
             ->assertSee('clockworkwd.test')
             ->assertSee($report->title);
+    });
+
+    it('renders the custom Reports brand palette colors set via Settings > White Labeling', function () {
+        app(CompanionBrandingManager::class)->saveReportsBranding([
+            'primary_color' => '#123456',
+            'accent_color' => '#abcdef',
+        ]);
+
+        $site = Site::factory()->create(['domain' => 'brand-colors.test', 'care_plan_enabled' => true]);
+
+        $generateResponse = $this->actingAs(User::factory()->create())->post(route('client-reports.generate'), [
+            'site_id' => $site->id,
+            'period_start' => now()->subMonth()->startOfMonth()->toDateString(),
+            'period_end' => now()->subMonth()->endOfMonth()->toDateString(),
+            'client_name' => 'Test Client',
+            'client_email' => 'client@example.test',
+        ]);
+
+        $report = ClientReport::query()->where('site_id', $site->id)->firstOrFail();
+        $generateResponse->assertRedirect(route('client-reports.show', $report));
+
+        $showResponse = $this->actingAs(User::factory()->create())->get(route('client-reports.show', $report));
+
+        $showResponse->assertOk()
+            ->assertSee('#123456', false)
+            ->assertSee('#abcdef', false);
     });
 
     it('shows the Traffic Analytics section when the period had recorded traffic', function () {

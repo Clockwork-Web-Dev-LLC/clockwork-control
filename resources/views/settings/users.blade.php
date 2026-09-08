@@ -6,6 +6,8 @@
     <x-page-header title="Team"
         subtitle="Allowlist of operators authorized to access Clockwork. Teammates can log in with their local password, or via configured Single Sign-On providers (Google, GitHub, Microsoft)." />
 
+    @include('settings._tabs')
+
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
             <i class="fa-solid fa-circle-check"></i> {{ session('status') }}

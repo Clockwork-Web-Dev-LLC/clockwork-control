@@ -34,6 +34,11 @@
     $forms = $data['forms'] ?? [];
     $traffic = $data['traffic'] ?? [];
     $backups = $data['backups'] ?? [];
+    // Brand Palette & Accents (Settings > White Labeling > Client Reports).
+    // Same fields/defaults as compileBranding()'s fallback — mirrors the
+    // accent-strip pattern already used in the vulnerability report email.
+    $primaryColor = !empty($branding['primary_color']) ? $branding['primary_color'] : '#2D2062';
+    $accentColor = !empty($branding['accent_color']) ? $branding['accent_color'] : '#7EFF83';
 @endphp
 
 <div class="max-w-4xl mx-auto">
@@ -53,7 +58,11 @@
     </div>
 
     {{-- Report Document Container --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 sm:p-12 space-y-10 report-card">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden report-card">
+        {{-- Brand Accent Strip --}}
+        <div style="height: 4px; background: {{ $accentColor }};"></div>
+
+        <div class="p-8 sm:p-12 space-y-10">
         {{-- Header & Cover Banner --}}
         <div class="border-b border-slate-200 pb-8 flex items-start justify-between flex-wrap gap-6">
             <div>
@@ -131,7 +140,7 @@
                 @endif
                 @if (isset($data['forms']))
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-indigo-600">{{ $forms['pass_rate'] ?? 100 }}%</div>
+                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 100 }}%</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
                     </div>
                 @endif
@@ -214,7 +223,7 @@
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <i class="fa-solid fa-shield-halved text-indigo-600"></i> Security & Firewall
+                        <i class="fa-solid fa-shield-halved" style="color: {{ $primaryColor }};"></i> Security & Firewall
                     </h2>
                     <span class="text-xs font-semibold text-slate-500">{{ $security['total_scans'] ?? 0 }} scans conducted</span>
                 </div>
@@ -320,6 +329,13 @@
             </div>
         @endif
 
+        {{-- Custom Footer Note if present --}}
+        @if (!empty($branding['footer_text']))
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                {{ $branding['footer_text'] }}
+            </div>
+        @endif
+
         {{-- Footer --}}
         <div class="border-t border-slate-200 pt-8 flex items-center justify-between flex-wrap gap-4 text-xs text-slate-400">
             <div>
@@ -328,6 +344,7 @@
             <div>
                 Questions? Email <a href="mailto:{{ $branding['support_email'] }}" class="text-slate-600 hover:underline">{{ $branding['support_email'] }}</a>
             </div>
+        </div>
         </div>
     </div>
 </div>

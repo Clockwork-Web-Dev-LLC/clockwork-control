@@ -10,6 +10,7 @@ use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
+use App\Services\Companion\CompanionBrandingManager;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 
@@ -83,11 +84,28 @@ class ClientReportCompiler
 
     protected function compileBranding(): array
     {
+        if (class_exists(CompanionBrandingManager::class)) {
+            $reportsBranding = app(CompanionBrandingManager::class)->getReportsBranding();
+
+            return [
+                'company_name' => $reportsBranding['company_name'] ?: config('app.name', 'Clockwork Control'),
+                'support_url' => $reportsBranding['support_url'] ?: config('app.url'),
+                'support_email' => $reportsBranding['support_email'] ?: config('mail.from.address'),
+                'logo_url' => $reportsBranding['logo_url'],
+                'primary_color' => $reportsBranding['primary_color'],
+                'accent_color' => $reportsBranding['accent_color'],
+                'footer_text' => $reportsBranding['footer_text'],
+            ];
+        }
+
         return [
-            'company_name' => $this->settings->get('companion.company_name') ?: config('app.name', 'Clockwork Control'),
-            'support_url' => $this->settings->get('companion.support_url') ?: config('app.url'),
-            'support_email' => $this->settings->get('companion.support_email') ?: config('mail.from.address'),
-            'logo_url' => $this->settings->get('companion.logo_url'),
+            'company_name' => $this->settings->get('companion.branding.company_name') ?: ($this->settings->get('companion.company_name') ?: config('app.name', 'Clockwork Control')),
+            'support_url' => $this->settings->get('companion.branding.support_url') ?: ($this->settings->get('companion.support_url') ?: config('app.url')),
+            'support_email' => $this->settings->get('companion.branding.support_email') ?: ($this->settings->get('companion.support_email') ?: config('mail.from.address')),
+            'logo_url' => $this->settings->get('companion.branding.logo_url') ?: $this->settings->get('companion.logo_url'),
+            'primary_color' => '#2D2062',
+            'accent_color' => '#7EFF83',
+            'footer_text' => '',
         ];
     }
 
