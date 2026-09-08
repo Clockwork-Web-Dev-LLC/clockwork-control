@@ -92,144 +92,179 @@
         @endif
 
         {{-- Key Metric Highlights Grid --}}
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <div class="text-2xl font-black text-slate-900">{{ $updates['total'] ?? 0 }}</div>
-                <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Updates Completed</div>
-            </div>
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <div class="text-2xl font-black text-emerald-600">{{ $uptime['uptime_percentage'] ?? 100 }}%</div>
-                <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
-            </div>
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] ?? 0 }}</div>
-                <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Threats Blocked</div>
-            </div>
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <div class="text-2xl font-black text-indigo-600">{{ $forms['pass_rate'] ?? 100 }}%</div>
-                <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
-            </div>
-        </div>
-
-        {{-- Section: Updates Applied --}}
-        <div class="space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-circle-arrow-up text-sky-600"></i> Updates & Upgrades
-                </h2>
-                <span class="text-xs font-semibold text-slate-500">{{ $updates['total'] ?? 0 }} updates performed</span>
-            </div>
-            <p class="text-xs text-slate-500">
-                Regular updates ensure your site remains secure against known vulnerabilities and compatible with current WordPress releases.
-            </p>
-
-            @if (!empty($updates['items']['plugins']))
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">
-                            <tr>
-                                <th class="px-3 py-2">Component</th>
-                                <th class="px-3 py-2">Details</th>
-                                <th class="px-3 py-2 text-right">Date Applied</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach ($updates['items']['plugins'] as $item)
-                                <tr>
-                                    <td class="px-3 py-2 font-medium text-slate-900">{{ $item['target'] ?: 'WordPress Plugin' }}</td>
-                                    <td class="px-3 py-2 text-slate-500">{{ $item['summary'] }}</td>
-                                    <td class="px-3 py-2 text-right text-slate-400 font-mono">{{ $item['date'] }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                <div class="text-xs text-slate-500 italic py-2">All software components were up-to-date throughout this period.</div>
-            @endif
-        </div>
-
-        {{-- Section: Uptime & Availability --}}
-        <div class="space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-heart-pulse text-emerald-600"></i> Uptime & Availability
-                </h2>
-                <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                    {{ $uptime['uptime_percentage'] ?? 100 }}% Available
-                </span>
-            </div>
-            <p class="text-xs text-slate-500">
-                Our global uptime monitors ping your website 24/7 at frequent intervals to verify round-the-clock availability.
-            </p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-sm font-bold text-slate-900">{{ $uptime['outages_count'] ?? 0 }}</div>
-                    <div class="text-[11px] text-slate-500">Outages Recorded</div>
-                </div>
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-sm font-bold text-slate-900">{{ $uptime['downtime_minutes'] ?? 0 }} min</div>
-                    <div class="text-[11px] text-slate-500">Total Downtime</div>
-                </div>
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
-                    <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Section: Security & Threat Prevention --}}
-        <div class="space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-shield-halved text-indigo-600"></i> Security & Firewall
-                </h2>
-                <span class="text-xs font-semibold text-slate-500">{{ $security['total_scans'] ?? 0 }} scans conducted</span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-xs font-medium text-slate-500">Malware & Checksum Scan</div>
-                    <div class="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
-                        <i class="fa-solid fa-check-circle"></i> Clean / Passed
+        @php
+            $metricCount = (isset($data['updates']) ? 1 : 0)
+                + (isset($data['uptime']) ? 1 : 0)
+                + (isset($data['security']) ? 1 : 0)
+                + (isset($data['forms']) ? 1 : 0);
+            // Tailwind's build-time scanner only picks up utility classes it can
+            // find as literal substrings — sm:grid-cols-{{ $n }} would compile to
+            // nothing for any $n whose literal class string doesn't appear
+            // somewhere in the scanned source, silently breaking the grid at
+            // that breakpoint. Spell out each option so the scanner sees them.
+            $metricGridColsClass = match (min($metricCount, 4)) {
+                1 => 'sm:grid-cols-1',
+                2 => 'sm:grid-cols-2',
+                3 => 'sm:grid-cols-3',
+                default => 'sm:grid-cols-4',
+            };
+        @endphp
+        @if ($metricCount > 0)
+            <div class="grid grid-cols-2 {{ $metricGridColsClass }} gap-4">
+                @if (isset($data['updates']))
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                        <div class="text-2xl font-black text-slate-900">{{ $updates['total'] ?? 0 }}</div>
+                        <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Updates Completed</div>
                     </div>
-                </div>
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                    <div class="text-sm font-bold text-slate-900 mt-1">
-                        {{ $security['blocked_threats_count'] ?? 0 }} IP bans
+                @endif
+                @if (isset($data['uptime']))
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                        <div class="text-2xl font-black text-emerald-600">{{ $uptime['uptime_percentage'] ?? 100 }}%</div>
+                        <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
                     </div>
-                </div>
-                <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div class="text-xs font-medium text-slate-500">Known CVE Vulnerabilities</div>
-                    <div class="text-sm font-bold {{ ($security['active_vulnerabilities'] ?? 0) === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
-                        {{ $security['active_vulnerabilities'] ?? 0 }} Active
+                @endif
+                @if (isset($data['security']))
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                        <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] ?? 0 }}</div>
+                        <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Threats Blocked</div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Section: Backups & Disaster Recovery --}}
-        <div class="space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
-                </h2>
-                <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Active</span>
-            </div>
-            <p class="text-xs text-slate-500">
-                Your website files and database are routinely backed up and stored in off-site secure cloud storage for complete disaster recovery.
-            </p>
-            <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
-                @if (!empty($backups['last_backup_at']))
-                    <span class="mx-2">&bull;</span>
-                    <span class="font-semibold text-slate-800">Latest Verified Backup:</span> {{ $backups['last_backup_at'] }}
+                @endif
+                @if (isset($data['forms']))
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                        <div class="text-2xl font-black text-indigo-600">{{ $forms['pass_rate'] ?? 100 }}%</div>
+                        <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
+                    </div>
                 @endif
             </div>
-        </div>
+        @endif
+
+        {{-- Section: Updates Applied --}}
+        @if (isset($data['updates']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-arrow-up text-sky-600"></i> Updates & Upgrades
+                    </h2>
+                    <span class="text-xs font-semibold text-slate-500">{{ $updates['total'] ?? 0 }} updates performed</span>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Regular updates ensure your site remains secure against known vulnerabilities and compatible with current WordPress releases.
+                </p>
+
+                @if (!empty($updates['items']['plugins']))
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">
+                                <tr>
+                                    <th class="px-3 py-2">Component</th>
+                                    <th class="px-3 py-2">Details</th>
+                                    <th class="px-3 py-2 text-right">Date Applied</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($updates['items']['plugins'] as $item)
+                                    <tr>
+                                        <td class="px-3 py-2 font-medium text-slate-900">{{ $item['target'] ?: 'WordPress Plugin' }}</td>
+                                        <td class="px-3 py-2 text-slate-500">{{ $item['summary'] }}</td>
+                                        <td class="px-3 py-2 text-right text-slate-400 font-mono">{{ $item['date'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="text-xs text-slate-500 italic py-2">All software components were up-to-date throughout this period.</div>
+                @endif
+            </div>
+        @endif
+
+        {{-- Section: Uptime & Availability --}}
+        @if (isset($data['uptime']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-heart-pulse text-emerald-600"></i> Uptime & Availability
+                    </h2>
+                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                        {{ $uptime['uptime_percentage'] ?? 100 }}% Available
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Our global uptime monitors ping your website 24/7 at frequent intervals to verify round-the-clock availability.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">{{ $uptime['outages_count'] ?? 0 }}</div>
+                        <div class="text-[11px] text-slate-500">Outages Recorded</div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">{{ $uptime['downtime_minutes'] ?? 0 }} min</div>
+                        <div class="text-[11px] text-slate-500">Total Downtime</div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
+                        <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Section: Security & Threat Prevention --}}
+        @if (isset($data['security']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved text-indigo-600"></i> Security & Firewall
+                    </h2>
+                    <span class="text-xs font-semibold text-slate-500">{{ $security['total_scans'] ?? 0 }} scans conducted</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">Malware & Checksum Scan</div>
+                        <div class="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
+                            <i class="fa-solid fa-check-circle"></i> Clean / Passed
+                        </div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
+                        <div class="text-sm font-bold text-slate-900 mt-1">
+                            {{ $security['blocked_threats_count'] ?? 0 }} IP bans
+                        </div>
+                    </div>
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">Known CVE Vulnerabilities</div>
+                        <div class="text-sm font-bold {{ ($security['active_vulnerabilities'] ?? 0) === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
+                            {{ $security['active_vulnerabilities'] ?? 0 }} Active
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Section: Backups & Disaster Recovery --}}
+        @if (isset($data['backups']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
+                    </h2>
+                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Active</span>
+                </div>
+                <p class="text-xs text-slate-500">
+                    Your website files and database are routinely backed up and stored in off-site secure cloud storage for complete disaster recovery.
+                </p>
+                <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
+                    @if (!empty($backups['last_backup_at']))
+                        <span class="mx-2">&bull;</span>
+                        <span class="font-semibold text-slate-800">Latest Verified Backup:</span> {{ $backups['last_backup_at'] }}
+                    @endif
+                </div>
+            </div>
+        @endif
 
         {{-- Section: Performance Benchmarks --}}
-        @if (!empty($perf['has_performance']))
+        @if (isset($data['performance']) && !empty($perf['has_performance']))
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">

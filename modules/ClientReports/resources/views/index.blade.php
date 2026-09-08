@@ -20,6 +20,8 @@
     </div>
 </div>
 
+@include('client-reports::_nav')
+
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     {{-- Main Reports List --}}
     <div class="lg:col-span-8 xl:col-span-9 space-y-6">
@@ -53,7 +55,14 @@
                             @foreach ($reports as $r)
                                 <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                                     <td class="px-4 py-3 font-medium text-[var(--color-ink-strong)]">
-                                        <div>{{ $r->title }}</div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span>{{ $r->title }}</span>
+                                            @if ($r->template)
+                                                <span class="px-1.5 py-0.5 rounded text-[9px] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
+                                                    {{ $r->template->name }}
+                                                </span>
+                                            @endif
+                                        </div>
                                         <div class="text-[11px] text-[var(--color-ink-muted)] font-mono">{{ $r->site->domain }}</div>
                                     </td>
                                     <td class="px-4 py-3 text-[var(--color-ink-soft)] whitespace-nowrap">
@@ -118,6 +127,19 @@
                         @endforeach
                     </select>
                 </div>
+
+                @if (!empty($templates) && $templates->isNotEmpty())
+                    <div>
+                        <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">Report Template</label>
+                        <select name="template_id" class="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+                            @foreach ($templates as $t)
+                                <option value="{{ $t->id }}" {{ $t->is_default ? 'selected' : '' }}>
+                                    {{ $t->name }} ({{ count((array) $t->sections) }} sections){{ $t->is_default ? ' — Default' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
 
                 <div class="grid grid-cols-2 gap-2">
                     <div>

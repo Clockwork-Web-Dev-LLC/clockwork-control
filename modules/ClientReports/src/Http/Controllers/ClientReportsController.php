@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
+use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
 
 class ClientReportsController extends Controller
@@ -21,7 +22,7 @@ class ClientReportsController extends Controller
     public function index(): View
     {
         $reports = ClientReport::query()
-            ->with('site')
+            ->with(['site', 'template'])
             ->orderByDesc('created_at')
             ->paginate(20);
 
@@ -30,7 +31,12 @@ class ClientReportsController extends Controller
             ->orderBy('domain')
             ->get(['id', 'domain']);
 
-        return view('client-reports::index', compact('reports', 'sites'));
+        $templates = ClientReportTemplate::query()
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+
+        return view('client-reports::index', compact('reports', 'sites', 'templates'));
     }
 
     /**
@@ -40,6 +46,7 @@ class ClientReportsController extends Controller
     {
         $validated = $request->validate([
             'site_id' => ['required', 'integer', 'exists:sites,id'],
+            'template_id' => ['nullable', 'integer', 'exists:client_report_templates,id'],
             'period_start' => ['required', 'date'],
             'period_end' => ['required', 'date', 'after_or_equal:period_start'],
             'client_name' => ['nullable', 'string', 'max:255'],
@@ -51,17 +58,23 @@ class ClientReportsController extends Controller
         $start = Carbon::parse($validated['period_start']);
         $end = Carbon::parse($validated['period_end']);
 
+        $template = ! empty($validated['template_id'])
+            ? ClientReportTemplate::find($validated['template_id'])
+            : null;
+
         $sectionsData = $compiler->compile(
             site: $site,
             periodStart: $start,
             periodEnd: $end,
-            customNotes: $validated['custom_notes'] ?? null
+            customNotes: $validated['custom_notes'] ?? null,
+            sections: $template ? $template->sections : null
         );
 
         $title = "Maintenance Report: {$site->domain} ({$start->format('M Y')})";
 
         $report = ClientReport::create([
             'site_id' => $site->id,
+            'template_id' => $template?->id,
             'title' => $title,
             'period_start' => $start,
             'period_end' => $end,

@@ -20,16 +20,24 @@ class ClientReportCompiler
     ) {}
 
     /**
-     * Compile all report sections for a site over the specified date window.
+     * Compile report sections for a site over the specified date window.
      *
+     * @param  ?array<string>  $sections  Optional subset of section keys to compile. If null, all sections are compiled.
      * @return array<string, mixed>
      */
-    public function compile(Site $site, Carbon $periodStart, Carbon $periodEnd, ?string $customNotes = null): array
-    {
+    public function compile(
+        Site $site,
+        Carbon $periodStart,
+        Carbon $periodEnd,
+        ?string $customNotes = null,
+        ?array $sections = null,
+    ): array {
         $start = $periodStart->copy()->startOfDay();
         $end = $periodEnd->copy()->endOfDay();
 
-        return [
+        $shouldInclude = fn (string $key) => $sections === null || in_array($key, $sections, true);
+
+        $data = [
             'meta' => [
                 'compiled_at' => now()->toIso8601String(),
                 'period_start' => $start->toDateString(),
@@ -46,14 +54,31 @@ class ClientReportCompiler
                 'php_version' => $site->companion_snapshot['environment']['php_version'] ?? null,
                 'care_plan_enabled' => (bool) $site->care_plan_enabled,
             ],
-            'updates' => $this->compileUpdates($site, $start, $end),
-            'uptime' => $this->compileUptime($site, $start, $end),
-            'security' => $this->compileSecurity($site, $start, $end),
-            'performance' => $this->compilePerformance($site, $start, $end),
-            'forms' => $this->compileForms($site, $start, $end),
-            'traffic' => $this->compileTraffic($site, $start, $end),
-            'backups' => $this->compileBackups($site, $start, $end),
         ];
+
+        if ($shouldInclude('updates')) {
+            $data['updates'] = $this->compileUpdates($site, $start, $end);
+        }
+        if ($shouldInclude('uptime')) {
+            $data['uptime'] = $this->compileUptime($site, $start, $end);
+        }
+        if ($shouldInclude('security')) {
+            $data['security'] = $this->compileSecurity($site, $start, $end);
+        }
+        if ($shouldInclude('performance')) {
+            $data['performance'] = $this->compilePerformance($site, $start, $end);
+        }
+        if ($shouldInclude('forms')) {
+            $data['forms'] = $this->compileForms($site, $start, $end);
+        }
+        if ($shouldInclude('traffic')) {
+            $data['traffic'] = $this->compileTraffic($site, $start, $end);
+        }
+        if ($shouldInclude('backups')) {
+            $data['backups'] = $this->compileBackups($site, $start, $end);
+        }
+
+        return $data;
     }
 
     protected function compileBranding(): array

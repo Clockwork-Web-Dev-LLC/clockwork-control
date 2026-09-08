@@ -76,6 +76,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:scan-sitecheck',
         'clockwork:scan-wp7-truncation --repair',
         'clockwork:security-check --ssh --quiet-ok',
+        'clockwork:send-client-reports',
         'clockwork:send-telemetry',
         'clockwork:sync-allowed-bots',
         'clockwork:sync-bill-care-plans',

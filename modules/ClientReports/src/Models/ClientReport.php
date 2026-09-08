@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 /**
  * @property int $id
  * @property int $site_id
+ * @property ?int $template_id
  * @property string $title
  * @property Carbon $period_start
  * @property Carbon $period_end
@@ -24,6 +25,7 @@ use Illuminate\Support\Str;
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
  * @property-read Site $site
+ * @property-read ?ClientReportTemplate $template
  */
 class ClientReport extends Model
 {
@@ -33,6 +35,7 @@ class ClientReport extends Model
 
     protected $fillable = [
         'site_id',
+        'template_id',
         'title',
         'period_start',
         'period_end',
@@ -66,5 +69,10 @@ class ClientReport extends Model
     public function site(): BelongsTo
     {
         return $this->belongsTo(Site::class);
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(ClientReportTemplate::class, 'template_id');
     }
 }

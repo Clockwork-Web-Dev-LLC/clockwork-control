@@ -2,6 +2,7 @@
 
 namespace Modules\ClientReports;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Modules\ClientReports\Console\Commands\SendScheduledClientReports;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
@@ -21,6 +22,14 @@ class ClientReportsServiceProvider extends ModuleServiceProvider
         $this->commands([
             SendScheduledClientReports::class,
         ]);
+    }
+
+    public function scheduledTasks(Schedule $schedule): void
+    {
+        $schedule->command('clockwork:send-client-reports')
+            ->dailyAt('06:00')
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 
     public function manifest(): ModuleManifest
