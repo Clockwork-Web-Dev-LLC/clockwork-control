@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-08
+
+### Fixed
+- **Orphan sites falsely flagged for GridPane, Cloudways, and other non-SpinupWP-managed sites.** Orphan detection (`/issues`, the fleet issue-count badge, and `clockwork:find-orphan-sites`) queried `spinupwp_id IS NULL` without scoping to SpinupWP-managed sites, so every site on a different provider — which naturally never has a `spinupwp_id` — was flagged as a SpinupWP site whose linkage was lost. Orphan detection is now scoped strictly to `hosting_provider = spinupwp`, and gracefully skips the SpinupWP API lookup entirely (instead of crashing) when no SpinupWP token is configured.
+- **"Recheck SSL" crashed with a 422 on any non-SpinupWP site.** The button unconditionally called the SpinupWP-only cert refresher; it now uses a live TLS probe (the same one the scheduled SSL checker already uses) for hosting providers with no per-site cert API.
+- **Companion "Push update" showed a confusing "site has no SpinupWP id" error on non-SpinupWP sites.** The backups leg now reports a clean skip instead of an error for hosts that don't use SpinupWP backup reporting.
+- **Daily apt-update polling silently skipped every non-SpinupWP server for up to a week.** `upgrade_required` is only ever set by the SpinupWP import mirror, so GridPane/Hetzner/custom-VPS servers never tripped the daily poll and were only checked by the weekly full-fleet sweep. The daily run now always includes non-SpinupWP-managed servers too.
+- **Adding a server manually always attempted a SpinupWP refresh**, even on fleets with no SpinupWP account, wasting a request and showing a misleading flash message. It now only runs when SpinupWP is actually configured, and still polls the new server immediately either way so its status classifies without delay.
+- **WordPress core-checksum verification and plugin detection guessed the wrong on-disk path on non-SpinupWP servers.** Both fell back to SpinupWP's `/sites/{domain}/files` convention whenever `wp_path` wasn't recorded. Path resolution is now provider-aware (SpinupWP, GridPane conventions) and skips cleanly — rather than guessing wrong — for a provider with no known layout.
+- **`hosting_provider` silently defaulted to `spinupwp`** for any site created without specifying it, which is exactly what fed the orphan false-positive bug above. Every site-creation path now sets it explicitly, and the column no longer has a default — a future path that forgets it fails loudly instead of silently mislabeling the site.
+- Updated empty-state and description copy across the dashboard, issues page, WordPress plugins settings, and server Updates tab that assumed SpinupWP was the only hosting provider.
+
 ## [1.3.0] - 2026-09-08
 
 ### Added
