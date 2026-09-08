@@ -9,6 +9,50 @@ use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
 
+/*
+|--------------------------------------------------------------------------
+| Real-MySQL scratch database for the full-install tests
+|--------------------------------------------------------------------------
+|
+| The installer's `install.run` action genuinely reconfigures the app's
+| 'mysql' connection to whatever the operator typed in, purges it, and runs
+| real migrations (InstallerController — config(['database.connections.mysql'
+| => ...]), DB::purge('mysql'), Artisan::call('migrate')) — that live
+| connect-and-migrate IS the feature under test, so it can't be faked away.
+| RefreshDatabase only wraps the app's default (sqlite) test connection; it
+| has no idea this dynamically-reconfigured mysql connection exists, so
+| nothing it writes there ever gets rolled back.
+|
+| Previously these tests pointed at a database named 'clockwork_prod' with
+| no create/teardown of their own — relying on that database already
+| existing by some out-of-band setup, and leaving real migrated tables (and
+| a real admin user) behind in it after every run. Using a dedicated,
+| obviously-scratch database name that these tests create before and drop
+| after themselves makes the suite self-contained and leaves nothing behind.
+*/
+function installerTestDatabaseName(): string
+{
+    return 'clockwork_installer_wizard_test';
+}
+
+function installerTestDatabasePdo(): PDO
+{
+    return new PDO('mysql:host=127.0.0.1;port=3306', 'root', '');
+}
+
+function resetInstallerTestDatabase(): void
+{
+    $db = installerTestDatabaseName();
+    $pdo = installerTestDatabasePdo();
+    $pdo->exec("DROP DATABASE IF EXISTS `{$db}`");
+    $pdo->exec("CREATE DATABASE `{$db}`");
+}
+
+function dropInstallerTestDatabase(): void
+{
+    installerTestDatabasePdo()->exec('DROP DATABASE IF EXISTS `'.installerTestDatabaseName().'`');
+}
+
 describe('InstallerWizard', function () {
     $tempEnv = null;
 
@@ -151,7 +195,7 @@ describe('InstallerWizard', function () {
                 'database' => [
                     'host' => '127.0.0.1',
                     'port' => 3306,
-                    'database' => 'clockwork_prod',
+                    'database' => installerTestDatabaseName(),
                     'username' => 'root',
                     'password' => 'supersecret',
                 ],
@@ -181,7 +225,7 @@ describe('InstallerWizard', function () {
         $response = $this->get(route('install.review'));
 
         $response->assertOk()
-            ->assertSee('clockwork_prod')
+            ->assertSee(installerTestDatabaseName())
             ->assertSee('••••••••')
             ->assertDontSee('supersecret')
             ->assertDontSee('topsecretoauth')
@@ -195,7 +239,7 @@ describe('InstallerWizard', function () {
                 'database' => [
                     'host' => '127.0.0.1',
                     'port' => 3306,
-                    'database' => 'clockwork_prod',
+                    'database' => installerTestDatabaseName(),
                     'username' => 'root',
                     'password' => '',
                 ],
@@ -214,123 +258,135 @@ describe('InstallerWizard', function () {
     });
 
     it('executes full installation on step 8 submit and provisions admin when disclaimer is accepted', function () use (&$tempEnv) {
-        $this->withSession([
-            'install.wizard' => [
-                'database' => [
-                    'host' => '127.0.0.1',
-                    'port' => 3306,
-                    'database' => 'clockwork_prod',
-                    'username' => 'root',
-                    'password' => '',
-                ],
-                'app' => [
-                    'name' => 'Agency Control',
-                    'url' => 'https://panel.agency.test',
-                    'timezone' => 'UTC',
-                ],
-                'mail' => [
-                    'skipped' => true,
-                ],
-                'google' => [
-                    'client_id' => 'google-client-id-123',
-                    'client_secret' => 'google-secret-456',
-                    'hd' => null,
-                ],
-                'admin' => [
-                    'name' => 'Dev Ops',
-                    'email' => 'devops@agency.test',
-                ],
-                'hosting' => [
-                    'provider' => 'spinupwp',
-                ],
-            ],
-        ]);
+        resetInstallerTestDatabase();
 
-        $response = $this->post(route('install.run'), [
-            'disclaimer_accepted' => '1',
-            'telemetry_opt_in' => '1',
-        ]);
+        try {
+            $this->withSession([
+                'install.wizard' => [
+                    'database' => [
+                        'host' => '127.0.0.1',
+                        'port' => 3306,
+                        'database' => installerTestDatabaseName(),
+                        'username' => 'root',
+                        'password' => '',
+                    ],
+                    'app' => [
+                        'name' => 'Agency Control',
+                        'url' => 'https://panel.agency.test',
+                        'timezone' => 'UTC',
+                    ],
+                    'mail' => [
+                        'skipped' => true,
+                    ],
+                    'google' => [
+                        'client_id' => 'google-client-id-123',
+                        'client_secret' => 'google-secret-456',
+                        'hd' => null,
+                    ],
+                    'admin' => [
+                        'name' => 'Dev Ops',
+                        'email' => 'devops@agency.test',
+                    ],
+                    'hosting' => [
+                        'provider' => 'spinupwp',
+                    ],
+                ],
+            ]);
 
-        $response->assertRedirect(route('install.done'));
+            $response = $this->post(route('install.run'), [
+                'disclaimer_accepted' => '1',
+                'telemetry_opt_in' => '1',
+            ]);
 
-        expect(file_exists(EnforceInstallerGate::sentinelPath()))->toBeTrue();
+            $response->assertRedirect(route('install.done'));
 
-        $user = User::where('email', 'devops@agency.test')->first();
-        expect($user)->not->toBeNull()
-            ->and($user->name)->toBe('Dev Ops')
-            ->and($user->revoked_at)->toBeNull();
+            expect(file_exists(EnforceInstallerGate::sentinelPath()))->toBeTrue();
 
-        $settings = app(Settings::class);
-        expect($settings->get('disclaimer.accepted_at'))->not->toBeNull()
-            ->and($settings->get('disclaimer.accepted_version'))->toBe(config('clockwork.version'))
-            ->and($settings->get('telemetry.enabled'))->toBeTrue();
+            $user = User::where('email', 'devops@agency.test')->first();
+            expect($user)->not->toBeNull()
+                ->and($user->name)->toBe('Dev Ops')
+                ->and($user->revoked_at)->toBeNull();
 
-        $envContents = file_get_contents($tempEnv);
-        expect($envContents)->toContain('CLOCKWORK_TELEMETRY_ENABLED=true');
+            $settings = app(Settings::class);
+            expect($settings->get('disclaimer.accepted_at'))->not->toBeNull()
+                ->and($settings->get('disclaimer.accepted_version'))->toBe(config('clockwork.version'))
+                ->and($settings->get('telemetry.enabled'))->toBeTrue();
+
+            $envContents = file_get_contents($tempEnv);
+            expect($envContents)->toContain('CLOCKWORK_TELEMETRY_ENABLED=true');
+        } finally {
+            dropInstallerTestDatabase();
+        }
     });
 
     it('executes full installation with skipped google oauth and provisions admin with working local password', function () use (&$tempEnv) {
-        $this->withSession([
-            'install.wizard' => [
-                'database' => [
-                    'host' => '127.0.0.1',
-                    'port' => 3306,
-                    'database' => 'clockwork_prod',
-                    'username' => 'root',
-                    'password' => '',
-                ],
-                'app' => [
-                    'name' => 'Karena Agency Fleet',
-                    'url' => 'https://fleet.agency.test',
-                    'timezone' => 'UTC',
-                ],
-                'mail' => [
-                    'skipped' => true,
-                ],
-                'google' => [
-                    'skipped' => true,
-                    'client_id' => '',
-                    'client_secret' => '',
-                    'hd' => null,
-                ],
-                'admin' => [
-                    'name' => 'Karena Operator',
-                    'email' => 'karena@agency.test',
-                    'password' => 'localSecretPass123!',
-                ],
-                'hosting' => [
-                    'provider' => 'skip',
-                ],
-            ],
-        ]);
+        resetInstallerTestDatabase();
 
-        $response = $this->post(route('install.run'), [
-            'disclaimer_accepted' => '1',
-            'telemetry_opt_in' => '0',
-        ]);
+        try {
+            $this->withSession([
+                'install.wizard' => [
+                    'database' => [
+                        'host' => '127.0.0.1',
+                        'port' => 3306,
+                        'database' => installerTestDatabaseName(),
+                        'username' => 'root',
+                        'password' => '',
+                    ],
+                    'app' => [
+                        'name' => 'Karena Agency Fleet',
+                        'url' => 'https://fleet.agency.test',
+                        'timezone' => 'UTC',
+                    ],
+                    'mail' => [
+                        'skipped' => true,
+                    ],
+                    'google' => [
+                        'skipped' => true,
+                        'client_id' => '',
+                        'client_secret' => '',
+                        'hd' => null,
+                    ],
+                    'admin' => [
+                        'name' => 'Karena Operator',
+                        'email' => 'karena@agency.test',
+                        'password' => 'localSecretPass123!',
+                    ],
+                    'hosting' => [
+                        'provider' => 'skip',
+                    ],
+                ],
+            ]);
 
-        $response->assertRedirect(route('install.done'));
-        expect(file_exists(EnforceInstallerGate::sentinelPath()))->toBeTrue();
+            $response = $this->post(route('install.run'), [
+                'disclaimer_accepted' => '1',
+                'telemetry_opt_in' => '0',
+            ]);
 
-        $user = User::where('email', 'karena@agency.test')->firstOrFail();
-        expect($user->name)->toBe('Karena Operator')
-            ->and($user->password)->not->toBeNull()
-            ->and(Hash::check('localSecretPass123!', $user->password))->toBeTrue();
+            $response->assertRedirect(route('install.done'));
+            expect(file_exists(EnforceInstallerGate::sentinelPath()))->toBeTrue();
 
-        $envContents = file_get_contents($tempEnv);
-        expect($envContents)->toContain('GOOGLE_CLIENT_ID=')
-            ->and($envContents)->not->toContain('GOOGLE_CLIENT_ID=google-client-id');
+            $user = User::where('email', 'karena@agency.test')->firstOrFail();
+            expect($user->name)->toBe('Karena Operator')
+                ->and($user->password)->not->toBeNull()
+                ->and(Hash::check('localSecretPass123!', $user->password))->toBeTrue();
 
-        // Verify the operator can now immediately sign in with their new password
-        EnforceInstallerGate::fake(true);
-        $this->mockIssueCounterZero();
-        $loginResponse = $this->post(route('login.attempt'), [
-            'email' => 'karena@agency.test',
-            'password' => 'localSecretPass123!',
-        ]);
+            $envContents = file_get_contents($tempEnv);
+            expect($envContents)->toContain('GOOGLE_CLIENT_ID=')
+                ->and($envContents)->not->toContain('GOOGLE_CLIENT_ID=google-client-id');
 
-        $loginResponse->assertRedirect(route('dashboard'));
-        $this->assertAuthenticatedAs($user);
+            // Verify the operator can now immediately sign in with their new password
+            EnforceInstallerGate::fake(true);
+            $this->mockIssueCounterZero();
+            $loginResponse = $this->post(route('login.attempt'), [
+                'email' => 'karena@agency.test',
+                'password' => 'localSecretPass123!',
+            ]);
+
+            $loginResponse->assertRedirect(route('dashboard'));
+            $this->assertAuthenticatedAs($user);
+        } finally {
+            dropInstallerTestDatabase();
+        }
     });
 
     it('renders step 9 done screen', function () {
