@@ -545,7 +545,7 @@ class SitesController extends Controller
         $previousState = $site->cert_state;
 
         $site->cert_source = Site::CERT_SOURCE_LIVE_PROBE;
-        $site->cert_expires_at = $expiresAt;
+        $site->cert_expires_at = Carbon::instance($expiresAt);
         $site->cert_renews_at = null;
         $site->save();
 
@@ -558,8 +558,8 @@ class SitesController extends Controller
         return [
             'from_state' => $previousState,
             'to_state' => $newState,
-            'expires_at' => $site->cert_expires_at?->toDateTimeString(),
-            'renews_at' => $site->cert_renews_at?->toDateTimeString(),
+            'expires_at' => $expiresAt->toDateTimeString(),
+            'renews_at' => null,
         ];
     }
 
@@ -1074,7 +1074,7 @@ class SitesController extends Controller
         } else {
             $bits[] = "snapshot ✗ ({$results['snapshot']['error']})";
         }
-        if ($results['backups']['ok'] ?? false) {
+        if ($results['backups']['ok']) {
             if (! empty($results['backups']['skipped'])) {
                 $bits[] = 'backups ✓ (skipped — '.$results['backups']['reason'].')';
             } else {

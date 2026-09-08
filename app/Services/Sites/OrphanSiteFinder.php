@@ -52,17 +52,10 @@ class OrphanSiteFinder
         // Sites hosted on GridPane, Cloudways, or any other provider are
         // naturally never known to SpinupWP's /sites endpoint — calling it
         // here would either crash (token unconfigured) or waste a request
-        // whose result can never match a non-SpinupWP domain.
-        if (! $this->spinup->isConfigured()) {
-            return $orphans->values()->map(fn (Site $orphan) => [
-                'site' => $orphan,
-                'classification' => 'unknown',
-                'parent' => null,
-                'matched_domain' => null,
-            ]);
-        }
-
-        $domainMap = $this->buildDomainToParentMap();
+        // whose result can never match a non-SpinupWP domain. An empty map
+        // makes every orphan fall through to 'unknown' below, same as if
+        // SpinupWP genuinely had no record of any of these domains.
+        $domainMap = $this->spinup->isConfigured() ? $this->buildDomainToParentMap() : [];
 
         return $orphans->values()->map(function (Site $orphan) use ($domainMap) {
             $domains = $this->candidateDomains($orphan);
