@@ -74,7 +74,17 @@ jobs:
         # Excluded here to keep CI itself fully hermetic and immune to
         # Twilio-side flakiness; run it locally without this flag when you
         # want that extra confidence.
-        run: vendor/bin/pest --coverage --min=0 --coverage-clover=coverage.xml --exclude-group=network
+        # --exclude-group=mysql : the two InstallerWizardTest "full
+        # installation" tests genuinely connect to and migrate a real MySQL
+        # database (that live connect-and-migrate is the installer feature
+        # itself) — this runner only installs pdo_sqlite/sqlite3 and has no
+        # MySQL service container, so they'd fail with "Connection refused"
+        # every time. Run them locally against a real MySQL server with
+        # `vendor/bin/pest tests/Feature/Installer/InstallerWizardTest.php`.
+        # Note: --exclude-group must be repeated per group — a single
+        # comma-separated value (--exclude-group=network,mysql) is silently
+        # treated as one nonexistent group name and excludes nothing.
+        run: vendor/bin/pest --coverage --min=0 --coverage-clover=coverage.xml --exclude-group=network --exclude-group=mysql
 
       - name: Add coverage summary to the job
         run: |
