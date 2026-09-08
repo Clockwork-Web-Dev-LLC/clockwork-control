@@ -3,6 +3,8 @@
 @section('title', 'Capacity Settings · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Capacity Settings"
         subtitle="Configure shared-server visit quotas, lookback windows, and server pressure thresholds.">
         <x-slot:actions>
@@ -12,8 +14,6 @@
             </a>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 flex items-start gap-2 border-l-4 border-[var(--color-status-green)]">

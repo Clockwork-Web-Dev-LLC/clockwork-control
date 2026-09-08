@@ -19,14 +19,14 @@
 @endphp
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="WordPress fleet plugins"
         subtitle="Fleet-wide inventory of WordPress sites and active deployment of the Clockwork Companion agent and security plugins.">
         <x-slot:actions>
             <x-column-toggle id="wp-plugins" :columns="$columnConfig" />
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     {{-- Primary Metrics Row --}}
     <div class="grid grid-cols-2 md:grid-cols-{{ $llarEnabled ? '5' : '4' }} gap-3 mb-6">

@@ -3,10 +3,10 @@
 @section('title', 'Notification settings · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="SMS notifications"
         subtitle="Site-down + recovery alerts via Twilio. Recipients listed here get paged when a care-plan site goes down. Off-windows opt a recipient out for a recurring time period (e.g. a recurring religious observance)." />
-
-    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-4 status-green flex items-center gap-2">

@@ -3,10 +3,10 @@
 @section('title', 'Bill.com sync · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Bill.com sync"
         subtitle="Read-only sync. Auto-links sites to Bill.com customers via domains in invoice line item descriptions, and auto-flips care_plan_enabled based on care-plan-Item invoicing." />
-
-    @include('settings._tabs')
 
     @if (session('bill_com_status'))
         <div class="card p-4 mb-4 status-green text-sm flex items-center gap-2">

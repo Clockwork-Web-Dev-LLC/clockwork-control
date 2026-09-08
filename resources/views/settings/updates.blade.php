@@ -14,6 +14,8 @@
             setTimeout(() => this.copiedSnippet = false, 2000);
         }
     }">
+        @include('settings._tabs')
+
         {{-- Standard Clockwork Page Header --}}
         <x-page-header title="Clockwork Updates"
             subtitle="Operator utilities for Clockwork Control Core, bundled modules, and Companion plugin fleet rollout. Updates are operator-triggered — nothing installs automatically.">
@@ -36,8 +38,6 @@
                 </a>
             </x-slot:actions>
         </x-page-header>
-
-        @include('settings._tabs')
 
         {{-- Status Flash Notifications --}}
         @if (session('status_update_ok'))

@@ -3,10 +3,10 @@
 @section('title', 'Slack notifications · Clockwork')
 
 @section('content')
+    @include('settings._tabs')
+
     <x-page-header title="Slack notifications"
         subtitle="Per-event opt-out for Slack notifications. Disabled events still log to the database and the Laravel log — only the Slack post is suppressed. Toggles save immediately." />
-
-    @include('settings._tabs')
 
     <div class="card p-4 mb-4 flex items-start gap-3">
         @if ($webhookConfigured)

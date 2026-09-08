@@ -4,10 +4,10 @@
 
 @section('content')
     <div class="mb-8">
+        @include('settings._tabs')
+
         <x-page-header title="Weird Stats"
             subtitle="Fleet-level patterns the regular dashboards don't compose into a single picture. Time windows are 7 days for attack-stream stats, 30 days for visit rollups. Threat-log derivatives cached for 10 min." />
-
-        @include('settings._tabs')
 
         <details class="mt-4 text-xs text-[var(--color-ink-muted)]">
             <summary class="cursor-pointer text-[var(--color-ink-strong)] font-medium inline-flex items-center gap-1">

@@ -10,6 +10,8 @@
         return text.toLowerCase().includes(this.search.toLowerCase().trim());
     }
 }">
+    @include('settings._tabs')
+
     <x-page-header title="Settings & Operations"
         subtitle="Manage fleet configuration, API integrations, operational tools, and system administration.">
         <x-slot:actions>
@@ -28,8 +30,6 @@
             </div>
         </x-slot:actions>
     </x-page-header>
-
-    @include('settings._tabs')
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
