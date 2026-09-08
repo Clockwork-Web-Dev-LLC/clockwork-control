@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
+use Modules\SpinupWp\SpinupWpClient;
 
 class ServersController extends Controller
 {
@@ -188,17 +189,32 @@ class ServersController extends Controller
 
         $server->save();
 
-        // Auto-refresh from SpinupWP so any sites that already belong to this
-        // server (or have moved between servers since the last sync) appear
-        // immediately. Idempotent and harmless for hand-rolled servers that
-        // have no SpinupWP record — they simply get no update from this pass.
-        $import = $this->runSpinupWpImport();
-
         $message = "Server '{$server->name}' created.";
-        if ($import['ok']) {
-            $message .= ' Refreshed from SpinupWP — '.$import['summary'].'.';
+
+        if (app(SpinupWpClient::class)->isConfigured()) {
+            // Auto-refresh from SpinupWP so any sites that already belong to
+            // this server (or have moved between servers since the last
+            // sync) appear immediately. Idempotent and harmless for
+            // hand-rolled servers that have no SpinupWP record — they
+            // simply get no update from this pass.
+            $import = $this->runSpinupWpImport();
+
+            if ($import['ok']) {
+                $message .= ' Refreshed from SpinupWP — '.$import['summary'].'.';
+            } else {
+                $message .= ' (SpinupWP refresh skipped: '.$import['summary'].')';
+            }
         } else {
-            $message .= ' (SpinupWP refresh skipped: '.$import['summary'].')';
+            // No SpinupWP account on this fleet — skip the import entirely
+            // rather than run a command that will just fail, but still poll
+            // so this new server's status (green/yellow/red) classifies
+            // immediately instead of sitting at "unknown" until the next
+            // scheduled tick.
+            try {
+                Artisan::call('clockwork:poll-servers');
+            } catch (\Throwable) {
+                // Best-effort — the server was created either way.
+            }
         }
 
         return redirect()

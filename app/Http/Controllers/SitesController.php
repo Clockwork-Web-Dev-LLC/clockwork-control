@@ -20,6 +20,7 @@ use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
 use App\Services\Sites\WpPluginDetector;
+use App\Services\Ssl\LiveCertProbe;
 use App\Services\Ssl\SiteCertRefresher;
 use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeStateUpdater;
@@ -492,15 +493,17 @@ class SitesController extends Controller
         ];
     }
 
-    public function recheckCert(Site $site, SiteCertRefresher $refresher): JsonResponse
+    public function recheckCert(Site $site, SiteCertRefresher $refresher, LiveCertProbe $liveCertProbe): JsonResponse
     {
         try {
-            $result = $refresher->refresh($site);
+            $result = $site->host()->supports(HostingProvider::CAP_CERT_SYNC)
+                ? $refresher->refresh($site)
+                : $this->refreshCertViaLiveProbe($site, $liveCertProbe);
 
             return response()->json([
                 'ok' => true,
                 'message' => sprintf(
-                    'Refreshed from SpinupWP. State: %s%s. Expires %s.',
+                    'Refreshed certificate state. State: %s%s. Expires %s.',
                     $result['to_state'],
                     $result['from_state'] !== null && $result['from_state'] !== $result['to_state']
                         ? " (was {$result['from_state']})"
@@ -517,6 +520,47 @@ class SitesController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * SSL recheck path for hosts with no per-site cert API to sync from
+     * (Pressable, WP Engine, Kinsta today — any provider without
+     * CAP_CERT_SYNC). Mirrors SslChecker::run()'s live-probe branch so the
+     * manual "Recheck SSL" button behaves the same as the scheduled check.
+     *
+     * @return array{from_state: ?string, to_state: string, expires_at: ?string, renews_at: ?string}
+     */
+    private function refreshCertViaLiveProbe(Site $site, LiveCertProbe $liveCertProbe): array
+    {
+        $userOverrides = [Site::CERT_SOURCE_EXTERNAL, Site::CERT_SOURCE_REDIRECT_ONLY];
+        if (in_array($site->cert_source, $userOverrides, true)) {
+            throw new \RuntimeException('Cert source is manually overridden ('.$site->cert_source.') — not re-probing.');
+        }
+
+        $expiresAt = $liveCertProbe->expiryFor($site->domain);
+        if ($expiresAt === null) {
+            throw new \RuntimeException('Could not read a certificate off the wire for this domain (unreachable or TLS handshake failed).');
+        }
+
+        $previousState = $site->cert_state;
+
+        $site->cert_source = Site::CERT_SOURCE_LIVE_PROBE;
+        $site->cert_expires_at = $expiresAt;
+        $site->cert_renews_at = null;
+        $site->save();
+
+        $newState = $site->fresh()->sslState();
+        $site->update([
+            'cert_state' => $newState,
+            'cert_state_changed_at' => $previousState !== $newState ? now() : $site->cert_state_changed_at,
+        ]);
+
+        return [
+            'from_state' => $previousState,
+            'to_state' => $newState,
+            'expires_at' => $site->cert_expires_at?->toDateTimeString(),
+            'renews_at' => $site->cert_renews_at?->toDateTimeString(),
+        ];
     }
 
     /**
@@ -944,9 +988,12 @@ class SitesController extends Controller
             $results['snapshot'] = ['ok' => false, 'error' => 'snapshot capability not advertised — older Companion version'];
         }
 
-        // 2. Backups report — only if the site has a SpinupWP id and the
-        //    plugin advertises backups-report. Otherwise skip cleanly.
-        if (! $site->spinupwp_id) {
+        // 2. Backups report — only SpinupWP exposes per-site backup config
+        //    today. Any other host cleanly skips rather than showing an
+        //    error pill for something it was never expected to have.
+        if (! $site->isSpinupWp()) {
+            $results['backups'] = ['ok' => true, 'skipped' => true, 'reason' => 'Host does not use SpinupWP backup reporting.'];
+        } elseif (! $site->spinupwp_id) {
             $results['backups'] = ['ok' => false, 'error' => 'site has no SpinupWP id'];
         } elseif (! in_array('backups-report', $caps, true)) {
             $results['backups'] = ['ok' => false, 'error' => 'backups-report capability not advertised'];
@@ -1028,7 +1075,11 @@ class SitesController extends Controller
             $bits[] = "snapshot ✗ ({$results['snapshot']['error']})";
         }
         if ($results['backups']['ok'] ?? false) {
-            $bits[] = "backups ✓ ({$results['backups']['history_runs']} runs, {$results['backups']['schedules']} schedules)";
+            if (! empty($results['backups']['skipped'])) {
+                $bits[] = 'backups ✓ (skipped — '.$results['backups']['reason'].')';
+            } else {
+                $bits[] = "backups ✓ ({$results['backups']['history_runs']} runs, {$results['backups']['schedules']} schedules)";
+            }
         } else {
             $bits[] = "backups ✗ ({$results['backups']['error']})";
         }
