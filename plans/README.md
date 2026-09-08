@@ -56,6 +56,16 @@ rest) → **theme-system** → **installer** → **backup-relay-generalization**
 
 ---
 
+## Client Reports follow-up (2026-09-07, Claude)
+
+- [`client-reports-templates-scheduling.md`](./client-reports-templates-scheduling.md) — finishes
+  the Client Reports module's half-built, currently-inert scheduling feature (a `ClientReportSchedule`
+  model, table, and `clockwork:send-client-reports` command already exist, but the command ignores
+  due-dates and `delivery_mode`, and isn't registered on the scheduler at all — plus there's no UI to
+  create a schedule) and adds a genuinely new Templates feature (named, reusable subsets of report
+  sections), matching a ManageWP-style panel Aaron shared as reference. 4 phases: fix what's broken →
+  Templates → Scheduling UI → conditional-delivery stretch goal.
+
 ## Final, ready-to-build plans (2026-09-06, Claude)
 
 The two features from the research above worth building next — corrected, and rewritten to exactly
