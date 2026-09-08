@@ -33,7 +33,7 @@
     @include('monitoring._tabs')
 
     {{-- Hero --}}
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div class="card p-5 md:col-span-1 flex flex-col items-center justify-center text-center">
             @php
                 $heroState = $currentlyDown > 0 ? 'down' : ($unknown === $sites->count() && $sites->count() > 0 ? 'unknown' : 'up');
@@ -67,6 +67,12 @@
                     · <span class="text-[var(--color-status-yellow)]"><i class="fa-solid fa-bell-slash"></i> {{ $currentlyIgnored }} ignored</span>
                 @endif
             </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Fleet uptime (7d)</div>
+            <div class="text-3xl font-bold font-data text-[var(--color-ink-strong)]">{{ $avg7d !== null ? number_format($avg7d, 2).'%' : '—' }}</div>
+            <div class="text-xs text-[var(--color-ink-muted)] mt-1">average across monitored sites</div>
         </div>
 
         <div class="card p-5">

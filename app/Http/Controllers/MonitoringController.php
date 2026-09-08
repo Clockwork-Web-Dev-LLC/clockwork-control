@@ -74,6 +74,7 @@ class MonitoringController extends Controller
         // honest about a single bad site dragging the average, but the
         // arithmetic version is what every status-page tool surfaces and is
         // the number operators expect.
+        $avg7d = $this->averageOfNonNull($stats7d);
         $avg30d = $this->averageOfNonNull($stats30d);
 
         // Recent fleet-wide events for the "Latest events" feed.
@@ -92,6 +93,7 @@ class MonitoringController extends Controller
             'currentlyUp',
             'unknown',
             'currentlyIgnored',
+            'avg7d',
             'avg30d',
             'recentEvents',
         ));
