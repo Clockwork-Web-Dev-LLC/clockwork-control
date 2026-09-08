@@ -26,6 +26,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?int $server_id null for Pressable-hosted sites — Pressable has no server concept
  * @property string $hosting_provider spinupwp|pressable
  * @property string $domain
+ * @property ?string $notes
  * @property ?string $site_user
  * @property ?string $wp_path
  * @property ?string $db_host
@@ -207,6 +208,7 @@ class Site extends Model
         'server_id',
         'hosting_provider',
         'domain',
+        'notes',
         'site_user',
         'wp_path',
         'db_host',
@@ -801,5 +803,40 @@ class Site extends Model
     public function isUptimeIgnored(): bool
     {
         return $this->uptime_ignored_at !== null;
+    }
+
+    /**
+     * Compute rolling uptime percentage over the given days (defaults to 30 days).
+     */
+    public function computeUptimePercentage(int $days = 30): float
+    {
+        if (! $this->uptime_monitoring_enabled) {
+            return 100.0;
+        }
+
+        $start = now()->subDays($days);
+        $totalMinutes = max(1, $start->diffInMinutes(now()));
+
+        $downEvents = $this->uptimeEvents()
+            ->where('event_at', '>=', $start)
+            ->where('event_type', SiteUptimeEvent::TYPE_DOWN)
+            ->get();
+
+        if ($downEvents->isEmpty() && $this->uptime_state !== 'down') {
+            return 100.0;
+        }
+
+        $totalDowntimeMinutes = 0;
+        foreach ($downEvents as $event) {
+            $totalDowntimeMinutes += ($event->duration_seconds ?? 300) / 60;
+        }
+
+        if ($this->uptime_state === 'down' && $this->uptime_down_since) {
+            $totalDowntimeMinutes += max(0, $this->uptime_down_since->diffInMinutes(now()));
+        }
+
+        $downtimeMinutes = min($totalMinutes, (int) round($totalDowntimeMinutes));
+
+        return max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
     }
 }
