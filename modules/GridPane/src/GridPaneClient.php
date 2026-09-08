@@ -17,6 +17,14 @@ class GridPaneClient
 
     protected int $delayMs;
 
+    /**
+     * Set when the most recent paginate() call had to stop early after
+     * already accumulating some pages (e.g. persistent 429s past the last
+     * page that succeeded). Callers can surface this instead of silently
+     * treating a truncated fleet as the complete one.
+     */
+    protected bool $partial = false;
+
     public function __construct(
         protected ?string $apiKey = null,
         protected ?string $baseUrl = null,
@@ -31,8 +39,10 @@ class GridPaneClient
         $this->baseUrl = $baseUrl ?? (string) config('clockwork.gridpane.base_url', self::DEFAULT_BASE_URL);
         $this->timeout = $timeout ?? (int) ($settings?->get('services.gridpane.timeout') ?? config('clockwork.gridpane.timeout', 15));
         $this->viewOnly = $viewOnly ?? (bool) config('clockwork.gridpane.view_only', true);
-        $this->retryAttempts = $retryAttempts ?? (int) ($settings?->get('services.gridpane.retry_attempts') ?? 2);
-        $this->delayMs = $delayMs ?? (int) ($settings?->get('services.gridpane.delay_ms') ?? 0);
+        // GridPane's documented 1-2 req/sec still 429'd real fleets at 600ms/2
+        // retries (see CHANGELOG); 1500ms + 3 retries gives real headroom.
+        $this->retryAttempts = $retryAttempts ?? (int) ($settings?->get('services.gridpane.retry_attempts') ?? 3);
+        $this->delayMs = $delayMs ?? (int) ($settings?->get('services.gridpane.delay_ms') ?? 1500);
     }
 
     public function getTimeout(): int
@@ -209,6 +219,11 @@ class GridPaneClient
     /**
      * Auto-paginate through all pages of a GridPane API collection endpoint.
      *
+     * Pacing between pages comes solely from request()'s delayMs gate (every
+     * call goes through get(), which goes through request()) rather than a
+     * second hardcoded sleep here, so an operator-configured delay_ms is
+     * actually honored on multi-page fetches instead of being overridden.
+     *
      * @param  array<string, mixed>  $query
      * @return list<array<string, mixed>>
      */
@@ -217,6 +232,7 @@ class GridPaneClient
         $all = [];
         $page = 1;
         $safetyLimit = 200; // matches PressableClient::paginate()'s guard against degenerate pagination metadata
+        $this->partial = false;
 
         do {
             if ($page > $safetyLimit) {
@@ -228,7 +244,21 @@ class GridPaneClient
                 $pageQuery['page'] = $page;
             }
 
-            $response = $this->get($path, $pageQuery);
+            try {
+                $response = $this->get($path, $pageQuery);
+            } catch (\Throwable $e) {
+                // A later page failing (e.g. retries exhausted on repeated
+                // 429s) shouldn't discard pages already fetched successfully.
+                // Only bubble up when we have nothing at all to show for it.
+                if ($all === []) {
+                    throw $e;
+                }
+
+                report($e);
+                $this->partial = true;
+                break;
+            }
+
             $data = $response->json();
 
             if (! is_array($data)) {
@@ -247,14 +277,19 @@ class GridPaneClient
                 || (isset($data['meta']['current_page'], $data['meta']['last_page']) && $data['meta']['current_page'] < $data['meta']['last_page']);
 
             $page++;
-
-            if ($hasNext) {
-                // Subtle delay between page requests to stay well within GridPane endpoint limits
-                usleep(150000);
-            }
         } while ($hasNext);
 
         return $all;
+    }
+
+    /**
+     * True when the most recent paginate() call (via servers() or sites())
+     * stopped early after already accumulating some results, rather than
+     * completing the full fleet listing.
+     */
+    public function wasPartial(): bool
+    {
+        return $this->partial;
     }
 
     protected function request(): PendingRequest
@@ -281,7 +316,7 @@ class GridPaneClient
                     // a `??` chain never actually falls through to the
                     // default — check for a genuinely non-empty value instead.
                     $header = $exception->response->header('Retry-After');
-                    $retryAfter = $header !== '' ? (int) $header : 3;
+                    $retryAfter = $header !== '' ? (int) $header : 5;
 
                     return max(1000, ($retryAfter + 1) * 1000);
                 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `clockwork:import-gridpane` silently failing to pull a complete fleet on accounts with many paginated pages of sites/servers: the pagination loop slept a hardcoded 150ms between pages regardless of the operator's configured `services.gridpane.delay_ms`, well above GridPane's documented 1-2 requests/second limit, and a single page failing after retries discarded every page already fetched (the whole import aborted with nothing saved). Paging now honors the configured delay via the same per-request gate used elsewhere, and a page that ultimately fails after already accumulating results now returns what was fetched with a console warning instead of throwing everything away — re-running the (idempotent) import picks up the rest.
+- Confirmed against a real fleet that GridPane throttles considerably tighter than its own docs claim: even a 600ms delay with 2 retries still hit `429 Beep, Beep, you're going too fast...` mid-pagination. Default delay bumped to 1500ms and default retries to 3 (both still operator-overridable via `services.gridpane.delay_ms`/`retry_attempts`), and the 429 backoff's fallback wait (used when GridPane omits a `Retry-After` header, which it did here) raised from 3s to 5s.
+
 ## [1.5.1] - 2026-09-08
 
 ### Fixed
