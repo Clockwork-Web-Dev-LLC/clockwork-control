@@ -11,6 +11,9 @@ use Throwable;
 
 class BackupArchiveEnumerator
 {
+    /** Presigned download URL lifetime used by getDownloadUrl(). */
+    public const DOWNLOAD_URL_TTL_HOURS = 24;
+
     public function __construct(
         protected ?string $diskName = null
     ) {
@@ -25,6 +28,27 @@ class BackupArchiveEnumerator
     public function diskName(): string
     {
         return $this->diskName;
+    }
+
+    /**
+     * Whether this disk can mint a real, directly-downloadable presigned URL.
+     * getDownloadUrl() falls back to an operator-authenticated Clockwork
+     * Control route when this isn't the case — fine for the internal
+     * /settings/backup-relay UI (the operator is already logged in), but
+     * useless if handed to a client-facing surface like the Companion
+     * wp-admin page, which has no Clockwork Control session to satisfy
+     * that route's auth middleware.
+     *
+     * Checking the configured driver rather than
+     * method_exists($disk, 'temporaryUrl') deliberately — Laravel's base
+     * FilesystemAdapter defines temporaryUrl() for every driver (including
+     * 'local'), only throwing at call time if the underlying adapter
+     * doesn't really support it, so a method_exists() check is always true
+     * regardless of the driver and would never actually gate anything.
+     */
+    public function supportsPresignedUrls(): bool
+    {
+        return config("filesystems.disks.{$this->diskName}.driver") === 's3';
     }
 
     /**
@@ -97,26 +121,15 @@ class BackupArchiveEnumerator
                     continue;
                 }
 
+                // Deliberately NOT falling back to $disk->size()/$disk->lastModified()
+                // here — those trigger a HeadObject call, which needs s3:GetObject.
+                // The whole point of using listContents() is that ListObjectsV2
+                // already returns Size/LastModified for every object using only
+                // s3:ListBucket; a HeadObject fallback would just re-fail with the
+                // same AccessDenied this method exists to avoid.
                 $size = method_exists($item, 'fileSize') ? (int) ($item->fileSize() ?? 0) : 0;
                 $mtime = method_exists($item, 'lastModified') ? $item->lastModified() : null;
                 $lastModified = $mtime ? Carbon::createFromTimestamp($mtime) : null;
-
-                if ($size === 0) {
-                    try {
-                        $size = (int) $disk->size($file);
-                    } catch (Throwable) {
-                        $size = 0;
-                    }
-                }
-
-                if (! $lastModified) {
-                    try {
-                        $mtime = $disk->lastModified($file);
-                        $lastModified = $mtime ? Carbon::createFromTimestamp($mtime) : null;
-                    } catch (Throwable) {
-                        $lastModified = null;
-                    }
-                }
 
                 $totalBytes += $size;
 
@@ -189,7 +202,7 @@ class BackupArchiveEnumerator
         try {
             $disk = $this->disk();
             if (method_exists($disk, 'temporaryUrl')) {
-                return $disk->temporaryUrl($key, now()->addHours(24));
+                return $disk->temporaryUrl($key, now()->addHours(self::DOWNLOAD_URL_TTL_HOURS));
             }
         } catch (Throwable) {
             // Fall back to direct controller download proxy
