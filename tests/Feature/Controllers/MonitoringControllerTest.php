@@ -2,6 +2,7 @@
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\SiteUptimeEvent;
 use App\Models\User;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Artisan;
@@ -31,6 +32,40 @@ describe('MonitoringController', function () {
             ->get(route('monitoring.index'));
 
         $response->assertOk()->assertSee('Monitoring')->assertSee('monitored.example.com');
+    });
+
+    it('renders separate 7d and 30d fleet uptime headline figures', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'seven-day-uptime.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'up',
+        ]);
+
+        // A single down/up pair 10 days ago: inside the 30d window, outside
+        // the 7d window — 30d should show less than 100%, 7d should show
+        // exactly 100% (the outage never happened within its window).
+        SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => 'down',
+            'event_at' => now()->subDays(10),
+        ]);
+        SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => 'up',
+            'event_at' => now()->subDays(10)->addHours(2),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('Fleet uptime (7d)')
+            ->assertSee('Fleet uptime (30d)')
+            ->assertSee('100.00%')
+            ->assertViewHas('avg7d', 100.0)
+            ->assertViewHas('avg30d', fn ($avg30d) => $avg30d !== null && $avg30d < 100.0);
     });
 
     it('renders the monitoring settings page', function () {
