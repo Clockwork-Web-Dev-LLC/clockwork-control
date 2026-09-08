@@ -14,7 +14,7 @@ class AppearanceSettingsController extends Controller
     public const COOKIE_NAME = 'cw_theme';
 
     /**
-     * Persist operator theme preference (system / light / dark / midnight / high-contrast).
+     * Persist operator theme preference (system / light / dark / high-contrast).
      */
     public function update(Request $request): JsonResponse
     {

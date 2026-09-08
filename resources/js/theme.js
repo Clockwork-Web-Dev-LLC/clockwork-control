@@ -23,11 +23,6 @@ export function initThemeSystem(Alpine) {
                 this.current = 'system';
             }
 
-            if (this.current === 'midnight') {
-                this.current = 'dark';
-                this.applyResolvedTheme('dark');
-            }
-
             // Listen for OS scheme changes when in system mode
             if (window.matchMedia) {
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
