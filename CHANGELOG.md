@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-08
+
+### Added
+- **White Labeling hub** (`/settings/companion`, renamed from "Companion" in navigation and page headers): consolidates all client-facing branding into one 3-tab hub — WordPress Companion mu-plugin branding (agency identity, plugin metadata, wp-admin menu, logo, live preview), Client Reports branding (brand color, accent strip color, 5 palette presets, custom SLA/footer text, live report preview), and Plugin Notification Email branding (header/accent colors, badge text, custom care-plan note, logo toggle, test-email dispatch, live email preview).
+- **Persistent two-tier settings navigation**: the 5-pillar top-level menu (Overview, Fleet & Branding, Integrations & Alerts, Operations & Tools, System & Workspace) now stays visible across every settings and operations page — previously it disappeared the moment you drilled into a specific tool. A contextual "tools" ribbon renders below it for the active pillar.
+- **7-day fleet uptime figure** on `/monitoring`, alongside the existing 30-day average.
+
+### Changed
+- Removed Midnight theme mode in favor of a 4-option grid (Light, Dark, High Contrast, Auto); existing Midnight cookies/preferences fall back to Dark automatically.
+- Fixed dark-mode bleed: an explicit Light selection could still pick up `dark:` Tailwind classes from the OS's `prefers-color-scheme`, now scoped strictly to the app's own theme state.
+- Settings navigation now sits above each page's header instead of below it, removing layout jump as header height varies between pages; the contextual tools ribbon is now a contained, elevated pill bar matching the rest of the settings hub's styling.
+- Module directory and integrations pages decluttered — capability badges moved from the directory cards to each integration's Configure page.
+
+### Fixed
+- Reports brand palette colors (primary/accent) were saved by the new White Labeling settings but never rendered anywhere in the generated report — fixed, with a regression test.
+- `/capacity`, `/maintenance-history`, `/operations/server-updates`, and the bulk SSH credentials page were missing the settings navigation entirely, despite already being wired into it as "Operations & Tools" destinations.
+- CI was failing on two installer-wizard tests that require a real MySQL server, which the CI runner doesn't provide — excluded from CI (they still run normally against a local MySQL server), matching the existing pattern for the one test that needs live Twilio API access.
+
 ## [1.3.1] - 2026-09-08
 
 ### Fixed
