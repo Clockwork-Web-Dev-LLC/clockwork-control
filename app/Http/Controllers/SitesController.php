@@ -174,7 +174,58 @@ class SitesController extends Controller
             ->limit(25)
             ->get();
 
-        return compact('recentLogs', 'logCount24h', 'logCountTotal', 'topIps24h', 'recentActivity');
+        // 1. Uptime widget data
+        $uptimePercentage30d = $site->computeUptimePercentage(30);
+        $recentUptimeEvents = $site->uptimeEvents()
+            ->orderByDesc('event_at')
+            ->limit(3)
+            ->get();
+
+        // 2. Performance widget data
+        $latestPerfMobile = $site->latestPerformanceScanMobile;
+        $latestPerfDesktop = $site->latestPerformanceScanDesktop;
+
+        // 3. Security widget data
+        $latestSiteCheck = $site->latestSiteCheckScan;
+        $latestChecksumScan = $site->latestChecksumScan;
+
+        // 4. Traffic 7-day summary data
+        $traffic7d = SiteTrafficDaily::query()
+            ->where('site_id', $site->id)
+            ->where('date', '>=', now()->subDays(6)->toDateString())
+            ->orderBy('date')
+            ->get(['date', 'requests', 'visits', 'unique_ips']);
+
+        $traffic7dVisits = (int) $traffic7d->sum('visits');
+        $traffic7dRequests = (int) $traffic7d->sum('requests');
+
+        // 5. Contact forms widget data
+        $latestFormRun = $site->contactFormTestRuns()
+            ->orderByDesc('ran_at')
+            ->first();
+        $formTestsCount = $site->contactFormTests()->count();
+
+        $dashboardLayout = $site->resolvedDashboardLayout();
+
+        return compact(
+            'recentLogs',
+            'logCount24h',
+            'logCountTotal',
+            'topIps24h',
+            'recentActivity',
+            'uptimePercentage30d',
+            'recentUptimeEvents',
+            'latestPerfMobile',
+            'latestPerfDesktop',
+            'latestSiteCheck',
+            'latestChecksumScan',
+            'traffic7d',
+            'traffic7dVisits',
+            'traffic7dRequests',
+            'latestFormRun',
+            'formTestsCount',
+            'dashboardLayout'
+        );
     }
 
     /**
@@ -704,6 +755,62 @@ class SitesController extends Controller
 
         return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
             ->with('status', 'Cert details updated.');
+    }
+
+    public function updateNotes(Request $request, Site $site): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:10000'],
+        ]);
+
+        $site->update([
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'notes' => $site->notes,
+                'message' => 'Site notes saved successfully.',
+            ]);
+        }
+
+        return back()->with('status', 'Site notes saved successfully.');
+    }
+
+    public function updateLayout(Request $request, Site $site): JsonResponse|RedirectResponse
+    {
+        if ($request->boolean('reset')) {
+            $site->update(['dashboard_layout' => null]);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'ok' => true,
+                    'layout' => Site::DEFAULT_DASHBOARD_LAYOUT,
+                    'message' => 'Dashboard layout reset to default.',
+                ]);
+            }
+
+            return back()->with('status', 'Dashboard layout reset to default.');
+        }
+
+        $validated = $request->validate([
+            'layout' => ['required', 'array'],
+            'layout.*' => ['string', 'in:'.implode(',', Site::DEFAULT_DASHBOARD_LAYOUT)],
+        ]);
+
+        $ordered = array_values(array_unique($validated['layout']));
+        $site->update(['dashboard_layout' => $ordered]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'layout' => $site->resolvedDashboardLayout(),
+                'message' => 'Dashboard layout updated successfully.',
+            ]);
+        }
+
+        return back()->with('status', 'Dashboard layout updated.');
     }
 
     /**

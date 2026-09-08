@@ -1,860 +1,873 @@
-<div class="card p-5 mb-6" id="cert-detail">
-    <div class="flex items-center justify-between mb-3">
-        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Cert details</h2>
-        <div class="flex items-center gap-3">
-            {{-- Recheck-now asks SpinupWP's own per-site API for fresh cert
-                 data — no equivalent exists for Pressable yet. --}}
-            @unless ($site->isPressable())
-                <button type="button" id="cert-recheck"
-                        data-url="{{ route('sites.cert.recheck', $site) }}"
-                        class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50">
-                    <i class="fa-solid fa-rotate"></i> Recheck now
-                </button>
-            @endunless
-            <button type="button" id="cert-edit-toggle" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">
-                <i class="fa-solid fa-pen-to-square"></i> Edit
-            </button>
-        </div>
-    </div>
+{{-- 3-Column Settings Grid — styled consistently with Overview Command Center cards --}}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
 
-    <div id="cert-recheck-result" class="hidden mb-3 text-sm"></div>
-
-    <div id="cert-view" class="space-y-2 text-sm">
-        <div><span class="text-[var(--color-ink-soft)]">Source:</span> <span class="font-data">{{ $site->cert_source }}</span></div>
-        <div><span class="text-[var(--color-ink-soft)]">Expires:</span> {{ $site->cert_expires_at?->format('M j, Y H:i') ?: '—' }}</div>
-        <div><span class="text-[var(--color-ink-soft)]">Renews:</span> {{ $site->cert_renews_at?->format('M j, Y H:i') ?: '—' }}</div>
+    {{-- Card 1: Cert Details --}}
+    <div class="card p-5 flex flex-col justify-between h-full" id="cert-detail">
         <div>
-            <div class="text-[var(--color-ink-soft)] mb-1">Notes:</div>
-            <div class="whitespace-pre-wrap text-[var(--color-ink-muted)]">{{ $site->cert_notes ?: '—' }}</div>
-        </div>
-        @if ($site->cert_source === 'spinupwp_le')
-            <div class="text-xs text-[var(--color-ink-soft)] mt-3">
-                <i class="fa-solid fa-circle-info"></i>
-                Updated automatically by <code>clockwork:import-spinupwp</code> from the SpinupWP API.
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-certificate text-emerald-600"></i>
+                    Cert details
+                </h3>
+                @php
+                    $certStatusClass = 'status-unknown';
+                    $certStatusText = 'No SSL';
+                    if ($site->cert_source === 'redirect_only') {
+                        $certStatusClass = 'status-unknown';
+                        $certStatusText = 'Redirect only';
+                    } elseif ($site->cert_expires_at) {
+                        $daysRemaining = (int) now()->diffInDays($site->cert_expires_at, false);
+                        if ($site->cert_expires_at->isPast() || $daysRemaining < 0) {
+                            $certStatusClass = 'status-red';
+                            $certStatusText = 'Expired';
+                        } elseif ($daysRemaining < 14) {
+                            $certStatusClass = 'status-red';
+                            $certStatusText = 'Expires soon';
+                        } elseif ($daysRemaining < 30) {
+                            $certStatusClass = 'status-yellow';
+                            $certStatusText = 'Expiring';
+                        } else {
+                            $certStatusClass = 'status-green';
+                            $certStatusText = 'Valid SSL';
+                        }
+                    }
+                @endphp
+                <span class="status-pill {{ $certStatusClass }} text-[10px]">
+                    <span class="status-dot"></span> {{ $certStatusText }}
+                </span>
             </div>
-        @endif
-    </div>
 
-    <form id="cert-form" method="POST" action="{{ route('sites.cert.update', $site) }}" class="hidden space-y-3 text-sm">
-        @csrf
-        @method('PATCH')
+            <div id="cert-recheck-result" class="hidden mb-3 text-xs"></div>
 
-        <label class="block">
-            <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Source</span>
-            <select name="cert_source" class="block w-full mt-1 border border-[var(--color-border-light)] rounded-md px-3 py-2">
-                <option value="none" @selected($site->cert_source === 'none')>None</option>
-                <option value="spinupwp_le" @selected($site->cert_source === 'spinupwp_le')>SpinupWP / Let's Encrypt</option>
-                <option value="external" @selected($site->cert_source === 'external')>External (3rd-party)</option>
-                <option value="redirect_only" @selected($site->cert_source === 'redirect_only')>Redirect-only / parked — skip SSL monitoring</option>
-            </select>
-            <p class="text-xs text-[var(--color-ink-soft)] mt-1">
-                "Redirect-only" suppresses SSL alerts for sites that just redirect elsewhere, sit behind Cloudflare Flexible SSL, or are parked.
-            </p>
-        </label>
+            <div id="cert-view" class="space-y-2">
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Source:</span>
+                        <span class="font-mono font-medium text-[var(--color-ink-strong)]">{{ $site->cert_source }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Expires:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $site->cert_expires_at?->format('M j, Y H:i') ?: '—' }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Renews:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $site->cert_renews_at?->format('M j, Y H:i') ?: '—' }}</span>
+                    </div>
+                </div>
 
-        <div class="grid grid-cols-2 gap-3">
-            <label class="block">
-                <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Expires at</span>
-                <input type="datetime-local" name="cert_expires_at"
-                       value="{{ $site->cert_expires_at?->format('Y-m-d\TH:i') }}"
-                       class="block w-full mt-1 border border-[var(--color-border-light)] rounded-md px-3 py-2">
-            </label>
-            <label class="block">
-                <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Renews at</span>
-                <input type="datetime-local" name="cert_renews_at"
-                       value="{{ $site->cert_renews_at?->format('Y-m-d\TH:i') }}"
-                       class="block w-full mt-1 border border-[var(--color-border-light)] rounded-md px-3 py-2">
-            </label>
-        </div>
+                @if ($site->cert_notes)
+                    <div class="text-[11px] text-[var(--color-ink-muted)] p-2 rounded bg-[var(--color-surface-alt)]/40 truncate" title="{{ $site->cert_notes }}">
+                        <i class="fa-regular fa-note-sticky text-gray-400 mr-1"></i> {{ $site->cert_notes }}
+                    </div>
+                @endif
 
-        <label class="block">
-            <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Notes</span>
-            <textarea name="cert_notes" rows="4" placeholder="Issuer, renewal portal URL, contact, etc."
-                      class="block w-full mt-1 border border-[var(--color-border-light)] rounded-md px-3 py-2 font-data text-xs">{{ $site->cert_notes }}</textarea>
-        </label>
-
-        <div class="flex items-center gap-2">
-            <button type="submit" class="btn-primary">Save</button>
-            <button type="button" id="cert-cancel" class="text-sm text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">Cancel</button>
-        </div>
-    </form>
-</div>
-
-<div class="card p-5 mb-6">
-    <div class="flex items-center justify-between mb-2">
-        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Cloudflare</h2>
-        <span class="text-xs text-[var(--color-ink-soft)]">
-            {{ $site->cloudflare_checked_at?->diffForHumans() ?? 'never checked' }}
-        </span>
-    </div>
-    @php
-        $stateMessage = match ($site->cloudflare_state) {
-            'proxied' => 'Traffic flows through Cloudflare. Their WAF + bot management filter requests before they reach the origin nginx.',
-            'dns_only' => 'Cloudflare manages DNS, but the proxy is OFF (grey cloud). Traffic still hits the origin directly. Consider toggling the proxy on for this domain in Cloudflare DNS settings.',
-            'not_using' => 'Domain is not using Cloudflare. All traffic — including spam and bots — reaches the origin nginx directly.',
-            default => 'Cloudflare state has not been determined yet.',
-        };
-    @endphp
-    <p class="text-sm text-[var(--color-ink-muted)] mb-3">{{ $stateMessage }}</p>
-    <div class="grid grid-cols-2 gap-4 text-xs font-data">
-        <div>
-            <div class="text-[var(--color-ink-soft)] uppercase tracking-wide mb-1 text-[10px]">A record</div>
-            <div class="text-[var(--color-ink-strong)]">{{ $site->resolved_a_record ?? '—' }}</div>
-        </div>
-        <div>
-            <div class="text-[var(--color-ink-soft)] uppercase tracking-wide mb-1 text-[10px]">First NS record</div>
-            <div class="text-[var(--color-ink-strong)] truncate">{{ $site->resolved_ns_record ?? '—' }}</div>
-        </div>
-    </div>
-</div>
-
-@if ($site->is_wordpress)
-    <div class="card p-5 mb-10">
-        <h2 class="font-display text-base font-semibold text-[var(--color-ink-strong)] mb-2">WordPress security</h2>
-        <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">Wordfence</div>
-                @if ($site->wordfence_enabled)
-                    <div class="text-[var(--color-ink-strong)]">Enabled — ingest pending</div>
-                @else
-                    <div class="text-[var(--color-ink-soft)]">Not enabled</div>
+                @if ($site->cert_source === 'spinupwp_le')
+                    <div class="text-[10px] text-[var(--color-ink-soft)] flex items-center gap-1 mt-1">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>Auto-synced via SpinupWP API</span>
+                    </div>
                 @endif
             </div>
-            <div>
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">Limit Login Attempts</div>
-                <div id="llar-state">
-                    @if ($site->llar_enabled)
-                        <div class="text-[var(--color-ink-strong)]">Enabled — ingest pending</div>
-                    @else
-                        <div class="flex items-center gap-3">
-                            <div class="text-[var(--color-ink-soft)]">Not enabled</div>
-                            {{-- Installs via wp-cli over SSH — no equivalent
-                                 transport wired up for Pressable yet. --}}
-                            @unless ($site->isPressable())
-                                <button type="button"
-                                        id="llar-install-btn"
-                                        class="btn-pill-nav text-xs"
-                                        data-url="{{ route('sites.llar.install', $site) }}"
-                                        title="Install LLAR via wp-cli over SSH and turn off its lockout email feature. If LLAR is already installed, the existing config is left untouched.">
-                                    <i class="fa-solid fa-download"></i> Install LLAR
-                                </button>
-                            @endunless
-                        </div>
-                    @endif
+
+            <form id="cert-form" method="POST" action="{{ route('sites.cert.update', $site) }}" class="hidden space-y-2.5 text-xs">
+                @csrf
+                @method('PATCH')
+
+                <div>
+                    <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Source</label>
+                    <select name="cert_source" class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-white">
+                        <option value="none" @selected($site->cert_source === 'none')>None</option>
+                        <option value="spinupwp_le" @selected($site->cert_source === 'spinupwp_le')>SpinupWP / Let's Encrypt</option>
+                        <option value="external" @selected($site->cert_source === 'external')>External (3rd-party)</option>
+                        <option value="redirect_only" @selected($site->cert_source === 'redirect_only')>Redirect-only / parked</option>
+                    </select>
                 </div>
-                <div id="llar-install-result" class="hidden text-xs mt-2"></div>
-            </div>
-        </div>
-        <div class="text-xs text-[var(--color-ink-soft)] mt-3">
-            <i class="fa-solid fa-circle-info"></i>
-            Wordfence + LLAR per-site stats arrive once the DB ingest lands. DB credentials
-            @if ($site->db_password)
-                are <span class="text-[var(--color-status-green)]">configured</span>.
-            @else
-                are <span class="text-[var(--color-ink-soft)]">missing</span> — run <code>php artisan clockwork:extract-wp-configs --site={{ $site->domain }}</code>.
-            @endif
-        </div>
-    </div>
 
-@if ($site->isPressable())
-    {{-- Pressable-native server tools — no SpinupWP/SSH equivalent needed since
-         this reads straight from Pressable's own API, not through Companion. --}}
-    <div class="card p-5 mb-10"
-         x-data="{
-            flushing: false,
-            flushResult: null,
-            async flushObjectCache() {
-                if (this.flushing) return;
-                this.flushing = true;
-                this.flushResult = null;
-                try {
-                    const r = await fetch('{{ route('sites.pressable.flush-object-cache', $site) }}', {
-                        method: 'POST',
-                        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    });
-                    const d = await r.json();
-                    this.flushResult = { ok: d.ok === true, message: d.message || d.error || 'Unknown error' };
-                } catch (e) {
-                    this.flushResult = { ok: false, message: 'Request failed: ' + e.message };
-                } finally {
-                    this.flushing = false;
-                }
-            },
-            loadingMetrics: false,
-            metricsError: null,
-            metricsLoaded: false,
-            async loadResourceMetrics() {
-                if (this.loadingMetrics) return;
-                this.loadingMetrics = true;
-                this.metricsError = null;
-                try {
-                    const r = await fetch('{{ route('sites.pressable.resource-metrics', $site) }}', { headers: { 'Accept': 'application/json' } });
-                    const d = await r.json();
-                    if (!d.ok) { this.metricsError = d.error || 'Unknown error'; return; }
-                    this.metricsLoaded = true;
-                    this.$nextTick(() => renderPressableResourceCharts(d.cpu, d.mysql));
-                } catch (e) {
-                    this.metricsError = 'Request failed: ' + e.message;
-                } finally {
-                    this.loadingMetrics = false;
-                }
-            },
-         }">
-        <h2 class="font-display text-base font-semibold text-[var(--color-ink-strong)] mb-3">
-            <i class="fa-solid fa-server text-[var(--color-ink-muted)] mr-1"></i>
-            Pressable server tools
-        </h2>
-
-        <div class="flex items-center flex-wrap gap-3 mb-2">
-            <button type="button" class="btn-pill-nav text-xs" :disabled="flushing" @click="flushObjectCache()"
-                    title="Flush WordPress's object cache (Redis/Memcached). Useful after a direct DB write, a restored backup, or anything else that bypasses the normal WordPress write path. Distinct from the edge/CDN cache purge this app already does automatically before every snapshot pull.">
-                <i class="fa-solid" :class="flushing ? 'fa-spinner fa-spin' : 'fa-broom'"></i>
-                <span x-text="flushing ? 'Flushing…' : 'Flush object cache'"></span>
-            </button>
-            <template x-if="flushResult">
-                <span class="text-xs" :class="flushResult.ok ? 'text-[var(--color-status-green)]' : 'text-[var(--color-status-red)]'" x-text="flushResult.message"></span>
-            </template>
-        </div>
-
-        <div class="flex items-center flex-wrap gap-3 mb-3">
-            <button type="button" class="btn-pill-nav text-xs" :disabled="loadingMetrics" @click="loadResourceMetrics()">
-                <i class="fa-solid" :class="loadingMetrics ? 'fa-spinner fa-spin' : 'fa-chart-line'"></i>
-                <span x-text="loadingMetrics ? 'Loading…' : 'Load resource metrics (past 24h)'"></span>
-            </button>
-            <template x-if="metricsError">
-                <span class="text-xs text-[var(--color-status-red)]" x-text="metricsError"></span>
-            </template>
-        </div>
-
-        <div x-show="metricsLoaded" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">CPU usage (per PHP pool)</div>
-                <div id="pressable-cpu-chart" style="height: 220px;"></div>
-            </div>
-            <div>
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">MySQL connections</div>
-                <div id="pressable-mysql-chart" style="height: 220px;"></div>
-            </div>
-        </div>
-        <div class="text-xs text-[var(--color-ink-soft)] mt-2">
-            <i class="fa-solid fa-circle-info"></i>
-            Pulled live from Pressable's own metrics API — read-only, nothing stored. Bucketed at 15-minute resolution.
-        </div>
-    </div>
-
-    <script>
-        // Renders once per "Load resource metrics" click — safe to redefine,
-        // and cheap since it only runs when the button is clicked.
-        function renderPressableResourceCharts(cpuPeriods, mysqlPeriods) {
-            if (! window.echarts) return;
-
-            const toSeries = (periods, pick) => (periods || []).map(p => [Number(p.timestamp) * 1000, pick(p)]);
-
-            // CPU is requested as a single metric, so Pressable keys each
-            // period's result by dimension value (one entry per PHP pool)
-            // under `dimension`, not under a `server`-named key — that
-            // nesting only happens with a multi-metric request (see MySQL
-            // below). Confirmed live 2026-08-29.
-            const poolKeys = new Set();
-            (cpuPeriods || []).forEach(p => {
-                const bucket = p.dimension || {};
-                Object.keys(bucket).forEach(k => poolKeys.add(k));
-            });
-            const cpuSeries = Array.from(poolKeys).map(pool => ({
-                name: pool,
-                type: 'line',
-                showSymbol: false,
-                data: toSeries(cpuPeriods, p => Number((p.dimension || {})[pool] ?? 0)),
-            }));
-
-            const cpuEl = document.getElementById('pressable-cpu-chart');
-            const cpuChart = window.echarts.init(cpuEl);
-            cpuChart.setOption({
-                tooltip: { trigger: 'axis' },
-                legend: { top: 0, textStyle: { fontSize: 10 } },
-                grid: { left: 40, right: 10, top: 28, bottom: 24 },
-                xAxis: { type: 'time' },
-                yAxis: { type: 'value' },
-                series: cpuSeries,
-            });
-            window.addEventListener('resize', () => cpuChart.resize());
-
-            // Multi-metric request nests one more level than CPU: each metric
-            // under `server` is itself an object keyed by PHP pool, e.g.
-            // server.mysql_total_connections["pool156-305-37"] = "29" — sum
-            // across pools to get one connections figure per bucket. A
-            // metric can be entirely absent from a given period (sparse data
-            // when the value was negligible), hence the `|| {}` guards.
-            // Confirmed live 2026-08-29.
-            const sumPoolValues = (obj) => Object.values(obj || {}).reduce((sum, v) => sum + Number(v || 0), 0);
-
-            const mysqlSeries = [{
-                name: 'Connections',
-                type: 'line',
-                showSymbol: false,
-                data: toSeries(mysqlPeriods, p => sumPoolValues((p.server || {}).mysql_total_connections)),
-            }];
-
-            const mysqlEl = document.getElementById('pressable-mysql-chart');
-            const mysqlChart = window.echarts.init(mysqlEl);
-            mysqlChart.setOption({
-                tooltip: { trigger: 'axis' },
-                grid: { left: 40, right: 10, top: 16, bottom: 24 },
-                xAxis: { type: 'time' },
-                yAxis: { type: 'value' },
-                series: mysqlSeries,
-            });
-            window.addEventListener('resize', () => mysqlChart.resize());
-        }
-    </script>
-@endif
-
-{{-- Billing & care plan — driven by Bill.com sync, manually overridable. --}}
-    <div class="card p-5 mb-6">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-file-invoice-dollar text-[var(--color-ink-muted)] mr-1"></i>
-                Billing & care plan
-            </h2>
-            @if ($site->care_plan_enabled)
-                <span class="status-pill status-green">On a care plan</span>
-            @else
-                <span class="status-pill status-unknown">No care plan</span>
-            @endif
-        </div>
-        <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div class="text-sm flex-1 min-w-[18rem]">
-                <div class="text-[var(--color-ink-strong)]">
-                    @if ($site->care_plan_enabled)
-                        <i class="fa-solid fa-shield-heart text-[var(--color-status-green)]"></i>
-                        On a care plan
-                        <span class="text-[var(--color-ink-soft)]">— maintenance work is included</span>
-                    @else
-                        <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i>
-                        Not on a care plan
-                        <span class="text-[var(--color-ink-soft)]">— bill maintenance separately</span>
-                    @endif
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Expires</label>
+                        <input type="datetime-local" name="cert_expires_at"
+                               value="{{ $site->cert_expires_at?->format('Y-m-d\TH:i') }}"
+                               class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Renews</label>
+                        <input type="datetime-local" name="cert_renews_at"
+                               value="{{ $site->cert_renews_at?->format('Y-m-d\TH:i') }}"
+                               class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs">
+                    </div>
                 </div>
-                <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                    @if ($site->care_plan_override !== null)
-                        <i class="fa-solid fa-hand text-[var(--color-status-yellow)]"></i>
-                        Manual override — Bill.com sync won't touch this flag.
-                    @else
-                        <i class="fa-solid fa-rotate text-[var(--color-ink-muted)]"></i>
-                        Auto — Bill.com sync sets this based on invoice activity.
-                    @endif
+
+                <div>
+                    <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Notes</label>
+                    <textarea name="cert_notes" rows="2" placeholder="Issuer, renewal portal URL, etc."
+                              class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-[11px] font-data">{{ $site->cert_notes }}</textarea>
                 </div>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-                <form method="POST" action="{{ route('sites.care-plan', $site) }}">
-                    @csrf
-                    <input type="hidden" name="enabled" value="{{ $site->care_plan_enabled ? '0' : '1' }}">
-                    <button type="submit" class="btn-pill-nav text-xs">
-                        @if ($site->care_plan_enabled)
-                            <i class="fa-solid fa-toggle-on"></i> Mark as NOT on care plan
-                        @else
-                            <i class="fa-solid fa-toggle-off"></i> Mark as on care plan
-                        @endif
+
+                <div class="flex items-center gap-2 pt-1">
+                    <button type="submit" class="btn-primary text-xs py-1 px-3">Save</button>
+                    <button type="button" id="cert-cancel" class="btn-pill-nav text-xs py-1 px-2.5">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between">
+            <div>
+                @unless ($site->isPressable())
+                    <button type="button" id="cert-recheck"
+                            data-url="{{ route('sites.cert.recheck', $site) }}"
+                            class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50 flex items-center gap-1">
+                        <i class="fa-solid fa-rotate text-[10px]"></i> Recheck now
                     </button>
-                </form>
-                @if ($site->care_plan_override !== null)
-                    <form method="POST" action="{{ route('sites.care-plan.clear-override', $site) }}">
-                        @csrf
-                        <button type="submit" class="btn-pill-nav text-xs"
-                                title="Clear the manual override; the next Bill.com sync will re-derive the flag from invoice activity.">
-                            <i class="fa-solid fa-rotate"></i> Let Bill.com decide
-                        </button>
-                    </form>
-                @endif
+                @else
+                    <span class="text-[11px] text-[var(--color-ink-muted)]">Managed SSL</span>
+                @endunless
+            </div>
+            <button type="button" id="cert-edit-toggle" class="btn-pill-nav text-xs flex items-center gap-1">
+                <i class="fa-solid fa-pen-to-square text-[10px]"></i> Edit
+            </button>
+        </div>
+    </div>
+
+    {{-- Card 2: Cloudflare --}}
+    <div class="card p-5 flex flex-col justify-between h-full">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-brands fa-cloudflare text-orange-500 text-base"></i>
+                    Cloudflare
+                </h3>
+                @php
+                    $cfPill = match ($site->cloudflare_state) {
+                        'proxied' => ['class' => 'status-green', 'text' => 'Proxied'],
+                        'dns_only' => ['class' => 'status-yellow', 'text' => 'DNS Only'],
+                        'not_using' => ['class' => 'status-unknown', 'text' => 'Direct Origin'],
+                        default => ['class' => 'status-unknown', 'text' => 'Unchecked'],
+                    };
+                @endphp
+                <span class="status-pill {{ $cfPill['class'] }} text-[10px]">
+                    <span class="status-dot"></span> {{ $cfPill['text'] }}
+                </span>
+            </div>
+
+            @php
+                $stateMessage = match ($site->cloudflare_state) {
+                    'proxied' => 'Traffic flows through Cloudflare proxy. WAF & bot protection active before origin.',
+                    'dns_only' => 'DNS is managed, but proxy is OFF (grey cloud). Traffic reaches origin directly.',
+                    'not_using' => 'Domain is not using Cloudflare. All traffic reaches origin nginx directly.',
+                    default => 'Cloudflare state has not been determined yet.',
+                };
+            @endphp
+            <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                {{ $stateMessage }}
+            </p>
+
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5">
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">A Record:</span>
+                    <span class="font-mono font-medium text-[var(--color-ink-strong)] truncate max-w-[140px]" title="{{ $site->resolved_a_record }}">{{ $site->resolved_a_record ?? '—' }}</span>
+                </div>
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">First NS:</span>
+                    <span class="font-mono font-medium text-[var(--color-ink-strong)] truncate max-w-[140px]" title="{{ $site->resolved_ns_record }}">{{ $site->resolved_ns_record ?? '—' }}</span>
+                </div>
             </div>
         </div>
 
-        @if ($site->bill_com_customer_id)
-            <div class="text-xs text-[var(--color-ink-muted)] mt-3 pt-3 border-t border-[var(--color-border-light)]">
-                <i class="fa-solid fa-file-invoice-dollar text-[var(--color-ink-muted)]"></i>
-                Bill.com customer: <strong class="text-[var(--color-ink-strong)]">{{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}</strong>
-                @if ($site->bill_com_linked_via_invoice)
-                    <span class="text-[var(--color-ink-soft)]">
-                        — linked via invoice {{ $site->bill_com_linked_via_invoice }}
-                        @if ($site->bill_com_linked_at)
-                            ({{ $site->bill_com_linked_at->diffForHumans() }})
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between">
+            <span class="text-[11px] text-[var(--color-ink-muted)] flex items-center gap-1">
+                <i class="fa-regular fa-clock text-[10px]"></i>
+                {{ $site->cloudflare_checked_at?->diffForHumans() ?? 'never checked' }}
+            </span>
+            <span class="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                DNS & Proxy
+            </span>
+        </div>
+    </div>
+
+    {{-- Card 3: WordPress Security --}}
+    @if ($site->is_wordpress)
+        <div class="card p-5 flex flex-col justify-between h-full">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved text-purple-600"></i>
+                        WordPress security
+                    </h3>
+                    @php
+                        $secPill = ($site->wordfence_enabled && $site->llar_enabled)
+                            ? ['class' => 'status-green', 'text' => 'Hardened']
+                            : (($site->wordfence_enabled || $site->llar_enabled)
+                                ? ['class' => 'status-yellow', 'text' => 'Partial']
+                                : ['class' => 'status-unknown', 'text' => 'Unconfigured']);
+                    @endphp
+                    <span class="status-pill {{ $secPill['class'] }} text-[10px]">
+                        <span class="status-dot"></span> {{ $secPill['text'] }}
+                    </span>
+                </div>
+
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Wordfence:</span>
+                        @if ($site->wordfence_enabled)
+                            <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
+                            </span>
+                        @else
+                            <span class="text-[var(--color-ink-soft)] text-[11px]">Not enabled</span>
                         @endif
+                    </div>
+
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Limit Login Attempts:</span>
+                        <div id="llar-state">
+                            @if ($site->llar_enabled)
+                                <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
+                                </span>
+                            @else
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[var(--color-ink-soft)] text-[11px]">Not enabled</span>
+                                    @unless ($site->isPressable())
+                                        <button type="button"
+                                                id="llar-install-btn"
+                                                class="btn-pill-nav text-[10px] py-0.5 px-2"
+                                                data-url="{{ route('sites.llar.install', $site) }}"
+                                                title="Install LLAR via wp-cli over SSH">
+                                            <i class="fa-solid fa-download text-[9px]"></i> Install
+                                        </button>
+                                    @endunless
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                <div id="llar-install-result" class="hidden text-xs mb-2"></div>
+
+                <div class="text-[11px] text-[var(--color-ink-soft)] flex items-start gap-1.5 leading-tight">
+                    <i class="fa-solid fa-database text-[10px] mt-0.5 shrink-0"></i>
+                    <span>
+                        DB credentials
+                        @if ($site->db_password)
+                            are <span class="text-[var(--color-status-green)] font-medium">configured</span>.
+                        @else
+                            are <span class="text-[var(--color-ink-soft)]">missing</span>.
+                        @endif
+                    </span>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+                <span class="text-[var(--color-ink-muted)]">Brute-force Protection</span>
+                <span class="text-[var(--color-ink-soft)] font-mono text-[10px]">wp-cli / SSH</span>
+            </div>
+        </div>
+    @endif
+
+    {{-- Card 4: Pressable Server Tools --}}
+    @if ($site->isPressable())
+        <div class="card p-5 flex flex-col justify-between h-full"
+             x-data="{
+                flushing: false,
+                flushResult: null,
+                async flushObjectCache() {
+                    if (this.flushing) return;
+                    this.flushing = true;
+                    this.flushResult = null;
+                    try {
+                        const r = await fetch('{{ route('sites.pressable.flush-object-cache', $site) }}', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                        });
+                        const d = await r.json();
+                        this.flushResult = { ok: d.ok === true, message: d.message || d.error || 'Unknown error' };
+                    } catch (e) {
+                        this.flushResult = { ok: false, message: 'Request failed: ' + e.message };
+                    } finally {
+                        this.flushing = false;
+                    }
+                },
+                loadingMetrics: false,
+                metricsError: null,
+                metricsLoaded: false,
+                async loadResourceMetrics() {
+                    if (this.loadingMetrics) return;
+                    this.loadingMetrics = true;
+                    this.metricsError = null;
+                    try {
+                        const r = await fetch('{{ route('sites.pressable.resource-metrics', $site) }}', { headers: { 'Accept': 'application/json' } });
+                        const d = await r.json();
+                        if (!d.ok) { this.metricsError = d.error || 'Unknown error'; return; }
+                        this.metricsLoaded = true;
+                        this.$nextTick(() => renderPressableResourceCharts(d.cpu, d.mysql));
+                    } catch (e) {
+                        this.metricsError = 'Request failed: ' + e.message;
+                    } finally {
+                        this.loadingMetrics = false;
+                    }
+                },
+             }"
+             :class="metricsLoaded ? 'md:col-span-2 lg:col-span-3' : ''">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-server text-blue-600"></i>
+                        Pressable tools
+                    </h3>
+                    <span class="status-pill status-green text-[10px]">
+                        <span class="status-dot"></span> Connected
+                    </span>
+                </div>
+
+                <p class="text-xs text-[var(--color-ink-muted)] mb-3">
+                    Direct server controls straight from Pressable's cloud metrics API.
+                </p>
+
+                <div class="space-y-2">
+                    <div>
+                        <button type="button" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5" :disabled="flushing" @click="flushObjectCache()">
+                            <i class="fa-solid" :class="flushing ? 'fa-spinner fa-spin' : 'fa-broom'"></i>
+                            <span x-text="flushing ? 'Flushing object cache…' : 'Flush object cache'"></span>
+                        </button>
+                        <template x-if="flushResult">
+                            <div class="text-[11px] mt-1 text-center" :class="flushResult.ok ? 'text-[var(--color-status-green)]' : 'text-[var(--color-status-red)]'" x-text="flushResult.message"></div>
+                        </template>
+                    </div>
+
+                    <div>
+                        <button type="button" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5" :disabled="loadingMetrics" @click="loadResourceMetrics()">
+                            <i class="fa-solid" :class="loadingMetrics ? 'fa-spinner fa-spin' : 'fa-chart-line'"></i>
+                            <span x-text="loadingMetrics ? 'Loading metrics…' : (metricsLoaded ? 'Reload resource metrics' : 'Load resource metrics (24h)')"></span>
+                        </button>
+                        <template x-if="metricsError">
+                            <div class="text-[11px] mt-1 text-center text-[var(--color-status-red)]" x-text="metricsError"></div>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="metricsLoaded" x-cloak class="mt-4 pt-4 border-t border-[var(--color-border-light)]">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">CPU usage (per PHP pool)</div>
+                            <div id="pressable-cpu-chart" style="height: 220px;"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">MySQL connections</div>
+                            <div id="pressable-mysql-chart" style="height: 220px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+                <span class="text-[var(--color-ink-muted)]">Pressable Hosting</span>
+                <span class="text-[var(--color-ink-soft)]">15m resolution</span>
+            </div>
+        </div>
+
+        <script>
+            function renderPressableResourceCharts(cpuPeriods, mysqlPeriods) {
+                if (! window.echarts) return;
+
+                const toSeries = (periods, pick) => (periods || []).map(p => [Number(p.timestamp) * 1000, pick(p)]);
+                const poolKeys = new Set();
+                (cpuPeriods || []).forEach(p => {
+                    const bucket = p.dimension || {};
+                    Object.keys(bucket).forEach(k => poolKeys.add(k));
+                });
+                const cpuSeries = Array.from(poolKeys).map(pool => ({
+                    name: pool,
+                    type: 'line',
+                    showSymbol: false,
+                    data: toSeries(cpuPeriods, p => Number((p.dimension || {})[pool] ?? 0)),
+                }));
+
+                const cpuEl = document.getElementById('pressable-cpu-chart');
+                if (cpuEl) {
+                    const cpuChart = window.echarts.init(cpuEl);
+                    cpuChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { top: 0, textStyle: { fontSize: 10 } },
+                        grid: { left: 40, right: 10, top: 28, bottom: 24 },
+                        xAxis: { type: 'time' },
+                        yAxis: { type: 'value' },
+                        series: cpuSeries,
+                    });
+                    window.addEventListener('resize', () => cpuChart.resize());
+                }
+
+                const sumPoolValues = (obj) => Object.values(obj || {}).reduce((sum, v) => sum + Number(v || 0), 0);
+                const mysqlSeries = [{
+                    name: 'Connections',
+                    type: 'line',
+                    showSymbol: false,
+                    data: toSeries(mysqlPeriods, p => sumPoolValues((p.server || {}).mysql_total_connections)),
+                }];
+
+                const mysqlEl = document.getElementById('pressable-mysql-chart');
+                if (mysqlEl) {
+                    const mysqlChart = window.echarts.init(mysqlEl);
+                    mysqlChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 40, right: 10, top: 16, bottom: 24 },
+                        xAxis: { type: 'time' },
+                        yAxis: { type: 'value' },
+                        series: mysqlSeries,
+                    });
+                    window.addEventListener('resize', () => mysqlChart.resize());
+                }
+            }
+        </script>
+    @endif
+
+    {{-- Card 5: Billing & Care Plan --}}
+    <div class="card p-5 flex flex-col justify-between h-full">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-file-invoice-dollar text-emerald-600"></i>
+                    Billing &amp; care plan
+                </h3>
+                @if ($site->care_plan_enabled)
+                    <span class="status-pill status-green text-[10px]">
+                        <span class="status-dot"></span> On care plan
+                    </span>
+                @else
+                    <span class="status-pill status-unknown text-[10px]">
+                        <span class="status-dot"></span> No care plan
                     </span>
                 @endif
             </div>
-        @endif
 
-        {{-- Nightly auto-updates pause/resume — only meaningful when the
-             site is on a care plan, but the toggle stays visible so an
-             operator can pre-pause a site before flipping the care-plan
-             switch. --}}
-        @if ($site->care_plan_enabled)
-            @php $autoOn = ! $site->auto_updates_paused; @endphp
-            <div class="mt-4 pt-4 border-t border-[var(--color-border-light)]">
-                <div class="flex items-start justify-between gap-3 flex-wrap">
-                    <div class="text-sm flex-1 min-w-[18rem]">
-                        <div class="text-[var(--color-ink-strong)]">
-                            <i class="fa-solid fa-moon text-[var(--color-ink-muted)]"></i>
-                            Nightly auto-updates
-                            @if ($autoOn)
-                                <span class="text-[var(--color-status-green)]">— ON</span>
-                                <span class="text-[var(--color-ink-soft)] text-xs">(plugins update automatically 2&ndash;6 AM ET)</span>
-                            @else
-                                <span class="text-[var(--color-ink-muted)]">— OFF</span>
-                                <span class="text-[var(--color-ink-soft)] text-xs">(opt in to put this site on the nightly path)</span>
-                            @endif
-                        </div>
-                        @if (! $autoOn && $site->auto_updates_paused_reason)
-                            <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                                <i class="fa-solid fa-circle-info"></i>
-                                {{ $site->auto_updates_paused_reason }}
-                            </div>
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Plan status:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
+                        @if ($site->care_plan_enabled)
+                            <i class="fa-solid fa-shield-heart text-emerald-600"></i> Maintenance included
+                        @else
+                            <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i> Bill separately
                         @endif
-                        @if ($site->auto_updates_last_run_at)
-                            <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                                <i class="fa-solid fa-clock-rotate-left"></i>
-                                Last considered {{ $site->auto_updates_last_run_at->diffForHumans() }}
-                            </div>
+                    </span>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Sync source:</span>
+                    <span class="text-[var(--color-ink-soft)] flex items-center gap-1">
+                        @if ($site->care_plan_override !== null)
+                            <i class="fa-solid fa-hand text-amber-500"></i> Manual override
+                        @else
+                            <i class="fa-solid fa-rotate text-gray-400"></i> Bill.com auto
                         @endif
+                    </span>
+                </div>
+
+                @if ($site->bill_com_customer_id)
+                    <div class="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--color-border-light)]">
+                        <span class="text-[var(--color-ink-muted)]">Customer:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[130px]" title="{{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}">
+                            {{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}
+                        </span>
                     </div>
-                    <form method="POST" action="{{ route('sites.auto-updates.toggle', $site) }}" class="inline">
+                @endif
+            </div>
+
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <form method="POST" action="{{ route('sites.care-plan', $site) }}" class="flex-1">
                         @csrf
-                        <input type="hidden" name="paused" value="{{ $autoOn ? '1' : '0' }}">
-                        <button type="submit" class="btn-pill-nav text-xs">
-                            @if ($autoOn)
-                                <i class="fa-solid fa-toggle-on"></i> Turn auto-updates OFF
+                        <input type="hidden" name="enabled" value="{{ $site->care_plan_enabled ? '0' : '1' }}">
+                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center">
+                            @if ($site->care_plan_enabled)
+                                <i class="fa-solid fa-toggle-on text-emerald-600"></i> Mark NOT on care plan
                             @else
-                                <i class="fa-solid fa-toggle-off"></i> Turn auto-updates ON
+                                <i class="fa-solid fa-toggle-off text-gray-400"></i> Mark on care plan
                             @endif
                         </button>
                     </form>
-                </div>
-            </div>
-        @endif
-    </div>
 
-    {{-- Uptime monitoring & alerts — disable stops probing entirely; ignore
-         keeps probing but suppresses alerts/Issues. Two distinct knobs in
-         one card because they're conceptually the same topic. --}}
-    <div class="card p-5 mb-6">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-heart-pulse text-[var(--color-ink-muted)] mr-1"></i>
-                Uptime monitoring & alerts
-            </h2>
-            @if (! $site->uptime_monitoring_enabled)
-                <span class="status-pill status-unknown">Off</span>
-            @elseif ($site->isUptimeIgnored())
-                <span class="status-pill status-yellow"><i class="fa-solid fa-bell-slash"></i> Ignored</span>
-            @else
-                <span class="status-pill status-green">Active</span>
-            @endif
-        </div>
-
-        {{-- Probe on/off (disable = stop probing entirely) --}}
-        <div class="flex items-center justify-between gap-3 flex-wrap py-3 border-t border-[var(--color-border-light)]">
-            <div class="text-sm">
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">Probe</div>
-                <div class="text-[var(--color-ink-strong)]">
-                    @if ($site->uptime_monitoring_enabled)
-                        <i class="fa-solid fa-eye text-[var(--color-status-green)]"></i>
-                        Enabled
-                        <span class="text-[var(--color-ink-soft)]">— probes every 5 min, alerts Mattermost on 10+ min outages</span>
-                    @else
-                        <i class="fa-solid fa-eye-slash text-[var(--color-ink-soft)]"></i>
-                        Disabled
-                        <span class="text-[var(--color-ink-soft)]">— this site is excluded from the every-5-min probe</span>
+                    @if ($site->care_plan_override !== null)
+                        <form method="POST" action="{{ route('sites.care-plan.clear-override', $site) }}">
+                            @csrf
+                            <button type="submit" class="btn-pill-nav text-xs" title="Clear manual override and let Bill.com decide">
+                                <i class="fa-solid fa-rotate"></i>
+                            </button>
+                        </form>
                     @endif
                 </div>
-            </div>
-            <form method="POST" action="{{ route('sites.uptime-monitoring.toggle', $site) }}">
-                @csrf
-                <input type="hidden" name="enabled" value="{{ $site->uptime_monitoring_enabled ? '0' : '1' }}">
-                <button type="submit" class="btn-pill-nav text-xs">
-                    @if ($site->uptime_monitoring_enabled)
-                        <i class="fa-solid fa-toggle-on"></i> Disable monitoring
-                    @else
-                        <i class="fa-solid fa-toggle-off"></i> Enable monitoring
-                    @endif
-                </button>
-            </form>
-        </div>
 
-        {{-- Ignore alerts (probe keeps running, alerts/Issues silenced) --}}
-        <div class="flex items-start justify-between gap-3 flex-wrap py-3 border-t border-[var(--color-border-light)]">
-            <div class="text-sm flex-1 min-w-[20rem]">
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">Alert routing</div>
-                <div class="text-[var(--color-ink-strong)]">
-                    @if ($site->isUptimeIgnored())
-                        <i class="fa-solid fa-bell-slash text-[var(--color-status-yellow)]"></i>
-                        Ignored
-                        <span class="text-[var(--color-ink-soft)]">since {{ $site->uptime_ignored_at->diffForHumans() }}</span>
-                        @if ($site->uptime_ignore_reason)
-                            <div class="text-xs text-[var(--color-ink-soft)] mt-1">"{{ $site->uptime_ignore_reason }}"</div>
-                        @endif
-                        <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                            Probe is still running — current state: <strong>{{ $site->uptime_state }}</strong>.
-                            Issues page and Mattermost alerts are suppressed.
+                @if ($site->care_plan_enabled)
+                    @php $autoOn = ! $site->auto_updates_paused; @endphp
+                    <div class="p-2 rounded bg-[var(--color-surface-alt)]/40 flex items-center justify-between gap-2 text-xs">
+                        <div>
+                            <div class="text-[11px] font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
+                                <i class="fa-solid fa-moon text-indigo-500 text-[10px]"></i> Auto-updates
+                            </div>
+                            <div class="text-[10px] text-[var(--color-ink-soft)]">
+                                {{ $autoOn ? 'Nightly (2–6 AM)' : 'Paused' }}
+                            </div>
                         </div>
-                    @else
-                        <i class="fa-solid fa-bell text-[var(--color-ink-soft)]"></i>
-                        Active
-                        <span class="text-[var(--color-ink-soft)]">— alerts and Issues entries fire normally.</span>
-                        <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                            Use Ignore when a site is known down indefinitely. Probe keeps running so we know when it recovers; you just don't get noisy alerts in the meantime.
-                        </div>
-                    @endif
-                </div>
-            </div>
-            <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="flex flex-col gap-2 items-end">
-                @csrf
-                @if ($site->isUptimeIgnored())
-                    <input type="hidden" name="ignore" value="0">
-                    <button type="submit" class="btn-pill-nav text-xs">
-                        <i class="fa-solid fa-bell"></i> Stop ignoring
-                    </button>
-                @else
-                    <input type="hidden" name="ignore" value="1">
-                    <input type="text" name="reason" maxlength="255" placeholder="Reason (optional)"
-                           class="px-3 py-1.5 rounded-md border border-[var(--color-border)] text-sm w-64 focus:outline-none focus:border-[var(--color-brand)]">
-                    <button type="submit" class="btn-pill-nav text-xs">
-                        <i class="fa-solid fa-bell-slash"></i> Ignore alerts
-                    </button>
+                        <form method="POST" action="{{ route('sites.auto-updates.toggle', $site) }}">
+                            @csrf
+                            <input type="hidden" name="paused" value="{{ $autoOn ? '1' : '0' }}">
+                            <button type="submit" class="btn-pill-nav text-[10px] py-1 px-2">
+                                {{ $autoOn ? 'Pause' : 'Enable' }}
+                            </button>
+                        </form>
+                    </div>
                 @endif
-            </form>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+            <span class="text-[var(--color-ink-muted)]">Care Plan Contract</span>
+            <span class="text-[10px] text-[var(--color-ink-soft)]">Bill.com</span>
         </div>
     </div>
 
-    {{-- Fleet-wide inactive flag — site stays visible everywhere (unlike
-         Archive, which hides it entirely) but is excluded from the Issues
-         page, nav badge, and every routine-maintenance alert (SSL renewal,
-         plugin updates, 2FA, contact-form/Companion health). Active-incident
-         signals (malware, uptime down/up, blocked IPs) are NOT affected —
-         those still fire even for an inactive site. Use case: a client
-         migrated away but asked to keep the site reachable a while longer. --}}
-    <div class="card p-5 mb-6">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-moon text-[var(--color-ink-muted)] mr-1"></i>
-                Site status
-            </h2>
-            @if ($site->is_inactive)
-                <span class="status-pill status-unknown"><i class="fa-solid fa-moon"></i> Inactive</span>
-            @else
-                <span class="status-pill status-green">Active</span>
-            @endif
-        </div>
+    {{-- Card 6: Uptime Monitoring & Alerts --}}
+    <div class="card p-5 flex flex-col justify-between h-full">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-heart-pulse text-rose-500"></i>
+                    Uptime monitoring
+                </h3>
+                @if (! $site->uptime_monitoring_enabled)
+                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Off</span>
+                @elseif ($site->isUptimeIgnored())
+                    <span class="status-pill status-yellow text-[10px]"><span class="status-dot"></span> Ignored</span>
+                @else
+                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
+                @endif
+            </div>
 
-        <div class="flex items-start justify-between gap-3 flex-wrap py-3 border-t border-[var(--color-border-light)]">
-            <div class="text-sm flex-1 min-w-[20rem]">
-                <div class="text-[var(--color-ink-strong)]">
-                    @if ($site->is_inactive)
-                        <i class="fa-solid fa-moon text-[var(--color-ink-soft)]"></i>
-                        Inactive
-                        @if ($site->inactive_reason)
-                            <div class="text-xs text-[var(--color-ink-soft)] mt-1">"{{ $site->inactive_reason }}"</div>
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">5-min Probe:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)]">
+                        @if ($site->uptime_monitoring_enabled)
+                            <span class="text-emerald-600 flex items-center gap-1"><i class="fa-solid fa-eye text-[10px]"></i> Probing</span>
+                        @else
+                            <span class="text-[var(--color-ink-soft)] flex items-center gap-1"><i class="fa-solid fa-eye-slash text-[10px]"></i> Disabled</span>
                         @endif
-                        <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                            Still shows up everywhere (Sites, search, this page). Excluded from the Issues page, nav badge, and routine-maintenance alerts — SSL renewal, plugin/theme updates, 2FA migration, contact-form/Companion health. Malware findings, uptime, and blocked IPs still alert normally.
-                        </div>
-                    @else
-                        <i class="fa-solid fa-sun text-[var(--color-ink-soft)]"></i>
-                        Active
-                        <span class="text-[var(--color-ink-soft)]">— issues and alerts fire normally.</span>
-                        <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                            Mark inactive when a site is winding down (client migrated, kept alive a while longer) but you don't want routine maintenance nags for it anymore. Different from Archive — the site stays fully visible.
-                        </div>
-                    @endif
+                    </span>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Alert routing:</span>
+                    <span class="font-medium">
+                        @if ($site->isUptimeIgnored())
+                            <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-bell-slash text-[10px]"></i> Silenced</span>
+                        @else
+                            <span class="text-emerald-600 flex items-center gap-1"><i class="fa-solid fa-bell text-[10px]"></i> Active</span>
+                        @endif
+                    </span>
                 </div>
             </div>
-            <form method="POST" action="{{ route('sites.inactive.toggle', $site) }}" class="flex flex-col gap-2 items-end">
+
+            <div class="space-y-2">
+                <form method="POST" action="{{ route('sites.uptime-monitoring.toggle', $site) }}">
+                    @csrf
+                    <input type="hidden" name="enabled" value="{{ $site->uptime_monitoring_enabled ? '0' : '1' }}">
+                    <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
+                        @if ($site->uptime_monitoring_enabled)
+                            <i class="fa-solid fa-toggle-on text-emerald-600"></i> Disable monitoring probe
+                        @else
+                            <i class="fa-solid fa-toggle-off text-gray-400"></i> Enable monitoring probe
+                        @endif
+                    </button>
+                </form>
+
+                <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="space-y-1.5">
+                    @csrf
+                    @if ($site->isUptimeIgnored())
+                        <input type="hidden" name="ignore" value="0">
+                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
+                            <i class="fa-solid fa-bell text-emerald-600"></i> Stop ignoring alerts
+                        </button>
+                    @else
+                        <input type="hidden" name="ignore" value="1">
+                        <div class="flex items-center gap-1">
+                            <input type="text" name="reason" maxlength="255" placeholder="Silence reason (optional)"
+                                   class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 focus:outline-none focus:border-[var(--color-brand)]">
+                            <button type="submit" class="btn-pill-nav text-xs shrink-0" title="Silence alerts">
+                                <i class="fa-solid fa-bell-slash text-amber-500"></i> Silence
+                            </button>
+                        </div>
+                    @endif
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+            <span class="text-[var(--color-ink-muted)]">Current: <strong class="text-[var(--color-ink-strong)]">{{ $site->uptime_state ?? 'UP' }}</strong></span>
+            <span class="text-[var(--color-ink-soft)]">Mattermost & Issues</span>
+        </div>
+    </div>
+
+    {{-- Card 7: Site Status (Active / Inactive) --}}
+    <div class="card p-5 flex flex-col justify-between h-full">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-circle-nodes text-sky-600"></i>
+                    Site status
+                </h3>
+                @if ($site->is_inactive)
+                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Inactive</span>
+                @else
+                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
+                @endif
+            </div>
+
+            <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                @if ($site->is_inactive)
+                    Site is winding down. Routine maintenance alerts are silenced, but active incidents still alert.
+                @else
+                    Site is fully active. All health checks, issues, and maintenance alerts fire normally.
+                @endif
+            </p>
+
+            @if ($site->is_inactive && $site->inactive_reason)
+                <div class="p-2 rounded bg-[var(--color-surface-alt)]/60 text-[11px] text-[var(--color-ink-muted)] italic mb-3 truncate" title="{{ $site->inactive_reason }}">
+                    "{{ $site->inactive_reason }}"
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('sites.inactive.toggle', $site) }}" class="space-y-2">
                 @csrf
                 @if ($site->is_inactive)
                     <input type="hidden" name="inactive" value="0">
-                    <button type="submit" class="btn-pill-nav text-xs">
-                        <i class="fa-solid fa-sun"></i> Reactivate
+                    <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
+                        <i class="fa-solid fa-sun text-amber-500"></i> Reactivate site
                     </button>
                 @else
                     <input type="hidden" name="inactive" value="1">
-                    <input type="text" name="reason" maxlength="255" placeholder="Reason (optional)"
-                           class="px-3 py-1.5 rounded-md border border-[var(--color-border)] text-sm w-64 focus:outline-none focus:border-[var(--color-brand)]">
-                    <button type="submit" class="btn-pill-nav text-xs">
-                        <i class="fa-solid fa-moon"></i> Mark inactive
-                    </button>
+                    <div class="space-y-1.5">
+                        <input type="text" name="reason" maxlength="255" placeholder="Reason (e.g. client winding down)"
+                               class="w-full px-2 py-1 rounded border border-[var(--color-border)] text-xs focus:outline-none focus:border-[var(--color-brand)]">
+                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
+                            <i class="fa-solid fa-moon text-indigo-500"></i> Mark inactive
+                        </button>
+                    </div>
                 @endif
             </form>
         </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+            <span class="text-[var(--color-ink-muted)]">Fleet Visibility</span>
+            <span class="text-[var(--color-ink-soft)]">Always searchable</span>
+        </div>
     </div>
 
-    {{-- Companion mu-plugin — install/upgrade + push-update. Self-contained.
-         No coupling to billing/uptime/contact-form; it's its own thing. --}}
-    <div class="card p-5 mb-6">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-puzzle-piece text-[var(--color-ink-muted)] mr-1"></i>
-                Companion mu-plugin
-            </h2>
-            @if ($site->companion_installed)
-                <span class="status-pill status-green">v{{ $site->companion_version }}</span>
-            @else
-                <span class="status-pill status-unknown">Not installed</span>
-            @endif
-        </div>
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-            <div class="text-sm">
-                <div id="companion-state" class="text-[var(--color-ink-strong)]">
-                    @if ($site->companion_installed)
-                        v{{ $site->companion_version }}
-                        <span class="text-[var(--color-ink-soft)]">— last seen {{ $site->companion_last_seen_at?->diffForHumans() ?? 'never' }}</span>
-                    @else
-                        <span class="text-[var(--color-ink-soft)]">Not installed on this site.</span>
-                    @endif
+    {{-- Card 8: Companion Plugin --}}
+    <div class="card p-5 flex flex-col justify-between h-full">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-puzzle-piece text-violet-600"></i>
+                    Companion mu-plugin
+                </h3>
+                @if ($site->companion_installed)
+                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> v{{ $site->companion_version }}</span>
+                @else
+                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Not installed</span>
+                @endif
+            </div>
+
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 mb-3">
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Status:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)]">
+                        @if ($site->companion_installed)
+                            Installed & Active
+                        @else
+                            Not installed
+                        @endif
+                    </span>
                 </div>
-                <div class="text-xs text-[var(--color-ink-soft)] mt-1">
-                    Powers the client-visible Tools → Clockwork pages (Activity / Uptime / Security / Performance / Backups), plus enables SSO, plugin updates, and contact-form testing.
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Last seen:</span>
+                    <span class="text-[var(--color-ink-strong)]">
+                        {{ $site->companion_last_seen_at?->diffForHumans() ?? 'never' }}
+                    </span>
                 </div>
             </div>
-            <div class="flex items-center gap-2 flex-wrap">
+
+            <div class="space-y-2">
                 @if ($site->companion_installed)
                     <button type="button"
                             id="companion-push-update-btn"
-                            class="btn-pill-nav text-xs"
+                            class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5"
                             data-url="{{ route('sites.companion.push-update', $site) }}"
-                            title="Force-refresh the Companion snapshot (plugins/admins/cron/comments) and push a fresh backups report — without waiting for the scheduled jobs.">
+                            title="Force-refresh snapshot and push fresh backups report">
                         <i class="fa-solid fa-rotate"></i> Push update
                     </button>
                 @endif
+
                 @if ($site->host()->supports(\Modules\Core\Contracts\HostingProvider::CAP_COMPANION))
                     <button type="button"
                             id="companion-install-btn"
-                            class="btn-pill-nav text-xs"
+                            class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5"
                             data-url="{{ route('sites.contact-form.install-companion', $site) }}"
-                            title="Install (or upgrade) the Clockwork Companion mu-plugin on this site over SSH. Safe to run repeatedly.">
+                            title="Install or upgrade Clockwork Companion over SSH">
                         <i class="fa-solid fa-download"></i>
                         {{ $site->companion_installed ? 'Reinstall Companion' : 'Install Companion' }}
                     </button>
                 @else
-                    <span class="text-xs text-[var(--color-ink-soft)]" title="{{ $site->host()->label() }} is in View-Only mode — confirm live write access in /settings/integrations to enable Companion install.">
-                        <i class="fa-solid fa-circle-info"></i> Install unavailable ({{ $site->host()->label() }} is View-Only)
-                    </span>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] text-center">
+                        <i class="fa-solid fa-circle-info"></i> Install unavailable ({{ $site->host()->label() }} View-Only)
+                    </div>
                 @endif
             </div>
+
+            <div id="companion-install-result" class="hidden text-xs mt-2"></div>
+            <div id="companion-push-update-result" class="hidden text-xs mt-2"></div>
         </div>
-        <div id="companion-install-result" class="hidden text-xs mt-2"></div>
-        <div id="companion-push-update-result" class="hidden text-xs mt-2"></div>
 
-        <script>
-            (function () {
-                const btn = document.getElementById('companion-push-update-btn');
-                if (!btn) return;
-                const result = document.getElementById('companion-push-update-result');
-                btn.addEventListener('click', async () => {
-                    const original = btn.innerHTML;
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Pushing…';
-                    result.className = 'mt-2 text-xs text-[var(--color-ink-muted)]';
-                    result.textContent = 'Refreshing snapshot + pushing backups report…';
-                    result.classList.remove('hidden');
-
-                    try {
-                        const r = await fetch(btn.dataset.url, {
-                            method: 'POST',
-                            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                        });
-                        const data = await r.json();
-                        const cls = data.all_ok ? 'status-green' : (data.ok ? 'status-yellow' : 'status-red');
-                        const icon = data.all_ok ? 'fa-circle-check' : (data.ok ? 'fa-circle-info' : 'fa-circle-xmark');
-                        result.className = 'mt-2 status-pill ' + cls + ' inline-block text-xs';
-                        result.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + (data.message || 'Done.');
-                    } catch (e) {
-                        result.className = 'mt-2 status-pill status-red inline-block text-xs';
-                        result.textContent = 'Network error: ' + e.message;
-                    } finally {
-                        btn.disabled = false;
-                        btn.innerHTML = original;
-                    }
-                });
-            })();
-        </script>
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+            <span class="text-[var(--color-ink-muted)]">Tools & SSO Plugin</span>
+            <span class="text-[var(--color-ink-soft)]">mu-plugin</span>
+        </div>
     </div>
 
-    {{-- Contact form testing has moved to its own Forms tab. The Companion
-         install card stays on this page because it's not per-form. --}}
+    {{-- Card 9: Contact Form Testing (if Care Plan Enabled) --}}
     @if ($site->care_plan_enabled)
-        <div class="card p-5 mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div class="card p-5 flex flex-col justify-between h-full">
             <div>
-                <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-envelope-circle-check text-[var(--color-ink-muted)] mr-1"></i>
-                    Contact form testing
-                </h2>
-                <p class="text-sm text-[var(--color-ink-muted)] mt-1">
-                    Configure up to {{ \App\Models\ContactFormTest::MAX_PER_SITE }} forms to test, each on its own schedule. Moved to a dedicated tab.
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-envelope-circle-check text-indigo-600"></i>
+                        Contact forms
+                    </h3>
+                    <span class="status-pill status-green text-[10px]">
+                        <span class="status-dot"></span> Dedicated Tab
+                    </span>
+                </div>
+
+                <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                    Automated synthetic submission tests verify that lead capture and notification delivery work continuously.
                 </p>
+
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Max forms:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)]">Up to {{ \App\Models\ContactFormTest::MAX_PER_SITE }} forms</span>
+                </div>
             </div>
-            <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'forms']) }}" class="btn-pill-nav text-sm">
-                Manage forms →
-            </a>
+
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between">
+                <span class="text-[11px] text-[var(--color-ink-muted)]">Forms Testing</span>
+                <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'forms']) }}" class="btn-pill-nav text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                    Manage forms <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </a>
+            </div>
         </div>
     @endif
 
-    <script>
-    (function () {
-        const btn = document.getElementById('companion-install-btn');
-        if (! btn) return;
-        const result = document.getElementById('companion-install-result');
-        const csrf = '{{ csrf_token() }}';
-        btn.addEventListener('click', async () => {
-            const original = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing…';
-            result.className = 'text-xs mt-2 text-[var(--color-ink-muted)]';
-            result.textContent = 'Pushing the plugin over SSH and verifying via /health…';
-            result.classList.remove('hidden');
-            try {
-                const r = await fetch(btn.dataset.url, {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                });
-                const data = await r.json();
-                if (r.ok) {
-                    result.className = 'text-xs mt-2 text-[var(--color-status-green)]';
-                    result.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${data.message ?? 'Installed.'} Refreshing…`;
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    result.className = 'text-xs mt-2 text-[var(--color-status-red)]';
-                    let html = `<i class="fa-solid fa-circle-xmark"></i> ${data.message ?? 'Failed'}`;
-                    if (data.output) {
-                        // Surface the captured wp-cli / SSH stderr in a collapsible
-                        // <details> so the operator can see WHY it failed without
-                        // burying it in the network tab. Common signal: wrong wp_path,
-                        // missing site_user, non-default table_prefix, sudo password
-                        // mismatch.
-                        const escaped = data.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        html += `
-                            <details class="mt-2">
-                                <summary class="cursor-pointer text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">Show wp-cli / SSH output</summary>
-                                <pre class="mt-1 p-2 bg-[var(--color-surface-alt)] rounded text-[10px] text-[var(--color-ink-muted)] whitespace-pre-wrap break-words">${escaped}</pre>
-                            </details>`;
-                    }
-                    result.innerHTML = html;
-                    btn.disabled = false;
-                    btn.innerHTML = original;
-                }
-            } catch (e) {
-                result.className = 'text-xs mt-2 text-[var(--color-status-red)]';
-                result.textContent = 'Network error: ' + e.message;
-                btn.disabled = false;
-                btn.innerHTML = original;
-            }
-        });
-    })();
-    </script>
+</div>
 
-    {{-- Remove from monitoring (soft archive). The Site model's global scope
-         hides archived rows from every listing automatically. Historical rows
-         (scans, bans, traffic) stay in the DB so we don't lose audit trail. --}}
-    <div class="card p-5 mb-6 border border-[var(--color-status-red)]/30">
-        <div class="flex items-start justify-between gap-4 flex-wrap">
-            <div class="max-w-xl">
-                <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-1">Remove from monitoring</h2>
-                <p class="text-sm text-[var(--color-ink-muted)]">
-                    Use this when the site has been deleted from SpinupWP, moved to another host, or otherwise should no longer appear in dashboards. The row is hidden from <em>every</em> listing — dashboard, monitoring, issues, server site lists. Historical scans, bans, and traffic data are retained.
-                </p>
-            </div>
-            <button type="button" id="archive-site-toggle" class="btn-pill-nav text-[var(--color-status-red)] border-[var(--color-status-red)]/40">
-                <i class="fa-solid fa-trash-can"></i> Remove site
-            </button>
-        </div>
-
-        <form id="archive-site-form" method="POST" action="{{ route('sites.archive', $site) }}" class="mt-4 hidden">
-            @csrf
-            <p class="text-sm text-[var(--color-ink-muted)] mb-2">
-                Type <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded text-[var(--color-ink-strong)] font-data">{{ $site->domain }}</code> below to confirm.
+{{-- Danger Zone: Remove from Monitoring --}}
+<div class="card p-5 border border-[var(--color-status-red)]/30 bg-rose-50/10 mb-8">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="max-w-xl">
+            <h3 class="font-display text-base font-semibold text-[var(--color-ink-strong)] flex items-center gap-2 mb-1">
+                <i class="fa-solid fa-triangle-exclamation text-[var(--color-status-red)]"></i>
+                Remove from monitoring
+            </h3>
+            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                Use this when the site has been deleted from the host, moved away, or should no longer appear in dashboards. The row is hidden from every listing (Sites, monitoring, issues), while historical scans and logs are retained for audit trail.
             </p>
+        </div>
+        <button type="button" id="archive-site-toggle" class="btn-pill-nav text-xs text-[var(--color-status-red)] border-[var(--color-status-red)]/40 hover:bg-rose-50 flex items-center gap-1.5">
+            <i class="fa-solid fa-trash-can text-[11px]"></i> Remove site
+        </button>
+    </div>
+
+    <form id="archive-site-form" method="POST" action="{{ route('sites.archive', $site) }}" class="mt-4 hidden pt-3 border-t border-rose-200/50">
+        @csrf
+        <p class="text-xs text-[var(--color-ink-muted)] mb-2">
+            Type <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded text-[var(--color-ink-strong)] font-data">{{ $site->domain }}</code> below to confirm.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input type="text" name="confirm_domain" autocomplete="off" spellcheck="false"
                    placeholder="{{ $site->domain }}"
-                   class="w-full font-data text-sm border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-status-red)]/30">
+                   class="w-full font-data text-xs border border-[var(--color-border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-status-red)]/30">
             <input type="text" name="reason" autocomplete="off"
-                   placeholder="Reason (optional, e.g. 'moved to Liquid Web 2026-05-06')"
-                   class="mt-2 w-full text-sm border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-status-red)]/30">
-            <div class="mt-3 flex items-center gap-2">
-                <button type="submit" class="btn-primary bg-[var(--color-status-red)] hover:bg-[var(--color-status-red)]/90">
-                    <i class="fa-solid fa-check"></i> Remove this site
-                </button>
-                <button type="button" id="archive-site-cancel" class="btn-pill-nav">Cancel</button>
-            </div>
-        </form>
-    </div>
-    <script>
-        (function () {
-            const toggle = document.getElementById('archive-site-toggle');
-            const form   = document.getElementById('archive-site-form');
-            const cancel = document.getElementById('archive-site-cancel');
-            if (!toggle || !form || !cancel) return;
-            toggle.addEventListener('click', () => { form.classList.remove('hidden'); toggle.classList.add('hidden'); form.querySelector('input[name="confirm_domain"]').focus(); });
-            cancel.addEventListener('click', () => { form.classList.add('hidden'); toggle.classList.remove('hidden'); form.reset(); });
-        })();
-    </script>
-@endif
+                   placeholder="Reason (optional, e.g. 'moved to new host')"
+                   class="w-full text-xs border border-[var(--color-border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-status-red)]/30">
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+            <button type="submit" class="btn-primary text-xs py-1.5 px-3 bg-[var(--color-status-red)] hover:bg-[var(--color-status-red)]/90 flex items-center gap-1.5">
+                <i class="fa-solid fa-check"></i> Confirm removal
+            </button>
+            <button type="button" id="archive-site-cancel" class="btn-pill-nav text-xs py-1.5 px-3">Cancel</button>
+        </div>
+    </form>
+</div>
 
+{{-- Scripts --}}
 <script>
     (function () {
-        const toggle = document.getElementById('cert-edit-toggle');
-        const cancel = document.getElementById('cert-cancel');
-        const view = document.getElementById('cert-view');
-        const form = document.getElementById('cert-form');
+        // Cert toggle & edit
+        const certToggle = document.getElementById('cert-edit-toggle');
+        const certCancel = document.getElementById('cert-cancel');
+        const certView = document.getElementById('cert-view');
+        const certForm = document.getElementById('cert-form');
 
-        function show(editing) {
-            view.classList.toggle('hidden', editing);
-            form.classList.toggle('hidden', !editing);
-            toggle.classList.toggle('hidden', editing);
+        function showCertEdit(editing) {
+            certView.classList.toggle('hidden', editing);
+            certForm.classList.toggle('hidden', !editing);
+            certToggle.classList.toggle('hidden', editing);
         }
 
-        toggle?.addEventListener('click', () => show(true));
-        cancel?.addEventListener('click', () => show(false));
+        certToggle?.addEventListener('click', () => showCertEdit(true));
+        certCancel?.addEventListener('click', () => showCertEdit(false));
 
-        const recheck = document.getElementById('cert-recheck');
-        const result = document.getElementById('cert-recheck-result');
-        recheck?.addEventListener('click', async () => {
-            recheck.disabled = true;
-            recheck.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
-            result.className = 'mb-3 text-sm text-[var(--color-ink-muted)]';
-            result.textContent = 'Asking SpinupWP for the latest cert info…';
-            result.classList.remove('hidden');
+        // Cert recheck
+        const certRecheck = document.getElementById('cert-recheck');
+        const certResult = document.getElementById('cert-recheck-result');
+        certRecheck?.addEventListener('click', async () => {
+            certRecheck.disabled = true;
+            certRecheck.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+            certResult.className = 'mb-3 text-xs text-[var(--color-ink-muted)]';
+            certResult.textContent = 'Asking SpinupWP for latest cert info…';
+            certResult.classList.remove('hidden');
             try {
-                const r = await fetch(recheck.dataset.url, {
+                const r = await fetch(certRecheck.dataset.url, {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
                 });
                 const data = await r.json();
                 if (data.ok) {
-                    result.className = 'mb-3 text-sm status-pill status-green inline-block';
-                    result.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + data.message + ' Reloading…';
+                    certResult.className = 'mb-3 text-xs status-pill status-green inline-block';
+                    certResult.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + data.message + ' Reloading…';
                     setTimeout(() => location.reload(), 800);
                 } else {
-                    result.className = 'mb-3 text-sm status-pill status-red inline-block';
-                    result.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
+                    certResult.className = 'mb-3 text-xs status-pill status-red inline-block';
+                    certResult.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
                 }
             } catch (e) {
-                result.className = 'mb-3 text-sm status-pill status-red inline-block';
-                result.textContent = 'Network error: ' + e.message;
+                certResult.className = 'mb-3 text-xs status-pill status-red inline-block';
+                certResult.textContent = 'Network error: ' + e.message;
             } finally {
-                recheck.disabled = false;
-                recheck.innerHTML = '<i class="fa-solid fa-rotate"></i> Recheck now';
+                certRecheck.disabled = false;
+                certRecheck.innerHTML = '<i class="fa-solid fa-rotate"></i> Recheck now';
             }
         });
 
+        // LLAR Install
         const llarBtn = document.getElementById('llar-install-btn');
         const llarResult = document.getElementById('llar-install-result');
-        const llarState = document.getElementById('llar-state');
         llarBtn?.addEventListener('click', async () => {
-            if (!confirm('Install Limit Login Attempts Reloaded on this site? Email-on-lockout will be turned off. If LLAR is already there, nothing will be changed.')) {
+            if (!confirm('Install Limit Login Attempts Reloaded on this site? Email-on-lockout will be turned off.')) {
                 return;
             }
             llarBtn.disabled = true;
             const original = llarBtn.innerHTML;
             llarBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing…';
-            llarResult.className = 'text-xs mt-2 text-[var(--color-ink-muted)]';
+            llarResult.className = 'text-xs mb-2 text-[var(--color-ink-muted)]';
             llarResult.textContent = 'Connecting over SSH and running wp-cli…';
             llarResult.classList.remove('hidden');
             try {
@@ -866,20 +879,110 @@
                 if (data.ok) {
                     const colorClass = data.result === 'installed' ? 'status-green' : 'status-yellow';
                     const icon = data.result === 'installed' ? 'fa-circle-check' : 'fa-circle-info';
-                    llarResult.className = 'text-xs mt-2 status-pill ' + colorClass + ' inline-block';
+                    llarResult.className = 'text-xs mb-2 status-pill ' + colorClass + ' inline-block';
                     llarResult.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + data.message + ' Reloading…';
                     setTimeout(() => location.reload(), 1200);
                 } else {
-                    llarResult.className = 'text-xs mt-2 status-pill status-red inline-block';
+                    llarResult.className = 'text-xs mb-2 status-pill status-red inline-block';
                     llarResult.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
                 }
             } catch (e) {
-                llarResult.className = 'text-xs mt-2 status-pill status-red inline-block';
+                llarResult.className = 'text-xs mb-2 status-pill status-red inline-block';
                 llarResult.textContent = 'Network error: ' + e.message;
             } finally {
                 llarBtn.disabled = false;
                 llarBtn.innerHTML = original;
             }
         });
+
+        // Companion Push Update
+        const companionPushBtn = document.getElementById('companion-push-update-btn');
+        const companionPushResult = document.getElementById('companion-push-update-result');
+        companionPushBtn?.addEventListener('click', async () => {
+            const original = companionPushBtn.innerHTML;
+            companionPushBtn.disabled = true;
+            companionPushBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Pushing…';
+            companionPushResult.className = 'mt-2 text-xs text-[var(--color-ink-muted)]';
+            companionPushResult.textContent = 'Refreshing snapshot + pushing backups report…';
+            companionPushResult.classList.remove('hidden');
+
+            try {
+                const r = await fetch(companionPushBtn.dataset.url, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                });
+                const data = await r.json();
+                const cls = data.all_ok ? 'status-green' : (data.ok ? 'status-yellow' : 'status-red');
+                const icon = data.all_ok ? 'fa-circle-check' : (data.ok ? 'fa-circle-info' : 'fa-circle-xmark');
+                companionPushResult.className = 'mt-2 status-pill ' + cls + ' inline-block text-xs';
+                companionPushResult.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + (data.message || 'Done.');
+            } catch (e) {
+                companionPushResult.className = 'mt-2 status-pill status-red inline-block text-xs';
+                companionPushResult.textContent = 'Network error: ' + e.message;
+            } finally {
+                companionPushBtn.disabled = false;
+                companionPushBtn.innerHTML = original;
+            }
+        });
+
+        // Companion Install
+        const companionInstallBtn = document.getElementById('companion-install-btn');
+        const companionInstallResult = document.getElementById('companion-install-result');
+        companionInstallBtn?.addEventListener('click', async () => {
+            const original = companionInstallBtn.innerHTML;
+            companionInstallBtn.disabled = true;
+            companionInstallBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing…';
+            companionInstallResult.className = 'text-xs mt-2 text-[var(--color-ink-muted)]';
+            companionInstallResult.textContent = 'Pushing plugin over SSH and verifying via /health…';
+            companionInstallResult.classList.remove('hidden');
+            try {
+                const r = await fetch(companionInstallBtn.dataset.url, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                });
+                const data = await r.json();
+                if (r.ok) {
+                    companionInstallResult.className = 'text-xs mt-2 text-[var(--color-status-green)]';
+                    companionInstallResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${data.message ?? 'Installed.'} Refreshing…`;
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    companionInstallResult.className = 'text-xs mt-2 text-[var(--color-status-red)]';
+                    let html = `<i class="fa-solid fa-circle-xmark"></i> ${data.message ?? 'Failed'}`;
+                    if (data.output) {
+                        const escaped = data.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        html += `
+                            <details class="mt-2">
+                                <summary class="cursor-pointer text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">Show wp-cli / SSH output</summary>
+                                <pre class="mt-1 p-2 bg-[var(--color-surface-alt)] rounded text-[10px] text-[var(--color-ink-muted)] whitespace-pre-wrap break-words">${escaped}</pre>
+                            </details>`;
+                    }
+                    companionInstallResult.innerHTML = html;
+                    companionInstallBtn.disabled = false;
+                    companionInstallBtn.innerHTML = original;
+                }
+            } catch (e) {
+                companionInstallResult.className = 'text-xs mt-2 text-[var(--color-status-red)]';
+                companionInstallResult.textContent = 'Network error: ' + e.message;
+                companionInstallBtn.disabled = false;
+                companionInstallBtn.innerHTML = original;
+            }
+        });
+
+        // Archive toggle
+        const archiveToggle = document.getElementById('archive-site-toggle');
+        const archiveForm   = document.getElementById('archive-site-form');
+        const archiveCancel = document.getElementById('archive-site-cancel');
+        if (archiveToggle && archiveForm && archiveCancel) {
+            archiveToggle.addEventListener('click', () => {
+                archiveForm.classList.remove('hidden');
+                archiveToggle.classList.add('hidden');
+                archiveForm.querySelector('input[name="confirm_domain"]')?.focus();
+            });
+            archiveCancel.addEventListener('click', () => {
+                archiveForm.classList.add('hidden');
+                archiveToggle.classList.remove('hidden');
+                archiveForm.reset();
+            });
+        }
     })();
 </script>

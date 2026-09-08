@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
+use App\Services\Uptime\UptimeStatsCalculator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Modules\BillCom\BillComCustomer;
 use Modules\ClientManagement\Models\Client;
 use Modules\Core\Contracts\HostingProvider;
@@ -26,6 +29,10 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?int $server_id null for Pressable-hosted sites — Pressable has no server concept
  * @property string $hosting_provider spinupwp|pressable
  * @property string $domain
+ * @property ?string $notes
+ * @property ?string $screenshot_path
+ * @property ?Carbon $screenshot_captured_at
+ * @property ?array $dashboard_layout
  * @property ?string $site_user
  * @property ?string $wp_path
  * @property ?string $db_host
@@ -207,6 +214,10 @@ class Site extends Model
         'server_id',
         'hosting_provider',
         'domain',
+        'notes',
+        'screenshot_path',
+        'screenshot_captured_at',
+        'dashboard_layout',
         'site_user',
         'wp_path',
         'db_host',
@@ -331,9 +342,11 @@ class Site extends Model
             'cloudflare_checked_at' => 'datetime',
             'archived_at' => 'datetime',
             'is_inactive' => 'boolean',
+            'screenshot_captured_at' => 'datetime',
             'companion_installed' => 'boolean',
             'companion_capabilities' => 'array',
             'companion_secret' => 'encrypted',
+            'dashboard_layout' => 'array',
             'domain_expires_at' => 'datetime',
             'domain_rdap_checked_at' => 'datetime',
             'domain_expiration_state_changed_at' => 'datetime',
@@ -432,6 +445,12 @@ class Site extends Model
     {
         static::addGlobalScope('notArchived', function (Builder $query) {
             $query->whereNull("{$query->getModel()->getTable()}.archived_at");
+        });
+
+        static::created(function (Site $site) {
+            if (! app()->runningUnitTests()) {
+                CaptureSiteScreenshotJob::dispatch($site->id);
+            }
         });
     }
 
@@ -801,5 +820,90 @@ class Site extends Model
     public function isUptimeIgnored(): bool
     {
         return $this->uptime_ignored_at !== null;
+    }
+
+    /**
+     * Compute rolling uptime percentage over the given days (defaults to 30 days).
+     */
+    public function computeUptimePercentage(int $days = 30): float
+    {
+        if (! $this->uptime_monitoring_enabled) {
+            return 100.0;
+        }
+
+        $calc = app(UptimeStatsCalculator::class);
+        $pct = $calc->siteUptime($this, now()->subDays($days), now());
+
+        return $pct ?? ($this->uptime_state === 'down' ? 0.0 : 100.0);
+    }
+
+    public const DEFAULT_DASHBOARD_LAYOUT = [
+        'updates',
+        'uptime',
+        'performance',
+        'backups',
+        'traffic',
+        'notes',
+        'security',
+        'seo',
+        'forms',
+    ];
+
+    /**
+     * Return the ordered list of widget keys for this site's dashboard.
+     * Appends any newly introduced default widgets if missing from a saved custom layout.
+     *
+     * @return array<string>
+     */
+    public function resolvedDashboardLayout(): array
+    {
+        $saved = is_array($this->dashboard_layout) ? $this->dashboard_layout : [];
+        if (empty($saved)) {
+            return self::DEFAULT_DASHBOARD_LAYOUT;
+        }
+
+        // Filter to only valid known widgets, preserving operator's order
+        $ordered = array_values(array_intersect($saved, self::DEFAULT_DASHBOARD_LAYOUT));
+
+        // Append any default widgets that weren't in the saved list
+        $missing = array_diff(self::DEFAULT_DASHBOARD_LAYOUT, $ordered);
+
+        return array_values(array_merge($ordered, $missing));
+    }
+
+    /**
+     * Get the public URL for the site's screenshot.
+     * Serves locally cached file if available; otherwise falls back to Automattic mShots.
+     */
+    public function screenshotUrl(): string
+    {
+        if ($this->screenshot_path && Storage::disk('public')->exists($this->screenshot_path)) {
+            return Storage::disk('public')->url($this->screenshot_path);
+        }
+
+        // Automattic mShots: free public high-quality screenshot renderer
+        $target = 'https://'.$this->domain;
+
+        return 'https://s0.wp.com/mshots/v1/'.rawurlencode($target).'?w=600';
+    }
+
+    /**
+     * Return a consolidated status color for visual cards ('green', 'yellow', 'red').
+     */
+    public function healthColor(): string
+    {
+        if ($this->uptime_state === 'down') {
+            return 'red';
+        }
+
+        if ($this->sslState() === self::SSL_STATE_RED) {
+            return 'red';
+        }
+
+        if ($this->uptime_state === 'unknown' || $this->sslState() === self::SSL_STATE_YELLOW) {
+            return 'yellow';
+        }
+
+        return 'green';
     }
 }

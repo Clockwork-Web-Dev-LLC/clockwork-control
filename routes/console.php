@@ -96,6 +96,13 @@ Schedule::command('clockwork:check-ssl-certs')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Capture / refresh website homepage screenshots via Automattic mShots
+Schedule::command('clockwork:capture-site-screenshots')
+    ->dailyAt('04:45')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
 // Watchdog: if the queue worker launchd service has no PID (crashed or
 // throttled into a backoff loop), kick it back alive. Runs every 5 min so
 // the gap between a crash and recovery is at most 5 minutes.
