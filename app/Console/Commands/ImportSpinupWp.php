@@ -317,6 +317,7 @@ class ImportSpinupWp extends Command
         $certRenews = $row['https']['certificate_renews'] ?? null;
 
         $attributes = [
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
             'spinupwp_id' => isset($row['id']) ? (string) $row['id'] : null,
             'server_id' => $serverId,
             'site_user' => $row['site_user'] ?? null,

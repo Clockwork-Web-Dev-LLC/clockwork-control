@@ -225,9 +225,12 @@ class IssuesController extends Controller
         // Orphaned sites — local Site rows whose SpinupWP linkage was lost.
         // Source: clockwork:find-orphan-sites populates consolidated_into_site_id
         // when a parent is detected. Both kinds (consolidated + unknown) flag here.
+        // Scoped to SpinupWP sites only — GridPane/Cloudways/custom-VPS sites
+        // always have spinupwp_id = null and are not orphans.
         // KEEP IN SYNC with App\Support\IssueCounter::total().
         $orphanSites = Site::query()
             ->withoutGlobalScopes()
+            ->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)
             ->whereNull('spinupwp_id')
             ->whereNull('archived_at')
             ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
@@ -357,7 +360,7 @@ class IssuesController extends Controller
     {
         $site = Site::withoutGlobalScopes()->findOrFail($siteId);
 
-        abort_unless($site->spinupwp_id === null, 422, 'Site is not orphaned.');
+        abort_unless($site->isSpinupWp() && $site->spinupwp_id === null, 422, 'Site is not orphaned.');
         abort_unless($site->archived_at === null, 422, 'Site is already archived.');
 
         $site->forceFill(['archived_at' => now()])->save();

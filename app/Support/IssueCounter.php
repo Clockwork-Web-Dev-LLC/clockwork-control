@@ -161,8 +161,11 @@ class IssueCounter
 
         // Orphaned sites — Site rows lost their SpinupWP linkage and weren't archived.
         // Detected nightly by clockwork:find-orphan-sites; surfaced here so users notice.
+        // Scoped to SpinupWP sites only — see IssuesController::index() for why.
+        // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
         $orphans = Site::query()
             ->withoutGlobalScopes()
+            ->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)
             ->whereNull('spinupwp_id')
             ->whereNull('archived_at')
             ->whereHas('server', fn ($q) => $q->where('is_ignored', false))

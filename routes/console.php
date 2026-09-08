@@ -69,23 +69,26 @@ Schedule::command('clockwork:refresh-companion-snapshot --pending-updates-only')
     ->onOneServer();
 
 // Apt-update visibility: the SpinupWP mirror only gives us a boolean
-// `upgrade_required`. This command SSHs to the small subset of servers
-// where that boolean is true and pulls the actual count + security split
-// + reboot-required package list, so the per-server Updates tab can show
-// "12 updates, 3 security" instead of just a yes/no pill. Runs after
-// import-spinupwp so the trigger boolean is fresh.
+// `upgrade_required` for SpinupWP-managed servers, and nothing sets that
+// flag at all for GridPane/Hetzner/custom-VPS boxes. This command SSHs to
+// (a) SpinupWP servers the mirror flagged with upgrade_required=true, and
+// (b) every non-SpinupWP-managed server unconditionally, pulling the actual
+// count + security split + reboot-required package list, so the per-server
+// Updates tab can show "12 updates, 3 security" instead of just a yes/no
+// pill. Runs after import-spinupwp so the trigger boolean is fresh.
 Schedule::command('clockwork:poll-system-updates')
     ->dailyAt('04:15')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Weekly full-fleet sweep, bypassing the SpinupWP upgrade_required gate above.
-// That gate only ever gets set by the SpinupWP mirror import, so any server
-// provisioned directly (DigitalOcean/Azure/Hetzner, outside SpinupWP) never
-// trips it and the daily job above silently skips it forever — confirmed
-// 2026-09-03: only 2 of 45 monitored servers had upgrade_required=true, and
-// the other 43 hadn't been polled since 2026-06-16. --all checks every
-// monitored server regardless of that flag.
+// Weekly full-fleet sweep as a safety net — catches SpinupWP servers whose
+// mirrored upgrade_required flag is stale/wrong, which the daily job above
+// would otherwise skip. --all checks every monitored server regardless of
+// that flag. (Historically this sweep was load-bearing for every
+// non-SpinupWP server too, before the daily job above was fixed to include
+// them directly — confirmed 2026-09-03: only 2 of 45 monitored servers had
+// upgrade_required=true, and the other 43 hadn't been polled since
+// 2026-06-16.)
 Schedule::command('clockwork:poll-system-updates --all')
     ->weeklyOn(1, '04:30')
     ->withoutOverlapping(60)

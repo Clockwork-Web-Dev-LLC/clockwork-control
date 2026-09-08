@@ -234,9 +234,9 @@ class UptimeDiagnostician
     private function summarize(array $r): string
     {
         if ($r['maintenance_mode']) {
-            return 'SpinupWP maintenance mode is active — '
+            return 'Maintenance mode is active (SpinupWP-style layout) — '
                 .'/etc/nginx/sites-available/{site-slug}/server/maintenance.conf '
-                .'returns 503. Disable maintenance in SpinupWP or truncate the file.';
+                .'returns 503. Disable maintenance mode or truncate the file.';
         }
 
         if ($r['fpm_socket_present'] === false) {

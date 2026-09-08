@@ -92,7 +92,7 @@
 
     @if ($sites->isEmpty())
         <div class="card p-10 text-center text-[var(--color-ink-soft)]">
-            No WordPress sites in inventory yet. Run <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:import-spinupwp</code>.
+            No WordPress sites in inventory yet. Run an import for your hosting provider (<code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:import-spinupwp</code>, <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">clockwork:import-gridpane</code>, etc.).
         </div>
     @else
         <div class="card overflow-hidden"

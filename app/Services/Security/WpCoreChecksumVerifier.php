@@ -133,7 +133,15 @@ class WpCoreChecksumVerifier
             );
         }
 
-        $wpPath = $site->wp_path ?: '/sites/'.$site->domain.'/files';
+        $wpPath = $site->resolveWpPath();
+        if ($wpPath === null) {
+            return $this->result($site, SiteSecurityScan::STATUS_FAILED,
+                summary: 'Skipped — no wp_path recorded and this hosting provider has no known on-disk convention.',
+                error: 'unknown_wp_path',
+                elapsedMs: (int) (microtime(true) * 1000) - $started,
+            );
+        }
+
         $sentinel = '__CLOCKWORK_WP_EXIT__';
 
         // Feed the password with `echo` (which appends \n) rather than

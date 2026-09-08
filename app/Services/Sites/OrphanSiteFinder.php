@@ -49,7 +49,13 @@ class OrphanSiteFinder
             return collect();
         }
 
-        $domainMap = $this->buildDomainToParentMap();
+        // Sites hosted on GridPane, Cloudways, or any other provider are
+        // naturally never known to SpinupWP's /sites endpoint — calling it
+        // here would either crash (token unconfigured) or waste a request
+        // whose result can never match a non-SpinupWP domain. An empty map
+        // makes every orphan fall through to 'unknown' below, same as if
+        // SpinupWP genuinely had no record of any of these domains.
+        $domainMap = $this->spinup->isConfigured() ? $this->buildDomainToParentMap() : [];
 
         return $orphans->values()->map(function (Site $orphan) use ($domainMap) {
             $domains = $this->candidateDomains($orphan);
@@ -123,8 +129,13 @@ class OrphanSiteFinder
         // notArchived global scope is already on the model. We override it here
         // by withTrashed-equivalent if that scope had soft-delete semantics —
         // but it's a where-null scope, so just query directly without it.
+        //
+        // Scoped strictly to SpinupWP sites — a GridPane, Cloudways, or
+        // custom-VPS site naturally has spinupwp_id = null forever; that's
+        // not a lost linkage, it's just a different provider.
         return Site::query()
             ->withoutGlobalScopes()
+            ->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)
             ->whereNull('spinupwp_id')
             ->whereNull('archived_at')
             ->whereHas('server', fn ($q) => $q->monitored())

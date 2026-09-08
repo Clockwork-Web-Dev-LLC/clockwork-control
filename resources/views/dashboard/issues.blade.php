@@ -1089,7 +1089,7 @@
         <div id="reboot-action-banner" class="hidden card px-5 py-3 mb-4 text-sm"></div>
     @endif
 
-    {{-- PATCHES (mirrors SpinupWP's upgrade_required) --}}
+    {{-- PATCHES (Server.upgrade_required — set by SpinupWP import or the daily SSH poll) --}}
     @if ($patchesAvailable->isNotEmpty())
         <section id="section-patches" class="card overflow-hidden mb-6">
             <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
@@ -1098,7 +1098,7 @@
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
                         Patches available
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">SpinupWP reports non-security apt updates are pending. Security updates auto-install via unattended-upgrades.</p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Non-security apt updates are pending. Security updates auto-install via unattended-upgrades.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $patchesAvailable->count() }}</span>
             </div>
@@ -1138,7 +1138,7 @@
         </section>
     @endif
 
-    {{-- REBOOT (mirrors SpinupWP's reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
+    {{-- REBOOT (Server.reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
     @if ($rebootRequired->isNotEmpty())
         <section id="section-reboot" class="card overflow-hidden mb-6">
             <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">

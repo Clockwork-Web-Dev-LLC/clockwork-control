@@ -114,4 +114,33 @@ describe('IssuesController', function () {
         $response->assertStatus(422);
         expect($site->fresh()->archived_at)->toBeNull();
     });
+
+    it('rejects destroying a non-SpinupWP site with a null spinupwp_id — it is not a SpinupWP orphan', function () {
+        $site = Site::factory()->gridpane()->create(['archived_at' => null]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->delete(route('issues.orphans.destroy', ['siteId' => $site->id]));
+
+        $response->assertStatus(422);
+        expect($site->fresh()->archived_at)->toBeNull();
+    });
+
+    it('does not list a GridPane site with a null spinupwp_id as an orphaned site', function () {
+        Site::factory()->spinupwp()->create([
+            'spinupwp_id' => null,
+            'archived_at' => null,
+            'domain' => 'real-orphan.example.com',
+        ]);
+        Site::factory()->gridpane()->create([
+            'archived_at' => null,
+            'domain' => 'gridpane-site.example.com',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('issues.index'));
+
+        $response->assertOk()
+            ->assertSee('real-orphan.example.com')
+            ->assertDontSee('gridpane-site.example.com');
+    });
 });

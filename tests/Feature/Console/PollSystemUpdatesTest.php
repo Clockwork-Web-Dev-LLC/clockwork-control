@@ -32,10 +32,14 @@ function okProbePayload(array $overrides = []): array
     ], $overrides);
 }
 
-describe('default server selection (upgrade_required=true only)', function () {
+describe('default server selection (upgrade_required=true, or non-SpinupWP-managed)', function () {
     it('probes only servers flagged upgrade_required=true and persists a snapshot + refreshed flags', function () {
         $due = Server::factory()->create(['upgrade_required' => true, 'reboot_required' => false]);
-        $notDue = Server::factory()->create(['upgrade_required' => false]);
+        // Explicitly a SpinupWP server (non-null spinupwp_id) not flagged for
+        // updates — this is the "genuinely not due" case, distinct from a
+        // non-SpinupWP server (spinupwp_id null), which is always included
+        // regardless of upgrade_required (see the describe block below).
+        $notDue = Server::factory()->create(['upgrade_required' => false, 'spinupwp_id' => '555']);
 
         $this->mock(AptUpdateProbe::class, function ($mock) use ($due) {
             $mock->shouldReceive('probe')
@@ -192,7 +196,10 @@ describe('non-OK probe results do not clobber SpinupWP-sourced flags', function 
 
 describe('no-op run', function () {
     it('exits successfully and probes nothing when no server matches', function () {
-        Server::factory()->create(['upgrade_required' => false]);
+        // Explicitly a SpinupWP server not flagged for updates — a
+        // non-SpinupWP server (spinupwp_id null) would be probed regardless,
+        // per the describe block below.
+        Server::factory()->create(['upgrade_required' => false, 'spinupwp_id' => '555']);
 
         $this->mock(AptUpdateProbe::class, function ($mock) {
             $mock->shouldReceive('probe')->never();
@@ -201,5 +208,41 @@ describe('no-op run', function () {
         $this->artisan('clockwork:poll-system-updates')->assertSuccessful();
 
         expect(ServerUpdateSnapshot::query()->count())->toBe(0);
+    });
+});
+
+describe('non-SpinupWP-managed servers are always included in the daily run', function () {
+    it('probes a server with no spinupwp_id even when upgrade_required=false', function () {
+        // upgrade_required is only ever set true by the SpinupWP import
+        // mirror — a GridPane/Hetzner/custom-VPS server (spinupwp_id null)
+        // never gets it set, so it must be probed unconditionally or it
+        // would never surface pending updates until the weekly --all sweep.
+        $gridPaneServer = Server::factory()->create(['upgrade_required' => false, 'spinupwp_id' => null]);
+        // A SpinupWP server not (yet) flagged stays excluded.
+        $spinupwpServer = Server::factory()->create(['upgrade_required' => false, 'spinupwp_id' => '777']);
+
+        $this->mock(AptUpdateProbe::class, function ($mock) use ($gridPaneServer) {
+            $mock->shouldReceive('probe')
+                ->once()
+                ->withArgs(fn (Server $s) => $s->id === $gridPaneServer->id)
+                ->andReturn(okProbePayload());
+        });
+
+        $this->artisan('clockwork:poll-system-updates')->assertSuccessful();
+
+        expect(ServerUpdateSnapshot::query()->where('server_id', $gridPaneServer->id)->exists())->toBeTrue()
+            ->and(ServerUpdateSnapshot::query()->where('server_id', $spinupwpServer->id)->exists())->toBeFalse();
+    });
+
+    it('excludes an ignored non-SpinupWP server', function () {
+        $ignored = Server::factory()->ignored()->create(['upgrade_required' => false, 'spinupwp_id' => null]);
+
+        $this->mock(AptUpdateProbe::class, function ($mock) {
+            $mock->shouldReceive('probe')->never();
+        });
+
+        $this->artisan('clockwork:poll-system-updates')->assertSuccessful();
+
+        expect(ServerUpdateSnapshot::query()->where('server_id', $ignored->id)->exists())->toBeFalse();
     });
 });
