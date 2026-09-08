@@ -2,7 +2,7 @@
 title: Theme System
 section: Reference
 order: 25
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [reference, frontend, css, themes, ui]
 tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php]
@@ -14,9 +14,10 @@ Clockwork Control features a multi-scheme theme system built on Tailwind CSS v4 
 
 1. **Light (`light`)**: The canonical clean white surface palette (`#ffffff`), tailored ink contrasts, and subtle borders.
 2. **Dark (`dark`)**: Built on the native `--color-surface-dark` token (`#181e25`) with deep slate tones and soft inverted text.
-3. **Midnight (`midnight`)**: A rich navy / Darcula palette with `#0f172a` deep-slate surface, electric brand accents, and muted ink.
-4. **High Contrast (`high-contrast`)**: An accessibility-first high visibility palette utilizing pure `#000000` surface with maximum contrast borders and white ink.
-5. **Auto / System (`system`)**: Follows the client operating system's `prefers-color-scheme` media query, automatically switching between light and dark.
+3. **High Contrast (`high-contrast`)**: An accessibility-first high visibility palette utilizing pure `#000000` surface with maximum contrast borders and white ink.
+4. **Auto / System (`system`)**: Follows the client operating system's `prefers-color-scheme` media query, automatically switching between light and dark.
+
+**Removed: Midnight.** The `midnight` scheme (a navy / Darcula palette) was removed in v1.4.0 in favor of the 4-option grid above. Operators who previously selected Midnight aren't left with a broken preference: the `:root[data-theme="dark"]` CSS block also matches `:root[data-theme="midnight"]` (so any stale `data-theme="midnight"` attribute still renders the Dark palette), and `resources/js/theme.js` normalizes a stored `cw_theme=midnight` cookie to `dark` on init. `AppearanceSettingsController::VALID_THEMES` no longer accepts `midnight` as a value to persist going forward.
 
 ## Architecture & How It Works
 
@@ -52,6 +53,8 @@ Each named palette is defined as a scoped selector block on the root element:
 ```
 
 Components (`.btn-pill-nav`, `.status-pill`, `.cw-switch`) reference these variables directly, instantly adapting to whatever `data-theme` attribute is active on `<html>`. `.card` is the one exception: its light-mode background is a hardcoded `#f9f9f9` (a deliberately subtler tone than `--color-surface`'s pure white) with an explicit `:root[data-theme="dark"] .card` override falling back to `--color-surface` in dark mode.
+
+Tailwind's `dark:` variant is remapped via a `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));` declaration at the top of `app.css`, so `dark:` utility classes key off the active `data-theme` attribute rather than the OS-level `prefers-color-scheme` media query. This closed a bleed bug where a device set to dark mode at the OS level would override an explicit `Light` selection in the app.
 
 ### 2. Zero-FOUC Head Script (`layouts/app.blade.php`)
 

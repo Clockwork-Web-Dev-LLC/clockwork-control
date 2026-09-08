@@ -2,7 +2,7 @@
 title: System updates
 section: Features
 order: 92
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [system-updates, self-update, core, companion, releases]
 tracks: [app/Services/Updates/**, app/Http/Controllers/SystemUpdatesController.php, app/Console/Commands/CheckSystemUpdates.php, app/Console/Commands/ApplySystemUpdate.php, resources/views/settings/updates.blade.php, routes/web.php]
@@ -33,6 +33,8 @@ Three sections, one page:
 5. `php artisan optimize:clear`
 
 Each step's output is captured and shown back to the operator, success or failure, so a broken update isn't a silent black box — you can see exactly which of the five steps it got through.
+
+**Subprocess environment forwarding**: Steps 2 and 3 explicitly pass `HOME`/`COMPOSER_HOME` into the `git pull` and `composer install` subprocesses via `SystemUpdateService::subprocessEnv()` — preferring whatever the ambient environment already provides, and falling back to a Clockwork-owned `storage/app/subprocess-home` directory (created on demand) when neither is set. This exists because `php artisan serve` run without `--no-reload` strips almost every environment variable (including `HOME`) from its worker process, to support hot-reload-on-`.env`-change; without the explicit forward, Composer has nowhere to write its cache/config and the composer-install step fails purely as an artifact of which dev server happens to be in front of PHP. A real php-fpm/nginx deployment doesn't have this problem, but self-update works regardless of how the operator is running the app.
 
 **This only works if the app is actually a git checkout.** If `.git` doesn't exist (e.g. you deployed via a tarball), the page still shows whether an update is available, but skips straight to migrations — there's no code to pull. In that case, use the manual terminal command shown on the page (`git clone`... doesn't apply; you'd `composer install --no-dev && php artisan migrate --force && php artisan optimize:clear` after replacing the files yourself).
 

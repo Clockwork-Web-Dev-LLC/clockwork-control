@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -21,7 +21,7 @@ One row per managed host. Natural key: `spinupwp_id`. Notable columns:
 - Identity: `name`, `hostname`, `spinupwp_id`.
 - Cloud provider: `provider` (`digitalocean|hetzner|…`), `provider_id`, `size_slug`, `vcpus`, `memory_mb`, `disk_gb`. Populated daily by `clockwork:import-spinupwp` from SpinupWP's `provider_name` field, cross-referenced against the matching cloud's API.
 - SSH: `ssh_user`, `ssh_port`, `ssh_private_key` (encrypted), `ssh_password` (encrypted).
-- Monitoring state: `status` (`green|yellow|red|unknown`), `last_polled_at`, `last_alert_at`, `last_ssh_ok_at`.
+- Monitoring state: `status` (`green|yellow|red|unknown`), `last_polled_at`, `last_alert_at`, `last_ssh_ok_at`, `provider_missing_since` (nullable timestamp — set the first time `clockwork:poll-servers` finds `CloudProvider::isDeletedAtProvider()` true, a precise "genuinely gone from the cloud provider's own inventory" signal distinct from a generic polling error; drives a red "Remove from Clockwork" banner on the server show page and is cleared automatically the next time a poll succeeds).
 - Provisioning: `clockwork_jail_provisioned_at`, `last_provision_log`.
 - Operations: `is_ignored`, `ignore_reason`, `auto_ban_llar`, `auto_ban_wordfence`, `last_llar_pull_at`, `last_wordfence_pull_at`, `upgrade_required`, `reboot_required`, `update_status`, `scheduled_reboot_at`.
 
@@ -29,13 +29,16 @@ One row per managed host. Natural key: `spinupwp_id`. Notable columns:
 
 One row per WordPress (or non-WP) site. Natural key: `domain` (unique). Notable columns:
 
-- Linkage: `server_id` (**nullable** — null for Pressable sites, which have no server concept), `spinupwp_id`, `hosting_provider` (`spinupwp` | `pressable`, default `spinupwp`), `pressable_site_id` (nullable, unique — mirrors `spinupwp_id`), `site_user`, `wp_path`.
+- Linkage: `server_id` (**nullable** — null for Pressable sites, which have no server concept), `spinupwp_id`, `hosting_provider` (`spinupwp` | `pressable` | `gridpane` | `wpengine` | `kinsta` | `cloudways`), `pressable_site_id` (nullable, unique — mirrors `spinupwp_id`), `site_user`, `wp_path`. `hosting_provider` has **no default** as of a 2026-09-08 migration — every creation path (`ImportSpinupWp`, `ImportPressable`, `ImportGridPane`, `SiteFactory`, …) now sets it explicitly, so a future path that forgets it fails loudly (NOT NULL violation) instead of silently mislabeling the site as `spinupwp` and falling into the orphan-sites query.
 - Database: `db_host`, `db_port`, `db_name`, `db_user`, `db_password` (encrypted), `table_prefix`.
 - Identity: `is_wordpress`, `wordfence_enabled`, `llar_enabled`, `wp_plugins_detected_at`, `wp_core_update`, `wp_theme_updates`, `wp_plugin_updates`. The `wp_core_update`/`wp_theme_updates`/`wp_plugin_updates` booleans are SpinupWP-inventory-only — always false for Pressable sites even when real pending updates exist (visible instead via `companion_snapshot`). UI hides those specific pills for Pressable rather than showing a false "up to date."
 - Cert: `cert_source`, `cert_expires_at`, `cert_renews_at`, `cert_state`, `cert_state_changed_at`, `cert_notes`.
+- Domain expiration: `domain_expires_at`, `domain_registrar`, `domain_rdap_status`, `domain_rdap_checked_at`, `domain_rdap_error` (all nullable, populated by the RDAP domain-expiration watchdog), plus `domain_expiration_state` (default `none`) + `domain_expiration_state_changed_at` tracking the alerting lifecycle for an about-to-expire domain.
 - Cloudflare: `cloudflare_state`, `cloudflare_checked_at`, `resolved_a_record`, `resolved_ns_record`.
 - Lifecycle: `is_inactive` (default `false`) + `inactive_reason` (nullable). Distinct from `archived_at`: an archived site is hidden from every listing entirely, an inactive site stays fully visible (Sites list, server page, search) but is excluded from the Issues page / nav badge counting and from every site-scoped Mattermost/Slack alert — same "still visible, not monitored" shape as `Server.is_ignored`, generalized across every issue category instead of one narrow toggle. Toggled via `ActionLog::TYPE_SITE_DEACTIVATED`/`TYPE_SITE_REACTIVATED`.
 - Care plan: `care_plan_enabled`, `care_plan_override` (NULL = Bill.com may write; bool = manual override sync respects).
+- SEO indexability: `seo_indexable` (default `true`), `seo_blocked_reason` + `seo_blocked_snippet` (the single current top-priority reason/evidence), `seo_checked_at`, `seo_monitoring_enabled` (default `true`), `seo_state_changed_at`, plus per-vector last-known snapshots `seo_meta_snippet` / `seo_header_snippet` / `seo_robots_snippet` — kept independently because the meta-tag, `X-Robots-Tag` header, and `robots.txt` vectors are checked by different code paths at different cadences, so fixing the higher-priority one doesn't silently "forget" a lower-priority one is still blocking. Suppressible per-site via `ignored_issues` (see below).
+- Site Command Center: `notes` (free-text, operator-editable), `dashboard_layout` (nullable JSON array of widget keys ordering the per-site Overview dashboard's draggable cards — `Site::resolvedDashboardLayout()` falls back to `Site::DEFAULT_DASHBOARD_LAYOUT` and appends any new default widgets missing from an older saved layout), `screenshot_path` + `screenshot_captured_at` (locally cached fleet-grid-view thumbnail, captured async via `CaptureSiteScreenshotJob` on site creation and by the `clockwork:capture-site-screenshots` command; `Site::screenshotUrl()` falls back to Automattic's free mShots renderer when no local capture exists yet).
 - Backup relay: `backup_relay_enabled` (boolean, default `false`) marks whether the site is enrolled in scheduled off-host backup archiving to S3 Glacier Instant Retrieval. `backup_relay_last_archived_at` (nullable timestamp) tracks when an archive run was most recently completed for the site.
 - Bill.com: `bill_com_customer_id`, `bill_com_customer_name`, `bill_com_linked_via_invoice`, `bill_com_linked_at`.
 - Companion: `companion_installed`, `companion_version`, `companion_capabilities`, `companion_secret` (encrypted), `companion_last_seen_at`, `companion_snapshot` (JSON), `companion_snapshot_at`, `companion_stuck_since` + `companion_stuck_reason` (both nullable). Set by `clockwork:detect-stuck-companion-state` (daily sweep) when a site transitions into a stuck state — a failed install never retried past 24h, or an installed Companion gone silent past the snapshot-staleness threshold (3 days). Cleared back to null on recovery. The pair exists purely to make that transition detectable for alerting. Companion traffic visibility can also be conditionally gated via `canViewCompanionTraffic()`.
@@ -52,7 +55,7 @@ Three canonical tags: `Dedicated`, `Shared`, `Staging`. The Capacity page filter
 
 ### `users`
 
-The auth allowlist. A row exists ⇒ allowed. `revoked_at IS NULL` ⇒ active. `password` is nullable + unused. Supports multiple OAuth providers via `google_id`, `github_id`, and `microsoft_id` (handled via `App\Services\Auth\OAuthLoginHandler`). `theme` (nullable string, default `'light'`) stores the user's UI theme preference (`light`, `dark`, `midnight`, `high-contrast`), cast and managed via `User::THEMES`.
+The auth allowlist. A row exists ⇒ allowed. `revoked_at IS NULL` ⇒ active. `password` (nullable, `hashed`-cast Bcrypt/Argon2) now backs local email/password sign-in — NULL means the account is SSO-only. Supports multiple OAuth providers via `google_id`, `github_id`, and `microsoft_id` (handled via `App\Services\Auth\OAuthLoginHandler`); local password and OAuth are independent and either/both can be set per user. See [Architecture → Security model](/docs/architecture/security-model) for the auth flow. `theme` (nullable string, default `'light'`) stores the user's UI theme preference — `light`, `dark`, `high-contrast`, or `system` (labeled "Auto" in the UI) — validated against `AppearanceSettingsController::VALID_THEMES` on `POST /settings/appearance`. Midnight mode was removed; a stored `midnight` value is mapped to `dark` for backward compatibility rather than migrated.
 
 ### `installed_modules`
 

@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]

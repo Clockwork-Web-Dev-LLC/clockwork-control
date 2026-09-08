@@ -2,7 +2,7 @@
 title: Sites (fleet view)
 section: Features
 order: 15
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [sites, fleet, pressable, spinupwp, hosting]
 tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
@@ -25,6 +25,23 @@ Paginated (50/page), searchable by domain, filterable by hosting provider with a
 - A crescent-moon **Inactive** pill when `site.is_inactive` is set (tooltip shows the reason, if one was given). See [Features → Inactive sites](/docs/features/inactive-sites) for what setting that flag does — it doesn't hide the row here, only from Issues/nav/alerts.
 
 Same visual language as the existing per-server sites-tab list, just fleet-wide and provider-agnostic.
+
+## List view vs. Visual grid view
+
+A **List / Grid** toggle sits top-right of the toolbar. The choice is remembered per-browser (`localStorage['clockwork_sites_view']`, Alpine.js state), not per-user server-side, so it doesn't follow you across devices.
+
+- **List** is the row layout described above.
+- **Grid** renders one card per site (`sites-grid`, responsive 1–6 columns) with a homepage screenshot thumbnail, a health-colored accent bar (green/yellow/red from `Site::healthColor()` — red on `uptime_state === 'down'` or a red SSL state, yellow on unknown uptime or a yellow SSL state, green otherwise), the domain, a Pressable/server-name badge, and a warning icon when health isn't green. An `Inactive` badge overlays the thumbnail for sites with `is_inactive` set.
+
+Both views share the same instant-filter search and the same server-side pagination/search fallback described above — the client-side filter script matches rows and cards in parallel and the AJAX search response swaps both `#sites-list-card` and `#sites-grid-container` at once, so switching views mid-search doesn't lose your query.
+
+### Screenshots
+
+Grid-view thumbnails come from `Site::screenshotUrl()`: if a locally cached screenshot exists (`screenshot_path` on the `public` disk) it's served directly, otherwise the view falls back live to Automattic's free mShots renderer (`https://s0.wp.com/mshots/v1/...`) so a card never shows blank while waiting on a first capture. A broken image (`onerror`) swaps in a placeholder globe icon with the domain underneath.
+
+Caching is populated two ways:
+- **On site creation** — `Site::booted()` dispatches `CaptureSiteScreenshotJob` automatically for every new site (skipped under tests).
+- **On a schedule** — `clockwork:capture-site-screenshots` runs daily at 04:45, queued and backgrounded (`Schedule::command(...)->dailyAt('04:45')->withoutOverlapping(30)->onOneServer()->runInBackground()`), picking up to `--limit=50` sites at a time, prioritizing sites with no screenshot or one older than 7 days. `--site=<domain-or-id>` targets one site, `--force` re-captures regardless of age, `--sync` runs inline instead of queueing (useful for manual backfills). `SiteScreenshotService::capture()` fetches from mShots, rejects mShots' known "still generating" placeholder image (by a hardcoded MD5) and any response under 100 bytes, and only then writes `screenshots/{id}.jpg` to the `public` disk and stamps `screenshot_captured_at`.
 
 ## Why a separate page instead of extending the dashboard
 

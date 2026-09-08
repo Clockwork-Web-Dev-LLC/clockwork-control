@@ -3,7 +3,7 @@ title: Servers (inventory + credentials)
 section: Features
 order: 12
 author: Aaron Reimann
-updated: 2026-09-07
+updated: 2026-09-08
 tags: [servers, ssh, credentials, inventory, fleet]
 tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---
@@ -16,7 +16,7 @@ Almost every SpinupWP server arrives via `clockwork:import-spinupwp`, not throug
 
 `/servers/new` (`ServersController::create` / `store`) is a plain form: name, hostname/IP, SSH user (defaults to `clockwork.ssh.default_user`), SSH port (defaults to `clockwork.ssh.default_port`), and an optional SSH password. The new row starts at `status=unknown` — it only turns green/yellow/red once a poll cycle or "Recheck health" runs.
 
-`store()` immediately calls the same internal `runSpinupWpImport()` helper `refreshFromSpinupWp()` uses (see below) — harmless for a genuinely hand-rolled server (no SpinupWP match, no-op), but it means a server you *thought* wasn't in SpinupWP can suddenly pick up sites on creation if it turns out it was already there under a different name.
+`store()` checks whether SpinupWP is actually configured (`SpinupWpClient::isConfigured()`) before doing anything SpinupWP-specific. If it is, `store()` immediately calls the same internal `runSpinupWpImport()` helper `refreshFromSpinupWp()` uses (see below) — harmless for a genuinely hand-rolled server (no SpinupWP match, no-op), but it means a server you *thought* wasn't in SpinupWP can suddenly pick up sites on creation if it turns out it was already there under a different name. If SpinupWP isn't configured on this fleet at all, the import is skipped entirely and `clockwork:poll-servers` runs directly instead, so the new server still gets a real status right away instead of sitting at "unknown" until the next scheduled tick.
 
 Use this form for one-off additions. For several servers at once, the page itself links to the **bulk paste-and-import flow** (`/servers/credentials/feed`, below) instead.
 
@@ -29,6 +29,8 @@ Each button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFro
 ## Removing a server
 
 **Destroy** (`DELETE /servers/{server}`) is permanent — it cascades to sites, server metrics, blocked-IP records, and the tag pivot via FK constraints. The operator must type the server's exact name as confirmation, checked server-side (not just a JS `confirm()`). Use this only when the box is actually gone at the provider — for "stop polling but keep the record," use **Toggle ignore** instead, which just flips `is_ignored` (with an optional reason) and leaves everything else intact.
+
+When `clockwork:poll-servers` finds a server's `provider_id` genuinely absent from the cloud provider's own inventory (`CloudProvider::isDeletedAtProvider()` — a precise signal, distinct from a generic polling error like a bad credential), it stamps `provider_missing_since`. The server detail page header then surfaces a red "This server no longer exists at ⟨provider⟩" banner with its own **Remove from Clockwork** button, regardless of which tab is open — same `servers.destroy` route and typed-name confirmation as above, just reachable directly from the page you're most likely to be looking at when a server has gone dark. `provider_missing_since` clears automatically the next time a poll succeeds, so a transient API hiccup doesn't permanently flag a live server.
 
 ## Auto-ban toggles
 

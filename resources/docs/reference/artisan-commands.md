@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -54,6 +54,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:pull-site-metrics` | Pull per-site CPU/memory hourly rollups from Companion (`resource-sampler` cap) into `site_metrics`. | `php artisan clockwork:pull-site-metrics` |
 | `clockwork:check-domain-expirations` | Check domain registration expiration dates via ICANN RDAP and alert on impending expiration. | `php artisan clockwork:check-domain-expirations` |
 | `clockwork:check-robots-txt` | Check `/robots.txt` directives across monitored sites for search-engine disallow rules. | `php artisan clockwork:check-robots-txt` |
+| `clockwork:capture-site-screenshots` | Capture/refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `--site=` targets one site (domain or ID), `--force` re-captures even if recent, `--limit=` caps the batch (default 50), `--sync` runs synchronously instead of queueing. | `php artisan clockwork:capture-site-screenshots --site=example.com --force` |
 
 ## Logs + ingest
 
@@ -142,7 +143,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:scan-wp7-truncation` | Detect (and `--repair`) sites with truncated WP 7.0 `php-ai-client` core files. | `php artisan clockwork:scan-wp7-truncation --repair` |
 | `clockwork:drop-orphan-prefix-tables` | Drop MySQL tables matching an orphan prefix on a site (refuses the live prefix). | `php artisan clockwork:drop-orphan-prefix-tables` |
 | `clockwork:provision-droplet-agent` | Install/start DO droplet-agent so the DO Web Console works. `--restart` clears "Registering SSH Keys" hangs. | `php artisan clockwork:provision-droplet-agent --server=web35` |
-| `clockwork:poll-system-updates` | SSH apt-check + reboot-required.pkgs + apt list --upgradable → `server_update_snapshots`. Default gate: only servers SpinupWP flagged with `upgrade_required=true`. | `php artisan clockwork:poll-system-updates --all` |
+| `clockwork:poll-system-updates` | SSH apt-check + reboot-required.pkgs + apt list --upgradable → `server_update_snapshots`. Default gate: SpinupWP-managed servers flagged `upgrade_required=true`, plus every non-SpinupWP-managed server unconditionally (nothing else sets that flag for GridPane/Hetzner/custom-VPS boxes). `--all` bypasses the gate entirely, for the weekly full-fleet safety-net sweep. | `php artisan clockwork:poll-system-updates --all` |
 | `clockwork:clean-failed-provision` | Recovery script for the v0 provisioner bug — paste into SpinupWP "Run a Custom Script". | `php artisan clockwork:clean-failed-provision myhost.example.com` |
 | `clockwork:provision-console-access` | Drop a `Match Address 127.0.0.1,::1` sshd config so the DigitalOcean Web Console can log in as root via droplet-agent on SpinupWP-hardened boxes. Validates with `sshd -t`, reloads (not restarts), auto-rollback on failure. | `php artisan clockwork:provision-console-access --server=web-test3.example.com` |
 

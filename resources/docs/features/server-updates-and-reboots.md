@@ -2,7 +2,7 @@
 title: Server updates + reboots
 section: Features
 order: 110
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [updates, reboot, ssh, ops, fleet, tags]
 tracks: [app/Http/Controllers/ServerUpdateController.php, app/Http/Controllers/OperationsUpdatesController.php, app/Http/Controllers/TagsController.php, app/Console/Commands/ProcessServerUpdates.php, app/Console/Commands/PollSystemUpdates.php, app/Console/Commands/ReapStaleServerUpdates.php, app/Services/Servers/ServerUpdater.php]
@@ -88,7 +88,7 @@ Cancel a scheduled reboot with the **Cancel reboot** button (runs `sudo shutdown
 
 `clockwork:poll-system-updates` re-SSHs to each server and syncs `upgrade_required` + `reboot_required` from the live probe so the dashboard row reflects the latest state even when no manual update has been queued. This is how the Issues page "Patches Available" and "Reboot Required" counts stay current between manual operator actions.
 
-It's scheduled twice, at different scopes ([Scheduled jobs](/docs/reference/scheduled-jobs) has the exact times): a **daily** run gated to servers SpinupWP's mirror already flagged `upgrade_required=true`, and a **weekly `--all` sweep** covering every monitored server regardless of that flag. The gate matters — `upgrade_required` is only set by the SpinupWP import, so a server provisioned directly (DigitalOcean/Azure/Hetzner, outside SpinupWP) never trips it; the weekly `--all` sweep ensures all monitored servers are checked at least weekly.
+It's scheduled twice, at different scopes ([Scheduled jobs](/docs/reference/scheduled-jobs) has the exact times): a **daily** run and a **weekly `--all` sweep** covering every monitored server unconditionally. The daily run's default (non-`--all`) query targets servers SpinupWP's mirror has already flagged `upgrade_required=true`, **plus every server with no `spinupwp_id` at all** (i.e. not SpinupWP-managed) — because `upgrade_required` is only ever set by the SpinupWP import, a GridPane/Hetzner/custom-VPS server would otherwise never trip that flag and would sit unprobed until the next weekly `--all` sweep, up to a week away. Including every non-SpinupWP server in the daily query closes that gap: those boxes now get probed daily like everything else, rather than only weekly.
 
 ## Probe state
 

@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -152,6 +152,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET/PATCH/POST | `/settings/ingest[/run-now]` | LLAR/Wordfence pull cadence + manual run. |
 | GET | `/settings/wordpress-plugins` | Fleet WP plugin inventory. |
 | GET/PATCH/POST | `/settings/security-scans[/run-now]` | Scan toggles + manual run. |
+| GET/PATCH/POST | `/settings/backup-relay[/run-now]` | Backup Relay (S3 Glacier IR) settings + on-demand execution. |
+| GET | `/settings/backup-relay/sites/{site}/{archives,download}` | Per-site S3 Glacier archive listing (`archives`) and streamed download of a specific archive (`download`). |
 | GET/POST | `/settings/bill-com[/run-{customer,care-plan}-sync]` | Sync status + manual runs. |
 | GET/POST | `/settings/mattermost` | Per-event Mattermost notification toggles (ip_blocked, ssl_state_changed, site_went_down/up, etc.). |
 | GET/POST | `/settings/slack` | Same per-event toggles, Slack channel. Independent settings key (`notifications.slack.events`) from Mattermost's. |

@@ -2,7 +2,7 @@
 title: Integrations settings
 section: Features
 order: 89
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, credentials, settings, modularization, rate-limits, env]
 tracks: [app/Http/Controllers/IntegrationCredentialsController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, app/Support/CredentialResolver.php, app/Models/IntegrationCredential.php, modules/*/src/*ServiceProvider.php]
@@ -32,6 +32,10 @@ Each provider service now has a dedicated rate limits and connection configurati
   - `delay_ms`: Inter-request delay pacing (ms) via `usleep` to smooth background polling bursts.
   - `retry_attempts`: Automatic retries on HTTP 429 / 503 with exponential backoff.
 - Runtime clients (e.g. `DigitalOceanClient`) dynamically read these operator overrides from `App\Support\Settings`.
+
+## Descriptions & Capability Badges
+
+Each integration card on `/settings/integrations` shows a one-line description and a row of feature-capability badges (e.g. "Offsite S3 Backups", "WAF Analytics", "Automated Provisioning"). For the built-in services (`do_spaces`, `cloudflare`, `security_scans`, `ssh`) these come from static `description`/`capabilities` entries on `IntegrationCredentialsController::INTEGRATIONS`; for module-provided integrations, `IntegrationCredentialsController::index()` fetches the live feed via `ModuleDirectoryClient::fetch()` and prefers the feed's `description`/`capabilities` when present, falling back to the static metadata (or the module manifest's own description) otherwise. A feed fetch failure is swallowed silently — the page just falls back to static metadata rather than erroring. These badges used to live on the [Module Directory](/docs/features/module-directory) cards; they moved here to declutter that page.
 
 ## Legacy DB Fallback: `CredentialResolver`
 

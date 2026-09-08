@@ -2,7 +2,7 @@
 title: SpinupWP
 section: Integrations
 order: 20
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, spinupwp, inventory, wordpress]
 tracks: [modules/SpinupWp/src/**, app/Console/Commands/ImportSpinupWp.php, app/Console/Commands/SpinupWpTest.php]
@@ -88,6 +88,7 @@ Base URL `https://api.spinupwp.app/v1`.
 
 ## Idempotency
 
+- `hosting_provider` is set explicitly to `Site::HOSTING_PROVIDER_SPINUPWP` on every site the import creates. It used to fall back to a table-level default of `'spinupwp'`; that default has since been dropped (the column is `NOT NULL` with no default now) so a future creation path that forgets to set it fails loudly instead of silently mislabeling a site as SpinupWP-hosted.
 - `servers.spinupwp_id` is the natural key for re-import.
 - **Manual-add reconciliation**: a server added via `/servers/new` has no `spinupwp_id`. When the SpinupWP record for the same box later imports, `upsertServer` falls back to matching by `(hostname, ssh_port)` against rows where `spinupwp_id IS NULL`, adopts the SpinupWP id onto the manual row, and merges the SpinupWP-sourced fields. Without this, the import would collide on the `servers_hostname_ssh_port_unique` index.
 - **Deletion sweep**: at the end of every import, any local Site or Server row whose `spinupwp_id` is *not* in the API response has its `spinupwp_id` nulled. This is what surfaces SpinupWP-side deletes to `clockwork:find-orphan-sites` (the import itself never deletes rows — it only severs the linkage so the orphan-finder can classify on the next tick). Counts surface in the `spinupwp_id_nulled` field of the `Servers:` and `Sites:` summary lines.

@@ -2,7 +2,7 @@
 title: Backup relay (Multi-Provider → S3 Glacier)
 section: Features
 order: 130
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
 tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php]
@@ -192,8 +192,34 @@ CLOCKWORK_BACKUP_RELAY_MODE=in_repo
 The web UI provides full visibility and control:
 - **Operational Mode Badge**: Shows whether in-repo native archiving or external droplet handoff is active.
 - **Run Relay Now**: Triggers an on-demand in-repo archive run across all enabled sites.
-- **Site Relay Targets**: Domain list with provider badges, adapter capability status, last archived timestamp, and instant toggle switches.
+- **Site Relay Targets**: Domain list with provider badges, adapter capability status, last archived timestamp, and instant toggle switches. Each row is expandable — see [Viewing & Downloading Historical Archives](#viewing--downloading-historical-archives) below.
 - **Run History**: Table of recent runs displaying archived, skipped, failed counts, durations, and error details.
+
+## Viewing & Downloading Historical Archives
+
+Beyond scheduling and run status, `/settings/backup-relay` lets an operator inspect and download the actual archived S3 objects for each site — not just whether the last run succeeded.
+
+### `BackupArchiveEnumerator`
+
+`Modules\BackupRelay\Services\BackupArchiveEnumerator::forSite(Site $site)` lists every archive object for a site directly from S3, searching both the in-repo layout (`archives/{domain}/*`) and the external-agent layout (`{domain}/fs/*`, `{domain}/db/*`). It returns a summary (`total_count`, `total_bytes`/`total_size_formatted`, `last_archived_at`) plus a per-archive array with a detected component type (`fs`/`db`/`full`, guessed from the path/filename), size, an archived-at timestamp (parsed from the filename's date pattern, falling back to S3's `LastModified`), and a resolved download URL.
+
+**Why `listContents()`, not `size()`/`lastModified()`**: an earlier version of this code called `$disk->size()` and `$disk->lastModified()` per object — each of those issues a `HeadObject` request, which needs `s3:GetObject` on the IAM policy. The monitoring IAM user only has `s3:ListBucket`, so every size/timestamp lookup silently failed and every archive showed as **0 B** with no date. Switching to `$disk->listContents($prefix, true)` fixed it: `ListObjectsV2` already returns `Size`/`LastModified` for every object in its response, so no second per-object API call — and no extra IAM permission — is needed at all. (Verified against a real production bucket: one site showed 6 real archives, 169–273 MB each, 1.3 GB total, where the old code reported 0 B for every one of them.) The `HeadObject`-triggering fallback was deliberately removed rather than kept as a backstop — it would just re-fail with the same `AccessDenied` the `listContents()` switch exists to avoid.
+
+**Download URL resolution** (`getDownloadUrl()`): if the disk's configured driver is `s3` (`BackupArchiveEnumerator::supportsPresignedUrls()`), returns a real presigned S3 URL valid for `DOWNLOAD_URL_TTL_HOURS` (24 hours). Otherwise it falls back to an operator-authenticated Clockwork Control route (`settings.backup-relay.download`) — Laravel's `FilesystemAdapter::temporaryUrl()` exists on every driver, so a `method_exists()` check would always be true and never actually gate anything; checking the configured driver directly is what makes the fallback real. In `external_agent` mode, if the droplet's `download-links.json` control-channel manifest already has a presigned link for a given object, that link is used instead of minting a new one.
+
+### Expandable site rows
+
+Each row in the **Site Relay Targets** table is expandable: clicking it lazy-loads `GET /settings/backup-relay/sites/{site}/archives` (`settings.backup-relay.archives`, JSON) and renders loading/error/empty states plus, on success, summary metrics and a snapshot table — one row per archive with a type badge (`fs`/`db`/`full`), size, archived-at, and a direct download link.
+
+### Download route
+
+`GET /settings/backup-relay/sites/{site}/download` (`settings.backup-relay.download`) takes a base64-encoded `key` query parameter, validates it belongs to that site's own domain prefix (`archives/{domain}/` or `{domain}/` — 403s otherwise, so one site's row can't be used to fetch another site's backup), confirms the object still exists in S3 (404s otherwise), and either redirects to a freshly-minted 1-hour presigned URL or streams the file directly if the disk doesn't support presigned URLs.
+
+### Pushing offsite archive links to the Companion plugin
+
+`PressableBackupsReport` and `PushCompanionBackupsReport` — which populate the `offsite_archive` block of the backups payload pushed to each site's Companion plugin, surfaced on the client-facing `wp-admin/admin.php?page=clockwork-backups` page — now enrich that payload from `BackupArchiveEnumerator` for any `backup_relay_enabled` site not already covered by an `external_agent`-mode manifest entry: picking the newest `fs`/`db` (or `full`) archive's download URL, and setting `download_expires_at` to the real ~24h presigned-URL expiry (previously hardcoded `null` in this enrichment path).
+
+This enrichment is gated on `BackupArchiveEnumerator::supportsPresignedUrls()`: without a real presigned S3 URL, `getDownloadUrl()` would fall back to an operator-authenticated Clockwork Control route — which, handed to a client on the Companion wp-admin page, would just bounce them to the Clockwork Control login screen. Rather than hand a client a dead-end link, both commands omit `offsite_archive` entirely when presigned URLs aren't available.
 
 ## Cadence and Retention Policy
 

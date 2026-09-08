@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport}.php, app/Models/SiteCoreChecksumAllowlist.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php]
@@ -86,10 +86,10 @@ php artisan clockwork:verify-wp-core-checksums --site=42
 
 ## Non-SSH transports for core checksums
 
-`WpCoreChecksumVerifier::verify()` branches on `! $site->host()->supports(HostingProvider::CAP_SSH)` before touching root SSH — a capability check rather than the older direct `$site->isPressable()` call. `CAP_SSH` means "root/sudo SSH against a tracked `Server` row" specifically (SpinupWP only); everything else — Pressable, WP Engine, Kinsta — is `CAP_SSH=false` and splits three ways:
+`WpCoreChecksumVerifier::verify()` branches on `! $site->host()->supports(HostingProvider::CAP_SSH)` before touching root SSH — a capability check rather than the older direct `$site->isPressable()` call. `CAP_SSH` means "root/sudo SSH against a tracked `Server` row" — that's SpinupWP, GridPane, and Cloudways today (each backed by a real `servers` row with `hostname`/`ssh_user`/`ssh_password`), not just SpinupWP; everything else — Pressable, WP Engine, Kinsta — is `CAP_SSH=false` and splits three ways:
 
 
-- **SpinupWP** (`CAP_SSH=true`) — root SSH + sudo-to-site_user, the original path.
+- **SpinupWP / GridPane / Cloudways** (`CAP_SSH=true`) — root SSH + sudo-to-site_user, the original path. The on-disk WordPress root comes from `Site::resolveWpPath()`: the recorded `wp_path` if one's set, otherwise a per-provider convention (`/sites/{domain}/files` for SpinupWP, `/var/www/{domain}/htdocs` for GridPane). A site with no `wp_path` on a provider with no known convention (Cloudways today) fails cleanly with `status=failed` / `error=unknown_wp_path` rather than guessing at a path and silently scanning the wrong directory.
 - **Pressable** (`$site->isPressable()`, checked first since its quirks are genuinely Pressable-specific, not capability-based) — `wp core verify-checksums` via `PressableCommandRunner`, `cd /srv/htdocs && wp core verify-checksums` (Pressable's wp-cli shim rejects `--path=`, confirmed live).
 - **Everything else without `CAP_SSH`** (WP Engine, Kinsta) — `verifyViaCommandRunner()`, the generic path for a hosting provider with real per-site SSH but no `Server` row and no root/sudo layer. Uses `$site->host()->commandRunner()` (the `SiteCommandRunner` abstraction) directly, no `cd` needed since a genuinely per-site-scoped SSH gateway already lands you in the site's WordPress root — unlike Pressable's fixed-docroot async command layer. **Unverified against a live WP Engine/Kinsta account** — the working-directory assumption is a reasonable default, not a confirmed fact; see [Integrations → WP Engine](/docs/integrations/wp-engine) / [Kinsta](/docs/integrations/kinsta).
 

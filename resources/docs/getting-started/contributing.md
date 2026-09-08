@@ -2,7 +2,7 @@
 title: Contributing & Module Testing
 section: Getting Started
 order: 15
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [contributing, modules, open-source, vibe-coding, claude]
 tracks: [CONTRIBUTING.md]
@@ -126,6 +126,19 @@ Push your branch to your fork and submit a PR to `Clockwork-Web-Dev-LLC/clockwor
 - If you made changes, briefly describe what the live API returned vs. what the original code assumed.
 
 We review and merge PRs quickly!
+
+---
+
+## Branching Strategy for Internal & Agent-Assisted Work
+
+Everything above describes the external fork-and-PR workflow. If you're working directly in this repository instead — the core team, or an AI agent (Claude, Gemini, etc.) working alongside them — a lighter internal convention applies:
+
+- **Branch once the work is substantial**, not for every change. A new module feature, a new controller + views + migration, or anything spanning multiple files with real design decisions should get its own branch. A small, contained fix (one file, a clear regression, a typo, a docs correction) is still fine committed straight to `main`.
+- **Naming**: `feature/<slug>`, `fix/<slug>` (for a multi-file bugfix substantial enough to branch), or `chore/<slug>` (release prep, dependency bumps, tooling). Keep `<slug>` short, kebab-case, and named for what it does — `feature/client-reports-templates`, not `feature/aaron-wip`.
+- **One feature, one branch, one PR.** Don't stack unrelated work onto a branch that's already open for something else — open a second branch instead.
+- **Run the quality trifecta before opening a PR** — CI (`.github/workflows/tests.yml`) enforces it regardless, but catching it locally first saves a round-trip.
+- **Merge via squash**, then delete the branch (`gh pr merge --squash --delete-branch`), so `main`'s history stays one commit per logical feature/fix, matching how this project has always looked.
+- **Multiple agents can share the same checkout.** Before creating a branch or committing, run `git status` and `git fetch && git log --oneline main..origin/main` first. Don't branch off a dirty working tree that has someone else's in-progress, uncommitted work mixed into it — stash it or ask before touching it rather than assuming it's abandoned.
 
 ---
 

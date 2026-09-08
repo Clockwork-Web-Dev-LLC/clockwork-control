@@ -2,7 +2,7 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**]
@@ -100,19 +100,20 @@ During installation, `CompanionInstaller` pushes the secret via `wp db query` an
 
 ## Capabilities — per-site feature gates
 
-`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.21.3):
+`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.34.0, the version bundled via `config('clockwork.companion.version')`):
 
 ```
 contact-form-test, lockouts, wordfence-blocks, plugins, admins, wp-cron,
 comments-summary, snapshot, backups-report, admin-ui, sso, updates,
 action-log, security-scans, malware-scan, secret-rotate, auth-audit,
 traffic-report, resource-sampler, resource-sampler-toggle,
-form-subscriptions, post-update-verify
+form-subscriptions, lockouts-unlock, post-update-verify, two-factor,
+white-label
 ```
 
 Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin.
 
-Two of the newer app-side modules gate on capability strings not yet reflected in the list above (pending confirmation of the current plugin-side version): `code-snippets` (Code Snippets execution) and `comments-moderation` (Comment Moderation, checked by the weekly cleanup command). Site Maintenance has no dedicated capability string — it gates only on `companion_installed`.
+Three of the newer app-side modules gate on capability strings the companion plugin repo has added on top of `code-snippets`, `comments-moderation`, and `maintenance-mode` — but that work hasn't been version-bumped/released past v1.34.0 yet, so it isn't in the list above. `code-snippets` (Code Snippets execution) and `comments-moderation` (Comment Moderation, checked by the weekly cleanup command) are checked app-side; `maintenance-mode` exists plugin-side but Site Maintenance doesn't check it — it gates only on `companion_installed`. Don't fleet-deploy Companion expecting these until a release picks them up.
 
 ## Routes
 
@@ -128,7 +129,7 @@ Read-only GETs (HMAC-signed):
 Mutating POSTs (HMAC-signed):
 
 - `/test-contact-form` — fire a marker-injected submission for the form-test add-on
-- `/backups-report` — Clockwork pushes SpinupWP config + DO Spaces history
+- `/backups-report` — Clockwork pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork's own (LAN-only) login screen
 - `/action-log/append` — Clockwork mirrors every meaningful action so wp-admin can show it
 - `/sso/magic-link` — mint a one-time URL the operator clicks to land in wp-admin as the named admin
 - `/plugins/update` — single-slug WP plugin upgrade via `Plugin_Upgrader`
@@ -165,7 +166,7 @@ Skips MFA — same as `wp-cli user create-session`. None of our agency clients h
 
 ## White Labeling & Feature Gating
 
-- **White Label Branding (v1.33.0+)**: Configured under `/settings/wordpress-plugins` (or `/settings/companion`). Allows agencies to rebrand the client-facing wp-admin portal with custom plugin titles, agency branding, and logos. See [Features → Companion Branding](/docs/features/companion-branding).
+- **White Labeling hub (v1.33.0+, consolidated in v1.4.0)**: Configured under `/settings/companion` — as of v1.4.0 this is a 3-tab "White Labeling" hub (renamed from "Companion"), not just the plugin-branding page: Companion/wp-admin branding (custom plugin title, agency branding, logo), Client Reports branding (brand colors, presets, SLA text), and Plugin Notification Email branding (header/accent colors, badge text, test-email dispatch) — all served by `CompanionBrandingManager`, with the Reports/Email tabs falling back to the core Companion tab's settings when unconfigured. `/settings/wordpress-plugins` is a **separate, unrelated page** (fleet-wide WordPress security-plugin + Companion deployment status via `WordPressPluginsController`) — despite the similar name it is not an alias for the branding hub. See [Features → Companion Branding](/docs/features/companion-branding).
 - **Traffic Tab Visibility**: Managed via `Site::canViewCompanionTraffic()`, conditionally hiding the Traffic tab in client wp-admin when SSH access or traffic rollups are unavailable on the host.
 
 ## Where to find each piece

@@ -2,7 +2,7 @@
 title: Mailgun
 section: Integrations
 order: 70
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, mailgun, email, notifications]
 tracks: [config/mail.php, app/Mail/**, app/Console/Commands/EmailFormTestSummaries.php]

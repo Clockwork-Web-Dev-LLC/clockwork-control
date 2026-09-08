@@ -2,15 +2,17 @@
 title: Google OAuth
 section: Integrations
 order: 50
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, auth, google, github, microsoft, oauth]
 tracks: [app/Http/Controllers/Auth/**, app/Services/Auth/**, app/Http/Controllers/LoginController.php, modules/AuthGoogle/src/**, modules/AuthGitHub/src/**, modules/AuthMicrosoft/src/**, modules/Core/src/Contracts/AuthProvider.php, config/services.php]
 ---
 
-Google OAuth is the original and still primary login provider — this page keeps its name and most of its detail for that reason — but it's no longer the only one. GitHub and Microsoft (365 / Azure AD / Entra ID) ship as their own auth modules alongside it. All three implement `Modules\Core\Contracts\AuthProvider` and share one login flow: OAuth handles "is this person who they say they are," the `users` table handles "should they be allowed in," and `App\Services\Auth\OAuthLoginHandler` enforces the allowlist + logs the audit trail identically regardless of which provider they signed in with. No passwords, no auto-provisioning, on any of the three.
+Google OAuth is the original and still primary SSO provider — this page keeps its name and most of its detail for that reason — but it's no longer the only one, and OAuth itself is no longer the only way in. GitHub and Microsoft (365 / Azure AD / Entra ID) ship as their own auth modules alongside Google. All three implement `Modules\Core\Contracts\AuthProvider` and share one login flow: OAuth handles "is this person who they say they are," the `users` table handles "should they be allowed in," and `App\Services\Auth\OAuthLoginHandler` enforces the allowlist + logs the audit trail identically regardless of which provider they signed in with. No auto-provisioning on any of the three — a first-time OAuth user is denied unless someone added them first.
 
-`LoginController::show()` only lists a provider once its credentials are actually configured (`AuthProvider::isConfigured()`) — an installed-but-uncredentialed module simply doesn't show a button, rather than rendering one that fails when clicked.
+Local email/password sign-in also exists now, handled directly by `LoginController::login()` (`POST /login`), and is the always-available fallback: `/login` always renders the local sign-in form, with OAuth provider buttons appended below a divider only when at least one is actually configured. This page stays focused on the Google OAuth path; see [Architecture → Request lifecycle](/docs/architecture/request-lifecycle#login-local-password--modular-oauth) and [Architecture → Security model](/docs/architecture/security-model) for the local-password flow and the full picture of both auth paths together.
+
+`LoginController::show()` only lists an OAuth provider once its credentials are actually configured (`AuthProvider::isConfigured()`) — an installed-but-uncredentialed module simply doesn't show a button, rather than rendering one that fails when clicked.
 
 ## Why we use OAuth at all
 
@@ -51,6 +53,8 @@ php artisan clockwork:add-user you@example.com --name="Your Name"
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/login` | Renders the local email/password form, plus a configured-provider's OAuth button below a divider. |
+| POST | `/login` | Local password sign-in (`LoginController::login()`), rate-limited `throttle:5,1`. |
 | GET | `/auth/google/redirect` | Kick off the Socialite flow. |
 | GET | `/auth/google/callback` | Where Google sends the user back. Allowlist check happens here. |
 | GET | `/auth/github/redirect` / `/auth/github/callback` | Same shape, GitHub. Routes registered by `Modules\AuthGitHub\GitHubAuthServiceProvider::boot()` — module-owned, gated on the module being enabled. |
@@ -63,41 +67,47 @@ All are public (the only public routes besides `/login`). Google's pair is the o
 - `modules/AuthGoogle/src/GoogleAuthProvider.php`, `modules/AuthGitHub/src/GitHubAuthProvider.php`, `modules/AuthMicrosoft/src/MicrosoftAuthProvider.php` — each implements `AuthProvider`: builds its Socialite driver (Google/GitHub) or hand-rolled OAuth2 flow (Microsoft — no Socialite driver used there), does the provider-side redirect/callback dance, then hands off to `OAuthLoginHandler`.
 - `app/Services/Auth/OAuthLoginHandler.php` — shared allowlist check, `users` row sync (name/avatar/provider id/`last_login_at`), session login, and audit log entry. One implementation, all three providers call it.
 - `app/Http/Controllers/Auth/GoogleAuthController.php` — thin `redirect()`/`callback()` delegator to `GoogleAuthProvider`. GitHub/Microsoft have their own equivalent controllers living inside their modules instead of `app/Http/Controllers/Auth/`.
-- `app/Http/Controllers/Auth/LoginController.php` — `/login` (filters to configured providers only) + `/logout`.
-- `app/Console/Commands/AddUser.php` — bootstrap + recovery escape hatch.
+- `app/Http/Controllers/Auth/LoginController.php` — `show()` renders `/login` (local form always, OAuth buttons filtered to configured providers only); `login()` handles local `POST /login`; `logout()` handles `/logout`.
+- `app/Console/Commands/AddUser.php` — bootstrap + recovery escape hatch; takes an optional `--password=` to set a local password on creation/restore.
+- `app/Console/Commands/SetPassword.php` — `clockwork:set-password` CLI recovery path (masked prompt or `--password=`) for setting/resetting an existing operator's local password.
 - `app/Http/Controllers/UsersSettingsController.php` — `/settings/users` UI.
 - `database/migrations/2026_09_04_000003_add_oauth_provider_ids_to_users_table.php` — adds `github_id`/`microsoft_id` alongside the existing `google_id`.
 - Config: `config/services.php` → `google`/`github`/`microsoft` keys, or set per-instance via `/settings/integrations` (resolved through `CredentialResolver`, DB first).
 
 ## Allowlist semantics
 
-The `users` table IS the allowlist:
+The `users` table IS the allowlist, for OAuth and local password sign-in alike:
 
 - A row exists ⇒ allowed.
 - `revoked_at IS NULL` ⇒ active.
-- No matching row, or revoked ⇒ callback bounces back to `/login` with a denial banner.
-- **No auto-provisioning.** A first-time Google user is denied unless someone added them first.
+- No matching row, or revoked ⇒ OAuth callback bounces back to `/login` with a denial banner; local login gets an equivalent "account has been revoked" message.
+- A row with `password IS NULL` is SSO-only — attempting local password login on it returns a message pointing the user at their configured OAuth provider (or asking an admin to set a local password).
+- **No auto-provisioning.** A first-time Google (or GitHub/Microsoft) user is denied unless someone added them first.
 
 ## Bootstrap and recovery
 
 ```bash
-# Add or restore a user (idempotent — restores revoked rows):
-php artisan clockwork:add-user alice@example.com --name=Alice
+# Add or restore a user (idempotent — restores revoked rows), optionally with a local password:
+php artisan clockwork:add-user alice@example.com --name=Alice --password=secret
+
+# Set or reset an existing operator's local password (masked prompt, or --password=):
+php artisan clockwork:set-password alice@example.com
 
 # UI version (every authenticated user can manage):
-# /settings/users  — add, revoke, restore
+# /settings/users  — add, revoke, restore, and set/reset a local password
 ```
 
-`clockwork:add-user` is the always-works escape hatch when the UI is locked out.
+`clockwork:add-user` and `clockwork:set-password` are the always-works escape hatch when the UI is locked out — useful now that local password is a valid recovery path even on an instance that only ever used OAuth.
 
 ## Audit trail
 
-Every login + add/revoke/restore lands in `action_logs`:
+Every login + add/revoke/restore/password-change lands in `action_logs`:
 
 - `TYPE_LOGIN`
 - `TYPE_USER_ADDED`
 - `TYPE_USER_REVOKED`
 - `TYPE_USER_RESTORED`
+- `TYPE_USER_PASSWORD_CHANGED`
 
 Surfaces on `/maintenance-history`.
 
@@ -105,5 +115,6 @@ Surfaces on `/maintenance-history`.
 
 - **Redirect URI must match exactly.** Google's error message is unhelpful — usually a wrong port, missing `/callback`, or http vs https.
 - **Revoke does not kill active sessions.** A revoked user keeps their existing session until logout / expiry. If you ever need real revocation, add a per-request middleware that re-checks `revoked_at`.
-- **Revoke-self is blocked at the controller.** The `clockwork:add-user` command + restore flow are the always-works recovery if the team accidentally locks themselves out.
+- **Revoke-self is blocked at the controller.** The `clockwork:add-user` / `clockwork:set-password` commands + restore flow are the always-works recovery if the team accidentally locks themselves out.
 - **`GOOGLE_HD` only restricts the picker, not the response.** Don't rely on it as a security gate — the allowlist does the gating.
+- **A `NULL` password isn't a broken account, it's SSO-only by design.** Don't "fix" it by setting a random password unless you actually want to offer that user a local-login fallback.

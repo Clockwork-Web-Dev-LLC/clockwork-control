@@ -2,7 +2,7 @@
 title: Pressable
 section: Integrations
 order: 21
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, pressable, hosting, wordpress]
 tracks: [modules/Pressable/src/**, app/Console/Commands/{ImportPressable,PressableTest,InstallCompanionPressable,PressableBackupsReport,PressableTrafficReport,PressableSecuritySummaryReport}.php]
@@ -90,7 +90,7 @@ Base URL `https://my.pressable.com/v1`.
 - `app/Console/Commands/ImportPressable.php` — idempotent site import (`clockwork:import-pressable`).
 - `app/Console/Commands/PressableTest.php` — connectivity check.
 - `app/Console/Commands/InstallCompanionPressable.php` — Companion install/update (`clockwork:install-companion-pressable`). Every result (installed, updated, failed) routes through `ActionLogger::recordCompanionInstall()`. `clockwork:detect-stuck-companion-state` (daily) alerts once on a failed install never retried within 24h, or an installed Companion gone silent for 3+ days, and once on recovery. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck).
-- `app/Console/Commands/PressableBackupsReport.php`, `PressableTrafficReport.php`, `PressableSecuritySummaryReport.php` — push real Pressable data into Companion's wp-admin pages. `PressableBackupsReport` also reads the offsite-archive manifest that `clockwork:pull-backup-relay-report` writes and attaches an `offsite_archive` block (download URLs + `last_archived_at`) per site alongside the native Pressable backup history, for care-plan sites enrolled in the S3 Glacier relay. See [Features → Backup relay](/docs/features/backup-relay).
+- `app/Console/Commands/PressableBackupsReport.php`, `PressableTrafficReport.php`, `PressableSecuritySummaryReport.php` — push real Pressable data into Companion's wp-admin pages. `PressableBackupsReport` also reads the offsite-archive manifest that `clockwork:pull-backup-relay-report` writes and attaches an `offsite_archive` block (download URLs + `last_archived_at`) per site alongside the native Pressable backup history, for care-plan sites enrolled in the S3 Glacier relay. If a backup-relay-enabled site has no manifest entry, it falls back to enumerating the site's S3 archives directly (`Modules\BackupRelay\Services\BackupArchiveEnumerator`) for the same block, with real presigned download URLs. See [Features → Backup relay](/docs/features/backup-relay).
 - Config: `config/clockwork.php` → `pressable` key.
 
 ## PressableCommandRunner — how "SSH" works without SSH

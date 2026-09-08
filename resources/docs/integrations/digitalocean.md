@@ -2,7 +2,7 @@
 title: DigitalOcean
 section: Integrations
 order: 10
-updated: 2026-09-06
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, digitalocean, monitoring]
 tracks: [modules/DigitalOcean/src/**, app/Services/DigitalOcean/SpacesClient.php, app/Services/Monitoring/CpuStatusClassifier.php, app/Console/Commands/PollServers.php, app/Console/Commands/DigitalOceanTest.php]

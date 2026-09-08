@@ -2,7 +2,7 @@
 title: WordPress plugin inventory
 section: Features
 order: 80
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [wordpress, plugins, inventory, updates, pressable]
 tracks: [app/Services/Sites/WpPluginDetector.php, app/Console/Commands/{DetectWpPlugins,RefreshCompanionSnapshot}.php, app/Http/Controllers/WordPressPluginsController.php]
@@ -20,7 +20,7 @@ A fleet-wide view of which WordPress plugins are installed, which need updates, 
 
 **Where Companion is installed**, plugin data comes from the `/snapshot` route — full per-plugin inventory (slug, name, version, active, update_available, new_version, auto_update). Cached in `sites.companion_snapshot` JSON, refreshed nightly at 01:30 ET by `clockwork:refresh-companion-snapshot` (plus on-demand after any update batch from the Updates page).
 
-**Where Companion isn't installed**, we fall back to an SSH + `wp-cli` probe (`clockwork:detect-wp-plugins`, daily 04:45 UTC) — SpinupWP-only, no Pressable transport exists for this probe today. Scoped to the slugs we care about (`limit-login-attempts-reloaded`, `wordfence`) — full inventory requires Companion. SpinupWP's update *booleans* (`wp_core_update`, `wp_theme_updates`, `wp_plugin_updates`) are still imported and surface as a coarse "updates available" badge — always false for Pressable sites regardless of real update state, same caveat as the per-site Overview tab pills (see [Features → Security scans](/docs/features/security-scans)).
+**Where Companion isn't installed**, we fall back to an SSH + `wp-cli` probe (`clockwork:detect-wp-plugins`, daily 04:45 UTC) — server-hosted sites only (any site with a `Server` row: SpinupWP, GridPane, Cloudways), no Pressable transport exists for this probe today since Pressable sites have no `Server` row to SSH against. Scoped to the slugs we care about (`limit-login-attempts-reloaded`, `wordfence`) — full inventory requires Companion. The on-disk WordPress path comes from `Site::resolveWpPath()` (the recorded `wp_path`, or a per-provider convention — `/sites/{domain}/files` for SpinupWP, `/var/www/{domain}/htdocs` for GridPane); a site with neither fails cleanly rather than probing a guessed, possibly-wrong path. SpinupWP's update *booleans* (`wp_core_update`, `wp_theme_updates`, `wp_plugin_updates`) are still imported and surface as a coarse "updates available" badge — always false for Pressable sites regardless of real update state, same caveat as the per-site Overview tab pills (see [Features → Security scans](/docs/features/security-scans)).
 
 ## Per-site updates
 

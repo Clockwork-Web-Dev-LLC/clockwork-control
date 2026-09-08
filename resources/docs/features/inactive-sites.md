@@ -3,7 +3,7 @@ title: Inactive sites
 section: Features
 order: 32
 author: Aaron Reimann
-updated: 2026-09-07
+updated: 2026-09-08
 tags: [sites, issues, alerting, care-plan]
 tracks: [app/Models/Site.php, app/Support/IssueCounter.php, app/Http/Controllers/IssuesController.php, app/Http/Controllers/SitesController.php, app/Services/Chat/ChatNotifierDispatcher.php, database/migrations/*add_is_inactive_to_sites*]
 ---

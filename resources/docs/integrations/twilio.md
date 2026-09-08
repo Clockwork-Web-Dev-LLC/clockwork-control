@@ -2,7 +2,7 @@
 title: Twilio (SMS)
 section: Integrations
 order: 75
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [integrations, twilio, notifications, sms, on-call]
 tracks: [modules/Twilio/src/**, app/Services/Twilio/OnCallResolver.php, app/Http/Controllers/NotificationSettingsController.php, resources/views/settings/notifications.blade.php]

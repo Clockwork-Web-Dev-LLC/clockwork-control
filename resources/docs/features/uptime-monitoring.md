@@ -2,7 +2,7 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack]
 tracks: [app/Services/Uptime/**, app/Http/Controllers/MonitoringController.php, app/Console/Commands/CheckSiteUptime.php]
@@ -14,7 +14,7 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 
 ## Where to look
 
-- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" hero, per-site uptime % over 24h / 7d / 30d, latest events feed.
+- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed.
 - **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min) and failure threshold (1–6 failures). Changes here apply to every monitored site.
 - **`/sites/<id>/overview`** — the Status card on the per-site Overview tab. Shows current state plus how long it's been that way.
 - **Companion → `Tools → Clockwork → Uptime`** — the client-visible version. Same data, friendlier copy. Clients see this in their wp-admin.
@@ -81,7 +81,7 @@ When a site transitions `up → down`, `UptimeDiagnostician` opens a single SSH 
 
 | Signal | What it tells you |
 |---|---|
-| `maintenance.conf` non-empty | **SpinupWP put the site in maintenance mode** (file holds `return 503;`). Disable maintenance to recover. |
+| `maintenance.conf` non-empty | **Maintenance mode is active** (SpinupWP-style layout; file holds `return 503;`). Disable maintenance mode or truncate the file to recover. |
 | `/run/php/php*-{site_user}.sock` missing | **PHP-FPM pool socket is gone** — the backend isn't running. `sudo systemctl restart phpX.Y-fpm`. |
 | `systemctl is-active php*-fpm` = `failed`/`inactive` | **FPM master service is down** — same fix, restart the service. |
 | `/proc/loadavg` ÷ cores > 4× | **Origin is overloaded** — workers timing out under load, the box itself needs attention. |
@@ -90,7 +90,7 @@ When a site transitions `up → down`, `UptimeDiagnostician` opens a single SSH 
 One round-trip, ~1–2 seconds, soft-fails to "could not SSH" if the box itself is unreachable (which is itself a useful signal — "we can't even talk to the server"). The result lands in two places:
 
 - **`site_uptime_events.diagnosis`** — JSON column on the down-event row. Inspectable forever in the per-site event history.
-- **Mattermost alert body** — the channel post now leads with the diagnosis summary instead of "Failed 2 probes in a row." For example: *"SpinupWP maintenance mode is active — /etc/nginx/sites-available/{domain}/server/maintenance.conf returns 503. Disable maintenance in SpinupWP or truncate the file."*
+- **Mattermost alert body** — the channel post now leads with the diagnosis summary instead of "Failed 2 probes in a row." For example: *"Maintenance mode is active (SpinupWP-style layout) — /etc/nginx/sites-available/{site-slug}/server/maintenance.conf returns 503. Disable maintenance mode or truncate the file."*
 
 The check runs **once per outage**, on the transition only — not on every probe. Steady-state probing is unaffected. Recovery alerts don't carry a diagnosis (nothing to diagnose when a site is up).
 

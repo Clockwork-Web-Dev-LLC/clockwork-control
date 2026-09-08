@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
@@ -94,9 +94,10 @@ The scheduler and queue worker both run as launchd services. The queue worker is
 | 03:45 | `clockwork:reconcile-provider` | Link servers import-spinupwp couldn't IP-cross-reference (manual adds, unknown-to-SpinupWP boxes). |
 | 03:50 | `clockwork:refresh-companion-snapshot --pending-updates-only` | Closes the SpinupWP/Companion snapshot gap: `import-spinupwp` (03:30) marks `wp_plugin_updates=true` for sites that have new updates, but the full snapshot refresh (01:30 ET) already ran using Companion's pre-update cached state. This targeted re-pull refreshes only sites flagged pending so the Updates page sees fresh data without requiring a full fleet refresh. |
 | 04:00 | `clockwork:check-ssl-certs` | Per-site SSL state + Mattermost transitions. |
-| 04:15 | `clockwork:poll-system-updates` | SSH `apt-check` + `reboot-required.pkgs` + `apt list --upgradable` → `server_update_snapshots`. Gated to servers SpinupWP flagged with `upgrade_required=true` — see the weekly `--all` sweep below for the servers this misses. |
+| 04:15 | `clockwork:poll-system-updates` | SSH `apt-check` + `reboot-required.pkgs` + `apt list --upgradable` → `server_update_snapshots`. Runs against (a) SpinupWP-managed servers SpinupWP flagged with `upgrade_required=true`, and (b) every non-SpinupWP-managed server unconditionally, since nothing else sets that flag for GridPane/Hetzner/custom-VPS boxes. See the weekly `--all` sweep below, now a safety net rather than the primary mechanism for non-SpinupWP servers. |
 | 04:30 | `clockwork:prune-server-metrics` | Drop `server_metrics` rows older than 90 days. |
 | 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Lighthouse run for tonight's 1/7th of the care-plan fleet — GTmetrix primary, PSI fallback. Each site gets one scan per week. Scheduled at 04:45 to land just after GTmetrix's daily credit refill (credits don't bank). `--strategy` is display-only on GTmetrix's tier; kept for row continuity. |
+| 04:45 | `clockwork:capture-site-screenshots` | Refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `withoutOverlapping(30)`, `runInBackground()`. |
 | 04:45 | `clockwork:detect-wp-plugins` | SSH wp-cli probe for active LLAR/Wordfence per WP site. |
 | 04:50 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. |
 | 04:55 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-picked form-test subscriptions (Companion wp-admin Forms tab) into `contact_form_tests`. Slots between detect (04:50) and test (06:00). |
@@ -123,7 +124,7 @@ The scheduler and queue worker both run as launchd services. The queue worker is
 
 | Day / time | Command | What it does |
 |---|---|---|
-| Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's SpinupWP `upgrade_required` gate. That flag only ever gets set by the SpinupWP mirror import, so this weekly sweep ensures directly-provisioned cloud servers (DigitalOcean/Azure/Hetzner) are consistently polled. |
+| Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's `upgrade_required` gate entirely. Now a safety net for SpinupWP servers whose mirrored flag is stale or wrong — the daily job above already polls non-SpinupWP-managed servers unconditionally, so this sweep is no longer their only path to being polled. |
 | Sun 05:15 | `clockwork:cleanup-spam-comments` | Purge stale spam and trash comments across Companion-equipped sites, via `CommentModerationServiceProvider::scheduledTasks()`. |
 | Sun 05:30 | `clockwork:refresh-fail2ban-ignoreip` | Refresh CF ranges + fleet IPs in every server's jail. |
 | Sun 05:30 | `clockwork:scan-wp7-truncation --repair` | Sweep + auto-repair WP 7.0 upgrades that left `wp-includes/php-ai-client/` files with truncated names. |

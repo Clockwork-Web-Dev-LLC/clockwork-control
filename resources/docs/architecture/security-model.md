@@ -2,7 +2,7 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Services/Companion/**, modules/Pressable/src/**, config/clockwork.php]
@@ -18,7 +18,8 @@ Clockwork is local-LAN-only. The DB is the highest-value target on the host: SSH
 
 - The app is bound to localhost. Don't run `php artisan serve --host 0.0.0.0` and don't expose Herd `.test` domains beyond the LAN without a deliberate decision.
 - The home network NAT is the actual perimeter. There is no public URL and no inbound from outside.
-- Outbound calls are HTTPS to known third parties only (DigitalOcean, Hetzner Cloud, Azure, Vultr, Linode, SpinupWP, Pressable, WP Engine, Kinsta, Cloudways, Cloudflare, Bill.com, Mattermost, Slack, Twilio, Mailgun, GTmetrix, PageSpeed Insights, Companion sites, blacklist/malware-scan services). LM Studio is loopback-only.
+- Outbound calls are HTTPS to known third parties only (DigitalOcean, Hetzner Cloud, Azure, Vultr, Linode, SpinupWP, Pressable, WP Engine, Kinsta, Cloudways, Cloudflare, Bill.com, Mattermost, Slack, Twilio, Mailgun, GTmetrix, PageSpeed Insights, Companion sites, blacklist/malware-scan services, and Clockwork Control's own anonymous telemetry endpoint — see below). LM Studio is loopback-only.
+- **Anonymous usage telemetry is on by default** (`CLOCKWORK_TELEMETRY_ENABLED`, weekly cron + viewable/one-click-opt-out on `/settings/maintenance`). `App\Services\Telemetry\TelemetryPayloadBuilder` deliberately narrows the payload to exact site/server counts, per-module breakdowns, and an install ID — never domains, IPs, emails, or database contents. Still worth knowing about for a local-LAN-only threat model: it's the one outbound call that's on by default rather than opt-in.
 
 ## Physical & host security
 

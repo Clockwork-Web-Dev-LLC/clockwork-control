@@ -2,7 +2,7 @@
 title: Settings & Operations Hub
 section: Features
 order: 90
-updated: 2026-09-07
+updated: 2026-09-08
 author: Aaron Reimann
 tags: [settings, operations, fleet, hub, navigation]
 tracks: [app/Http/Controllers/SettingsController.php, resources/views/settings/index.blade.php, resources/views/settings/_tabs.blade.php]
@@ -18,7 +18,7 @@ The hub categorizes settings and operational tools into four functional quadrant
 
 ### 1. Fleet & Branding
 Policies and client-facing customizations applied across monitored sites and client environments:
-* **Companion (White Label)** (`/settings/companion`) — Configure agency logo, branding palette, support links, and mu-plugin deployment across the fleet.
+* **White Labeling** (`/settings/companion`, renamed from "Companion") — 3-tab hub: Companion (wp-admin) branding (logo, plugin name/menu, support links), Client Reports branding (colors, footer text), and Plugin Notification Email branding (header/accent colors, badge text, test-send). See [Companion & White Label](/docs/features/companion-branding).
 * **Tag Management** (`/settings/tags`) — Manage server and site tagging taxonomy for grouped actions and batch scheduling.
 * **WordPress Plugins** (`/settings/wordpress-plugins`) — Fleet-wide plugin version inventory, adoption metrics, and update tracking.
 * **Ingest Pipeline** (`/settings/ingest`) — LLAR and Wordfence threat log ingestion frequency and IP ban auto-approval policies.
@@ -54,6 +54,6 @@ Application governance, health diagnostics, and platform maintenance:
 ## Live Search & Navigation
 
 * **Instant Client-Side Filtering**: Powered by Alpine.js (`x-model="search"`). Filters all 24+ tool links instantly by title, description, or keyword (e.g. typing `"slack"`, `"backup"`, or `"token"` highlights matching cards in real time).
-* **Settings Sub-Tabs (`settings._tabs.blade.php`)**: Persistent sub-navigation banner rendered across settings views (`Overview`, `Fleet & Branding`, `Integrations & Alerts`, `Operations & Tools`, `System & Workspace`), preserving context as operators navigate between related tools.
+* **Settings Sub-Tabs (`settings._tabs.blade.php`)**: A persistent two-tier navigation block rendered above `<x-page-header>` on every settings/operations view — Tier 1 is the five pillar tabs (`Overview`, `Fleet & Branding`, `Integrations & Alerts`, `Operations & Tools`, `System & Workspace`); Tier 2 is a contextual "tools" ribbon (a contained, rounded pill container with an elevated active-state pill) listing the pages within whichever pillar is currently active, so operators keep both their place in the hierarchy and one-click access to sibling tools as they drill in. It's included on all settings pages plus four Operations & Tools pages that live outside `resources/views/settings/`: `/capacity` (and its settings sub-page), `/maintenance-history`, `/operations/server-updates`, and the bulk SSH credentials page (`/servers/credentials`) — all four were missing the nav until a follow-up fix added it.
 * **Mega-Menu Popover**: Desktop header gear icon opens a categorized 4-column menu matching the hub categories, providing single-click direct access to any destination without navigating through the hub.
 * **Mobile Slide-Over Drawer**: Responsive navigation drawer containing quick access links to all four settings quadrants, theme switching, and sign-out actions.
