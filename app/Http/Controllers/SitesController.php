@@ -205,6 +205,8 @@ class SitesController extends Controller
             ->first();
         $formTestsCount = $site->contactFormTests()->count();
 
+        $dashboardLayout = $site->resolvedDashboardLayout();
+
         return compact(
             'recentLogs',
             'logCount24h',
@@ -221,7 +223,8 @@ class SitesController extends Controller
             'traffic7dVisits',
             'traffic7dRequests',
             'latestFormRun',
-            'formTestsCount'
+            'formTestsCount',
+            'dashboardLayout'
         );
     }
 
@@ -773,6 +776,41 @@ class SitesController extends Controller
         }
 
         return back()->with('status', 'Site notes saved successfully.');
+    }
+
+    public function updateLayout(Request $request, Site $site): JsonResponse|RedirectResponse
+    {
+        if ($request->boolean('reset')) {
+            $site->update(['dashboard_layout' => null]);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'ok' => true,
+                    'layout' => Site::DEFAULT_DASHBOARD_LAYOUT,
+                    'message' => 'Dashboard layout reset to default.',
+                ]);
+            }
+
+            return back()->with('status', 'Dashboard layout reset to default.');
+        }
+
+        $validated = $request->validate([
+            'layout' => ['required', 'array'],
+            'layout.*' => ['string', 'in:'.implode(',', Site::DEFAULT_DASHBOARD_LAYOUT)],
+        ]);
+
+        $ordered = array_values(array_unique($validated['layout']));
+        $site->update(['dashboard_layout' => $ordered]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'layout' => $site->resolvedDashboardLayout(),
+                'message' => 'Dashboard layout updated successfully.',
+            ]);
+        }
+
+        return back()->with('status', 'Dashboard layout updated.');
     }
 
     /**

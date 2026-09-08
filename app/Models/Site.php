@@ -27,6 +27,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property string $hosting_provider spinupwp|pressable
  * @property string $domain
  * @property ?string $notes
+ * @property ?array $dashboard_layout
  * @property ?string $site_user
  * @property ?string $wp_path
  * @property ?string $db_host
@@ -209,6 +210,7 @@ class Site extends Model
         'hosting_provider',
         'domain',
         'notes',
+        'dashboard_layout',
         'site_user',
         'wp_path',
         'db_host',
@@ -336,6 +338,7 @@ class Site extends Model
             'companion_installed' => 'boolean',
             'companion_capabilities' => 'array',
             'companion_secret' => 'encrypted',
+            'dashboard_layout' => 'array',
             'domain_expires_at' => 'datetime',
             'domain_rdap_checked_at' => 'datetime',
             'domain_expiration_state_changed_at' => 'datetime',
@@ -838,5 +841,39 @@ class Site extends Model
         $downtimeMinutes = min($totalMinutes, (int) round($totalDowntimeMinutes));
 
         return max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
+    }
+
+    public const DEFAULT_DASHBOARD_LAYOUT = [
+        'updates',
+        'uptime',
+        'performance',
+        'backups',
+        'traffic',
+        'notes',
+        'security',
+        'seo',
+        'forms',
+    ];
+
+    /**
+     * Return the ordered list of widget keys for this site's dashboard.
+     * Appends any newly introduced default widgets if missing from a saved custom layout.
+     *
+     * @return array<string>
+     */
+    public function resolvedDashboardLayout(): array
+    {
+        $saved = is_array($this->dashboard_layout) ? $this->dashboard_layout : [];
+        if (empty($saved)) {
+            return self::DEFAULT_DASHBOARD_LAYOUT;
+        }
+
+        // Filter to only valid known widgets, preserving operator's order
+        $ordered = array_values(array_intersect($saved, self::DEFAULT_DASHBOARD_LAYOUT));
+
+        // Append any default widgets that weren't in the saved list
+        $missing = array_diff(self::DEFAULT_DASHBOARD_LAYOUT, $ordered);
+
+        return array_values(array_merge($ordered, $missing));
     }
 }

@@ -267,6 +267,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('sites.show');
     Route::patch('/sites/{site}/cert', [SitesController::class, 'updateCert'])->name('sites.cert.update');
     Route::patch('/sites/{site}/notes', [SitesController::class, 'updateNotes'])->name('sites.notes.update');
+    Route::patch('/sites/{site}/layout', [SitesController::class, 'updateLayout'])->name('sites.layout.update');
     Route::post('/sites/{site}/cert/recheck', [SitesController::class, 'recheckCert'])->name('sites.cert.recheck');
     Route::post('/sites/{site}/uptime/recheck', [SitesController::class, 'recheckUptime'])->name('sites.uptime.recheck');
     Route::post('/sites/{site}/domain/recheck', [DomainExpirationController::class, 'recheck'])->name('sites.domain.recheck');

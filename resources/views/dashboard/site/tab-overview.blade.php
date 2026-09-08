@@ -110,22 +110,63 @@
     </button>
 </div>
 
-{{-- 3-Column Command Center Widget Grid --}}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-    {{-- Row 1: Core Maintenance & Health --}}
-    <div>@include('dashboard.site.widgets._widget-updates')</div>
-    <div>@include('dashboard.site.widgets._widget-uptime')</div>
-    <div>@include('dashboard.site.widgets._widget-performance')</div>
+{{-- 3-Column Command Center Widget Grid with Drag & Drop Reordering --}}
+<div x-data="siteDashboardReorder({
+    updateUrl: '{{ route('sites.layout.update', $site) }}',
+    csrf: '{{ csrf_token() }}',
+    order: {{ json_encode($dashboardLayout) }},
+    isCustom: {{ $site->dashboard_layout !== null ? 'true' : 'false' }}
+})">
+    {{-- Reorder helper and controls bar --}}
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3 px-1 text-xs text-[var(--color-ink-muted)]">
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 font-medium text-[var(--color-ink-strong)]">
+                <i class="fa-solid fa-grip-vertical text-gray-400"></i> Command Center Cards
+            </span>
+            <span class="text-[var(--color-border)]">|</span>
+            <span class="text-[11px] text-[var(--color-ink-soft)] flex items-center gap-1">
+                <i class="fa-solid fa-arrows-up-down-left-right text-[10px]"></i> Drag cards to reorder per site
+            </span>
+        </div>
 
-    {{-- Row 2: Infrastructure & Operations --}}
-    <div>@include('dashboard.site.widgets._widget-backups')</div>
-    <div>@include('dashboard.site.widgets._widget-traffic')</div>
-    <div>@include('dashboard.site.widgets._widget-notes')</div>
+        <div class="flex items-center gap-3">
+            <span x-show="savedToast" x-cloak class="text-emerald-600 font-medium text-xs flex items-center gap-1 transition-opacity">
+                <i class="fa-solid fa-circle-check text-[11px]"></i> Layout saved
+            </span>
+            <button type="button"
+                    x-show="isCustom"
+                    @click="resetLayout()"
+                    :disabled="saving"
+                    class="text-[11px] text-[var(--color-ink-muted)] hover:text-rose-600 transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Reset to default
+            </button>
+        </div>
+    </div>
 
-    {{-- Row 3: Security, SEO & Forms --}}
-    <div>@include('dashboard.site.widgets._widget-security')</div>
-    <div>@include('dashboard.site.widgets._widget-seo')</div>
-    <div>@include('dashboard.site.widgets._widget-forms')</div>
+    <div id="site-dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+        @foreach ($dashboardLayout as $widget)
+            <div class="dashboard-widget-card group transition-all duration-200 cursor-default"
+                 data-widget="{{ $widget }}"
+                 draggable="true"
+                 @dragstart="onDragStart($event, '{{ $widget }}')"
+                 @dragend="onDragEnd($event)"
+                 @dragover.prevent="onDragOver($event, '{{ $widget }}')"
+                 @dragleave="onDragLeave($event)"
+                 @drop="onDrop($event, '{{ $widget }}')"
+                 :class="{
+                     'opacity-40 scale-95 border-dashed border-2 border-[var(--color-brand)] rounded-2xl': draggedWidget === '{{ $widget }}',
+                     'border-t-4 border-t-[var(--color-brand)]': dragOverWidget === '{{ $widget }}' && draggedWidget !== '{{ $widget }}'
+                 }">
+                <div class="relative h-full">
+                    <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-gray-400 hover:text-[var(--color-ink-strong)] p-1 z-10"
+                         title="Drag to reorder this card">
+                        <i class="fa-solid fa-grip-vertical text-xs"></i>
+                    </div>
+                    @includeIf('dashboard.site.widgets._widget-' . $widget)
+                </div>
+            </div>
+        @endforeach
+    </div>
 </div>
 
 {{-- Recent Activity Audit Timeline --}}

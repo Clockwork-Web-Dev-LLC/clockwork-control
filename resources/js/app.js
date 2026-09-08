@@ -173,6 +173,120 @@ Alpine.data('docsSearch', (index = []) => ({
     },
 }));
 
+Alpine.data('siteDashboardReorder', ({ updateUrl, csrf, order = [], isCustom = false } = {}) => ({
+    order: [...order],
+    isCustom: isCustom,
+    draggedWidget: null,
+    dragOverWidget: null,
+    saving: false,
+    savedToast: false,
+
+    onDragStart(event, widget) {
+        this.draggedWidget = widget;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', widget);
+    },
+
+    onDragEnd() {
+        this.draggedWidget = null;
+        this.dragOverWidget = null;
+    },
+
+    onDragOver(event, widget) {
+        if (this.draggedWidget && this.draggedWidget !== widget) {
+            this.dragOverWidget = widget;
+        }
+    },
+
+    onDragLeave() {
+        // Handled dynamically
+    },
+
+    async onDrop(event, targetWidget) {
+        const sourceWidget = this.draggedWidget || event.dataTransfer.getData('text/plain');
+        if (!sourceWidget || sourceWidget === targetWidget) {
+            this.draggedWidget = null;
+            this.dragOverWidget = null;
+            return;
+        }
+
+        const grid = document.getElementById('site-dashboard-grid');
+        if (!grid) return;
+
+        const sourceEl = grid.querySelector(`[data-widget="${sourceWidget}"]`);
+        const targetEl = grid.querySelector(`[data-widget="${targetWidget}"]`);
+        if (!sourceEl || !targetEl) return;
+
+        const fromIndex = this.order.indexOf(sourceWidget);
+        const toIndex = this.order.indexOf(targetWidget);
+
+        if (fromIndex !== -1 && toIndex !== -1) {
+            this.order.splice(fromIndex, 1);
+            this.order.splice(toIndex, 0, sourceWidget);
+
+            if (fromIndex < toIndex) {
+                grid.insertBefore(sourceEl, targetEl.nextSibling);
+            } else {
+                grid.insertBefore(sourceEl, targetEl);
+            }
+
+            this.isCustom = true;
+            await this.saveLayout();
+        }
+
+        this.draggedWidget = null;
+        this.dragOverWidget = null;
+    },
+
+    async saveLayout() {
+        this.saving = true;
+        try {
+            const response = await fetch(updateUrl, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                },
+                body: JSON.stringify({ layout: this.order }),
+            });
+            if (response.ok) {
+                this.savedToast = true;
+                setTimeout(() => {
+                    this.savedToast = false;
+                }, 3000);
+            }
+        } catch (err) {
+            console.error('Failed saving dashboard layout', err);
+        } finally {
+            this.saving = false;
+        }
+    },
+
+    async resetLayout() {
+        if (!confirm('Reset dashboard cards to the default layout?')) return;
+        this.saving = true;
+        try {
+            const response = await fetch(updateUrl, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                },
+                body: JSON.stringify({ reset: true }),
+            });
+            if (response.ok) {
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error('Failed resetting dashboard layout', err);
+        } finally {
+            this.saving = false;
+        }
+    },
+}));
+
 initThemeSystem(Alpine);
 
 Alpine.start();
