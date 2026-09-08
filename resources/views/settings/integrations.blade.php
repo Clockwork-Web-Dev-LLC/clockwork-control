@@ -18,6 +18,8 @@
             </x-slot:actions>
         </x-page-header>
 
+        @include('settings._tabs')
+
         <div class="card p-4 mb-6 border-l-4 border-[var(--color-status-yellow)] bg-[var(--color-status-yellow-bg)] text-xs flex items-start gap-3 max-w-3xl">
             <i class="fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)] text-sm mt-0.5 flex-shrink-0"></i>
             <div class="leading-relaxed text-[var(--color-ink)]">
@@ -140,7 +142,7 @@ CLOCKWORK_MATTERMOST_WEBHOOK_URL=https://chat.agency.com/hooks/...</pre>
         @method('PATCH')
 
         @foreach ($integrations as $id => $integration)
-            <div class="card p-6 max-w-3xl">
+            <div class="card p-6 max-w-3xl" id="integration-{{ $id }}">
                 <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">{{ $integration['label'] }}</h2>
                     <div class="flex items-center gap-2">
@@ -164,6 +166,26 @@ CLOCKWORK_MATTERMOST_WEBHOOK_URL=https://chat.agency.com/hooks/...</pre>
                         @endif
                     </div>
                 </div>
+
+                @if (!empty($integration['description']))
+                    <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                        {{ $integration['description'] }}
+                    </p>
+                @endif
+
+                @if (!empty($integration['capabilities']))
+                    <div class="mb-5 pb-3.5 border-b border-[var(--color-border-light)]">
+                        <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--color-ink-soft)] block mb-1.5">Features &amp; Capabilities</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            @foreach ($integration['capabilities'] as $cap)
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-data border border-[var(--color-border-light)]">
+                                    <i class="fa-solid fa-check text-[10px] text-emerald-500"></i>
+                                    <span>{{ $cap }}</span>
+                                </span>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
 
                 @if (($integration['status'] ?? 'verified') === 'looking_for_testers')
                     <div class="mb-5 p-4 rounded-xl border flex items-start gap-3.5" style="background: var(--color-status-yellow-bg); border-color: var(--color-status-yellow-border); color: var(--color-status-yellow-text);">

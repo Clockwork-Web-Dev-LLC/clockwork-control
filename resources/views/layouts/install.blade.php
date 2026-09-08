@@ -1,5 +1,11 @@
+@php
+    $cookieTheme = request()->cookie('cw_theme');
+    $initialTheme = ($cookieTheme && $cookieTheme !== 'system')
+        ? ($cookieTheme === 'midnight' ? 'dark' : $cookieTheme)
+        : 'light';
+@endphp
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ request()->cookie('cw_theme') && request()->cookie('cw_theme') !== 'system' ? request()->cookie('cw_theme') : 'light' }}">
+<html lang="en" data-theme="{{ $initialTheme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,6 +19,9 @@
                 var resolved = theme;
                 if (!resolved || resolved === 'system') {
                     resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                if (resolved === 'midnight') {
+                    resolved = 'dark';
                 }
                 document.documentElement.setAttribute('data-theme', resolved);
             } catch (e) {}

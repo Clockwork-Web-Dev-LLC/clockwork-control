@@ -62,7 +62,9 @@ describe('index (GET /settings/modules)', function () {
             ->assertSee('RunCloud Hosting')
             ->assertSee('Community')
             ->assertSee('Official')
-            ->assertSee('Check for updates');
+            ->assertSee('Check for updates')
+            ->assertDontSee('CPU &amp; RAM Telemetry', false)
+            ->assertSee(route('settings.integrations.index').'#integration-digitalocean', false);
     });
 
     it('gracefully renders fallback directory when remote API is unreachable', function () {

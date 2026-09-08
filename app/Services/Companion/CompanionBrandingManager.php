@@ -30,6 +30,16 @@ class CompanionBrandingManager
 
     public const DEFAULT_MENU_ICON = 'dashicons-clock';
 
+    public const DEFAULT_REPORTS_PRIMARY_COLOR = '#2D2062';
+
+    public const DEFAULT_REPORTS_ACCENT_COLOR = '#7EFF83';
+
+    public const DEFAULT_EMAIL_HEADER_BG = '#2D2062';
+
+    public const DEFAULT_EMAIL_ACCENT_COLOR = '#7EFF83';
+
+    public const DEFAULT_EMAIL_BADGE_TEXT = 'Security Alert';
+
     public function __construct(
         protected Settings $settings
     ) {}
@@ -183,6 +193,182 @@ class CompanionBrandingManager
             'companion.branding.hide_plugin_row' => null,
             'companion.branding.hide_help_links' => null,
             'companion.branding.footer_text' => null,
+        ]);
+    }
+
+    /**
+     * Get Client Reports branding configuration merged with shared agency defaults.
+     *
+     * @return array{
+     *     enabled: bool,
+     *     company_name: string,
+     *     company_url: string,
+     *     support_email: string,
+     *     support_url: string,
+     *     logo_url: string,
+     *     primary_color: string,
+     *     accent_color: string,
+     *     footer_text: string,
+     *     is_custom: bool,
+     * }
+     */
+    public function getReportsBranding(): array
+    {
+        $shared = $this->get();
+        $enabled = (bool) $this->settings->get('reports.branding.enabled', false);
+        $companyName = (string) $this->settings->get('reports.branding.company_name', '');
+        $supportEmail = (string) $this->settings->get('reports.branding.support_email', '');
+        $supportUrl = (string) $this->settings->get('reports.branding.support_url', '');
+        $logoUrl = (string) $this->settings->get('reports.branding.logo_url', '');
+        $primaryColor = (string) $this->settings->get('reports.branding.primary_color', self::DEFAULT_REPORTS_PRIMARY_COLOR);
+        $accentColor = (string) $this->settings->get('reports.branding.accent_color', self::DEFAULT_REPORTS_ACCENT_COLOR);
+        $footerText = (string) $this->settings->get('reports.branding.footer_text', '');
+
+        $isCustom = $enabled || $companyName !== '' || $primaryColor !== self::DEFAULT_REPORTS_PRIMARY_COLOR;
+
+        return [
+            'enabled' => $enabled,
+            'company_name' => $companyName !== '' ? $companyName : $shared['company_name'],
+            'company_url' => $shared['company_url'],
+            'support_email' => $supportEmail !== '' ? $supportEmail : $shared['support_email'],
+            'support_url' => $supportUrl !== '' ? $supportUrl : $shared['support_url'],
+            'logo_url' => $logoUrl !== '' ? $logoUrl : $shared['logo_url'],
+            'primary_color' => $primaryColor !== '' ? $primaryColor : self::DEFAULT_REPORTS_PRIMARY_COLOR,
+            'accent_color' => $accentColor !== '' ? $accentColor : self::DEFAULT_REPORTS_ACCENT_COLOR,
+            'footer_text' => $footerText,
+            'is_custom' => $isCustom,
+        ];
+    }
+
+    /**
+     * Save Client Reports branding settings.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function saveReportsBranding(array $data): void
+    {
+        $payload = [
+            'reports.branding.enabled' => ! empty($data['enabled']),
+            'reports.branding.company_name' => trim((string) ($data['company_name'] ?? '')),
+            'reports.branding.support_email' => trim((string) ($data['support_email'] ?? '')),
+            'reports.branding.support_url' => trim((string) ($data['support_url'] ?? '')),
+            'reports.branding.primary_color' => trim((string) ($data['primary_color'] ?? self::DEFAULT_REPORTS_PRIMARY_COLOR)),
+            'reports.branding.accent_color' => trim((string) ($data['accent_color'] ?? self::DEFAULT_REPORTS_ACCENT_COLOR)),
+            'reports.branding.footer_text' => trim((string) ($data['footer_text'] ?? '')),
+        ];
+
+        if (array_key_exists('logo_url', $data)) {
+            $payload['reports.branding.logo_url'] = trim((string) $data['logo_url']);
+        }
+
+        $this->settings->putMany($payload);
+    }
+
+    /**
+     * Reset Client Reports branding back to shared defaults.
+     */
+    public function resetReports(): void
+    {
+        $this->settings->putMany([
+            'reports.branding.enabled' => false,
+            'reports.branding.company_name' => null,
+            'reports.branding.support_email' => null,
+            'reports.branding.support_url' => null,
+            'reports.branding.logo_url' => null,
+            'reports.branding.primary_color' => null,
+            'reports.branding.accent_color' => null,
+            'reports.branding.footer_text' => null,
+        ]);
+    }
+
+    /**
+     * Get Plugin Notification Email branding merged with shared agency defaults.
+     *
+     * @return array{
+     *     enabled: bool,
+     *     company_name: string,
+     *     company_url: string,
+     *     sender_name: string,
+     *     reply_to: string,
+     *     support_email: string,
+     *     logo_url: string,
+     *     header_bg: string,
+     *     accent_color: string,
+     *     badge_text: string,
+     *     footer_text: string,
+     *     use_logo: bool,
+     *     is_custom: bool,
+     * }
+     */
+    public function getEmailBranding(): array
+    {
+        $shared = $this->get();
+        $enabled = (bool) $this->settings->get('email.branding.enabled', false);
+        $companyName = (string) $this->settings->get('email.branding.company_name', '');
+        $senderName = (string) $this->settings->get('email.branding.sender_name', '');
+        $replyTo = (string) $this->settings->get('email.branding.reply_to', '');
+        $headerBg = (string) $this->settings->get('email.branding.header_bg', self::DEFAULT_EMAIL_HEADER_BG);
+        $accentColor = (string) $this->settings->get('email.branding.accent_color', self::DEFAULT_EMAIL_ACCENT_COLOR);
+        $badgeText = (string) $this->settings->get('email.branding.badge_text', self::DEFAULT_EMAIL_BADGE_TEXT);
+        $footerText = (string) $this->settings->get('email.branding.footer_text', '');
+        $useLogo = (bool) $this->settings->get('email.branding.use_logo', true);
+
+        $isCustom = $enabled || $companyName !== '' || $headerBg !== self::DEFAULT_EMAIL_HEADER_BG;
+
+        return [
+            'enabled' => $enabled,
+            'company_name' => $companyName !== '' ? $companyName : $shared['company_name'],
+            'company_url' => $shared['company_url'],
+            'sender_name' => $senderName !== '' ? $senderName : $shared['company_name'],
+            'reply_to' => $replyTo !== '' ? $replyTo : $shared['support_email'],
+            'support_email' => $shared['support_email'],
+            'logo_url' => $shared['logo_url'],
+            'header_bg' => $headerBg !== '' ? $headerBg : self::DEFAULT_EMAIL_HEADER_BG,
+            'accent_color' => $accentColor !== '' ? $accentColor : self::DEFAULT_EMAIL_ACCENT_COLOR,
+            'badge_text' => $badgeText !== '' ? $badgeText : self::DEFAULT_EMAIL_BADGE_TEXT,
+            'footer_text' => $footerText,
+            'use_logo' => $useLogo,
+            'is_custom' => $isCustom,
+        ];
+    }
+
+    /**
+     * Save Plugin Notification Email branding settings.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function saveEmailBranding(array $data): void
+    {
+        $payload = [
+            'email.branding.enabled' => ! empty($data['enabled']),
+            'email.branding.company_name' => trim((string) ($data['company_name'] ?? '')),
+            'email.branding.sender_name' => trim((string) ($data['sender_name'] ?? '')),
+            'email.branding.reply_to' => trim((string) ($data['reply_to'] ?? '')),
+            'email.branding.header_bg' => trim((string) ($data['header_bg'] ?? self::DEFAULT_EMAIL_HEADER_BG)),
+            'email.branding.accent_color' => trim((string) ($data['accent_color'] ?? self::DEFAULT_EMAIL_ACCENT_COLOR)),
+            'email.branding.badge_text' => trim((string) ($data['badge_text'] ?? self::DEFAULT_EMAIL_BADGE_TEXT)),
+            'email.branding.footer_text' => trim((string) ($data['footer_text'] ?? '')),
+            'email.branding.use_logo' => ! empty($data['use_logo']),
+        ];
+
+        $this->settings->putMany($payload);
+    }
+
+    /**
+     * Reset Plugin Notification Email branding back to defaults.
+     */
+    public function resetEmail(): void
+    {
+        $this->settings->putMany([
+            'email.branding.enabled' => false,
+            'email.branding.company_name' => null,
+            'email.branding.sender_name' => null,
+            'email.branding.reply_to' => null,
+            'email.branding.header_bg' => null,
+            'email.branding.accent_color' => null,
+            'email.branding.badge_text' => null,
+            'email.branding.footer_text' => null,
+            'email.branding.use_logo' => null,
         ]);
     }
 

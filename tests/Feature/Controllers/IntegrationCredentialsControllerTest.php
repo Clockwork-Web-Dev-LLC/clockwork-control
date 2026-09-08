@@ -85,6 +85,15 @@ describe('index', function () {
             ->assertSee('/docs/getting-started/contributing');
     });
 
+    it('renders module features and capabilities on integration cards', function () {
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('settings.integrations.index'));
+
+        $response->assertOk()
+            ->assertSee('Features &amp; Capabilities', false)
+            ->assertSee('id="integration-digitalocean"', false);
+    });
+
     it('renders all registered integrations on the overview screen in alphabetical order', function () {
         $response = $this->actingAs(User::factory()->create())
             ->get(route('settings.integrations.index'));

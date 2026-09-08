@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@400;500;600;700&family=Poppins:wght@400;500;600&family=Roboto:wght@400;500;600&display=swap');
 @import 'tailwindcss';
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));
 @import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
 @import '@fortawesome/fontawesome-free/css/solid.min.css';
 @import '@fortawesome/fontawesome-free/css/regular.min.css';
@@ -29,11 +30,14 @@
     --color-brand-sky: #3daeff;
 
     /* Primary (blue) scale */
+    --color-primary-50: #eff6ff;
+    --color-primary-100: #dbeafe;
     --color-primary-200: #bfdbfe;
     --color-primary-light: #60a5fa;
     --color-primary-500: #3b82f6;
     --color-primary-600: #2563eb;
     --color-primary-700: #1d4ed8;
+    --color-primary-950: #172554;
 
     /* Text */
     --color-ink: #222222;
@@ -117,8 +121,9 @@
     --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* 2. Dark Scheme (built on staged --color-surface-dark: #181e25) */
-:root[data-theme="dark"] {
+/* 2. Dark Scheme (built on staged --color-surface-dark: #181e25; aliases midnight) */
+:root[data-theme="dark"],
+:root[data-theme="midnight"] {
     color-scheme: dark;
     --color-surface: #181e25;
     --color-surface-alt: #1e2630;
@@ -132,11 +137,14 @@
     --color-ink-soft: #64748b;
     --color-ink-helper: #94a3b8;
 
+    --color-primary-50: rgba(59, 130, 246, 0.12);
+    --color-primary-100: rgba(59, 130, 246, 0.2);
     --color-primary-200: #1e3a8a;
     --color-primary-light: #93c5fd;
     --color-primary-500: #60a5fa;
     --color-primary-600: #3b82f6;
     --color-primary-700: #2563eb;
+    --color-primary-950: #0f1d40;
 
     --color-status-green: #22c55e;
     --color-status-green-bg: rgba(34, 197, 94, 0.15);
@@ -163,52 +171,6 @@
     --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
-/* 3. Midnight Scheme (deep navy / Darcula palette) */
-:root[data-theme="midnight"] {
-    color-scheme: dark;
-    --color-surface: #0f172a;
-    --color-surface-alt: #1e293b;
-    --color-surface-dark: #090e1a;
-    --color-border-light: #1e293b;
-    --color-border: #334155;
-
-    --color-ink: #e2e8f0;
-    --color-ink-strong: #ffffff;
-    --color-ink-muted: #94a3b8;
-    --color-ink-soft: #64748b;
-    --color-ink-helper: #cbd5e1;
-
-    --color-primary-200: #1e3a8a;
-    --color-primary-light: #93c5fd;
-    --color-primary-500: #60a5fa;
-    --color-primary-600: #3b82f6;
-    --color-primary-700: #2563eb;
-
-    --color-status-green: #34d399;
-    --color-status-green-bg: rgba(52, 211, 153, 0.15);
-    --color-status-yellow: #fbbf24;
-    --color-status-yellow-bg: rgba(251, 191, 36, 0.15);
-    --color-status-red: #f87171;
-    --color-status-red-bg: rgba(248, 113, 113, 0.15);
-    --color-status-unknown: #94a3b8;
-    --color-status-unknown-bg: rgba(148, 163, 184, 0.15);
-
-    --color-cf-orange: #fb923c;
-    --color-cf-orange-bg: rgba(251, 146, 60, 0.15);
-
-    --color-nav-bg: rgba(255, 255, 255, 0.08);
-    --color-nav-hover: rgba(255, 255, 255, 0.14);
-    --color-nav-active-bg: rgba(255, 255, 255, 0.16);
-    --color-nav-active-ink: #ffffff;
-    --color-nav-active-border: rgba(255, 255, 255, 0.22);
-
-    --color-btn-primary-bg: #ffffff;
-    --color-btn-primary-ink: #0f172a;
-    --color-btn-primary-hover: #e2e8f0;
-
-    --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.45);
-}
-
 /* 4. High Contrast Scheme (high-visibility accessibility) */
 :root[data-theme="high-contrast"] {
     color-scheme: dark;
@@ -224,11 +186,14 @@
     --color-ink-soft: #a1a1aa;
     --color-ink-helper: #ffffff;
 
+    --color-primary-50: rgba(59, 130, 246, 0.2);
+    --color-primary-100: rgba(59, 130, 246, 0.3);
     --color-primary-200: #3b82f6;
     --color-primary-light: #bfdbfe;
     --color-primary-500: #93c5fd;
     --color-primary-600: #60a5fa;
     --color-primary-700: #3b82f6;
+    --color-primary-950: #000000;
 
     --color-status-green: #4ade80;
     --color-status-green-bg: rgba(74, 222, 128, 0.25);

@@ -58,3 +58,43 @@ test('module directory renders with search input in header and tabs', function (
         ->assertSee('Search modules, tags, author...')
         ->assertSee('Integrations &amp; Alerts', false);
 });
+
+test('settings pages render persistent two-tier navigation', function () {
+    $this->mockIssueCounterZero();
+    $user = User::factory()->create();
+
+    // 1. Fleet & Branding (White Labeling)
+    $response = $this->actingAs($user)->get(route('settings.companion.index'));
+    $response->assertOk()
+        ->assertSee('Fleet &amp; Branding', false)
+        ->assertSee('White Labeling')
+        ->assertSee('Server Tags')
+        ->assertSee('WordPress Plugins');
+
+    // 2. Integrations & Alerts
+    $response = $this->actingAs($user)->get(route('settings.integrations.index'));
+    $response->assertOk()
+        ->assertSee('Integrations &amp; Alerts', false)
+        ->assertSee('API Credentials')
+        ->assertSee('Module Directory');
+
+    // 3. System & Workspace (Users)
+    $response = $this->actingAs($user)->get(route('settings.users.index'));
+    $response->assertOk()
+        ->assertSee('System &amp; Workspace', false)
+        ->assertSee('Team &amp; Users', false)
+        ->assertSee('Database Maintenance');
+
+    // 4. System Updates
+    $response = $this->actingAs($user)->get(route('settings.updates.index'));
+    $response->assertOk()
+        ->assertSee('System &amp; Workspace', false)
+        ->assertSee('System Updates')
+        ->assertSee('Database Maintenance');
+
+    // 5. Diagnostics
+    $response = $this->actingAs($user)->get(route('settings.diagnostics.index'));
+    $response->assertOk()
+        ->assertSee('System &amp; Workspace', false)
+        ->assertSee('Diagnostics &amp; Health', false);
+});

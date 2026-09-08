@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Modules\Core\ModuleDirectoryClient;
 use Modules\Core\ModuleRegistry;
 
 /**
@@ -34,6 +35,8 @@ class IntegrationCredentialsController extends Controller
     public const INTEGRATIONS = [
         'do_spaces' => [
             'label' => 'DigitalOcean Spaces',
+            'description' => 'Automated offsite backup storage using DigitalOcean Spaces or any S3-compatible object store.',
+            'capabilities' => ['Offsite S3 Backups', 'Asset Preservation', 'Custom Storage Endpoints'],
             'fields' => [
                 'key' => ['label' => 'Access Key', 'secret' => false],
                 'secret' => ['label' => 'Secret Key', 'secret' => true],
@@ -44,6 +47,8 @@ class IntegrationCredentialsController extends Controller
         ],
         'cloudflare' => [
             'label' => 'Cloudflare',
+            'description' => 'DNS zone inspection, edge cache health, and WAF security analytics via Cloudflare API.',
+            'capabilities' => ['DNS Zone Health', 'WAF Analytics', 'SSL Edge Telemetry'],
             'fields' => [
                 'api_token' => ['label' => 'API Token (read)', 'secret' => true],
                 'write_token' => ['label' => 'Write Token', 'secret' => true],
@@ -54,6 +59,8 @@ class IntegrationCredentialsController extends Controller
         ],
         'security_scans' => [
             'label' => 'Blacklist scanning',
+            'description' => 'Daily domain reputation checks against Google Safe Browsing and abuse intelligence databases.',
+            'capabilities' => ['Google Safe Browsing', 'URLhaus Threat Intel', 'Automated Malware Checks'],
             'fields' => [
                 'google_safe_browsing_key' => ['label' => 'Google Safe Browsing Key', 'secret' => true],
                 'urlhaus_auth_key' => ['label' => 'URLHaus Auth Key', 'secret' => true],
@@ -64,6 +71,8 @@ class IntegrationCredentialsController extends Controller
         ],
         'ssh' => [
             'label' => 'SSH (fleet default key)',
+            'description' => 'Fleet-wide default SSH credentials for server provisioning and scheduled telemetry commands.',
+            'capabilities' => ['Fleet Key Distribution', 'Automated Provisioning', 'Secure Server Access'],
             'fields' => [
                 'default_key_path' => ['label' => 'Default Key Path', 'secret' => false],
                 'default_key_passphrase' => ['label' => 'Default Key Passphrase', 'secret' => true],
@@ -87,6 +96,7 @@ class IntegrationCredentialsController extends Controller
         foreach ($modules->manifests() as $manifest) {
             $merged[$manifest->id] = [
                 'label' => $manifest->name,
+                'description' => $manifest->description,
                 'fields' => $manifest->credentialFields,
                 'check' => null,
                 'status' => $manifest->status,
@@ -99,6 +109,18 @@ class IntegrationCredentialsController extends Controller
 
     public function index(CredentialResolver $resolver, ModuleRegistry $modules): View
     {
+        $feedModules = [];
+        try {
+            $feed = app(ModuleDirectoryClient::class)->fetch();
+            foreach ($feed['modules'] ?? [] as $m) {
+                if (! empty($m['id'])) {
+                    $feedModules[$m['id']] = $m;
+                }
+            }
+        } catch (\Throwable) {
+            // Keep going if directory feed is unreachable
+        }
+
         $integrations = [];
         foreach ($this->integrations($modules) as $id => $meta) {
             $fields = [];
@@ -110,8 +132,12 @@ class IntegrationCredentialsController extends Controller
                 ];
             }
 
+            $feedItem = $feedModules[$id] ?? null;
+
             $integrations[$id] = [
                 'label' => $meta['label'],
+                'description' => $feedItem['description'] ?? ($meta['description'] ?? null),
+                'capabilities' => $feedItem['capabilities'] ?? ($meta['capabilities'] ?? []),
                 'fields' => $fields,
                 'testable' => $meta['check'] !== null || $modules->diagnosticCheckFor($id) !== null,
                 'status' => $meta['status'] ?? 'verified',

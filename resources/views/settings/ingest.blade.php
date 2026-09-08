@@ -25,6 +25,8 @@
     <x-page-header title="Scheduling"
         subtitle="Controls when Clockwork pulls active blocks from per-site security plugins. The window and cadence are shared; each source has an independent enable toggle." />
 
+    @include('settings._tabs')
+
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
             <i class="fa-solid fa-circle-check"></i>

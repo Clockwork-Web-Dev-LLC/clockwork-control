@@ -37,6 +37,8 @@
             </x-slot:actions>
         </x-page-header>
 
+        @include('settings._tabs')
+
         {{-- Status Flash Notifications --}}
         @if (session('status_update_ok'))
             <div class="mb-4 px-4 py-2.5 rounded-md bg-[var(--color-status-green)]/10 text-[var(--color-status-green)] text-sm flex items-center gap-2">

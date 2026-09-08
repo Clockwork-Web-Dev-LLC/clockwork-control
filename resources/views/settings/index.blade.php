@@ -39,7 +39,7 @@
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-50,#eff6ff)] dark:bg-[var(--color-primary-950,#172554)] text-[var(--color-primary-600)] flex items-center justify-center text-sm shadow-2xs">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
                             <i class="fa-solid fa-sliders"></i>
                         </div>
                         <div>
@@ -52,13 +52,13 @@
 
                 <div class="divide-y divide-[var(--color-border-light)]">
                     <a href="{{ route('settings.companion.index') }}"
-                       x-show="matches('companion white label mu plugin branding logo')"
+                       x-show="matches('white labeling companion white label mu plugin branding logo reports email')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
                         <div class="flex items-start gap-3 min-w-0">
                             <i class="fa-solid fa-paintbrush text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
                             <div class="min-w-0">
-                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Companion (White Label)</div>
-                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Brand WordPress admin, agency author, support email, and fleet sync</div>
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">White Labeling</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Brand WordPress admin, Client Reports, and notification emails</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0 ml-3">
@@ -148,7 +148,7 @@
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-50,#eff6ff)] dark:bg-[var(--color-primary-950,#172554)] text-[var(--color-primary-600)] flex items-center justify-center text-sm shadow-2xs">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
                             <i class="fa-solid fa-plug"></i>
                         </div>
                         <div>
@@ -253,7 +253,7 @@
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-50,#eff6ff)] dark:bg-[var(--color-primary-950,#172554)] text-[var(--color-primary-600)] flex items-center justify-center text-sm shadow-2xs">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
                             <i class="fa-solid fa-toolbox"></i>
                         </div>
                         <div>
@@ -357,7 +357,7 @@
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-[var(--color-primary-50,#eff6ff)] dark:bg-[var(--color-primary-950,#172554)] text-[var(--color-primary-600)] flex items-center justify-center text-sm shadow-2xs">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
                             <i class="fa-solid fa-server"></i>
                         </div>
                         <div>

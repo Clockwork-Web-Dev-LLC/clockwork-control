@@ -72,6 +72,8 @@ namespace {
                 ->get(route('settings.maintenance.index'));
 
             $response->assertOk()
+                ->assertSee('System &amp; Workspace', false)
+                ->assertSee('Database Maintenance')
                 ->assertSee('Database backup')
                 ->assertSee('50.0 MB')
                 ->assertSee('Anonymous usage telemetry')

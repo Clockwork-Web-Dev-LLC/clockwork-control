@@ -39,7 +39,7 @@ describe('AppearanceSettingsController', function () {
 
     it('redirects unauthenticated appearance update requests', function () {
         $response = $this->post(route('settings.appearance.update'), [
-            'theme' => 'midnight',
+            'theme' => 'dark',
         ]);
 
         $response->assertRedirect(route('login'));
@@ -50,12 +50,12 @@ describe('AppearanceSettingsController', function () {
     });
 
     it('renders the configured theme in html data-theme attribute on authenticated page', function () {
-        $user = User::factory()->create(['theme' => 'midnight']);
+        $user = User::factory()->create(['theme' => 'dark']);
 
         $response = $this->actingAs($user)->get(route('settings.tags.index'));
 
         $response->assertOk()
-            ->assertSee('data-theme="midnight"', false);
+            ->assertSee('data-theme="dark"', false);
     });
 
     it('prefers valid cookie over user default if cookie is present', function () {
@@ -70,11 +70,19 @@ describe('AppearanceSettingsController', function () {
     });
 
     it('renders data-theme from cookie on guest page', function () {
+        $response = $this->withUnencryptedCookie('cw_theme', 'high-contrast')
+            ->get(route('login'));
+
+        $response->assertOk()
+            ->assertSee('data-theme="high-contrast"', false);
+    });
+
+    it('maps legacy midnight cookie to dark theme on guest page', function () {
         $response = $this->withUnencryptedCookie('cw_theme', 'midnight')
             ->get(route('login'));
 
         $response->assertOk()
-            ->assertSee('data-theme="midnight"', false);
+            ->assertSee('data-theme="dark"', false);
     });
 
     it('defaults to light when neither cookie nor user theme exists', function () {

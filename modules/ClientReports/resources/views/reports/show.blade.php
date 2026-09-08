@@ -320,6 +320,13 @@
             </div>
         @endif
 
+        {{-- Custom Footer Note if present --}}
+        @if (!empty($branding['footer_text']))
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                {{ $branding['footer_text'] }}
+            </div>
+        @endif
+
         {{-- Footer --}}
         <div class="border-t border-slate-200 pt-8 flex items-center justify-between flex-wrap gap-4 text-xs text-slate-400">
             <div>

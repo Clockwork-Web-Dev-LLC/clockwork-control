@@ -4,12 +4,11 @@
 
 export function initThemeSystem(Alpine) {
     Alpine.data('themePicker', () => ({
-        // Active preference: 'system' | 'light' | 'dark' | 'midnight' | 'high-contrast'
+        // Active preference: 'system' | 'light' | 'dark' | 'high-contrast'
         current: 'system',
         schemes: [
             { key: 'light', label: 'Light', surface: '#ffffff', brand: '#1456f0', ink: '#222222' },
             { key: 'dark', label: 'Dark', surface: '#181e25', brand: '#1456f0', ink: '#e6e8eb' },
-            { key: 'midnight', label: 'Midnight', surface: '#0f172a', brand: '#3daeff', ink: '#e2e8f0' },
             { key: 'high-contrast', label: 'High Contrast', surface: '#000000', brand: '#1456f0', ink: '#ffffff' },
         ],
         saving: false,
@@ -18,9 +17,15 @@ export function initThemeSystem(Alpine) {
             // Read active preference from cookie, fallback to system
             const cookieMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
             if (cookieMatch) {
-                this.current = decodeURIComponent(cookieMatch[1]);
+                const storedTheme = decodeURIComponent(cookieMatch[1]);
+                this.current = storedTheme === 'midnight' ? 'dark' : storedTheme;
             } else {
                 this.current = 'system';
+            }
+
+            if (this.current === 'midnight') {
+                this.current = 'dark';
+                this.applyResolvedTheme('dark');
             }
 
             // Listen for OS scheme changes when in system mode
@@ -37,7 +42,7 @@ export function initThemeSystem(Alpine) {
             if (this.current === 'system') {
                 return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             }
-            return this.current === 'dark' || this.current === 'midnight' || this.current === 'high-contrast';
+            return this.current === 'dark' || this.current === 'high-contrast';
         },
 
         toggleDark() {

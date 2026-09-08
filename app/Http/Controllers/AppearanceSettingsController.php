@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 
 class AppearanceSettingsController extends Controller
 {
-    public const VALID_THEMES = ['system', 'light', 'dark', 'midnight', 'high-contrast'];
+    public const VALID_THEMES = ['system', 'light', 'dark', 'high-contrast'];
 
     public const COOKIE_NAME = 'cw_theme';
 

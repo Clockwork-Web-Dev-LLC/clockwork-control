@@ -17,6 +17,8 @@
         </x-slot:actions>
     </x-page-header>
 
+    @include('settings._tabs')
+
     {{-- Roll-up metric tiles --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-3xl">
         <div class="card px-4 py-3">

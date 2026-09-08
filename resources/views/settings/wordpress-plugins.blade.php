@@ -26,6 +26,8 @@
         </x-slot:actions>
     </x-page-header>
 
+    @include('settings._tabs')
+
     {{-- Primary Metrics Row --}}
     <div class="grid grid-cols-2 md:grid-cols-{{ $llarEnabled ? '5' : '4' }} gap-3 mb-6">
         <div class="card px-4 py-3">
