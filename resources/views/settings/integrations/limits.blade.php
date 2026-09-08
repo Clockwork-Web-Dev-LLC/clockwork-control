@@ -159,6 +159,183 @@
                     @endif
                 </div>
 
+                @if ($isCloudProvider)
+                    <!-- Card: How this integrates (Cloud Provider Architecture) -->
+                    <div class="p-5 rounded-xl bg-blue-50/80 border border-blue-200 text-slate-800 space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-700 flex items-center justify-center text-sm flex-shrink-0">
+                                <i class="fa-solid fa-cloud"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-display font-bold text-sm text-blue-950 leading-tight">
+                                    How {{ $service['name'] }} Integrates with Clockwork Control
+                                </h3>
+                                <span class="text-xs text-slate-600">Hardware Telemetry &bull; Alive/Dead Status Checks &bull; IP Matching</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-700 leading-relaxed">
+                            <strong>Hosting Panels vs Cloud Infrastructure:</strong> Server management panels (like <strong>SpinupWP</strong> or <strong>GridPane</strong>) manage your WordPress sites, Nginx configs, and database credentials. <strong>{{ $service['name'] }}</strong> manages the underlying virtual machines and hardware specifications (vCPUs, RAM, disk, alive state).
+                        </p>
+                        <div class="grid sm:grid-cols-2 gap-2.5 pt-1 text-xs">
+                            <div class="p-3 rounded-lg bg-white/90 border border-blue-100 space-y-1">
+                                <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-server text-blue-600 text-xs"></i>
+                                    <span>Hosting Panel Managed Server</span>
+                                </div>
+                                <p class="text-[11px] text-slate-600 leading-normal">
+                                    When you import from SpinupWP or GridPane, Clockwork matches servers to {{ $service['name'] }} instances by IP address to monitor CPU, RAM, and droplet health.
+                                </p>
+                            </div>
+                            <div class="p-3 rounded-lg bg-white/90 border border-blue-100 space-y-1">
+                                <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-cloud-arrow-down text-blue-600 text-xs"></i>
+                                    <span>Standalone Cloud Server</span>
+                                </div>
+                                <p class="text-[11px] text-slate-600 leading-normal">
+                                    Import any standalone {{ $service['name'] }} instance directly into your Server Fleet below to track uptime and hardware specifications.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: Detected Cloud Instances -->
+                    <div class="card p-6 border-l-4 border-l-blue-600">
+                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-network-wired text-base"></i>
+                                </div>
+                                <div>
+                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
+                                        Detected {{ $service['name'] }} Instances
+                                    </h2>
+                                    <span class="text-xs text-[var(--color-ink-muted)]">Live cloud resources queried from {{ $service['name'] }} API ({{ count($detectedInstances) }} detected)</span>
+                                </div>
+                            </div>
+
+                            <form method="POST" action="{{ route('settings.integrations.reconcile', $service['id']) }}">
+                                @csrf
+                                <button type="submit"
+                                        class="btn-pill-nav text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-surface-alt)] border border-[var(--color-border)] shadow-2xs flex items-center gap-1.5 px-3 py-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-arrows-rotate text-[var(--color-primary-500)]"></i>
+                                    <span>Reconcile Hardware Specs</span>
+                                </button>
+                            </form>
+                        </div>
+
+                        @if (count($detectedInstances) > 0)
+                            <div class="space-y-3">
+                                @foreach ($detectedInstances as $inst)
+                                    <div class="p-4 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-2.5">
+                                        <div class="flex items-center justify-between flex-wrap gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="font-display font-bold text-sm text-[var(--color-ink-strong)]">{{ $inst['name'] ?: ($inst['ip'] ?: $inst['id']) }}</span>
+                                                @if (!empty($inst['ip']))
+                                                    <code class="font-data text-xs text-[var(--color-ink-soft)] px-1.5 py-0.5 rounded bg-white border border-[var(--color-border-light)]">{{ $inst['ip'] }}</code>
+                                                @endif
+                                                @if (!empty($inst['region']))
+                                                    <span class="status-pill status-blue text-[10px] font-mono">{{ $inst['region'] }}</span>
+                                                @endif
+                                            </div>
+
+                                            <div class="flex items-center gap-2">
+                                                @if ($inst['is_linked'])
+                                                    <span class="status-pill status-green text-xs font-mono flex items-center gap-1">
+                                                        <i class="fa-solid fa-link text-[10px]"></i>
+                                                        <span>Linked to Fleet</span>
+                                                    </span>
+                                                @else
+                                                    <span class="status-pill status-yellow text-xs font-mono flex items-center gap-1">
+                                                        <i class="fa-solid fa-unlink text-[10px]"></i>
+                                                        <span>Not in Fleet</span>
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        <!-- Specs Row -->
+                                        <div class="flex items-center gap-2.5 text-xs text-[var(--color-ink-muted)] flex-wrap">
+                                            @if (!empty($inst['plan']))
+                                                <span class="font-mono text-xs px-2 py-0.5 rounded bg-white border border-[var(--color-border-light)] font-semibold text-[var(--color-ink-strong)]">{{ $inst['plan'] }}</span>
+                                            @endif
+                                            @if ($inst['vcpus'])
+                                                <span><strong>{{ $inst['vcpus'] }}</strong> vCPU</span>
+                                            @endif
+                                            @if ($inst['memory_mb'])
+                                                <span>&bull; <strong>{{ round($inst['memory_mb'] / 1024, 1) }} GB</strong> RAM</span>
+                                            @endif
+                                            @if ($inst['disk_gb'])
+                                                <span>&bull; <strong>{{ $inst['disk_gb'] }} GB</strong> Disk</span>
+                                            @endif
+                                            @if (!empty($inst['status']))
+                                                <span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded {{ in_array($inst['status'], ['active', 'running']) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600' }}">
+                                                    {{ $inst['status'] }}
+                                                </span>
+                                            @endif
+                                            @foreach ($inst['tags'] as $tag)
+                                                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">#{{ $tag }}</span>
+                                            @endforeach
+                                        </div>
+
+                                        <!-- Actions Row -->
+                                        <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-2">
+                                            @if ($inst['is_linked'] && !empty($inst['linked_server']))
+                                                <div class="text-xs text-[var(--color-ink-muted)] flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-check-circle text-emerald-600 text-sm"></i>
+                                                    <span>Server #{{ $inst['linked_server']['id'] }}: <strong>{{ $inst['linked_server']['name'] }}</strong></span>
+                                                </div>
+                                                <a href="{{ $inst['linked_server']['url'] }}" class="btn-pill-nav text-xs px-3 py-1 text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
+                                                    <span>View Server</span>
+                                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                                </a>
+                                            @else
+                                                <div class="flex items-center justify-between w-full flex-wrap gap-2">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        @if ($inst['suggested_panel'] === 'spinupwp' && !empty($hostingPanels['spinupwp']['enabled']))
+                                                            <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}">
+                                                                @csrf
+                                                                <button type="submit" class="btn-pill-nav text-xs font-semibold text-emerald-700 hover:bg-emerald-50 border border-emerald-300 shadow-2xs flex items-center gap-1.5 px-3 py-1.5 cursor-pointer">
+                                                                    <i class="fa-solid fa-arrows-rotate text-emerald-600"></i>
+                                                                    <span>Sync from SpinupWP</span>
+                                                                </button>
+                                                            </form>
+                                                        @elseif ($inst['suggested_panel'] === 'gridpane' && !empty($hostingPanels['gridpane']['enabled']))
+                                                            <form method="POST" action="{{ route('servers.refreshFromGridPane') }}">
+                                                                @csrf
+                                                                <button type="submit" class="btn-pill-nav text-xs font-semibold text-emerald-700 hover:bg-emerald-50 border border-emerald-300 shadow-2xs flex items-center gap-1.5 px-3 py-1.5 cursor-pointer">
+                                                                    <i class="fa-solid fa-arrows-rotate text-emerald-600"></i>
+                                                                    <span>Sync from GridPane</span>
+                                                                </button>
+                                                            </form>
+                                                        @endif
+                                                    </div>
+                                                    <form method="POST" action="{{ route('settings.integrations.importInstance', $service['id']) }}">
+                                                        @csrf
+                                                        <input type="hidden" name="instance_id" value="{{ $inst['id'] }}">
+                                                        <button type="submit" class="btn btn-primary text-xs px-3 py-1.5 shadow-2xs flex items-center gap-1.5">
+                                                            <i class="fa-solid fa-plus"></i>
+                                                            <span>Import as Standalone Server</span>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="p-4 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] flex items-center gap-2">
+                                <i class="fa-solid fa-circle-info text-[var(--color-ink-soft)]"></i>
+                                @if (collect($credentials)->some(fn($c) => $c['configured']))
+                                    <span>No cloud instances found on this {{ $service['name'] }} account.</span>
+                                @else
+                                    <span>Configure and save your API credentials above to discover cloud instances automatically.</span>
+                                @endif
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
                 <!-- Card: Official Vendor Rate Limits & Headers -->
                 <div class="card p-6">
                     <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">

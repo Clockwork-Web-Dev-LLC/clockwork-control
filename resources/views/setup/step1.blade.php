@@ -424,6 +424,189 @@
                             </template>
                         </div>
 
+                        <!-- Cloud Provider Integration Guide (shown only for cloud providers) -->
+                        <template x-if="isCloudProvider">
+                            <div class="p-4 rounded-xl bg-blue-50/80 border border-blue-200 text-slate-800 space-y-2.5 shadow-2xs">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-md bg-blue-500/15 text-blue-700 flex items-center justify-center text-xs">
+                                        <i class="fa-solid fa-cloud"></i>
+                                    </div>
+                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-950">
+                                        How <span x-text="serviceName"></span> Integrates with Clockwork
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-700 leading-relaxed">
+                                    <strong>Hosting Panels vs Cloud Infrastructure:</strong> Server management panels (like <strong>SpinupWP</strong> or <strong>GridPane</strong>) manage your WordPress sites, Nginx configs, and databases. <strong x-text="serviceName"></strong> manages the underlying virtual machines and hardware specifications.
+                                </p>
+                                <div class="grid sm:grid-cols-2 gap-2 pt-1 text-xs">
+                                    <div class="p-2.5 rounded-lg bg-white/80 border border-blue-100 space-y-1">
+                                        <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                            <i class="fa-solid fa-server text-blue-600 text-[11px]"></i>
+                                            <span>Hosting Panel Managed</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-600 leading-normal">
+                                            When you import from SpinupWP or GridPane, Clockwork automatically matches servers to <span x-text="serviceName"></span> instances by IP address to monitor CPU, RAM, and hardware health.
+                                        </p>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-white/80 border border-blue-100 space-y-1">
+                                        <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                            <i class="fa-solid fa-cloud-arrow-down text-blue-600 text-[11px]"></i>
+                                            <span>Standalone Cloud Server</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-600 leading-normal">
+                                            Import any standalone <span x-text="serviceName"></span> instance directly into your Server Fleet below to track uptime and hardware specifications.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Detected Cloud Instances Section (shown for cloud providers) -->
+                        <template x-if="isCloudProvider">
+                            <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                                        <i class="fa-solid fa-network-wired text-[var(--color-primary-600)]"></i>
+                                        <span>Detected <span x-text="serviceName"></span> Instances</span>
+                                        <span class="font-data font-bold text-xs px-1.5 py-0.2 rounded bg-black/5 text-[var(--color-ink-strong)]" x-text="detectedInstances.length"></span>
+                                    </div>
+
+                                    <button type="button"
+                                            @click="reconcileInstances()"
+                                            :disabled="actionLoading"
+                                            class="btn-pill-nav text-[11px] font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-primary-600)] hover:bg-white border border-[var(--color-border)] shadow-2xs flex items-center gap-1.5 px-2.5 py-1 cursor-pointer disabled:opacity-50"
+                                            title="Match unlinked servers against cloud provider instances by IP address">
+                                        <template x-if="actionLoading">
+                                            <i class="fa-solid fa-circle-notch fa-spin text-[var(--color-primary-600)]"></i>
+                                        </template>
+                                        <template x-if="!actionLoading">
+                                            <i class="fa-solid fa-arrows-rotate text-[var(--color-primary-500)]"></i>
+                                        </template>
+                                        <span>Reconcile Hardware Specs</span>
+                                    </button>
+                                </div>
+
+                                <template x-if="detectedInstances && detectedInstances.length > 0">
+                                    <div class="space-y-2.5 pt-1">
+                                        <template x-for="inst in detectedInstances" :key="inst.id">
+                                            <div class="p-3 bg-white rounded-lg border border-[var(--color-border-light)] shadow-2xs space-y-2">
+                                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <span class="font-display font-bold text-xs text-[var(--color-ink-strong)]" x-text="inst.name || inst.ip || inst.id"></span>
+                                                        <template x-if="inst.ip">
+                                                            <code class="font-data text-[11px] text-[var(--color-ink-soft)] px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]" x-text="inst.ip"></code>
+                                                        </template>
+                                                        <template x-if="inst.region">
+                                                            <span class="status-pill status-blue text-[10px] font-mono" x-text="inst.region"></span>
+                                                        </template>
+                                                    </div>
+
+                                                    <div class="flex items-center gap-1.5">
+                                                        <template x-if="inst.is_linked">
+                                                            <span class="status-pill status-green text-[10px] font-mono flex items-center gap-1">
+                                                                <i class="fa-solid fa-link text-[9px]"></i>
+                                                                <span>Linked to Fleet</span>
+                                                            </span>
+                                                        </template>
+                                                        <template x-if="!inst.is_linked">
+                                                            <span class="status-pill status-amber text-xs font-mono flex items-center gap-1">
+                                                                <i class="fa-solid fa-unlink text-[9px]"></i>
+                                                                <span>Not in Fleet</span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Specs line -->
+                                                <div class="flex items-center gap-2 text-[11px] text-[var(--color-ink-muted)] flex-wrap">
+                                                    <template x-if="inst.plan">
+                                                        <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] font-semibold text-[var(--color-ink-strong)]" x-text="inst.plan"></span>
+                                                    </template>
+                                                    <template x-if="inst.vcpus">
+                                                        <span><strong x-text="inst.vcpus"></strong> vCPU</span>
+                                                    </template>
+                                                    <template x-if="inst.memory_mb">
+                                                        <span>&bull; <strong x-text="Math.round(inst.memory_mb / 1024 * 10) / 10 + ' GB'"></strong> RAM</span>
+                                                    </template>
+                                                    <template x-if="inst.disk_gb">
+                                                        <span>&bull; <strong x-text="inst.disk_gb + ' GB'"></strong> Disk</span>
+                                                    </template>
+                                                    <template x-if="inst.status">
+                                                        <span class="text-[10px] uppercase font-mono px-1 py-0.2 rounded"
+                                                              :class="inst.status === 'active' || inst.status === 'running' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'"
+                                                              x-text="inst.status"></span>
+                                                    </template>
+                                                    <template x-for="tag in (inst.tags || [])" :key="tag">
+                                                        <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100" x-text="'#' + tag"></span>
+                                                    </template>
+                                                </div>
+
+                                                <!-- Actions row -->
+                                                <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-2">
+                                                    <template x-if="inst.is_linked && inst.linked_server">
+                                                        <div class="text-[11px] text-[var(--color-ink-muted)] flex items-center gap-1.5">
+                                                            <i class="fa-solid fa-check-circle text-emerald-600 text-xs"></i>
+                                                            <span>Server #<span x-text="inst.linked_server.id"></span>: <strong x-text="inst.linked_server.name"></strong></span>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="inst.is_linked && inst.linked_server">
+                                                        <a :href="inst.linked_server.url" class="btn-pill-nav text-[11px] px-2.5 py-1 text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
+                                                            <span>View Server</span>
+                                                            <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                                                        </a>
+                                                    </template>
+
+                                                    <template x-if="!inst.is_linked">
+                                                        <div class="flex items-center gap-2 flex-wrap w-full justify-between">
+                                                            <div class="flex items-center gap-2 flex-wrap">
+                                                                <template x-if="inst.suggested_panel === 'spinupwp' && hostingPanels?.spinupwp?.enabled">
+                                                                    <button type="button"
+                                                                            @click="syncFromPanel('spinupwp')"
+                                                                            :disabled="actionLoading"
+                                                                            class="btn-pill-nav text-xs font-semibold text-emerald-700 hover:bg-emerald-50 border border-emerald-300 shadow-2xs flex items-center gap-1.5 px-3 py-1 cursor-pointer disabled:opacity-50">
+                                                                        <i class="fa-solid fa-arrows-rotate text-emerald-600"></i>
+                                                                        <span>Sync from SpinupWP</span>
+                                                                    </button>
+                                                                </template>
+                                                                <template x-if="inst.suggested_panel === 'gridpane' && hostingPanels?.gridpane?.enabled">
+                                                                    <button type="button"
+                                                                            @click="syncFromPanel('gridpane')"
+                                                                            :disabled="actionLoading"
+                                                                            class="btn-pill-nav text-xs font-semibold text-emerald-700 hover:bg-emerald-50 border border-emerald-300 shadow-2xs flex items-center gap-1.5 px-3 py-1 cursor-pointer disabled:opacity-50">
+                                                                        <i class="fa-solid fa-arrows-rotate text-emerald-600"></i>
+                                                                        <span>Sync from GridPane</span>
+                                                                    </button>
+                                                                </template>
+                                                            </div>
+                                                            <button type="button"
+                                                                    @click="importInstance(inst.id)"
+                                                                    :disabled="actionLoading"
+                                                                    class="btn btn-primary text-xs px-3 py-1 shadow-2xs flex items-center gap-1.5">
+                                                                <i class="fa-solid fa-plus"></i>
+                                                                <span>Import as Standalone Server</span>
+                                                            </button>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <template x-if="!detectedInstances || detectedInstances.length === 0">
+                                    <div class="p-3.5 bg-white rounded-lg border border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] flex items-center gap-2">
+                                        <i class="fa-solid fa-circle-info text-[var(--color-ink-soft)]"></i>
+                                        <template x-if="credentials && credentials.some(c => c.configured)">
+                                            <span>No cloud instances found on this <span x-text="serviceName"></span> account.</span>
+                                        </template>
+                                        <template x-if="!credentials || !credentials.some(c => c.configured)">
+                                            <span>Configure and save your API credentials above to discover cloud instances automatically.</span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
                         <!-- Official Rate Limit Specifications Box -->
                         <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
                             <div class="flex items-center justify-between flex-wrap gap-2">
@@ -586,6 +769,7 @@
                 loading: false,
                 saving: false,
                 testing: false,
+                actionLoading: false,
                 saveSuccess: false,
                 testResult: null,
                 successMessage: '',
@@ -593,6 +777,9 @@
                 service: null,
                 credentials: [],
                 credentialsPayload: {},
+                isCloudProvider: false,
+                detectedInstances: [],
+                hostingPanels: {},
                 tunables: {
                     rate_limit: '',
                     timeout: 15,
@@ -606,11 +793,15 @@
                     this.serviceName = name;
                     this.showLimitsModal = true;
                     this.loading = true;
+                    this.actionLoading = false;
                     this.errorMessage = '';
                     this.saveSuccess = false;
                     this.testResult = null;
                     this.testing = false;
                     this.credentialsPayload = {};
+                    this.isCloudProvider = false;
+                    this.detectedInstances = [];
+                    this.hostingPanels = {};
                     fetch('/settings/integrations/' + id + '/limits', {
                         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                     })
@@ -623,6 +814,9 @@
                         this.tunables = data.tunables;
                         this.credentials = (data.credentials || []).map(c => ({ ...c, showPlain: false }));
                         this.testable = !!data.testable;
+                        this.isCloudProvider = !!data.is_cloud_provider;
+                        this.detectedInstances = data.detected_instances || [];
+                        this.hostingPanels = data.hosting_panels || {};
                         this.loading = false;
                     })
                     .catch(err => {
@@ -748,6 +942,107 @@
                     .catch(err => {
                         this.saving = false;
                         this.errorMessage = 'Network error resetting defaults';
+                    });
+                },
+                reloadModalData() {
+                    fetch('/settings/integrations/' + this.serviceId + '/limits', {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        this.service = data.service;
+                        this.tunables = data.tunables;
+                        this.credentials = (data.credentials || []).map(c => ({ ...c, showPlain: false }));
+                        this.isCloudProvider = !!data.is_cloud_provider;
+                        this.detectedInstances = data.detected_instances || [];
+                        this.hostingPanels = data.hosting_panels || {};
+                    })
+                    .catch(() => {});
+                },
+                reconcileInstances() {
+                    this.actionLoading = true;
+                    this.errorMessage = '';
+                    const token = document.querySelector('input[name=_token]')?.value;
+                    fetch('/settings/integrations/' + this.serviceId + '/reconcile', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': token
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        this.actionLoading = false;
+                        if (data.success) {
+                            this.successMessage = data.message || 'Reconciliation completed!';
+                            this.saveSuccess = true;
+                            this.reloadModalData();
+                            setTimeout(() => { this.saveSuccess = false; }, 4000);
+                        } else {
+                            this.errorMessage = data.message || 'Reconciliation failed';
+                        }
+                    })
+                    .catch(err => {
+                        this.actionLoading = false;
+                        this.errorMessage = 'Network error during reconciliation';
+                    });
+                },
+                importInstance(instanceId) {
+                    if (!confirm('Import this cloud instance into your Clockwork Control Server Fleet?')) return;
+                    this.actionLoading = true;
+                    this.errorMessage = '';
+                    const token = document.querySelector('input[name=_token]')?.value;
+                    fetch('/settings/integrations/' + this.serviceId + '/import-instance', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': token
+                        },
+                        body: JSON.stringify({ instance_id: instanceId })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        this.actionLoading = false;
+                        if (data.success) {
+                            this.successMessage = data.message || 'Instance imported!';
+                            this.saveSuccess = true;
+                            this.reloadModalData();
+                            setTimeout(() => { this.saveSuccess = false; }, 4000);
+                        } else {
+                            this.errorMessage = data.message || 'Failed to import instance';
+                        }
+                    })
+                    .catch(err => {
+                        this.actionLoading = false;
+                        this.errorMessage = 'Network error importing instance';
+                    });
+                },
+                syncFromPanel(panelKey) {
+                    this.actionLoading = true;
+                    this.errorMessage = '';
+                    const token = document.querySelector('input[name=_token]')?.value;
+                    const url = panelKey === 'spinupwp' ? '/servers/refresh-spinupwp' : '/servers/refresh-gridpane';
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': token
+                        }
+                    })
+                    .then(res => {
+                        this.actionLoading = false;
+                        this.successMessage = (panelKey === 'spinupwp' ? 'SpinupWP' : 'GridPane') + ' sync triggered! Servers and sites refreshing.';
+                        this.saveSuccess = true;
+                        this.reloadModalData();
+                        setTimeout(() => { this.saveSuccess = false; }, 4000);
+                    })
+                    .catch(err => {
+                        this.actionLoading = false;
+                        this.errorMessage = 'Network error syncing from panel';
                     });
                 },
                 async testConnection() {

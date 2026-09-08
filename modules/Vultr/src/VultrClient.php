@@ -87,6 +87,14 @@ class VultrClient
         return $all;
     }
 
+    /**
+     * GET /v2/instances/{instance-id} — retrieve a single instance.
+     */
+    public function instance(string $id): array
+    {
+        return $this->get("/instances/{$id}")->json('instance', []);
+    }
+
     protected function client(): PendingRequest
     {
         if (! $this->isConfigured()) {

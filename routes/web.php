@@ -355,6 +355,8 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/settings/integrations/{service}/limits', [ServiceApiLimitsController::class, 'update'])->name('settings.integrations.limits.update');
     Route::post('/settings/integrations/{service}/limits/reset', [ServiceApiLimitsController::class, 'reset'])->name('settings.integrations.limits.reset');
     Route::post('/settings/integrations/{service}/credentials/{field}/remove', [ServiceApiLimitsController::class, 'removeCredential'])->name('settings.integrations.credentials.remove');
+    Route::post('/settings/integrations/{service}/reconcile', [ServiceApiLimitsController::class, 'reconcile'])->name('settings.integrations.reconcile');
+    Route::post('/settings/integrations/{service}/import-instance', [ServiceApiLimitsController::class, 'importInstance'])->name('settings.integrations.importInstance');
 
     // Module Directory (official feed & community ecosystem browser)
     Route::get('/settings/modules', [ModuleDirectoryController::class, 'index'])->name('settings.modules.index');

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\IntegrationCredential;
+use App\Models\Server;
 use App\Models\User;
 use App\Support\EnvCredentialManager;
 use App\Support\ServiceRateLimitRegistry;
@@ -489,5 +490,165 @@ describe('.env credential management', function () {
         expect($envManager->getEnvValue('GOOGLE_CLIENT_ID'))->toBe('goog_client_abc')
             ->and($envManager->getEnvValue('GOOGLE_CLIENT_SECRET'))->toBe('goog_secret_xyz')
             ->and($envManager->getEnvValue('GOOGLE_HD'))->toBe('myagency.com');
+    });
+});
+
+describe('cloud instance discovery & actions', function () {
+    it('discovers live Vultr instances and detects link status in show endpoint', function () {
+        config(['clockwork.vultr.api_key' => 'vultr-test-key']);
+        $user = User::factory()->create();
+
+        Http::fake([
+            'api.vultr.com/v2/instances*' => Http::response([
+                'instances' => [
+                    [
+                        'id' => 'vultr-uuid-1234',
+                        'label' => 'web1.clockworkwp.com',
+                        'main_ip' => '198.51.100.25',
+                        'plan' => 'voc-g-1c-4gb-30s-amd',
+                        'vcpu_count' => 1,
+                        'ram' => 4096,
+                        'disk' => 30,
+                        'status' => 'active',
+                        'region' => 'dfw',
+                        'tags' => ['spinupwp'],
+                    ],
+                ],
+                'meta' => ['total' => 1, 'links' => ['next' => '']],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('settings.integrations.limits', 'vultr'));
+
+        $response->assertOk()
+            ->assertJsonPath('is_cloud_provider', true)
+            ->assertJsonPath('detected_instances.0.id', 'vultr-uuid-1234')
+            ->assertJsonPath('detected_instances.0.name', 'web1.clockworkwp.com')
+            ->assertJsonPath('detected_instances.0.ip', '198.51.100.25')
+            ->assertJsonPath('detected_instances.0.is_linked', false)
+            ->assertJsonPath('detected_instances.0.suggested_panel', 'spinupwp')
+            ->assertJsonPath('hosting_panels.spinupwp.enabled', true);
+    });
+
+    it('cross-references detected instances against existing servers', function () {
+        config(['clockwork.vultr.api_key' => 'vultr-test-key']);
+        $user = User::factory()->create();
+
+        $server = Server::factory()->create([
+            'name' => 'web1.clockworkwp.com',
+            'hostname' => '198.51.100.25',
+            'provider' => Server::PROVIDER_VULTR,
+            'provider_id' => 'vultr-uuid-1234',
+        ]);
+
+        Http::fake([
+            'api.vultr.com/v2/instances*' => Http::response([
+                'instances' => [
+                    [
+                        'id' => 'vultr-uuid-1234',
+                        'label' => 'web1.clockworkwp.com',
+                        'main_ip' => '198.51.100.25',
+                        'plan' => 'voc-g-1c-4gb-30s-amd',
+                        'status' => 'active',
+                    ],
+                ],
+                'meta' => ['total' => 1, 'links' => ['next' => '']],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('settings.integrations.limits', 'vultr'));
+
+        $response->assertOk()
+            ->assertJsonPath('detected_instances.0.is_linked', true)
+            ->assertJsonPath('detected_instances.0.is_fully_linked', true)
+            ->assertJsonPath('detected_instances.0.linked_server.id', $server->id);
+    });
+
+    it('reconciles hardware specs via POST /settings/integrations/{service}/reconcile', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('settings.integrations.reconcile', 'vultr'));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['success', 'message', 'output']);
+    });
+
+    it('imports an unlinked cloud instance via POST /settings/integrations/{service}/import-instance', function () {
+        config(['clockwork.vultr.api_key' => 'vultr-test-key']);
+        $user = User::factory()->create();
+
+        Http::fake([
+            'api.vultr.com/v2/instances/vultr-uuid-9999' => Http::response([
+                'instance' => [
+                    'id' => 'vultr-uuid-9999',
+                    'label' => 'standalone-app',
+                    'main_ip' => '198.51.100.99',
+                    'plan' => 'vc2-1c-1gb',
+                    'vcpu_count' => 1,
+                    'ram' => 1024,
+                    'disk' => 25,
+                    'status' => 'active',
+                    'os' => 'Ubuntu 24.04 LTS x64',
+                ],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson(route('settings.integrations.importInstance', 'vultr'), [
+                'instance_id' => 'vultr-uuid-9999',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('server.name', 'standalone-app')
+            ->assertJsonPath('server.hostname', '198.51.100.99');
+
+        $server = Server::where('provider_id', 'vultr-uuid-9999')->first();
+        expect($server)->not->toBeNull()
+            ->and($server->name)->toBe('standalone-app')
+            ->and($server->hostname)->toBe('198.51.100.99')
+            ->and($server->provider)->toBe(Server::PROVIDER_VULTR)
+            ->and($server->size_slug)->toBe('vc2-1c-1gb')
+            ->and($server->vcpus)->toBe(1)
+            ->and($server->memory_mb)->toBe(1024)
+            ->and($server->disk_gb)->toBe(25);
+    });
+
+    it('renders cloud provider architecture guide and detected instances on HTML limits page', function () {
+        config(['clockwork.vultr.api_key' => 'vultr-test-key']);
+        $user = User::factory()->create();
+
+        Http::fake([
+            'api.vultr.com/v2/instances*' => Http::response([
+                'instances' => [
+                    [
+                        'id' => 'vultr-uuid-5555',
+                        'label' => 'cloud-box.example.com',
+                        'main_ip' => '198.51.100.55',
+                        'plan' => 'voc-g-1c-4gb-30s-amd',
+                        'vcpu_count' => 1,
+                        'ram' => 4096,
+                        'disk' => 30,
+                        'status' => 'active',
+                    ],
+                ],
+                'meta' => ['total' => 1, 'links' => ['next' => '']],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('settings.integrations.limits', 'vultr'));
+
+        $response->assertOk()
+            ->assertSee('How Vultr Integrates with Clockwork Control')
+            ->assertSee('Detected Vultr Instances')
+            ->assertSee('cloud-box.example.com')
+            ->assertSee('198.51.100.55')
+            ->assertSee('Reconcile Hardware Specs')
+            ->assertSee('Import as Standalone Server');
     });
 });
