@@ -29,6 +29,13 @@ uses(RendersAuthenticatedPages::class);
 | a real admin user) behind in it after every run. Using a dedicated,
 | obviously-scratch database name that these tests create before and drop
 | after themselves makes the suite self-contained and leaves nothing behind.
+|
+| Both full-installation tests are tagged ->group('mysql') and excluded in
+| CI (see .github/workflows/tests.yml) — the CI runner only installs
+| pdo_sqlite/sqlite3 and has no MySQL service container, so a real
+| 127.0.0.1:3306 connection always fails there with "Connection refused".
+| They still run normally anywhere a local MySQL server is reachable
+| (`vendor/bin/pest tests/Feature/Installer/InstallerWizardTest.php`).
 */
 function installerTestDatabaseName(): string
 {
@@ -317,7 +324,7 @@ describe('InstallerWizard', function () {
         } finally {
             dropInstallerTestDatabase();
         }
-    });
+    })->group('mysql');
 
     it('executes full installation with skipped google oauth and provisions admin with working local password', function () use (&$tempEnv) {
         resetInstallerTestDatabase();
@@ -387,7 +394,7 @@ describe('InstallerWizard', function () {
         } finally {
             dropInstallerTestDatabase();
         }
-    });
+    })->group('mysql');
 
     it('renders step 9 done screen', function () {
         $response = $this->get(route('install.done'));
