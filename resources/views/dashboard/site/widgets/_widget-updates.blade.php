@@ -1,18 +1,24 @@
 @php
-    $corePending = $site->isPressable()
-        ? ($site->companion_snapshot !== null ? $site->core_update_available : null)
-        : $site->wp_core_update;
-    $themesPending = $site->isPressable()
-        ? ($site->companion_snapshot !== null ? $site->theme_updates_available > 0 : null)
-        : $site->wp_theme_updates;
-    $pluginsPending = $site->isPressable()
-        ? ($site->companion_snapshot !== null ? $site->plugin_updates_available > 0 : null)
-        : $site->wp_plugin_updates;
+    $hasCompanion = $site->companion_snapshot !== null;
 
-    $pluginCount = $site->plugin_updates_available;
-    $themeCount = $site->theme_updates_available;
-    $totalPending = ($corePending ? 1 : 0) + $pluginCount + $themeCount;
-    $isUpToDate = $totalPending === 0 && $corePending === false;
+    $corePending = $site->isPressable()
+        ? ($hasCompanion ? $site->core_update_available : null)
+        : $site->wp_core_update;
+
+    $pluginCount = $hasCompanion ? $site->plugin_updates_available : null;
+    $themeCount = $hasCompanion ? $site->theme_updates_available : null;
+
+    $pluginsPending = $hasCompanion
+        ? ($pluginCount > 0)
+        : (bool) $site->wp_plugin_updates;
+
+    $themesPending = $hasCompanion
+        ? ($themeCount > 0)
+        : (bool) $site->wp_theme_updates;
+
+    $hasPending = ($corePending === true) || $pluginsPending || $themesPending;
+    $totalPending = ($corePending ? 1 : 0) + ($pluginCount ?? ($pluginsPending ? 1 : 0)) + ($themeCount ?? ($themesPending ? 1 : 0));
+    $isUpToDate = ! $hasPending && ($corePending === false || $corePending === null);
 @endphp
 
 <div class="card p-5 flex flex-col justify-between h-full">
@@ -26,9 +32,9 @@
                 <span class="status-pill status-green text-[10px]">
                     <span class="status-dot"></span> Up to date
                 </span>
-            @elseif ($totalPending > 0)
+            @elseif ($hasPending)
                 <span class="status-pill status-yellow text-[10px]">
-                    <span class="status-dot"></span> {{ $totalPending }} Pending
+                    <span class="status-dot"></span> {{ $totalPending > 0 ? $totalPending . ' Pending' : 'Updates Pending' }}
                 </span>
             @else
                 <span class="status-pill status-unknown text-[10px]">Unknown</span>
@@ -63,20 +69,28 @@
                     <span class="flex items-center gap-2 text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-plug text-purple-600"></i> Plugins
                     </span>
-                    @if ($pluginCount > 0)
+                    @if ($pluginCount !== null && $pluginCount > 0)
                         <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">{{ $pluginCount }} update{{ $pluginCount === 1 ? '' : 's' }}</span>
-                    @else
+                    @elseif ($pluginsPending)
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">Update available</span>
+                    @elseif ($pluginsPending === false)
                         <span class="text-[10px] text-emerald-700 font-medium"><i class="fa-solid fa-check text-[9px]"></i> Current</span>
+                    @else
+                        <span class="text-[10px] text-[var(--color-ink-muted)]">—</span>
                     @endif
                 </div>
                 <div class="flex items-center justify-between text-xs p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60">
                     <span class="flex items-center gap-2 text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-paintbrush text-indigo-600"></i> Themes
                     </span>
-                    @if ($themeCount > 0)
+                    @if ($themeCount !== null && $themeCount > 0)
                         <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">{{ $themeCount }} update{{ $themeCount === 1 ? '' : 's' }}</span>
-                    @else
+                    @elseif ($themesPending)
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">Update available</span>
+                    @elseif ($themesPending === false)
                         <span class="text-[10px] text-emerald-700 font-medium"><i class="fa-solid fa-check text-[9px]"></i> Current</span>
+                    @else
+                        <span class="text-[10px] text-[var(--color-ink-muted)]">—</span>
                     @endif
                 </div>
             </div>

@@ -133,6 +133,9 @@
             <span x-show="savedToast" x-cloak class="text-emerald-600 font-medium text-xs flex items-center gap-1 transition-opacity">
                 <i class="fa-solid fa-circle-check text-[11px]"></i> Layout saved
             </span>
+            <span x-show="errorToast" x-cloak class="text-rose-600 font-medium text-xs flex items-center gap-1 transition-opacity">
+                <i class="fa-solid fa-circle-exclamation text-[11px]"></i> <span x-text="errorMessage || 'Failed to update layout'"></span>
+            </span>
             <button type="button"
                     x-show="isCustom"
                     @click="resetLayout()"

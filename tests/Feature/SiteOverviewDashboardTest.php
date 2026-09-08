@@ -125,14 +125,19 @@ describe('Site Overview Command Center Dashboard', function () {
         // 100% when no downtime events
         expect($site->computeUptimePercentage(30))->toBe(100.0);
 
-        // Add a 60-minute downtime event
+        // Add a 60-minute downtime event pair (DOWN then UP 60 minutes later)
         SiteUptimeEvent::create([
             'site_id' => $site->id,
             'event_type' => SiteUptimeEvent::TYPE_DOWN,
             'status_code' => 500,
             'error' => 'HTTP 500 Internal Server Error',
             'event_at' => now()->subDays(2),
-            'duration_seconds' => 3600, // 60 minutes
+        ]);
+        SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_UP,
+            'status_code' => 200,
+            'event_at' => now()->subDays(2)->addMinutes(60),
         ]);
 
         $pct = $site->computeUptimePercentage(30);

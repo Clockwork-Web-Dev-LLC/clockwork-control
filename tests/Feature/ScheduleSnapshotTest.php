@@ -25,6 +25,7 @@ class ScheduleSnapshotTest extends TestCase
     private const EXPECTED_COMMANDS = [
         'clockwork:auto-approve-repeats',
         'clockwork:backup-relay-run',
+        'clockwork:capture-site-screenshots',
         'clockwork:check-blacklists',
         'clockwork:check-cloudflare',
         'clockwork:check-domain-expirations',

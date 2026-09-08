@@ -11,6 +11,11 @@ use Throwable;
 class SiteScreenshotService
 {
     /**
+     * Known MD5 hash of Automattic mShots 'still generating' default placeholder image (8,737 bytes).
+     */
+    public const MSHOTS_PLACEHOLDER_MD5 = 'e89e34619e53928489a0c703c761cd58';
+
+    /**
      * Capture or refresh the homepage screenshot for a given site.
      * Fetches from Automattic's mShots service and caches the resulting JPEG to public disk.
      */
@@ -43,9 +48,18 @@ class SiteScreenshotService
                 return false;
             }
 
+            $effectiveUri = (string) ($response->effectiveUri() ?? '');
+            if (str_contains($effectiveUri, '/mshots/v1/default') || str_ends_with($effectiveUri, '/default')) {
+                Log::info("mShots returned default placeholder for site {$site->domain} (still generating)");
+
+                return false;
+            }
+
             $body = $response->body();
-            // Validate that we received non-empty binary image content
-            if (strlen($body) < 100) {
+            // Validate that we received non-empty binary image content and not the known Automattic placeholder image
+            if (strlen($body) < 100 || md5($body) === self::MSHOTS_PLACEHOLDER_MD5) {
+                Log::info("mShots screenshot rejected for site {$site->domain} (empty body or known placeholder hash)");
+
                 return false;
             }
 
