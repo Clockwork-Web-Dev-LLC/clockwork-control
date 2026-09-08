@@ -6,6 +6,8 @@
     <x-page-header title="Maintenance history"
         subtitle="Cross-site action log for the selected month — track billable work, automated updates, and covered care-plan events." />
 
+    @include('settings._tabs')
+
     {{-- Stats strip — covered vs billable vs server-only. --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div class="card px-4 py-3">
