@@ -312,13 +312,7 @@ class GridPaneClient
         if ($this->retryAttempts > 0) {
             $request->retry($this->retryAttempts, function (int $attempt, \Throwable $exception) {
                 if ($exception instanceof RequestException && $exception->response->status() === 429) {
-                    // header() returns '' (not null) for a missing header, so
-                    // a `??` chain never actually falls through to the
-                    // default — check for a genuinely non-empty value instead.
-                    $header = $exception->response->header('Retry-After');
-                    $retryAfter = $header !== '' ? (int) $header : 5;
-
-                    return max(1000, ($retryAfter + 1) * 1000);
+                    return max(1000, ($this->retryAfterSeconds($exception->response) + 1) * 1000);
                 }
 
                 return 500;
@@ -326,6 +320,37 @@ class GridPaneClient
         }
 
         return $request;
+    }
+
+    /**
+     * How long to wait before retrying a 429, in seconds.
+     *
+     * GridPane enforces a per-endpoint budget (`X-RateLimit-Endpoint-Limit`)
+     * separate from its documented account-wide rate, and a listing page
+     * costs more than one unit against it — a fleet with more pages than
+     * that budget allows trips a 429 well before the account-wide limit is
+     * anywhere close. On a 429 it reports the real cooldown via
+     * `Retry-After-Endpoint` (observed ~27s) and `X-RateLimit-Endpoint-Reset`
+     * (unix timestamp) — NOT the generic `Retry-After` header, which
+     * GridPane never sends, so checking only that name silently fell
+     * through to a too-short fallback and kept retrying into the same
+     * still-exhausted window.
+     */
+    protected function retryAfterSeconds(Response $response): int
+    {
+        foreach (['Retry-After-Endpoint', 'Retry-After'] as $name) {
+            $value = $response->header($name);
+            if ($value !== '') {
+                return (int) $value;
+            }
+        }
+
+        $reset = $response->header('X-RateLimit-Endpoint-Reset');
+        if ($reset !== '') {
+            return max(0, (int) $reset - time());
+        }
+
+        return 5;
     }
 
     protected function url(string $path): string
