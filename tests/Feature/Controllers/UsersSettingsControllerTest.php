@@ -46,6 +46,15 @@ describe('UsersSettingsController', function () {
                 ->assertSee('revoked@clockworkwd.com')
                 ->assertSee('Revoked');
         });
+
+        it('shows an accurate revoked-count roll-up tile', function () {
+            $viewer = User::factory()->create();
+            User::factory()->count(2)->create(['revoked_at' => now()]);
+
+            $response = $this->actingAs($viewer)->get(route('settings.users.index'));
+
+            $response->assertOk()->assertSeeInOrder(['Revoked', '2', 'No longer authorized']);
+        });
     });
 
     describe('store', function () {

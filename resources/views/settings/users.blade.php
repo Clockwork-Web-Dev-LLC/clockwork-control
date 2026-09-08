@@ -29,7 +29,7 @@
     @endif
 
     {{-- Roll-up metric tiles --}}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-4xl">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 max-w-5xl">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Active Teammates</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ $users->whereNull('revoked_at')->count() }}</div>
@@ -39,6 +39,11 @@
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Total Accounts</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ $users->count() }}</div>
             <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">Configured allowlist</div>
+        </div>
+        <div class="card px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Revoked</div>
+            <div class="text-2xl font-display text-[var(--color-status-red)] font-data">{{ $users->whereNotNull('revoked_at')->count() }}</div>
+            <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">No longer authorized</div>
         </div>
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Password Ready</div>
