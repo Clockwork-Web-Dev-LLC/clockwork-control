@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Modules\BillCom\BillComCustomer;
 use Modules\ClientManagement\Models\Client;
 use Modules\Core\Contracts\HostingProvider;
@@ -27,6 +29,8 @@ use Modules\Core\Contracts\HostingProvider;
  * @property string $hosting_provider spinupwp|pressable
  * @property string $domain
  * @property ?string $notes
+ * @property ?string $screenshot_path
+ * @property ?Carbon $screenshot_captured_at
  * @property ?array $dashboard_layout
  * @property ?string $site_user
  * @property ?string $wp_path
@@ -210,6 +214,8 @@ class Site extends Model
         'hosting_provider',
         'domain',
         'notes',
+        'screenshot_path',
+        'screenshot_captured_at',
         'dashboard_layout',
         'site_user',
         'wp_path',
@@ -335,6 +341,7 @@ class Site extends Model
             'cloudflare_checked_at' => 'datetime',
             'archived_at' => 'datetime',
             'is_inactive' => 'boolean',
+            'screenshot_captured_at' => 'datetime',
             'companion_installed' => 'boolean',
             'companion_capabilities' => 'array',
             'companion_secret' => 'encrypted',
@@ -437,6 +444,12 @@ class Site extends Model
     {
         static::addGlobalScope('notArchived', function (Builder $query) {
             $query->whereNull("{$query->getModel()->getTable()}.archived_at");
+        });
+
+        static::created(function (Site $site) {
+            if (! app()->runningUnitTests()) {
+                CaptureSiteScreenshotJob::dispatch($site->id);
+            }
         });
     }
 
@@ -875,5 +888,41 @@ class Site extends Model
         $missing = array_diff(self::DEFAULT_DASHBOARD_LAYOUT, $ordered);
 
         return array_values(array_merge($ordered, $missing));
+    }
+
+    /**
+     * Get the public URL for the site's screenshot.
+     * Serves locally cached file if available; otherwise falls back to Automattic mShots.
+     */
+    public function screenshotUrl(): string
+    {
+        if ($this->screenshot_path && Storage::disk('public')->exists($this->screenshot_path)) {
+            return Storage::disk('public')->url($this->screenshot_path);
+        }
+
+        // Automattic mShots: free public high-quality screenshot renderer
+        $target = 'https://'.$this->domain;
+
+        return 'https://s0.wp.com/mshots/v1/'.rawurlencode($target).'?w=600';
+    }
+
+    /**
+     * Return a consolidated status color for visual cards ('green', 'yellow', 'red').
+     */
+    public function healthColor(): string
+    {
+        if ($this->uptime_state === 'down') {
+            return 'red';
+        }
+
+        if ($this->sslState() === self::SSL_STATE_RED) {
+            return 'red';
+        }
+
+        if ($this->uptime_state === 'unknown' || $this->sslState() === self::SSL_STATE_YELLOW) {
+            return 'yellow';
+        }
+
+        return 'green';
     }
 }
