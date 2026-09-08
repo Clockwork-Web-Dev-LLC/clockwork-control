@@ -25,6 +25,36 @@ Because we can only run our own live production workloads on the services our ag
 
 Full walkthrough: [`resources/docs/getting-started/local-dev.md`](resources/docs/getting-started/local-dev.md). Quick version is in the [README](README.md#quickstart).
 
+## Branching strategy
+
+This applies to work done directly in this repo (the core team, and AI agents like Claude/Gemini
+working alongside them) — external contributors already work from their own fork per the workflow
+above.
+
+- **Branch once work is substantial**, not for every change. A new module feature, a new
+  controller + views + migration, anything spanning multiple files with real design decisions —
+  branch it. A small, contained fix (one file, a clear regression, a typo, a docs correction) is
+  still fine committed straight to `main`, same as this project has always done.
+- **Naming**: `feature/<slug>`, `fix/<slug>` (a multi-file bugfix substantial enough to branch),
+  or `chore/<slug>` (release prep, dependency bumps, tooling). `<slug>` is short and kebab-case,
+  named for what it does — `feature/client-reports-templates`, not `feature/gemini-9-8` or
+  `feature/aaron-wip`.
+- **One feature, one branch, one PR.** Don't stack unrelated work onto a branch that's already
+  open for something else — open a second branch instead.
+- **Before opening a PR**, run the same quality trifecta as always (see below) — CI
+  (`.github/workflows/tests.yml`) enforces it regardless, but catching it locally first saves a
+  round-trip.
+- **Merge via squash** — the whole branch collapses into one clean commit on `main`, matching how
+  this project's history already reads (one commit per logical feature/fix). Delete the branch
+  once merged (`gh pr merge --squash --delete-branch`). If a genuine reason comes up to preserve a
+  branch's individual commits instead, that's a case-by-case call, not the default.
+- **Multiple agents share this checkout.** Claude and Gemini (and any future assistant) may both
+  be working in the same local clone at overlapping times — before creating a branch or
+  committing, run `git status` and `git fetch && git log --oneline main..origin/main` first.
+  Don't branch off a dirty working tree that has someone else's in-progress, uncommitted work
+  mixed into it — if you find one, stash it or ask before touching it rather than assuming it's
+  abandoned or folding it into your own commit.
+
 ## Before you open a PR
 
 ```bash
