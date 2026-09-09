@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-09-08
+
+### Added
+- **OAuth 2.0 redirect URI helper**: Added Authorized Redirect URI display box with 1-click clipboard copy (`/auth/{provider}/callback`) to Google, GitHub, and Microsoft integration modals and settings pages.
+- **Context-aware integration settings & navigation**: Settings buttons on `/settings/integrations` and modal headers on `/setup` now display tailored labels and icons based on real service type (`API Limits & Docs`, `OAuth Setup & Keys`, `Webhook Settings`).
+
+### Changed
+- **Audit module rate limits and integration types**: Classified all 24 registered services into real architectural types (APIs, webhooks, OAuth SSO). Stripped fake vendor rate limits (60–100 req/min), fake quota reset headers (`X-RateLimit-Limit`), and fleet polling projections from outbound webhooks (`slack`, `mattermost`, `client_slack`) and OAuth SSO providers (`auth_google`, `auth_github`, `auth_microsoft`).
+- **Contextual credentials presentation**: Modals and settings cards for public scanner services without credentials (such as Sucuri SiteCheck) now display "Service Access & Authentication — Zero credentials required • Public access" instead of a confusing empty `.env` credentials box.
+
+### Fixed
+- **Contact Form Testing integration modal**: Removed `contact-forms` from `ServiceRateLimitRegistry` so this first-party synthetic test runner no longer renders an erroneous gear button, empty API credentials card, or operator pacing sliders on `/setup`.
+- **Setup checklist Backup Relay auto-detection**: Fixed Backup Relay setup checklist card to auto-detect S3 bucket configuration and sites in use on `/setup`.
+- **Module navigation bar and resolver memoization**: Fixed disabled module items appearing in the global navigation bar and resolved premature `ModuleStateResolver` memoization issues.
+
 ## [1.5.2] - 2026-09-08
 
 ### Added
