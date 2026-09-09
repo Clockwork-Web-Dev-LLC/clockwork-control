@@ -1957,6 +1957,11 @@
 
     {{-- DB CREDS --}}
     @if ($missingDbCreds->isNotEmpty())
+        {{-- Auto-refresh while a background fetch is in flight, same pattern
+             as operations/server-updates.blade.php's poll-in-progress banner. --}}
+        @if ($dbCredsFetchInProgress)
+            <meta http-equiv="refresh" content="10">
+        @endif
         <section id="section-no_db" class="card overflow-hidden mb-6">
             <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
                 <div>
@@ -1970,12 +1975,25 @@
                     <span class="status-pill status-yellow">{{ $missingDbCreds->count() }}</span>
                     <form method="POST" action="{{ route('issues.fetch-all-db-creds') }}">
                         @csrf
-                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors">
-                            <i class="fa-solid fa-rotate"></i> Fetch all
+                        <button type="submit"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors @if($dbCredsFetchInProgress) opacity-50 cursor-not-allowed @endif"
+                                @if($dbCredsFetchInProgress) disabled @endif>
+                            <i class="fa-solid @if($dbCredsFetchInProgress) fa-spinner fa-spin @else fa-rotate @endif"></i>
+                            {{ $dbCredsFetchInProgress ? 'Fetching…' : 'Fetch all' }}
                         </button>
                     </form>
                 </div>
             </div>
+            @if ($dbCredsFetchInProgress)
+                <div class="px-5 py-3 border-b border-[var(--color-border-light)] bg-amber-50 text-sm">
+                    <strong>Background fetch in progress.</strong>
+                    {{ $missingDbCreds->count() }} site(s) still remaining
+                    @if ($dbCredsFetchStartedAt)
+                        · started {{ $dbCredsFetchStartedAt->diffForHumans() }}
+                    @endif
+                    · this page reloads every 10s until done.
+                </div>
+            @endif
             <div class="max-h-96 overflow-y-auto">
                 <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">

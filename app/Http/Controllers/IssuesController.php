@@ -10,16 +10,31 @@ use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\PluginVulnerabilityMatcher;
-use App\Services\Sites\WpConfigExtractor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
+use Symfony\Component\Process\PhpExecutableFinder;
 use Throwable;
 
 class IssuesController extends Controller
 {
+    /**
+     * Cache key for the "a bulk DB-creds fetch is currently running" marker.
+     * Same pattern as OperationsUpdatesController::POLL_MARKER_KEY — value
+     * stored is the ISO start timestamp, presence is the signal. TTL bounds
+     * the in-progress state in case the background process dies without
+     * finishing (full-fleet extraction can legitimately take several minutes
+     * — see WpConfigExtractor's two existence probes + cat per site, each a
+     * separate SSH round-trip).
+     */
+    public const DB_CREDS_MARKER_KEY = 'issues.fetch_all_db_creds.in_progress_since';
+
+    public const DB_CREDS_MARKER_TTL_SEC = 1800;
+
     public function index(): View
     {
         // Match the rest of the fleet automation: staging-tagged servers are
@@ -147,6 +162,27 @@ class IssuesController extends Controller
                 && ! $s->db_password
                 && $s->server?->last_ssh_ok_at)
             ->values();
+
+        // "Fetch all" runs in the background (see fetchAllDbCreds()) — check
+        // whether one is currently in flight so the view can show a progress
+        // banner and disable the button, same pattern as
+        // OperationsUpdatesController::index()'s poll-in-progress marker.
+        // Unlike that marker (which advances on every server regardless of
+        // per-server outcome via polled_at), a site that fails extraction
+        // never leaves $missingDbCreds, so this can't detect "finished with
+        // some failures" — it relies on the TTL as the ultimate backstop,
+        // same tradeoff the reference implementation accepts.
+        $dbCredsFetchMarker = Cache::get(self::DB_CREDS_MARKER_KEY);
+        $dbCredsFetchInProgress = false;
+        $dbCredsFetchStartedAt = null;
+        if (is_string($dbCredsFetchMarker) && $dbCredsFetchMarker !== '') {
+            $dbCredsFetchStartedAt = Carbon::parse($dbCredsFetchMarker);
+            if ($missingDbCreds->isEmpty()) {
+                Cache::forget(self::DB_CREDS_MARKER_KEY);
+            } else {
+                $dbCredsFetchInProgress = true;
+            }
+        }
 
         // Cloudflare misconfig: DNS-only is the only actionable Issue. "Not on Cloudflare"
         // is shown on the site row but not flagged here — the user can't always force a flip.
@@ -339,6 +375,8 @@ class IssuesController extends Controller
             'missingSsh',
             'missingJail',
             'missingDbCreds',
+            'dbCredsFetchInProgress',
+            'dbCredsFetchStartedAt',
             'patchesAvailable',
             'rebootRequired',
             'companionMissing',
@@ -368,38 +406,62 @@ class IssuesController extends Controller
         return back()->with('status', "{$site->domain} removed from monitoring.");
     }
 
-    public function fetchAllDbCreds(WpConfigExtractor $extractor): RedirectResponse
+    /**
+     * Kick off the bulk DB-creds extraction as a detached background process
+     * so the HTTP request returns immediately, instead of looping over every
+     * eligible site synchronously in-request. The previous synchronous
+     * design opened a fresh SSH connection per site (WpConfigExtractor's two
+     * existence probes + cat, each a separate handshake — see
+     * SshClient::exec(), no connection reuse) and blew past PHP's
+     * max_execution_time well before finishing a fleet of any real size —
+     * exactly the failure mode OperationsUpdatesController::refresh() was
+     * already fixed for; this mirrors that fix.
+     *
+     * Reuses the existing `clockwork:extract-wp-configs` artisan command
+     * (already covers the identical is_wordpress + null db_password + SSH-ok
+     * selection this endpoint used) rather than duplicating its logic.
+     */
+    public function fetchAllDbCreds(): RedirectResponse
     {
         $sites = Site::query()
-            ->with('server')
             ->where('is_wordpress', true)
             ->whereNull('db_password')
             ->whereHas('server', fn ($q) => $q->monitored()->whereNotNull('last_ssh_ok_at'))
-            ->get();
+            ->exists();
 
-        if ($sites->isEmpty()) {
+        if (! $sites) {
             return back()->with('status', 'No sites with missing DB credentials found.');
         }
 
-        $ok = 0;
-        $failed = [];
+        $startedAt = Carbon::now();
+        $gotLock = Cache::add(self::DB_CREDS_MARKER_KEY, $startedAt->toIso8601String(), self::DB_CREDS_MARKER_TTL_SEC);
 
-        foreach ($sites as $site) {
-            try {
-                $extractor->extractAndStore($site);
-                $ok++;
-            } catch (Throwable $e) {
-                $failed[] = "{$site->domain}: {$e->getMessage()}";
-            }
+        if (! $gotLock) {
+            return back()->with('status', 'A DB-credentials fetch is already running in the background — sit tight, this page will show progress as sites complete.');
         }
 
-        if ($failed) {
-            $msg = "Fetched {$ok}, failed ".count($failed).': '.implode('; ', array_slice($failed, 0, 3));
+        $php = (new PhpExecutableFinder)->find();
+        if ($php === false) {
+            Cache::forget(self::DB_CREDS_MARKER_KEY);
 
-            return back()->with('status_error', $msg);
+            return back()->with('status_error', 'Could not locate the PHP binary to launch the background fetch.');
         }
 
-        return back()->with('status', "DB credentials fetched for {$ok} site(s).");
+        $cmd = sprintf('%s artisan clockwork:extract-wp-configs', escapeshellarg($php));
+
+        // Detach: nohup + redirect stdout/stderr to a logfile + trailing `&`.
+        // The child re-bootstraps Laravel from artisan as a fresh CLI
+        // process, so it doesn't inherit this request's max_execution_time.
+        $logPath = storage_path('logs/issues-db-creds-fetch-bg.log');
+        $shell = sprintf(
+            '(cd %s && nohup %s < /dev/null > %s 2>&1 &) > /dev/null 2>&1',
+            escapeshellarg(base_path()),
+            $cmd,
+            escapeshellarg($logPath),
+        );
+        @exec($shell);
+
+        return back()->with('status', 'Fetching DB credentials in the background — this page will show progress as sites complete.');
     }
 
     public function pollServers(): JsonResponse

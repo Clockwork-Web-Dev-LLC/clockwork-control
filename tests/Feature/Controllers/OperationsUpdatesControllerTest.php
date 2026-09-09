@@ -9,27 +9,16 @@
  * server for real. This suite must never let that reach the real global
  * exec().
  *
- * Technique (same one already proven in
- * tests/Feature/Console/EnsureQueueWorkerTest.php): PHP resolves an
- * unqualified function call inside a namespaced file by first looking for a
- * function of that name in the CURRENT namespace, falling back to the
- * global one only if none exists. OperationsUpdatesController.php calls
- * exec() unqualified inside `namespace App\Http\Controllers`, so declaring
- * our own App\Http\Controllers\exec() below shadows it for every call site
- * in that class.
+ * The App\Http\Controllers\exec() shadow that makes that safe lives in
+ * tests/Support/HttpControllersExecShadow.php — shared with
+ * IssuesControllerTest.php, since PHP fatal-errors on two files each
+ * declaring the same namespaced function. See that file for the technique.
+ * Calls land in $GLOBALS['__cw_http_controllers_exec_calls'].
  */
 
-namespace App\Http\Controllers {
-    function exec(string $command, &$output = null, &$result_code = null)
-    {
-        $GLOBALS['__ouc_exec_calls'][] = $command;
-        $result_code = 0;
-
-        return '';
-    }
-}
-
 namespace {
+
+    require_once __DIR__.'/../../Support/HttpControllersExecShadow.php';
 
     use App\Http\Controllers\OperationsUpdatesController;
     use App\Models\Server;
@@ -43,7 +32,7 @@ namespace {
 
     function oucResetExecFixtures(): void
     {
-        $GLOBALS['__ouc_exec_calls'] = [];
+        $GLOBALS['__cw_http_controllers_exec_calls'] = [];
     }
 
     describe('OperationsUpdatesController', function () {
@@ -158,8 +147,8 @@ namespace {
             $response->assertSessionHas('status', 'Fleet poll started in the background — the page will refresh as servers complete.');
 
             expect(Cache::has(OperationsUpdatesController::POLL_MARKER_KEY))->toBeTrue();
-            expect($GLOBALS['__ouc_exec_calls'])->toHaveCount(1);
-            expect($GLOBALS['__ouc_exec_calls'][0])
+            expect($GLOBALS['__cw_http_controllers_exec_calls'])->toHaveCount(1);
+            expect($GLOBALS['__cw_http_controllers_exec_calls'][0])
                 ->toContain('clockwork:poll-system-updates')
                 ->toContain('--all')
                 ->toContain('< /dev/null')
@@ -175,7 +164,7 @@ namespace {
             $response->assertSessionHas('status', function ($status) {
                 return str_contains($status, 'already running');
             });
-            expect($GLOBALS['__ouc_exec_calls'])->toBeEmpty();
+            expect($GLOBALS['__cw_http_controllers_exec_calls'])->toBeEmpty();
         });
 
         it('redirects the GET refresh URL straight back to the index without erroring', function () {
