@@ -51,7 +51,7 @@
                             </span>
                         </div>
                         <p class="text-xs sm:text-sm text-[var(--color-ink-muted)] leading-relaxed max-w-3xl">
-                            We've written full integration modules for <strong>WP Engine</strong>, <strong>Kinsta</strong>, <strong>Cloudways</strong>, <strong>Hetzner</strong>, <strong>Azure</strong>, <strong>Linode</strong>, <strong>Vultr</strong>, <strong>GitHub OAuth</strong>, and <strong>Microsoft OAuth</strong>. We need agencies using these platforms to test with real credentials! Just test live, vibe code any fixes with Claude, and open a PR back.
+                            We've written full integration modules for <strong>WP Engine</strong>, <strong>Kinsta</strong>, <strong>Cloudways</strong>, <strong>Azure</strong>, <strong>Linode</strong>, <strong>GitHub OAuth</strong>, and <strong>Microsoft OAuth</strong>. We need agencies using these platforms to test with real credentials! Just test live, vibe code any fixes with Claude, and open a PR back.
                         </p>
                     </div>
                 </div>

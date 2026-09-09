@@ -53,8 +53,8 @@ class GridPaneServiceProvider extends ModuleServiceProvider
                 'base_url' => ['label' => 'API Base URL', 'secret' => false],
                 'view_only' => ['label' => 'View-Only Mode (Read-Only)', 'secret' => false],
             ],
-            status: ModuleManifest::STATUS_LOOKING_FOR_TESTERS,
-            statusNote: 'GridPane API v1 client, server/site import, and SSH execution. Ready for testing with live API credentials.',
+            status: ModuleManifest::STATUS_VERIFIED,
+            statusNote: 'GridPane API v1 client, server/site import, rate limiting, and SSH execution verified in active production.',
         );
     }
 

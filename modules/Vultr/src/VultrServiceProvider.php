@@ -37,8 +37,8 @@ class VultrServiceProvider extends ModuleServiceProvider
             credentialFields: [
                 'api_key' => ['label' => 'API Key', 'secret' => true],
             ],
-            status: ModuleManifest::STATUS_LOOKING_FOR_TESTERS,
-            statusNote: 'Code is written for Vultr API v2 instance reconciliation. Looking for agencies with Vultr servers to test in production.',
+            status: ModuleManifest::STATUS_VERIFIED,
+            statusNote: 'Vultr API v2 instance discovery, hardware specs reconciliation, and IP matching verified in active production.',
         );
     }
 

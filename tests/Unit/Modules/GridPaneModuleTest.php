@@ -18,13 +18,13 @@ describe('GridPane module unit tests', function () {
         Http::preventStrayRequests();
     });
 
-    it('manifest provides looking_for_testers status and credential fields', function () {
+    it('manifest provides verified status and credential fields', function () {
         $provider = new GridPaneServiceProvider(app());
         $manifest = $provider->manifest();
 
         expect($manifest->id)->toBe('gridpane')
             ->and($manifest->name)->toBe('GridPane')
-            ->and($manifest->status)->toBe(ModuleManifest::STATUS_LOOKING_FOR_TESTERS)
+            ->and($manifest->status)->toBe(ModuleManifest::STATUS_VERIFIED)
             ->and($manifest->credentialFields)->toHaveKey('api_key')
             ->and($manifest->credentialFields['api_key']['secret'])->toBeTrue()
             ->and($manifest->credentialFields)->toHaveKey('base_url')
