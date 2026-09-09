@@ -3,7 +3,7 @@ title: Servers (inventory + credentials)
 section: Features
 order: 12
 author: Aaron Reimann
-updated: 2026-09-08
+updated: 2026-09-09
 tags: [servers, ssh, credentials, inventory, fleet]
 tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---
@@ -16,7 +16,7 @@ Almost every SpinupWP server arrives via `clockwork:import-spinupwp`, not throug
 
 `/servers/new` (`ServersController::create` / `store`) is a plain form: name, hostname/IP, SSH user (defaults to `clockwork.ssh.default_user`), SSH port (defaults to `clockwork.ssh.default_port`), and an optional SSH password. The new row starts at `status=unknown` — it only turns green/yellow/red once a poll cycle or "Recheck health" runs.
 
-`store()` checks whether SpinupWP is actually configured (`SpinupWpClient::isConfigured()`) before doing anything SpinupWP-specific. If it is, `store()` immediately calls the same internal `runSpinupWpImport()` helper `refreshFromSpinupWp()` uses (see below) — harmless for a genuinely hand-rolled server (no SpinupWP match, no-op), but it means a server you *thought* wasn't in SpinupWP can suddenly pick up sites on creation if it turns out it was already there under a different name. If SpinupWP isn't configured on this fleet at all, the import is skipped entirely and `clockwork:poll-servers` runs directly instead, so the new server still gets a real status right away instead of sitting at "unknown" until the next scheduled tick.
+`store()` checks whether SpinupWP is actually configured (`SpinupWpClient::isConfigured()`) before doing anything SpinupWP-specific. If it is, `store()` launches the same background `clockwork:import-spinupwp` + `clockwork:poll-servers` pair the Refresh button uses (see below) — harmless for a genuinely hand-rolled server (no SpinupWP match, no-op), but it means a server you *thought* wasn't in SpinupWP can suddenly pick up sites shortly after creation if it turns out it was already there under a different name. If SpinupWP isn't configured on this fleet at all, only `clockwork:poll-servers` is launched, so the new server still gets a real status without waiting for the next scheduled tick.
 
 Use this form for one-off additions. For several servers at once, the page itself links to the **bulk paste-and-import flow** (`/servers/credentials/feed`, below) instead.
 
@@ -24,7 +24,7 @@ Use this form for one-off additions. For several servers at once, the page itsel
 
 The server detail page header shows a **Refresh from SpinupWP** or **Refresh from GridPane** button — whichever control panel actually manages that server's fleet inventory (`$server->spinupwp_id !== null` for SpinupWP; `$server->provider === Server::PROVIDER_GRIDPANE` for GridPane, since GridPane has no separate server-level id column). Neither button renders for a server managed by neither (hand-added, or a cloud-VPS provider with no panel of its own) — there's nothing to refresh.
 
-Each button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFromSpinupWp`, `POST /servers/refresh-gridpane` → `refreshFromGridPane`) runs the matching `clockwork:import-*` command synchronously, then `clockwork:poll-servers` so a brand-new server gets a real status immediately instead of sitting at "unknown" until the next scheduled tick. Import is the gating step: if it fails, poll is skipped and the whole action reports failure. If import succeeds but poll throws, the action still reports success — the user's actual intent (refresh the server/site list) was met, poll is a bonus. The flash message concatenates the artisan output's `Servers:` / `Sites:` / `Done. ...` summary lines so you get real numbers, not just "done."
+Each button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFromSpinupWp`, `POST /servers/refresh-gridpane` → `refreshFromGridPane`) launches the matching `clockwork:import-*` command **and** `clockwork:poll-servers` as one detached background chain (`BackgroundArtisan` — `Cache::add` lock + `nohup`, same helper as the Operations "Re-poll fleet" button). The HTTP request returns immediately; a second click while the lock is held flashes "already running." Import and poll are chained with `&&`, so a failed import skips the poll. Progress lands in `storage/logs/`.
 
 ## Removing a server
 
@@ -50,13 +50,13 @@ Three ways to set SSH credentials, all landing in `ServerCredentialsController`:
 
 ### Bulk edit
 
-`/servers/credentials` (`bulk` / `bulkUpdate`) lists every non-ignored server with a password field each. Submitting only touches rows where a password was actually typed (blank fields are skipped, not cleared) — sets the password, backfills `ssh_user` from the default if the row has none, saves, then runs `SshClient::test()` per updated row. The flash message reports updated / verified / failed counts. This is the fast path for "I just rotated the clockwork-deploy password fleet-wide."
+`/servers/credentials` (`bulk` / `bulkUpdate`) lists every non-ignored server with a password field each. Submitting only touches rows where a password was actually typed (blank fields are skipped, not cleared) — sets the password, backfills `ssh_user` from the default if the row has none, and saves. It does **not** open an SSH session per row (that used to time out the request on a 24-server fleet). Use the per-row **Test SSH** button to verify. This is the fast path for "I just rotated the clockwork-deploy password fleet-wide."
 
 ### Paste-and-import feed
 
 `/servers/credentials/feed` (`feed` / `feedParse` / `feedApply`) accepts a block-separated text dump in a specific format (name, IP, `ssh <user>@<ip>` line, password, repeated per server, `---`-separated) — the shape SpinupWP's own credential export uses. `CredentialFeedParser::parse()` splits it into rows; `feedParse()` then matches each row against existing servers by name (exact) or hostname (only if unambiguous — multiple hostname matches are flagged `ambiguous`, a name match against a *different* IP is flagged `name_ip_conflict`), producing a preview table with a status per row (`matched` / `unmatched` / `ambiguous` / `name_ip_conflict`).
 
-The operator reviews the preview and checks which rows to `apply`. `feedApply()` then, per checked row: updates credentials on a matched server (SSH user only changes if `update_user` was explicitly checked — accidental user drift from a mismatched paste is exactly what the `ambiguous`/`name_ip_conflict` statuses exist to catch before this step), or creates a new `Server` row for `unmatched` entries (re-checking for a name/IP collision at apply time, in case something changed between parse and apply). Every touched server gets an `SshClient::test()` immediately after, same as the other two paths.
+The operator reviews the preview and checks which rows to `apply`. `feedApply()` then, per checked row: updates credentials on a matched server (SSH user only changes if `update_user` was explicitly checked — accidental user drift from a mismatched paste is exactly what the `ambiguous`/`name_ip_conflict` statuses exist to catch before this step), or creates a new `Server` row for `unmatched` entries (re-checking for a name/IP collision at apply time, in case something changed between parse and apply). It does not run a fleet-wide SSH verify — use **Test SSH** on each row.
 
 ## What this isn't
 

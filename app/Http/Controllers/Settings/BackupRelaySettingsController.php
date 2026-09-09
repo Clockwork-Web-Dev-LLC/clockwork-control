@@ -7,15 +7,14 @@ use App\Models\ActionLog;
 use App\Models\BackupRelayRun;
 use App\Models\Site;
 use App\Services\ActionLog\ActionLogger;
+use App\Services\Process\BackgroundArtisan;
 use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
-use Modules\BackupRelay\Services\GlacierUploader;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
 
@@ -190,7 +189,7 @@ class BackupRelaySettingsController extends Controller
         return back()->with('status', $msg);
     }
 
-    public function runNow(Request $request, GlacierUploader $uploader, Settings $settings): RedirectResponse|JsonResponse
+    public function runNow(Request $request, Settings $settings): RedirectResponse|JsonResponse
     {
         $mode = (string) $settings->get('backup_relay.mode', config('clockwork.backup_relay.mode', 'in_repo'));
 
@@ -207,25 +206,35 @@ class BackupRelaySettingsController extends Controller
             return back()->with('warning', $msg);
         }
 
-        $exitCode = Artisan::call('clockwork:backup-relay-run');
-        $output = trim(Artisan::output());
+        $result = app(BackgroundArtisan::class)->start(
+            'backup_relay.run',
+            ['clockwork:backup-relay-run'],
+            7200,
+            'backup-relay-run-bg',
+        );
 
-        $isSuccess = $exitCode === 0;
-        $msg = $isSuccess ? 'Backup relay completed successfully.' : 'Backup relay completed with warnings or failures.';
+        if ($result->alreadyRunning()) {
+            $msg = 'A backup relay run is already in progress.';
+        } elseif ($result->failed()) {
+            $msg = $result->error ?? 'Could not start the backup relay run.';
 
-        if ($output !== '') {
-            $msg .= " ({$output})";
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        } else {
+            $msg = 'Backup relay started in the background. This can take a while — check this page again when the latest run appears.';
         }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'success' => $isSuccess,
+                'success' => true,
                 'message' => $msg,
-                'output' => $output,
-            ], $isSuccess ? 200 : 500);
+            ]);
         }
 
-        return back()->with($isSuccess ? 'status' : 'error', $msg);
+        return back()->with('status', $msg);
     }
 
     public function archives(Site $site, BackupArchiveEnumerator $enumerator): JsonResponse

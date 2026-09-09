@@ -6,6 +6,7 @@ use App\Jobs\PushCompanionBrandingJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\Site;
 use App\Services\Companion\CompanionBrandingManager;
+use App\Services\Process\BackgroundArtisan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -200,24 +201,34 @@ class CompanionSettingsController extends Controller
         return back()->with('status', $msg);
     }
 
-    public function sync(Request $request, CompanionBrandingManager $brandingManager): RedirectResponse|JsonResponse
+    public function sync(Request $request, BackgroundArtisan $background): RedirectResponse|JsonResponse
     {
-        $res = $brandingManager->syncFleet();
-        $msg = "Branding synced to {$res['successful']} of {$res['total']} site(s).";
+        $result = $background->start(
+            'companion.push_branding',
+            ['clockwork:push-companion-branding'],
+            900,
+            'companion-branding-bg',
+        );
 
-        if ($res['failed'] > 0) {
-            $msg .= " ({$res['failed']} failed)";
+        if ($result->alreadyRunning()) {
+            $msg = 'A branding sync is already running.';
+        } elseif ($result->failed()) {
+            $msg = $result->error ?? 'Could not start the branding sync.';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('status_error', $msg);
+        } else {
+            $msg = 'Branding sync started in the background. Companion sites will pick up the new branding as each push completes.';
         }
 
         if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => $res['failed'] === 0,
-                'message' => $msg,
-                'stats' => $res,
-            ]);
+            return response()->json(['success' => true, 'message' => $msg]);
         }
 
-        return back()->with($res['failed'] > 0 ? 'warning' : 'status', $msg);
+        return back()->with('status', $msg);
     }
 
     public function reset(CompanionBrandingManager $brandingManager): RedirectResponse

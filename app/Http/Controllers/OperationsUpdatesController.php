@@ -4,13 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Server;
 use App\Models\ServerUpdateSnapshot;
+use App\Services\Process\BackgroundArtisan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
-use Symfony\Component\Process\PhpExecutableFinder;
 
 /**
  * Fleet-wide system updates dashboard. Surfaces the latest
@@ -229,55 +229,29 @@ class OperationsUpdatesController extends Controller
             'all' => ['nullable', 'boolean'],
         ]);
 
-        $startedAt = Carbon::now();
-        $gotLock = Cache::add(self::POLL_MARKER_KEY, $startedAt->toIso8601String(), self::POLL_MARKER_TTL_SEC);
+        $artisan = 'clockwork:poll-system-updates';
+        if (! empty($validated['server'])) {
+            $artisan .= ' --server='.escapeshellarg((string) $validated['server']);
+        } else {
+            $artisan .= ' --all';
+        }
 
-        if (! $gotLock) {
+        $result = app(BackgroundArtisan::class)->start(
+            self::POLL_MARKER_KEY,
+            [$artisan],
+            self::POLL_MARKER_TTL_SEC,
+            'operations-poll-bg',
+        );
+
+        if ($result->alreadyRunning()) {
             return redirect()->route('operations.server-updates.index')
                 ->with('status', 'A fleet poll is already running — sit tight, the page will refresh as servers complete.');
         }
 
-        // PHP_BINARY captures the path of the PHP that started the current
-        // process. On Homebrew (the local dev setup) that's the versioned
-        // Cellar path — e.g. `/opt/homebrew/Cellar/php@8.4/8.4.21/bin/php`
-        // — which silently breaks the moment Homebrew updates PHP and moves
-        // the binary into a new Cellar directory. The long-running
-        // `artisan serve` process keeps holding the OLD path in PHP_BINARY,
-        // exec() fails with "no such file or directory," and the background
-        // poll never starts. PhpExecutableFinder re-resolves the current
-        // PHP binary by walking $PATH, so it survives Homebrew upgrades and
-        // production deploys where PHP lives somewhere else entirely.
-        $php = (new PhpExecutableFinder)->find();
-        if ($php === false) {
-            Cache::forget(self::POLL_MARKER_KEY);
-
+        if ($result->failed()) {
             return redirect()->route('operations.server-updates.index')
-                ->with('status_error', 'Could not locate the PHP binary to launch the background poll.');
+                ->with('status_error', $result->error ?? 'Could not start the background poll.');
         }
-
-        // Build the artisan command line. Default is --all (the on-demand
-        // path wants the full picture, including up-to-date servers); --server
-        // narrows to one.
-        $cmd = sprintf('%s artisan clockwork:poll-system-updates', escapeshellarg($php));
-        if (! empty($validated['server'])) {
-            $cmd .= ' --server='.escapeshellarg((string) $validated['server']);
-        } else {
-            $cmd .= ' --all';
-        }
-
-        // Detach: nohup + redirect stdout/stderr to a logfile + trailing `&`
-        // are the classic Unix incantation for "PHP can exit, child keeps
-        // running." The child re-bootstraps Laravel from artisan as a fresh
-        // CLI process, so it doesn't inherit this request's max_execution_time
-        // or any request-bound state.
-        $logPath = storage_path('logs/operations-poll-bg.log');
-        $shell = sprintf(
-            '(cd %s && nohup %s < /dev/null > %s 2>&1 &) > /dev/null 2>&1',
-            escapeshellarg(base_path()),
-            $cmd,
-            escapeshellarg($logPath),
-        );
-        @exec($shell);
 
         return redirect()->route('operations.server-updates.index')
             ->with('status', 'Fleet poll started in the background — the page will refresh as servers complete.');

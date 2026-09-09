@@ -9,7 +9,7 @@
             <form method="POST" action="{{ route('monitoring.refresh') }}" class="inline">
                 @csrf
                 <button type="submit" class="btn-pill-nav"
-                        title="Re-probe every monitored site now. Same command the cron runs. Takes ~10–30 seconds."
+                        title="Re-probe every monitored site now. Same command the cron runs. Runs in the background (~2–3 min for ~150 sites).">
                         onclick="this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Probing…';">
                     <i class="fa-solid fa-rotate"></i> <span>Re-probe all sites</span>
                 </button>

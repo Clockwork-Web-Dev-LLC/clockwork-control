@@ -5,6 +5,8 @@ namespace Tests\Feature\Controllers;
 use App\Models\BackupRelayRun;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -161,11 +163,22 @@ class BackupRelaySettingsControllerTest extends TestCase
             'is_wordpress' => true,
         ]);
 
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $key, array $cmds) => $key === 'backup_relay.run'
+                    && $cmds === ['clockwork:backup-relay-run'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
+
         $this->actingAs($this->user)
             ->post(route('settings.backup-relay.runNow'))
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('status', function ($status) {
+                return str_contains($status, 'Backup relay started in the background');
+            });
 
-        $this->assertSame(1, BackupRelayRun::query()->count());
+        $this->assertSame(0, BackupRelayRun::query()->count());
     }
 
     public function test_run_now_rejects_in_external_agent_mode(): void

@@ -124,7 +124,7 @@ describe('toggleEvent', function () {
             if ($key === 'site_went_down') {
                 continue;
             }
-            expect($stored[$key])->toBe((bool) (ChatNotifier::EVENTS[$key]['default'] ?? true));
+            expect($stored[$key])->toBe((bool) ChatNotifier::EVENTS[$key]['default']);
         }
     });
 

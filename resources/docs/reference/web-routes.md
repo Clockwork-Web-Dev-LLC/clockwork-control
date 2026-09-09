@@ -37,13 +37,13 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/` | Fleet dashboard (cards sorted by health). Server-centric — Pressable sites (no `server` row) don't appear here; see `/sites` below. |
 | GET | `/sites` | Fleet-wide Sites list across both hosting providers, paginated + filterable by provider/domain. The only place to see the fleet in one list regardless of host. |
 | GET | `/issues` | Consolidated "what needs human eyes." |
-| POST | `/issues/poll-servers` | Re-poll all servers on demand from the Issues page. |
-| POST | `/issues/fetch-all-db-creds` | Bulk-fetch missing WP DB credentials over SSH for all eligible sites. |
+| POST | `/issues/poll-servers` | Re-poll all servers on demand from the Issues page (background `clockwork:poll-servers`). |
+| POST | `/issues/fetch-all-db-creds` | Bulk-fetch missing WP DB credentials over SSH for all eligible sites (background `clockwork:extract-wp-configs`). |
 | DELETE | `/issues/orphans/{siteId}` | Remove an orphaned site row (archives it via `archived_at`). Confirm dialog required. |
 | GET | `/capacity` | Shared-server capacity / over-quota table. |
 | GET/PATCH | `/capacity/settings` | Configure shared-server visit quota, lookback windows, and pressure limits. |
 | GET | `/settings/capacity` | Redirects to `capacity.settings` — legacy-alias route, same shape as other `/settings/*` redirects. |
-| POST | `/capacity/site-metrics/toggle` | Pause/resume a site's Companion resource-sampler polling. See [Features → Dashboard](/docs/features/dashboard) ("Per-site CPU collection toggle"). |
+| POST | `/capacity/site-metrics/toggle` | Pause/resume fleet-wide Companion resource-sampler collection, then push the new flag in the background. See [Features → Dashboard](/docs/features/dashboard) ("Per-site CPU collection toggle"). |
 | GET | `/maintenance-history` | Action-log review across the fleet. |
 | GET | `/setup` | Fleet integrations setup and onboarding dashboard. |
 | POST | `/setup` | Save active integrations and finish setup (redirecting to dashboard). |
@@ -56,8 +56,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/servers/new` | New-server form. |
-| POST | `/servers` | Create. Auto-runs `clockwork:import-spinupwp` after save so SpinupWP-side moves and existing sites attach immediately. |
-| POST | `/servers/refresh-spinupwp` | Fleet-wide on-demand re-run of `clockwork:import-spinupwp` + `clockwork:poll-servers`. Surfaces from the dashboard "Refresh from SpinupWP" button and every server header. Same idempotent command the 03:30 cron runs. |
+| POST | `/servers` | Create. Launches background `clockwork:import-spinupwp` + poll after save so SpinupWP-side moves and existing sites attach without blocking. |
+| POST | `/servers/refresh-spinupwp` | Fleet-wide on-demand background re-run of `clockwork:import-spinupwp` + `clockwork:poll-servers`. Surfaces from the dashboard "Refresh from SpinupWP" button and every server header. Same idempotent command the 03:30 cron runs. |
 | GET | `/servers/{server}/{tab?}` | Server detail. `tab` ∈ `sites|stats|updates|bans|settings`. |
 | GET/PATCH | `/servers/{server}/edit` · `/credentials` | Edit + save SSH creds. |
 | POST | `/servers/{server}/test` | Test SSH. |
@@ -127,7 +127,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/monitoring` | Fleet uptime status board. |
-| POST | `/monitoring/refresh` | On-demand fleet uptime re-check. |
+| POST | `/monitoring/refresh` | On-demand fleet uptime re-check (background `clockwork:check-site-uptime`). |
 | GET/PATCH | `/monitoring/settings` | Probe interval + failure threshold. |
 | GET | `/security/scans` | Per-site security scan inventory. |
 | POST | `/security/scans/{site}/run` | Manual scan trigger. |

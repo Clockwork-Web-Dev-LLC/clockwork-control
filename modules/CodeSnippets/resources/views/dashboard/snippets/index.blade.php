@@ -62,10 +62,10 @@
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-server text-[var(--color-ink-soft)] mr-1"></i> Target Sites
                     </h3>
-                    <p class="text-[10px] text-[var(--color-ink-muted)]">Select which sites to run the snippet on</p>
+                    <p class="text-[10px] text-[var(--color-ink-muted)]">Select up to 15 sites per run — more than that times out the request</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" @click="selectAllSites()" class="text-[10px] text-[var(--color-brand)] hover:underline">Select All</button>
+                    <button type="button" @click="selectAllSites()" class="text-[10px] text-[var(--color-brand)] hover:underline">Select first 15</button>
                     <span class="text-[var(--color-border)]">|</span>
                     <button type="button" @click="selectedSites = []" class="text-[10px] text-[var(--color-ink-soft)] hover:underline">Clear</button>
                 </div>
@@ -77,7 +77,7 @@
             <div class="space-y-1 max-h-60 overflow-y-auto pr-1">
                 <template x-for="site in filteredSites" :key="site.id">
                     <label class="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--color-surface-alt)] cursor-pointer text-xs">
-                        <input type="checkbox" :value="site.id" x-model="selectedSites" class="rounded text-[var(--color-brand)] focus:ring-0">
+                        <input type="checkbox" :value="site.id" x-model="selectedSites" :disabled="selectedSites.length >= 15 && !selectedSites.map(Number).includes(Number(site.id))" class="rounded text-[var(--color-brand)] focus:ring-0">
                         <span class="text-[var(--color-ink-strong)] truncate flex-1" x-text="site.domain"></span>
                     </label>
                 </template>
@@ -85,7 +85,7 @@
                     No matching Companion sites.
                 </div>
             </div>
-            <div class="mt-2 text-[10px] text-[var(--color-ink-soft)] text-right" x-text="selectedSites.length + ' site(s) selected'"></div>
+            <div class="mt-2 text-[10px] text-[var(--color-ink-soft)] text-right" x-text="selectedSites.length + ' / 15 site(s) selected'"></div>
         </div>
     </div>
 
@@ -201,7 +201,7 @@ function snippetWorkbench(config) {
         },
 
         selectAllSites() {
-            this.selectedSites = this.filteredSites.map(s => s.id);
+            this.selectedSites = this.filteredSites.map(s => s.id).slice(0, 15);
         },
 
         selectSnippet(s) {
@@ -223,7 +223,7 @@ function snippetWorkbench(config) {
                         'Accept': 'application/json',
                     },
                     body: JSON.stringify({
-                        site_ids: this.selectedSites,
+                        site_ids: this.selectedSites.slice(0, 15),
                         code: this.code,
                         timeout: parseInt(this.timeout, 10),
                     })

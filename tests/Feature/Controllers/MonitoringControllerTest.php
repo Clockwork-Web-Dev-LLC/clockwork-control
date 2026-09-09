@@ -5,9 +5,10 @@ use App\Models\Site;
 use App\Models\SiteUptimeEvent;
 use App\Models\User;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Support\Settings;
-use Illuminate\Support\Facades\Artisan;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -128,20 +129,22 @@ describe('MonitoringController', function () {
             ->assertSee('stale');
     });
 
-    it('refresh runs clockwork:check-site-uptime and flashes the summary', function () {
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('clockwork:check-site-uptime')
-            ->andReturn(0);
-        Artisan::shouldReceive('output')
-            ->once()
-            ->andReturn("Probing 3 sites...\nDone. up=3 down=0 elapsed=1.2s\n");
+    it('refresh starts clockwork:check-site-uptime in the background', function () {
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $key, array $cmds) => $key === 'monitoring.check_site_uptime'
+                    && $cmds === ['clockwork:check-site-uptime'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
 
         $response = $this->actingAs(User::factory()->create())
             ->post(route('monitoring.refresh'));
 
         $response->assertRedirect()
-            ->assertSessionHas('status', 'Uptime refresh complete. Done. up=3 down=0 elapsed=1.2s');
+            ->assertSessionHas('status', function ($status) {
+                return str_contains($status, 'Re-probe started in the background');
+            });
     });
 
     it('updates monitoring settings with valid input', function () {

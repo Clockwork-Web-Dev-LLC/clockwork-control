@@ -14,7 +14,7 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 
 ## Where to look
 
-- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed.
+- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed. **Re-probe all sites** (`POST /monitoring/refresh`) launches `clockwork:check-site-uptime` in the background (~2–3 min for ~150 sites) — it does not run inside the HTTP request.
 - **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min) and failure threshold (1–6 failures). Changes here apply to every monitored site.
 - **`/sites/<id>/overview`** — the Status card on the per-site Overview tab. Shows current state plus how long it's been that way.
 - **Companion → `Tools → Clockwork → Uptime`** — the client-visible version. Same data, friendlier copy. Clients see this in their wp-admin.

@@ -2,6 +2,8 @@
 
 use App\Models\AppSetting;
 use App\Models\User;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use Illuminate\Foundation\Console\QueuedCommand;
 use Illuminate\Support\Facades\Queue;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -16,15 +18,11 @@ uses(RendersAuthenticatedPages::class);
 | Verified against the real controller (not assumed):
 |   - index()/update() only touch the Settings facade (app_settings table)
 |     — no external I/O, no mocking needed.
-|   - runNow() calls Artisan::queue($command), which under the hood
-|     dispatches Illuminate\Foundation\Console\QueuedCommand as a
-|     ShouldQueue job. Because phpunit.xml sets QUEUE_CONNECTION=sync,
-|     an unfaked queue would execute that job (and the real artisan
-|     command, e.g. clockwork:scan-sitecheck) synchronously in-process.
-|     Queue::fake() is therefore required in every runNow test — without
-|     it these tests would attempt a real Sucuri/SSH/blacklist scan.
-|   - runNow() with an unknown `source` never reaches Artisan::queue() at
-|     all — it returns back() with a `queue_error` flash first.
+|   - runNow() launches the matching artisan command via BackgroundArtisan
+|     (detached nohup). Tests mock that helper so they never spawn a real
+|     Sucuri/SSH/blacklist scan.
+|   - runNow() with an unknown `source` never reaches BackgroundArtisan —
+|     it returns back() with a `queue_error` flash first.
 |   - The three real SOURCES keys or commands, confirmed by reading the
 |     controller's SOURCES const: sitecheck -> clockwork:scan-sitecheck,
 |     checksums -> clockwork:verify-wp-core-checksums,
@@ -107,34 +105,50 @@ describe('SecurityScansSettingsController', function () {
     });
 
     describe('runNow', function () {
-        it('queues the correct artisan command for a known source', function () {
-            Queue::fake();
+        it('starts the sitecheck command in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'security_scans.sitecheck'
+                        && $cmds === ['clockwork:scan-sitecheck'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('settings.security-scans.runNow'), ['source' => 'sitecheck']);
 
             $response->assertRedirect()
-                ->assertSessionHas('status', 'sitecheck scan queued — running in background.');
-
-            Queue::assertPushed(QueuedCommand::class, fn ($job) => $job->displayName() === 'clockwork:scan-sitecheck');
+                ->assertSessionHas('status', 'sitecheck scan started in the background — refresh this page in a few minutes.');
         });
 
-        it('queues the checksums command', function () {
-            Queue::fake();
+        it('starts the checksums command in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $cmds === ['clockwork:verify-wp-core-checksums'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $this->actingAs(User::factory()->create())
-                ->post(route('settings.security-scans.runNow'), ['source' => 'checksums']);
-
-            Queue::assertPushed(QueuedCommand::class, fn ($job) => $job->displayName() === 'clockwork:verify-wp-core-checksums');
+                ->post(route('settings.security-scans.runNow'), ['source' => 'checksums'])
+                ->assertSessionHas('status', function ($status) {
+                    return str_contains($status, 'checksums scan started in the background');
+                });
         });
 
-        it('queues the blacklist command', function () {
-            Queue::fake();
+        it('starts the blacklist command in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $cmds === ['clockwork:check-blacklists'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $this->actingAs(User::factory()->create())
-                ->post(route('settings.security-scans.runNow'), ['source' => 'blacklist']);
-
-            Queue::assertPushed(QueuedCommand::class, fn ($job) => $job->displayName() === 'clockwork:check-blacklists');
+                ->post(route('settings.security-scans.runNow'), ['source' => 'blacklist'])
+                ->assertSessionHas('status', function ($status) {
+                    return str_contains($status, 'blacklist scan started in the background');
+                });
         });
 
         it('rejects an unknown source without queuing anything', function () {

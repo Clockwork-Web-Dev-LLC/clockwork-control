@@ -7,13 +7,12 @@ use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
-use App\Services\Companion\ClockworkCompanionClient;
+use App\Services\Process\BackgroundArtisan;
 use App\Support\Settings;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class CapacityController extends Controller
@@ -390,10 +389,9 @@ class CapacityController extends Controller
      *     sampler's per-request UPSERT but produce no further leaderboard
      *     data. Documented in the flash message so the operator knows.
      *
-     * Push is synchronous because (a) toggle clicks are rare and (b) the
-     * operator wants to know which sites got the message. Per-site push
-     * uses the existing 30s HTTP timeout; failures are reported but don't
-     * abort the loop. Re-running the toggle re-pushes to any laggards.
+     * The Settings flip is in-request (one row). The Companion fan-out
+     * runs in the background via BackgroundArtisan — a 132-site HTTP
+     * push cannot finish before the proxy times out.
      */
     public function toggleSiteMetrics(Settings $settings): RedirectResponse
     {
@@ -401,20 +399,24 @@ class CapacityController extends Controller
         $newState = ! $current;
         $settings->put('monitoring.site_metrics_enabled', $newState);
 
-        [$pushed, $skipped, $failed] = $this->pushSamplerStateToFleet($newState);
-
         $verb = $newState ? 'resumed' : 'paused';
-        $msg = "Per-site CPU collection {$verb}. Pushed new state to {$pushed} site"
-            .($pushed === 1 ? '' : 's')
-            .' with Companion 1.17.2+';
-        if ($skipped > 0) {
-            $msg .= "; {$skipped} site".($skipped === 1 ? '' : 's').' on older Companion keep sampling locally until upgraded';
-        }
-        if ($failed > 0) {
-            $msg .= "; {$failed} push".($failed === 1 ? '' : 'es').' failed (will retry on the next toggle)';
+        $result = app(BackgroundArtisan::class)->start(
+            'capacity.push_sampler_state',
+            ['clockwork:push-site-metrics-state'],
+            600,
+            'site-metrics-toggle-bg',
+        );
+
+        $msg = "Per-site CPU collection {$verb}.";
+        if ($result->alreadyRunning()) {
+            $msg .= ' A Companion push is already running.';
+        } elseif ($result->failed()) {
+            return back()->with('status_error', $msg.' '.$result->error);
+        } else {
+            $msg .= ' Companion sites are being notified in the background.';
         }
 
-        return back()->with($failed > 0 ? 'status_error' : 'status', $msg.'.');
+        return back()->with('status', $msg);
     }
 
     public function settings(Settings $settings): View
@@ -462,48 +464,5 @@ class CapacityController extends Controller
         return redirect()
             ->route('capacity.settings')
             ->with('status', 'Capacity settings saved. Threshold updates take effect immediately across the Capacity dashboard and issue counting.');
-    }
-
-    /**
-     * @return array{0: int, 1: int, 2: int} [pushed_ok, skipped_no_capability, failed]
-     */
-    private function pushSamplerStateToFleet(bool $enabled): array
-    {
-        $ok = 0;
-        $skipped = 0;
-        $failed = 0;
-
-        $sites = Site::query()
-            ->where('companion_installed', true)
-            ->whereHas('server', fn ($q) => $q->monitored())
-            ->get();
-
-        foreach ($sites as $site) {
-            $caps = $site->companion_capabilities ?? [];
-            if (! is_array($caps) || ! in_array('resource-sampler-toggle', $caps, true)) {
-                $skipped++;
-
-                continue;
-            }
-
-            try {
-                $client = new ClockworkCompanionClient($site);
-                $resp = $client->setResourceSamplerEnabled($enabled);
-                if (! ($resp['ok'] ?? false)) {
-                    throw new \RuntimeException('Companion returned ok=false');
-                }
-                $ok++;
-            } catch (\Throwable $e) {
-                $failed++;
-                Log::warning('resource_sampler.toggle_push_failed', [
-                    'site_id' => $site->id,
-                    'domain' => $site->domain,
-                    'enabled' => $enabled,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return [$ok, $skipped, $failed];
     }
 }

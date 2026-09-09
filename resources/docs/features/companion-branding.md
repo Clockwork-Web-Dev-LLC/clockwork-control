@@ -29,7 +29,7 @@ A client-side segmented control (`activeTab` Alpine state) switches between the 
 - **Only tab 1 (Companion/wp-admin) is pushed to the fleet.** Client Reports and Plugin Notification Email branding render entirely inside Clockwork Control (report output, outbound emails) and never reach the remote plugin — there's no "sync fleet" concept for them. They take effect the next time a Client Report is generated or a vulnerability email is sent.
 - **Push timing** (tab 1 only):
   - Checking "Push to all connected sites upon saving" (default on) when saving the form dispatches `PushCompanionBrandingJob` (queued, fleet-wide).
-  - The dedicated **"Sync Fleet Now"** button in the page header runs `CompanionBrandingManager::syncFleet()` synchronously and reports a `successful`/`failed` count per site.
+  - The dedicated **"Sync Fleet Now"** button in the page header launches `clockwork:push-companion-branding` in the background (`BackgroundArtisan`) and redirects immediately.
   - `php artisan clockwork:push-companion-branding [--site=<id-or-domain>]` does the same from the CLI, scoped to one site or the whole fleet.
   - **Every Companion install or update** (`CompanionInstaller`/`PressableCompanionInstaller::installOrUpdate()`) also pushes the current branding to that one site inline, best-effort — so a freshly-installed or re-installed Companion never briefly shows default Clockwork branding before the next fleet sync.
 - Only sites with `companion_installed = true` and a non-empty `companion_secret` are eligible; everything else is silently skipped (not an error) since there's no signed channel to reach them yet.

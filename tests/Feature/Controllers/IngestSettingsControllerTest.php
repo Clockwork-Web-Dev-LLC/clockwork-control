@@ -3,6 +3,8 @@
 use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\Ingest\IngestScheduleGate;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use Illuminate\Support\Facades\Artisan;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -15,12 +17,9 @@ uses(RendersAuthenticatedPages::class);
 |
 | index()/update() just read/write plain settings keys via IngestScheduleGate
 | + Settings — no external I/O to mock there. runNow() is the one action that
-| touches the outside world: it dispatches one of two artisan commands via
-| Artisan::queue() (confirmed by reading the controller — LLAR maps to
-| 'clockwork:pull-llar-lockouts', Wordfence to 'clockwork:pull-wordfence-blocks',
-| anything else is rejected before Artisan is ever touched). Artisan is a
-| facade, so Artisan::shouldReceive(...) swaps in a Mockery expectation the
-| same way $this->mock() does for a container-bound class.
+| touches the outside world: it launches clockwork:pull-llar-lockouts or
+| clockwork:pull-wordfence-blocks via BackgroundArtisan (anything else is
+| rejected first). Tests mock BackgroundArtisan so they never spawn a pull.
 */
 
 function settingValue(string $key): mixed
@@ -108,39 +107,49 @@ describe('IngestSettingsController', function () {
     });
 
     describe('runNow', function () {
-        it('queues the LLAR pull command when source=llar and flashes a status message', function () {
-            Artisan::shouldReceive('queue')
-                ->once()
-                ->with('clockwork:pull-llar-lockouts');
+        it('starts the LLAR pull in the background when source=llar', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'ingest.llar'
+                        && $cmds === ['clockwork:pull-llar-lockouts'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('settings.ingest.runNow'), ['source' => 'llar']);
 
             $response->assertRedirect();
-            $response->assertSessionHas('status', 'Pull queued for llar — running in background. Refresh /review in a minute.');
+            $response->assertSessionHas('status', 'Pull started for llar in the background. Refresh /review in a minute.');
             $response->assertSessionMissing('queue_error');
         });
 
-        it('queues the Wordfence pull command when source=wordfence', function () {
-            Artisan::shouldReceive('queue')
-                ->once()
-                ->with('clockwork:pull-wordfence-blocks');
+        it('starts the Wordfence pull in the background when source=wordfence', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $cmds === ['clockwork:pull-wordfence-blocks'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('settings.ingest.runNow'), ['source' => 'wordfence']);
 
             $response->assertRedirect();
-            $response->assertSessionHas('status', 'Pull queued for wordfence — running in background. Refresh /review in a minute.');
+            $response->assertSessionHas('status', 'Pull started for wordfence in the background. Refresh /review in a minute.');
         });
 
         it('defaults to source=llar when no source is given', function () {
-            Artisan::shouldReceive('queue')
-                ->once()
-                ->with('clockwork:pull-llar-lockouts');
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $cmds === ['clockwork:pull-llar-lockouts'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $this->actingAs(User::factory()->create())
                 ->post(route('settings.ingest.runNow'), [])
-                ->assertSessionHas('status', 'Pull queued for llar — running in background. Refresh /review in a minute.');
+                ->assertSessionHas('status', 'Pull started for llar in the background. Refresh /review in a minute.');
         });
 
         it('never calls Artisan and flashes queue_error for an unknown source', function () {

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Services\Ingest\IngestScheduleGate;
+use App\Services\Process\BackgroundArtisan;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 
 class IngestSettingsController extends Controller
@@ -66,9 +66,22 @@ class IngestSettingsController extends Controller
             return back()->with('queue_error', "Unknown source '{$source}'.");
         }
 
-        Artisan::queue($command);
+        $result = app(BackgroundArtisan::class)->start(
+            'ingest.'.$source,
+            [$command],
+            600,
+            'ingest-'.$source.'-bg',
+        );
 
-        return back()->with('status', "Pull queued for {$source} — running in background. Refresh /review in a minute.");
+        if ($result->alreadyRunning()) {
+            return back()->with('status', "A {$source} pull is already running.");
+        }
+
+        if ($result->failed()) {
+            return back()->with('queue_error', $result->error ?? "Could not start the {$source} pull.");
+        }
+
+        return back()->with('status', "Pull started for {$source} in the background. Refresh /review in a minute.");
     }
 
     /**

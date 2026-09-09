@@ -97,7 +97,7 @@ class UptimeProber
             $retryAfter = $response->header('Retry-After') ?: null;
             $bodySample = mb_substr($body, 0, 4000);
 
-            $hasRetryAfter = $retryAfter !== null && $retryAfter !== '';
+            $hasRetryAfter = $retryAfter !== null;
             $hasMaintenanceSignature = str_contains($bodySample, 'Briefly unavailable for scheduled maintenance')
                 || str_contains($bodySample, 'Scheduled Maintenance')
                 || str_contains($bodySample, 'scheduled maintenance')
