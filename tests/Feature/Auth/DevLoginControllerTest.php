@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\DevLoginController;
+use App\Http\Middleware\EnforceInstallerGate;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -13,22 +14,40 @@ describe('DevLoginController', function () {
     });
 
     it('404s in local env when no active user exists', function () {
+        // Setting env to local turns off Application::runningUnitTests(), which
+        // would otherwise make EnforceInstallerGate treat every test as installed.
+        // Without a sentinel + active user, the gate 302s to /install before
+        // DevLoginController runs — that is the CI 302 this test kept hitting.
+        EnforceInstallerGate::fake(true);
         $this->app['env'] = 'local';
+        User::factory()->create();
+        User::query()->update(['revoked_at' => now()]);
 
-        $this->get(route('dev-login'))->assertNotFound();
+        $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login'))->assertNotFound();
+
+        $this->app['env'] = 'testing';
     });
 
     it('logs in the first active user on loopback when APP_ENV is local', function () {
+        EnforceInstallerGate::fake(true);
         $this->app['env'] = 'local';
         $this->mockIssueCounterZero();
 
         $user = User::factory()->create(['email' => 'dev@example.com']);
-        User::factory()->create(['revoked_at' => now()]);
+        User::factory()->create()->forceFill(['revoked_at' => now()])->save();
 
-        $response = $this->get(route('dev-login'));
+        $response = $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login'));
 
         $response->assertRedirect(route('settings.companion.index'));
         $this->assertAuthenticatedAs($user);
+
+        $this->app['env'] = 'testing';
     });
 
     it('does not treat a public host as loopback', function () {
