@@ -191,4 +191,21 @@ class BackupRelaySettingsControllerTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('warning');
     }
+
+    public function test_run_now_warns_when_already_running(): void
+    {
+        app(Settings::class)->put('backup_relay.mode', 'in_repo');
+        config(['clockwork.backup_relay.mode' => 'in_repo']);
+
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->andReturn(BackgroundArtisanResult::busy());
+        });
+
+        $this->actingAs($this->user)
+            ->post(route('settings.backup-relay.runNow'))
+            ->assertRedirect()
+            ->assertSessionHas('warning', 'A backup relay run is already in progress.');
+    }
 }
