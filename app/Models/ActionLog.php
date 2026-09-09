@@ -114,6 +114,10 @@ class ActionLog extends Model
 
     public const TYPE_MAINTENANCE_MODE_TOGGLED = 'maintenance_mode_toggled';
 
+    public const TYPE_WFLS_2FA_MIGRATED = 'wfls_2fa_migrated';
+
+    public const TYPE_WFLS_PLUGIN_REMOVED = 'wfls_plugin_removed';
+
     /**
      * The four update-job kinds, grouped for the maintenance-history
      * "All updates" quick filter — kept here so any future caller that

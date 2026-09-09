@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automatic codebase rollback on update step failure**: If `composer install` or `php artisan migrate --force` fails during an update, Clockwork automatically rolls back the working copy using `git reset --hard $prePullCommit` and flushes caches (`optimize:clear`), preventing the application from being stranded on new code with missing dependencies or unapplied migrations.
 - **Schema mismatch resilience on authenticated views**: Wrapped layout view composer queries in `AppServiceProvider` and issue calculation in `IssueCounter` with defensive exception handling and fallbacks. Unmigrated database schema or column lag no longer triggers an app-wide 500 White Screen of Death that swallows error notices.
 
+### Removed
+- **Wordfence Login Security 2FA migration tracking in Issues**: Retired the proprietary WFLS migration status and `twoFactorAtRisk` section from the `/issues` dashboard and global `IssueCounter` badge. Post-migration cleanup (deleting legacy WFLS plugin files) is handled via CLI (`clockwork:remove-wfls-plugin`) without triggering false "at risk" security alarms or inflating fleet issue counts.
+
 ## [1.5.5] - 2026-09-09
 
 ### Added

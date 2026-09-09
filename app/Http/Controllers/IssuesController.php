@@ -84,8 +84,8 @@ class IssuesController extends Controller
 
         // SSL issues (and the several downstream .filter()s below that share
         // this same base collection: missingDbCreds, cfMisconfigured,
-        // companionMissing, pluginsOutdated, twoFactorAtRisk — is_inactive
-        // sites are excluded from all of them at once here).
+        // companionMissing, pluginsOutdated — is_inactive sites are excluded
+        // from all of them at once here).
         $sites = Site::query()
             ->with('server:id,name,is_ignored,last_ssh_ok_at')
             ->where('is_inactive', false)
@@ -200,29 +200,6 @@ class IssuesController extends Controller
         $matcher = app(PluginVulnerabilityMatcher::class);
         $vulnsBySiteId = $matcher->forSites($pluginsOutdated);
 
-        // 2FA at risk — Companion's two_factor snapshot block (1.28.0+).
-        // Flags sites where users' 2FA still lives in Wordfence Login
-        // Security (being discontinued — worse, when WFLS is inactive those
-        // users have NO login gate despite thinking they do), where the
-        // CLOCKWORK_2FA_DISABLE rescue hatch was left on, or where every
-        // WFLS setup has migrated and the plugin is now safe to remove
-        // (1.29.0+ reports wfls_ready_to_remove). "No 2FA at all" is
-        // deliberately NOT an issue yet — it would flag the whole fleet on
-        // day one. KEEP IN SYNC with App\Support\IssueCounter::total().
-        $twoFactorAtRisk = $sites
-            ->filter(function (Site $s) {
-                $tf = $s->companion_snapshot['two_factor'] ?? null;
-                if (! is_array($tf)) {
-                    return false;
-                }
-
-                return (int) ($tf['wfls_unmigrated_total'] ?? $tf['counts']['wfls_only'] ?? 0) > 0
-                    || ! empty($tf['gate_disabled'])
-                    || ! empty($tf['wfls_ready_to_remove']);
-            })
-            ->sortBy(fn (Site $s) => ($s->companion_snapshot['two_factor']['wfls_active'] ?? true) ? 1 : 0)
-            ->values();
-
         // Orphaned sites — local Site rows whose SpinupWP linkage was lost.
         // Source: clockwork:find-orphan-sites populates consolidated_into_site_id
         // when a parent is detected. Both kinds (consolidated + unknown) flag here.
@@ -327,7 +304,6 @@ class IssuesController extends Controller
             'no_companion' => $companionMissing->count(),
             'forms_failing' => $failedFormTests->count(),
             'plugins_outdated' => $pluginsOutdated->count(),
-            'two_factor' => $twoFactorAtRisk->count(),
             'orphans' => $orphanSites->count(),
             'malware' => $malwareHits->count(),
             'tampering' => $checksumTampering->count(),
@@ -356,7 +332,6 @@ class IssuesController extends Controller
             'companionMissing',
             'failedFormTests',
             'pluginsOutdated',
-            'twoFactorAtRisk',
             'vulnsBySiteId',
             'orphanSites',
             'orphanParents',

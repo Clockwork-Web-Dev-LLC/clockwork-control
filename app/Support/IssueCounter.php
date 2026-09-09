@@ -152,27 +152,6 @@ class IssueCounter
             ->whereRaw("CAST(JSON_EXTRACT(companion_snapshot, '$.plugins.counts.updates_available') AS UNSIGNED) > 0")
             ->count();
 
-        // 2FA at risk — Companion snapshot two_factor block reports users still
-        // on the discontinued Wordfence Login Security, a disabled gate, or a
-        // fully-migrated WFLS install that is now safe to remove.
-        // wfls_unmigrated_total (all roles, 1.29.0+) falls back to
-        // counts.wfls_only (admins/editors, 1.28.0) via COALESCE.
-        // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
-        $twoFactorAtRisk = Site::query()
-            ->where('is_inactive', false)
-            ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
-            ->whereNotNull('companion_snapshot')
-            ->whereRaw("(
-                CAST(COALESCE(
-                    JSON_EXTRACT(companion_snapshot, '$.two_factor.wfls_unmigrated_total'),
-                    JSON_EXTRACT(companion_snapshot, '$.two_factor.counts.wfls_only'),
-                    0
-                ) AS UNSIGNED) > 0
-                OR JSON_UNQUOTE(JSON_EXTRACT(companion_snapshot, '$.two_factor.gate_disabled')) = 'true'
-                OR JSON_UNQUOTE(JSON_EXTRACT(companion_snapshot, '$.two_factor.wfls_ready_to_remove')) = 'true'
-            )")
-            ->count();
-
         // Orphaned sites — Site rows lost their SpinupWP linkage and weren't archived.
         // Detected nightly by clockwork:find-orphan-sites; surfaced here so users notice.
         // Scoped to SpinupWP sites only — see IssuesController::index() for why.
@@ -253,7 +232,7 @@ class IssueCounter
             // Missing settings table on a half-installed box shouldn't zero the whole badge.
         }
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $twoFactorAtRisk + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale;
+        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale;
     }
 
     /**

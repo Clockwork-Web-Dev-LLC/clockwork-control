@@ -26,7 +26,6 @@
             ['key' => 'no_jail', 'label' => 'Jail', 'class' => 'status-yellow'],
             ['key' => 'no_companion', 'label' => 'Companion', 'class' => 'status-yellow'],
             ['key' => 'plugins_outdated', 'label' => 'WP plugins', 'class' => 'status-yellow'],
-            ['key' => 'two_factor', 'label' => '2FA', 'class' => 'status-yellow'],
             ['key' => 'stuck_maintenance', 'label' => 'Stuck maint', 'class' => 'status-yellow'],
             ['key' => 'orphans', 'label' => 'Orphans', 'class' => 'status-yellow'],
             ['key' => 'no_db', 'label' => 'DB creds', 'class' => 'status-yellow'],
@@ -1873,79 +1872,6 @@
                     </tbody>
                 </table>
             </div>
-        </section>
-    @endif
-
-    {{-- 2FA AT RISK (Wordfence Login Security migration) --}}
-    @if ($twoFactorAtRisk->isNotEmpty())
-        <section id="section-two_factor" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
-                <div>
-                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-shield-halved text-[var(--color-status-yellow)] mr-2"></i>
-                        Two-factor at risk
-                    </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Admins/editors whose 2FA still lives in Wordfence Login Security (being discontinued). If WFLS is inactive their login gate is already OFF. Migrate via wp-admin → Clockwork → Login Security on each site.</p>
-                </div>
-                <span class="status-pill status-yellow">{{ $twoFactorAtRisk->count() }}</span>
-            </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="wfls" class="px-5 py-2">WFLS status</x-sort-th>
-                        <x-sort-th key="migrate" align="right" class="px-5 py-2">Needs migration</x-sort-th>
-                        <x-sort-th key="enrolled" align="right" class="px-5 py-2">On Clockwork 2FA</x-sort-th>
-                        <x-sort-th key="none" align="right" class="px-5 py-2">No 2FA</x-sort-th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($twoFactorAtRisk as $s)
-                        @php
-                            $tf = $s->companion_snapshot['two_factor'];
-                            $wflsActive = (bool) ($tf['wfls_active'] ?? false);
-                            $gateDisabled = ! empty($tf['gate_disabled']);
-                            $readyToRemove = ! empty($tf['wfls_ready_to_remove']);
-                            $unmigrated = (int) ($tf['wfls_unmigrated_total'] ?? $tf['counts']['wfls_only'] ?? 0);
-                        @endphp
-                        <tr
-                            data-sort-site="{{ $s->domain }}"
-                            data-sort-server="{{ $s->server?->name }}"
-                            data-sort-wfls="{{ $gateDisabled ? 0 : ($readyToRemove ? 3 : ($wflsActive ? 2 : 1)) }}"
-                            data-sort-migrate="{{ $unmigrated }}"
-                            data-sort-enrolled="{{ (int) ($tf['counts']['enrolled'] ?? 0) }}"
-                            data-sort-none="{{ (int) ($tf['counts']['unprotected'] ?? 0) }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
-                            </td>
-                            <td class="px-5 py-2">
-                                @if ($gateDisabled)
-                                    <span class="status-pill status-red text-[10px]" title="CLOCKWORK_2FA_DISABLE is set — the Companion 2FA gate is bypassed on this site.">gate disabled</span>
-                                @elseif ($readyToRemove)
-                                    <span class="status-pill status-green text-[10px]" title="Every WFLS 2FA setup has migrated to Companion — remove the plugin via wp-admin → Clockwork → Login Security.">migrated — remove WFLS</span>
-                                @elseif ($wflsActive)
-                                    <span class="status-pill status-yellow text-[10px]">active — migrate before removal</span>
-                                @else
-                                    <span class="status-pill status-red text-[10px]" title="WFLS data exists but the plugin is inactive — these users have no working login gate.">removed — gate is OFF</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-right font-data text-xs">
-                                @if ($unmigrated > 0)
-                                    <span class="status-pill status-yellow">{{ $unmigrated }}</span>
-                                @else
-                                    <span class="text-[var(--color-status-green)]">0</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-right font-data text-xs text-[var(--color-status-green)]">{{ (int) ($tf['counts']['enrolled'] ?? 0) }}</td>
-                            <td class="px-5 py-2 text-right font-data text-xs text-[var(--color-ink-soft)]">{{ (int) ($tf['counts']['unprotected'] ?? 0) }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
         </section>
     @endif
 

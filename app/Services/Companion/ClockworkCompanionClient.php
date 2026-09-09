@@ -672,6 +672,44 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Per-admin/editor 2FA enrollment status plus the site-level WFLS
+     * migration picture. See TwoFactorStatusRoute in the Companion repo for
+     * the authoritative response shape — notably `users[].state` (
+     * 'clockwork' | 'wfls' | 'none') is what a migration caller filters on,
+     * and `users` only covers administrator/editor roles even though
+     * `wfls_unmigrated_total` counts all roles.
+     *
+     * Requires Companion 1.28.0+ (route added alongside the 2FA feature).
+     *
+     * @return array<string, mixed>
+     */
+    public function twoFactorStatus(): array
+    {
+        return $this->getJson('/two-factor');
+    }
+
+    /**
+     * Migrate one user's 2FA from Wordfence Login Security to Companion's
+     * own TOTP secret, in place — same underlying key, so their existing
+     * authenticator app entry keeps working. Deletes the WFLS DB row for
+     * that user and issues 8 fresh Companion backup codes. Companion-side
+     * this is WflsMigrator::migrate(); no-ops (ok=true, migrated=false) if
+     * the user is already enrolled in Companion 2FA or has no WFLS secret.
+     *
+     * Requires Companion 1.29.6+ (route built specifically for this —
+     * "monitoring-app-driven WFLS migrations"). Unlike the wp-admin
+     * migrate button (which only ever acts on the logged-in user), this
+     * route takes any user id, which is what makes fleet automation
+     * possible at all.
+     *
+     * @return array{ok: bool, migrated: bool}
+     */
+    public function migrateTwoFactorUser(int $userId): array
+    {
+        return $this->postJson('/two-factor/migrate', ['user_id' => $userId]);
+    }
+
+    /**
      * Query params are passed through to the URL but NOT included in the
      * HMAC payload — the signature is computed over the registered route
      * pattern only ($request->get_route() on the WP side strips them).

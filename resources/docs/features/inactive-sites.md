@@ -31,7 +31,6 @@ Use Archive when a site is truly gone (decommissioned, DNS pointed elsewhere, no
 
 - SSL renewal / expiry (`IssueCounter`, `IssuesController::index()`'s SSL section)
 - Plugin updates outdated
-- 2FA-at-risk (WFLS migration)
 - Contact-form / Companion-missing checks
 - Cloudflare DNS-only misconfiguration
 - Traffic-capacity ("over quota") flags

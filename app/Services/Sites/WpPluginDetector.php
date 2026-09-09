@@ -57,8 +57,18 @@ class WpPluginDetector
         );
 
         $sentinel = '__CLOCKWORK_WP_EXIT__';
+        // `echo` (not `printf %s`) for the sudo password feed — printf omits
+        // the trailing newline, so sudo -S waits on EOF rather than seeing a
+        // complete line, and some wp-cli subcommands start before sudo's
+        // stdin handler unblocks, producing empty output. This detector's
+        // own `| grep ... || true` used to mask that as a clean "nothing
+        // active" result instead of a failure — confirmed live 2026-09-09 on
+        // a client site, which reported llar_enabled=false while LLAR
+        // was demonstrably active in wp-admin. `-p ""` suppresses sudo's
+        // password prompt so it can't leak into the piped stdout. See
+        // CompanionInstaller::runAsSiteUser()'s docblock for the same fix.
         $inner = sprintf(
-            'printf %%s "$CW_SUDO_PW" | sudo -S -u %s /usr/local/bin/wp --path=%s %s; echo "%s:$?"',
+            'echo "$CW_SUDO_PW" | sudo -S -p "" -u %s /usr/local/bin/wp --path=%s %s; echo "%s:$?"',
             escapeshellarg($site->site_user),
             escapeshellarg($wpPath),
             $wpArgs,
