@@ -19,9 +19,14 @@
     // clockwork:import-spinupwp itself sets and cross-references) takes
     // priority; GridPane-provisioned servers are identified by provider
     // instead, since GridPane has no separate server-level id column.
+    //
+    // Also requires the owning module still be enabled — a server's
+    // provider/spinupwp_id can be leftover from before the integration was
+    // turned off in Setup, and the button shouldn't resurrect it.
+    $moduleState = app(\Modules\Core\ModuleStateResolver::class);
     $refreshPanel = match (true) {
-        $server->spinupwp_id !== null => 'spinupwp',
-        $server->provider === Server::PROVIDER_GRIDPANE => 'gridpane',
+        $server->spinupwp_id !== null && $moduleState->isEnabled('spinupwp') => 'spinupwp',
+        $server->provider === Server::PROVIDER_GRIDPANE && $moduleState->isEnabled('gridpane') => 'gridpane',
         default => null,
     };
 @endphp

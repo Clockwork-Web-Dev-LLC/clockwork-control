@@ -11,12 +11,13 @@ use Illuminate\Support\Facades\DB;
 use Modules\DigitalOcean\DigitalOceanClient;
 use Modules\Hetzner\HetznerClient;
 use Modules\SpinupWp\SpinupWpClient;
+use Modules\Vultr\VultrClient;
 
 #[Signature('clockwork:import-spinupwp {--dry-run : Report what would be imported without modifying the database}')]
-#[Description('Import (or refresh) servers and sites from the SpinupWP API. Cross-references DigitalOcean and Hetzner servers by IP when the respective tokens are configured. Idempotent.')]
+#[Description('Import (or refresh) servers and sites from the SpinupWP API. Cross-references DigitalOcean, Hetzner, and Vultr servers by IP when the respective tokens are configured. Idempotent.')]
 class ImportSpinupWp extends Command
 {
-    public function handle(SpinupWpClient $spinupwp, DigitalOceanClient $digitalocean, HetznerClient $hetzner): int
+    public function handle(SpinupWpClient $spinupwp, DigitalOceanClient $digitalocean, HetznerClient $hetzner, VultrClient $vultr): int
     {
         if (! $spinupwp->isConfigured()) {
             $this->error('CLOCKWORK_SPINUPWP_TOKEN is not set in .env.');
@@ -43,14 +44,15 @@ class ImportSpinupWp extends Command
 
         $dropletsByIp = $this->fetchDropletsByIp($digitalocean);
         $hetznerByIp = $this->fetchHetznerByIp($hetzner);
+        $vultrByIp = $this->fetchVultrByIp($vultr);
 
         $serverStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'spinupwp_id_nulled' => 0];
         $siteStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'wordpress' => 0, 'non_wordpress' => 0, 'skipped_no_server' => 0, 'spinupwp_id_nulled' => 0];
 
         try {
-            DB::transaction(function () use ($spServers, $spSites, $dropletsByIp, $hetznerByIp, &$serverStats, &$siteStats, $dryRun) {
+            DB::transaction(function () use ($spServers, $spSites, $dropletsByIp, $hetznerByIp, $vultrByIp, &$serverStats, &$siteStats, $dryRun) {
                 foreach ($spServers as $row) {
-                    $this->upsertServer($row, $dropletsByIp, $hetznerByIp, $serverStats);
+                    $this->upsertServer($row, $dropletsByIp, $hetznerByIp, $vultrByIp, $serverStats);
                 }
 
                 $serverIdBySpinupId = Server::whereNotNull('spinupwp_id')->pluck('id', 'spinupwp_id');
@@ -165,7 +167,39 @@ class ImportSpinupWp extends Command
         return $byIp;
     }
 
-    protected function upsertServer(array $row, array $dropletsByIp, array $hetznerByIp, array &$stats): void
+    /**
+     * Vultr equivalent of fetchDropletsByIp(). Maps IPv4 -> instance specs.
+     */
+    protected function fetchVultrByIp(VultrClient $client): array
+    {
+        if (! $client->isConfigured()) {
+            return [];
+        }
+
+        $this->info('Fetching Vultr instances…');
+        $instances = $client->instances();
+        $this->line('  '.count($instances).' Vultr instances');
+
+        $byIp = [];
+        foreach ($instances as $inst) {
+            $vcpus = $inst['vcpu_count'] ?? $inst['vcpus'] ?? null;
+            $summary = [
+                'id' => (string) $inst['id'],
+                'size_slug' => $inst['plan'] ?? null,
+                'vcpus' => $vcpus !== null ? (int) $vcpus : null,
+                'memory_mb' => isset($inst['ram']) ? (int) $inst['ram'] : null,
+                'disk_gb' => isset($inst['disk']) ? (int) $inst['disk'] : null,
+            ];
+            $ip = $inst['main_ip'] ?? null;
+            if ($ip) {
+                $byIp[$ip] = $summary;
+            }
+        }
+
+        return $byIp;
+    }
+
+    protected function upsertServer(array $row, array $dropletsByIp, array $hetznerByIp, array $vultrByIp, array &$stats): void
     {
         $spinupId = (string) ($row['id'] ?? '');
         if ($spinupId === '') {
@@ -184,6 +218,7 @@ class ImportSpinupWp extends Command
         $providerSummary = match ($provider) {
             Server::PROVIDER_HETZNER => $ip ? ($hetznerByIp[$ip] ?? null) : null,
             Server::PROVIDER_DIGITALOCEAN => $ip ? ($dropletsByIp[$ip] ?? null) : null,
+            Server::PROVIDER_VULTR => $ip ? ($vultrByIp[$ip] ?? null) : null,
             default => null,
         };
 
