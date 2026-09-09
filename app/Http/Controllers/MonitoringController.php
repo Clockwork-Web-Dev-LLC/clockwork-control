@@ -50,7 +50,8 @@ class MonitoringController extends Controller
                 WHEN uptime_state = 'down' AND uptime_ignored_at IS NULL THEN 1
                 WHEN uptime_state = 'unknown' THEN 2
                 WHEN uptime_state = 'down' THEN 3
-                ELSE 4
+                WHEN uptime_state = 'maintenance' THEN 4
+                ELSE 5
             END")
             ->orderBy('domain')
             ->get();
@@ -66,6 +67,7 @@ class MonitoringController extends Controller
         // in the table with a muted badge so they're still visible.
         $currentlyDown = $sites->where('uptime_state', 'down')->whereNull('uptime_ignored_at')->count();
         $currentlyUp = $sites->where('uptime_state', 'up')->count();
+        $currentlyMaintenance = $sites->where('uptime_state', 'maintenance')->count();
         $unknown = $sites->where('uptime_state', 'unknown')->count();
         $currentlyIgnored = $sites->whereNotNull('uptime_ignored_at')->count();
 
@@ -91,6 +93,7 @@ class MonitoringController extends Controller
             'stats30d',
             'currentlyDown',
             'currentlyUp',
+            'currentlyMaintenance',
             'unknown',
             'currentlyIgnored',
             'avg7d',

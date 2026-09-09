@@ -550,6 +550,68 @@ abstract class WebhookChatNotifier implements ChatNotifier
     }
 
     /**
+     * Notify that a site entered scheduled maintenance mode.
+     */
+    public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool
+    {
+        if (! $this->isEventEnabled('site_entered_maintenance')) {
+            return false;
+        }
+
+        $detail = $statusCode !== null ? "HTTP {$statusCode}" : '503';
+        $title = sprintf(':wrench: %s entered scheduled maintenance (%s)', $site->domain, $detail);
+
+        $body = 'Uptime probe detected scheduled maintenance mode. Outage alerts and SMS notifications are suppressed while maintenance is active.';
+
+        $fields = [
+            ['title' => 'Site', 'value' => $site->domain, 'short' => true],
+            ['title' => 'Server', 'value' => $site->server !== null ? $site->server->name : 'n/a', 'short' => true],
+            $statusCode !== null ? ['title' => 'Status', 'value' => (string) $statusCode, 'short' => true] : null,
+            $retryAfter !== null ? ['title' => 'Retry-After', 'value' => (string) $retryAfter, 'short' => true] : null,
+            $reason !== null ? ['title' => 'Detail', 'value' => mb_strimwidth($reason, 0, 200, '…'), 'short' => false] : null,
+        ];
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#3498db',
+            'title' => $title,
+            'text' => $body,
+            'fields' => array_values(array_filter($fields)),
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    /**
+     * Notify that a site exited scheduled maintenance mode and is back up.
+     */
+    public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool
+    {
+        if (! $this->isEventEnabled('site_exited_maintenance')) {
+            return false;
+        }
+
+        $durationLabel = $maintenanceSec !== null
+            ? $this->formatDowntime($maintenanceSec)
+            : 'unknown duration';
+
+        $title = sprintf(':white_check_mark: %s exited maintenance mode (was in maintenance for %s)', $site->domain, $durationLabel);
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#33aa33',
+            'title' => $title,
+            'fields' => [
+                ['title' => 'Site', 'value' => $site->domain, 'short' => true],
+                ['title' => 'Server', 'value' => $site->server !== null ? $site->server->name : 'n/a', 'short' => true],
+                ['title' => 'Maintenance duration', 'value' => $durationLabel, 'short' => true],
+            ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    /**
      * Per-failure ping for the nightly auto-update loop. Fires only when
      * the queued job is part of a `nightly-*` batch — manual bulk-update
      * failures stay quiet because the operator is watching the page in

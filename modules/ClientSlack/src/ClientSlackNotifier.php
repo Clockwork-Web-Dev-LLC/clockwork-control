@@ -101,6 +101,16 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool
+    {
+        return false;
+    }
+
+    public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool
+    {
+        return false;
+    }
+
     public function contactFormTestFailed(Site $site, string $reason, int $streak, ?string $formId = null): bool
     {
         $webhook = $this->webhookUrl($site);

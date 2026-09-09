@@ -95,6 +95,7 @@
                             $uptimeMeta = match ($site->uptime_state) {
                                 'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'title' => 'Up'],
                                 'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'title' => 'Down since ' . optional($site->uptime_down_since)->diffForHumans()],
+                                'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'title' => 'In maintenance' . ($site->uptime_maintenance_since ? ' since ' . $site->uptime_maintenance_since->diffForHumans() : '')],
                                 default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'title' => 'Uptime unknown / not monitored'],
                             };
                         @endphp

@@ -44,6 +44,22 @@ The per-site Overview status pill shows **"Up · auth required"** with a lock ic
 
 If you want to exempt our probe from a CF WAF rule, the User-Agent is `Clockwork-Uptime/1.0` plus `(+CLOCKWORK_OPERATOR_CONTACT_EMAIL)` if that's set (see `reference/env-vars`) — `UptimeProber::userAgent()` builds it dynamically as of the modularization roadmap's Phase 8, replacing what used to be a hardcoded email address. Whitelist whatever your instance's actual User-Agent string is in the WAF and the probe will receive a 200 instead.
 
+## The 503 maintenance mode carve-out
+
+WordPress core automatic updates (`.maintenance`), popular maintenance plugins (SeedProd, Kadence, WP Maintenance Mode), and hosting panel maintenance modes legitimately return **HTTP 503 Service Unavailable** for SEO protection (RFC 7231 §6.6.4).
+
+Clockwork distinguishes between real server outages and scheduled maintenance:
+- **503 with a `Retry-After` header** (standard WordPress core & reputable plugins) → classified as **maintenance**.
+- **503 with WordPress maintenance markers in the response body** (e.g. `Briefly unavailable for scheduled maintenance`, `Scheduled Maintenance`, `Maintenance Mode`) → classified as **maintenance**.
+- **503 with a server-side `.maintenance` or maintenance configuration file** (detected via SSH by `UptimeDiagnostician` across SpinupWP, GridPane, and custom VPS) → classified as **maintenance**.
+- **Bare 503 without maintenance markers** → treated as down (FPM exhaustion, database timeout, or origin crash).
+
+When a site is in maintenance mode:
+- Status pill shows 🔧 **"Maintenance"** (or `MAINT` on the status board).
+- Time in scheduled maintenance does **not** degrade rolling 24h / 7d / 30d uptime percentages.
+- Critical outage notifications and on-call SMS pages are suppressed; an informational chat notice is posted instead.
+- **Safety net**: If a site remains in maintenance mode for longer than 2 hours, `IssueCounter` flags it as a lingering maintenance issue to prevent forgotten maintenance windows.
+
 ## Per-site opt-out
 
 `sites.uptime_monitoring_enabled` is the flag. Default is true for every site. Toggle from the per-site **Settings** tab when you have a site that legitimately shouldn't be monitored — staging, archived, customer-managed.
@@ -101,7 +117,6 @@ This used to be a 30-minute SSH-and-grep session every time a site went down. Th
 - **No content keyword check.** ManageWP lets you say "alert if the response body doesn't contain 'WordPress'". Marginal value for our fleet; defer.
 - **No multi-region probing.** Everything probes from the operator's own machine. If you need an outside-the-agency-network viewpoint, that's a v2 feature.
 - **No per-site cadence override.** All sites use the global interval. If a client wants 1-min checks while everyone else stays at 5, we'd add nullable `uptime_interval_minutes` columns. Defer until someone actually asks.
-- **No maintenance-window suppression.** If you take a site down intentionally and the threshold trips, you'll get a false alert. Acceptable trade-off for v1.
 - **No SLA report PDF.** The data is in `site_uptime_events` — the report-generation feature is a separate plan.
 
 ## Common pitfalls

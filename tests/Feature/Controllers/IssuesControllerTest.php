@@ -143,4 +143,33 @@ describe('IssuesController', function () {
             ->assertSee('real-orphan.example.com')
             ->assertDontSee('gridpane-site.example.com');
     });
+
+    it('lists sites stuck in maintenance longer than two hours', function () {
+        $server = Server::factory()->create(['is_ignored' => false]);
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'stuck-maint.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => now()->subHours(3),
+            'uptime_ignored_at' => null,
+        ]);
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'fresh-maint.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => now()->subMinutes(20),
+            'uptime_ignored_at' => null,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('issues.index'));
+
+        $response->assertOk()
+            ->assertSee('stuck-maint.example.com')
+            ->assertDontSee('fresh-maint.example.com')
+            ->assertSee('Maintenance running longer than')
+            ->assertViewHas('stuckMaintenanceSites', fn ($sites) => $sites->count() === 1);
+    });
 });

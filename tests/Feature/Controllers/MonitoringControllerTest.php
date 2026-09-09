@@ -31,7 +31,35 @@ describe('MonitoringController', function () {
         $response = $this->actingAs(User::factory()->create())
             ->get(route('monitoring.index'));
 
-        $response->assertOk()->assertSee('Monitoring')->assertSee('monitored.example.com');
+        $response->assertOk()
+            ->assertSee('Monitoring')
+            ->assertSee('monitored.example.com')
+            ->assertSee('id="monitoring-search"', false)
+            ->assertSee('id="monitoring-search-clear"', false)
+            ->assertSee('site-row', false)
+            ->assertSee('data-search="monitored.example.com', false)
+            ->assertSee('id="monitoring-no-match"', false);
+    });
+
+    it('renders sites in maintenance mode with the maintenance badge and counter', function () {
+        $server = Server::factory()->create();
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'maint.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => now()->subMinutes(12),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('maint.example.com')
+            ->assertSee('MAINT')
+            ->assertSee('In maintenance 12m')
+            ->assertSee('1 maint')
+            ->assertViewHas('currentlyMaintenance', 1);
     });
 
     it('renders separate 7d and 30d fleet uptime headline figures', function () {

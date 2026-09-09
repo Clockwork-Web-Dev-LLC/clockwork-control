@@ -26,6 +26,7 @@
             ['key' => 'no_companion', 'label' => 'Companion', 'class' => 'status-yellow'],
             ['key' => 'plugins_outdated', 'label' => 'WP plugins', 'class' => 'status-yellow'],
             ['key' => 'two_factor', 'label' => '2FA', 'class' => 'status-yellow'],
+            ['key' => 'stuck_maintenance', 'label' => 'Stuck maint', 'class' => 'status-yellow'],
             ['key' => 'orphans', 'label' => 'Orphans', 'class' => 'status-yellow'],
             ['key' => 'no_db', 'label' => 'DB creds', 'class' => 'status-yellow'],
         ];
@@ -291,6 +292,48 @@
                     });
                 })();
             </script>
+        </section>
+    @endif
+
+    {{-- STUCK MAINTENANCE — forgotten windows, not outages --}}
+    @if ($stuckMaintenanceSites->isNotEmpty())
+        <section id="section-stuck_maintenance" class="card overflow-hidden mb-6">
+            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-wrench text-[var(--color-status-yellow)] mr-2"></i>
+                        Maintenance running longer than {{ \App\Models\Site::UPTIME_STUCK_MAINTENANCE_HOURS }} hours
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Likely a forgotten maintenance plugin or an update that never finished. Outage alerts stay suppressed until the site comes back up.</p>
+                </div>
+                <span class="status-pill status-yellow">{{ $stuckMaintenanceSites->count() }}</span>
+            </div>
+            <table class="w-full text-sm">
+                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="px-5 py-2 text-left">Site</th>
+                        <th class="px-5 py-2 text-left">Server</th>
+                        <th class="px-5 py-2 text-left">In maintenance</th>
+                        <th class="px-5 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--color-border-light)]">
+                    @foreach ($stuckMaintenanceSites as $site)
+                        <tr>
+                            <td class="px-5 py-2 font-data">
+                                <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
+                            </td>
+                            <td class="px-5 py-2 font-data text-[var(--color-ink-muted)]">{{ $site->server?->name ?? '—' }}</td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-status-yellow)] font-data tabular-nums">
+                                {{ $site->uptime_maintenance_since?->diffForHumans(['parts' => 2, 'short' => true]) ?? '—' }}
+                            </td>
+                            <td class="px-5 py-2 text-right">
+                                <a href="{{ route('monitoring.index') }}" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">Monitoring</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
         </section>
     @endif
 

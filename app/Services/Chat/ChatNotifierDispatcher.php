@@ -109,6 +109,16 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatch(fn (ChatNotifier $n) => $n->siteWentUp($site, $downtimeSec));
     }
 
+    public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->siteEnteredMaintenance($site, $statusCode, $reason, $retryAfter));
+    }
+
+    public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->siteExitedMaintenance($site, $maintenanceSec));
+    }
+
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
     {
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->pluginUpdateFailed($site, $job));

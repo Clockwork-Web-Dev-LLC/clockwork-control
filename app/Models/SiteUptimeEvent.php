@@ -29,6 +29,8 @@ class SiteUptimeEvent extends Model
 
     public const TYPE_UP = 'up';
 
+    public const TYPE_MAINTENANCE = 'maintenance';
+
     public $timestamps = false;
 
     protected $fillable = [

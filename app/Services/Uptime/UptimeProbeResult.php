@@ -22,11 +22,32 @@ final class UptimeProbeResult
         public readonly ?string $error,
         public readonly ?string $body = null,
         public readonly ?string $xRobotsTagHeader = null,
+        public readonly bool $isMaintenance = false,
+        public readonly ?string $retryAfter = null,
     ) {}
 
     public static function success(int $statusCode, int $responseTimeMs, ?string $body = null, ?string $xRobotsTagHeader = null): self
     {
         return new self(true, $statusCode, $responseTimeMs, null, $body, $xRobotsTagHeader);
+    }
+
+    /**
+     * Origin intentionally in maintenance mode (typically 503 + Retry-After or
+     * standard WordPress/plugin maintenance signatures). The server is alive
+     * and deliberately in scheduled maintenance.
+     */
+    public static function maintenance(int $statusCode, int $responseTimeMs, string $reason, ?string $retryAfter = null, ?string $body = null, ?string $xRobotsTagHeader = null): self
+    {
+        return new self(
+            succeeded: true,
+            statusCode: $statusCode,
+            responseTimeMs: $responseTimeMs,
+            error: $reason,
+            body: $body,
+            xRobotsTagHeader: $xRobotsTagHeader,
+            isMaintenance: true,
+            retryAfter: $retryAfter,
+        );
     }
 
     /**

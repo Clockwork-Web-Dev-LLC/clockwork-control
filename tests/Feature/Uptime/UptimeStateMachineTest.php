@@ -5,6 +5,7 @@ namespace Tests\Feature\Uptime;
 use App\Models\Site;
 use App\Models\SiteUptimeEvent;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Uptime\UptimeDiagnostician;
 use App\Services\Uptime\UptimeProbeResult;
 use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Support\Facades\Http;
@@ -304,6 +305,152 @@ describe('UptimeStateUpdater', function () {
 
         $site->refresh();
         expect($site->uptime_state)->toBe('down');
+    });
+
+    it('transitions a site from up to maintenance, records the maintenance event, notifies chat, and suppresses SMS', function () {
+        $site = Site::factory()->create([
+            'care_plan_enabled' => true,
+            'uptime_state' => 'up',
+            'uptime_consecutive_failures' => 0,
+            'uptime_maintenance_since' => null,
+        ]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldReceive('siteEnteredMaintenance')
+            ->once()
+            ->with(
+                \Mockery::on(fn ($arg) => $arg instanceof Site && $arg->id === $site->id),
+                503,
+                \Mockery::type('string'),
+                '600',
+            )
+            ->andReturn(true);
+        $chat->shouldNotReceive('siteWentDown');
+
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldNotReceive('siteWentDown');
+
+        $updater = app(UptimeStateUpdater::class);
+        $probe = UptimeProbeResult::maintenance(503, 150, 'HTTP 503 (scheduled maintenance)', '600');
+        $updater->update($site, $probe);
+
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('maintenance')
+            ->and($site->uptime_maintenance_since)->not->toBeNull()
+            ->and($site->uptime_down_since)->toBeNull()
+            ->and($site->uptime_consecutive_failures)->toBe(0);
+
+        $event = SiteUptimeEvent::where('site_id', $site->id)->first();
+        expect($event)->not->toBeNull()
+            ->and($event->event_type)->toBe(SiteUptimeEvent::TYPE_MAINTENANCE)
+            ->and($event->status_code)->toBe(503);
+    });
+
+    it('transitions a site from maintenance to up, clears maintenance timestamp, and notifies chat of exit', function () {
+        $site = Site::factory()->create([
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => now()->subMinutes(15),
+            'uptime_down_since' => null,
+        ]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldReceive('siteExitedMaintenance')
+            ->once()
+            ->with(
+                \Mockery::on(fn ($arg) => $arg instanceof Site && $arg->id === $site->id),
+                \Mockery::type('int'),
+            )
+            ->andReturn(true);
+        $chat->shouldNotReceive('siteWentUp');
+
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldNotReceive('siteWentUp');
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, UptimeProbeResult::success(200, 100));
+
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('up')
+            ->and($site->uptime_maintenance_since)->toBeNull()
+            ->and($site->uptime_down_since)->toBeNull();
+
+        $event = SiteUptimeEvent::where('site_id', $site->id)->latest('id')->first();
+        expect($event)->not->toBeNull()
+            ->and($event->event_type)->toBe(SiteUptimeEvent::TYPE_UP);
+    });
+
+    it('pivots a bare 503 failure to maintenance state when SSH diagnostician confirms maintenance mode', function () {
+        $site = Site::factory()->create([
+            'uptime_state' => 'unknown',
+            'uptime_consecutive_failures' => 1,
+            'uptime_down_since' => null,
+        ]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldReceive('siteEnteredMaintenance')->once()->andReturn(true);
+        $chat->shouldNotReceive('siteWentDown');
+
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldNotReceive('siteWentDown');
+
+        $diagnostician = $this->mock(UptimeDiagnostician::class);
+        $diagnostician->shouldReceive('diagnose')
+            ->once()
+            ->andReturn([
+                'maintenance_mode' => true,
+                'maintenance_excerpt' => 'WordPress .maintenance file is active',
+                'summary' => 'Maintenance mode is active',
+            ]);
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, UptimeProbeResult::badStatus(503, 100, 'HTTP 503'));
+
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('maintenance')
+            ->and($site->uptime_maintenance_since)->not->toBeNull()
+            ->and($site->uptime_down_since)->toBeNull();
+
+        $event = SiteUptimeEvent::where('site_id', $site->id)->first();
+        expect($event)->not->toBeNull()
+            ->and($event->event_type)->toBe(SiteUptimeEvent::TYPE_MAINTENANCE);
+    });
+
+    it('does not re-notify when a site already in maintenance keeps returning a bare 503 that SSH still confirms', function () {
+        $since = now()->subMinutes(20);
+        $site = Site::factory()->create([
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => $since,
+            'uptime_consecutive_failures' => 1,
+            'uptime_down_since' => null,
+        ]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldNotReceive('siteEnteredMaintenance');
+        $chat->shouldNotReceive('siteWentDown');
+
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldNotReceive('siteWentDown');
+
+        $diagnostician = $this->mock(UptimeDiagnostician::class);
+        $diagnostician->shouldReceive('diagnose')
+            ->once()
+            ->andReturn([
+                'maintenance_mode' => true,
+                'maintenance_excerpt' => 'return 503;',
+                'summary' => 'Maintenance mode is active',
+            ]);
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, UptimeProbeResult::badStatus(503, 100, 'HTTP 503'));
+
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('maintenance')
+            ->and($site->uptime_maintenance_since?->timestamp)->toBe($since->timestamp)
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0);
     });
 });
 

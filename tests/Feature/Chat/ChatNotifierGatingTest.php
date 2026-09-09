@@ -155,6 +155,20 @@ function fakeChatNotifier(bool $returns): ChatNotifier
             return $this->returns;
         }
 
+        public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
         public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
         {
             $this->calls[] = __FUNCTION__;

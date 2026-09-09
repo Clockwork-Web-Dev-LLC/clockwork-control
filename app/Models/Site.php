@@ -92,12 +92,13 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $auto_updates_paused_reason short note shown as a tooltip in the fleet listing
  * @property ?Carbon $auto_updates_last_run_at last time the nightly loop touched this site
  * @property bool $uptime_monitoring_enabled
- * @property string $uptime_state up|down|unknown
+ * @property string $uptime_state up|down|maintenance|unknown
  * @property ?Carbon $uptime_last_checked_at
  * @property ?Carbon $uptime_last_up_at
  * @property ?int $uptime_last_status_code
  * @property int $uptime_consecutive_failures
  * @property ?Carbon $uptime_down_since
+ * @property ?Carbon $uptime_maintenance_since
  * @property ?Carbon $uptime_ignored_at
  * @property ?string $uptime_ignore_reason
  * @property ?Carbon $sucuri_unavailable_at
@@ -204,6 +205,17 @@ class Site extends Model
 
     public const FORM_TEST_STATE_FAILED = 'failed';
 
+    public const UPTIME_STATE_UP = 'up';
+
+    public const UPTIME_STATE_DOWN = 'down';
+
+    public const UPTIME_STATE_MAINTENANCE = 'maintenance';
+
+    /** Abandoned-window nag: maintenance longer than this is an Issue. */
+    public const UPTIME_STUCK_MAINTENANCE_HOURS = 2;
+
+    public const UPTIME_STATE_UNKNOWN = 'unknown';
+
     protected $fillable = [
         'spinupwp_id',
         'pressable_site_id',
@@ -284,6 +296,7 @@ class Site extends Model
         'uptime_last_status_code',
         'uptime_consecutive_failures',
         'uptime_down_since',
+        'uptime_maintenance_since',
         'uptime_ignored_at',
         'uptime_ignore_reason',
         'sucuri_unavailable_at',
@@ -374,6 +387,7 @@ class Site extends Model
             'uptime_last_status_code' => 'integer',
             'uptime_consecutive_failures' => 'integer',
             'uptime_down_since' => 'datetime',
+            'uptime_maintenance_since' => 'datetime',
             'uptime_ignored_at' => 'datetime',
             'sucuri_unavailable_at' => 'datetime',
             'psi_unavailable_at' => 'datetime',
@@ -482,6 +496,20 @@ class Site extends Model
             $q->whereHas('server', fn (Builder $sq) => $sq->monitored())
                 ->orWhereIn('hosting_provider', self::HOSTING_PROVIDERS_WITHOUT_SERVER);
         });
+    }
+
+    /**
+     * Sites sitting in uptime maintenance longer than UPTIME_STUCK_MAINTENANCE_HOURS.
+     * Shared by IssueCounter and IssuesController so the nav badge matches the page.
+     */
+    public function scopeStuckInMaintenance(Builder $query): Builder
+    {
+        return $query
+            ->where('uptime_state', self::UPTIME_STATE_MAINTENANCE)
+            ->where('uptime_monitoring_enabled', true)
+            ->where('uptime_maintenance_since', '<', now()->subHours(self::UPTIME_STUCK_MAINTENANCE_HOURS))
+            ->whereNull('uptime_ignored_at')
+            ->whereHas('server', fn ($q) => $q->where('is_ignored', false));
     }
 
     /** @return BelongsTo<Server, $this> */
@@ -907,6 +935,11 @@ class Site extends Model
         return 'https://s0.wp.com/mshots/v1/'.rawurlencode($target).'?w=600';
     }
 
+    public function isMaintenance(): bool
+    {
+        return $this->uptime_state === self::UPTIME_STATE_MAINTENANCE;
+    }
+
     /**
      * Return a consolidated status color for visual cards ('green', 'yellow', 'red').
      */
@@ -920,7 +953,7 @@ class Site extends Model
             return 'red';
         }
 
-        if ($this->uptime_state === 'unknown' || $this->sslState() === self::SSL_STATE_YELLOW) {
+        if ($this->uptime_state === 'unknown' || $this->uptime_state === self::UPTIME_STATE_MAINTENANCE || $this->sslState() === self::SSL_STATE_YELLOW) {
             return 'yellow';
         }
 

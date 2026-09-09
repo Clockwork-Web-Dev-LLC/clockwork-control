@@ -30,6 +30,16 @@ interface ChatNotifier
             'description' => 'Uptime probe transitioned the site back to up.',
             'default' => true,
         ],
+        'site_entered_maintenance' => [
+            'label' => 'Site entered maintenance mode',
+            'description' => 'Uptime probe detected the site entered scheduled maintenance (HTTP 503).',
+            'default' => true,
+        ],
+        'site_exited_maintenance' => [
+            'label' => 'Site exited maintenance mode',
+            'description' => 'Uptime probe detected the site finished scheduled maintenance and is back up.',
+            'default' => true,
+        ],
         'ssl_state_changed' => [
             'label' => 'SSL state changed',
             'description' => 'Certificate state moved between green / yellow / red.',
@@ -137,6 +147,10 @@ interface ChatNotifier
     public function siteWentDown(Site $site, ?int $statusCode, ?string $error, bool $likelyWafBlock = false, ?array $diagnosis = null): bool;
 
     public function siteWentUp(Site $site, ?int $downtimeSec): bool;
+
+    public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool;
+
+    public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool;
 
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool;
 

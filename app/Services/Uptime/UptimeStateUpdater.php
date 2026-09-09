@@ -48,7 +48,9 @@ class UptimeStateUpdater
         $now = Carbon::now();
         $previousState = $site->uptime_state ?? 'unknown';
 
-        if ($probe->succeeded) {
+        if ($probe->isMaintenance) {
+            $this->handleMaintenance($site, $probe, $previousState, $now);
+        } elseif ($probe->succeeded) {
             $this->handleSuccess($site, $probe, $previousState, $now);
         } else {
             $this->handleFailure($site, $probe, $previousState, $now);
@@ -60,16 +62,39 @@ class UptimeStateUpdater
         ])->save();
     }
 
+    private function handleMaintenance(Site $site, UptimeProbeResult $probe, string $previousState, Carbon $now): void
+    {
+        $isTransition = $previousState !== 'maintenance';
+
+        $site->forceFill([
+            'uptime_state' => 'maintenance',
+            'uptime_consecutive_failures' => 0,
+            'uptime_down_since' => null,
+            'uptime_maintenance_since' => $site->uptime_maintenance_since ?? $now,
+        ])->save();
+
+        if ($isTransition) {
+            $this->recordEvent($site, SiteUptimeEvent::TYPE_MAINTENANCE, $probe, $now);
+
+            if (! $site->isUptimeIgnored()) {
+                $this->fireMaintenanceNotification($site, $probe);
+            }
+        }
+    }
+
     private function handleSuccess(Site $site, UptimeProbeResult $probe, string $previousState, Carbon $now): void
     {
-        $isRecovery = $previousState === 'down';
+        $isRecoveryFromDown = $previousState === 'down';
+        $isRecoveryFromMaint = $previousState === 'maintenance';
         $downSince = $site->uptime_down_since;
+        $maintSince = $site->uptime_maintenance_since;
 
         $site->forceFill([
             'uptime_state' => 'up',
             'uptime_last_up_at' => $now,
             'uptime_consecutive_failures' => 0,
             'uptime_down_since' => null,
+            'uptime_maintenance_since' => null,
         ])->save();
 
         if ($previousState === 'unknown') {
@@ -83,7 +108,7 @@ class UptimeStateUpdater
             return;
         }
 
-        if ($isRecovery) {
+        if ($isRecoveryFromDown) {
             // Carbon 3 returns signed diffs; ordinarily downSince is in the
             // past so this is positive, but an NTP step backwards mid-flight
             // can flip the sign. abs() makes the math sign-independent so
@@ -96,6 +121,13 @@ class UptimeStateUpdater
             // page (or `/monitoring`) for current state when they care.
             if (! $site->isUptimeIgnored()) {
                 $this->fireRecoveryNotification($site, $downtimeSec, $probe);
+            }
+        } elseif ($isRecoveryFromMaint) {
+            $maintSec = $maintSince !== null ? (int) abs($maintSince->diffInSeconds($now)) : null;
+            $this->recordEvent($site, SiteUptimeEvent::TYPE_UP, $probe, $now);
+
+            if (! $site->isUptimeIgnored()) {
+                $this->fireMaintenanceRecoveryNotification($site, $maintSec, $probe);
             }
         }
     }
@@ -128,16 +160,41 @@ class UptimeStateUpdater
             self::FAILURE_THRESHOLD_FOR_DOWN,
         );
         if ($previousState !== 'down' && $newFailures >= $threshold) {
+            // Run the SSH diagnostic ONCE per outage at the transition point.
+            // If the probe was a bare 503 without headers, but the SSH diagnostician
+            // finds maintenance mode active (.maintenance file or nginx maintenance.conf),
+            // pivot to maintenance state instead of down.
+            $diagnosis = $this->safelyDiagnose($site);
+
+            if ($probe->statusCode === 503 && ($diagnosis['maintenance_mode'] ?? false) === true) {
+                $alreadyMaint = $previousState === 'maintenance';
+
+                $site->forceFill([
+                    'uptime_state' => 'maintenance',
+                    'uptime_down_since' => null,
+                    'uptime_maintenance_since' => $site->uptime_maintenance_since ?? $now,
+                    'uptime_consecutive_failures' => 0,
+                ])->save();
+
+                // Bare nginx `return 503` never matches HTTP signatures, so every
+                // subsequent probe still looks like a failure. Without this guard
+                // we'd re-enter here every threshold (~10 min) and spam chat.
+                if (! $alreadyMaint) {
+                    $this->recordEvent($site, SiteUptimeEvent::TYPE_MAINTENANCE, $probe, $now, $diagnosis);
+
+                    if (! $site->isUptimeIgnored()) {
+                        $this->fireMaintenanceNotification($site, $probe, $diagnosis);
+                    }
+                }
+
+                return;
+            }
+
             $site->forceFill([
                 'uptime_state' => 'down',
                 'uptime_down_since' => $now,
+                'uptime_maintenance_since' => null,
             ])->save();
-
-            // Run the SSH diagnostic ONCE per outage at the transition point so
-            // the operator gets "SpinupWP maintenance mode is active" instead
-            // of "HTTP 503". Wrapped — a diagnostician throw must never abort
-            // the down-alert or event-record path.
-            $diagnosis = $this->safelyDiagnose($site);
 
             $this->recordEvent($site, SiteUptimeEvent::TYPE_DOWN, $probe, $now, $diagnosis);
 
@@ -235,6 +292,47 @@ class UptimeStateUpdater
             site: $site,
             target: 'up',
             details: ['status_code' => $probe->statusCode, 'downtime_sec' => $downtimeSec],
+            ok: true,
+            elapsedMs: $probe->responseTimeMs,
+            actor: 'scheduled',
+        );
+    }
+
+    private function fireMaintenanceNotification(Site $site, UptimeProbeResult $probe, ?array $diagnosis = null): void
+    {
+        try {
+            $this->mattermost->siteEnteredMaintenance($site, $probe->statusCode, $probe->error, $probe->retryAfter);
+        } catch (\Throwable $e) {
+            Log::warning('uptime.mattermost_maintenance_failed', ['site_id' => $site->id, 'error' => $e->getMessage()]);
+        }
+
+        $this->actionLogger->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: "{$site->domain} entered scheduled maintenance".($probe->statusCode ? " (HTTP {$probe->statusCode})" : ''),
+            site: $site,
+            target: 'maintenance',
+            details: ['status_code' => $probe->statusCode, 'retry_after' => $probe->retryAfter, 'diagnosis' => $diagnosis],
+            ok: true,
+            elapsedMs: $probe->responseTimeMs,
+            actor: 'scheduled',
+        );
+    }
+
+    private function fireMaintenanceRecoveryNotification(Site $site, ?int $maintenanceSec, UptimeProbeResult $probe): void
+    {
+        try {
+            $this->mattermost->siteExitedMaintenance($site, $maintenanceSec);
+        } catch (\Throwable $e) {
+            Log::warning('uptime.mattermost_maintenance_recovered_failed', ['site_id' => $site->id, 'error' => $e->getMessage()]);
+        }
+
+        $durationMin = $maintenanceSec !== null ? (int) round($maintenanceSec / 60) : 0;
+        $this->actionLogger->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: "{$site->domain} exited maintenance mode (was in maintenance for {$durationMin} min)",
+            site: $site,
+            target: 'up',
+            details: ['status_code' => $probe->statusCode, 'maintenance_sec' => $maintenanceSec],
             ok: true,
             elapsedMs: $probe->responseTimeMs,
             actor: 'scheduled',

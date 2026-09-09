@@ -302,6 +302,13 @@ class IssuesController extends Controller
             ->orderBy('uptime_down_since')
             ->get();
 
+        // KEEP IN SYNC with App\Support\IssueCounter::total().
+        $stuckMaintenanceSites = Site::query()
+            ->stuckInMaintenance()
+            ->with('server:id,name')
+            ->orderBy('uptime_maintenance_since')
+            ->get();
+
         $totals = [
             'ssl' => $sslIssues->count(),
             'domain_expiration' => $domainExpirationIssues->count(),
@@ -323,6 +330,7 @@ class IssuesController extends Controller
             'tampering' => $checksumTampering->count(),
             'companion_malware' => $companionMalwareFindings->count(),
             'down_sites' => $downSites->count(),
+            'stuck_maintenance' => $stuckMaintenanceSites->count(),
         ];
         $totals['all'] = array_sum($totals);
         $totals['domain-expiration'] = $totals['domain_expiration'];
@@ -352,6 +360,7 @@ class IssuesController extends Controller
             'checksumTampering',
             'companionMalwareFindings',
             'downSites',
+            'stuckMaintenanceSites',
             'totals',
         ));
     }

@@ -89,6 +89,29 @@ class UptimeProber
             return UptimeProbeResult::authProtected($status, $elapsed, 'HTTP 403 (forbidden — likely WAF or allowlist)', $body, $xRobotsTag);
         }
 
+        // Scheduled maintenance mode (RFC 7231 §6.6.4): WordPress core and
+        // reputable maintenance plugins (SeedProd, Kadence, WP Maintenance Mode)
+        // emit 503 + Retry-After (or recognizable maintenance copy) for SEO
+        // protection. The origin is alive and intentionally in scheduled maintenance.
+        if ($status === 503) {
+            $retryAfter = $response->header('Retry-After') ?: null;
+            $bodySample = mb_substr($body, 0, 4000);
+
+            $hasRetryAfter = $retryAfter !== null && $retryAfter !== '';
+            $hasMaintenanceSignature = str_contains($bodySample, 'Briefly unavailable for scheduled maintenance')
+                || str_contains($bodySample, 'Scheduled Maintenance')
+                || str_contains($bodySample, 'scheduled maintenance')
+                || str_contains($bodySample, 'Maintenance Mode')
+                || str_contains($bodySample, 'maintenance mode')
+                || str_contains($bodySample, 'undergoing scheduled maintenance');
+
+            if ($hasRetryAfter || $hasMaintenanceSignature) {
+                $reason = 'HTTP 503 (scheduled maintenance'.($hasRetryAfter ? " · Retry-After: {$retryAfter}" : '').')';
+
+                return UptimeProbeResult::maintenance($status, $elapsed, $reason, $retryAfter, $body, $xRobotsTag);
+            }
+        }
+
         return UptimeProbeResult::badStatus($status, $elapsed, "HTTP {$status}", $body, $xRobotsTag);
     }
 }

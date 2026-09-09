@@ -221,7 +221,11 @@ class IssueCounter
             ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
             ->count();
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $twoFactorAtRisk + $orphans + $malware + $tampering + $companionMalware + $downSites;
+        // Sites in maintenance mode for longer than 2 hours (likely an abandoned or forgotten window).
+        // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
+        $stuckMaintenanceSites = Site::query()->stuckInMaintenance()->count();
+
+        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $twoFactorAtRisk + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites;
     }
 
     /**

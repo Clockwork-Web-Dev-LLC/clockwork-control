@@ -77,9 +77,10 @@ class UptimeDiagnostician
             : $site->domain;
 
         $cmd = sprintf(
-            'CW_SITE_SLUG=%s CW_SITE_USER=%s bash -c %s 2>&1',
+            'CW_SITE_SLUG=%s CW_SITE_USER=%s CW_WP_PATH=%s bash -c %s 2>&1',
             escapeshellarg($siteSlug),
             escapeshellarg((string) $site->site_user),
+            escapeshellarg((string) ($site->wp_path ?? '')),
             escapeshellarg($this->buildScript()),
         );
 
@@ -110,7 +111,7 @@ class UptimeDiagnostician
     {
         return <<<'BASH'
         #!/usr/bin/env bash
-        # Inputs: CW_SITE_SLUG, CW_SITE_USER (set by caller).
+        # Inputs: CW_SITE_SLUG, CW_SITE_USER, CW_WP_PATH (set by caller).
 
         echo "===MAINT==="
         MAINT_FILE="/etc/nginx/sites-available/${CW_SITE_SLUG}/server/maintenance.conf"
@@ -118,6 +119,10 @@ class UptimeDiagnostician
             # Cap at 500 bytes — the file is normally `return 503;` (12 bytes)
             # but a custom maintenance page could include HTML.
             head -c 500 "$MAINT_FILE" 2>/dev/null
+        elif [ -n "$CW_WP_PATH" ] && [ -f "${CW_WP_PATH}/.maintenance" ]; then
+            echo "WordPress .maintenance file is active"
+        elif [ -f "/var/www/${CW_SITE_SLUG}/htdocs/grid-maintenance.html" ]; then
+            echo "GridPane maintenance mode is active"
         fi
 
         echo ""
@@ -234,9 +239,9 @@ class UptimeDiagnostician
     private function summarize(array $r): string
     {
         if ($r['maintenance_mode']) {
-            return 'Maintenance mode is active (SpinupWP-style layout) — '
-                .'/etc/nginx/sites-available/{site-slug}/server/maintenance.conf '
-                .'returns 503. Disable maintenance mode or truncate the file.';
+            $excerpt = $r['maintenance_excerpt'] ? " ({$r['maintenance_excerpt']})" : '';
+
+            return "Maintenance mode is active{$excerpt} — server returns 503. Disable maintenance mode or remove the maintenance marker to recover.";
         }
 
         if ($r['fpm_socket_present'] === false) {
