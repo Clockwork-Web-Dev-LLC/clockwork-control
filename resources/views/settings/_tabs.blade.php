@@ -1,4 +1,6 @@
 @php
+    $isAdmin = auth()->user()?->isAdmin() ?? false;
+
     $tabs = [
         [
             'key' => 'hub',
@@ -32,7 +34,7 @@
             'key' => 'system',
             'label' => 'System & Workspace',
             'icon' => 'fa-server',
-            'route' => 'settings.users.index',
+            'route' => $isAdmin ? 'settings.users.index' : 'settings.maintenance.index',
             'active' => request()->routeIs('settings.users.*') || request()->routeIs('settings.updates.*') || request()->routeIs('settings.maintenance.*') || request()->routeIs('settings.diagnostics.*') || request()->routeIs('setup.*') || request()->routeIs('docs.*'),
         ],
     ];
@@ -62,12 +64,12 @@
             ['label' => 'Maintenance History', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'maintenance-history.index', 'active' => request()->routeIs('maintenance-history.*')],
             ['label' => 'Weird Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
         ],
-        'system' => [
-            ['label' => 'Team & Users', 'icon' => 'fa-solid fa-people-group', 'route' => 'settings.users.index', 'active' => request()->routeIs('settings.users.*')],
+        'system' => array_values(array_filter([
+            $isAdmin ? ['label' => 'Team & Users', 'icon' => 'fa-solid fa-people-group', 'route' => 'settings.users.index', 'active' => request()->routeIs('settings.users.*')] : null,
             ['label' => 'System Updates', 'icon' => 'fa-solid fa-arrows-rotate', 'route' => 'settings.updates.index', 'active' => request()->routeIs('settings.updates.*')],
             ['label' => 'Database Maintenance', 'icon' => 'fa-solid fa-database', 'route' => 'settings.maintenance.index', 'active' => request()->routeIs('settings.maintenance.*')],
             ['label' => 'Diagnostics & Health', 'icon' => 'fa-solid fa-stethoscope', 'route' => 'settings.diagnostics.index', 'active' => request()->routeIs('settings.diagnostics.*')],
-        ],
+        ])),
     ];
 
     $currentTools = array_filter($categoryTools[$activeKey] ?? [], fn ($item) => Route::has($item['route']));

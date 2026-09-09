@@ -102,6 +102,22 @@ describe('InstallerWizard', function () {
         expect(session('install.wizard.database.database'))->toBe('clockwork_test');
     });
 
+    it('does not leak SQL or PDO errors from the database test endpoint', function () {
+        $response = $this->postJson(route('install.database.test'), [
+            'host' => '127.0.0.1',
+            'port' => 1,
+            'database' => 'definitely_not_a_database',
+            'username' => 'nobody',
+            'password' => 'nope',
+        ]);
+
+        $response->assertStatus(422);
+        $message = (string) $response->json('message');
+        expect($message)->toBe('Connection failed. Check the host, port, database name, and credentials, then try again.')
+            ->and($message)->not->toContain('SQLSTATE')
+            ->and($message)->not->toContain('PDO');
+    });
+
     it('saves step 3 app identity preferences to session', function () {
         $response = $this->post(route('install.app.save'), [
             'name' => 'Agency Fleet Panel',

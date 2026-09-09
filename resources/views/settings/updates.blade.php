@@ -155,13 +155,13 @@
                 </div>
 
                 <div class="flex items-center gap-2 flex-wrap">
-                    @if ($updateInfo['has_update'])
+                    @if ($updateInfo['has_update'] && auth()->user()?->isAdmin())
                         <button type="button"
                                 @click="showConfirmModal = true"
                                 class="px-4 py-2 rounded-md bg-[var(--color-primary-600)] text-white text-sm font-medium hover:bg-[var(--color-primary-700)] inline-flex items-center gap-2">
                             <i class="fa-solid fa-download"></i> Update to v{{ $updateInfo['latest_version'] }}
                         </button>
-                    @else
+                    @elseif (! $updateInfo['has_update'])
                         <span class="status-pill status-green">
                             <span class="status-dot"></span> Up to date (v{{ $updateInfo['current_version'] }})
                         </span>
@@ -221,7 +221,9 @@
                 <div>
                     <strong class="text-[var(--color-ink-strong)]">Pre-update recommendation.</strong>
                     Before updating, please ensure you have downloaded a database backup. Encrypted SSH keys, site tokens, and configuration live in your database.
+                    @if (auth()->user()?->isAdmin())
                     <a href="{{ route('settings.maintenance.backup') }}" class="text-[var(--color-primary-600)] underline ml-1 font-medium">Download backup snapshot &rarr;</a>
+                    @endif
                 </div>
             </div>
         </div>
@@ -310,6 +312,7 @@
         </div>
 
         {{-- Operator Confirmation Modal for Core Self-Update --}}
+        @if (auth()->user()?->isAdmin())
         <div x-show="showConfirmModal"
              x-cloak
              class="fixed inset-0 z-50 overflow-y-auto bg-black/40 flex items-center justify-center p-4"
@@ -357,5 +360,6 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 @endsection

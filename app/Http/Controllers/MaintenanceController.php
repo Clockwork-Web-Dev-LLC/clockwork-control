@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActionLog;
+use App\Services\ActionLog\ActionLogger;
 use App\Services\Telemetry\TelemetryPayloadBuilder;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -86,10 +89,17 @@ class MaintenanceController extends Controller
      *                   tablespaces metadata (Herd's MySQL root may not
      *                   have it, and we don't need that data).
      */
-    public function downloadBackup(): StreamedResponse
+    public function downloadBackup(ActionLogger $logger): StreamedResponse
     {
         $cfg = config('database.connections.'.config('database.default'));
         $filename = 'clockwork-backup-'.now()->format('Ymd-His').'.sql.gz';
+
+        $logger->record(
+            actionType: ActionLog::TYPE_BACKUP_DOWNLOADED,
+            summary: 'Downloaded the Clockwork database backup.',
+            ok: true,
+            actor: (string) (Auth::user()->email ?? 'unknown'),
+        );
 
         $cmd = $this->buildDumpCommand($cfg);
 

@@ -62,7 +62,7 @@ class GoogleAuthProvider implements AuthProvider
     {
         $driver = $this->driver();
 
-        $hd = (string) ($this->resolver->get('auth_google.hosted_domain') ?? config('services.google.hosted_domain'));
+        $hd = $this->hostedDomain();
         if ($hd !== '') {
             $driver->with(['hd' => $hd]);
         }
@@ -81,6 +81,17 @@ class GoogleAuthProvider implements AuthProvider
                 'login_denial',
                 'Google sign-in failed. Try again, and let an administrator know if it keeps happening.'
             );
+        }
+
+        $requiredHd = $this->hostedDomain();
+        if ($requiredHd !== '') {
+            $actualHd = $googleUser->user['hd'] ?? null;
+            if (! is_string($actualHd) || strcasecmp($actualHd, $requiredHd) !== 0) {
+                return redirect()->route('login')->with(
+                    'login_denial',
+                    'Google sign-in is restricted to the '.$requiredHd.' workspace. Use a matching account, or ask an administrator to add you.'
+                );
+            }
         }
 
         return $this->loginHandler->handle(
@@ -111,5 +122,10 @@ class GoogleAuthProvider implements AuthProvider
         $driver->redirectUrl(route('auth.google.callback'));
 
         return $driver;
+    }
+
+    protected function hostedDomain(): string
+    {
+        return (string) ($this->resolver->get('auth_google.hosted_domain') ?? config('services.google.hosted_domain', ''));
     }
 }

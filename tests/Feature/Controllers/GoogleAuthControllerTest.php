@@ -134,4 +134,42 @@ describe('callback (GET /auth/google/callback)', function () {
 
         $this->assertGuest();
     });
+
+    it('sends hd on redirect when a hosted domain is configured', function () {
+        config(['services.google.hosted_domain' => 'clockworkwd.com']);
+
+        $driver = Mockery::mock(GoogleProvider::class);
+        $driver->shouldReceive('redirectUrl')->once()->with(route('auth.google.callback'))->andReturnSelf();
+        $driver->shouldReceive('with')->once()->with(['hd' => 'clockworkwd.com'])->andReturnSelf();
+        $driver->shouldReceive('redirect')->once()->andReturn(Redirect::away('https://accounts.google.com/o/oauth2/auth?hd=clockworkwd.com'));
+
+        Socialite::shouldReceive('driver')->once()->with('google')->andReturn($driver);
+
+        $this->get(route('auth.google.redirect'))
+            ->assertRedirect('https://accounts.google.com/o/oauth2/auth?hd=clockworkwd.com');
+    });
+
+    it('rejects a callback whose hd claim does not match GOOGLE_HD', function () {
+        config(['services.google.hosted_domain' => 'clockworkwd.com']);
+        User::factory()->create(['email' => 'operator@clockworkwd.com']);
+
+        $googleUser = SocialiteUser::fake([
+            'id' => 'google-hd-mismatch',
+            'email' => 'operator@clockworkwd.com',
+            'hd' => 'gmail.com',
+        ]);
+
+        $driver = Mockery::mock(GoogleProvider::class);
+        $driver->shouldReceive('redirectUrl')->once()->with(route('auth.google.callback'))->andReturnSelf();
+        $driver->shouldReceive('user')->once()->andReturn($googleUser);
+
+        Socialite::shouldReceive('driver')->once()->with('google')->andReturn($driver);
+
+        $response = $this->get(route('auth.google.callback'));
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', 'Google sign-in is restricted to the clockworkwd.com workspace. Use a matching account, or ask an administrator to add you.');
+
+        $this->assertGuest();
+    });
 });

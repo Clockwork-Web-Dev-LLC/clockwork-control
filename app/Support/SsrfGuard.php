@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Container\Container;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -54,6 +55,16 @@ final class SsrfGuard
         self::$fakeResolutions = $hostToIps;
     }
 
+    private static ?bool $allowPrivateHosts = null;
+
+    /**
+     * Test-only / programmatic override to permit private/loopback hosts.
+     */
+    public static function allowPrivateHosts(?bool $allow = true): void
+    {
+        self::$allowPrivateHosts = $allow;
+    }
+
     /**
      * Reverts to real DNS resolution. Only relevant for tests that called
      * fake() directly (e.g. SsrfGuardTest) — Feature tests never need this,
@@ -62,6 +73,7 @@ final class SsrfGuard
     public static function stopFaking(): void
     {
         self::$fakeResolutions = null;
+        self::$allowPrivateHosts = null;
     }
 
     /**
@@ -70,6 +82,10 @@ final class SsrfGuard
      */
     public static function assertPublic(string $url): void
     {
+        if (self::$allowPrivateHosts ?? self::isConfiguredToAllowPrivateHosts()) {
+            return;
+        }
+
         $host = parse_url($url, PHP_URL_HOST);
         if (! is_string($host) || $host === '') {
             throw new InvalidArgumentException("Refusing to fetch a URL with no host: {$url}");
@@ -118,5 +134,14 @@ final class SsrfGuard
             static fn (array $record) => $record['ip'] ?? $record['ipv6'] ?? null,
             $records,
         ))));
+    }
+
+    private static function isConfiguredToAllowPrivateHosts(): bool
+    {
+        if (function_exists('config') && Container::getInstance()?->has('config')) {
+            return (bool) config('clockwork.security.allow_private_hosts', false);
+        }
+
+        return false;
     }
 }

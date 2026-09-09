@@ -2,7 +2,7 @@
 title: Google OAuth
 section: Integrations
 order: 50
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [integrations, auth, google, github, microsoft, oauth]
 tracks: [app/Http/Controllers/Auth/**, app/Services/Auth/**, app/Http/Controllers/LoginController.php, modules/AuthGoogle/src/**, modules/AuthGitHub/src/**, modules/AuthMicrosoft/src/**, modules/Core/src/Contracts/AuthProvider.php, config/services.php]
@@ -93,7 +93,7 @@ php artisan clockwork:add-user alice@example.com --name=Alice --password=secret
 # Set or reset an existing operator's local password (masked prompt, or --password=):
 php artisan clockwork:set-password alice@example.com
 
-# UI version (every authenticated user can manage):
+# UI version (administrators only):
 # /settings/users  — add, revoke, restore, and set/reset a local password
 ```
 
@@ -114,7 +114,7 @@ Surfaces on `/maintenance-history`.
 ## Gotchas
 
 - **Redirect URI must match exactly.** Google's error message is unhelpful — usually a wrong port, missing `/callback`, or http vs https.
-- **Revoke does not kill active sessions.** A revoked user keeps their existing session until logout / expiry. If you ever need real revocation, add a per-request middleware that re-checks `revoked_at`.
+- **Revoke and password change kill live sessions.** `User::invalidateSessions()` cycles `remember_token` and deletes stored database sessions; `EnsureUserIsActive` logs a revoked operator out on the next request.
 - **Revoke-self is blocked at the controller.** The `clockwork:add-user` / `clockwork:set-password` commands + restore flow are the always-works recovery if the team accidentally locks themselves out.
-- **`GOOGLE_HD` only restricts the picker, not the response.** Don't rely on it as a security gate — the allowlist does the gating.
+- **`GOOGLE_HD` is enforced on callback.** The account picker's `hd` parameter is a hint; `GoogleAuthProvider::handleCallback()` also requires the token's `hd` claim to match.
 - **A `NULL` password isn't a broken account, it's SSO-only by design.** Don't "fix" it by setting a random password unless you actually want to offer that user a local-login fallback.

@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionLog;
 use App\Models\BackupRelayRun;
 use App\Models\Site;
+use App\Services\ActionLog\ActionLogger;
 use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\BackupRelay\Services\GlacierUploader;
@@ -236,7 +239,7 @@ class BackupRelaySettingsController extends Controller
         ], $data));
     }
 
-    public function download(Site $site, Request $request, BackupArchiveEnumerator $enumerator): mixed
+    public function download(Site $site, Request $request, BackupArchiveEnumerator $enumerator, ActionLogger $logger): mixed
     {
         $rawKey = $request->query('key');
         if (! $rawKey) {
@@ -261,6 +264,15 @@ class BackupRelaySettingsController extends Controller
         if (! $disk->exists($key)) {
             abort(404, 'Archive object not found in S3.');
         }
+
+        $logger->record(
+            actionType: ActionLog::TYPE_BACKUP_RELAY_DOWNLOADED,
+            summary: "Downloaded backup-relay archive for {$site->domain}.",
+            ok: true,
+            site: $site,
+            target: $key,
+            actor: (string) (Auth::user()->email ?? 'unknown'),
+        );
 
         try {
             if (method_exists($disk, 'temporaryUrl')) {

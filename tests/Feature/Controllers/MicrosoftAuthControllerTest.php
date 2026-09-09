@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Modules\AuthMicrosoft\MicrosoftAuthProvider;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -146,5 +147,21 @@ describe('callback (GET /auth/microsoft/callback)', function () {
         $response->assertRedirect(route('login'))
             ->assertSessionHas('login_denial', "Microsoft didn't return an email address. Make sure you're signed into a Microsoft account.");
         $this->assertGuest();
+    });
+
+    it('is not configured in production without a pinned Entra tenant', function () {
+        $this->app['env'] = 'production';
+        config([
+            'services.microsoft.client_id' => 'test-client-id',
+            'services.microsoft.client_secret' => 'test-client-secret',
+            'services.microsoft.tenant_id' => 'common',
+        ]);
+
+        $provider = app(MicrosoftAuthProvider::class);
+        expect($provider->isConfigured())->toBeFalse();
+
+        $this->get(route('auth.microsoft.redirect'))
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('login_denial', 'Microsoft sign-in requires a directory (tenant) ID. Ask an administrator to set it under Integrations.');
     });
 });

@@ -232,9 +232,11 @@ class InstallerController extends Controller
                 'message' => "Successfully connected to MySQL database [{$database}] on [{$host}:{$port}].",
             ]);
         } catch (Exception $e) {
+            Log::warning('installer.database_test_failed', ['message' => $e->getMessage()]);
+
             return response()->json([
                 'ok' => false,
-                'message' => 'Connection failed: '.$e->getMessage(),
+                'message' => 'Connection failed. Check the host, port, database name, and credentials, then try again.',
             ], 422);
         }
     }
@@ -844,6 +846,7 @@ class InstallerController extends Controller
             'DB_USERNAME' => $db['username'],
             'DB_PASSWORD' => $db['password'] ?? '',
             'SESSION_DRIVER' => 'database',
+            'SESSION_SECURE_COOKIE' => str_starts_with((string) $appUrl, 'https') ? 'true' : 'false',
             'CACHE_STORE' => 'database',
             'QUEUE_CONNECTION' => 'database',
             'GOOGLE_CLIENT_ID' => ! empty($google['skipped']) ? '' : ($google['client_id'] ?? ''),
@@ -900,7 +903,7 @@ class InstallerController extends Controller
 
                 return redirect()->route('install.review')->with(
                     'error',
-                    'Database migration failed: '.$e->getMessage().' Fix the issue and try again.'
+                    'Database migration failed. Check the application logs for details, then try again.'
                 );
             }
         }

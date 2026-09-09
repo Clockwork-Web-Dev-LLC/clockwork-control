@@ -37,6 +37,7 @@ namespace App\Http\Controllers {
 
 namespace {
 
+    use App\Models\ActionLog;
     use App\Models\User;
     use App\Support\Settings;
     use Illuminate\Support\Facades\DB;
@@ -129,6 +130,18 @@ namespace {
                 ->toContain('mysqldump')
                 ->toContain('--single-transaction')
                 ->toContain('gzip');
+
+            $log = ActionLog::query()->where('action_type', ActionLog::TYPE_BACKUP_DOWNLOADED)->first();
+            expect($log)->not->toBeNull()
+                ->and($log->ok)->toBeTrue();
+        });
+
+        it('forbids operators from downloading the database backup', function () {
+            $this->actingAs(User::factory()->operator()->create())
+                ->get(route('settings.maintenance.backup'))
+                ->assertForbidden();
+
+            expect($GLOBALS['__maint_passthru_calls'])->toBe([]);
         });
     });
 

@@ -107,6 +107,13 @@ class EnforceInstallerGate
         $isInstalled = static::isInstalled();
 
         if ($isInstalled) {
+            // Allow the post-install celebration once — the installer writes the
+            // sentinel then redirects here. Subsequent visits 404 like every
+            // other installer route.
+            if ($request->is('install/done') && $request->session()->has('install.just_installed')) {
+                return $next($request);
+            }
+
             // Hard 404 on any installer route once installed — eliminates replay or bookmark probing.
             if ($request->is('install') || $request->is('install/*')) {
                 abort(404);

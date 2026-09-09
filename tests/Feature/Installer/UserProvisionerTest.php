@@ -15,7 +15,8 @@ describe('UserProvisioner', function () {
             ->and($result['user']->email)->toBe('founder@agency.test')
             ->and($result['user']->name)->toBe('Agency Founder')
             ->and($result['user']->password)->toBeNull()
-            ->and($result['user']->revoked_at)->toBeNull();
+            ->and($result['user']->revoked_at)->toBeNull()
+            ->and($result['user']->role)->toBe(User::ROLE_ADMIN);
 
         expect(User::where('email', 'founder@agency.test')->exists())->toBeTrue();
 

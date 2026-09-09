@@ -61,10 +61,12 @@
                     · approx {{ $totalBytes >= 1073741824 ? number_format($totalBytes / 1024 / 1024 / 1024, 1) . ' GB' : number_format($totalBytes / 1024 / 1024, 1) . ' MB' }}
                 </div>
             </div>
+            @if (auth()->user()?->isAdmin())
             <a href="{{ route('settings.maintenance.backup') }}"
                class="px-4 py-2 rounded-md bg-[var(--color-primary-600)] text-white text-sm font-medium hover:bg-[var(--color-primary-700)] inline-flex items-center gap-2">
                 <i class="fa-solid fa-download"></i> Download backup
             </a>
+            @endif
         </div>
 
         <div class="text-sm text-[var(--color-ink-muted)] space-y-2">

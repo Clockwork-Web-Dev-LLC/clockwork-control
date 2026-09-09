@@ -49,7 +49,18 @@ describe('EnforceInstallerGate', function () {
         '/install/admin',
         '/install/hosting',
         '/install/review',
+        '/install/done',
     ]);
+
+    it('serves /install/done after a successful install while just_installed is set', function () {
+        EnforceInstallerGate::fake(true);
+
+        $response = $this->withSession(['install.just_installed' => true])
+            ->get(route('install.done'));
+
+        $response->assertOk()
+            ->assertSee('Clockwork Control is Installed!');
+    });
 
     it('does not redirect standard routes when installed', function () {
         EnforceInstallerGate::fake(true);

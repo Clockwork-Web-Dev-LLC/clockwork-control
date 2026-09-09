@@ -99,6 +99,10 @@ class ActionLog extends Model
 
     public const TYPE_USER_PASSWORD_CHANGED = 'user_password_changed';
 
+    public const TYPE_BACKUP_DOWNLOADED = 'backup_downloaded';
+
+    public const TYPE_BACKUP_RELAY_DOWNLOADED = 'backup_relay_downloaded';
+
     public const TYPE_INSTALLER_REOPENED = 'installer_reopened';
 
     // ManageWP parity features (Comment Moderation, Code Snippets, Site Maintenance)

@@ -22,6 +22,18 @@ class LoginController extends Controller
     public function show(Request $request, ModuleRegistry $registry): View|RedirectResponse
     {
         if (Auth::check()) {
+            $user = Auth::user();
+            if ($user instanceof User && ! $user->isActive()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->route('login')->with(
+                    'login_denial',
+                    'Your account has been revoked. Please contact an administrator.'
+                );
+            }
+
             return redirect()->intended(route('dashboard'));
         }
 

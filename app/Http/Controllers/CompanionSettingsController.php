@@ -182,7 +182,7 @@ class CompanionSettingsController extends Controller
     public function uploadLogo(Request $request, CompanionBrandingManager $brandingManager): RedirectResponse|JsonResponse
     {
         $request->validate([
-            'logo' => 'required|file|mimes:png,jpg,jpeg,svg,webp|max:2048',
+            'logo' => 'required|file|mimes:png,jpg,jpeg,webp|max:2048',
         ]);
 
         $url = $brandingManager->uploadLogo($request->file('logo'));

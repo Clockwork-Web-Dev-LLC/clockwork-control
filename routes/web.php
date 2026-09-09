@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AppearanceSettingsController;
+use App\Http\Controllers\Auth\DevLoginController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BansController;
@@ -40,40 +41,34 @@ use App\Http\Controllers\UsersSettingsController;
 use App\Http\Controllers\WeirdStatsController;
 use App\Http\Controllers\WordPressPluginsController;
 use App\Http\Middleware\RedirectToSetupIfFreshInstall;
-use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 // Public — auth flow only. Everything else is gated below.
 Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1')->name('login.attempt');
-Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
-Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
+Route::middleware('throttle:10,1')->group(function () {
+    Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
+    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
+});
 
-if (app()->environment('local')) {
-    Route::get('/dev-login', function () {
-        $user = User::query()->whereNull('revoked_at')->first()
-            ?? User::factory()->create();
-        Auth::login($user);
-
-        return redirect()->route('settings.companion.index');
-    })->name('dev-login');
-}
+Route::get('/dev-login', DevLoginController::class)->name('dev-login');
 
 // Everything below this line requires an authenticated, non-revoked user.
-// The auth gate is applied via this single group wrapper rather than per-route
-// so it's hard to forget. New routes go INSIDE the closure.
-Route::middleware(['auth'])->group(function () {
+// auth + active (revoked_at) are applied via this single group wrapper rather
+// than per-route so it's hard to forget. New routes go INSIDE the closure.
+Route::middleware(['auth', 'active'])->group(function () {
 
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
-    // Team (allowlist) management — every authenticated user can manage. v1 has
-    // no admin/member distinction; revoke-self is blocked at the controller.
-    Route::get('/settings/users', [UsersSettingsController::class, 'index'])->name('settings.users.index');
-    Route::post('/settings/users', [UsersSettingsController::class, 'store'])->name('settings.users.store');
-    Route::patch('/settings/users/{user}/revoke', [UsersSettingsController::class, 'revoke'])->name('settings.users.revoke');
-    Route::patch('/settings/users/{user}/restore', [UsersSettingsController::class, 'restore'])->name('settings.users.restore');
-    Route::patch('/settings/users/{user}/password', [UsersSettingsController::class, 'updatePassword'])->name('settings.users.password');
+    // Team (allowlist) management — admin-only. Operators can use the fleet
+    // but cannot add, revoke, restore, or reset passwords for other users.
+    Route::middleware('admin')->group(function () {
+        Route::get('/settings/users', [UsersSettingsController::class, 'index'])->name('settings.users.index');
+        Route::post('/settings/users', [UsersSettingsController::class, 'store'])->name('settings.users.store');
+        Route::patch('/settings/users/{user}/revoke', [UsersSettingsController::class, 'revoke'])->name('settings.users.revoke');
+        Route::patch('/settings/users/{user}/restore', [UsersSettingsController::class, 'restore'])->name('settings.users.restore');
+        Route::patch('/settings/users/{user}/password', [UsersSettingsController::class, 'updatePassword'])->name('settings.users.password');
+    });
 
     // Appearance & theme preferences
     Route::post('/settings/appearance', [AppearanceSettingsController::class, 'update'])->name('settings.appearance.update');
@@ -367,12 +362,16 @@ Route::middleware(['auth'])->group(function () {
     // Operator-triggered system updates hub (WordPress-style Core + Companion + Modules).
     Route::get('/settings/updates', [SystemUpdatesController::class, 'index'])->name('settings.updates.index');
     Route::post('/settings/updates/check', [SystemUpdatesController::class, 'check'])->name('settings.updates.check');
-    Route::post('/settings/updates/apply', [SystemUpdatesController::class, 'apply'])->name('settings.updates.apply');
+    Route::post('/settings/updates/apply', [SystemUpdatesController::class, 'apply'])
+        ->middleware('admin')
+        ->name('settings.updates.apply');
 
-    // Operator-only maintenance utilities. Today: on-demand DB backup
-    // (gzipped mysqldump streamed to browser, never written server-side).
+    // Maintenance utilities. Today: on-demand DB backup (admin-only, gzipped mysqldump
+    // streamed to browser, never written server-side) and telemetry settings.
     Route::get('/settings/maintenance', [MaintenanceController::class, 'index'])->name('settings.maintenance.index');
-    Route::get('/settings/maintenance/backup', [MaintenanceController::class, 'downloadBackup'])->name('settings.maintenance.backup');
+    Route::get('/settings/maintenance/backup', [MaintenanceController::class, 'downloadBackup'])
+        ->middleware('admin')
+        ->name('settings.maintenance.backup');
     Route::patch('/settings/maintenance/telemetry', [MaintenanceController::class, 'updateTelemetry'])->name('settings.maintenance.telemetry.update');
     Route::post('/settings/maintenance/telemetry/send-now', [MaintenanceController::class, 'sendTelemetryNow'])->name('settings.maintenance.telemetry.sendNow');
 

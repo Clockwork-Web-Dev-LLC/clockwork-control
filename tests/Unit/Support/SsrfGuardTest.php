@@ -47,3 +47,10 @@ it('defaults unmapped hostnames to a safe public IP while faking', function () {
 
     SsrfGuard::assertPublic('https://anything-at-all.example/');
 })->throwsNoExceptions();
+
+it('permits private IP literals when allowPrivateHosts is enabled', function () {
+    SsrfGuard::allowPrivateHosts(true);
+
+    SsrfGuard::assertPublic('https://192.168.1.1/');
+    SsrfGuard::assertPublic('https://10.0.0.1/');
+})->throwsNoExceptions();

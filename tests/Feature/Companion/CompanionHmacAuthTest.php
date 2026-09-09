@@ -4,6 +4,7 @@ namespace Tests\Feature\Companion;
 
 use App\Models\Site;
 use App\Services\Companion\ClockworkCompanionClient;
+use App\Support\SsrfGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -287,5 +288,28 @@ describe('ClockworkCompanionClient non-JSON response handling', function () {
 
         expect(fn () => (new ClockworkCompanionClient($site))->health())
             ->toThrow(RuntimeException::class, "Clockwork Companion GET /health on {$site->domain} returned a non-JSON or malformed body: {$html}");
+    });
+});
+
+describe('ClockworkCompanionClient SSRF guard', function () {
+    it('refuses to call a companion host on a private address', function () {
+        Http::fake();
+        $site = companionSite(['domain' => '127.0.0.1']);
+
+        expect(fn () => (new ClockworkCompanionClient($site))->detect())
+            ->toThrow(RuntimeException::class, 'private/reserved');
+
+        Http::assertNothingSent();
+    });
+
+    it('refuses a companion host that resolves to a metadata address', function () {
+        Http::fake();
+        SsrfGuard::fake(['evil.example' => ['169.254.169.254']]);
+        $site = companionSite(['domain' => 'evil.example']);
+
+        expect(fn () => (new ClockworkCompanionClient($site))->detect())
+            ->toThrow(RuntimeException::class, 'private/reserved');
+
+        Http::assertNothingSent();
     });
 });

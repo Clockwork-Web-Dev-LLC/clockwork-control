@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -19,7 +19,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 
 | Command | Purpose | Example |
 |---|---|---|
-| `clockwork:add-user` | Add or restore a user on the auth allowlist with optional display name and local password. Idempotent. | `php artisan clockwork:add-user alice@example.com --name=Alice --password=secret` |
+| `clockwork:add-user` | Add or restore a user on the auth allowlist with optional display name, local password, and `--role=admin|operator` (default admin). Idempotent. | `php artisan clockwork:add-user alice@example.com --name=Alice --password=secret --role=operator` |
 | `clockwork:set-password` | Set or reset an operator's local password via masked CLI prompt or option. | `php artisan clockwork:set-password alice@example.com` |
 | `clockwork:sync-allowed-bots` | Pull arcjet/well-known-bots → `allowed_bots`. | `php artisan clockwork:sync-allowed-bots` |
 | `clockwork:digitalocean-test` | Verify the DO token + list droplets. | `php artisan clockwork:digitalocean-test` |

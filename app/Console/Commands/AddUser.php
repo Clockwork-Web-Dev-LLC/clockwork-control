@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
 use App\Support\UserProvisioner;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
@@ -18,7 +19,8 @@ class AddUser extends Command
     protected $signature = 'clockwork:add-user
                             {email : Email address of the user}
                             {--name= : Display name}
-                            {--password= : Optional local password (min 8 characters)}';
+                            {--password= : Optional local password (min 8 characters)}
+                            {--role=admin : Role: admin or operator}';
 
     protected $description = 'Add or restore a user on the Clockwork allowlist.';
 
@@ -27,6 +29,7 @@ class AddUser extends Command
         $email = (string) $this->argument('email');
         $name = $this->option('name');
         $password = $this->option('password');
+        $role = (string) $this->option('role');
 
         if ($password !== null && strlen($password) < 8) {
             $this->error('Password must be at least 8 characters.');
@@ -34,8 +37,14 @@ class AddUser extends Command
             return self::FAILURE;
         }
 
+        if (! in_array($role, [User::ROLE_ADMIN, User::ROLE_OPERATOR], true)) {
+            $this->error('Role must be admin or operator.');
+
+            return self::FAILURE;
+        }
+
         try {
-            $result = $provisioner->addOrRestore($email, $name, actor: 'cli', password: $password);
+            $result = $provisioner->addOrRestore($email, $name, actor: 'cli', password: $password, role: $role);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 

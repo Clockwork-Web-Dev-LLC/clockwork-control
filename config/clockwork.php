@@ -479,4 +479,13 @@ return [
         'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', true),
         'endpoint' => env('CLOCKWORK_TELEMETRY_ENDPOINT', 'https://telemetry.clockworkcontrol.com/v1/report'),
     ],
+
+    // Security & outbound network restrictions.
+    'security' => [
+        // Allow outbound HTTP requests (uptime probes, Companion API calls) to
+        // resolve to private / loopback IP ranges (e.g. 192.168.x.x, 10.x.x.x).
+        // Defaults to false to protect against SSRF. Enable only in private LAN,
+        // homelab, or local staging environments.
+        'allow_private_hosts' => (bool) env('CLOCKWORK_ALLOW_PRIVATE_HOSTS', false),
+    ],
 ];

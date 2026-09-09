@@ -2,7 +2,7 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Services/Companion/**, modules/Pressable/src/**, config/clockwork.php]
@@ -37,8 +37,9 @@ The network posture above assumes the machine itself is safe. It might not be �
   - **OAuth Providers**: Each implements `Modules\Core\Contracts\AuthProvider` in its own module (`AuthGoogle`/`AuthGitHub`/`AuthMicrosoft`) and shares one allowlist/audit path through `App\Services\Auth\OAuthLoginHandler`. `LoginController` only shows a provider's button once it's actually configured, avoiding broken sign-in paths when SSO is not set up.
 - **The `users` table is the allowlist**, regardless of whether the operator authenticates via local password or OAuth. A row exists ⇒ allowed; `revoked_at IS NULL` ⇒ active. **No auto-provisioning** — the user must already exist on the allowlist, or login is denied with an informative banner.
 - **Bootstrap and recovery** via `clockwork:add-user <email> [--name=] [--password=]` and `clockwork:set-password <email> [--password=]`. Idempotent — restores revoked rows and sets or resets operator credentials via masked CLI prompts. Always-works escape hatch when the UI is locked out.
-- **Optional Workspace pin** — `GOOGLE_HD=your-agency.com` restricts the Google account picker to that domain. Off by default so personal accounts work for testing.
-- **Revoke does not kill active sessions.** A revoked user keeps their existing session until logout/expiry, but is blocked at any subsequent password or OAuth authentication attempt. Login + add/revoke/restore/password-change all land in `action_logs`.
+- **Optional Workspace pin** — `GOOGLE_HD=your-agency.com` restricts the Google account picker to that domain *and* is re-checked on the OAuth callback (`hd` claim). Off by default so personal accounts work for testing.
+- **Revoke and password change kill live sessions.** `User::invalidateSessions()` cycles `remember_token` and deletes `sessions` rows for that user. `EnsureUserIsActive` middleware re-checks `revoked_at` on every web request and logs the operator out immediately. Login + add/revoke/restore/password-change all land in `action_logs`.
+- **Roles.** `users.role` is `admin` (default for existing rows, the installer, and `clockwork:add-user`) or `operator`. Operators can run the fleet; only admins can manage the allowlist, download the Clockwork DB backup, apply in-app system updates, or execute Code Snippets. New teammates added from `/settings/users` default to operator.
 
 ### Users settings page (`/settings/users`)
 
@@ -129,7 +130,7 @@ Pressable has no SSH equivalent — the Companion secret has to reach the site s
 
 `MaintenanceController::index()` shows the operator a one-glance summary of Clockwork's own database (name, host, driver, and a rough total-byte size via a single `information_schema.tables` query) before they commit to downloading anything. `downloadBackup()` then streams a gzipped `mysqldump` (`--single-transaction --quick --no-tablespaces`, piped through `gzip`) straight to the browser via `passthru()` — no temp file ever touches the server's disk, and the password goes through the `MYSQL_PWD` env var rather than the command line so it never shows up in `ps` output.
 
-This is the highest-value single file an attacker could get: it contains every encrypted column's ciphertext (SSH private keys, per-site DB passwords, Companion secrets) plus all snapshot/threat-log data. The ciphertext alone is safe — decrypting it requires pairing the dump with `APP_KEY` from `.env`, which never leaves the server through this path — but treat any downloaded copy of this file with the same handling discipline as `.env` itself. There's no audit-log entry for who downloaded a backup and when; if that becomes a real need, it's a one-line `ActionLogger::record` addition to `downloadBackup()`.
+This is the highest-value single file an attacker could get: it contains every encrypted column's ciphertext (SSH private keys, per-site DB passwords, Companion secrets) plus all snapshot/threat-log data. The ciphertext alone is safe — decrypting it requires pairing the dump with `APP_KEY` from `.env`, which never leaves the server through this path — but treat any downloaded copy of this file with the same handling discipline as `.env` itself. Downloads are limited to admin-role operators and recorded as `TYPE_BACKUP_DOWNLOADED` in `action_logs`.
 
 ## Don't do these
 

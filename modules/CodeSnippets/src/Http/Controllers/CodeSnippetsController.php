@@ -35,7 +35,9 @@ class CodeSnippetsController extends Controller
         $selectedSiteId = (int) $request->query('site_id', 0);
         $selectedSnippetId = (int) $request->query('snippet_id', 0);
 
-        return view('code-snippets::dashboard.snippets.index', compact('snippets', 'sites', 'selectedSiteId', 'selectedSnippetId'));
+        $canManage = $request->user()?->isAdmin() ?? false;
+
+        return view('code-snippets::dashboard.snippets.index', compact('snippets', 'sites', 'selectedSiteId', 'selectedSnippetId', 'canManage'));
     }
 
     /**

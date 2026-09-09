@@ -140,6 +140,14 @@ it('handles operator-triggered apply update action safely', function () {
     Process::assertRan(fn ($process) => is_array($process->command) && str($process->command[0] ?? '')->contains('composer'));
 });
 
+it('forbids operators from applying a system update', function () {
+    Process::fake();
+
+    $this->actingAs(User::factory()->operator()->create())
+        ->post(route('settings.updates.apply'))
+        ->assertForbidden();
+});
+
 it('forwards HOME/COMPOSER_HOME to the git and composer subprocesses regardless of the ambient environment', function () {
     // Regression coverage: `php artisan serve` run without --no-reload
     // strips almost every env var (including HOME) from its worker

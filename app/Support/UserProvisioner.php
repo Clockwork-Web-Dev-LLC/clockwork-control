@@ -18,12 +18,19 @@ class UserProvisioner
      *
      * @return array{user: User, status: 'created'|'restored'|'updated'}
      */
-    public function addOrRestore(string $email, ?string $name = null, string $actor = 'cli', ?string $password = null): array
-    {
+    public function addOrRestore(
+        string $email,
+        ?string $name = null,
+        string $actor = 'cli',
+        ?string $password = null,
+        string $role = User::ROLE_ADMIN,
+    ): array {
         $email = strtolower(trim($email));
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException("'{$email}' doesn't look like a valid email address.");
         }
+
+        $role = $role === User::ROLE_OPERATOR ? User::ROLE_OPERATOR : User::ROLE_ADMIN;
 
         $name = (string) ($name ?: $email);
         $existing = User::where('email', $email)->first();
@@ -33,11 +40,16 @@ class UserProvisioner
             $updates = [
                 'name' => $name,
                 'revoked_at' => null,
+                'role' => $role,
             ];
             if ($password !== null && $password !== '') {
                 $updates['password'] = $password;
             }
             $existing->forceFill($updates)->save();
+
+            if ($password !== null && $password !== '') {
+                $existing->invalidateSessions();
+            }
 
             if ($wasRevoked) {
                 $this->logger->record(
@@ -58,6 +70,7 @@ class UserProvisioner
             'name' => $name,
             'email' => $email,
             'password' => ($password !== null && $password !== '') ? $password : null,
+            'role' => $role,
         ])->save();
 
         $this->logger->record(
@@ -80,6 +93,7 @@ class UserProvisioner
         }
 
         $user->forceFill(['password' => $password])->save();
+        $user->invalidateSessions();
 
         $this->logger->record(
             actionType: ActionLog::TYPE_USER_PASSWORD_CHANGED,

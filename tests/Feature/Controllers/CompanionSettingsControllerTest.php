@@ -212,6 +212,19 @@ describe('CompanionSettingsController', function () {
 
             $response->assertSessionHasErrors(['logo']);
         });
+
+        it('rejects SVG uploads', function () {
+            Storage::fake('public');
+            $user = User::factory()->create();
+
+            $file = UploadedFile::fake()->create('agency-logo.svg', 20, 'image/svg+xml');
+
+            $response = $this->actingAs($user)->post(route('settings.companion.logo'), [
+                'logo' => $file,
+            ]);
+
+            $response->assertSessionHasErrors(['logo']);
+        });
     });
 
     describe('sync', function () {

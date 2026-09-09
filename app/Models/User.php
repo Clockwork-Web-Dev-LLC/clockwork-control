@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
@@ -22,13 +25,18 @@ use Illuminate\Support\Carbon;
  * @property ?string $microsoft_id
  * @property ?string $avatar_url
  * @property string $theme
+ * @property string $role
  */
-#[Fillable(['name', 'email', 'password', 'revoked_at', 'last_login_at', 'google_id', 'github_id', 'microsoft_id', 'avatar_url', 'theme'])]
+#[Fillable(['name', 'email', 'password', 'last_login_at', 'google_id', 'github_id', 'microsoft_id', 'avatar_url', 'theme', 'role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_OPERATOR = 'operator';
 
     /**
      * @return array<string, string>
@@ -56,6 +64,37 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    /**
+     * Cycle remember_token and drop stored database sessions so a revoke or
+     * password change takes effect immediately, not at session expiry.
+     */
+    public function invalidateSessions(bool $keepCurrent = false): void
+    {
+        $this->forceFill([
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        if (! Schema::hasTable('sessions')) {
+            return;
+        }
+
+        $query = DB::table('sessions')->where('user_id', $this->id);
+
+        if ($keepCurrent) {
+            $currentId = session()->getId();
+            if (is_string($currentId) && $currentId !== '') {
+                $query->where('id', '!=', $currentId);
+            }
+        }
+
+        $query->delete();
     }
 
     /**

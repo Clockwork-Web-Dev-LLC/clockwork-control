@@ -14,9 +14,11 @@
                 Execute sandboxed PHP snippets across one or multiple WordPress sites in your fleet.
             </p>
         </div>
+        @if ($canManage)
         <button type="button" @click="isCreating = true; editingSnippet = { id: null, name: '', description: '', code: '' }" class="btn-pill-primary text-xs">
             <i class="fa-solid fa-plus mr-1"></i> New Snippet
         </button>
+        @endif
     </div>
 </div>
 
@@ -24,7 +26,8 @@
     snippets: {{ json_encode($snippets) }},
     sites: {{ json_encode($sites) }},
     selectedSnippetId: {{ $selectedSnippetId ?: ($snippets->first()->id ?? 0) }},
-    preselectedSiteId: {{ $selectedSiteId }}
+    preselectedSiteId: {{ $selectedSiteId }},
+    canManage: {{ $canManage ? 'true' : 'false' }}
 })">
     {{-- Left Column: Library & Site Selector --}}
     <div class="lg:col-span-4 space-y-6">
@@ -105,11 +108,12 @@
                             <option value="120">120s</option>
                         </select>
                     </label>
-                    <button type="button" @click="runSnippet()" :disabled="running || selectedSites.length === 0"
+                    <button x-show="canManage" type="button" @click="runSnippet()" :disabled="running || selectedSites.length === 0"
                             class="btn-pill-primary text-xs px-4 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
                         <i class="fa-solid" :class="running ? 'fa-spinner fa-spin' : 'fa-play'"></i>
                         <span x-text="running ? 'Executing...' : 'Run on (' + selectedSites.length + ') Sites'"></span>
                     </button>
+                    <span x-show="!canManage" class="text-xs text-[var(--color-ink-muted)]">Running snippets requires an administrator.</span>
                 </div>
             </div>
 
@@ -177,6 +181,7 @@ function snippetWorkbench(config) {
         timeout: 30,
         running: false,
         results: null,
+        canManage: Boolean(config.canManage),
 
         init() {
             if (config.selectedSnippetId) {
@@ -205,7 +210,7 @@ function snippetWorkbench(config) {
         },
 
         async runSnippet() {
-            if (this.selectedSites.length === 0 || !this.code.trim()) return;
+            if (!this.canManage || this.selectedSites.length === 0 || !this.code.trim()) return;
             this.running = true;
             this.results = null;
 

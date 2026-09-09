@@ -11,10 +11,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 /**
- * Allowlist management. A row in `users` IS the allowlist:
- *   - store: insert (or restore if previously revoked)
- *   - revoke: set revoked_at (preserves audit history)
+ * Admin-only allowlist management. A row in `users` IS the allowlist:
+ *   - store: insert (or restore if previously revoked); new UI users default to operator
+ *   - revoke: set revoked_at and invalidate sessions
  *   - restore: clear revoked_at
+ *   - updatePassword: set password and invalidate other sessions
  *
  * Self-revoke is blocked at the controller — losing access to your own UI is
  * surprising and the artisan recovery path doesn't help if you can't reach
@@ -39,20 +40,38 @@ class UsersSettingsController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'min:8'],
+            'role' => ['nullable', 'in:'.User::ROLE_ADMIN.','.User::ROLE_OPERATOR],
         ]);
 
         $email = strtolower(trim($data['email']));
         $name = (string) ($data['name'] ?? $email);
+        $role = $data['role'] ?? User::ROLE_OPERATOR;
 
         $user = User::where('email', $email)->first();
 
         if ($user) {
+            if ($user->isActive() && $user->isAdmin() && $role === User::ROLE_OPERATOR) {
+                if (Auth::id() === $user->id) {
+                    return redirect()->route('settings.users.index')
+                        ->with('error', "You can't demote your own account.");
+                }
+
+                if (User::query()->active()->where('role', User::ROLE_ADMIN)->count() <= 1) {
+                    return redirect()->route('settings.users.index')
+                        ->with('error', "You can't demote the last administrator.");
+                }
+            }
+
             $wasRevoked = $user->revoked_at !== null;
-            $updates = ['name' => $name, 'revoked_at' => null];
+            $updates = ['name' => $name, 'revoked_at' => null, 'role' => $role];
             if (! empty($data['password'])) {
                 $updates['password'] = $data['password'];
             }
             $user->forceFill($updates)->save();
+
+            if (! empty($data['password'])) {
+                $user->invalidateSessions();
+            }
 
             if ($wasRevoked) {
                 $logger->record(
@@ -75,6 +94,7 @@ class UsersSettingsController extends Controller
             'name' => $name,
             'email' => $email,
             'password' => ! empty($data['password']) ? $data['password'] : null,
+            'role' => $role,
         ])->save();
 
         $logger->record(
@@ -95,6 +115,7 @@ class UsersSettingsController extends Controller
         ]);
 
         $user->forceFill(['password' => $data['password']])->save();
+        $user->invalidateSessions(keepCurrent: Auth::id() === $user->id);
 
         $logger->record(
             actionType: ActionLog::TYPE_USER_PASSWORD_CHANGED,
@@ -119,7 +140,13 @@ class UsersSettingsController extends Controller
                 ->with('status', "{$user->email} is already revoked.");
         }
 
+        if ($user->isAdmin() && User::query()->active()->where('role', User::ROLE_ADMIN)->count() === 1) {
+            return redirect()->route('settings.users.index')
+                ->with('error', "You can't revoke the last administrator.");
+        }
+
         $user->forceFill(['revoked_at' => now()])->save();
+        $user->invalidateSessions();
 
         $logger->record(
             actionType: ActionLog::TYPE_USER_REVOKED,
@@ -129,7 +156,7 @@ class UsersSettingsController extends Controller
         );
 
         return redirect()->route('settings.users.index')
-            ->with('status', "Revoked {$user->email}. They'll be denied at next sign-in attempt.");
+            ->with('status', "Revoked {$user->email}. Their sessions have been ended.");
     }
 
     public function restore(User $user, ActionLogger $logger): RedirectResponse

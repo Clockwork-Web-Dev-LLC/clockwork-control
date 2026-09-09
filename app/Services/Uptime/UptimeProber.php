@@ -2,6 +2,7 @@
 
 namespace App\Services\Uptime;
 
+use App\Support\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -44,10 +45,16 @@ class UptimeProber
         $started = microtime(true);
 
         try {
+            SsrfGuard::assertPublic($url);
             $response = Http::timeout($timeoutSec)
                 ->withUserAgent(self::userAgent())
                 ->withOptions([
-                    'allow_redirects' => ['max' => 5, 'strict' => false, 'protocols' => ['http', 'https']],
+                    'allow_redirects' => [
+                        'max' => 5,
+                        'strict' => false,
+                        'protocols' => ['http', 'https'],
+                        'on_redirect' => SsrfGuard::onRedirect(),
+                    ],
                     // See class docblock — chain validation is not our job.
                     'verify' => false,
                 ])

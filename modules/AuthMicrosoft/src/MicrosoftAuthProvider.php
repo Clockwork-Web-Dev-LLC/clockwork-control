@@ -55,11 +55,26 @@ class MicrosoftAuthProvider implements AuthProvider
         $clientId = $this->clientId();
         $clientSecret = $this->clientSecret();
 
-        return ! empty($clientId) && ! empty($clientSecret);
+        if ($clientId === '' || $clientSecret === '') {
+            return false;
+        }
+
+        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function handleRedirect(): Response
     {
+        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+            return redirect()->route('login')->with(
+                'login_denial',
+                'Microsoft sign-in requires a directory (tenant) ID. Ask an administrator to set it under Integrations.'
+            );
+        }
+
         $state = Str::random(40);
         session(['oauth_microsoft_state' => $state]);
 
@@ -79,6 +94,13 @@ class MicrosoftAuthProvider implements AuthProvider
 
     public function handleCallback(Request $request): RedirectResponse
     {
+        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+            return redirect()->route('login')->with(
+                'login_denial',
+                'Microsoft sign-in requires a directory (tenant) ID. Ask an administrator to set it under Integrations.'
+            );
+        }
+
         $savedState = session()->pull('oauth_microsoft_state');
         $givenState = $request->query('state');
 
@@ -153,8 +175,29 @@ class MicrosoftAuthProvider implements AuthProvider
 
     protected function tenantId(): string
     {
-        $tenant = (string) ($this->resolver->get('auth_microsoft.tenant_id') ?? config('services.microsoft.tenant_id', ''));
+        $tenant = $this->configuredTenantId();
 
-        return $tenant !== '' ? $tenant : 'common';
+        if ($tenant !== '' && ! $this->isBroadTenant($tenant)) {
+            return $tenant;
+        }
+
+        return app()->environment('production') ? '' : 'common';
+    }
+
+    protected function configuredTenantId(): string
+    {
+        return trim((string) ($this->resolver->get('auth_microsoft.tenant_id') ?? config('services.microsoft.tenant_id', '')));
+    }
+
+    protected function hasPinnedTenant(): bool
+    {
+        $tenant = $this->configuredTenantId();
+
+        return $tenant !== '' && ! $this->isBroadTenant($tenant);
+    }
+
+    protected function isBroadTenant(string $tenant): bool
+    {
+        return in_array(strtolower($tenant), ['common', 'organizations', 'consumers'], true);
     }
 }

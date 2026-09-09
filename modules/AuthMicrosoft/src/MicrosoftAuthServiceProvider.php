@@ -17,7 +17,7 @@ class MicrosoftAuthServiceProvider extends ModuleServiceProvider
             return;
         }
 
-        Route::middleware('web')->group(function () {
+        Route::middleware(['web', 'throttle:10,1'])->group(function () {
             Route::get('/auth/microsoft/redirect', [MicrosoftAuthController::class, 'redirect'])->name('auth.microsoft.redirect');
             Route::get('/auth/microsoft/callback', [MicrosoftAuthController::class, 'callback'])->name('auth.microsoft.callback');
         });
@@ -32,7 +32,7 @@ class MicrosoftAuthServiceProvider extends ModuleServiceProvider
             credentialFields: [
                 'client_id' => ['label' => 'App (client) ID', 'secret' => false],
                 'client_secret' => ['label' => 'Client Secret', 'secret' => true],
-                'tenant_id' => ['label' => 'Directory (tenant) ID (or "common")', 'secret' => false],
+                'tenant_id' => ['label' => 'Directory (tenant) ID (required in production; do not use "common")', 'secret' => false],
             ],
             status: ModuleManifest::STATUS_LOOKING_FOR_TESTERS,
             statusNote: 'Microsoft Entra ID integration implemented. Looking for agencies using Microsoft 365 / Entra ID to test authentication.',

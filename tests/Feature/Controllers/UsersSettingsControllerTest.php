@@ -73,6 +73,7 @@ describe('UsersSettingsController', function () {
             expect($user->name)->toBe('New Person');
             expect($user->revoked_at)->toBeNull();
             expect($user->password)->toBeNull();
+            expect($user->role)->toBe(User::ROLE_OPERATOR);
 
             $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_ADDED)->firstOrFail();
             expect($log->summary)->toBe('Added newperson@example.com to allowlist.');
@@ -130,6 +131,41 @@ describe('UsersSettingsController', function () {
             expect(ActionLog::query()->count())->toBe(0);
         });
 
+        it('blocks an administrator from demoting their own account', function () {
+            $admin = User::factory()->create(['email' => 'admin@example.com', 'role' => User::ROLE_ADMIN]);
+            User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+            $response = $this->actingAs($admin)->post(route('settings.users.store'), [
+                'email' => 'admin@example.com',
+                'role' => User::ROLE_OPERATOR,
+            ]);
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('error', "You can't demote your own account.");
+            expect($admin->fresh()->role)->toBe(User::ROLE_ADMIN);
+        });
+
+        it('blocks demoting the last active administrator', function () {
+            $actingAdmin = User::factory()->create(['email' => 'acting@example.com', 'role' => User::ROLE_ADMIN]);
+            $targetAdmin = User::factory()->create(['email' => 'target@example.com', 'role' => User::ROLE_ADMIN]);
+
+            // Demoting when 2 active admins exist succeeds
+            $response = $this->actingAs($actingAdmin)->post(route('settings.users.store'), [
+                'email' => 'target@example.com',
+                'role' => User::ROLE_OPERATOR,
+            ]);
+            $response->assertRedirect(route('settings.users.index'));
+            expect($targetAdmin->fresh()->role)->toBe(User::ROLE_OPERATOR);
+
+            // Now actingAdmin is the only admin left — trying to demote actingAdmin is blocked
+            $response = $this->actingAs($actingAdmin)->post(route('settings.users.store'), [
+                'email' => 'acting@example.com',
+                'role' => User::ROLE_OPERATOR,
+            ]);
+            $response->assertSessionHas('error', "You can't demote your own account.");
+            expect($actingAdmin->fresh()->role)->toBe(User::ROLE_ADMIN);
+        });
+
         it('rejects an invalid email via validation before touching the database', function () {
             $admin = User::factory()->create();
 
@@ -154,14 +190,16 @@ describe('UsersSettingsController', function () {
         it('revokes another user, logs it, and redirects with a status flash', function () {
             $admin = User::factory()->create();
             $target = User::factory()->create(['email' => 'target@example.com']);
+            $originalRememberToken = $target->remember_token;
 
             $response = $this->actingAs($admin)->patch(route('settings.users.revoke', $target));
 
             $response->assertRedirect(route('settings.users.index'));
-            $response->assertSessionHas('status', "Revoked target@example.com. They'll be denied at next sign-in attempt.");
+            $response->assertSessionHas('status', 'Revoked target@example.com. Their sessions have been ended.');
 
             $target->refresh();
             expect($target->revoked_at)->not->toBeNull();
+            expect($target->remember_token)->not->toBe($originalRememberToken);
 
             $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_REVOKED)->firstOrFail();
             expect($log->summary)->toBe('Revoked allowlist access for target@example.com.');
@@ -228,16 +266,28 @@ describe('UsersSettingsController', function () {
             expect(ActionLog::query()->where('action_type', ActionLog::TYPE_USER_RESTORED)->count())->toBe(0);
         });
 
-        it('allows restoring your own row (only revoke-self is blocked)', function () {
-            $self = User::factory()->create(['email' => 'selfrestore@example.com', 'revoked_at' => now()->subDay()]);
+        it('allows an admin to restore a revoked teammate', function () {
+            $self = User::factory()->create(['email' => 'selfrestore@example.com']);
+            $target = User::factory()->create(['email' => 'gone@example.com', 'revoked_at' => now()->subDay()]);
 
-            $response = $this->actingAs($self)->patch(route('settings.users.restore', $self));
+            $response = $this->actingAs($self)->patch(route('settings.users.restore', $target));
 
             $response->assertRedirect(route('settings.users.index'));
-            $response->assertSessionHas('status', 'Restored selfrestore@example.com.');
+            $response->assertSessionHas('status', 'Restored gone@example.com.');
 
-            $self->refresh();
-            expect($self->revoked_at)->toBeNull();
+            $target->refresh();
+            expect($target->revoked_at)->toBeNull();
+        });
+
+        it('blocks operators from managing the allowlist', function () {
+            $operator = User::factory()->operator()->create();
+            $target = User::factory()->create();
+
+            $this->actingAs($operator)->get(route('settings.users.index'))->assertForbidden();
+            $this->actingAs($operator)->post(route('settings.users.store'), [
+                'email' => 'new@example.com',
+            ])->assertForbidden();
+            $this->actingAs($operator)->patch(route('settings.users.revoke', $target))->assertForbidden();
         });
     });
 
@@ -265,6 +315,7 @@ describe('UsersSettingsController', function () {
                 'email' => 'targetoperator@example.com',
                 'password' => 'oldpassword123',
             ]);
+            $originalRememberToken = $target->remember_token;
 
             $response = $this->actingAs($admin)->patch(route('settings.users.password', $target), [
                 'password' => 'newSecretPass456!',
@@ -276,6 +327,7 @@ describe('UsersSettingsController', function () {
 
             $target->refresh();
             expect(Hash::check('newSecretPass456!', $target->password))->toBeTrue();
+            expect($target->remember_token)->not->toBe($originalRememberToken);
 
             $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_PASSWORD_CHANGED)->firstOrFail();
             expect($log->summary)->toBe('Updated password for targetoperator@example.com.');

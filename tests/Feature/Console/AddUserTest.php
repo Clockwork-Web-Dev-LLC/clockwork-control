@@ -29,6 +29,7 @@ describe('creating a new user', function () {
         expect($user->name)->toBe('Test User');
         expect($user->revoked_at)->toBeNull();
         expect($user->password)->toBeNull();
+        expect($user->role)->toBe(User::ROLE_ADMIN);
 
         $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_ADDED)->first();
         expect($log)->not->toBeNull();
@@ -42,6 +43,14 @@ describe('creating a new user', function () {
             ->assertSuccessful();
 
         expect(User::where('email', 'noname@example.com')->first()->name)->toBe('noname@example.com');
+        expect(User::where('email', 'noname@example.com')->first()->role)->toBe(User::ROLE_ADMIN);
+    });
+
+    it('creates an operator when --role=operator is passed', function () {
+        $this->artisan('clockwork:add-user', ['email' => 'op@example.com', '--role' => 'operator'])
+            ->assertSuccessful();
+
+        expect(User::where('email', 'op@example.com')->first()->role)->toBe(User::ROLE_OPERATOR);
     });
 
     it('rejects an invalid email and creates no user', function () {

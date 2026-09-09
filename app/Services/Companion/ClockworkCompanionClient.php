@@ -3,6 +3,7 @@
 namespace App\Services\Companion;
 
 use App\Models\Site;
+use App\Support\SsrfGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
@@ -842,6 +843,8 @@ class ClockworkCompanionClient
         // 2 = one retry after first failure). Default 2 = single retry.
         $retries = max(1, (int) ($options['retries'] ?? 2));
 
+        SsrfGuard::assertPublic($this->buildUrl($route));
+
         return Http::timeout($options['timeout'] ?? $this->timeout)
             ->withUserAgent(self::USER_AGENT)
             ->withHeaders([
@@ -861,7 +864,15 @@ class ClockworkCompanionClient
             // requiring the operator to fix the chain. The dedicated
             // clockwork:check-ssl-certs job is where chain validity gets
             // tracked; it's not this client's job.
-            ->withOptions(['verify' => false])
+            ->withOptions([
+                'verify' => false,
+                'allow_redirects' => [
+                    'max' => 5,
+                    'strict' => true,
+                    'protocols' => ['https'],
+                    'on_redirect' => SsrfGuard::onRedirect(),
+                ],
+            ])
             ->retry($retries, 500);
     }
 

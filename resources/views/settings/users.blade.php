@@ -64,9 +64,9 @@
         @csrf
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-1.5">Add a teammate</h2>
         <p class="text-sm text-[var(--color-ink-muted)] mb-4">
-            Add an operator to the allowlist. You can set a local password immediately, or leave it blank to rely on SSO.
+            Add a user to the allowlist. You can set a local password immediately, or leave it blank to rely on SSO.
         </p>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
             <div>
                 <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Email</label>
                 <input type="email" name="email" required placeholder="teammate@agency.com"
@@ -81,6 +81,14 @@
                 <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Password (optional, min 8)</label>
                 <input type="password" name="password" placeholder="••••••••••••"
                        class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm font-mono focus:outline-none focus:border-[var(--color-brand)]">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Role</label>
+                <select name="role"
+                        class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm focus:outline-none focus:border-[var(--color-brand)]">
+                    <option value="operator">Operator</option>
+                    <option value="admin">Admin</option>
+                </select>
             </div>
         </div>
         <div class="flex justify-end">
@@ -105,6 +113,7 @@
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="text-left px-6 py-2.5">Operator</th>
+                        <th class="text-left px-6 py-2.5">Role</th>
                         <th class="text-left px-6 py-2.5">Authentication</th>
                         <th class="text-left px-6 py-2.5">Last login</th>
                         <th class="text-left px-6 py-2.5">Status</th>
@@ -117,6 +126,9 @@
                             <td class="px-6 py-3.5">
                                 <div class="font-medium text-[var(--color-ink-strong)]">{{ $u->name }}</div>
                                 <div class="font-data text-xs text-[var(--color-ink-muted)]">{{ $u->email }}</div>
+                            </td>
+                            <td class="px-6 py-3.5">
+                                <span class="text-xs font-medium uppercase tracking-wide {{ $u->isAdmin() ? 'text-[var(--color-brand)]' : 'text-[var(--color-ink-muted)]' }}">{{ $u->role }}</span>
                             </td>
                             <td class="px-6 py-3.5">
                                 @if (!empty($u->password))
@@ -170,7 +182,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-6 py-8 text-center text-[var(--color-ink-muted)]">
+                            <td colspan="6" class="px-6 py-8 text-center text-[var(--color-ink-muted)]">
                                 No users on the allowlist yet. Add one above, or run<br>
                                 <code class="font-data text-xs">php artisan clockwork:add-user you@example.com --password=secret</code>
                             </td>
