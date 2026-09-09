@@ -7,12 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-09-09
+
 ### Added
-- **SSH metrics for Vultr servers**: Added single-shot SSH metrics collection (`vmstat`, `free`, `df`, `/proc/loadavg`) to `VultrCloudProvider::metrics()`. Because Vultr's public REST API v2 has no time-series metrics endpoint, Vultr instances previously defaulted to `unknown` health with a dark border and no CPU/MEM/DSK stats. Vultr servers with verified SSH credentials now report real-time health (`Healthy`/green), live CPU, memory, and disk usage, and 24h sparklines on the fleet dashboard.
+- **Admin vs. Operator role authorization**: Introduced `users.role` (`admin`, `operator`). Operators can run the fleet (servers, sites, SSH, Companion, fail2ban), while allowlist management, panel self-updates, database backup downloads, and Code Snippets mutations/execution are strictly restricted to administrators.
+- **SSH metrics for Vultr servers**: Added single-shot SSH metrics collection (`vmstat`, `free`, `df`, `/proc/loadavg`) to `VultrCloudProvider::metrics()`. Vultr servers now report real-time health, live CPU, memory, and disk stats, and 24h sparklines on the fleet dashboard.
+- **Configurable SSRF private host bypass**: Added `CLOCKWORK_ALLOW_PRIVATE_HOSTS` (`clockwork.security.allow_private_hosts`) to allow intranet, homelab, or local staging instances to probe private IP ranges.
 - **SpinupWP sync button on empty server views**: When viewing a server with no sites mapped to it, an inline "Sync sites from SpinupWP" button now surfaces directly inside the empty state.
 
 ### Changed
 - **Hourly SpinupWP inventory sync**: Increased SpinupWP import schedule from once daily (`03:30`) to hourly (`hourlyAt(30)`), followed by `clockwork:find-orphan-sites` at `:35`. New servers, newly provisioned sites, and site moves between servers are now automatically detected throughout the day rather than waiting up to 24 hours.
+- **Immediate session invalidation on revoke and password change**: `User::invalidateSessions()` cycles `remember_token` and deletes database session records. `EnsureUserIsActive` middleware terminates revoked users on their next web request.
+- **OAuth security hardening**: Google OAuth now enforces the `hd` (hosted domain) claim on callback. Microsoft Entra ID now requires a pinned tenant ID in production (rejecting `common`/`organizations`/`consumers`). Added `throttle:10,1` on OAuth redirect/callback routes.
+- **Dev-login loopback protection**: `/dev-login` rejects reverse-proxy forwarded headers (`X-Forwarded-For`, `X-Forwarded-Host`) and verifies direct connection IPs.
+
+### Fixed
+- **GridPane `wp-config.php` path resolution**: Probes both the docroot and parent directory, resolving DB credentials extraction for GridPane sites storing `wp-config.php` above `htdocs/`. (Contributed by [@karenalenore](https://github.com/karenalenore) in [#3](https://github.com/Clockwork-Web-Dev-LLC/clockwork-control/pull/3)).
+- **Installer exception disclosure**: Database connection and migration errors now log full exception details internally while displaying sanitized error messages in the wizard.
+- **Companion branding logo upload**: Blocked SVG uploads to prevent stored script execution on the public disk.
+- **Last-admin self-demotion guard**: Prevented administrators from accidentally demoting their own account or the sole active administrator to operator.
 
 ## [1.5.3] - 2026-09-08
 
