@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-09-09
+
+### Added
+- **Universal maintenance mode detection & SLA protection**: Uptime monitoring now distinguishes deliberate maintenance (HTTP 503 with `Retry-After`, WordPress core/plugin maintenance body signatures, and server-side `.maintenance` / `maintenance.conf` / `grid-maintenance.html`) from hard server crashes.
+- **Maintenance window alert suppression**: Scheduled maintenance suppresses critical outage notifications and on-call Twilio SMS pages, routing informational notices to chat instead.
+- **SLA protection**: Time spent in scheduled maintenance is excluded from downtime accumulation, preventing routine updates from degrading rolling 24h, 7d, and 30d uptime statistics.
+- **Stuck maintenance window tracking**: Added `Site::stuckInMaintenance()` monitoring to detect abandoned maintenance windows (> 2 hours), displaying them on `/issues` and in the layout badge.
+- **Dynamic search on `/monitoring`**: Added real-time client-side search filtering to the fleet uptime monitoring dashboard.
+
 ## [1.5.4] - 2026-09-09
 
 ### Added
