@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\DevLoginController;
+use App\Http\Middleware\EnforceInstallerGate;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -8,11 +9,20 @@ use Tests\Concerns\RendersAuthenticatedPages;
 uses(RendersAuthenticatedPages::class);
 
 describe('DevLoginController', function () {
+    afterEach(function () {
+        EnforceInstallerGate::fake(null);
+    });
+
     it('404s when APP_ENV is not local', function () {
         $this->get(route('dev-login'))->assertNotFound();
     });
 
     it('404s in local env when no active user exists', function () {
+        // Setting env to local turns off Application::runningUnitTests(), which
+        // would otherwise make EnforceInstallerGate treat every test as installed.
+        // Without a sentinel + active user, the gate 302s to /install before
+        // DevLoginController runs — that is the CI 302 this test kept hitting.
+        EnforceInstallerGate::fake(true);
         $this->app['env'] = 'local';
         User::factory()->create();
         User::query()->update(['revoked_at' => now()]);
@@ -24,6 +34,7 @@ describe('DevLoginController', function () {
     });
 
     it('logs in the first active user on loopback when APP_ENV is local', function () {
+        EnforceInstallerGate::fake(true);
         $this->app['env'] = 'local';
         $this->mockIssueCounterZero();
 
