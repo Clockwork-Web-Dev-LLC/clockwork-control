@@ -39,6 +39,9 @@ class GridPaneTest extends Command
 
         $this->line('  Servers visible: '.count($servers));
         $this->line('  Sites visible:   '.count($sites));
+        if ($client->wasPartial()) {
+            $this->warn('  Note: the last fetch above stopped early after hitting API errors mid-pagination; counts may be incomplete.');
+        }
 
         if ($servers !== []) {
             $this->newLine();

@@ -40,6 +40,9 @@ class ImportGridPane extends Command
             return self::FAILURE;
         }
         $this->line('  '.count($gpServers).' servers found');
+        if ($gridpane->wasPartial()) {
+            $this->warn('  Server list may be incomplete: GridPane stopped responding partway through pagination. Re-run this command shortly to pick up the rest.');
+        }
 
         $this->info('Fetching GridPane sites…');
         try {
@@ -50,6 +53,9 @@ class ImportGridPane extends Command
             return self::FAILURE;
         }
         $this->line('  '.count($gpSites).' sites found');
+        if ($gridpane->wasPartial()) {
+            $this->warn('  Site list may be incomplete: GridPane stopped responding partway through pagination. Re-run this command shortly to pick up the rest.');
+        }
 
         $serverStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0];
         $siteStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped_no_domain' => 0];

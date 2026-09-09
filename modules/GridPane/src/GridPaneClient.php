@@ -17,6 +17,14 @@ class GridPaneClient
 
     protected int $delayMs;
 
+    /**
+     * Set when the most recent paginate() call had to stop early after
+     * already accumulating some pages (e.g. persistent 429s past the last
+     * page that succeeded). Callers can surface this instead of silently
+     * treating a truncated fleet as the complete one.
+     */
+    protected bool $partial = false;
+
     public function __construct(
         protected ?string $apiKey = null,
         protected ?string $baseUrl = null,
@@ -31,8 +39,10 @@ class GridPaneClient
         $this->baseUrl = $baseUrl ?? (string) config('clockwork.gridpane.base_url', self::DEFAULT_BASE_URL);
         $this->timeout = $timeout ?? (int) ($settings?->get('services.gridpane.timeout') ?? config('clockwork.gridpane.timeout', 15));
         $this->viewOnly = $viewOnly ?? (bool) config('clockwork.gridpane.view_only', true);
-        $this->retryAttempts = $retryAttempts ?? (int) ($settings?->get('services.gridpane.retry_attempts') ?? 2);
-        $this->delayMs = $delayMs ?? (int) ($settings?->get('services.gridpane.delay_ms') ?? 0);
+        // GridPane's documented 1-2 req/sec still 429'd real fleets at 600ms/2
+        // retries (see CHANGELOG); 1500ms + 3 retries gives real headroom.
+        $this->retryAttempts = $retryAttempts ?? (int) ($settings?->get('services.gridpane.retry_attempts') ?? 3);
+        $this->delayMs = $delayMs ?? (int) ($settings?->get('services.gridpane.delay_ms') ?? 1500);
     }
 
     public function getTimeout(): int
@@ -209,6 +219,13 @@ class GridPaneClient
     /**
      * Auto-paginate through all pages of a GridPane API collection endpoint.
      *
+     * Only paginate() paces itself against delay_ms, between pages — single-
+     * shot calls (get/post/put/delete) go straight through request() with no
+     * sleep, since they never hit the per-endpoint budget that pagination
+     * does. This keeps one-off calls (diagnostic check, a single server/site
+     * lookup, a WP-CLI exec) fast while still honoring the operator-configured
+     * delay_ms on multi-page fetches instead of a hardcoded sleep.
+     *
      * @param  array<string, mixed>  $query
      * @return list<array<string, mixed>>
      */
@@ -217,10 +234,15 @@ class GridPaneClient
         $all = [];
         $page = 1;
         $safetyLimit = 200; // matches PressableClient::paginate()'s guard against degenerate pagination metadata
+        $this->partial = false;
 
         do {
             if ($page > $safetyLimit) {
                 throw new RuntimeException("GridPane pagination exceeded {$safetyLimit} pages on {$path}; aborting.");
+            }
+
+            if ($page > 1 && $this->delayMs > 0) {
+                usleep($this->delayMs * 1000);
             }
 
             $pageQuery = $query;
@@ -228,7 +250,21 @@ class GridPaneClient
                 $pageQuery['page'] = $page;
             }
 
-            $response = $this->get($path, $pageQuery);
+            try {
+                $response = $this->get($path, $pageQuery);
+            } catch (\Throwable $e) {
+                // A later page failing (e.g. retries exhausted on repeated
+                // 429s) shouldn't discard pages already fetched successfully.
+                // Only bubble up when we have nothing at all to show for it.
+                if ($all === []) {
+                    throw $e;
+                }
+
+                report($e);
+                $this->partial = true;
+                break;
+            }
+
             $data = $response->json();
 
             if (! is_array($data)) {
@@ -247,24 +283,25 @@ class GridPaneClient
                 || (isset($data['meta']['current_page'], $data['meta']['last_page']) && $data['meta']['current_page'] < $data['meta']['last_page']);
 
             $page++;
-
-            if ($hasNext) {
-                // Subtle delay between page requests to stay well within GridPane endpoint limits
-                usleep(150000);
-            }
         } while ($hasNext);
 
         return $all;
+    }
+
+    /**
+     * True when the most recent paginate() call (via servers() or sites())
+     * stopped early after already accumulating some results, rather than
+     * completing the full fleet listing.
+     */
+    public function wasPartial(): bool
+    {
+        return $this->partial;
     }
 
     protected function request(): PendingRequest
     {
         if (! $this->isConfigured()) {
             throw new RuntimeException('GridPane API key is not configured.');
-        }
-
-        if ($this->delayMs > 0) {
-            usleep($this->delayMs * 1000);
         }
 
         $request = Http::withToken($this->apiKey)
@@ -277,13 +314,7 @@ class GridPaneClient
         if ($this->retryAttempts > 0) {
             $request->retry($this->retryAttempts, function (int $attempt, \Throwable $exception) {
                 if ($exception instanceof RequestException && $exception->response->status() === 429) {
-                    // header() returns '' (not null) for a missing header, so
-                    // a `??` chain never actually falls through to the
-                    // default — check for a genuinely non-empty value instead.
-                    $header = $exception->response->header('Retry-After');
-                    $retryAfter = $header !== '' ? (int) $header : 3;
-
-                    return max(1000, ($retryAfter + 1) * 1000);
+                    return max(1000, ($this->retryAfterSeconds($exception->response) + 1) * 1000);
                 }
 
                 return 500;
@@ -291,6 +322,37 @@ class GridPaneClient
         }
 
         return $request;
+    }
+
+    /**
+     * How long to wait before retrying a 429, in seconds.
+     *
+     * GridPane enforces a per-endpoint budget (`X-RateLimit-Endpoint-Limit`)
+     * separate from its documented account-wide rate, and a listing page
+     * costs more than one unit against it — a fleet with more pages than
+     * that budget allows trips a 429 well before the account-wide limit is
+     * anywhere close. On a 429 it reports the real cooldown via
+     * `Retry-After-Endpoint` (observed ~27s) and `X-RateLimit-Endpoint-Reset`
+     * (unix timestamp) — NOT the generic `Retry-After` header, which
+     * GridPane never sends, so checking only that name silently fell
+     * through to a too-short fallback and kept retrying into the same
+     * still-exhausted window.
+     */
+    protected function retryAfterSeconds(Response $response): int
+    {
+        foreach (['Retry-After-Endpoint', 'Retry-After'] as $name) {
+            $value = $response->header($name);
+            if ($value !== '') {
+                return (int) $value;
+            }
+        }
+
+        $reset = $response->header('X-RateLimit-Endpoint-Reset');
+        if ($reset !== '') {
+            return max(0, (int) $reset - time());
+        }
+
+        return 5;
     }
 
     protected function url(string $path): string
