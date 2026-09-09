@@ -145,7 +145,7 @@ jobs:
           '
 
       - name: Commit updated badge data
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: 'chore: update coverage badge [skip ci]'
           file_pattern: .github/badges/coverage.json
