@@ -150,9 +150,30 @@ CLOCKWORK_MATTERMOST_WEBHOOK_URL=https://chat.agency.com/hooks/...</pre>
                             $rateLimitEntry = app(\App\Support\ServiceRateLimitRegistry::class)->get($id);
                         @endphp
                         @if ($rateLimitEntry)
-                            <a href="{{ route('settings.integrations.limits', $rateLimitEntry['id']) }}" class="btn-pill-nav text-xs py-1 px-2.5" title="API limits, quota headers & docs">
-                                <i class="fa-solid fa-gauge-high text-[var(--color-ink-muted)]"></i>
-                                <span>API Limits &amp; Docs</span>
+                            @php
+                                $btnType = $rateLimitEntry['type'] ?? 'api';
+                                $btnLabel = match ($btnType) {
+                                    'oauth' => 'OAuth Setup & Keys',
+                                    'webhook' => 'Webhook Settings',
+                                    'internal' => 'Worker Settings',
+                                    default => 'API Limits & Docs',
+                                };
+                                $btnIcon = match ($btnType) {
+                                    'oauth' => 'fa-key',
+                                    'webhook' => 'fa-paper-plane',
+                                    'internal' => 'fa-sliders',
+                                    default => 'fa-gauge-high',
+                                };
+                                $btnTitle = match ($btnType) {
+                                    'oauth' => 'SSO credentials, redirect URI & docs',
+                                    'webhook' => 'Webhook endpoints & connection testing',
+                                    'internal' => 'Synthetic worker configuration',
+                                    default => 'API limits, quota headers & docs',
+                                };
+                            @endphp
+                            <a href="{{ route('settings.integrations.limits', $rateLimitEntry['id']) }}" class="btn-pill-nav text-xs py-1 px-2.5" title="{{ $btnTitle }}">
+                                <i class="fa-solid {{ $btnIcon }} text-[var(--color-ink-muted)]"></i>
+                                <span>{{ $btnLabel }}</span>
                             </a>
                         @endif
                         @if (($integration['status'] ?? 'verified') === 'looking_for_testers')

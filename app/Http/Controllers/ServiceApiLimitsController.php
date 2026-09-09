@@ -66,6 +66,13 @@ class ServiceApiLimitsController extends Controller
             ],
         ];
 
+        $redirectUri = match ($canonicalId) {
+            'auth_google', 'google' => url('/auth/google/callback'),
+            'auth_github', 'github' => url('/auth/github/callback'),
+            'auth_microsoft', 'microsoft' => url('/auth/microsoft/callback'),
+            default => null,
+        };
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
@@ -76,6 +83,7 @@ class ServiceApiLimitsController extends Controller
                 'is_cloud_provider' => $isCloudProvider,
                 'detected_instances' => $detectedInstances,
                 'hosting_panels' => $hostingPanels,
+                'redirect_uri' => $redirectUri,
             ]);
         }
 
@@ -88,6 +96,7 @@ class ServiceApiLimitsController extends Controller
             'isCloudProvider' => $isCloudProvider,
             'detectedInstances' => $detectedInstances,
             'hostingPanels' => $hostingPanels,
+            'redirectUri' => $redirectUri,
         ]);
     }
 

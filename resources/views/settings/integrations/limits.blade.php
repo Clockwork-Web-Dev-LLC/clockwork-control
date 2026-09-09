@@ -1,11 +1,27 @@
 @extends('layouts.app')
 
-@section('title', $service['name'] . ' API Limits & Documentation · Clockwork')
+@php
+    $pageType = $service['type'] ?? 'api';
+    $pageHeading = match ($pageType) {
+        'oauth' => $service['name'] . ' SSO Authentication Settings',
+        'webhook' => $service['name'] . ' Webhook Settings',
+        'internal' => $service['name'] . ' Worker Settings',
+        default => $service['name'] . ' API Limits & Quotas',
+    };
+    $pageSubtitle = match ($pageType) {
+        'oauth' => 'OAuth 2.0 Single Sign-On credentials, authorized redirect URI, and connection settings.',
+        'webhook' => 'Event-driven outbound webhook endpoint, payload delivery, and connection settings.',
+        'internal' => 'Local synthetic worker configuration and dispatch settings.',
+        default => 'Official rate limits, quota reset headers, fleet polling impact, and operator pacing tunables for this integration.',
+    };
+@endphp
+
+@section('title', $pageHeading . ' · Clockwork')
 
 @section('content')
     <div class="mb-8">
-        <x-page-header :title="$service['name'] . ' API Limits & Quotas'"
-            subtitle="Official rate limits, quota reset headers, fleet polling impact, and operator pacing tunables for this integration.">
+        <x-page-header :title="$pageHeading"
+            :subtitle="$pageSubtitle">
             <x-slot:actions>
                 <a href="{{ route('settings.integrations.index') }}" class="btn-pill-nav text-sm">
                     <i class="fa-solid fa-arrow-left text-[var(--color-ink-muted)]"></i>
@@ -15,7 +31,7 @@
                     <i class="fa-solid fa-sliders text-[var(--color-ink-muted)]"></i>
                     <span>Setup Wizard</span>
                 </a>
-                <a href="{{ $service['rate_limit_docs_url'] }}" target="_blank" rel="noopener noreferrer" class="btn-pill-nav text-sm text-[var(--color-primary-600)]">
+                <a href="{{ $service['rate_limit_docs_url'] ?? $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="btn-pill-nav text-sm text-[var(--color-primary-600)]">
                     <i class="fa-solid fa-arrow-up-right-from-square"></i>
                     <span>Official Vendor Docs</span>
                 </a>
@@ -33,42 +49,77 @@
             </div>
         @endif
 
-        {{-- 4-Column Metric Roll-up Tiles --}}
+        {{-- Metric Roll-up Tiles --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 max-w-5xl">
-            <div class="card px-4 py-3">
-                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Official Rate Limit</div>
-                <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5 truncate" title="{{ $service['official_limits']['standard'] }}">
-                    {{ $service['official_limits']['standard'] }}
+            @if ($service['has_rate_limits'] ?? true)
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Official Rate Limit</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5 truncate" title="{{ $service['official_limits']['standard'] }}">
+                        {{ $service['official_limits']['standard'] }}
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">{{ $service['category'] }}</div>
                 </div>
-                <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">{{ $service['category'] }}</div>
-            </div>
-            <div class="card px-4 py-3">
-                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Timeout Limit</div>
-                <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
-                    {{ $tunables['timeout'] }}s
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Timeout Limit</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ $tunables['timeout'] }}s
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                        {{ $tunables['is_custom'] ? 'Custom operator override' : 'Default ' . ($service['defaults']['timeout'] ?? 15) . 's' }}
+                    </div>
                 </div>
-                <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
-                    {{ $tunables['is_custom'] ? 'Custom operator override' : 'Default ' . $service['defaults']['timeout'] . 's' }}
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Max Concurrency</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ $tunables['concurrency'] }} <span class="text-xs font-normal text-[var(--color-ink-muted)]">parallel</span>
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                        {{ $tunables['delay_ms'] > 0 ? $tunables['delay_ms'] . 'ms inter-request delay' : 'Instant queuing' }}
+                    </div>
                 </div>
-            </div>
-            <div class="card px-4 py-3">
-                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Max Concurrency</div>
-                <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
-                    {{ $tunables['concurrency'] }} <span class="text-xs font-normal text-[var(--color-ink-muted)]">parallel</span>
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Auto Retries</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ $tunables['retry_attempts'] }} &times;
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                        {{ $tunables['retry_attempts'] > 0 ? 'Exponential backoff' : 'Fail immediately' }}
+                    </div>
                 </div>
-                <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
-                    {{ $tunables['delay_ms'] > 0 ? $tunables['delay_ms'] . 'ms inter-request delay' : 'Instant queuing' }}
+            @else
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Integration Type</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ ($service['type'] ?? '') === 'oauth' ? 'OAuth 2.0' : (($service['type'] ?? '') === 'webhook' ? 'Webhook' : 'Synthetic') }}
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">{{ $service['category'] }}</div>
                 </div>
-            </div>
-            <div class="card px-4 py-3">
-                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Auto Retries</div>
-                <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
-                    {{ $tunables['retry_attempts'] }} &times;
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Fleet Quota Cost</div>
+                    <div class="text-xl sm:text-2xl font-display text-emerald-600 font-data mt-0.5">
+                        0 Polled
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">No scheduled background polling</div>
                 </div>
-                <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
-                    {{ $tunables['retry_attempts'] > 0 ? 'Exponential backoff' : 'Fail immediately' }}
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Timeout Limit</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ $tunables['timeout'] }}s
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                        {{ $tunables['is_custom'] ? 'Custom operator override' : 'Default ' . ($service['defaults']['timeout'] ?? 15) . 's' }}
+                    </div>
                 </div>
-            </div>
+                <div class="card px-4 py-3">
+                    <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Auto Retries</div>
+                    <div class="text-xl sm:text-2xl font-display text-[var(--color-ink-strong)] font-data mt-0.5">
+                        {{ $tunables['retry_attempts'] }} &times;
+                    </div>
+                    <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                        {{ $tunables['retry_attempts'] > 0 ? 'Retry on failure' : 'Fail immediately' }}
+                    </div>
+                </div>
+            @endif
         </div>
 
             {{-- Left Column: Credentials, Rate Limit Specs & Fleet Impact --}}
@@ -336,98 +387,226 @@
                     </div>
                 @endif
 
-                <!-- Card: Official Vendor Rate Limits & Headers -->
-                <div class="card p-6">
-                    <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-alt)] flex items-center justify-center flex-shrink-0">
-                                <x-service-logo :service="$service['id']" class="w-7 h-7" />
+                @if ($service['has_rate_limits'] ?? true)
+                    <!-- Card: Official Vendor Rate Limits & Headers -->
+                    <div class="card p-6">
+                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[var(--color-surface-alt)] flex items-center justify-center flex-shrink-0">
+                                    <x-service-logo :service="$service['id']" class="w-7 h-7" />
+                                </div>
+                                <div>
+                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
+                                        Official Rate Limit Specifications
+                                    </h2>
+                                    <span class="text-xs text-[var(--color-ink-muted)]">{{ $service['category'] }} API Documentation</span>
+                                </div>
                             </div>
-                            <div>
-                                <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
-                                    Official Rate Limit Specifications
-                                </h2>
-                                <span class="text-xs text-[var(--color-ink-muted)]">{{ $service['category'] }} API Documentation</span>
-                            </div>
-                        </div>
-                        <span class="status-pill status-blue text-xs font-data">
-                            HTTP {{ $service['official_limits']['exceeded_code'] }}
-                        </span>
-                    </div>
-
-                    <div class="space-y-4 text-sm text-[var(--color-ink)]">
-                        <div class="p-3.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
-                            <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Quota &amp; Enforcement Window</div>
-                            <div class="font-display font-bold text-base text-[var(--color-ink-strong)] mb-1">
-                                {{ $service['official_limits']['standard'] }}
-                            </div>
-                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
-                                {{ $service['official_limits']['window'] }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-2">Rate Limit Response Headers Monitored</div>
-                            <div class="flex flex-wrap gap-2">
-                                @forelse ($service['official_limits']['headers'] as $header)
-                                    <span class="font-data text-xs px-2.5 py-1 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] font-semibold">
-                                        <i class="fa-solid fa-code text-[var(--color-primary-500)] text-[10px] mr-1"></i>{{ $header }}
-                                    </span>
-                                @empty
-                                    <span class="text-xs text-[var(--color-ink-muted)] italic">Standard HTTP status codes (429 Too Many Requests)</span>
-                                @endforelse
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Burst Handling &amp; Concurrency Notes</div>
-                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
-                                {{ $service['official_limits']['burst_notes'] }}
-                            </p>
-                        </div>
-
-                        <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
-                            <a href="{{ $service['rate_limit_docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
-                                <i class="fa-solid fa-book-open"></i>
-                                View official vendor rate limits &rarr;
-                            </a>
-                            <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] flex items-center gap-1">
-                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                                Full API Reference
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card: Fleet Telemetry Impact & Scale Projections -->
-                <div class="card p-6 border-l-4 border-l-[var(--color-primary-500)]">
-                    <h3 class="font-display text-base font-bold text-[var(--color-ink-strong)] mb-2 flex items-center gap-2">
-                        <i class="fa-solid fa-network-wired text-[var(--color-primary-500)]"></i>
-                        Fleet Impact &amp; Polling Telemetry Costs
-                    </h3>
-                    <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed mb-4">
-                        Clockwork Control monitors your servers, droplets, and sites at regular background cron intervals. Here is how your fleet consumes this API:
-                    </p>
-
-                    <div class="space-y-3.5 text-xs text-[var(--color-ink-muted)]">
-                        <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
-                            <span class="font-semibold text-[var(--color-ink-strong)] block mb-1">Per-Resource API Footprint:</span>
-                            <span class="leading-relaxed">{{ $service['fleet_impact']['calls_per_server'] }}</span>
-                        </div>
-
-                        <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
-                            <span class="font-semibold text-[var(--color-ink-strong)] block mb-1">Fleet Scale Projection:</span>
-                            <span class="leading-relaxed">{{ $service['fleet_impact']['fleet_projection'] }}</span>
-                        </div>
-
-                        <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900">
-                            <span class="font-bold block mb-1 text-emerald-950 flex items-center gap-1.5">
-                                <i class="fa-solid fa-lightbulb text-emerald-600"></i> Recommended Production Strategy:
+                            <span class="status-pill status-blue text-xs font-data">
+                                HTTP {{ $service['official_limits']['exceeded_code'] }}
                             </span>
-                            <span class="leading-relaxed">{{ $service['fleet_impact']['recommendation'] }}</span>
+                        </div>
+
+                        <div class="space-y-4 text-sm text-[var(--color-ink)]">
+                            <div class="p-3.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
+                                <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Quota &amp; Enforcement Window</div>
+                                <div class="font-display font-bold text-base text-[var(--color-ink-strong)] mb-1">
+                                    {{ $service['official_limits']['standard'] }}
+                                </div>
+                                <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                    {{ $service['official_limits']['window'] }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-2">Rate Limit Response Headers Monitored</div>
+                                <div class="flex flex-wrap gap-2">
+                                    @forelse ($service['official_limits']['headers'] as $header)
+                                        <span class="font-data text-xs px-2.5 py-1 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] font-semibold">
+                                            <i class="fa-solid fa-code text-[var(--color-primary-500)] text-[10px] mr-1"></i>{{ $header }}
+                                        </span>
+                                    @empty
+                                        <span class="text-xs text-[var(--color-ink-muted)] italic">Standard HTTP status codes (429 Too Many Requests)</span>
+                                    @endforelse
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Burst Handling &amp; Concurrency Notes</div>
+                                <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                    {{ $service['official_limits']['burst_notes'] }}
+                                </p>
+                            </div>
+
+                            <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                                <a href="{{ $service['rate_limit_docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book-open"></i>
+                                    View official vendor rate limits &rarr;
+                                </a>
+                                <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                    Full API Reference
+                                </a>
+                            </div>
                         </div>
                     </div>
-                </div>
+
+                    <!-- Card: Fleet Telemetry Impact & Scale Projections -->
+                    <div class="card p-6 border-l-4 border-l-[var(--color-primary-500)]">
+                        <h3 class="font-display text-base font-bold text-[var(--color-ink-strong)] mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-network-wired text-[var(--color-primary-500)]"></i>
+                            Fleet Impact &amp; Polling Telemetry Costs
+                        </h3>
+                        <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed mb-4">
+                            Clockwork Control monitors your servers, droplets, and sites at regular background cron intervals. Here is how your fleet consumes this API:
+                        </p>
+
+                        <div class="space-y-3.5 text-xs text-[var(--color-ink-muted)]">
+                            <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                                <span class="font-semibold text-[var(--color-ink-strong)] block mb-1">Per-Resource API Footprint:</span>
+                                <span class="leading-relaxed">{{ $service['fleet_impact']['calls_per_server'] }}</span>
+                            </div>
+
+                            <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                                <span class="font-semibold text-[var(--color-ink-strong)] block mb-1">Fleet Scale Projection:</span>
+                                <span class="leading-relaxed">{{ $service['fleet_impact']['fleet_projection'] }}</span>
+                            </div>
+
+                            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900">
+                                <span class="font-bold block mb-1 text-emerald-950 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-lightbulb text-emerald-600"></i> Recommended Production Strategy:
+                                </span>
+                                <span class="leading-relaxed">{{ $service['fleet_impact']['recommendation'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                @elseif (($service['type'] ?? '') === 'oauth')
+                    <!-- Card: OAuth Single Sign-On Configuration -->
+                    <div class="card p-6 border-l-4 border-l-[var(--color-primary-600)]">
+                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[var(--color-primary-50)] text-[var(--color-primary-600)] flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-shield-halved text-lg"></i>
+                                </div>
+                                <div>
+                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
+                                        OAuth 2.0 Single Sign-On Configuration
+                                    </h2>
+                                    <span class="text-xs text-[var(--color-ink-muted)]">Browser-based operator authentication flow</span>
+                                </div>
+                            </div>
+                            <span class="status-pill status-blue text-xs font-data">
+                                Interactive SSO
+                            </span>
+                        </div>
+
+                        <div class="space-y-4 text-sm text-[var(--color-ink)]">
+                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                {{ $service['description'] ?? 'This provider is used exclusively for interactive operator login into Clockwork Control. It is not polled by background workers, so API rate limit quotas and fleet pacing delays do not apply.' }}
+                            </p>
+
+                            @if (!empty($redirectUri))
+                                <div class="p-3.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-2">
+                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                        <span class="text-xs font-semibold text-[var(--color-ink-strong)] uppercase tracking-wider">
+                                            Authorized Redirect URI (Callback URL)
+                                        </span>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $redirectUri }}'); this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy URL', 2000);"
+                                                class="btn-pill-nav text-xs py-0.5 px-2 font-mono text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)] cursor-pointer">
+                                            Copy URL
+                                        </button>
+                                    </div>
+                                    <div class="p-2.5 bg-white rounded border border-[var(--color-border-light)] font-data text-xs text-[var(--color-ink-strong)] select-all break-all">
+                                        {{ $redirectUri }}
+                                    </div>
+                                    <p class="text-[11px] text-[var(--color-ink-soft)] leading-normal">
+                                        Copy and paste this exact callback URL into the <strong>Authorized redirect URIs</strong> list in your OAuth application console (e.g. Google Cloud Console, GitHub Developer Settings, Microsoft Entra ID).
+                                    </p>
+                                </div>
+                            @endif
+
+                            <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                                <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book-open"></i>
+                                    View official {{ $service['name'] }} OAuth documentation &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                @elseif (($service['type'] ?? '') === 'webhook')
+                    <!-- Card: Event-Driven Webhook -->
+                    <div class="card p-6 border-l-4 border-l-emerald-600">
+                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-paper-plane text-lg"></i>
+                                </div>
+                                <div>
+                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
+                                        Event-Driven Outbound Webhook
+                                    </h2>
+                                    <span class="text-xs text-[var(--color-ink-muted)]">Real-time incident dispatch architecture</span>
+                                </div>
+                            </div>
+                            <span class="status-pill status-green text-xs font-data">
+                                Outbound Push
+                            </span>
+                        </div>
+
+                        <div class="space-y-4 text-sm text-[var(--color-ink)]">
+                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                {{ $service['description'] ?? 'Clockwork dispatches outbound notifications directly to your webhook endpoint when incidents occur (e.g. site outages, CPU spikes, contact form failures). Zero scheduled background polling is performed against this service, so vendor polling rate limits do not apply.' }}
+                            </p>
+
+                            <div class="p-3.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-1.5">
+                                <span class="text-xs font-semibold text-[var(--color-ink-strong)] block">Reliability &amp; Retry Policy</span>
+                                <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                    Deliveries that experience network timeouts or transient server errors are retried with exponential backoff up to your configured retry limit.
+                                </p>
+                            </div>
+
+                            <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                                <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book-open"></i>
+                                    View official {{ $service['name'] }} webhook documentation &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <!-- Card: Local Diagnostic Module -->
+                    <div class="card p-6 border-l-4 border-l-indigo-600">
+                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-microchip text-lg"></i>
+                                </div>
+                                <div>
+                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
+                                        Local Synthetic Worker
+                                    </h2>
+                                    <span class="text-xs text-[var(--color-ink-muted)]">Internal scheduled diagnostic runner</span>
+                                </div>
+                            </div>
+                            <span class="status-pill status-blue text-xs font-data">
+                                Local Execution
+                            </span>
+                        </div>
+
+                        <div class="space-y-4 text-sm text-[var(--color-ink)]">
+                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                {{ $service['description'] ?? 'This module runs synthetic diagnostics directly against your monitored WordPress sites. It does not connect to external third-party SaaS vendors, so external API rate limits do not apply.' }}
+                            </p>
+
+                            <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                                <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book-open"></i>
+                                    View documentation &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </div>
 
             {{-- Right Column: Operator Tunables & Quick Navigation --}}
@@ -436,7 +615,7 @@
                 <div class="card p-6">
                     <div class="flex items-center justify-between gap-2 mb-4">
                         <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)]">
-                            API Connection Tunables
+                            {{ ($service['has_rate_limits'] ?? true) ? 'API Connection Tunables' : 'Connection & Delivery Settings' }}
                         </h2>
                         @if ($tunables['is_custom'])
                             <span class="status-pill status-blue text-[11px] font-mono">
@@ -450,26 +629,28 @@
                     </div>
 
                     <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed mb-5">
-                        Adjust Clockwork's HTTP client timeouts, rate pacing, and retry behaviors to match your server fleet scale and avoid 429 errors.
+                        {{ ($service['has_rate_limits'] ?? true) ? "Adjust Clockwork's HTTP client timeouts, rate pacing, and retry behaviors to match your server fleet scale and avoid 429 errors." : "Configure HTTP request timeouts and automatic retry behaviors for reliable communication with " . $service['name'] . "." }}
                     </p>
 
                     <form method="POST" action="{{ route('settings.integrations.limits.update', $service['id']) }}" class="space-y-4">
                         @csrf
                         @method('PATCH')
 
-                        <!-- Rate Limit Cap -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label for="field-rate-limit" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
-                                    Rate Limit Ceiling
-                                </label>
-                                <span class="text-[11px] font-data text-[var(--color-ink-soft)]">{{ $service['defaults']['rate_limit_unit'] }}</span>
+                        @if ($service['has_rate_limits'] ?? true)
+                            <!-- Rate Limit Cap -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label for="field-rate-limit" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
+                                        Rate Limit Ceiling
+                                    </label>
+                                    <span class="text-[11px] font-data text-[var(--color-ink-soft)]">{{ $service['defaults']['rate_limit_unit'] ?? 'requests / minute' }}</span>
+                                </div>
+                                <input type="number" name="rate_limit" id="field-rate-limit" min="1" max="1000000"
+                                       value="{{ old('rate_limit', $tunables['rate_limit']) }}"
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ number_format($service['defaults']['rate_limit'] ?? 100) }} {{ $service['defaults']['rate_limit_unit'] ?? 'requests / minute' }}</span>
                             </div>
-                            <input type="number" name="rate_limit" id="field-rate-limit" min="1" max="1000000"
-                                   value="{{ old('rate_limit', $tunables['rate_limit']) }}"
-                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ number_format($service['defaults']['rate_limit']) }} {{ $service['defaults']['rate_limit_unit'] }}</span>
-                        </div>
+                        @endif
 
                         <!-- Timeout -->
                         <div>
@@ -482,36 +663,38 @@
                             <input type="number" name="timeout" id="field-timeout" min="1" max="300"
                                    value="{{ old('timeout', $tunables['timeout']) }}"
                                    class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['timeout'] }}s (Max allowed: 300s)</span>
+                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['timeout'] ?? 15 }}s (Max allowed: 300s)</span>
                         </div>
 
-                        <!-- Concurrency -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label for="field-concurrency" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
-                                    Worker Concurrency
-                                </label>
-                                <span class="text-[11px] font-data text-[var(--color-ink-soft)]">Parallel Requests</span>
+                        @if (($service['has_rate_limits'] ?? true) || ($service['type'] ?? '') === 'internal')
+                            <!-- Concurrency -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label for="field-concurrency" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
+                                        Worker Concurrency
+                                    </label>
+                                    <span class="text-[11px] font-data text-[var(--color-ink-soft)]">Parallel Requests</span>
+                                </div>
+                                <input type="number" name="concurrency" id="field-concurrency" min="1" max="10"
+                                       value="{{ old('concurrency', $tunables['concurrency']) }}"
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['concurrency'] ?? 2 }} parallel connections</span>
                             </div>
-                            <input type="number" name="concurrency" id="field-concurrency" min="1" max="10"
-                                   value="{{ old('concurrency', $tunables['concurrency']) }}"
-                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['concurrency'] }} parallel connections</span>
-                        </div>
 
-                        <!-- Inter-request delay pacing -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label for="field-delay" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
-                                    Inter-Request Pacing Delay
-                                </label>
-                                <span class="text-[11px] font-data text-[var(--color-ink-soft)]">Milliseconds</span>
+                            <!-- Inter-request delay pacing -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label for="field-delay" class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">
+                                        Inter-Request Pacing Delay
+                                    </label>
+                                    <span class="text-[11px] font-data text-[var(--color-ink-soft)]">Milliseconds</span>
+                                </div>
+                                <input type="number" name="delay_ms" id="field-delay" min="0" max="5000" step="10"
+                                       value="{{ old('delay_ms', $tunables['delay_ms']) }}"
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Sleeps between successive calls to smooth bursts (Default: {{ $service['defaults']['delay_ms'] ?? 0 }}ms)</span>
                             </div>
-                            <input type="number" name="delay_ms" id="field-delay" min="0" max="5000" step="10"
-                                   value="{{ old('delay_ms', $tunables['delay_ms']) }}"
-                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Sleeps between successive API calls to smooth bursts (Default: {{ $service['defaults']['delay_ms'] }}ms)</span>
-                        </div>
+                        @endif
 
                         <!-- Retries -->
                         <div>
@@ -524,7 +707,7 @@
                             <input type="number" name="retry_attempts" id="field-retries" min="0" max="5"
                                    value="{{ old('retry_attempts', $tunables['retry_attempts']) }}"
                                    class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Retries with exponential backoff on 429 or 503 (Default: {{ $service['defaults']['retry_attempts'] }})</span>
+                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Retries with exponential backoff on transient errors (Default: {{ $service['defaults']['retry_attempts'] ?? 2 }})</span>
                         </div>
 
                         <div class="pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between gap-3">

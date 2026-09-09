@@ -179,8 +179,8 @@
                                             <button type="button"
                                                     @click="openModal('{{ $service['id'] }}', '{{ addslashes($service['name']) }}')"
                                                     class="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-ink-soft)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] transition-colors cursor-pointer shadow-2xs"
-                                                    title="{{ $service['name'] }} API Limits &amp; Settings"
-                                                    aria-label="{{ $service['name'] }} API Limits &amp; Settings">
+                                                    title="{{ $service['name'] }} {{ ($service['has_rate_limits'] ?? true) ? 'API Limits & Settings' : (($service['type'] ?? '') === 'oauth' ? 'OAuth Settings' : 'Integration Settings') }}"
+                                                    aria-label="{{ $service['name'] }} {{ ($service['has_rate_limits'] ?? true) ? 'API Limits & Settings' : (($service['type'] ?? '') === 'oauth' ? 'OAuth Settings' : 'Integration Settings') }}">
                                                 <i class="fa-solid fa-gear text-sm"></i>
                                             </button>
                                         @endif
@@ -254,12 +254,12 @@
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <h3 class="font-display font-bold text-base sm:text-lg text-[var(--color-ink-strong)]" x-text="serviceName + ' API Limits & Settings'"></h3>
+                                <h3 class="font-display font-bold text-base sm:text-lg text-[var(--color-ink-strong)]" x-text="service ? (serviceName + (service.has_rate_limits ? ' API Limits & Settings' : (service.type === 'oauth' ? ' OAuth Settings & Redirect URI' : (service.type === 'webhook' ? ' Webhook Settings' : ' Integration Settings')))) : (serviceName + ' Settings')"></h3>
                                 <template x-if="service">
                                     <span class="status-pill status-blue text-[10px] font-mono" x-text="service.category"></span>
                                 </template>
                             </div>
-                            <p class="text-xs text-[var(--color-ink-muted)]">Official vendor rate limits, headers, and client connection tuning</p>
+                            <p class="text-xs text-[var(--color-ink-muted)]" x-text="service?.has_rate_limits ? 'Official vendor rate limits, headers, and client connection tuning' : (service?.type === 'oauth' ? 'OAuth single sign-on credentials, authorized redirect URI, and handshake settings' : (service?.type === 'webhook' ? 'Event-driven notification webhook endpoint and delivery settings' : 'Integration credentials, diagnostics, and connection settings'))"></p>
                         </div>
                     </div>
                     <button type="button" @click="showLimitsModal = false" class="text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] text-2xl leading-none p-1 cursor-pointer" aria-label="Close">×</button>
@@ -609,51 +609,110 @@
                             </div>
                         </template>
 
-                        <!-- Official Rate Limit Specifications Box -->
-                        <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
-                            <div class="flex items-center justify-between flex-wrap gap-2">
-                                <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                                    <i class="fa-solid fa-gauge-high text-[var(--color-primary-600)]"></i>
-                                    <span>Official Vendor Rate Limits</span>
+                        <!-- OAuth 2.0 Provider Details Box (shown when type === 'oauth') -->
+                        <template x-if="service?.type === 'oauth'">
+                            <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                                        <i class="fa-solid fa-shield-halved text-[var(--color-primary-600)]"></i>
+                                        <span>OAuth 2.0 Single Sign-On</span>
+                                    </div>
+                                    <span class="status-pill status-blue text-[10px] font-mono">Browser Auth</span>
                                 </div>
-                                <span class="status-pill status-unknown text-[10px] font-mono" x-text="'HTTP ' + (service?.official_limits?.exceeded_code || '429')"></span>
+                                <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
+                                    This provider handles browser-based operator authentication. Clockwork does not poll OAuth providers in the background, so scheduled fleet rate limits and pacing delays do not apply.
+                                </p>
+                                <template x-if="redirectUri">
+                                    <div class="pt-2 border-t border-[var(--color-border-light)] space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-[var(--color-ink-strong)]">Authorized Redirect URI (Callback URL):</span>
+                                            <button type="button" @click="copyRedirectUri()" class="btn-pill-nav text-[10px] py-0.5 px-2 font-mono flex items-center gap-1 text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)] cursor-pointer">
+                                                <i class="fa-solid" :class="copiedRedirectUri ? 'fa-check text-emerald-600' : 'fa-copy'"></i>
+                                                <span x-text="copiedRedirectUri ? 'Copied!' : 'Copy URL'"></span>
+                                            </button>
+                                        </div>
+                                        <div class="p-2 bg-white rounded border border-[var(--color-border-light)] font-data text-xs text-[var(--color-ink-strong)] select-all break-all" x-text="redirectUri"></div>
+                                        <p class="text-[10px] text-[var(--color-ink-soft)]">Paste this into the Authorized Redirect URIs field in your OAuth provider console.</p>
+                                    </div>
+                                </template>
                             </div>
+                        </template>
 
-                            <div>
-                                <div class="font-display font-bold text-base text-[var(--color-ink-strong)]" x-text="service?.official_limits?.standard"></div>
-                                <p class="text-xs text-[var(--color-ink-muted)] mt-0.5" x-text="service?.official_limits?.window"></p>
+                        <!-- Webhook Architecture Note (shown when type === 'webhook') -->
+                        <template x-if="service?.type === 'webhook'">
+                            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-paper-plane text-emerald-600 text-sm"></i>
+                                    <span class="font-bold text-xs uppercase tracking-wider text-emerald-900">Event-Driven Outbound Webhook</span>
+                                </div>
+                                <p class="text-xs leading-relaxed text-emerald-900/90">
+                                    Clockwork dispatches real-time incident broadcasts directly to your webhook endpoint when high-priority events occur (site outages, CPU spikes, contact form failures). Zero scheduled background polling is performed against this endpoint.
+                                </p>
                             </div>
+                        </template>
 
-                            <div class="pt-2 border-t border-[var(--color-border-light)]">
-                                <span class="text-[11px] font-semibold text-[var(--color-ink-strong)] block mb-1">Response Headers Monitored:</span>
-                                <div class="flex flex-wrap gap-1.5">
-                                    <template x-for="h in (service?.official_limits?.headers || [])" :key="h">
-                                        <span class="font-data text-[11px] px-2 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] font-semibold" x-text="h"></span>
-                                    </template>
+                        <!-- Internal Diagnostic Worker Note (shown when type === 'internal') -->
+                        <template x-if="service?.type === 'internal'">
+                            <div class="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 text-indigo-950 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-microchip text-indigo-600 text-sm"></i>
+                                    <span class="font-bold text-xs uppercase tracking-wider text-indigo-900">Local Synthetic Worker</span>
+                                </div>
+                                <p class="text-xs leading-relaxed text-indigo-900/90">
+                                    This module executes local synthetic checks scheduled by Artisan workers. Tests run directly against your WordPress sites without external vendor API limits or cloud quota constraints.
+                                </p>
+                            </div>
+                        </template>
+
+                        <!-- Official Rate Limit Specifications Box (shown only when has_rate_limits is true) -->
+                        <template x-if="service?.has_rate_limits">
+                            <div class="space-y-5">
+                                <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
+                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                        <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                                            <i class="fa-solid fa-gauge-high text-[var(--color-primary-600)]"></i>
+                                            <span>Official Vendor Rate Limits</span>
+                                        </div>
+                                        <span class="status-pill status-unknown text-[10px] font-mono" x-text="'HTTP ' + (service?.official_limits?.exceeded_code || '429')"></span>
+                                    </div>
+
+                                    <div>
+                                        <div class="font-display font-bold text-base text-[var(--color-ink-strong)]" x-text="service?.official_limits?.standard"></div>
+                                        <p class="text-xs text-[var(--color-ink-muted)] mt-0.5" x-text="service?.official_limits?.window"></p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-[var(--color-border-light)]">
+                                        <span class="text-[11px] font-semibold text-[var(--color-ink-strong)] block mb-1">Response Headers Monitored:</span>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="h in (service?.official_limits?.headers || [])" :key="h">
+                                                <span class="font-data text-[11px] px-2 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] font-semibold" x-text="h"></span>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-[var(--color-border-light)] text-xs">
+                                        <span class="text-[11px] font-semibold text-[var(--color-ink-strong)] block mb-0.5">Burst Notes:</span>
+                                        <p class="text-[11px] text-[var(--color-ink-muted)] leading-normal" x-text="service?.official_limits?.burst_notes"></p>
+                                    </div>
+                                </div>
+
+                                <!-- Fleet Impact Card -->
+                                <div class="p-4 rounded-xl border border-blue-200/80 bg-blue-50/60 dark:border-blue-800/60 dark:bg-blue-950/30 text-slate-800 dark:text-slate-200 space-y-2">
+                                    <div class="text-xs font-bold text-blue-950 dark:text-blue-300 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-network-wired text-blue-600 dark:text-blue-400"></i>
+                                        <span>Fleet Polling Impact &amp; Pacing</span>
+                                    </div>
+                                    <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+                                        <p class="mb-1" x-text="service?.fleet_impact?.calls_per_server"></p>
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400" x-text="service?.fleet_impact?.fleet_projection"></p>
+                                    </div>
+                                    <div class="pt-2 border-t border-blue-200/60 dark:border-blue-800/60 text-[11px] text-emerald-800 dark:text-emerald-300 font-medium flex items-start gap-1">
+                                        <i class="fa-solid fa-lightbulb text-emerald-600 dark:text-emerald-400 mt-0.5"></i>
+                                        <span x-text="service?.fleet_impact?.recommendation"></span>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div class="pt-2 border-t border-[var(--color-border-light)] text-xs">
-                                <span class="text-[11px] font-semibold text-[var(--color-ink-strong)] block mb-0.5">Burst Notes:</span>
-                                <p class="text-[11px] text-[var(--color-ink-muted)] leading-normal" x-text="service?.official_limits?.burst_notes"></p>
-                            </div>
-                        </div>
-
-                        <!-- Fleet Impact Card -->
-                        <div class="p-4 rounded-xl border border-blue-200/80 bg-blue-50/60 dark:border-blue-800/60 dark:bg-blue-950/30 text-slate-800 dark:text-slate-200 space-y-2">
-                            <div class="text-xs font-bold text-blue-950 dark:text-blue-300 flex items-center gap-1.5">
-                                <i class="fa-solid fa-network-wired text-blue-600 dark:text-blue-400"></i>
-                                <span>Fleet Polling Impact &amp; Pacing</span>
-                            </div>
-                            <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200">
-                                <p class="mb-1" x-text="service?.fleet_impact?.calls_per_server"></p>
-                                <p class="text-[11px] text-slate-600 dark:text-slate-400" x-text="service?.fleet_impact?.fleet_projection"></p>
-                            </div>
-                            <div class="pt-2 border-t border-blue-200/60 dark:border-blue-800/60 text-[11px] text-emerald-800 dark:text-emerald-300 font-medium flex items-start gap-1">
-                                <i class="fa-solid fa-lightbulb text-emerald-600 dark:text-emerald-400 mt-0.5"></i>
-                                <span x-text="service?.fleet_impact?.recommendation"></span>
-                            </div>
-                        </div>
+                        </template>
 
                         <!-- Tunables Form Controls -->
                         <div class="space-y-4 pt-1">
@@ -674,28 +733,6 @@
                                     <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">HTTP call timeout</span>
                                 </div>
 
-                                <!-- Concurrency -->
-                                <div>
-                                    <div class="flex items-center justify-between mb-1">
-                                        <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Concurrency</label>
-                                        <span class="text-[10px] text-[var(--color-ink-soft)]" x-text="'Default: ' + (service?.defaults?.concurrency || 3)"></span>
-                                    </div>
-                                    <input type="number" x-model.number="tunables.concurrency" min="1" max="10"
-                                           class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                                    <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Parallel workers</span>
-                                </div>
-
-                                <!-- Inter-request Delay -->
-                                <div>
-                                    <div class="flex items-center justify-between mb-1">
-                                        <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Pacing Delay (ms)</label>
-                                        <span class="text-[10px] text-[var(--color-ink-soft)]" x-text="'Default: ' + (service?.defaults?.delay_ms || 0) + 'ms'"></span>
-                                    </div>
-                                    <input type="number" x-model.number="tunables.delay_ms" min="0" max="5000" step="10"
-                                           class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                                    <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Sleep between requests</span>
-                                </div>
-
                                 <!-- Retries -->
                                 <div>
                                     <div class="flex items-center justify-between mb-1">
@@ -704,16 +741,42 @@
                                     </div>
                                     <input type="number" x-model.number="tunables.retry_attempts" min="0" max="5"
                                            class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                                    <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Retry on 429/503</span>
+                                    <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Retry on transient failure</span>
                                 </div>
+
+                                <!-- Concurrency (shown only when has_rate_limits or internal) -->
+                                <template x-if="service?.has_rate_limits || service?.type === 'internal'">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Concurrency</label>
+                                            <span class="text-[10px] text-[var(--color-ink-soft)]" x-text="'Default: ' + (service?.defaults?.concurrency || 2)"></span>
+                                        </div>
+                                        <input type="number" x-model.number="tunables.concurrency" min="1" max="10"
+                                               class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Parallel workers</span>
+                                    </div>
+                                </template>
+
+                                <!-- Inter-request Delay (shown only when has_rate_limits or internal) -->
+                                <template x-if="service?.has_rate_limits || service?.type === 'internal'">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Pacing Delay (ms)</label>
+                                            <span class="text-[10px] text-[var(--color-ink-soft)]" x-text="'Default: ' + (service?.defaults?.delay_ms || 0) + 'ms'"></span>
+                                        </div>
+                                        <input type="number" x-model.number="tunables.delay_ms" min="0" max="5000" step="10"
+                                               class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Sleep between requests</span>
+                                    </div>
+                                </template>
                             </div>
                         </div>
 
                         <!-- Documentation Links & Full Page Link -->
                         <div class="pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-2 text-xs">
-                            <a :href="service?.rate_limit_docs_url" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
+                            <a :href="service?.rate_limit_docs_url || service?.docs_url" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                                <span>Official <span x-text="serviceName"></span> Rate Limit Docs</span>
+                                <span>Official <span x-text="serviceName"></span> <span x-text="service?.has_rate_limits ? 'Rate Limit Docs' : 'Documentation'"></span></span>
                             </a>
                             <a :href="'/settings/integrations/' + serviceId + '/limits'" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] underline flex items-center gap-1">
                                 <span>Open Full Dedicated Page &rarr;</span>
@@ -777,6 +840,14 @@
                 successMessage: '',
                 errorMessage: '',
                 service: null,
+                redirectUri: null,
+                copiedRedirectUri: false,
+                copyRedirectUri() {
+                    if (!this.redirectUri) return;
+                    navigator.clipboard.writeText(this.redirectUri);
+                    this.copiedRedirectUri = true;
+                    setTimeout(() => { this.copiedRedirectUri = false; }, 2000);
+                },
                 credentials: [],
                 credentialsPayload: {},
                 isCloudProvider: false,
@@ -801,6 +872,8 @@
                     this.testResult = null;
                     this.testing = false;
                     this.service = null;
+                    this.redirectUri = null;
+                    this.copiedRedirectUri = false;
                     this.credentials = [];
                     this.credentialsPayload = {};
                     this.isCloudProvider = false;
@@ -823,6 +896,7 @@
                     })
                     .then(data => {
                         this.service = data.service;
+                        this.redirectUri = data.redirect_uri || null;
                         this.tunables = data.tunables;
                         this.credentials = (data.credentials || []).map(c => ({ ...c, showPlain: false }));
                         this.testable = !!data.testable;

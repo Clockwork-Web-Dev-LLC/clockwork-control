@@ -48,15 +48,70 @@ describe('ServiceRateLimitRegistry', function () {
             expect($service['id'])->toBe($serviceId)
                 ->and($service['name'])->toBeString()->not->toBeEmpty()
                 ->and($service['category'])->toBeString()->not->toBeEmpty()
+                ->and($service['type'])->toBeIn(['api', 'webhook', 'oauth', 'internal'])
+                ->and($service['has_rate_limits'])->toBeBool()
                 ->and($service['docs_url'])->toStartWith('https://')
-                ->and($service['rate_limit_docs_url'])->toStartWith('https://')
-                ->and($service['official_limits'])->toBeArray()
-                ->and($service['official_limits'])->toHaveKeys(['standard', 'window', 'headers', 'exceeded_code', 'burst_notes'])
-                ->and($service['fleet_impact'])->toBeArray()
-                ->and($service['fleet_impact'])->toHaveKeys(['calls_per_server', 'fleet_projection', 'recommendation'])
                 ->and($service['defaults'])->toBeArray()
-                ->and($service['defaults'])->toHaveKeys(['rate_limit', 'rate_limit_unit', 'timeout', 'concurrency', 'delay_ms', 'retry_attempts']);
+                ->and($service['defaults'])->toHaveKeys(['timeout', 'retry_attempts']);
+
+            if ($service['has_rate_limits']) {
+                expect($service['type'])->toBe('api')
+                    ->and($service['rate_limit_docs_url'])->toStartWith('https://')
+                    ->and($service['official_limits'])->toBeArray()
+                    ->and($service['official_limits'])->toHaveKeys(['standard', 'window', 'headers', 'exceeded_code', 'burst_notes'])
+                    ->and($service['fleet_impact'])->toBeArray()
+                    ->and($service['fleet_impact'])->toHaveKeys(['calls_per_server', 'fleet_projection', 'recommendation'])
+                    ->and($service['defaults'])->toHaveKeys(['rate_limit', 'rate_limit_unit', 'concurrency', 'delay_ms']);
+            } else {
+                expect($service['type'])->toBeIn(['webhook', 'oauth', 'internal'])
+                    ->and($service)->not->toHaveKey('official_limits')
+                    ->and($service)->not->toHaveKey('fleet_impact');
+            }
         }
+    });
+
+    it('accurately identifies integration types and whether rate limits apply', function () {
+        $registry = app(ServiceRateLimitRegistry::class);
+
+        // APIs
+        expect($registry->hasRateLimits('digitalocean'))->toBeTrue()
+            ->and($registry->getType('digitalocean'))->toBe('api')
+            ->and($registry->hasRateLimits('spinupwp'))->toBeTrue()
+            ->and($registry->getType('spinupwp'))->toBe('api');
+
+        // Webhooks
+        expect($registry->hasRateLimits('mattermost'))->toBeFalse()
+            ->and($registry->getType('mattermost'))->toBe('webhook')
+            ->and($registry->hasRateLimits('slack'))->toBeFalse()
+            ->and($registry->getType('slack'))->toBe('webhook')
+            ->and($registry->hasRateLimits('client_slack'))->toBeFalse()
+            ->and($registry->getType('client_slack'))->toBe('webhook');
+
+        // OAuth
+        expect($registry->hasRateLimits('auth_google'))->toBeFalse()
+            ->and($registry->getType('auth_google'))->toBe('oauth')
+            ->and($registry->hasRateLimits('auth_github'))->toBeFalse()
+            ->and($registry->getType('auth_github'))->toBe('oauth')
+            ->and($registry->hasRateLimits('auth_microsoft'))->toBeFalse()
+            ->and($registry->getType('auth_microsoft'))->toBe('oauth');
+
+        // Internal
+        expect($registry->hasRateLimits('contact-forms'))->toBeFalse()
+            ->and($registry->getType('contact-forms'))->toBe('internal');
+    });
+
+    it('safely merges defaults for webhook and oauth services without requiring rate_limit or concurrency in raw defaults', function () {
+        $registry = app(ServiceRateLimitRegistry::class);
+
+        $mattermost = $registry->get('mattermost');
+        expect($mattermost['defaults'])->not->toHaveKey('concurrency')
+            ->and($mattermost['defaults'])->not->toHaveKey('rate_limit');
+
+        $tunables = $registry->getTunables('mattermost');
+        expect($tunables['timeout'])->toBe(10)
+            ->and($tunables['retry_attempts'])->toBe(2)
+            ->and($tunables['concurrency'])->toBe(2) // fallback
+            ->and($tunables['is_custom'])->toBeFalse();
     });
 
     it('returns null for an unknown service ID in get()', function () {

@@ -234,9 +234,57 @@ describe('limits update and reset', function () {
                 ->get(route('settings.integrations.limits', $serviceId));
 
             $response->assertOk()
-                ->assertSee($serviceMeta['name'])
-                ->assertSee('API Connection Tunables');
+                ->assertSee($serviceMeta['name']);
+
+            if ($serviceMeta['has_rate_limits'] ?? true) {
+                $response->assertSee('API Connection Tunables');
+            } else {
+                $response->assertSee('Connection &amp; Delivery Settings', false);
+            }
         }
+    });
+
+    it('renders OAuth configuration card and redirect URI helper for OAuth providers', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('settings.integrations.limits', 'auth_google'));
+
+        $response->assertOk()
+            ->assertSee('Google SSO Authentication Settings')
+            ->assertSee('OAuth 2.0 Single Sign-On')
+            ->assertSee('Authorized Redirect URI')
+            ->assertSee(url('/auth/google/callback'))
+            ->assertDontSee('Official Vendor Rate Limits')
+            ->assertDontSee('Fleet Impact &amp; Polling Telemetry Costs', false);
+
+        $json = $this->actingAs($user)
+            ->getJson(route('settings.integrations.limits', 'auth_google'));
+
+        $json->assertOk()
+            ->assertJsonPath('service.type', 'oauth')
+            ->assertJsonPath('service.has_rate_limits', false)
+            ->assertJsonPath('redirect_uri', url('/auth/google/callback'));
+    });
+
+    it('renders outbound webhook card without fake limits for webhook providers', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('settings.integrations.limits', 'mattermost'));
+
+        $response->assertOk()
+            ->assertSee('Mattermost Webhook Settings')
+            ->assertSee('Event-Driven Outbound Webhook')
+            ->assertDontSee('Official Vendor Rate Limits')
+            ->assertDontSee('Fleet Impact &amp; Polling Telemetry Costs', false);
+
+        $json = $this->actingAs($user)
+            ->getJson(route('settings.integrations.limits', 'mattermost'));
+
+        $json->assertOk()
+            ->assertJsonPath('service.type', 'webhook')
+            ->assertJsonPath('service.has_rate_limits', false);
     });
 
     it('returns valid JSON metadata including tunables and credentials for every single registered service', function () {

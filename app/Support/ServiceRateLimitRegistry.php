@@ -21,6 +21,8 @@ class ServiceRateLimitRegistry
                 'id' => 'digitalocean',
                 'name' => 'DigitalOcean',
                 'category' => 'Cloud VPS',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://docs.digitalocean.com/reference/api/api-reference/',
                 'rate_limit_docs_url' => 'https://docs.digitalocean.com/reference/api/api-reference/#section/Rate-Limits',
                 'official_limits' => [
@@ -49,6 +51,8 @@ class ServiceRateLimitRegistry
                 'id' => 'hetzner',
                 'name' => 'Hetzner Cloud',
                 'category' => 'Cloud VPS',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://docs.hetzner.cloud/',
                 'rate_limit_docs_url' => 'https://docs.hetzner.cloud/#rate-limiting',
                 'official_limits' => [
@@ -77,6 +81,8 @@ class ServiceRateLimitRegistry
                 'id' => 'linode',
                 'name' => 'Linode (Akamai)',
                 'category' => 'Cloud VPS',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://techdocs.akamai.com/linode-api/reference/api-rate-limits',
                 'rate_limit_docs_url' => 'https://techdocs.akamai.com/linode-api/reference/api-rate-limits',
                 'official_limits' => [
@@ -105,6 +111,8 @@ class ServiceRateLimitRegistry
                 'id' => 'vultr',
                 'name' => 'Vultr',
                 'category' => 'Cloud VPS',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://www.vultr.com/api/',
                 'rate_limit_docs_url' => 'https://www.vultr.com/api/#section/Rate-Limits',
                 'official_limits' => [
@@ -133,6 +141,8 @@ class ServiceRateLimitRegistry
                 'id' => 'azure',
                 'name' => 'Azure (Microsoft Cloud)',
                 'category' => 'Cloud VPS',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/request-limits-and-throttling',
                 'rate_limit_docs_url' => 'https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/request-limits-and-throttling',
                 'official_limits' => [
@@ -161,6 +171,8 @@ class ServiceRateLimitRegistry
                 'id' => 'spinupwp',
                 'name' => 'SpinupWP',
                 'category' => 'Control Panel',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://spinupwp.com/doc/api/',
                 'rate_limit_docs_url' => 'https://spinupwp.com/doc/api/#rate-limits',
                 'official_limits' => [
@@ -189,6 +201,8 @@ class ServiceRateLimitRegistry
                 'id' => 'pressable',
                 'name' => 'Pressable',
                 'category' => 'Managed Host',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://my.pressable.com/api',
                 'rate_limit_docs_url' => 'https://my.pressable.com/api',
                 'official_limits' => [
@@ -217,6 +231,8 @@ class ServiceRateLimitRegistry
                 'id' => 'wpengine',
                 'name' => 'WP Engine',
                 'category' => 'Managed Host',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://wpengineapi.com/',
                 'rate_limit_docs_url' => 'https://wpengineapi.com/#rate-limiting',
                 'official_limits' => [
@@ -245,6 +261,8 @@ class ServiceRateLimitRegistry
                 'id' => 'kinsta',
                 'name' => 'Kinsta',
                 'category' => 'Managed Host',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://kinsta.com/docs/kinsta-api/',
                 'rate_limit_docs_url' => 'https://kinsta.com/docs/kinsta-api/#rate-limits',
                 'official_limits' => [
@@ -273,6 +291,8 @@ class ServiceRateLimitRegistry
                 'id' => 'cloudways',
                 'name' => 'Cloudways',
                 'category' => 'Control Panel',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://developers.cloudways.com/docs/',
                 'rate_limit_docs_url' => 'https://developers.cloudways.com/docs/',
                 'official_limits' => [
@@ -301,6 +321,8 @@ class ServiceRateLimitRegistry
                 'id' => 'gridpane',
                 'name' => 'GridPane',
                 'category' => 'Control Panel',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://gridpane.com/kb/',
                 'rate_limit_docs_url' => 'https://gridpane.com/kb/',
                 'official_limits' => [
@@ -329,6 +351,8 @@ class ServiceRateLimitRegistry
                 'id' => 'cloudflare',
                 'name' => 'Cloudflare',
                 'category' => 'DNS & Security',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://developers.cloudflare.com/fundamentals/api/reference/limits/',
                 'rate_limit_docs_url' => 'https://developers.cloudflare.com/fundamentals/api/reference/limits/',
                 'official_limits' => [
@@ -357,6 +381,8 @@ class ServiceRateLimitRegistry
                 'id' => 'psi',
                 'name' => 'Google PageSpeed Insights',
                 'category' => 'Performance',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://developers.google.com/speed/docs/insights/v5/get-started',
                 'rate_limit_docs_url' => 'https://developers.google.com/speed/docs/insights/v5/get-started#rate-limits',
                 'official_limits' => [
@@ -385,6 +411,8 @@ class ServiceRateLimitRegistry
                 'id' => 'gtmetrix',
                 'name' => 'GTmetrix',
                 'category' => 'Performance',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://gtmetrix.com/api/docs/2.0/',
                 'rate_limit_docs_url' => 'https://gtmetrix.com/api/docs/2.0/#api-rate-limits',
                 'official_limits' => [
@@ -413,6 +441,8 @@ class ServiceRateLimitRegistry
                 'id' => 'sucuri',
                 'name' => 'Sucuri SiteCheck',
                 'category' => 'Security',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://sitecheck.sucuri.net/',
                 'rate_limit_docs_url' => 'https://sitecheck.sucuri.net/',
                 'official_limits' => [
@@ -441,6 +471,8 @@ class ServiceRateLimitRegistry
                 'id' => 'twilio',
                 'name' => 'Twilio',
                 'category' => 'Notifications',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://www.twilio.com/docs/messaging/guidance/rate-limits-and-message-queuing',
                 'rate_limit_docs_url' => 'https://www.twilio.com/docs/messaging/guidance/rate-limits-and-message-queuing',
                 'official_limits' => [
@@ -469,26 +501,13 @@ class ServiceRateLimitRegistry
                 'id' => 'slack',
                 'name' => 'Slack',
                 'category' => 'Notifications',
-                'docs_url' => 'https://api.slack.com/apis/rate-limits',
-                'rate_limit_docs_url' => 'https://api.slack.com/apis/rate-limits',
-                'official_limits' => [
-                    'standard' => '1 message / second',
-                    'window' => 'Per incoming webhook URL with short burst allowance.',
-                    'headers' => ['Retry-After'],
-                    'exceeded_code' => '429 with Retry-After header',
-                    'burst_notes' => 'Designed for real-time chat broadcasts.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => 'Notification broadcasts on incident open/close.',
-                    'fleet_projection' => 'Paced notifications to prevent 429 webhook lockouts.',
-                    'recommendation' => 'Concurrency 1, timeout 10s.',
-                ],
+                'type' => 'webhook',
+                'has_rate_limits' => false,
+                'description' => 'Outbound Slack incoming webhook integration for real-time incident notifications, form failure alerts, and emergency team dispatches.',
+                'docs_url' => 'https://api.slack.com/messaging/webhooks',
+                'rate_limit_docs_url' => 'https://api.slack.com/messaging/webhooks',
                 'defaults' => [
-                    'rate_limit' => 60,
-                    'rate_limit_unit' => 'messages / minute',
                     'timeout' => 10,
-                    'concurrency' => 1,
-                    'delay_ms' => 250,
                     'retry_attempts' => 2,
                 ],
             ],
@@ -497,26 +516,13 @@ class ServiceRateLimitRegistry
                 'id' => 'mattermost',
                 'name' => 'Mattermost',
                 'category' => 'Notifications',
-                'docs_url' => 'https://mattermost.com/',
-                'rate_limit_docs_url' => 'https://mattermost.com/',
-                'official_limits' => [
-                    'standard' => '60–100 requests / minute',
-                    'window' => 'Configured by Mattermost server admin (RateLimitingSettings).',
-                    'headers' => ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],
-                    'exceeded_code' => '429 Too Many Requests',
-                    'burst_notes' => 'Self-hosted limits determined by your Mattermost instance config.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => 'Webhook incident notifications.',
-                    'fleet_projection' => 'Fast internal dispatch.',
-                    'recommendation' => 'Concurrency 1, timeout 10s.',
-                ],
+                'type' => 'webhook',
+                'has_rate_limits' => false,
+                'description' => 'Outbound Mattermost incoming webhook integration for real-time incident broadcasts to your self-hosted or cloud Mattermost channels.',
+                'docs_url' => 'https://mattermost.com/docs/guides/administration/integrations/incoming-webhooks/',
+                'rate_limit_docs_url' => 'https://mattermost.com/docs/guides/administration/integrations/incoming-webhooks/',
                 'defaults' => [
-                    'rate_limit' => 60,
-                    'rate_limit_unit' => 'messages / minute',
                     'timeout' => 10,
-                    'concurrency' => 1,
-                    'delay_ms' => 250,
                     'retry_attempts' => 2,
                 ],
             ],
@@ -525,6 +531,8 @@ class ServiceRateLimitRegistry
                 'id' => 'bill-com',
                 'name' => 'Bill.com',
                 'category' => 'Agency Billing',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://developer.bill.com/',
                 'rate_limit_docs_url' => 'https://developer.bill.com/',
                 'official_limits' => [
@@ -553,27 +561,14 @@ class ServiceRateLimitRegistry
                 'id' => 'auth_google',
                 'name' => 'Google',
                 'category' => 'Authentication',
+                'type' => 'oauth',
+                'has_rate_limits' => false,
+                'description' => 'Google OAuth 2.0 Web Client for operator authentication and single sign-on (SSO) login into Clockwork Control.',
                 'docs_url' => 'https://developers.google.com/identity/protocols/oauth2',
-                'rate_limit_docs_url' => 'https://developers.google.com/identity/protocols/oauth2#usage-limits',
-                'official_limits' => [
-                    'standard' => 'Google Identity OAuth standard quotas',
-                    'window' => 'Per-project rate limits in Google Cloud Console.',
-                    'headers' => ['Retry-After'],
-                    'exceeded_code' => '429 / 403 rateLimitExceeded',
-                    'burst_notes' => 'Standard OAuth 2.0 endpoints have high rate limits for user authentication.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => '1–2 API calls during operator Google OAuth sign-in flow.',
-                    'fleet_projection' => 'Operator authentication consumes negligible quota.',
-                    'recommendation' => 'Keep timeout at 15s with concurrency at 3.',
-                ],
+                'rate_limit_docs_url' => 'https://developers.google.com/identity/protocols/oauth2',
                 'defaults' => [
-                    'rate_limit' => 1000,
-                    'rate_limit_unit' => 'requests / minute',
                     'timeout' => 15,
-                    'concurrency' => 3,
-                    'delay_ms' => 0,
-                    'retry_attempts' => 2,
+                    'retry_attempts' => 1,
                 ],
             ],
 
@@ -581,27 +576,14 @@ class ServiceRateLimitRegistry
                 'id' => 'auth_github',
                 'name' => 'GitHub',
                 'category' => 'Authentication',
+                'type' => 'oauth',
+                'has_rate_limits' => false,
+                'description' => 'GitHub OAuth App for operator authentication and single sign-on (SSO) login into Clockwork Control.',
                 'docs_url' => 'https://docs.github.com/en/apps/oauth-apps',
-                'rate_limit_docs_url' => 'https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api',
-                'official_limits' => [
-                    'standard' => '5,000 requests / hour',
-                    'window' => 'Rolling 60-minute window per authenticated OAuth App token.',
-                    'headers' => ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'],
-                    'exceeded_code' => '403 rate limit exceeded / 429 Too Many Requests',
-                    'burst_notes' => 'GitHub OAuth and REST API rate limit is 5,000 req/hr for authorized users and 60 req/hr for unauthenticated calls.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => '1–2 calls during operator OAuth sign-in and profile fetch.',
-                    'fleet_projection' => 'Sign-in events are operator-driven and lightweight. Far below the 5,000 req/hr ceiling.',
-                    'recommendation' => 'Default timeout of 15s is recommended for fast token exchange.',
-                ],
+                'rate_limit_docs_url' => 'https://docs.github.com/en/apps/oauth-apps',
                 'defaults' => [
-                    'rate_limit' => 5000,
-                    'rate_limit_unit' => 'requests / hour',
                     'timeout' => 15,
-                    'concurrency' => 3,
-                    'delay_ms' => 0,
-                    'retry_attempts' => 2,
+                    'retry_attempts' => 1,
                 ],
             ],
 
@@ -609,27 +591,14 @@ class ServiceRateLimitRegistry
                 'id' => 'auth_microsoft',
                 'name' => 'Microsoft',
                 'category' => 'Authentication',
+                'type' => 'oauth',
+                'has_rate_limits' => false,
+                'description' => 'Microsoft Entra ID (Azure AD) App Registration for operator authentication and single sign-on (SSO) login into Clockwork Control.',
                 'docs_url' => 'https://learn.microsoft.com/en-us/entra/identity-platform/',
-                'rate_limit_docs_url' => 'https://learn.microsoft.com/en-us/graph/throttling-limits',
-                'official_limits' => [
-                    'standard' => 'Microsoft Graph tier limits (~10,000 req / 10 min)',
-                    'window' => 'Rolling per-tenant and per-app throttling on Microsoft Graph API.',
-                    'headers' => ['Retry-After', 'RateLimit-Limit', 'RateLimit-Remaining'],
-                    'exceeded_code' => '429 Too Many Requests',
-                    'burst_notes' => 'Throttling occurs when too many requests are sent to Microsoft identity or Graph endpoints in a short window.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => '1–2 API calls during operator OAuth redirect/token exchange and /me profile query.',
-                    'fleet_projection' => 'Operator login traffic is negligible against enterprise Microsoft Graph quotas.',
-                    'recommendation' => 'Keep timeout at 15s with 2 retries for token exchange reliability.',
-                ],
+                'rate_limit_docs_url' => 'https://learn.microsoft.com/en-us/entra/identity-platform/',
                 'defaults' => [
-                    'rate_limit' => 2000,
-                    'rate_limit_unit' => 'requests / minute',
                     'timeout' => 15,
-                    'concurrency' => 3,
-                    'delay_ms' => 0,
-                    'retry_attempts' => 2,
+                    'retry_attempts' => 1,
                 ],
             ],
 
@@ -637,23 +606,12 @@ class ServiceRateLimitRegistry
                 'id' => 'contact-forms',
                 'name' => 'Contact Form Testing',
                 'category' => 'Maintenance & QA',
+                'type' => 'internal',
+                'has_rate_limits' => false,
+                'description' => 'Synthetic local test suite for WordPress contact forms. Submits test submissions directly to monitored WordPress sites with companion verification.',
                 'docs_url' => 'https://clockworkcontrol.com/docs/features/contact-forms',
                 'rate_limit_docs_url' => 'https://clockworkcontrol.com/docs/features/contact-forms',
-                'official_limits' => [
-                    'standard' => 'Synthetic local test suite',
-                    'window' => 'Executed by scheduled Artisan worker or on-demand manual trigger.',
-                    'headers' => [],
-                    'exceeded_code' => 'N/A',
-                    'burst_notes' => 'Tests are scheduled across morning hours to minimize concurrent site load.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => 'Submits synthetic test forms to WordPress sites with companion verification.',
-                    'fleet_projection' => 'Runs daily for care plan sites with contact form monitoring enabled.',
-                    'recommendation' => 'Concurrency 2, delay 500ms between submissions.',
-                ],
                 'defaults' => [
-                    'rate_limit' => 60,
-                    'rate_limit_unit' => 'tests / minute',
                     'timeout' => 30,
                     'concurrency' => 2,
                     'delay_ms' => 500,
@@ -665,26 +623,13 @@ class ServiceRateLimitRegistry
                 'id' => 'client_slack',
                 'name' => 'Client Slack Notifications',
                 'category' => 'Notifications',
+                'type' => 'webhook',
+                'has_rate_limits' => false,
+                'description' => 'Client-specific Slack incoming webhook integration for dispatching individual site failure alerts directly to client channels.',
                 'docs_url' => 'https://api.slack.com/messaging/webhooks',
-                'rate_limit_docs_url' => 'https://api.slack.com/docs/rate-limits',
-                'official_limits' => [
-                    'standard' => '1 message / second per incoming webhook',
-                    'window' => 'Per client-configured site webhook URL.',
-                    'headers' => ['Retry-After'],
-                    'exceeded_code' => '429 Too Many Requests',
-                    'burst_notes' => 'Per-site client Slack webhooks are configured directly in WordPress companion plugin.',
-                ],
-                'fleet_impact' => [
-                    'calls_per_server' => 'Dispatches client-facing form failure and site alerts to client Slack channels.',
-                    'fleet_projection' => 'Low volume; event-driven alerts per client site.',
-                    'recommendation' => 'Timeout 10s, concurrency 1.',
-                ],
+                'rate_limit_docs_url' => 'https://api.slack.com/messaging/webhooks',
                 'defaults' => [
-                    'rate_limit' => 60,
-                    'rate_limit_unit' => 'messages / minute',
                     'timeout' => 10,
-                    'concurrency' => 1,
-                    'delay_ms' => 250,
                     'retry_attempts' => 2,
                 ],
             ],
@@ -693,6 +638,8 @@ class ServiceRateLimitRegistry
                 'id' => 'backup-relay',
                 'name' => 'Backup Relay',
                 'category' => 'Maintenance',
+                'type' => 'api',
+                'has_rate_limits' => true,
                 'docs_url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/glacier-instant-retrieval-storage-class.html',
                 'rate_limit_docs_url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html',
                 'official_limits' => [
@@ -780,7 +727,7 @@ class ServiceRateLimitRegistry
     public function getTunables(string $serviceId): array
     {
         $service = $this->get($serviceId);
-        $defaults = $service['defaults'] ?? [
+        $fallbacks = [
             'rate_limit' => 100,
             'rate_limit_unit' => 'requests / minute',
             'timeout' => 15,
@@ -788,6 +735,7 @@ class ServiceRateLimitRegistry
             'delay_ms' => 100,
             'retry_attempts' => 2,
         ];
+        $defaults = array_merge($fallbacks, $service['defaults'] ?? []);
 
         $key = 'services.'.($service['id'] ?? $serviceId);
         $savedTimeout = $this->settings->get("{$key}.timeout");
@@ -807,6 +755,26 @@ class ServiceRateLimitRegistry
             'retry_attempts' => (int) ($savedRetries ?? $defaults['retry_attempts']),
             'is_custom' => $isCustom,
         ];
+    }
+
+    /**
+     * Check whether a service has official API rate limits and fleet polling quotas.
+     */
+    public function hasRateLimits(string $serviceId): bool
+    {
+        $service = $this->get($serviceId);
+
+        return (bool) ($service['has_rate_limits'] ?? true);
+    }
+
+    /**
+     * Get integration type (api, webhook, oauth, internal).
+     */
+    public function getType(string $serviceId): string
+    {
+        $service = $this->get($serviceId);
+
+        return $service['type'] ?? 'api';
     }
 
     /**

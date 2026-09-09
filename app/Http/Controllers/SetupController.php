@@ -205,7 +205,10 @@ class SetupController extends Controller
                 : $detection['in_use'];
 
             $rateLimitRegistry = app(ServiceRateLimitRegistry::class);
-            $hasSettings = count($item['manifest']->credentialFields) > 0 || $rateLimitRegistry->get($id) !== null;
+            $serviceMeta = $rateLimitRegistry->get($id);
+            $hasSettings = count($item['manifest']->credentialFields) > 0 || $serviceMeta !== null;
+            $hasRateLimits = $serviceMeta ? ($serviceMeta['has_rate_limits'] ?? true) : false;
+            $serviceType = $serviceMeta['type'] ?? 'api';
 
             $categories[$targetCategory]['services'][] = [
                 'id' => $id,
@@ -217,6 +220,8 @@ class SetupController extends Controller
                 'is_configured' => $detection['is_configured'],
                 'field_count' => count($item['manifest']->credentialFields),
                 'has_settings' => $hasSettings,
+                'has_rate_limits' => $hasRateLimits,
+                'type' => $serviceType,
                 'status' => $item['manifest']->status,
                 'status_note' => $item['manifest']->statusNote,
             ];
