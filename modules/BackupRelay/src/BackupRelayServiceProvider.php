@@ -2,6 +2,7 @@
 
 namespace Modules\BackupRelay;
 
+use App\Services\Diagnostics\DiagnosticCheck;
 use App\Support\Settings;
 use Illuminate\Console\Scheduling\Schedule;
 use Modules\BackupRelay\Console\RunBackupRelayNow;
@@ -49,6 +50,11 @@ class BackupRelayServiceProvider extends ModuleServiceProvider
             status: ModuleManifest::STATUS_VERIFIED,
             statusNote: 'Verified multi-provider backup relay and S3 Glacier archival pipeline.',
         );
+    }
+
+    public function diagnosticCheck(): ?DiagnosticCheck
+    {
+        return $this->app->make(BackupRelayCheck::class);
     }
 
     public function scheduledTasks(Schedule $schedule): void

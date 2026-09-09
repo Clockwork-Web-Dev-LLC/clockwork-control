@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BackupRelayRun;
 use App\Models\ContactFormTest;
 use App\Models\Server;
 use App\Models\Site;
@@ -100,6 +101,10 @@ class SetupController extends Controller
         'sucuri' => [
             'url' => 'https://sitecheck.sucuri.net/',
             'guide' => 'Sucuri SiteCheck public malware & blacklist scanner (ManageWP replacement suite, zero configuration required).',
+        ],
+        'backup-relay' => [
+            'url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/glacier-instant-retrieval-storage-class.html',
+            'guide' => 'Amazon S3 Glacier Instant Retrieval bucket, credentials, and streaming prefix for scheduled offsite backups.',
         ],
     ];
 
@@ -301,6 +306,21 @@ class SetupController extends Controller
         if ($id === 'llar') {
             if (Site::where('llar_enabled', true)->exists() || Server::where('auto_ban_llar', true)->exists()) {
                 $hasActivity = true;
+            }
+        }
+        if ($id === 'backup-relay') {
+            $relayCount = Site::where('backup_relay_enabled', true)->count();
+            if ($relayCount > 0) {
+                $reasons[] = "{$relayCount} ".($relayCount === 1 ? 'site' : 'sites');
+                $hasActivity = true;
+            }
+            if (BackupRelayRun::exists()) {
+                $hasActivity = true;
+            }
+            $s3Disk = (string) config('clockwork.backup_relay.disk', 's3-backup-relay');
+            $bucket = config("filesystems.disks.{$s3Disk}.bucket");
+            if (! empty($bucket)) {
+                $hasEnvCreds = true;
             }
         }
 

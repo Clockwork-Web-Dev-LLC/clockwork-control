@@ -348,6 +348,41 @@ class EnvCredentialManager
             ],
         ],
 
+        'backup-relay' => [
+            'bucket' => [
+                'env_var' => 'S3_BACKUP_RELAY_BUCKET',
+                'label' => 'S3 Bucket',
+                'secret' => false,
+                'guide' => 'Amazon S3 bucket name configured for offsite backup archive storage',
+                'url' => 'https://s3.console.aws.amazon.com/s3/home',
+                'config_path' => 'filesystems.disks.s3-backup-relay.bucket',
+            ],
+            'region' => [
+                'env_var' => 'S3_BACKUP_RELAY_REGION',
+                'label' => 'S3 Region',
+                'secret' => false,
+                'guide' => 'AWS Region for the S3 backup bucket (e.g. us-east-1, us-east-2)',
+                'url' => 'https://docs.aws.amazon.com/general/latest/gr/s3.html',
+                'config_path' => 'filesystems.disks.s3-backup-relay.region',
+            ],
+            'mode' => [
+                'env_var' => 'CLOCKWORK_BACKUP_RELAY_MODE',
+                'label' => 'Relay Mode',
+                'secret' => false,
+                'guide' => 'Relay execution mode: in_repo (local cron) or external_agent (remote runner)',
+                'url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/glacier-instant-retrieval-storage-class.html',
+                'config_path' => 'clockwork.backup_relay.mode',
+            ],
+            'prefix' => [
+                'env_var' => 'CLOCKWORK_BACKUP_RELAY_S3_PREFIX',
+                'label' => 'S3 Prefix',
+                'secret' => false,
+                'guide' => 'Root S3 path prefix for backup manifests (default: _control/backup-relay)',
+                'url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html',
+                'config_path' => 'clockwork.backup_relay.s3_prefix',
+            ],
+        ],
+
         'bill-com' => [
             'username' => [
                 'env_var' => 'CLOCKWORK_BILL_COM_USERNAME',
@@ -520,6 +555,7 @@ class EnvCredentialManager
             'contact_forms' => 'contact_forms',
             'client-slack' => 'client_slack',
             'client_slack' => 'client_slack',
+            'backup_relay' => 'backup-relay',
         ];
 
         if (isset($aliases[$id])) {
@@ -542,6 +578,12 @@ class EnvCredentialManager
         foreach ($defs as $fieldKey => $meta) {
             $envVar = $meta['env_var'];
             $val = $this->getEnvValue($envVar);
+            if (($val === null || $val === '') && ! empty($meta['config_path'])) {
+                $configVal = config($meta['config_path']);
+                if ($configVal !== null && $configVal !== '') {
+                    $val = (string) $configVal;
+                }
+            }
             $configured = ($val !== null && $val !== '');
 
             $preview = null;
