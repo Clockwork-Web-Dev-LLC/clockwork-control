@@ -6,7 +6,8 @@ use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\CloudProvider\CloudProviderRegistry;
-use Illuminate\Support\Facades\Artisan;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use Modules\Core\Contracts\CloudProvider;
 use Modules\SpinupWp\SpinupWpClient;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -62,12 +63,13 @@ describe('ServersController', function () {
         it('creates a server with default ssh user/port, refreshes from SpinupWP, and redirects to servers.show', function () {
             $this->mock(SpinupWpClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(true));
 
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-spinupwp')->andReturn(0);
-            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
-            Artisan::shouldReceive('output')->twice()->andReturn(
-                'Servers: {"created":0,"updated":0,"unchanged":0,"spinupwp_id_nulled":0}',
-                'Done. green=0 yellow=0 red=0 unknown=0 errors=0 deleted=0',
-            );
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.import_spinupwp'
+                        && $cmds === ['clockwork:import-spinupwp', 'clockwork:poll-servers'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())->post(route('servers.store'), [
                 'name' => 'new-server.example.com',
@@ -85,7 +87,7 @@ describe('ServersController', function () {
             $response->assertRedirect(route('servers.show', $server));
             $response->assertSessionHas('status', function ($msg) {
                 return str_contains($msg, "Server 'new-server.example.com' created.")
-                    && str_contains($msg, 'Refreshed from SpinupWP');
+                    && str_contains($msg, 'SpinupWP refresh started in the background');
             });
 
             expect($server->hostname)->toBe('203.0.113.10');
@@ -100,7 +102,13 @@ describe('ServersController', function () {
             // entirely and polls directly instead, same as the real test
             // environment (no CLOCKWORK_SPINUPWP_TOKEN configured).
             $this->mock(SpinupWpClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
-            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.poll_servers'
+                        && $cmds === ['clockwork:poll-servers'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $this->actingAs(User::factory()->create())->post(route('servers.store'), [
                 'name' => 'custom-server.example.com',
@@ -129,65 +137,69 @@ describe('ServersController', function () {
     });
 
     describe('refreshFromSpinupWp', function () {
-        it('flashes a success status when the import + poll succeed', function () {
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-spinupwp')->andReturn(0);
-            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
-            Artisan::shouldReceive('output')->twice()->andReturn(
-                'Servers: {"created":2,"updated":1,"unchanged":0,"spinupwp_id_nulled":0}'."\n".'Sites: {"created":5}',
-                'Done. green=3 yellow=0 red=0 unknown=0 errors=0 deleted=0',
-            );
+        it('starts import + poll in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.import_spinupwp'
+                        && $cmds === ['clockwork:import-spinupwp', 'clockwork:poll-servers'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('servers.refreshFromSpinupWp'));
 
             $response->assertSessionHas('status', function ($msg) {
-                return str_starts_with($msg, 'Refreshed from SpinupWP.')
-                    && str_contains($msg, 'Servers: {"created":2');
+                return str_contains($msg, 'SpinupWP refresh started in the background');
             });
             $response->assertSessionMissing('status_error');
         });
 
-        it('flashes a status_error when the import fails, and never calls poll-servers', function () {
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-spinupwp')->andReturn(1);
-            Artisan::shouldReceive('call')->with('clockwork:poll-servers')->never();
-            Artisan::shouldReceive('output')->once()->andReturn('CLOCKWORK_SPINUPWP_TOKEN is not set in .env.');
+        it('flashes a status_error when the background launch fails', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->andReturn(BackgroundArtisanResult::error('Could not locate the PHP binary to launch the background job.'));
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('servers.refreshFromSpinupWp'));
 
-            $response->assertSessionHas('status_error', 'SpinupWP refresh failed. no summary');
+            $response->assertSessionHas('status_error', 'Could not locate the PHP binary to launch the background job.');
             $response->assertSessionMissing('status');
         });
     });
 
     describe('refreshFromGridPane', function () {
-        it('flashes a success status when the import + poll succeed', function () {
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-gridpane')->andReturn(0);
-            Artisan::shouldReceive('call')->once()->with('clockwork:poll-servers')->andReturn(0);
-            Artisan::shouldReceive('output')->twice()->andReturn(
-                'Servers: {"created":1,"updated":0,"unchanged":0}'."\n".'Sites: {"created":3}',
-                'Done. green=1 yellow=0 red=0 unknown=0 errors=0 deleted=0',
-            );
+        it('starts import + poll in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.import_gridpane'
+                        && $cmds === ['clockwork:import-gridpane', 'clockwork:poll-servers'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('servers.refreshFromGridPane'));
 
             $response->assertSessionHas('status', function ($msg) {
-                return str_starts_with($msg, 'Refreshed from GridPane.')
-                    && str_contains($msg, 'Servers: {"created":1');
+                return str_contains($msg, 'GridPane refresh started in the background');
             });
             $response->assertSessionMissing('status_error');
         });
 
-        it('flashes a status_error when the import fails, and never calls poll-servers', function () {
-            Artisan::shouldReceive('call')->once()->with('clockwork:import-gridpane')->andReturn(1);
-            Artisan::shouldReceive('call')->with('clockwork:poll-servers')->never();
-            Artisan::shouldReceive('output')->once()->andReturn('GRIDPANE_API_KEY is not configured in .env or Settings.');
+        it('flashes a status_error when the background launch fails', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->andReturn(BackgroundArtisanResult::error('Could not locate the PHP binary to launch the background job.'));
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('servers.refreshFromGridPane'));
 
-            $response->assertSessionHas('status_error', 'GridPane refresh failed. no summary');
+            $response->assertSessionHas('status_error', 'Could not locate the PHP binary to launch the background job.');
             $response->assertSessionMissing('status');
         });
     });

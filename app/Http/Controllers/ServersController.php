@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Server;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use App\Services\Monitoring\CpuStatusClassifier;
+use App\Services\Process\BackgroundArtisan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 use Modules\Core\ModuleStateResolver;
 use Modules\SpinupWp\SpinupWpClient;
@@ -32,13 +32,17 @@ class ServersController extends Controller
             return back()->with('status_error', 'SpinupWP is not enabled for this fleet.');
         }
 
-        $result = $this->runSpinupWpImport();
+        $result = $this->startImportInBackground(
+            'fleet.import_spinupwp',
+            ['clockwork:import-spinupwp', 'clockwork:poll-servers'],
+            'spinupwp-import-bg',
+        );
 
         if ($result['ok']) {
-            return back()->with('status', 'Refreshed from SpinupWP. '.$result['summary']);
+            return back()->with('status', $result['summary']);
         }
 
-        return back()->with('status_error', 'SpinupWP refresh failed. '.$result['summary']);
+        return back()->with('status_error', $result['summary']);
     }
 
     /**
@@ -52,120 +56,41 @@ class ServersController extends Controller
             return back()->with('status_error', 'GridPane is not enabled for this fleet.');
         }
 
-        $result = $this->runGridPaneImport();
+        $result = $this->startImportInBackground(
+            'fleet.import_gridpane',
+            ['clockwork:import-gridpane', 'clockwork:poll-servers'],
+            'gridpane-import-bg',
+        );
 
         if ($result['ok']) {
-            return back()->with('status', 'Refreshed from GridPane. '.$result['summary']);
+            return back()->with('status', $result['summary']);
         }
 
-        return back()->with('status_error', 'GridPane refresh failed. '.$result['summary']);
+        return back()->with('status_error', $result['summary']);
     }
 
     /**
-     * Runs `clockwork:import-gridpane` then `clockwork:poll-servers`. See
-     * runSpinupWpImport() below for why the poll step is chained on.
+     * Import then poll, detached. The previous inline Artisan::call pair
+     * blocked the request for the whole fleet (import + metrics poll).
      *
+     * @param  list<string>  $commands
      * @return array{ok: bool, summary: string}
      */
-    protected function runGridPaneImport(): array
+    protected function startImportInBackground(string $lockKey, array $commands, string $logBasename): array
     {
-        try {
-            $importExit = Artisan::call('clockwork:import-gridpane');
-            $importOutput = trim((string) Artisan::output());
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'summary' => 'error: '.$e->getMessage()];
+        $result = app(BackgroundArtisan::class)->start($lockKey, $commands, 900, $logBasename);
+
+        if ($result->alreadyRunning()) {
+            return ['ok' => true, 'summary' => 'A refresh is already running in the background.'];
         }
 
-        $importSummary = $this->extractSummaryLines($importOutput, ['Servers:', 'Sites:']);
-
-        if ($importExit !== 0) {
-            return ['ok' => false, 'summary' => $importSummary ?: 'no summary'];
+        if ($result->failed()) {
+            return ['ok' => false, 'summary' => $result->error ?? 'Could not start the background refresh.'];
         }
 
-        $pollSummary = '';
-        try {
-            Artisan::call('clockwork:poll-servers');
-            $pollOutput = trim((string) Artisan::output());
-            $pollLine = $this->extractSummaryLines($pollOutput, ['Done.']);
-            $pollSummary = $pollLine ? 'Polled: '.preg_replace('/^Done\.\s*/', '', $pollLine) : '';
-        } catch (\Throwable $e) {
-            $pollSummary = 'Poll skipped: '.$e->getMessage();
-        }
+        $label = str_contains($commands[0], 'gridpane') ? 'GridPane' : 'SpinupWP';
 
-        $summary = trim($importSummary.($pollSummary ? ' · '.$pollSummary : ''));
-
-        return ['ok' => true, 'summary' => $summary ?: 'no summary'];
-    }
-
-    /**
-     * Runs `clockwork:import-spinupwp` then `clockwork:poll-servers` so a
-     * just-added server gets its status (green/yellow/red) immediately
-     * instead of sitting at the bottom of the dashboard as "unknown" until
-     * the next minute-cron tick.
-     *
-     * Import is the gating step — if it fails, poll is skipped. Poll
-     * failure does not flip the overall result to error, since the user's
-     * primary intent ("refresh server + site list from SpinupWP") still
-     * succeeded.
-     *
-     * @return array{ok: bool, summary: string}
-     */
-    protected function runSpinupWpImport(): array
-    {
-        try {
-            $importExit = Artisan::call('clockwork:import-spinupwp');
-            $importOutput = trim((string) Artisan::output());
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'summary' => 'error: '.$e->getMessage()];
-        }
-
-        $importSummary = $this->extractSummaryLines($importOutput, ['Servers:', 'Sites:']);
-
-        if ($importExit !== 0) {
-            return ['ok' => false, 'summary' => $importSummary ?: 'no summary'];
-        }
-
-        // Poll the fleet so any new servers (or servers whose status hasn't
-        // been classified yet) flip out of "unknown" into the right bucket.
-        $pollSummary = '';
-        try {
-            Artisan::call('clockwork:poll-servers');
-            $pollOutput = trim((string) Artisan::output());
-            $pollLine = $this->extractSummaryLines($pollOutput, ['Done.']);
-            // Reformat "Done. green=X yellow=Y red=Z unknown=W errors=E" → "Polled: ..."
-            $pollSummary = $pollLine ? 'Polled: '.preg_replace('/^Done\.\s*/', '', $pollLine) : '';
-        } catch (\Throwable $e) {
-            $pollSummary = 'Poll skipped: '.$e->getMessage();
-        }
-
-        $summary = trim($importSummary.($pollSummary ? ' · '.$pollSummary : ''));
-
-        return ['ok' => true, 'summary' => $summary ?: 'no summary'];
-    }
-
-    /**
-     * Pull lines starting with any of the given prefixes from artisan output
-     * and join them with " · " for compact flash display.
-     *
-     * @param  list<string>  $prefixes
-     */
-    protected function extractSummaryLines(string $output, array $prefixes): string
-    {
-        $matches = array_values(array_filter(
-            preg_split('/\R/', $output) ?: [],
-            function ($l) use ($prefixes) {
-                $trimmed = trim($l);
-                foreach ($prefixes as $p) {
-                    if (str_starts_with($trimmed, $p)) {
-                        return true;
-                    }
-                }
-
-                return false;
-            },
-        ));
-
-        return implode(' · ', array_map('trim', $matches));
+        return ['ok' => true, 'summary' => "{$label} refresh started in the background (import, then fleet poll). Refresh this page in a minute."];
     }
 
     public function store(Request $request): RedirectResponse
@@ -201,28 +126,26 @@ class ServersController extends Controller
         $message = "Server '{$server->name}' created.";
 
         if (app(SpinupWpClient::class)->isConfigured()) {
-            // Auto-refresh from SpinupWP so any sites that already belong to
-            // this server (or have moved between servers since the last
-            // sync) appear immediately. Idempotent and harmless for
-            // hand-rolled servers that have no SpinupWP record — they
-            // simply get no update from this pass.
-            $import = $this->runSpinupWpImport();
+            $import = $this->startImportInBackground(
+                'fleet.import_spinupwp',
+                ['clockwork:import-spinupwp', 'clockwork:poll-servers'],
+                'spinupwp-import-bg',
+            );
 
             if ($import['ok']) {
-                $message .= ' Refreshed from SpinupWP — '.$import['summary'].'.';
+                $message .= ' '.$import['summary'];
             } else {
                 $message .= ' (SpinupWP refresh skipped: '.$import['summary'].')';
             }
         } else {
-            // No SpinupWP account on this fleet — skip the import entirely
-            // rather than run a command that will just fail, but still poll
-            // so this new server's status (green/yellow/red) classifies
-            // immediately instead of sitting at "unknown" until the next
-            // scheduled tick.
-            try {
-                Artisan::call('clockwork:poll-servers');
-            } catch (\Throwable) {
-                // Best-effort — the server was created either way.
+            $poll = app(BackgroundArtisan::class)->start(
+                'fleet.poll_servers',
+                ['clockwork:poll-servers'],
+                600,
+                'poll-servers-bg',
+            );
+            if ($poll->started()) {
+                $message .= ' Fleet poll started in the background.';
             }
         }
 

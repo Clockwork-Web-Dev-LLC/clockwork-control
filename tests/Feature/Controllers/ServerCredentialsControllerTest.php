@@ -20,8 +20,8 @@ uses(RendersAuthenticatedPages::class);
 | value read back through the model is correct.
 |
 | SshClient is a real network/SSH client (phpseclib3 under the hood) — every
-| action that calls it (test(), and the verification step inside
-| bulkUpdate()/update()/feedApply()) mocks it here.
+| action that still calls it (test() and the single-server update() verify)
+| mocks it here. Fleet-wide bulkUpdate()/feedApply() only persist credentials.
 */
 
 beforeEach(function () {
@@ -49,14 +49,8 @@ describe('bulk (GET /servers/credentials)', function () {
 });
 
 describe('bulkUpdate (POST /servers/credentials)', function () {
-    it('sets the password on each server, defaults the SSH user, verifies over SSH, and persists the password encrypted', function () {
+    it('sets the password on each server, defaults the SSH user, and persists the password encrypted', function () {
         $server = Server::factory()->create(['ssh_user' => '', 'ssh_password' => null]);
-
-        $this->mock(SshClient::class)
-            ->shouldReceive('test')
-            ->once()
-            ->withArgs(fn (Server $s) => $s->is($server))
-            ->andReturn(['ok' => true, 'message' => 'Connected.']);
 
         $response = $this->actingAs(User::factory()->create())->post(route('servers.credentials.bulkUpdate'), [
             'passwords' => [
@@ -65,7 +59,9 @@ describe('bulkUpdate (POST /servers/credentials)', function () {
         ]);
 
         $response->assertRedirect(route('servers.credentials.bulk'));
-        $response->assertSessionHas('status', 'Updated SSH credentials on 1 server(s). Verified 1.');
+        $response->assertSessionHas('status', function ($status) {
+            return str_contains($status, 'Updated SSH credentials on 1 server(s)');
+        });
 
         $fresh = $server->fresh();
         expect($fresh->ssh_password)->toBe('super-secret-pw-1');
@@ -76,33 +72,27 @@ describe('bulkUpdate (POST /servers/credentials)', function () {
         expect($rawPassword)->not->toBeNull();
     });
 
-    it('reports a failed count in the flash message when SSH verification fails, but still saves the password', function () {
+    it('saves the password without a live SSH verify so a fleet submit cannot time out', function () {
         $server = Server::factory()->create(['ssh_user' => 'clockwork-deploy']);
-
-        $this->mock(SshClient::class)->shouldReceive('test')->once()->andReturn([
-            'ok' => false,
-            'message' => 'Connection refused.',
-        ]);
 
         $response = $this->actingAs(User::factory()->create())->post(route('servers.credentials.bulkUpdate'), [
             'passwords' => [$server->id => 'another-pw'],
         ]);
 
-        $response->assertSessionHas('status_error', 'Updated SSH credentials on 1 server(s). Verified 0, 1 failed verification.');
-        $response->assertSessionMissing('status');
+        $response->assertSessionHas('status', function ($status) {
+            return str_contains($status, 'Updated SSH credentials on 1 server(s)');
+        });
         expect($server->fresh()->ssh_password)->toBe('another-pw');
     });
 
-    it('skips servers with an empty or missing password entry and never touches SshClient for them', function () {
+    it('skips servers with an empty or missing password entry', function () {
         $server = Server::factory()->create(['ssh_password' => null]);
-
-        $this->mock(SshClient::class)->shouldNotReceive('test');
 
         $response = $this->actingAs(User::factory()->create())->post(route('servers.credentials.bulkUpdate'), [
             'passwords' => [$server->id => ''],
         ]);
 
-        $response->assertSessionHas('status', 'Updated SSH credentials on 0 server(s). Verified 0.');
+        $response->assertSessionHas('status', 'No passwords submitted.');
         expect($server->fresh()->ssh_password)->toBeNull();
     });
 });
@@ -290,18 +280,12 @@ describe('feedParse (POST /servers/credentials/feed)', function () {
 });
 
 describe('feedApply (POST /servers/credentials/feed/apply)', function () {
-    it('applies a matched entry to an existing server, verifies over SSH, and persists the password encrypted', function () {
+    it('applies a matched entry to an existing server and persists the password encrypted', function () {
         $server = Server::factory()->create([
             'ssh_user' => 'clockwork-deploy',
             'ssh_port' => 22,
             'ssh_password' => null,
         ]);
-
-        $this->mock(SshClient::class)
-            ->shouldReceive('test')
-            ->once()
-            ->withArgs(fn (Server $s) => $s->is($server))
-            ->andReturn(['ok' => true, 'message' => 'Connected.']);
 
         $response = $this->actingAs(User::factory()->create())->post(route('servers.credentials.feedApply'), [
             'entries' => [
@@ -316,7 +300,9 @@ describe('feedApply (POST /servers/credentials/feed/apply)', function () {
         ]);
 
         $response->assertRedirect(route('servers.credentials.bulk'));
-        $response->assertSessionHas('status', 'Updated credentials on 1 server(s). Verified 1.');
+        $response->assertSessionHas('status', function ($status) {
+            return str_contains($status, 'Updated credentials on 1 server(s)');
+        });
 
         $fresh = $server->fresh();
         expect($fresh->ssh_password)->toBe('feed-applied-password');
@@ -325,9 +311,7 @@ describe('feedApply (POST /servers/credentials/feed/apply)', function () {
         expect($rawPassword)->not->toBe('feed-applied-password');
     });
 
-    it('creates a new server for an unmatched entry and verifies it over SSH', function () {
-        $this->mock(SshClient::class)->shouldReceive('test')->once()->andReturn(['ok' => true, 'message' => 'Connected.']);
-
+    it('creates a new server for an unmatched entry without a live SSH verify', function () {
         $response = $this->actingAs(User::factory()->create())->post(route('servers.credentials.feedApply'), [
             'entries' => [
                 [
@@ -341,7 +325,9 @@ describe('feedApply (POST /servers/credentials/feed/apply)', function () {
             ],
         ]);
 
-        $response->assertSessionHas('status', 'Created 1 new server(s). Verified 1.');
+        $response->assertSessionHas('status', function ($status) {
+            return str_contains($status, 'Created 1 new server(s)');
+        });
 
         $created = Server::query()->where('hostname', '203.0.113.99')->firstOrFail();
         expect($created->name)->toBe('web-test9.example.com');
@@ -363,7 +349,7 @@ describe('feedApply (POST /servers/credentials/feed/apply)', function () {
             ],
         ]);
 
-        $response->assertSessionHas('status', 'No changes. Verified 0. Skipped 1.');
+        $response->assertSessionHas('status', 'No changes. Skipped 1.');
         expect(Server::query()->where('hostname', '203.0.113.100')->exists())->toBeFalse();
     });
 });

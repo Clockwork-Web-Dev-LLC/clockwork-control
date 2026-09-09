@@ -8,16 +8,14 @@ use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
+use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\PluginVulnerabilityMatcher;
-use App\Services\Sites\WpConfigExtractor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
-use Throwable;
 
 class IssuesController extends Controller
 {
@@ -357,51 +355,56 @@ class IssuesController extends Controller
         return back()->with('status', "{$site->domain} removed from monitoring.");
     }
 
-    public function fetchAllDbCreds(WpConfigExtractor $extractor): RedirectResponse
+    public function fetchAllDbCreds(BackgroundArtisan $background): RedirectResponse
     {
         $sites = Site::query()
-            ->with('server')
             ->where('is_wordpress', true)
             ->whereNull('db_password')
             ->whereHas('server', fn ($q) => $q->monitored()->whereNotNull('last_ssh_ok_at'))
-            ->get();
+            ->count();
 
-        if ($sites->isEmpty()) {
+        if ($sites === 0) {
             return back()->with('status', 'No sites with missing DB credentials found.');
         }
 
-        $ok = 0;
-        $failed = [];
+        $result = $background->start(
+            'issues.extract_wp_configs',
+            ['clockwork:extract-wp-configs'],
+            900,
+            'extract-wp-configs-bg',
+        );
 
-        foreach ($sites as $site) {
-            try {
-                $extractor->extractAndStore($site);
-                $ok++;
-            } catch (Throwable $e) {
-                $failed[] = "{$site->domain}: {$e->getMessage()}";
-            }
+        if ($result->alreadyRunning()) {
+            return back()->with('status', 'A DB-credentials fetch is already running.');
         }
 
-        if ($failed) {
-            $msg = "Fetched {$ok}, failed ".count($failed).': '.implode('; ', array_slice($failed, 0, 3));
-
-            return back()->with('status_error', $msg);
+        if ($result->failed()) {
+            return back()->with('status_error', $result->error ?? 'Could not start the DB-credentials fetch.');
         }
 
-        return back()->with('status', "DB credentials fetched for {$ok} site(s).");
+        return back()->with('status', "Fetching DB credentials for {$sites} site(s) in the background. Refresh this page in a few minutes.");
     }
 
-    public function pollServers(): JsonResponse
+    public function pollServers(BackgroundArtisan $background): JsonResponse
     {
-        try {
-            Artisan::call('clockwork:poll-servers');
-        } catch (Throwable $e) {
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
-        }
-
         $unhealthy = Server::query()->monitored()->where('status', 'red')->count();
 
-        return response()->json(['ok' => true, 'unhealthy' => $unhealthy]);
+        $result = $background->start(
+            'fleet.poll_servers',
+            ['clockwork:poll-servers'],
+            600,
+            'poll-servers-bg',
+        );
+
+        if ($result->alreadyRunning()) {
+            return response()->json(['ok' => true, 'started' => false, 'already_running' => true, 'unhealthy' => $unhealthy]);
+        }
+
+        if ($result->failed()) {
+            return response()->json(['ok' => false, 'error' => $result->error], 500);
+        }
+
+        return response()->json(['ok' => true, 'started' => true, 'unhealthy' => $unhealthy]);
     }
 
     public function ignore(Request $request): JsonResponse|RedirectResponse

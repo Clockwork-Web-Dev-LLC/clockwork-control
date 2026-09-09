@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Process\BackgroundArtisan;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 
 /**
@@ -73,8 +73,22 @@ class SecurityScansSettingsController extends Controller
             return back()->with('queue_error', "Unknown source '{$source}'.");
         }
 
-        Artisan::queue(self::SOURCES[$source]['command']);
+        $command = self::SOURCES[$source]['command'];
+        $result = app(BackgroundArtisan::class)->start(
+            'security_scans.'.$source,
+            [$command],
+            1800,
+            'security-scan-'.$source.'-bg',
+        );
 
-        return back()->with('status', "{$source} scan queued — running in background.");
+        if ($result->alreadyRunning()) {
+            return back()->with('status', "{$source} scan is already running.");
+        }
+
+        if ($result->failed()) {
+            return back()->with('queue_error', $result->error ?? "Could not start the {$source} scan.");
+        }
+
+        return back()->with('status', "{$source} scan started in the background — refresh this page in a few minutes.");
     }
 }

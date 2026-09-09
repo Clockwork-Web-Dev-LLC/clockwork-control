@@ -4,13 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use App\Models\SiteUptimeEvent;
+use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Uptime\UptimeStateUpdater;
 use App\Services\Uptime\UptimeStatsCalculator;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 
 /**
@@ -132,29 +132,24 @@ class MonitoringController extends Controller
      * wants the up/down status to reflect reality immediately instead of
      * waiting for the next cron tick.
      */
-    public function refresh(): RedirectResponse
+    public function refresh(BackgroundArtisan $background): RedirectResponse
     {
-        try {
-            $exitCode = Artisan::call('clockwork:check-site-uptime');
-            $output = trim((string) Artisan::output());
-        } catch (\Throwable $e) {
-            return back()->with('status_error', 'Uptime refresh error: '.$e->getMessage());
+        $result = $background->start(
+            'monitoring.check_site_uptime',
+            ['clockwork:check-site-uptime'],
+            900,
+            'uptime-refresh-bg',
+        );
+
+        if ($result->alreadyRunning()) {
+            return back()->with('status', 'A fleet re-probe is already running. Refresh this page in a couple of minutes.');
         }
 
-        // Pull the "Done. up=N down=M elapsed=Xs" line from the artisan output.
-        $summary = '';
-        foreach (preg_split('/\R/', $output) ?: [] as $line) {
-            if (str_starts_with(trim($line), 'Done.')) {
-                $summary = trim($line);
-                break;
-            }
+        if ($result->failed()) {
+            return back()->with('status_error', $result->error ?? 'Could not start the uptime re-probe.');
         }
 
-        if ($exitCode === 0) {
-            return back()->with('status', 'Uptime refresh complete. '.$summary);
-        }
-
-        return back()->with('status_error', 'Uptime refresh failed (exit '.$exitCode.'). '.$summary);
+        return back()->with('status', 'Re-probe started in the background. This page will show new results as sites complete (~2–3 min for the full fleet).');
     }
 
     public function updateSettings(Request $request, Settings $settings): RedirectResponse

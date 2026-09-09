@@ -5,6 +5,8 @@ use App\Models\Site;
 use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
 use App\Models\User;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -59,14 +61,22 @@ describe('CapacityController', function () {
         $response->assertSee('tag exists', false);
     });
 
-    it('toggles site-metrics collection off and flashes the resulting state', function () {
+    it('toggles site-metrics collection off and starts a background Companion push', function () {
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $key, array $cmds) => $key === 'capacity.push_sampler_state'
+                    && $cmds === ['clockwork:push-site-metrics-state'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
+
         $response = $this->actingAs(User::factory()->create())
             ->post(route('capacity.site-metrics.toggle'));
 
         $response->assertRedirect()
             ->assertSessionHas(
                 'status',
-                'Per-site CPU collection paused. Pushed new state to 0 sites with Companion 1.17.2+.'
+                'Per-site CPU collection paused. Companion sites are being notified in the background.'
             );
     });
 

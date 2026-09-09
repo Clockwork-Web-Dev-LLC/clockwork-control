@@ -5,6 +5,8 @@ use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Companion\CompanionBrandingManager;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -228,40 +230,38 @@ describe('CompanionSettingsController', function () {
     });
 
     describe('sync', function () {
-        it('executes fleet sync and redirects with summary message', function () {
+        it('starts branding sync in the background', function () {
             $user = User::factory()->create();
 
-            $mockManager = Mockery::mock(CompanionBrandingManager::class);
-            $mockManager->shouldReceive('syncFleet')->once()->andReturn([
-                'total' => 2,
-                'successful' => 2,
-                'failed' => 0,
-                'errors' => [],
-            ]);
-            $this->app->instance(CompanionBrandingManager::class, $mockManager);
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'companion.push_branding'
+                        && $cmds === ['clockwork:push-companion-branding'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
 
             $response = $this->actingAs($user)->post(route('settings.companion.sync'));
 
             $response->assertRedirect();
-            $response->assertSessionHas('status', 'Branding synced to 2 of 2 site(s).');
+            $response->assertSessionHas('status', function ($status) {
+                return str_contains($status, 'Branding sync started in the background');
+            });
         });
 
-        it('reports failure warnings when one or more sites fail sync', function () {
+        it('reports when a branding sync is already running', function () {
             $user = User::factory()->create();
 
-            $mockManager = Mockery::mock(CompanionBrandingManager::class);
-            $mockManager->shouldReceive('syncFleet')->once()->andReturn([
-                'total' => 3,
-                'successful' => 2,
-                'failed' => 1,
-                'errors' => ['fail.com' => 'Connection timeout'],
-            ]);
-            $this->app->instance(CompanionBrandingManager::class, $mockManager);
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->andReturn(BackgroundArtisanResult::busy());
+            });
 
             $response = $this->actingAs($user)->post(route('settings.companion.sync'));
 
             $response->assertRedirect();
-            $response->assertSessionHas('warning', 'Branding synced to 2 of 3 site(s). (1 failed)');
+            $response->assertSessionHas('status', 'A branding sync is already running.');
         });
     });
 

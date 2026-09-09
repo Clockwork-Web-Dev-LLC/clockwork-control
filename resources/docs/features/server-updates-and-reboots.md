@@ -45,7 +45,7 @@ A single dashboard for the whole fleet:
 
 ### Re-poll fleet now
 
-The button next to the rollup tiles kicks off `clockwork:poll-system-updates --all` as a **detached background process** (it forks with `nohup ... &` via `Symfony\Component\Process\PhpExecutableFinder` so it survives the HTTP request). A poll-in-progress banner appears at the top showing "polled X of Y" and the page auto-refreshes every 10s until the marker clears. The poll is **idempotent** across clicks — a cache lock (`operations.system_updates.poll_in_progress_since`) means a double-click only starts one background process; the second click sees "still running" and bails.
+The button next to the rollup tiles kicks off `clockwork:poll-system-updates --all` through `BackgroundArtisan` (the shared `Cache::add` + `PhpExecutableFinder` + `nohup` helper every other fleet-wide "run now" button uses). A poll-in-progress banner appears at the top showing "polled X of Y" and the page auto-refreshes every 10s until the marker clears. The poll is **idempotent** across clicks — a cache lock (`operations.system_updates.poll_in_progress_since`) means a double-click only starts one background process; the second click sees "still running" and bails.
 
 The same poll runs automatically every day at 04:15 UTC, but the on-demand path is what you reach for after a manual upgrade so the dashboard reflects reality immediately.
 

@@ -191,7 +191,7 @@ CLOCKWORK_BACKUP_RELAY_MODE=in_repo
 
 The web UI provides full visibility and control:
 - **Operational Mode Badge**: Shows whether in-repo native archiving or external droplet handoff is active.
-- **Run Relay Now**: Triggers an on-demand in-repo archive run across all enabled sites.
+- **Run Relay Now**: Launches `clockwork:backup-relay-run` in the background (`BackgroundArtisan`, 2-hour lock). The request returns immediately — a full archive + Glacier upload per site cannot finish in-request.
 - **Site Relay Targets**: Domain list with provider badges, adapter capability status, last archived timestamp, and instant toggle switches. Each row is expandable — see [Viewing & Downloading Historical Archives](#viewing--downloading-historical-archives) below.
 - **Run History**: Table of recent runs displaying archived, skipped, failed counts, durations, and error details.
 

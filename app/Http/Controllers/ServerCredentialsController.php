@@ -23,7 +23,7 @@ class ServerCredentialsController extends Controller
         return view('dashboard.credentials-bulk', compact('servers'));
     }
 
-    public function bulkUpdate(Request $request, SshClient $ssh): RedirectResponse
+    public function bulkUpdate(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'ssh_user' => ['nullable', 'string', 'max:255'],
@@ -36,8 +36,6 @@ class ServerCredentialsController extends Controller
         $defaultUser = ($validated['ssh_user'] ?? null) ?: (string) config('clockwork.ssh.default_user');
 
         $updated = 0;
-        $verified = 0;
-        $failed = 0;
         foreach ($validated['passwords'] ?? [] as $serverId => $password) {
             if ($password === null || $password === '') {
                 continue;
@@ -54,24 +52,15 @@ class ServerCredentialsController extends Controller
             }
             $server->save();
             $updated++;
-
-            $result = $ssh->test($server->fresh());
-            if (! empty($result['ok'])) {
-                $verified++;
-            } else {
-                $failed++;
-            }
         }
 
-        $msg = "Updated SSH credentials on {$updated} server(s). Verified {$verified}";
-        if ($failed > 0) {
-            $msg .= ", {$failed} failed verification";
-        }
-        $msg .= '.';
+        $msg = $updated === 0
+            ? 'No passwords submitted.'
+            : "Updated SSH credentials on {$updated} server(s). Use Test SSH on each row to verify — fleet-wide verify was removed so this page cannot time out.";
 
         return redirect()
             ->route('servers.credentials.bulk')
-            ->with($failed > 0 ? 'status_error' : 'status', $msg);
+            ->with('status', $msg);
     }
 
     public function edit(Server $server): View
@@ -190,7 +179,7 @@ class ServerCredentialsController extends Controller
         ]);
     }
 
-    public function feedApply(Request $request, SshClient $ssh): RedirectResponse
+    public function feedApply(Request $request): RedirectResponse
     {
         $entries = $request->input('entries', []);
 
@@ -198,8 +187,6 @@ class ServerCredentialsController extends Controller
         $created = 0;
         $skipped = 0;
         $userUpdates = 0;
-        $verified = 0;
-        $failed = 0;
 
         foreach ($entries as $row) {
             if (empty($row['apply'])) {
@@ -267,13 +254,6 @@ class ServerCredentialsController extends Controller
                 ]);
                 $created++;
             }
-
-            $result = $ssh->test($server->fresh());
-            if (! empty($result['ok'])) {
-                $verified++;
-            } else {
-                $failed++;
-            }
         }
 
         $parts = [];
@@ -288,20 +268,18 @@ class ServerCredentialsController extends Controller
         }
         $msg = implode('. ', $parts).'.';
 
-        $msg .= " Verified {$verified}";
-        if ($failed > 0) {
-            $msg .= ", {$failed} failed";
-        }
-        $msg .= '.';
         if ($userUpdates > 0) {
             $msg .= " Updated SSH user on {$userUpdates}.";
         }
         if ($skipped > 0) {
             $msg .= " Skipped {$skipped}.";
         }
+        if ($applied > 0 || $created > 0) {
+            $msg .= ' Use Test SSH on each row to verify — fleet-wide verify was removed so this page cannot time out.';
+        }
 
         return redirect()
             ->route('servers.credentials.bulk')
-            ->with($failed > 0 ? 'status_error' : 'status', $msg);
+            ->with('status', $msg);
     }
 }

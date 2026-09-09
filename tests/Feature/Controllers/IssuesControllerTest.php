@@ -4,10 +4,10 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Services\Scheduler\SchedulerHeartbeat;
-use App\Services\Sites\WpConfigExtractor;
 use App\Support\Settings;
-use Illuminate\Support\Facades\Artisan;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -28,25 +28,29 @@ describe('IssuesController', function () {
         $response->assertOk()->assertSee('Issues');
     });
 
-    it('poll-servers dispatches clockwork:poll-servers and reports unhealthy count', function () {
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('clockwork:poll-servers')
-            ->andReturn(0);
+    it('poll-servers starts clockwork:poll-servers in the background and reports unhealthy count', function () {
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.poll_servers'
+                    && $cmds === ['clockwork:poll-servers'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
 
         Server::factory()->create(['status' => Server::STATUS_RED]);
 
         $response = $this->actingAs(User::factory()->create())
             ->post(route('issues.poll-servers'));
 
-        $response->assertOk()->assertJson(['ok' => true, 'unhealthy' => 1]);
+        $response->assertOk()->assertJson(['ok' => true, 'started' => true, 'unhealthy' => 1]);
     });
 
-    it('poll-servers returns a 500 JSON error when the artisan command throws', function () {
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('clockwork:poll-servers')
-            ->andThrow(new RuntimeException('ssh fleet unreachable'));
+    it('poll-servers returns a 500 JSON error when the background launch fails', function () {
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->andReturn(BackgroundArtisanResult::error('ssh fleet unreachable'));
+        });
 
         $response = $this->actingAs(User::factory()->create())
             ->post(route('issues.poll-servers'));
@@ -54,26 +58,29 @@ describe('IssuesController', function () {
         $response->assertStatus(500)->assertJson(['ok' => false, 'error' => 'ssh fleet unreachable']);
     });
 
-    it('fetch-all-db-creds extracts credentials for every eligible site', function () {
+    it('fetch-all-db-creds starts extract-wp-configs in the background', function () {
         $server = Server::factory()->create(['last_ssh_ok_at' => now()]);
-        $site = Site::factory()->spinupwp()->create([
+        Site::factory()->spinupwp()->create([
             'server_id' => $server->id,
             'is_wordpress' => true,
             'db_password' => null,
         ]);
 
-        $this->mock(WpConfigExtractor::class, function ($mock) use ($site) {
-            $mock->shouldReceive('extractAndStore')
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
                 ->once()
-                ->withArgs(fn (Site $s) => $s->is($site))
-                ->andReturn(['db_name' => 'wp', 'db_user' => 'wp', 'db_password' => 'secret', 'db_host' => 'localhost']);
+                ->withArgs(fn (string $key, array $cmds) => $key === 'issues.extract_wp_configs'
+                    && $cmds === ['clockwork:extract-wp-configs'])
+                ->andReturn(BackgroundArtisanResult::ok());
         });
 
         $response = $this->actingAs(User::factory()->create())
             ->post(route('issues.fetch-all-db-creds'));
 
         $response->assertRedirect()
-            ->assertSessionHas('status', 'DB credentials fetched for 1 site(s).');
+            ->assertSessionHas('status', function ($status) {
+                return str_contains($status, 'Fetching DB credentials for 1 site(s) in the background');
+            });
     });
 
     it('fetch-all-db-creds reports no candidates when nothing is missing credentials', function () {

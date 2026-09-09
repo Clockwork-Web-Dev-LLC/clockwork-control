@@ -101,5 +101,5 @@ Base URL `https://api.spinupwp.app/v1`.
 
 The 03:30 daily import is the steady state, but two paths trigger an immediate re-run:
 
-- **`POST /servers/refresh-spinupwp`** — fleet-wide button, surfaces on the dashboard and every server header. Runs `clockwork:import-spinupwp` followed by `clockwork:poll-servers` so a freshly-imported server flips out of `unknown` status into its right severity bucket on the same click.
-- **`ServersController::store`** — auto-runs `import-spinupwp` after a manual server creation so any sites that already belonged to that box (per SpinupWP) attach immediately.
+- **`POST /servers/refresh-spinupwp`** — fleet-wide button, surfaces on the dashboard and every server header. Launches `clockwork:import-spinupwp` then `clockwork:poll-servers` in the background so the request cannot time out. A freshly-imported server flips out of `unknown` once the poll finishes.
+- **`ServersController::store`** — launches the same background import after a manual server creation so any sites that already belonged to that box (per SpinupWP) attach without blocking the redirect.

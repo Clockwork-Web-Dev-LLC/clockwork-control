@@ -105,7 +105,7 @@ class CodeSnippetsController extends Controller
     public function execute(Request $request, ActionLogger $logger): JsonResponse
     {
         $validated = $request->validate([
-            'site_ids' => ['required', 'array', 'min:1'],
+            'site_ids' => ['required', 'array', 'min:1', 'max:15'],
             'site_ids.*' => ['integer'],
             'code' => ['required', 'string'],
             'timeout' => ['nullable', 'integer', 'min:1', 'max:120'],

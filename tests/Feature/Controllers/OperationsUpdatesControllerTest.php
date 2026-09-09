@@ -36,6 +36,7 @@ namespace {
     use App\Models\ServerUpdateSnapshot;
     use App\Models\Tag;
     use App\Models\User;
+    use App\Services\Process\DetachedShell;
     use Illuminate\Support\Facades\Cache;
     use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -151,6 +152,13 @@ namespace {
         });
 
         it('starts a background poll on refresh, stamps the in-progress cache marker, and never touches the real exec()', function () {
+            $this->mock(DetachedShell::class, function ($mock) {
+                $mock->shouldReceive('run')
+                    ->once()
+                    ->withArgs(fn (string $cmd) => str_contains($cmd, 'clockwork:poll-system-updates --all')
+                        && str_contains($cmd, 'nohup'));
+            });
+
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('operations.server-updates.refresh'), []);
 
@@ -158,16 +166,14 @@ namespace {
             $response->assertSessionHas('status', 'Fleet poll started in the background — the page will refresh as servers complete.');
 
             expect(Cache::has(OperationsUpdatesController::POLL_MARKER_KEY))->toBeTrue();
-            expect($GLOBALS['__ouc_exec_calls'])->toHaveCount(1);
-            expect($GLOBALS['__ouc_exec_calls'][0])
-                ->toContain('clockwork:poll-system-updates')
-                ->toContain('--all')
-                ->toContain('< /dev/null')
-                ->toContain('> /dev/null 2>&1');
         });
 
         it('declines to start a second background poll while one is already in flight', function () {
             Cache::put(OperationsUpdatesController::POLL_MARKER_KEY, now()->toIso8601String(), 600);
+
+            $this->mock(DetachedShell::class, function ($mock) {
+                $mock->shouldNotReceive('run');
+            });
 
             $response = $this->actingAs(User::factory()->create())
                 ->post(route('operations.server-updates.refresh'), []);
@@ -175,7 +181,6 @@ namespace {
             $response->assertSessionHas('status', function ($status) {
                 return str_contains($status, 'already running');
             });
-            expect($GLOBALS['__ouc_exec_calls'])->toBeEmpty();
         });
 
         it('redirects the GET refresh URL straight back to the index without erroring', function () {
