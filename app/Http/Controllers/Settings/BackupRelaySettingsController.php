@@ -216,7 +216,15 @@ class BackupRelaySettingsController extends Controller
 
         if ($result->alreadyRunning()) {
             $msg = 'A backup relay run is already in progress.';
-        } elseif ($result->failed()) {
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
             $msg = $result->error ?? 'Could not start the backup relay run.';
 
             if ($request->wantsJson() || $request->ajax()) {
@@ -224,9 +232,9 @@ class BackupRelaySettingsController extends Controller
             }
 
             return back()->with('error', $msg);
-        } else {
-            $msg = 'Backup relay started in the background. This can take a while — check this page again when the latest run appears.';
         }
+
+        $msg = 'Backup relay started in the background. This can take a while — check this page again when the latest run appears.';
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

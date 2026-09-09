@@ -16,6 +16,7 @@ describe('BackgroundArtisan', function () {
                 ->withArgs(function (string $cmd) {
                     return str_contains($cmd, 'nohup')
                         && str_contains($cmd, 'artisan clockwork:check-site-uptime')
+                        && str_contains($cmd, 'artisan cache:forget')
                         && str_contains($cmd, '< /dev/null')
                         && str_contains($cmd, '> /dev/null 2>&1');
                 });

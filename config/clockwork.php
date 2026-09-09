@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.5.5',
+    'version' => '1.5.6',
 
     'arcjet' => [
         'bots_url' => env(

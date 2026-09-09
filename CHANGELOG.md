@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-09-09
+
 ### Added
+- **Fleet-wide background bulk actions**: Converted long-running synchronous operations into detached background tasks via `BackgroundArtisan` (uptime re-probes, SpinupWP/GridPane server imports, fleet metrics polling, WP DB credentials extraction over SSH, Companion branding sync, and security scan triggers). Resolves request timeouts across the fleet. Includes automatic cache lock cleanup upon process exit.
+- **Code snippet execution cap**: Introduced a 15-site limit on live Code Snippet executions with UI enforcement to protect web requests from proxy timeouts.
 - **Scheduler heartbeat & crontab liveness tracking**: Clockwork Control now monitors whether crontab is actively running `php artisan schedule:run`. An hourly heartbeat (`clockwork:scheduler-heartbeat`) records scheduler execution in `app_settings`. If crontab fails (e.g. machine sleep, disabled cron service, broken PHP symlink) and no heartbeat is recorded for > 2 hours, Clockwork flags a warning on `/issues`, `/monitoring`, `/monitoring/settings`, and in the layout issues counter badge. Includes runbook at `resources/docs/runbooks/scheduler-stuck.md`.
 - **Durable self-update execution logging**: Self-updates now log structured events across every step (`system_update.*`) and persist execution results in `app_settings` (`updates.last_apply_result`). A persistent "Last Update Execution Log" panel on `/settings/updates` displays the outcome, timestamp, error details, and step checklist even if session flash notifications are cleared.
 
 ### Changed
+- **Optimized bulk credential saving**: Bulk SSH password updates and credential feed imports now persist credentials immediately without blocking on synchronous SSH handshakes across the entire fleet; operators verify connectivity per-row.
 - **Conditional Composer execution on self-update**: `SystemUpdateService` now diffs `composer.json` and `composer.lock` against the pre-pull commit. When dependencies have not changed, `composer install` is skipped entirely, speeding up point releases and avoiding unnecessary external toolchain invocations.
+- **Dependency updates**: Upgraded Alpine.js (3.17.2), Tailwind CSS (4.3.3), Vite (8.2.2), FontAwesome Free (7.3.1), and GitHub Actions workflows.
 
 ### Fixed
 - **Subprocess PATH resolution in PHP-FPM / Laravel Herd**: Enriched subprocess `PATH` in `SystemUpdateService` with Apple Silicon & Intel Homebrew paths (`/opt/homebrew/bin`, `/opt/homebrew/sbin`, `/usr/local/bin`, `/usr/local/sbin`), Laravel Herd directories (`~/.config/herd/bin`, `~/Library/Application Support/Herd/bin`), and global Composer vendor paths (`~/.composer/vendor/bin`). Resolves exit code 127 failures when applying updates via the web UI under PHP-FPM.

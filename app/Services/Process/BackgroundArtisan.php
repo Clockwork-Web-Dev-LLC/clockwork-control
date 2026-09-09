@@ -54,11 +54,16 @@ class BackgroundArtisan
             $commands,
         ));
 
+        // Always release the cache lock when the job finishes (on success or failure)
+        // so fleet actions are not blocked for the remainder of the fallback TTL.
+        $forget = escapeshellarg($php).' artisan cache:forget '.escapeshellarg($lockKey);
+        $fullChain = sprintf('(%s) ; %s', $chain, $forget);
+
         $logPath = storage_path('logs/'.($logBasename ?? 'background-artisan').'.log');
         $shell = sprintf(
-            '(cd %s && nohup %s < /dev/null > %s 2>&1 &) > /dev/null 2>&1',
+            '(cd %s && nohup sh -c %s < /dev/null > %s 2>&1 &) > /dev/null 2>&1',
             escapeshellarg(base_path()),
-            $chain,
+            escapeshellarg($fullChain),
             escapeshellarg($logPath),
         );
 
