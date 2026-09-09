@@ -104,9 +104,39 @@ class WpConfigExtractor
         return $result;
     }
 
+    /**
+     * wp-config.php's location relative to the WP docroot (wp_path) varies by
+     * host: SpinupWP keeps it inside the docroot, but GridPane keeps it one
+     * directory ABOVE htdocs (WordPress core itself checks both locations at
+     * boot for exactly this reason — see wp-load.php). Probe the docroot
+     * location first, since that's the more common layout, then fall back to
+     * the parent directory before giving up.
+     */
     public function wpConfigPath(Site $site): string
     {
-        return rtrim($this->wpDirPath($site), '/').'/wp-config.php';
+        $inDocroot = rtrim($this->wpDirPath($site), '/').'/wp-config.php';
+
+        if ($this->fileExists($site, $inDocroot)) {
+            return $inDocroot;
+        }
+
+        $aboveDocroot = dirname(rtrim($this->wpDirPath($site), '/')).'/wp-config.php';
+
+        if ($this->fileExists($site, $aboveDocroot)) {
+            return $aboveDocroot;
+        }
+
+        // Neither confirmed present (e.g. the exists-check itself couldn't
+        // reach the server) — return the docroot path so the caller's error
+        // message at least points somewhere sensible.
+        return $inDocroot;
+    }
+
+    private function fileExists(Site $site, string $path): bool
+    {
+        $escaped = escapeshellarg($path);
+
+        return trim($this->ssh->exec($site->server, "test -f {$escaped} && echo yes")) === 'yes';
     }
 
     private function wpDirPath(Site $site): string

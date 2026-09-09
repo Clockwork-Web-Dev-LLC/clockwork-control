@@ -55,7 +55,10 @@ describe('clockwork:extract-wp-configs — real extraction through a mocked SSH 
     it('parses wp-config.php over SSH and stores the DB credentials + prefix', function () {
         $site = wpConfigSite();
 
-        $this->mock(SshClient::class)->shouldReceive('exec')->once()->andReturn(fakeWpConfig());
+        // 3 calls: wpConfigPath()'s docroot + parent-dir existence probes
+        // (both "fail" against this generic mock, since neither returns the
+        // literal string "yes"), then the actual `cat` that succeeds.
+        $this->mock(SshClient::class)->shouldReceive('exec')->times(3)->andReturn(fakeWpConfig());
 
         $this->artisan('clockwork:extract-wp-configs')
             ->expectsOutputToContain('Extracted: 1, skipped: 0, failed: 0')
@@ -73,9 +76,11 @@ describe('clockwork:extract-wp-configs — real extraction through a mocked SSH 
     it('counts an unreadable wp-config.php as failed and exits FAILURE, without touching db_password', function () {
         $site = wpConfigSite();
 
-        // Both the plain `cat` and the sudo fallback return empty output —
-        // WpConfigExtractor throws, the command catches it and tallies failed.
-        $this->mock(SshClient::class)->shouldReceive('exec')->twice()->andReturn('');
+        // 4 calls: the two wpConfigPath() existence probes (both "not found"),
+        // then the plain `cat` and the sudo fallback, both returning empty
+        // output — WpConfigExtractor throws, the command catches it and
+        // tallies failed.
+        $this->mock(SshClient::class)->shouldReceive('exec')->times(4)->andReturn('');
 
         $this->artisan('clockwork:extract-wp-configs')
             ->expectsOutputToContain('Extracted: 0, skipped: 0, failed: 1')
@@ -119,7 +124,7 @@ describe('clockwork:extract-wp-configs — site selection + skip logic', functio
     it('--force re-extracts a site that already has db_password stored', function () {
         $site = wpConfigSite(['db_password' => 'stale-password']);
 
-        $this->mock(SshClient::class)->shouldReceive('exec')->once()->andReturn(
+        $this->mock(SshClient::class)->shouldReceive('exec')->times(3)->andReturn(
             fakeWpConfig(['DB_PASSWORD' => 'fresh-password'])
         );
 
@@ -134,7 +139,7 @@ describe('clockwork:extract-wp-configs — site selection + skip logic', functio
         $target = wpConfigSite(['domain' => 'target.example.com']);
         wpConfigSite(['domain' => 'other.example.com']);
 
-        $this->mock(SshClient::class)->shouldReceive('exec')->once()->andReturn(fakeWpConfig());
+        $this->mock(SshClient::class)->shouldReceive('exec')->times(3)->andReturn(fakeWpConfig());
 
         $this->artisan('clockwork:extract-wp-configs', ['--site' => 'target.example.com'])
             ->expectsOutputToContain('Extracted: 1, skipped: 0, failed: 0')
@@ -147,7 +152,7 @@ describe('clockwork:extract-wp-configs — site selection + skip logic', functio
         $inScope->update(['server_id' => $server->id]);
         wpConfigSite(['domain' => 'out-of-scope.example.com']);
 
-        $this->mock(SshClient::class)->shouldReceive('exec')->once()->andReturn(fakeWpConfig());
+        $this->mock(SshClient::class)->shouldReceive('exec')->times(3)->andReturn(fakeWpConfig());
 
         $this->artisan('clockwork:extract-wp-configs', ['--server' => $server->name])
             ->expectsOutputToContain('Extracted: 1, skipped: 0, failed: 0')
