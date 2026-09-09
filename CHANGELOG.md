@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-08
+
+### Added
+- **Vultr cloud instance discovery & sync**: Added real-time discovery of cloud VPS instances via Vultr API v2 on `/settings/integrations/vultr/limits` and Setup Checklist modal. Displays plan, specs (vCPUs, RAM, disk, region, tags), and real-time IP linking to local servers. Includes hosting architecture guide and one-click actions: "Sync from SpinupWP/GridPane", "Import as Standalone Server", and "Reconcile Hardware Specs".
+
+### Changed
+- **Promoted GridPane and Vultr to Verified in Production**: Marked both modules as `STATUS_VERIFIED` in their service providers, removing the yellow beaker icon and "Looking for testers" banner across the control panel and website.
+
 ### Fixed
 - Fixed `clockwork:import-gridpane` silently failing to pull a complete fleet on accounts with many paginated pages of sites/servers: the pagination loop slept a hardcoded 150ms between pages regardless of the operator's configured `services.gridpane.delay_ms`, well above GridPane's documented 1-2 requests/second limit, and a single page failing after retries discarded every page already fetched (the whole import aborted with nothing saved). Paging now honors the configured delay via the same per-request gate used elsewhere, and a page that ultimately fails after already accumulating results now returns what was fetched with a console warning instead of throwing everything away — re-running the (idempotent) import picks up the rest.
 - Confirmed against a real fleet that GridPane throttles considerably tighter than its own docs claim: even a 600ms delay with 2 retries still hit `429 Beep, Beep, you're going too fast...` mid-pagination. Default delay bumped to 1500ms and default retries to 3 (both still operator-overridable via `services.gridpane.delay_ms`/`retry_attempts`).
