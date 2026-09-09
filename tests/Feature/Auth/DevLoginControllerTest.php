@@ -9,10 +9,6 @@ use Tests\Concerns\RendersAuthenticatedPages;
 uses(RendersAuthenticatedPages::class);
 
 describe('DevLoginController', function () {
-    afterEach(function () {
-        EnforceInstallerGate::fake(null);
-    });
-
     it('404s when APP_ENV is not local', function () {
         $this->get(route('dev-login'))->assertNotFound();
     });
@@ -31,6 +27,8 @@ describe('DevLoginController', function () {
             'REMOTE_ADDR' => '127.0.0.1',
             'HTTP_HOST' => 'localhost',
         ])->get(route('dev-login'))->assertNotFound();
+
+        $this->app['env'] = 'testing';
     });
 
     it('logs in the first active user on loopback when APP_ENV is local', function () {
@@ -48,6 +46,8 @@ describe('DevLoginController', function () {
 
         $response->assertRedirect(route('settings.companion.index'));
         $this->assertAuthenticatedAs($user);
+
+        $this->app['env'] = 'testing';
     });
 
     it('does not treat a public host as loopback', function () {
