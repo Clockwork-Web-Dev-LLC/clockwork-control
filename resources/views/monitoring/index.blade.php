@@ -32,6 +32,29 @@
 
     @include('monitoring._tabs')
 
+    @isset($schedulerHeartbeat)
+        <div class="card p-4 mb-6 flex items-start gap-3 {{ $schedulerHeartbeat->isOk() ? '' : ($schedulerHeartbeat->isStale() ? 'border-l-4 border-[var(--color-status-red)]' : 'border-l-4 border-[var(--color-status-yellow)]') }}">
+            <i class="fa-solid fa-clock mt-0.5 {{ $schedulerHeartbeat->isOk() ? 'text-[var(--color-status-green)]' : ($schedulerHeartbeat->isStale() ? 'text-[var(--color-status-red)]' : 'text-[var(--color-status-yellow)]') }}"></i>
+            <div class="text-sm">
+                <div class="font-medium text-[var(--color-ink-strong)]">
+                    Scheduler heartbeat
+                    @if ($schedulerHeartbeat->isOk())
+                        <span class="text-[var(--color-status-green)] font-data">· {{ $schedulerHeartbeat->ageLabel() }}</span>
+                    @elseif ($schedulerHeartbeat->isStale())
+                        <span class="text-[var(--color-status-red)] font-data">· stale {{ $schedulerHeartbeat->ageLabel() }}</span>
+                    @else
+                        <span class="text-[var(--color-status-yellow)] font-data">· never ticked</span>
+                    @endif
+                </div>
+                <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
+                    crontab should spawn <code class="font-data">php artisan schedule:run</code> every minute.
+                    A missing tick means this page’s uptime numbers will drift.
+                    <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-[var(--color-primary-600)] hover:underline">Runbook</a>
+                </p>
+            </div>
+        </div>
+    @endisset
+
     {{-- Hero --}}
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div class="card p-5 md:col-span-1 flex flex-col items-center justify-center text-center">

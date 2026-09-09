@@ -105,6 +105,16 @@ interface ChatNotifier
             'description' => 'The com.clockwork.queue launchd watchdog found the worker crashed and its own restart attempt (launchctl kickstart) also failed — every queued job in the app is stuck until this is fixed manually.',
             'default' => true,
         ],
+        'scheduler_stale' => [
+            'label' => 'Scheduler stopped ticking',
+            'description' => 'The crontab-driven schedule:run heartbeat is older than 5 minutes. Uptime, ingest, and updates are frozen until cron is running again.',
+            'default' => true,
+        ],
+        'scheduler_recovered' => [
+            'label' => 'Scheduler recovered',
+            'description' => 'schedule:run started ticking again after a stale stretch.',
+            'default' => true,
+        ],
         'domain_expiration_state_changed' => [
             'label' => 'Domain expiration state changed',
             'description' => 'Domain expiration tracking moved between green / yellow / red.',
@@ -163,4 +173,8 @@ interface ChatNotifier
     public function serverUpdateFailed(Server $server, string $reason): bool;
 
     public function queueWorkerRestartFailed(string $reason): bool;
+
+    public function schedulerStale(?int $ageSeconds = null, ?Carbon $lastRunAt = null): bool;
+
+    public function schedulerRecovered(): bool;
 }

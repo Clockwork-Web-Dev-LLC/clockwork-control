@@ -99,6 +99,16 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatch(fn (ChatNotifier $n) => $n->queueWorkerRestartFailed($reason));
     }
 
+    public function schedulerStale(?int $ageSeconds = null, ?Carbon $lastRunAt = null): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->schedulerStale($ageSeconds, $lastRunAt));
+    }
+
+    public function schedulerRecovered(): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->schedulerRecovered());
+    }
+
     public function siteWentDown(Site $site, ?int $statusCode, ?string $error, bool $likelyWafBlock = false, ?array $diagnosis = null): bool
     {
         return $this->dispatch(fn (ChatNotifier $n) => $n->siteWentDown($site, $statusCode, $error, $likelyWafBlock, $diagnosis));

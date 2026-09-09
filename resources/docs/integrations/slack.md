@@ -53,7 +53,7 @@ The webhook URL is the credential, same trust model as Mattermost's — don't co
 
 ### What we POST
 
-Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `ipBlocked`, `sslStateChanged`, `llarInstalled`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
+Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `ipBlocked`, `sslStateChanged`, `llarInstalled`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`, `schedulerStale`/`schedulerRecovered`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
 
 ### Files
 

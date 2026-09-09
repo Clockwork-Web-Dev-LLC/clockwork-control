@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
@@ -17,12 +17,13 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 php artisan schedule:work
 ```
 
-The scheduler and queue worker both run as launchd services. The queue worker is monitored by `clockwork:ensure-queue-worker` (every 5 min), which kickstarts the worker if it has crashed or been throttled.
+The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute, first): crontab cannot notice its own absence, so the web UI compares the last tick against a 5-minute threshold. The queue worker is monitored separately by `clockwork:ensure-queue-worker` (every 5 min), which kickstarts the worker if it has crashed or been throttled.
 
 ## Every minute
 
 | Command | What it does |
 |---|---|
+| `clockwork:scheduler-heartbeat` | **Must stay first.** Writes `monitoring.scheduler_heartbeat_at`. If that timestamp is older than 5 minutes, the next web request shows a layout banner, counts +1 on Issues, and fires `scheduler_stale` chat once. A never-ticked install is a yellow warning only (no chat, not an Issue). See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck). |
 | `clockwork:process-server-updates` | Drain queued apt-update jobs, one server per tick. Long SSH sessions don't stack. A live apt-get failure logs `server_update_failed` to `action_logs` and pings Mattermost/Slack (same event the reaper below fires for a stuck-and-reaped row). Success is not logged. |
 | `clockwork:process-pending-bans` | Drain `queued_for_ban` → `fail2ban-client banip` over SSH. Small batches. |
 | `clockwork:auto-approve-repeats` | Promote any IP with 2+ pending lockouts to the ban queue. Gated by `auto_approve_repeats_enabled`. |

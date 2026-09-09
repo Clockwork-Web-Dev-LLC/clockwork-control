@@ -59,12 +59,36 @@
             </div>
         @endif
 
-        {{-- Log Output from Just-Completed Update --}}
-        @if (session('update_steps'))
-            <div class="card p-4 mb-6 border-l-4 border-[var(--color-primary-600)]">
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] font-semibold mb-2">Update Execution Summary</div>
+        {{-- Log Output from Just-Completed or Last-Recorded Update --}}
+        @php
+            $displaySteps = session('update_steps') ?? ($lastApplyResult['steps'] ?? null);
+            $isHistorical = ! session('update_steps') && ! empty($lastApplyResult);
+        @endphp
+
+        @if (! empty($displaySteps))
+            <div class="card p-4 mb-6 border-l-4 {{ (! empty($lastApplyResult['success']) || session('status_update_ok')) ? 'border-[var(--color-primary-600)]' : 'border-[var(--color-status-red)]' }}">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] font-semibold">
+                        {{ $isHistorical ? 'Last Update Execution Log' : 'Update Execution Summary' }}
+                        @if ($isHistorical && ! empty($lastApplyResult['applied_at']))
+                            <span class="text-[var(--color-ink-muted)] font-normal normal-case ml-2">
+                                ({{ \Illuminate\Support\Carbon::parse($lastApplyResult['applied_at'])->diffForHumans() }} · v{{ $lastApplyResult['version'] ?? '' }})
+                            </span>
+                        @endif
+                    </div>
+                    @if ($isHistorical)
+                        <span class="status-pill text-[10px] {{ (! empty($lastApplyResult['success'])) ? 'status-green' : 'status-red' }}">
+                            {{ (! empty($lastApplyResult['success'])) ? 'succeeded' : 'failed' }}
+                        </span>
+                    @endif
+                </div>
+                @if (! empty($lastApplyResult['error']) && $isHistorical && empty($lastApplyResult['success']))
+                    <div class="mb-3 px-3 py-2 rounded bg-[var(--color-status-red)]/10 text-[var(--color-status-red)] text-xs font-data">
+                        {{ $lastApplyResult['error'] }}
+                    </div>
+                @endif
                 <div class="space-y-2 text-xs font-data">
-                    @foreach (session('update_steps') as $step)
+                    @foreach ($displaySteps as $step)
                         <div class="flex items-start gap-2">
                             <span class="{{ $step['success'] ? 'text-[var(--color-status-green)]' : 'text-[var(--color-status-red)]' }} font-bold">
                                 {{ $step['success'] ? '✓' : '✗' }}

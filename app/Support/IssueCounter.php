@@ -10,8 +10,11 @@ use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
+use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Security\CoreChecksumAllowlist;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class IssueCounter
 {
@@ -27,6 +30,17 @@ class IssueCounter
      * mismatch what the user sees.
      */
     public function total(): int
+    {
+        try {
+            return $this->calculateTotal();
+        } catch (Throwable $e) {
+            Log::warning('issue_counter.total_failed', ['error' => $e->getMessage()]);
+
+            return 0;
+        }
+    }
+
+    private function calculateTotal(): int
     {
         $unhealthy = Server::query()
             ->where('is_ignored', false)
@@ -223,9 +237,23 @@ class IssueCounter
 
         // Sites in maintenance mode for longer than 2 hours (likely an abandoned or forgotten window).
         // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
-        $stuckMaintenanceSites = Site::query()->stuckInMaintenance()->count();
+        $stuckMaintenanceSites = 0;
+        try {
+            $stuckMaintenanceSites = Site::query()->stuckInMaintenance()->count();
+        } catch (Throwable $e) {
+            Log::warning('issue_counter.stuck_maintenance_failed', ['error' => $e->getMessage()]);
+        }
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $twoFactorAtRisk + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites;
+        $schedulerStale = 0;
+        try {
+            if (app(SchedulerHeartbeat::class)->isStale()) {
+                $schedulerStale = 1;
+            }
+        } catch (Throwable) {
+            // Missing settings table on a half-installed box shouldn't zero the whole badge.
+        }
+
+        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $twoFactorAtRisk + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale;
     }
 
     /**

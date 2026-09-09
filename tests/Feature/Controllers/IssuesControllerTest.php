@@ -3,7 +3,10 @@
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Chat\ChatNotifier;
+use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Sites\WpConfigExtractor;
+use App\Support\Settings;
 use Illuminate\Support\Facades\Artisan;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -171,5 +174,25 @@ describe('IssuesController', function () {
             ->assertDontSee('fresh-maint.example.com')
             ->assertSee('Maintenance running longer than')
             ->assertViewHas('stuckMaintenanceSites', fn ($sites) => $sites->count() === 1);
+    });
+
+    it('lists a stale scheduler heartbeat as an issue', function () {
+        app(Settings::class)->put(
+            SchedulerHeartbeat::SETTING_HEARTBEAT_AT,
+            now()->subMinutes(12)->toIso8601String()
+        );
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('schedulerStale')->once()->andReturn(true);
+            $mock->shouldReceive('schedulerRecovered')->never();
+        });
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('issues.index'));
+
+        $response->assertOk()
+            ->assertSee('Scheduler has not ticked')
+            ->assertSee('crontab is not spawning')
+            ->assertViewHas('totals', fn ($totals) => ($totals['scheduler_stale'] ?? 0) === 1);
     });
 });

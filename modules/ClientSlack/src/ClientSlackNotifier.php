@@ -96,6 +96,16 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function schedulerStale(?int $ageSeconds = null, ?Carbon $lastRunAt = null): bool
+    {
+        return false;
+    }
+
+    public function schedulerRecovered(): bool
+    {
+        return false;
+    }
+
     public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool
     {
         return false;

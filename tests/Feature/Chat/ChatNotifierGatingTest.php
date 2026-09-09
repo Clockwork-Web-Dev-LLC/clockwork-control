@@ -40,7 +40,7 @@ use Illuminate\Support\Carbon;
 |
 | Not site-scoped at all — no Site parameter, so is_inactive can't apply:
 |   send, backupRelayStale, backupRelayRecovered, serverUpdateFailed,
-|   queueWorkerRestartFailed
+|   queueWorkerRestartFailed, schedulerStale, schedulerRecovered
 |
 | The regression this file exists to catch: someone "helpfully" moving one
 | of the never-gated active-incident methods onto dispatchForSite() would
@@ -210,6 +210,20 @@ function fakeChatNotifier(bool $returns): ChatNotifier
 
             return $this->returns;
         }
+
+        public function schedulerStale(?int $ageSeconds = null, ?Carbon $lastRunAt = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function schedulerRecovered(): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
     };
 }
 
@@ -327,6 +341,22 @@ describe('non-site-scoped methods always dispatch (no Site parameter, so is_inac
 
         expect($dispatcher->queueWorkerRestartFailed('launchctl kickstart failed'))->toBeTrue();
         expect($notifier->calls)->toBe(['queueWorkerRestartFailed']);
+    });
+
+    it('schedulerStale() calls through', function () {
+        $notifier = fakeChatNotifier(true);
+        $dispatcher = new ChatNotifierDispatcher([$notifier]);
+
+        expect($dispatcher->schedulerStale(360, now()->subMinutes(6)))->toBeTrue();
+        expect($notifier->calls)->toBe(['schedulerStale']);
+    });
+
+    it('schedulerRecovered() calls through', function () {
+        $notifier = fakeChatNotifier(true);
+        $dispatcher = new ChatNotifierDispatcher([$notifier]);
+
+        expect($dispatcher->schedulerRecovered())->toBeTrue();
+        expect($notifier->calls)->toBe(['schedulerRecovered']);
     });
 });
 

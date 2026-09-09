@@ -60,4 +60,16 @@ describe('IssueCounter maintenance tracking', function () {
 
         expect(Site::query()->stuckInMaintenance()->count())->toBe(0);
     });
+
+    it('catches database exceptions during calculation and returns 0 without crashing', function () {
+        Log::spy();
+
+        DB::statement('DROP TABLE sites');
+
+        $total = (new IssueCounter)->total();
+        expect($total)->toBe(0);
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn ($msg) => $msg === 'issue_counter.total_failed');
+    });
 });

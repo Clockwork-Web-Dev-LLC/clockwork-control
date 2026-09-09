@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Scheduler heartbeat & crontab liveness tracking**: Clockwork Control now monitors whether crontab is actively running `php artisan schedule:run`. An hourly heartbeat (`clockwork:scheduler-heartbeat`) records scheduler execution in `app_settings`. If crontab fails (e.g. machine sleep, disabled cron service, broken PHP symlink) and no heartbeat is recorded for > 2 hours, Clockwork flags a warning on `/issues`, `/monitoring`, `/monitoring/settings`, and in the layout issues counter badge. Includes runbook at `resources/docs/runbooks/scheduler-stuck.md`.
+- **Durable self-update execution logging**: Self-updates now log structured events across every step (`system_update.*`) and persist execution results in `app_settings` (`updates.last_apply_result`). A persistent "Last Update Execution Log" panel on `/settings/updates` displays the outcome, timestamp, error details, and step checklist even if session flash notifications are cleared.
+
+### Changed
+- **Conditional Composer execution on self-update**: `SystemUpdateService` now diffs `composer.json` and `composer.lock` against the pre-pull commit. When dependencies have not changed, `composer install` is skipped entirely, speeding up point releases and avoiding unnecessary external toolchain invocations.
+
+### Fixed
+- **Subprocess PATH resolution in PHP-FPM / Laravel Herd**: Enriched subprocess `PATH` in `SystemUpdateService` with Apple Silicon & Intel Homebrew paths (`/opt/homebrew/bin`, `/opt/homebrew/sbin`, `/usr/local/bin`, `/usr/local/sbin`), Laravel Herd directories (`~/.config/herd/bin`, `~/Library/Application Support/Herd/bin`), and global Composer vendor paths (`~/.composer/vendor/bin`). Resolves exit code 127 failures when applying updates via the web UI under PHP-FPM.
+- **Automatic codebase rollback on update step failure**: If `composer install` or `php artisan migrate --force` fails during an update, Clockwork automatically rolls back the working copy using `git reset --hard $prePullCommit` and flushes caches (`optimize:clear`), preventing the application from being stranded on new code with missing dependencies or unapplied migrations.
+- **Schema mismatch resilience on authenticated views**: Wrapped layout view composer queries in `AppServiceProvider` and issue calculation in `IssueCounter` with defensive exception handling and fallbacks. Unmigrated database schema or column lag no longer triggers an app-wide 500 White Screen of Death that swallows error notices.
+
 ## [1.5.5] - 2026-09-09
 
 ### Added

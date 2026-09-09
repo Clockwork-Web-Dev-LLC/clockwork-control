@@ -786,6 +786,47 @@ abstract class WebhookChatNotifier implements ChatNotifier
         return $this->send($title, [$attachment]);
     }
 
+    public function schedulerStale(?int $ageSeconds = null, ?Carbon $lastRunAt = null): bool
+    {
+        if (! $this->isEventEnabled('scheduler_stale')) {
+            return false;
+        }
+
+        $ageLabel = $ageSeconds !== null ? $this->formatDowntime($ageSeconds) : 'unknown';
+        $title = sprintf(':rotating_light: Scheduler has not ticked in %s', $ageLabel);
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#cc3333',
+            'title' => $title,
+            'text' => 'crontab is not spawning `php artisan schedule:run`. Uptime probes, ingest, bans, and updates are frozen until that cron entry is running again. See the Scheduler stuck runbook.',
+            'fields' => [
+                ['title' => 'Last tick', 'value' => $lastRunAt !== null ? $lastRunAt->format('M j, H:i').' ('.$lastRunAt->diffForHumans().')' : 'never', 'short' => true],
+                ['title' => 'Expected', 'value' => 'every minute', 'short' => true],
+            ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    public function schedulerRecovered(): bool
+    {
+        if (! $this->isEventEnabled('scheduler_recovered')) {
+            return false;
+        }
+
+        $title = ':white_check_mark: Scheduler recovered';
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#33aa33',
+            'title' => $title,
+            'text' => '`schedule:run` is ticking again. Uptime, ingest, and updates will catch up on their next due times.',
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
     private function formatDowntime(int $seconds): string
     {
         if ($seconds < 60) {

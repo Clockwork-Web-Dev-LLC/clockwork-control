@@ -74,6 +74,26 @@
         </div>
     </form>
 
+    <div class="card p-6 max-w-3xl mb-6">
+        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-2">Scheduler heartbeat</h2>
+        <p class="text-sm text-[var(--color-ink-muted)] mb-3">
+            crontab runs <code class="font-data">php artisan schedule:run</code> every minute. Each run writes a timestamp.
+            If that timestamp is older than {{ $schedulerHeartbeat->thresholdMinutes }} minutes, this panel is no longer updating in the background.
+        </p>
+        <p class="text-sm text-[var(--color-ink-strong)] font-data">
+            Last tick:
+            @if ($schedulerHeartbeat->lastAt)
+                {{ $schedulerHeartbeat->lastAt->format('M j, Y H:i:s') }}
+                ({{ $schedulerHeartbeat->ageLabel() }})
+            @else
+                never
+            @endif
+        </p>
+        <p class="text-xs text-[var(--color-ink-soft)] mt-2">
+            <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-[var(--color-primary-600)] hover:underline">Scheduler stuck runbook</a>
+        </p>
+    </div>
+
     <div class="card p-6 max-w-3xl">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-2">Per-site overrides</h2>
         <p class="text-sm text-[var(--color-ink-muted)] mb-4">

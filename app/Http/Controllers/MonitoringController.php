@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use App\Models\SiteUptimeEvent;
+use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Uptime\UptimeStateUpdater;
 use App\Services\Uptime\UptimeStatsCalculator;
 use App\Support\Settings;
@@ -86,6 +87,8 @@ class MonitoringController extends Controller
             ->limit(50)
             ->get();
 
+        $schedulerHeartbeat = app(SchedulerHeartbeat::class)->status();
+
         return view('monitoring.index', compact(
             'sites',
             'stats24h',
@@ -99,6 +102,7 @@ class MonitoringController extends Controller
             'avg7d',
             'avg30d',
             'recentEvents',
+            'schedulerHeartbeat',
         ));
     }
 
@@ -116,7 +120,9 @@ class MonitoringController extends Controller
             ->orderBy('domain')
             ->get();
 
-        return view('monitoring.settings', compact('intervalMin', 'failureThreshold', 'disabledSites'));
+        $schedulerHeartbeat = app(SchedulerHeartbeat::class)->status();
+
+        return view('monitoring.settings', compact('intervalMin', 'failureThreshold', 'disabledSites', 'schedulerHeartbeat'));
     }
 
     /**

@@ -2,12 +2,16 @@
 title: Scheduler stuck
 section: Runbooks
 order: 50
-updated: 2026-09-03
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [runbook, scheduler, ops, incident]
 ---
 
-The scheduler not running is a load-bearing failure mode. Without it, almost every drainer drifts: traffic rollups go stale, the auto-approve sweep doesn't fire, queued updates and queued bans sit forever, post-reboot state never re-polls. Symptoms look like product bugs ("why didn't the reboot clear the badge?", "why is the queue 162 with auto-approve on?") but are usually just "scheduler isn't running." There is exactly one permanent mechanism: crontab — see below for why a long-running daemon should not be used.
+The scheduler not running is a load-bearing failure mode. Without it, almost every drainer drifts: traffic rollups go stale, the auto-approve sweep doesn't fire, queued updates and queued bans sit forever, post-reboot state never re-polls. Symptoms look like product bugs ("why didn't the reboot clear the badge?", "why is the queue 162 with auto-approve on?") but are usually just "scheduler isn't running."
+
+You should not have to notice this from second-order drift. `clockwork:scheduler-heartbeat` writes a timestamp every minute; any authenticated page older than 5 minutes since that tick shows a red banner, `/issues` counts it, and Mattermost/Slack fire `scheduler_stale` once. A brand-new install that has never ticked is a yellow banner only — no chat, not an Issue.
+
+There is exactly one permanent mechanism: crontab — see below for why a long-running daemon should not be used.
 
 ## The permanent mechanism: crontab, not a long-running process
 
@@ -31,6 +35,8 @@ In past testing, a separate launchd-managed `php artisan schedule:work` process 
 
 ## Symptoms
 
+- Red layout banner: "Scheduler has not ticked in N min." `/monitoring` and `/monitoring/settings` show the last-tick timestamp. `/issues` has a Scheduler section.
+- Chat: `scheduler_stale` (once per outage). Recovery is `scheduler_recovered` on the next successful `schedule:run`.
 - The bans queue isn't shrinking even with auto-approve on.
 - Approved bans sit in `queued_for_ban` and never reach fail2ban.
 - Server queued for `apt-get upgrade` 30 minutes ago, still says `queued`.
@@ -44,6 +50,8 @@ If two or more of these are true at once — and `crontab -l` still shows the en
 ## Diagnose
 
 ```bash
+# What does Clockwork itself think? /monitoring/settings → Scheduler heartbeat → Last tick.
+
 # Is the crontab entry present at all?
 crontab -l
 
@@ -103,6 +111,7 @@ The longer-cadence jobs catch up at their next scheduled tick.
 
 ## Mitigations baked in
 
+- `clockwork:scheduler-heartbeat` + the layout banner / Issues / chat path above — crontab cannot watch itself, so detection is on the next web request.
 - Optimistic UI updates show what *should* happen even if the drainer hasn't fired yet.
 - Recheck-state buttons on most pages let you force a probe.
 - Run-now buttons on `/settings/ingest`, `/settings/security-scans`, and `/settings/bill-com` let you bypass the schedule.

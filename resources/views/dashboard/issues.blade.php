@@ -10,6 +10,7 @@
 
         $chips = [
             ['key' => 'seo-indexability', 'label' => 'SEO blocked', 'class' => 'status-red'],
+            ['key' => 'scheduler_stale', 'label' => 'Scheduler', 'class' => 'status-red'],
             ['key' => 'malware', 'label' => 'Malware', 'class' => 'status-red'],
             ['key' => 'companion_malware', 'label' => 'Malware findings', 'class' => 'status-red'],
             ['key' => 'tampering', 'label' => 'Core tampering', 'class' => 'status-red'],
@@ -61,6 +62,31 @@
                 No SSL issues, no unhealthy servers, no provisioning gaps, no missing DB creds.
             </p>
         </div>
+    @endif
+
+    {{-- SCHEDULER HEARTBEAT — if this is stale, every other monitor is lying --}}
+    @if ($schedulerHeartbeat->isStale())
+        <section id="section-scheduler_stale" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
+            <div class="px-5 py-4 flex items-start justify-between gap-4">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-clock text-[var(--color-status-red)] mr-2"></i>
+                        Scheduler has not ticked in {{ $schedulerHeartbeat->ageLabel() }}
+                    </h2>
+                    <p class="text-sm text-[var(--color-ink-muted)] mt-1">
+                        crontab is not spawning <code class="font-data">php artisan schedule:run</code>.
+                        Uptime, ingest, bans, and updates are frozen. Last tick:
+                        {{ $schedulerHeartbeat->lastAt?->diffForHumans() ?? 'unknown' }}.
+                    </p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-2">
+                        <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-[var(--color-primary-600)] hover:underline">Scheduler stuck runbook</a>
+                        ·
+                        <a href="{{ route('monitoring.settings') }}" class="text-[var(--color-primary-600)] hover:underline">Monitoring settings</a>
+                    </p>
+                </div>
+                <span class="status-pill status-red">1</span>
+            </div>
+        </section>
     @endif
 
     {{-- MALWARE / BLACKLIST (Sucuri SiteCheck) --}}

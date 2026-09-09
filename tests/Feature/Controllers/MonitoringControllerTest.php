@@ -4,6 +4,8 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteUptimeEvent;
 use App\Models\User;
+use App\Services\Chat\ChatNotifier;
+use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Artisan;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -33,6 +35,8 @@ describe('MonitoringController', function () {
 
         $response->assertOk()
             ->assertSee('Monitoring')
+            ->assertSee('Scheduler heartbeat')
+            ->assertSee('never ticked')
             ->assertSee('monitored.example.com')
             ->assertSee('id="monitoring-search"', false)
             ->assertSee('id="monitoring-search-clear"', false)
@@ -100,7 +104,28 @@ describe('MonitoringController', function () {
         $response = $this->actingAs(User::factory()->create())
             ->get(route('monitoring.settings'));
 
-        $response->assertOk()->assertSee('Monitoring');
+        $response->assertOk()
+            ->assertSee('Monitoring')
+            ->assertSee('Scheduler heartbeat')
+            ->assertSee('Last tick:');
+    });
+
+    it('shows a stale scheduler heartbeat on the monitoring index', function () {
+        app(Settings::class)->put(
+            SchedulerHeartbeat::SETTING_HEARTBEAT_AT,
+            now()->subMinutes(11)->toIso8601String()
+        );
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('schedulerStale')->once()->andReturn(true);
+        });
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('Scheduler heartbeat')
+            ->assertSee('stale');
     });
 
     it('refresh runs clockwork:check-site-uptime and flashes the summary', function () {

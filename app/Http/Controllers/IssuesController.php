@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
+use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\WpConfigExtractor;
@@ -309,6 +310,8 @@ class IssuesController extends Controller
             ->orderBy('uptime_maintenance_since')
             ->get();
 
+        $schedulerHeartbeat = app(SchedulerHeartbeat::class)->status();
+
         $totals = [
             'ssl' => $sslIssues->count(),
             'domain_expiration' => $domainExpirationIssues->count(),
@@ -331,6 +334,7 @@ class IssuesController extends Controller
             'companion_malware' => $companionMalwareFindings->count(),
             'down_sites' => $downSites->count(),
             'stuck_maintenance' => $stuckMaintenanceSites->count(),
+            'scheduler_stale' => $schedulerHeartbeat->isStale() ? 1 : 0,
         ];
         $totals['all'] = array_sum($totals);
         $totals['domain-expiration'] = $totals['domain_expiration'];
@@ -361,6 +365,7 @@ class IssuesController extends Controller
             'companionMalwareFindings',
             'downSites',
             'stuckMaintenanceSites',
+            'schedulerHeartbeat',
             'totals',
         ));
     }

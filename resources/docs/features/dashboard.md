@@ -84,7 +84,7 @@ Use this once you've identified the hot-CPU offenders and no longer need the ove
 
 A few cases where the dashboard can mislead:
 
-- **Scheduler not running** → cards stay green even as data goes stale. The `last_polled_at` timestamp on the card tells you the truth. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck).
+- **Scheduler not running** → cards stay green even as data goes stale. The layout banner ("Scheduler has not ticked…") and `/monitoring` last-tick timestamp are the first-class signal; `last_polled_at` on the card is the second-order one. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck).
 - **Ignored server is actually broken** — by design, ignored servers don't count in headline status. Don't ignore a box you actually need to monitor.
 - **CF cache masks origin death** — a CF-cached homepage can serve 200 even when the origin has imploded. The uptime probe sees up, but the real site is down. Pair the dashboard with `/monitoring`.
 - **Provider-deleted server still showing green** — if a server is removed at the provider (DO/Hetzner) without being decommissioned in Clockwork, `PollServers` marks it `status=unknown` on the next cycle. Cards stuck green with a stale `last_polled_at` are a sign the scheduler is down; cards showing "unknown" are a sign the server is gone at the provider.

@@ -11,6 +11,13 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Must stay first among every-minute jobs. A cheap Settings write that
+// proves crontab actually spawned `schedule:run`. Detection of a missing
+// tick happens on web requests — a scheduled command cannot watch itself.
+Schedule::command('clockwork:scheduler-heartbeat')
+    ->everyMinute()
+    ->onOneServer();
+
 Schedule::command('clockwork:sync-allowed-bots')
     ->dailyAt('03:00')
     ->withoutOverlapping()

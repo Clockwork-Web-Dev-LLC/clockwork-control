@@ -22,11 +22,13 @@ class SystemUpdatesController extends Controller
         $updateInfo = $updateService->checkForUpdates(force: false);
         $companionStatus = $updateService->getCompanionFleetStatus();
         $lastCheckedAt = $updateService->getLastCheckedAt();
+        $lastApplyResult = $updateService->getLastApplyResult();
 
         return view('settings.updates', [
             'updateInfo' => $updateInfo,
             'companionStatus' => $companionStatus,
             'lastCheckedAt' => $lastCheckedAt,
+            'lastApplyResult' => $lastApplyResult,
         ]);
     }
 

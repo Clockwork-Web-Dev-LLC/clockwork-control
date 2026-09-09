@@ -76,6 +76,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:run-performance-scans --strategy=mobile --weekly-rotation',
         'clockwork:scan-sitecheck',
         'clockwork:scan-wp7-truncation --repair',
+        'clockwork:scheduler-heartbeat',
         'clockwork:security-check --ssh --quiet-ok',
         'clockwork:send-client-reports',
         'clockwork:send-telemetry',
@@ -132,6 +133,20 @@ class ScheduleSnapshotTest extends TestCase
             'it means an entry was dropped or renamed during the move —',
             'fix the module scheduledTasks() contribution instead.',
         ]));
+    }
+
+    public function test_scheduler_heartbeat_is_the_first_every_minute_command(): void
+    {
+        $firstEveryMinute = collect(app(Schedule::class)->events())
+            ->filter(fn ($event) => $event->expression === '* * * * *')
+            ->map(fn ($event) => $this->commandName($event->command ?? ''))
+            ->first();
+
+        $this->assertSame(
+            'clockwork:scheduler-heartbeat',
+            $firstEveryMinute,
+            'clockwork:scheduler-heartbeat must stay first among every-minute jobs so a hung drainer cannot delay the tick write.'
+        );
     }
 
     public function test_provider_coupled_list_is_a_subset_of_the_snapshot(): void

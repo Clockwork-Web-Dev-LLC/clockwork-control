@@ -635,6 +635,26 @@
         </div>
     </header>
 
+    @isset($schedulerHeartbeat)
+        @if ($schedulerHeartbeat->needsAttention())
+            <div class="border-b {{ $schedulerHeartbeat->isStale() ? 'bg-[var(--color-status-red)]/10 border-[var(--color-status-red)]/30' : 'bg-[var(--color-status-yellow)]/10 border-[var(--color-status-yellow)]/30' }}">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-start sm:items-center gap-3 text-sm">
+                    <i class="fa-solid {{ $schedulerHeartbeat->isStale() ? 'fa-clock text-[var(--color-status-red)]' : 'fa-triangle-exclamation text-[var(--color-status-yellow)]' }} mt-0.5 sm:mt-0"></i>
+                    <div class="min-w-0 flex-1">
+                        @if ($schedulerHeartbeat->isStale())
+                            <span class="font-semibold text-[var(--color-ink-strong)]">Scheduler has not ticked in {{ $schedulerHeartbeat->ageLabel() }}.</span>
+                            <span class="text-[var(--color-ink-muted)]"> Uptime, ingest, and updates are frozen until crontab runs <code class="font-data">schedule:run</code>.</span>
+                        @else
+                            <span class="font-semibold text-[var(--color-ink-strong)]">Scheduler has never ticked.</span>
+                            <span class="text-[var(--color-ink-muted)]"> Add the crontab entry so probes and drainers actually run.</span>
+                        @endif
+                    </div>
+                    <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline shrink-0">Runbook</a>
+                </div>
+            </div>
+        @endif
+    @endisset
+
     <main class="max-w-7xl mx-auto px-6 py-10">
         @yield('content')
     </main>

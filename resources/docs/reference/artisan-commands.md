@@ -50,6 +50,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:check-ssl-certs` | Per-site SSL state + Mattermost transitions. | `php artisan clockwork:check-ssl-certs` |
 | `clockwork:check-cloudflare` | Per-site CF detection. | `php artisan clockwork:check-cloudflare` |
 | `clockwork:check-site-uptime` | HTTP probe each monitored site. | `php artisan clockwork:check-site-uptime` |
+| `clockwork:scheduler-heartbeat` | Cheap Settings write that proves crontab spawned `schedule:run`. First among every-minute jobs. Detection of a missing tick happens on page load (a scheduled command cannot watch itself): 5+ minutes stale → layout banner + Issues + `scheduler_stale` chat once; the next tick fires `scheduler_recovered`. Never-ticked is a yellow UI warning only. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck). | `php artisan clockwork:scheduler-heartbeat` |
 | `clockwork:backfill-uptime-seed` | One-off: seed initial uptime state on first run. | `php artisan clockwork:backfill-uptime-seed` |
 | `clockwork:pull-site-metrics` | Pull per-site CPU/memory hourly rollups from Companion (`resource-sampler` cap) into `site_metrics`. | `php artisan clockwork:pull-site-metrics` |
 | `clockwork:check-domain-expirations` | Check domain registration expiration dates via ICANN RDAP and alert on impending expiration. | `php artisan clockwork:check-domain-expirations` |
@@ -107,7 +108,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:run-nightly-plugin-updates` | Nightly care-plan auto-update path — runs `wp plugin update` per opted-in site. Runs 02:00 ET. Per-site opt-out toggle on the site Updates tab. | `php artisan clockwork:run-nightly-plugin-updates` |
 | `clockwork:nightly-update-summary` | Email summary of the previous night's auto-update run. Runs 06:15 ET. | `php artisan clockwork:nightly-update-summary` |
 | `clockwork:push-companion-traffic` | Push the previous day's traffic rollup to each Companion-equipped site for display in the WP admin. | `php artisan clockwork:push-companion-traffic` |
-| `clockwork:ensure-queue-worker` | Watchdog for the `com.clockwork.queue` launchd service — checks `launchctl list` for a live PID and kickstarts the worker if it has crashed or been throttled into a backoff loop. Scheduled every 5 min so recovery gap ≤ 5 min. A successful revival is log-only; if the kickstart itself fails, fires a `queue_worker_restart_failed` Mattermost/Slack alert (every queued job in the app is stuck at that point). | `php artisan clockwork:ensure-queue-worker` |
+| `clockwork:ensure-queue-worker` | Watchdog for the `com.clockwork.queue` launchd service — checks `launchctl list` for a live PID and kickstarts the worker if it has crashed or been throttled into a backoff loop. Scheduled every 5 min so recovery gap ≤ 5 min. A successful revival is log-only; if the kickstart itself fails, fires a `queue_worker_restart_failed` Mattermost/Slack alert (every queued job in the app is stuck at that point). Crontab itself is watched by `clockwork:scheduler-heartbeat` (Health + metrics). | `php artisan clockwork:ensure-queue-worker` |
 
 ## Security + bans
 
