@@ -14,8 +14,8 @@ describe('DevLoginController', function () {
 
     it('404s in local env when no active user exists', function () {
         $this->app['env'] = 'local';
+        User::factory()->create();
         User::query()->update(['revoked_at' => now()]);
-        User::factory()->create(['revoked_at' => now()]);
 
         $this->withServerVariables([
             'REMOTE_ADDR' => '127.0.0.1',
@@ -28,7 +28,7 @@ describe('DevLoginController', function () {
         $this->mockIssueCounterZero();
 
         $user = User::factory()->create(['email' => 'dev@example.com']);
-        User::factory()->create(['revoked_at' => now()]);
+        User::factory()->create()->forceFill(['revoked_at' => now()])->save();
 
         $response = $this->withServerVariables([
             'REMOTE_ADDR' => '127.0.0.1',
