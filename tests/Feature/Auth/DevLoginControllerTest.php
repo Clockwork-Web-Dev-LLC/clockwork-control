@@ -14,7 +14,8 @@ describe('DevLoginController', function () {
 
     it('404s in local env when no active user exists', function () {
         $this->app['env'] = 'local';
-        User::query()->delete();
+        User::query()->update(['revoked_at' => now()]);
+        User::factory()->create(['revoked_at' => now()]);
 
         $this->withServerVariables([
             'REMOTE_ADDR' => '127.0.0.1',

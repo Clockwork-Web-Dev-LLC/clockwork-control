@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Support\Settings;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -29,7 +30,10 @@ class PushSiteMetricsState extends Command
 
         $sites = Site::query()
             ->where('companion_installed', true)
-            ->whereHas('server', fn ($q) => $q->monitored())
+            ->whereHas('server', function (Builder $q): void {
+                $q->where('is_ignored', false)
+                    ->whereDoesntHave('tags', fn (Builder $t) => $t->where('slug', 'staging'));
+            })
             ->get();
 
         foreach ($sites as $site) {
