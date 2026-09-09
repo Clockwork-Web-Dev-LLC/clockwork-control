@@ -14,8 +14,12 @@ describe('DevLoginController', function () {
 
     it('404s in local env when no active user exists', function () {
         $this->app['env'] = 'local';
+        User::query()->delete();
 
-        $this->get(route('dev-login'))->assertNotFound();
+        $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login'))->assertNotFound();
     });
 
     it('logs in the first active user on loopback when APP_ENV is local', function () {
@@ -25,7 +29,10 @@ describe('DevLoginController', function () {
         $user = User::factory()->create(['email' => 'dev@example.com']);
         User::factory()->create(['revoked_at' => now()]);
 
-        $response = $this->get(route('dev-login'));
+        $response = $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login'));
 
         $response->assertRedirect(route('settings.companion.index'));
         $this->assertAuthenticatedAs($user);

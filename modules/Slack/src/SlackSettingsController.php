@@ -35,7 +35,7 @@ class SlackSettingsController extends Controller
                 'description' => $meta['description'],
                 'enabled' => array_key_exists($key, $stored)
                     ? (bool) $stored[$key]
-                    : (bool) ($meta['default'] ?? true),
+                    : (bool) $meta['default'],
             ];
         }
 
@@ -61,7 +61,7 @@ class SlackSettingsController extends Controller
         foreach (ChatNotifier::EVENTS as $eventKey => $meta) {
             $next[$eventKey] = array_key_exists($eventKey, $stored)
                 ? (bool) $stored[$eventKey]
-                : (bool) ($meta['default'] ?? true);
+                : (bool) $meta['default'];
         }
 
         $was = $next[$key];
