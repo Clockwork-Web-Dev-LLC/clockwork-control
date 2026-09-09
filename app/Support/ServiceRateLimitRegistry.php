@@ -602,23 +602,6 @@ class ServiceRateLimitRegistry
                 ],
             ],
 
-            'contact-forms' => [
-                'id' => 'contact-forms',
-                'name' => 'Contact Form Testing',
-                'category' => 'Maintenance & QA',
-                'type' => 'internal',
-                'has_rate_limits' => false,
-                'description' => 'Synthetic local test suite for WordPress contact forms. Submits test submissions directly to monitored WordPress sites with companion verification.',
-                'docs_url' => 'https://clockworkcontrol.com/docs/features/contact-forms',
-                'rate_limit_docs_url' => 'https://clockworkcontrol.com/docs/features/contact-forms',
-                'defaults' => [
-                    'timeout' => 30,
-                    'concurrency' => 2,
-                    'delay_ms' => 500,
-                    'retry_attempts' => 2,
-                ],
-            ],
-
             'client_slack' => [
                 'id' => 'client_slack',
                 'name' => 'Client Slack Notifications',
@@ -686,8 +669,6 @@ class ServiceRateLimitRegistry
             'microsoft' => 'auth_microsoft',
             'auth-google' => 'auth_google',
             'google' => 'auth_google',
-            'contact_forms' => 'contact-forms',
-            'contactforms' => 'contact-forms',
             'client-slack' => 'client_slack',
             'clientslack' => 'client_slack',
             'backup_relay' => 'backup-relay',

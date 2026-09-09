@@ -5,13 +5,11 @@
     $pageHeading = match ($pageType) {
         'oauth' => $service['name'] . ' SSO Authentication Settings',
         'webhook' => $service['name'] . ' Webhook Settings',
-        'internal' => $service['name'] . ' Worker Settings',
         default => $service['name'] . ' API Limits & Quotas',
     };
     $pageSubtitle = match ($pageType) {
         'oauth' => 'OAuth 2.0 Single Sign-On credentials, authorized redirect URI, and connection settings.',
         'webhook' => 'Event-driven outbound webhook endpoint, payload delivery, and connection settings.',
-        'internal' => 'Local synthetic worker configuration and dispatch settings.',
         default => 'Official rate limits, quota reset headers, fleet polling impact, and operator pacing tunables for this integration.',
     };
 @endphp
@@ -128,14 +126,18 @@
                 <div class="card p-6 border-l-4 border-l-[var(--color-primary-600)]">
                     <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
                         <div class="flex items-center gap-2.5">
-                            <div class="w-9 h-9 rounded-lg bg-[var(--color-primary-50)] text-[var(--color-primary-600)] flex items-center justify-center flex-shrink-0">
-                                <i class="fa-solid fa-key text-base"></i>
+                            <div class="w-9 h-9 rounded-lg {{ count($credentials) > 0 ? 'bg-[var(--color-primary-50)] text-[var(--color-primary-600)]' : 'bg-emerald-50 text-emerald-600' }} flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid {{ count($credentials) > 0 ? 'fa-key text-base' : 'fa-globe text-base' }}"></i>
                             </div>
                             <div>
                                 <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
-                                    API Credentials (.env file)
+                                    {{ count($credentials) > 0 ? 'API Credentials (.env file)' : 'Service Access & Authentication' }}
                                 </h2>
-                                <span class="text-xs text-[var(--color-ink-muted)]">Saved directly into root <code class="font-data text-xs">.env</code> &bull; No database storage</span>
+                                @if (count($credentials) > 0)
+                                    <span class="text-xs text-[var(--color-ink-muted)]">Saved directly into root <code class="font-data text-xs">.env</code> &bull; No database storage</span>
+                                @else
+                                    <span class="text-xs text-emerald-700 font-medium">Zero credentials required &bull; Public access</span>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -572,40 +574,6 @@
                                 </a>
                             </div>
                         </div>
-                    </div>
-                @else
-                    <!-- Card: Local Diagnostic Module -->
-                    <div class="card p-6 border-l-4 border-l-indigo-600">
-                        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                                    <i class="fa-solid fa-microchip text-lg"></i>
-                                </div>
-                                <div>
-                                    <h2 class="font-display text-lg font-bold text-[var(--color-ink-strong)] leading-tight">
-                                        Local Synthetic Worker
-                                    </h2>
-                                    <span class="text-xs text-[var(--color-ink-muted)]">Internal scheduled diagnostic runner</span>
-                                </div>
-                            </div>
-                            <span class="status-pill status-blue text-xs font-data">
-                                Local Execution
-                            </span>
-                        </div>
-
-                        <div class="space-y-4 text-sm text-[var(--color-ink)]">
-                            <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
-                                {{ $service['description'] ?? 'This module runs synthetic diagnostics directly against your monitored WordPress sites. It does not connect to external third-party SaaS vendors, so external API rate limits do not apply.' }}
-                            </p>
-
-                            <div class="pt-2 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
-                                <a href="{{ $service['docs_url'] }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
-                                    <i class="fa-solid fa-book-open"></i>
-                                    View documentation &rarr;
-                                </a>
-                            </div>
-                        </div>
-                    </div>
                 @endif
             </div>
 
@@ -666,7 +634,7 @@
                             <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['timeout'] ?? 15 }}s (Max allowed: 300s)</span>
                         </div>
 
-                        @if (($service['has_rate_limits'] ?? true) || ($service['type'] ?? '') === 'internal')
+                        @if ($service['has_rate_limits'] ?? true)
                             <!-- Concurrency -->
                             <div>
                                 <div class="flex items-center justify-between mb-1">

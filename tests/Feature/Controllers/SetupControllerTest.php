@@ -171,6 +171,27 @@ describe('Step 1: Which services are you using? (GET/POST /setup)', function () 
             ->assertSee('border-emerald-500');
     });
 
+    it('only marks has_settings true for integrations that have settings, rate limits, or credentials', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+
+        $response->assertOk();
+
+        // Contact Form Testing is an internal synthetic worker with zero credentials or external API
+        $categories = $response->viewData('categories');
+        $allServices = collect($categories)->pluck('services')->flatten(1)->keyBy('id');
+
+        expect($allServices)->toHaveKey('contact-forms')
+            ->and($allServices['contact-forms']['has_settings'])->toBeFalse()
+            ->and($allServices)->toHaveKey('digitalocean')
+            ->and($allServices['digitalocean']['has_settings'])->toBeTrue()
+            ->and($allServices)->toHaveKey('mattermost')
+            ->and($allServices['mattermost']['has_settings'])->toBeTrue()
+            ->and($allServices)->toHaveKey('auth_google')
+            ->and($allServices['auth_google']['has_settings'])->toBeTrue();
+    });
+
     it('sorts all integrations in alphabetical order by name within each category', function () {
         $user = User::factory()->create();
 

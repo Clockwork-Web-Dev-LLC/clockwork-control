@@ -287,14 +287,19 @@
                     </div>
 
                     <div x-show="!loading && service" class="space-y-5">
-                        <!-- API Credentials (.env file) Box -->
+                        <!-- API Credentials / Access Box -->
                         <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-3">
                             <div class="flex items-center justify-between flex-wrap gap-2">
                                 <div class="text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                                    <i class="fa-solid fa-key text-[var(--color-primary-600)]"></i>
-                                    <span>API Credentials (.env file)</span>
+                                    <i class="fa-solid" :class="(credentials && credentials.length > 0) ? 'fa-key text-[var(--color-primary-600)]' : 'fa-globe text-emerald-600'"></i>
+                                    <span x-text="(credentials && credentials.length > 0) ? 'API Credentials (.env file)' : 'Service Access & Authentication'"></span>
                                 </div>
-                                <span class="text-[11px] text-[var(--color-ink-soft)]">Saved directly into root <code class="font-data text-[10px]">.env</code> &bull; No DB storage</span>
+                                <template x-if="credentials && credentials.length > 0">
+                                    <span class="text-[11px] text-[var(--color-ink-soft)]">Saved directly into root <code class="font-data text-[10px]">.env</code> &bull; No DB storage</span>
+                                </template>
+                                <template x-if="!credentials || credentials.length === 0">
+                                    <span class="text-[11px] text-emerald-700 font-medium">Zero credentials required &bull; Public access</span>
+                                </template>
                             </div>
 
                             <template x-if="credentials && credentials.length > 0">
@@ -651,19 +656,6 @@
                             </div>
                         </template>
 
-                        <!-- Internal Diagnostic Worker Note (shown when type === 'internal') -->
-                        <template x-if="service?.type === 'internal'">
-                            <div class="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 text-indigo-950 space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-microchip text-indigo-600 text-sm"></i>
-                                    <span class="font-bold text-xs uppercase tracking-wider text-indigo-900">Local Synthetic Worker</span>
-                                </div>
-                                <p class="text-xs leading-relaxed text-indigo-900/90">
-                                    This module executes local synthetic checks scheduled by Artisan workers. Tests run directly against your WordPress sites without external vendor API limits or cloud quota constraints.
-                                </p>
-                            </div>
-                        </template>
-
                         <!-- Official Rate Limit Specifications Box (shown only when has_rate_limits is true) -->
                         <template x-if="service?.has_rate_limits">
                             <div class="space-y-5">
@@ -744,8 +736,8 @@
                                     <span class="text-[10px] text-[var(--color-ink-soft)] mt-0.5 block">Retry on transient failure</span>
                                 </div>
 
-                                <!-- Concurrency (shown only when has_rate_limits or internal) -->
-                                <template x-if="service?.has_rate_limits || service?.type === 'internal'">
+                                <!-- Concurrency (shown only when has_rate_limits) -->
+                                <template x-if="service?.has_rate_limits">
                                     <div>
                                         <div class="flex items-center justify-between mb-1">
                                             <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Concurrency</label>
@@ -757,8 +749,8 @@
                                     </div>
                                 </template>
 
-                                <!-- Inter-request Delay (shown only when has_rate_limits or internal) -->
-                                <template x-if="service?.has_rate_limits || service?.type === 'internal'">
+                                <!-- Inter-request Delay (shown only when has_rate_limits) -->
+                                <template x-if="service?.has_rate_limits">
                                     <div>
                                         <div class="flex items-center justify-between mb-1">
                                             <label class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Pacing Delay (ms)</label>

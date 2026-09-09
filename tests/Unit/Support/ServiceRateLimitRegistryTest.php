@@ -7,7 +7,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 describe('ServiceRateLimitRegistry', function () {
-    it('contains all 25 supported service integrations with complete metadata', function () {
+    it('contains all 24 supported service integrations with complete metadata', function () {
         $registry = app(ServiceRateLimitRegistry::class);
         $services = $registry->all();
 
@@ -34,12 +34,11 @@ describe('ServiceRateLimitRegistry', function () {
             'auth_google',
             'auth_github',
             'auth_microsoft',
-            'contact-forms',
             'client_slack',
             'backup-relay',
         ];
 
-        expect(count($services))->toBe(25);
+        expect(count($services))->toBe(24);
 
         foreach ($expectedServices as $serviceId) {
             expect($services)->toHaveKey($serviceId);
@@ -48,7 +47,7 @@ describe('ServiceRateLimitRegistry', function () {
             expect($service['id'])->toBe($serviceId)
                 ->and($service['name'])->toBeString()->not->toBeEmpty()
                 ->and($service['category'])->toBeString()->not->toBeEmpty()
-                ->and($service['type'])->toBeIn(['api', 'webhook', 'oauth', 'internal'])
+                ->and($service['type'])->toBeIn(['api', 'webhook', 'oauth'])
                 ->and($service['has_rate_limits'])->toBeBool()
                 ->and($service['docs_url'])->toStartWith('https://')
                 ->and($service['defaults'])->toBeArray()
@@ -63,7 +62,7 @@ describe('ServiceRateLimitRegistry', function () {
                     ->and($service['fleet_impact'])->toHaveKeys(['calls_per_server', 'fleet_projection', 'recommendation'])
                     ->and($service['defaults'])->toHaveKeys(['rate_limit', 'rate_limit_unit', 'concurrency', 'delay_ms']);
             } else {
-                expect($service['type'])->toBeIn(['webhook', 'oauth', 'internal'])
+                expect($service['type'])->toBeIn(['webhook', 'oauth'])
                     ->and($service)->not->toHaveKey('official_limits')
                     ->and($service)->not->toHaveKey('fleet_impact');
             }
@@ -95,9 +94,8 @@ describe('ServiceRateLimitRegistry', function () {
             ->and($registry->hasRateLimits('auth_microsoft'))->toBeFalse()
             ->and($registry->getType('auth_microsoft'))->toBe('oauth');
 
-        // Internal
-        expect($registry->hasRateLimits('contact-forms'))->toBeFalse()
-            ->and($registry->getType('contact-forms'))->toBe('internal');
+        // Internal modules do not belong in ServiceRateLimitRegistry
+        expect($registry->get('contact-forms'))->toBeNull();
     });
 
     it('safely merges defaults for webhook and oauth services without requiring rate_limit or concurrency in raw defaults', function () {
