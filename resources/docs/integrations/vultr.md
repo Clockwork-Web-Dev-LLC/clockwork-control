@@ -20,7 +20,7 @@ Some servers in the fleet live on Vultr rather than DigitalOcean. Clockwork dete
 
 ## What's different from DigitalOcean
 
-Vultr's REST API v2 has no equivalent of DO's `/monitoring/metrics/droplet/*` series — no CPU, memory, disk, or load, and no built-in agent that exposes one. `VultrCloudProvider::metrics()` always returns all-null; the green/yellow/red CPU signal on the dashboard never lights up for Vultr servers from this integration. The SSH-collected `LiveServerLoad` snapshot on the server detail page is the only live signal Vultr servers get.
+Vultr's REST API v2 has no equivalent of DO's `/monitoring/metrics/droplet/*` series — no CPU, memory, disk, or load time-series API. To monitor Vultr instances, `VultrCloudProvider::metrics()` uses a fast single-shot SSH probe (`vmstat`, `free`, `df`, `/proc/loadavg`) to collect real-time CPU %, memory %, disk %, and 1-minute load average. If SSH credentials are not configured or the connection fails, it gracefully falls back to null values.
 
 Plan-slug naming is also its own scheme: `vc2-*` (Cloud Compute), `vhf-*` (High Frequency), `vhp-*` (High Performance), `voc-*` (Optimized Cloud / Dedicated vCPU), `vdc-*` (Dedicated Cloud), `vbm-*` (Bare Metal). `Modules\Vultr\VultrCloudProvider::sizeTier()` maps these to the human tier label shown in the server header; an unrecognized prefix falls back to the raw slug, same convention as every other `CloudProvider` adapter.
 
@@ -71,6 +71,6 @@ Same reason as every other cloud provider here. Vultr's `POST /instances/{id}/re
 
 ## Gotchas
 
-- **No metrics, ever.** This isn't a temporary gap like Hetzner's missing memory/disk — Vultr's public API structurally has no time-series endpoint. Don't expect the CPU status dot to ever reflect real data for `provider='vultr'` servers from this integration.
+- **No cloud time-series API.** Vultr's public REST API has no metrics time-series endpoint. Metrics are collected via SSH probe (`vmstat`, `free`, `df`, `/proc/loadavg`), which requires valid SSH credentials on the server.
 - **Cursor pagination, not page-number.** `VultrClient::instances()` follows `meta.links.next` until it comes back empty — different shape from DO's `links.pages.next` URL and Hetzner's `meta.pagination.next_page` integer. Don't copy-paste pagination logic between these three clients without checking the actual response shape.
 - **Server match is best-effort by public IPv4** (`main_ip`, plus any `v4[].ip` marked `main_ip`). Same limitation as DO/Hetzner — a Vultr instance with only a private network won't auto-link.

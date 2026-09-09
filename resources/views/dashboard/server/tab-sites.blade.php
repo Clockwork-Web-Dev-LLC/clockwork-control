@@ -5,7 +5,18 @@
     </div>
 
     @if ($server->sites->isEmpty())
-        <div class="p-10 text-center text-[var(--color-ink-soft)]">No sites mapped to this server.</div>
+        <div class="p-10 text-center text-[var(--color-ink-soft)]">
+            <p>No sites mapped to this server.</p>
+            @if ($server->spinupwp_id && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
+                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Sync sites from SpinupWP</span>
+                    </button>
+                </form>
+            @endif
+        </div>
     @else
         @php
             $usage = collect($server->sites)->map(function ($site) use ($poolStats, $requestsBySite) {

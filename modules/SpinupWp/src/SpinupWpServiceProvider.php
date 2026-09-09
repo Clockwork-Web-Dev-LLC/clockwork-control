@@ -59,20 +59,19 @@ class SpinupWpServiceProvider extends ModuleServiceProvider
 
     public function scheduledTasks(Schedule $schedule): void
     {
-        // Moved from routes/console.php (Phase 7) — exact same cron/modifier
-        // chain. clockwork:reconcile-provider (03:45, still in routes/console.php)
-        // depends on this having run first each day; that's a wall-clock
-        // ordering, not a code-registration one, so it's unaffected by the move.
+        // Scheduled hourly at minute 30 so new sites, deleted sites, and site moves
+        // between servers are detected automatically throughout the day rather than
+        // waiting 24 hours. Still hits 03:30 for downstream daily jobs.
         $schedule->command('clockwork:import-spinupwp')
-            ->dailyAt('03:30')
+            ->hourlyAt(30)
             ->withoutOverlapping()
             ->onOneServer();
 
         // Reclassify orphaned sites — Site rows whose SpinupWP linkage was
         // lost (likely consolidated as additional_domain on another site).
-        // Daily at 03:35, right after the SpinupWP inventory import above.
+        // Runs 5 minutes after import-spinupwp.
         $schedule->command('clockwork:find-orphan-sites')
-            ->dailyAt('03:35')
+            ->hourlyAt(35)
             ->withoutOverlapping(30)
             ->onOneServer();
 

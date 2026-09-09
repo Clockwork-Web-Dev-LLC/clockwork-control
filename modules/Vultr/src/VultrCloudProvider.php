@@ -3,6 +3,7 @@
 namespace Modules\Vultr;
 
 use App\Models\Server;
+use App\Services\Ssh\SshClient;
 use Illuminate\Support\Facades\Log;
 use Modules\Core\Contracts\CloudProvider;
 use Throwable;
@@ -11,6 +12,7 @@ class VultrCloudProvider implements CloudProvider
 {
     public function __construct(
         private readonly VultrClient $client,
+        private readonly ?SshClient $ssh = null,
     ) {}
 
     public function id(): string
@@ -72,17 +74,44 @@ class VultrCloudProvider implements CloudProvider
     }
 
     /**
-     * Vultr does not expose real-time CPU/memory time series via its REST API v2
-     * without custom monitoring agents. SSH metrics collector remains the primary
-     * source for Vultr instances.
+     * Vultr does not expose real-time CPU/memory time series via its REST API v2.
+     * SSH metrics collector provides live CPU/memory/disk/load stats for Vultr instances.
      */
     public function metrics(Server $server, int $start, int $end): array
     {
+        if ($this->ssh && $server->hostname !== '' && $server->ssh_user !== '') {
+            try {
+                return $this->metricsViaSsh($server);
+            } catch (Throwable $e) {
+                Log::debug('vultr.ssh_metrics_failed', ['server' => $server->name, 'error' => $e->getMessage()]);
+            }
+        }
+
         return [
             'cpu_pct' => null,
             'memory_pct' => null,
             'disk_pct' => null,
             'load_1' => null,
+        ];
+    }
+
+    /**
+     * Fast single-shot SSH probe for CPU, memory, disk, and load_1.
+     *
+     * @return array{cpu_pct: ?float, memory_pct: ?float, disk_pct: ?float, load_1: ?float}
+     */
+    protected function metricsViaSsh(Server $server): array
+    {
+        $script = "vmstat 1 2 | tail -1 | awk '{print 100 - $15}'; free -m | awk '/Mem:/ {printf \"%.1f\", ($2-$7)/$2 * 100}'; echo; df -P / | awk 'NR==2 {print substr($5, 1, length($5)-1)}'; cat /proc/loadavg | awk '{print $1}'";
+        $output = $this->ssh->exec($server, $script, 5);
+
+        $lines = array_map('trim', explode("\n", trim($output)));
+
+        return [
+            'cpu_pct' => isset($lines[0]) && is_numeric($lines[0]) ? (float) $lines[0] : null,
+            'memory_pct' => isset($lines[1]) && is_numeric($lines[1]) ? (float) $lines[1] : null,
+            'disk_pct' => isset($lines[2]) && is_numeric($lines[2]) ? (float) $lines[2] : null,
+            'load_1' => isset($lines[3]) && is_numeric($lines[3]) ? (float) $lines[3] : null,
         ];
     }
 

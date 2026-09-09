@@ -214,7 +214,8 @@ class DashboardController extends Controller
             '24h' => ['since' => now()->subDay(), 'unit' => 'hour', 'step' => 2, 'fmt' => 'HH:mm', 'label' => 'Last 24 hours'],
             '7d' => ['since' => now()->subDays(7), 'unit' => 'day', 'step' => 1, 'fmt' => 'EEE HH:mm', 'label' => 'Last 7 days'],
         ];
-        $chartRange = array_key_exists($request->query('range'), $rangeMap) ? $request->query('range') : '7d';
+        $range = (string) $request->query('range', '7d');
+        $chartRange = array_key_exists($range, $rangeMap) ? $range : '7d';
         $rangeConfig = $rangeMap[$chartRange];
 
         $metrics = $server->metrics()

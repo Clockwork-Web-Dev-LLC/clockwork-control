@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Server;
+use App\Services\Ssh\SshClient;
 use Illuminate\Support\Facades\Http;
 use Modules\Vultr\VultrCheck;
 use Modules\Vultr\VultrClient;
@@ -91,6 +92,39 @@ describe('VultrCloudProvider', function () {
         expect($this->provider->isDeletedAtProvider($server, ['vultr-inst-01', 'vultr-inst-02']))->toBeFalse();
         expect($this->provider->isDeletedAtProvider($server, ['vultr-inst-02']))->toBeTrue();
         expect($this->provider->isDeletedAtProvider($server, null))->toBeFalse();
+    });
+
+    it('returns null metrics when SSH fails or is unconfigured', function () {
+        $server = Server::factory()->vultr()->make(['hostname' => '', 'ssh_user' => '']);
+        $metrics = $this->provider->metrics($server, time() - 900, time());
+
+        expect($metrics)->toBe([
+            'cpu_pct' => null,
+            'memory_pct' => null,
+            'disk_pct' => null,
+            'load_1' => null,
+        ]);
+    });
+
+    it('polls CPU, memory, disk, and load_1 via SSH when available', function () {
+        $server = Server::factory()->vultr()->make([
+            'hostname' => '155.138.242.30',
+            'ssh_user' => 'systemsgo',
+        ]);
+
+        $this->mock(SshClient::class, function ($mock) {
+            $mock->shouldReceive('exec')
+                ->once()
+                ->andReturn("12.5\n48.2\n75\n0.35\n");
+        });
+
+        $provider = app(VultrCloudProvider::class);
+        $metrics = $provider->metrics($server, time() - 900, time());
+
+        expect($metrics['cpu_pct'])->toBe(12.5);
+        expect($metrics['memory_pct'])->toBe(48.2);
+        expect($metrics['disk_pct'])->toBe(75.0);
+        expect($metrics['load_1'])->toBe(0.35);
     });
 });
 

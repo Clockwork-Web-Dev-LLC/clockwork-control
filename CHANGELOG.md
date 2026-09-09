@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SSH metrics for Vultr servers**: Added single-shot SSH metrics collection (`vmstat`, `free`, `df`, `/proc/loadavg`) to `VultrCloudProvider::metrics()`. Because Vultr's public REST API v2 has no time-series metrics endpoint, Vultr instances previously defaulted to `unknown` health with a dark border and no CPU/MEM/DSK stats. Vultr servers with verified SSH credentials now report real-time health (`Healthy`/green), live CPU, memory, and disk usage, and 24h sparklines on the fleet dashboard.
+- **SpinupWP sync button on empty server views**: When viewing a server with no sites mapped to it, an inline "Sync sites from SpinupWP" button now surfaces directly inside the empty state.
+
+### Changed
+- **Hourly SpinupWP inventory sync**: Increased SpinupWP import schedule from once daily (`03:30`) to hourly (`hourlyAt(30)`), followed by `clockwork:find-orphan-sites` at `:35`. New servers, newly provisioned sites, and site moves between servers are now automatically detected throughout the day rather than waiting up to 24 hours.
+
 ## [1.5.3] - 2026-09-08
 
 ### Added
