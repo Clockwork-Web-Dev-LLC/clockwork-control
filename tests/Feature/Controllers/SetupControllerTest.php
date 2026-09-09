@@ -159,6 +159,18 @@ describe('Step 1: Which services are you using? (GET/POST /setup)', function () 
             ->assertDontSee('text-emerald-600 Active');
     });
 
+    it('auto-detects backup-relay as configured when sites have backup relay enabled', function () {
+        $user = User::factory()->create();
+        Site::factory()->create(['backup_relay_enabled' => true]);
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+
+        $response->assertOk()
+            ->assertSee('Backup Relay')
+            ->assertSee('1 site')
+            ->assertSee('border-emerald-500');
+    });
+
     it('sorts all integrations in alphabetical order by name within each category', function () {
         $user = User::factory()->create();
 
