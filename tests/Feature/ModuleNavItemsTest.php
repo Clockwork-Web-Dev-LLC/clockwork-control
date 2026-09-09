@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Core\InstalledModule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleRegistry;
 use Modules\Core\ModuleServiceProvider;
+use Modules\Core\ModuleStateResolver;
 use Modules\Core\NavItem;
 use Modules\Slack\SlackServiceProvider;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -111,5 +113,51 @@ class ModuleNavItemsTest extends TestCase
         config(['clockwork.slack.enabled' => true]);
         $response = $this->actingAs($user)->get(route('capacity.index'));
         $response->assertSee('Slack notifications');
+    }
+
+    public function test_client_reports_is_gated_from_nav_and_gear_menu_when_disabled(): void
+    {
+        $user = User::factory()->create();
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'client_reports'],
+            ['name' => 'Client Reports', 'enabled' => false, 'source' => 'bundled', 'status' => 'active']
+        );
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('capacity.index'));
+        $response->assertDontSee('Client reports');
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'client_reports'],
+            ['name' => 'Client Reports', 'enabled' => true, 'source' => 'bundled', 'status' => 'active']
+        );
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('capacity.index'));
+        $response->assertSee('Client reports');
+    }
+
+    public function test_client_management_is_gated_from_gear_menu_when_disabled(): void
+    {
+        $user = User::factory()->create();
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'client-management'],
+            ['name' => 'Client Management', 'enabled' => false, 'source' => 'bundled', 'status' => 'active']
+        );
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('capacity.index'));
+        $response->assertDontSee('Clients');
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'client-management'],
+            ['name' => 'Client Management', 'enabled' => true, 'source' => 'bundled', 'status' => 'active']
+        );
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('capacity.index'));
+        $response->assertSee('Clients');
     }
 }

@@ -30,6 +30,10 @@ class ClientManagementServiceProvider extends ModuleServiceProvider
 
     public function navItems(): array
     {
+        if (! $this->enabled()) {
+            return [];
+        }
+
         return [
             new NavItem(
                 label: 'Clients',

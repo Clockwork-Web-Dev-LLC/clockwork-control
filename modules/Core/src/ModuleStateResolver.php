@@ -23,6 +23,10 @@ class ModuleStateResolver
             $this->state = $this->loadState();
         }
 
+        if ($this->state === null) {
+            return true;
+        }
+
         return $this->state[$moduleId] ?? true;
     }
 
@@ -35,16 +39,21 @@ class ModuleStateResolver
     }
 
     /**
-     * @return array<string, bool>
+     * @return array<string, bool>|null
      */
-    protected function loadState(): array
+    protected function loadState(): ?array
     {
+        if (! app()->bound('db')) {
+            return null;
+        }
+
         try {
-            return InstalledModule::pluck('enabled', 'module_id')
+            return app('db')->table('installed_modules')
+                ->pluck('enabled', 'module_id')
                 ->mapWithKeys(fn ($enabled, $id) => [(string) $id => (bool) $enabled])
                 ->all();
         } catch (Throwable) {
-            return [];
+            return null;
         }
     }
 }

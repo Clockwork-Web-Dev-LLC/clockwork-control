@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Support\CredentialResolver;
 use App\Support\EnvCredentialManager;
+use App\Support\ServiceRateLimitRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -203,6 +204,9 @@ class SetupController extends Controller
                 ? (bool) $installed->get($id)->enabled
                 : $detection['in_use'];
 
+            $rateLimitRegistry = app(ServiceRateLimitRegistry::class);
+            $hasSettings = count($item['manifest']->credentialFields) > 0 || $rateLimitRegistry->get($id) !== null;
+
             $categories[$targetCategory]['services'][] = [
                 'id' => $id,
                 'name' => $item['manifest']->name,
@@ -212,6 +216,7 @@ class SetupController extends Controller
                 'in_use_reason' => $detection['reason'],
                 'is_configured' => $detection['is_configured'],
                 'field_count' => count($item['manifest']->credentialFields),
+                'has_settings' => $hasSettings,
                 'status' => $item['manifest']->status,
                 'status_note' => $item['manifest']->statusNote,
             ];

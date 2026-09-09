@@ -409,4 +409,21 @@ describe('Step 1 toggle auto-save (POST /setup/toggle)', function () {
         $response->assertNotFound()
             ->assertJsonPath('success', false);
     });
+
+    it('renders the gear icon only for services with settings or rate limits on step1', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+
+        $response->assertOk();
+        // Services with credentials or rate limits have settings cog
+        $response->assertSee('DigitalOcean API Limits &amp; Settings', false);
+        $response->assertSee('Sucuri SiteCheck API Limits &amp; Settings', false);
+
+        // First-party modules without credentials or external rate limits do not have settings cog
+        $response->assertDontSee('Client Management API Limits &amp; Settings', false);
+        $response->assertDontSee('Client Reports API Limits &amp; Settings', false);
+        $response->assertDontSee('Comment Moderation API Limits &amp; Settings', false);
+        $response->assertDontSee('Site Maintenance API Limits &amp; Settings', false);
+    });
 });

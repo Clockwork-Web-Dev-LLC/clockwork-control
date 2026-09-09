@@ -175,13 +175,15 @@
                                             </div>
                                         @endif
 
-                                        <button type="button"
-                                                @click="openModal('{{ $service['id'] }}', '{{ addslashes($service['name']) }}')"
-                                                class="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-ink-soft)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] transition-colors cursor-pointer shadow-2xs"
-                                                title="{{ $service['name'] }} API Limits &amp; Settings"
-                                                aria-label="{{ $service['name'] }} API Limits &amp; Settings">
-                                            <i class="fa-solid fa-gear text-sm"></i>
-                                        </button>
+                                        @if ($service['has_settings'] ?? false)
+                                            <button type="button"
+                                                    @click="openModal('{{ $service['id'] }}', '{{ addslashes($service['name']) }}')"
+                                                    class="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-ink-soft)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] transition-colors cursor-pointer shadow-2xs"
+                                                    title="{{ $service['name'] }} API Limits &amp; Settings"
+                                                    aria-label="{{ $service['name'] }} API Limits &amp; Settings">
+                                                <i class="fa-solid fa-gear text-sm"></i>
+                                            </button>
+                                        @endif
 
                                         <label for="toggle-{{ $service['id'] }}" class="relative inline-flex items-center cursor-pointer select-none">
                                             <input type="checkbox"
@@ -798,10 +800,20 @@
                     this.saveSuccess = false;
                     this.testResult = null;
                     this.testing = false;
+                    this.service = null;
+                    this.credentials = [];
                     this.credentialsPayload = {};
                     this.isCloudProvider = false;
                     this.detectedInstances = [];
                     this.hostingPanels = {};
+                    this.tunables = {
+                        rate_limit: '',
+                        timeout: 15,
+                        concurrency: 3,
+                        delay_ms: 0,
+                        retry_attempts: 2,
+                        is_custom: false
+                    };
                     fetch('/settings/integrations/' + id + '/limits', {
                         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                     })

@@ -5,6 +5,7 @@ use App\Services\Diagnostics\Checks\GoogleOAuthCheck;
 use App\Services\Diagnostics\Checks\MicrosoftOAuthCheck;
 use Modules\Azure\AzureCheck;
 use Modules\Azure\AzureCloudProvider;
+use Modules\BackupRelay\BackupRelayCheck;
 use Modules\BillCom\BillComCheck;
 use Modules\Cloudways\CloudwaysCheck;
 use Modules\Cloudways\CloudwaysCloudProvider;
@@ -129,7 +130,7 @@ describe('ModuleRegistry aggregation', function () {
         expect($names)->toEqualCanonicalizing(['Google', 'GitHub', 'Microsoft']);
     });
 
-    it('includes all 18 module-contributed diagnostic checks', function () {
+    it('includes all 19 module-contributed diagnostic checks', function () {
         $checks = $this->registry->diagnosticChecks();
 
         $classes = array_map(fn ($c) => get_class($c), $checks);
@@ -148,6 +149,7 @@ describe('ModuleRegistry aggregation', function () {
             SlackCheck::class,
             TwilioCheck::class,
             BillComCheck::class,
+            BackupRelayCheck::class,
             VultrCheck::class,
             LinodeCheck::class,
             GoogleOAuthCheck::class,

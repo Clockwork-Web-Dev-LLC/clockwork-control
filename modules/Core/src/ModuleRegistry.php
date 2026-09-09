@@ -63,7 +63,9 @@ class ModuleRegistry
     {
         $items = [];
         foreach ($this->providers as $provider) {
-            array_push($items, ...$provider->navItems());
+            if ($provider->enabled()) {
+                array_push($items, ...$provider->navItems());
+            }
         }
 
         return $items;
