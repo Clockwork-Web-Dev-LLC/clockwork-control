@@ -356,22 +356,8 @@
                             </span>
                         </div>
 
-                        <!-- Provider, Staging, Patches & Tags -->
+                        <!-- Staging, Patches, SpinupWP & Tags -->
                         <div class="flex items-center gap-1.5 flex-wrap mb-3">
-                            {{-- Cloud Provider Icon / Label (DigitalOcean, Hetzner, Vultr, Azure, Linode) --}}
-                            @if ($cloudProvider && $cloudProvider->id() !== 'null')
-                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]"
-                                      title="{{ $cloudProvider->label() }}{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
-                                    <i class="{{ $cloudProvider->iconClass() }} text-xs" style="color: {{ $cloudProvider->iconColor() }}"></i>
-                                    <span>{{ $providerName ?? $cloudProvider->label() }}</span>
-                                </span>
-                            @elseif ($server->provider)
-                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
-                                    <i class="fa-solid fa-server text-xs"></i>
-                                    <span>{{ ucfirst($server->provider) }}</span>
-                                </span>
-                            @endif
-
                             @if ($server->spinupwp_id)
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="SpinupWP server #{{ $server->spinupwp_id }}">
                                     <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]"></i>
@@ -509,8 +495,8 @@
 
                     <!-- Footer: Actions -->
                     <div class="flex items-center justify-between pt-3 mt-3 border-t border-[var(--color-border-light)]/60 text-xs">
-                        <span class="text-[11px] font-mono text-[var(--color-ink-soft)]" title="Server IP">
-                            {{ $server->ip_address }}
+                        <span class="text-[11px] font-mono text-[var(--color-ink-soft)]" title="{{ $server->hostname }}{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
+                            {{ $server->provider_label ?: 'Server Node' }}
                         </span>
                         <div class="flex items-center gap-2">
                             <button type="button"
