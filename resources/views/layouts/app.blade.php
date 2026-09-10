@@ -381,48 +381,6 @@
                                     @endif
                                 @endforeach
 
-                                {{-- Appearance / Theme Selector --}}
-                                <div class="px-3 py-2 border-t border-[var(--color-border-light)]">
-                                    <div class="flex items-center justify-between mb-1.5">
-                                        <span class="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)] font-mono">Theme Mode</span>
-                                        <span class="text-[10px] font-medium text-[var(--color-brand)] capitalize" x-text="current"></span>
-                                    </div>
-                                    <div class="grid grid-cols-4 gap-1">
-                                        <button type="button"
-                                                @click.prevent="setTheme('light')"
-                                                :class="current === 'light' ? 'border-[var(--color-brand)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold ring-1 ring-[var(--color-brand)]/30' : 'border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]/60'"
-                                                class="p-1.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1 cursor-pointer"
-                                                title="Light theme">
-                                            <i class="fa-solid fa-sun text-amber-500 text-xs"></i>
-                                            <span class="text-[10px]">Light</span>
-                                        </button>
-                                        <button type="button"
-                                                @click.prevent="setTheme('dark')"
-                                                :class="current === 'dark' ? 'border-[var(--color-brand)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold ring-1 ring-[var(--color-brand)]/30' : 'border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]/60'"
-                                                class="p-1.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1 cursor-pointer"
-                                                title="Dark theme">
-                                            <i class="fa-solid fa-moon text-indigo-400 text-xs"></i>
-                                            <span class="text-[10px]">Dark</span>
-                                        </button>
-                                        <button type="button"
-                                                @click.prevent="setTheme('high-contrast')"
-                                                :class="current === 'high-contrast' ? 'border-[var(--color-brand)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold ring-1 ring-[var(--color-brand)]/30' : 'border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]/60'"
-                                                class="p-1.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1 cursor-pointer"
-                                                title="High contrast theme">
-                                            <i class="fa-solid fa-circle-half-stroke text-[var(--color-ink-strong)] text-xs"></i>
-                                            <span class="text-[10px]">Contrast</span>
-                                        </button>
-                                        <button type="button"
-                                                @click.prevent="setTheme('system')"
-                                                :class="current === 'system' ? 'border-[var(--color-brand)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold ring-1 ring-[var(--color-brand)]/30' : 'border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]/60'"
-                                                class="p-1.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1 cursor-pointer"
-                                                title="Auto (matches system preference)">
-                                            <i class="fa-solid fa-laptop text-[var(--color-ink-soft)] text-xs"></i>
-                                            <span class="text-[10px]">Auto</span>
-                                        </button>
-                                    </div>
-                                </div>
-
                                 <form method="POST" action="{{ route('logout') }}" class="border-t border-[var(--color-border-light)] mt-1">
                                     @csrf
                                     <button type="submit" class="w-full text-left flex items-center gap-2 px-3 py-2 text-[var(--color-status-red)] hover:bg-[var(--color-surface-alt)] cursor-pointer">
@@ -516,15 +474,6 @@
                                 <i class="fa-solid fa-plus text-[10px]"></i>
                             </button>
                         </div>
-                    </div>
-                    <div class="flex items-center justify-between pb-2 border-b border-[var(--color-border-light)]">
-                        <span class="font-semibold text-[var(--color-ink-muted)]">Theme Mode</span>
-                        <button type="button"
-                                @click="toggleDark()"
-                                class="px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5 cursor-pointer">
-                            <i :class="isDark ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon text-indigo-500'"></i>
-                            <span x-text="isDark ? 'Light' : 'Dark'"></span>
-                        </button>
                     </div>
                     <div class="grid grid-cols-2 gap-1 pt-1">
                         <a href="{{ route('dashboard') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">

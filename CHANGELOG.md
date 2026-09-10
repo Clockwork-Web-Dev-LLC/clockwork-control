@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Correctly validates multi-field required credentials across all services before declaring a service ready.
   - Removed misleading "Get API Key" link from the Account Email field for Cloudways integration.
 
+### Removed
+- **Redundant Theme Mode selector**: Removed the legacy 4-button "Theme Mode" selector from the user profile dropdown and mobile navigation drawer in favor of the persistent one-click light/dark toggle button in the primary header toolbar.
+
 ## [1.6.2] - 2026-09-10
 
 ### Added
