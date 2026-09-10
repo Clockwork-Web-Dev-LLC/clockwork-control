@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.4] - 2026-09-10
+## [1.6.5] - 2026-09-10
+
+### Added
+- **Master Agency Brand Palette & Unified Color Picker**:
+  - Centralized agency brand palette (`primary_color`, `accent_color`, `surface_color`, `brand_text_color`) in `/settings/companion` with one-click cascade across Companion (wp-admin), Client Reports, and Plugin Notification Email hubs.
+  - Reusable `<x-color-picker>` Blade component supporting native color picker controls, uppercase hex inputs, preset swatch palettes, and live Alpine.js reactivity.
+- **Companion wp-admin Header Parity & Two-Tone Contrast**:
+  - Added dedicated `brand_text` (admin header bar title) separate from `menu_title` (left sidebar menu entry).
+  - Dynamic two-tone contrast via `CompanionBrandingManager::deriveMediumTone()` (boosts lightness to 0.48–0.65 and saturation >= 0.50 in HSL) for interactive accents (`--cwk-primary`) while preserving dark header chrome (`--cwk-primary-dark`).
+  - Derived soft pastel tint backgrounds via `deriveSoftColor()` (15% dark color blended with 85% white) for notification badges without color drift.
+  - Added dedicated full-page preview endpoint (`GET /settings/companion/preview`) for live WordPress admin chrome inspection.
+- **Server Tag Management Promotion**:
+  - Promoted Server Tag management directly to the primary Dashboard (`/`) via the top header action button and an inline dashed filter pill (`+ Manage Tags`) in the tag filter row.
+
+### Changed
+- **Settings Information Architecture (5 Pillars)**:
+  - Reorganized the Settings Hub into five structured operational pillars: **Overview**, **Agency Branding** (`/settings/companion`), **Fleet Policies**, **Integrations & Alerts**, and **System & Workspace**.
+  - Contextual Tier 2 tools ribbon now automatically hides when viewing single-tool pillars like Agency Branding, removing redundant sub-navigation clutter.
+
+### Security
+- **Strict Brand Logo Validation & Storage Cleanup**:
+  - Restricted brand logo uploads to safe raster image formats (`png, jpg, jpeg, webp` up to 2MB) and explicitly reject SVG uploads to mitigate stored script injection risks.
+  - Automatically deletes orphaned logo files from public disk storage upon replacement, external URL override, or branding reset.
+  - Hardened Alpine.js state initialization across branding and preview views with `@js()` escaping.
+
 
 ### Changed
 - **Command Center navigation & user menu relocation**:
