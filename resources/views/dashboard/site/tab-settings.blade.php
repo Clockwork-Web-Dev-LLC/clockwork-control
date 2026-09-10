@@ -75,7 +75,7 @@
 
                 <div>
                     <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Source</label>
-                    <select name="cert_source" class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-white">
+                    <select name="cert_source" class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
                         <option value="none" @selected($site->cert_source === 'none')>None</option>
                         <option value="spinupwp_le" @selected($site->cert_source === 'spinupwp_le')>SpinupWP / Let's Encrypt</option>
                         <option value="external" @selected($site->cert_source === 'external')>External (3rd-party)</option>

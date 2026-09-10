@@ -6,6 +6,7 @@ export function themePicker() {
     return {
         // Active preference: 'system' | 'light' | 'dark' | 'high-contrast'
         current: 'system',
+        isDark: false,
         schemes: [
             { key: 'light', label: 'Light', surface: '#ffffff', brand: '#1456f0', ink: '#222222' },
             { key: 'dark', label: 'Dark', surface: '#181e25', brand: '#1456f0', ink: '#e6e8eb' },
@@ -38,6 +39,9 @@ export function themePicker() {
                 }
             }
 
+            this.applyResolvedTheme(this.current);
+            this.updateDarkState();
+
             // Listen for OS scheme changes when in system mode
             if (window.matchMedia) {
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -48,19 +52,20 @@ export function themePicker() {
             }
         },
 
-        get isDark() {
+        checkIsDark() {
             if (this.current === 'system') {
                 return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             }
             return this.current === 'dark' || this.current === 'high-contrast';
         },
 
+        updateDarkState() {
+            this.isDark = this.checkIsDark();
+        },
+
         toggleDark() {
-            if (this.isDark) {
-                this.setTheme('light');
-            } else {
-                this.setTheme('dark');
-            }
+            const next = this.checkIsDark() ? 'light' : 'dark';
+            this.setTheme(next);
         },
 
         applyResolvedTheme(theme) {
@@ -70,7 +75,11 @@ export function themePicker() {
                     ? 'dark'
                     : 'light';
             }
+            if (resolved === 'midnight') {
+                resolved = 'dark';
+            }
             document.documentElement.setAttribute('data-theme', resolved);
+            this.updateDarkState();
             window.dispatchEvent(new CustomEvent('theme-changed', {
                 detail: { theme, resolved }
             }));
@@ -79,6 +88,7 @@ export function themePicker() {
         async setTheme(theme) {
             this.current = theme;
             this.applyResolvedTheme(theme);
+            this.updateDarkState();
 
             // Update cookie & localStorage synchronously for immediate future requests
             try {

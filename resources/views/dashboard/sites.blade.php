@@ -57,14 +57,14 @@
             {{-- View Mode Toggle: List vs Visual Grid --}}
             <div class="inline-flex items-center bg-[var(--color-surface-alt)] p-1 rounded-xl border border-[var(--color-border-light)] text-xs ml-auto">
                 <button type="button" @click="setView('list')"
-                        :class="view === 'list' ? 'bg-white shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                        :class="view === 'list' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
                         class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
                         title="List view">
                     <i class="fa-solid fa-list text-xs"></i>
                     <span class="hidden sm:inline">List</span>
                 </button>
                 <button type="button" @click="setView('grid')"
-                        :class="view === 'grid' ? 'bg-white shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                        :class="view === 'grid' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
                         class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
                         title="Visual Grid view">
                     <i class="fa-solid fa-table-cells text-xs"></i>
@@ -183,9 +183,9 @@
                                      class="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                                      onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
 
-                                <div class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-50 text-slate-300 p-4 text-center">
-                                    <i class="fa-solid fa-globe text-3xl mb-1 text-slate-300"></i>
-                                    <span class="text-[10px] text-slate-400 font-mono truncate max-w-full">{{ $site->domain }}</span>
+                                <div class="hidden absolute inset-0 flex flex-col items-center justify-center bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] p-4 text-center">
+                                    <i class="fa-solid fa-globe text-3xl mb-1 opacity-40"></i>
+                                    <span class="text-[10px] font-mono truncate max-w-full text-[var(--color-ink-muted)]">{{ $site->domain }}</span>
                                 </div>
 
                                 @if ($site->is_inactive)

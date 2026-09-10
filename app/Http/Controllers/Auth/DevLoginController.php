@@ -25,7 +25,9 @@ class DevLoginController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('settings.companion.index');
+        $target = $request->query('redirect');
+
+        return redirect($target ?: route('settings.companion.index'));
     }
 
     public static function isLoopbackRequest(Request $request): bool

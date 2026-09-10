@@ -14,8 +14,14 @@
     <script>
         (function () {
             try {
-                var match = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
-                var theme = match ? decodeURIComponent(match[1]) : 'system';
+                var theme = null;
+                try {
+                    theme = localStorage.getItem('cw_theme');
+                } catch (e) {}
+                if (!theme) {
+                    var match = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
+                    theme = match ? decodeURIComponent(match[1]) : 'system';
+                }
                 var resolved = theme;
                 if (!resolved || resolved === 'system') {
                     resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
