@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -157,11 +157,15 @@ No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms betwee
 
 ## Google PageSpeed Insights v5 — `https://www.googleapis.com/pagespeedonline/v5/runPagespeed`
 
-`modules/PageSpeedInsights/src/PageSpeedInsightsClient.php` · `key=CLOCKWORK_PSI_API_KEY` (free 25k/day). **Fallback engine** — called when GTmetrix encounters an error or reaches capacity; rows tagged `engine='psi-fallback'`.
+`modules/PageSpeedInsights/src/PageSpeedInsightsClient.php` · `key=CLOCKWORK_PSI_API_KEY` (free 25k/day). **Fallback engine** — called when GTmetrix encounters an error or reaches capacity; rows tagged `engine='psi-fallback'`. One request asks for four Lighthouse categories via repeating `category=` params (`performance`, `accessibility`, `best-practices`, `seo`). Bracket arrays (`category[0]=`) are ignored by PSI v5.
+
+## Google Cloud Web Risk — `https://webrisk.googleapis.com/v1/uris:search`
+
+`GET` with `key=CLOCKWORK_GOOGLE_WEB_RISK_KEY` and repeating `threatTypes=`. Primary source for `clockwork:check-blacklists`. Empty JSON `{}` means clean.
 
 ## Google Safe Browsing v4 — `https://safebrowsing.googleapis.com/v4/threatMatches:find`
 
-`POST` with `key=CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY`. Optional source for `clockwork:check-blacklists`.
+`POST` with `key=CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY`. Used only when `CLOCKWORK_GOOGLE_WEB_RISK_KEY` is empty. The v4 secret must not be copied into the Web Risk env var — they are different APIs, and stuffing a v4 key into the Web Risk slot would call `webrisk.googleapis.com` with a key that API will reject.
 
 ## URLhaus — `https://urlhaus-api.abuse.ch/v1/host/`
 

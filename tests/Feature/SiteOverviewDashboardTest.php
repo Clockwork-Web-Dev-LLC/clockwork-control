@@ -6,6 +6,7 @@ use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
 use App\Models\User;
+use App\Services\DigitalOcean\SpacesClient;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -188,7 +189,7 @@ describe('Site Overview Command Center Dashboard', function () {
         expect($site->fresh()->notes)->toBe('Saved via web form submit.');
     });
 
-    it('renders backup protection and destination for SpinupWP sites when DO Spaces is configured', function () {
+    it('does not claim Protected for SpinupWP Spaces until snapshot history exists', function () {
         $this->mockIssueCounterZero();
         $user = User::factory()->create();
 
@@ -207,13 +208,13 @@ describe('Site Overview Command Center Dashboard', function () {
 
         $response = $this->actingAs($user)->get(route('sites.show', $site));
 
-        $response->assertOk();
-        $response->assertSee('Protected');
-        $response->assertSee('DigitalOcean Spaces (SpinupWP)');
-        $response->assertSee('Snapshots');
+        $response->assertOk()
+            ->assertSee('DigitalOcean Spaces (SpinupWP)')
+            ->assertSee('Snapshots')
+            ->assertSee('Checking');
     });
 
-    it('returns backup history json from backups-history endpoint', function () {
+    it('returns backup history json including Spaces runs from backups-history endpoint', function () {
         $user = User::factory()->create();
 
         $site = Site::factory()->create([
@@ -221,6 +222,22 @@ describe('Site Overview Command Center Dashboard', function () {
             'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
             'backup_relay_enabled' => false,
         ]);
+
+        $this->mock(SpacesClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('listSiteBackupObjects')->once()->andReturn([
+                ['key' => 'api-history-test.example.com/2026-09-01-07-00-00.sql.gz', 'size' => 4256, 'last_modified' => null],
+            ]);
+            $mock->shouldReceive('toHistoryRows')->once()->andReturn([
+                [
+                    'date' => '2026-09-01T07:00:00+00:00',
+                    'type' => 'daily',
+                    'database_bytes' => 4256,
+                    'files_bytes' => 1024,
+                    'notes' => null,
+                ],
+            ]);
+        });
 
         $response = $this->actingAs($user)->getJson(route('sites.backups.history', $site));
 
@@ -230,6 +247,9 @@ describe('Site Overview Command Center Dashboard', function () {
                 'site_id' => $site->id,
                 'domain' => $site->domain,
                 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
-            ]);
+                'spaces_configured' => true,
+            ])
+            ->assertJsonPath('spaces_history.0.date', '2026-09-01T07:00:00+00:00')
+            ->assertJsonPath('spaces_history.0.database_bytes', 4256);
     });
 });

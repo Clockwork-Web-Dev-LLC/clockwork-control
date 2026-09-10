@@ -2,7 +2,7 @@
 title: Server, Site, Care plan, Hosting tier
 section: Concepts
 order: 10
-updated: 2026-09-02
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [concepts, mental-model, care-plan, hosting, pressable, wpengine, kinsta, cloudways]
 ---
@@ -62,7 +62,7 @@ If we host a site, that site is on the **hosting tier** by default. Every Compan
 
 - Off-site backups — 30-day retention for SpinupWP sites (DigitalOcean Spaces). **Pressable sites have no retention policy to apply**: Pressable's own `/backups` API has no pagination and returns whatever window it returns (observed ~36-38 hours), so Companion shows Pressable sites "all available history" rather than a day-count promise. **WP Engine, Kinsta, and Cloudways backup history is not yet wired into Companion or any report command** — each client (`WPEngineClient::backups()`, `KinstaClient::backups()`, `CloudwaysClient::takeBackup()`/`restoreBackup()`) can reach the provider's native backup API, but unlike Pressable there's no `*BackupsReport` command pushing that data anywhere yet. Don't assume backup visibility parity with Pressable/SpinupWP for these three until that's built.
 - Uptime monitoring (HTTP probes, Mattermost alerts on downtime)
-- Daily blacklist scans (Spamhaus + URLHaus + Google Safe Browsing)
+- Daily blacklist scans (Spamhaus + URLHaus + Google Web Risk, or legacy Safe Browsing v4)
 - The Companion plugin if installed, with Activity / Uptime / Backups visibility for the client
 
 You don't have to do anything to put a new site on the hosting tier — it's the default.

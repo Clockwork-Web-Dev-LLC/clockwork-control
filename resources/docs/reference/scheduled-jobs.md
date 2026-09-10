@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
@@ -80,7 +80,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | Time | Command | What it does |
 |---|---|---|
 | 02:00 | `clockwork:scan-sitecheck` | Sucuri SiteCheck remote scan. Care-plan only. (Daily now, not weekly Mon — all care-plan scans match the once-a-day expectation.) |
-| 02:15 | `clockwork:check-blacklists` | URLhaus + Spamhaus DBL + optional Google Safe Browsing. Hosting-tier (every site). |
+| 02:15 | `clockwork:check-blacklists` | URLhaus + Spamhaus DBL + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Hosting-tier (every site). |
 | 02:30 | `clockwork:verify-wp-core-checksums` | `wp core verify-checksums` per site — SSH for SpinupWP, Pressable's async command API for Pressable. Care-plan only. |
 | 02:45 | `clockwork:run-companion-malware-scans` | In-WP malware probe (Companion plugin endpoint, SSH wp-cli fallback). Bypasses Cloudflare. Care-plan only. |
 

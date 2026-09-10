@@ -2,7 +2,7 @@
 title: Welcome to Clockwork Control
 section: Getting Started
 order: 10
-updated: 2026-09-04
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [overview, onboarding, control-panel]
 ---
@@ -16,7 +16,7 @@ A few things, all at once:
 - **Watches the servers** — every 5 minutes Clockwork Control pulls metrics from each server's cloud provider — DigitalOcean droplets give CPU, memory, disk, and load; Azure VMs give CPU and memory; Hetzner Cloud servers give CPU only — and tags any server that's running hot.
 - **Watches the sites** — every monitored site gets an HTTP probe a few times an hour. If a site stops responding for two probes in a row, we get a Mattermost alert before the client emails us.
 - **Watches for trouble** — nginx logs are tailed, Wordfence and Limit Login Attempts data is ingested, and IPs that misbehave land in a review queue. Repeated abusers get banned via fail2ban over SSH.
-- **Runs the care-plan checks** — nightly Lighthouse performance scans (GTmetrix), weekly Sucuri SiteCheck, daily WordPress core file integrity, daily blacklist checks against Spamhaus / URLHaus / Google Safe Browsing.
+- **Runs the care-plan checks** — nightly Lighthouse performance scans (GTmetrix), weekly Sucuri SiteCheck, daily WordPress core file integrity, daily blacklist checks against Spamhaus / URLHaus / Google Web Risk.
 - **Talks to clients via the Companion plugin** — every Companion-equipped site has a Tools → Clockwork section in wp-admin showing the same data we see, formatted for them.
 
 ## What it isn't

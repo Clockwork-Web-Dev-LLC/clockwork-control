@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport}.php, app/Models/SiteCoreChecksumAllowlist.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php]
@@ -15,7 +15,7 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | Scan | Cadence | Tier | What it catches |
 |---|---|---|---|
 | **Sucuri SiteCheck** | daily 02:00 | care-plan | Remote malware + blacklist hits via Sucuri's public API (the same engine ManageWP resold). Decoupled as `clockwork/sucuri` (`modules/Sucuri`). |
-| **Domain blacklists** | daily 02:15 | hosting | Spamhaus DBL + URLhaus + optional Google Safe Browsing. Recovers the blacklist signal Sucuri loses when CF 403's its scanner. |
+| **Domain blacklists** | daily 02:15 | hosting | Spamhaus DBL + URLhaus + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Recovers the blacklist signal Sucuri loses when CF 403's its scanner. |
 | **WP core checksums** | daily 02:30 | care-plan | `wp core verify-checksums` — catches base64 / shell backdoors dropped into wp-includes / wp-admin that Sucuri can't see (because they're not in the public HTML). |
 | **Companion malware** | daily 02:45 | care-plan | In-WP probe (Companion endpoint preferred, SSH fallback). PHP files >30 bytes under `wp-content/uploads/` (skipping the standard 0-byte and "Silence is golden" stubs that legit plugins drop), obfuscation signatures (`eval(base64_decode(`, `eval(gzinflate(`, `c99shell`, `r57shell`, `WSOsetcookie`, `FilesMan`), and recently-modified `wp-config.php`. Bypasses Cloudflare so CF-fronted sites get real signal. |
 

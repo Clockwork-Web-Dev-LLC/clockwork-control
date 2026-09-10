@@ -59,13 +59,14 @@ class IntegrationCredentialsController extends Controller
         ],
         'security_scans' => [
             'label' => 'Blacklist scanning',
-            'description' => 'Daily domain reputation checks against Google Safe Browsing and abuse intelligence databases.',
-            'capabilities' => ['Google Safe Browsing', 'URLhaus Threat Intel', 'Automated Malware Checks'],
+            'description' => 'Daily domain reputation checks against Google Web Risk (or legacy Safe Browsing v4) and abuse intelligence databases.',
+            'capabilities' => ['Google Web Risk', 'URLhaus Threat Intel', 'Automated Malware Checks'],
             'fields' => [
-                'google_safe_browsing_key' => ['label' => 'Google Safe Browsing Key', 'secret' => true],
+                'google_web_risk_key' => ['label' => 'Google Web Risk Key', 'secret' => true],
+                'google_safe_browsing_key' => ['label' => 'Google Safe Browsing Key (legacy v4)', 'secret' => true],
                 'urlhaus_auth_key' => ['label' => 'URLHaus Auth Key', 'secret' => true],
             ],
-            'check' => GoogleSafeBrowsingCheck::class, // only covers the GSB field; URLHaus and keyless Spamhaus have no dedicated check
+            'check' => GoogleSafeBrowsingCheck::class, // Web Risk first, then v4; URLHaus and keyless Spamhaus have no dedicated check
             'status' => 'verified',
             'status_note' => 'Verified and in active daily use for fleet threat intelligence.',
         ],

@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -253,8 +253,8 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_GOOGLE_WEB_RISK_KEY` | empty | Google Cloud Web Risk API (commercial standard). Free up to 100k req/mo. |
-| `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` | empty | Legacy non-commercial Safe Browsing v4 fallback. Free, 10k/day. |
+| `CLOCKWORK_GOOGLE_WEB_RISK_KEY` | empty | Google Cloud Web Risk API (commercial standard). Free up to 100k req/mo. Do not put a v4 Safe Browsing secret here. |
+| `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` | empty | Legacy non-commercial Safe Browsing v4. Used only when the Web Risk key is empty. |
 | `CLOCKWORK_URLHAUS_AUTH_KEY` | empty | Optional. Free registration at auth.abuse.ch. |
 | `CLOCKWORK_BLACKLIST_TIMEOUT` | `10` | Per-source timeout. |
 | `CLOCKWORK_SUCURI_BASE_URL` | `https://sitecheck.sucuri.net` | |

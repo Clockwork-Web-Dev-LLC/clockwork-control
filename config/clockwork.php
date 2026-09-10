@@ -396,7 +396,9 @@ return [
         //     Catches malware-host status (4M+ entries).
         //
         // All sources unset = Spamhaus DBL only (still useful baseline).
-        'google_web_risk_key' => env('CLOCKWORK_GOOGLE_WEB_RISK_KEY', env('CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY', '')),
+        // Do NOT default web_risk_key to the v4 secret — they are different APIs.
+        // Runtime fallback lives in BlacklistChecker::effectiveGoogleSource().
+        'google_web_risk_key' => env('CLOCKWORK_GOOGLE_WEB_RISK_KEY', ''),
         'google_safe_browsing_key' => env('CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY', ''),
         'urlhaus_auth_key' => env('CLOCKWORK_URLHAUS_AUTH_KEY', ''),
         'blacklist_timeout' => env('CLOCKWORK_BLACKLIST_TIMEOUT', 10),

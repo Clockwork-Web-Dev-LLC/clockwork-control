@@ -2,7 +2,7 @@
 title: Google PageSpeed Insights
 section: Integrations
 order: 80
-updated: 2026-09-07
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, google, care-plan, pressable, modularization]
 tracks: [modules/PageSpeedInsights/src/PageSpeedInsightsClient.php, modules/PageSpeedInsights/src/PageSpeedInsightsServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
@@ -65,6 +65,7 @@ Each scan also writes a summary row to `action_logs` (`TYPE_PERFORMANCE_SCAN`), 
 
 ## Gotchas
 
+- **Repeating `category=` is required.** `http_build_query` array encoding produces `category[0]=`, which PSI v5 ignores. The client concatenates `category=performance&category=accessibility&category=best-practices&category=seo`. One HTTP call is still one Lighthouse run and one quota unit.
 - **PSI is genuinely slow.** 20–60s per scan is normal; a stuck Lighthouse run can push past 60s. The default 90s timeout gives headroom without hanging the loop forever on a wedged remote browser.
 - **PSI and GTmetrix scores aren't comparable.** Different throttling and environments. Filter by `engine` when analyzing historical trends.
 - **CLS is stored ×1000 as integer.** Don't compare raw column values to display values (e.g., 125 in the column is 0.125 to a user).
