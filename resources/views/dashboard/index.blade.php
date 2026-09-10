@@ -325,6 +325,17 @@
                     $jailTitle = $jailOk
                         ? 'fail2ban provisioned ' . $server->clockwork_jail_provisioned_at->diffForHumans()
                         : 'fail2ban not provisioned';
+
+                    $cloudProvider = $server->provider ? app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider) : null;
+                    $providerName = match(true) {
+                        str_starts_with($server->provider ?? '', 'digitalocean') => 'DigitalOcean',
+                        str_starts_with($server->provider ?? '', 'hetzner') => 'Hetzner',
+                        str_starts_with($server->provider ?? '', 'vultr') => 'Vultr',
+                        str_starts_with($server->provider ?? '', 'azure') => 'Azure',
+                        str_starts_with($server->provider ?? '', 'linode') => 'Linode',
+                        str_starts_with($server->provider ?? '', 'aws') => 'AWS',
+                        default => $cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : null,
+                    };
                 @endphp
                 <div class="cw-server-card flex flex-col justify-between server-card relative group {{ $meta['card'] }}"
                      data-server-id="{{ $server->id }}"
@@ -347,16 +358,17 @@
 
                         <!-- Provider, Staging, Patches & Tags -->
                         <div class="flex items-center gap-1.5 flex-wrap mb-3">
-                            {{-- Cloud Provider Icon / Label --}}
-                            @if ($server->provider_id)
-                                @php $cloudProvider = app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider); @endphp
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]" title="{{ $cloudProvider->label() }} #{{ $server->provider_id }}">
+                            {{-- Cloud Provider Icon / Label (DigitalOcean, Hetzner, Vultr, Azure, Linode) --}}
+                            @if ($cloudProvider && $cloudProvider->id() !== 'null')
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]"
+                                      title="{{ $cloudProvider->label() }}{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
                                     <i class="{{ $cloudProvider->iconClass() }} text-xs" style="color: {{ $cloudProvider->iconColor() }}"></i>
-                                    <span>{{ $cloudProvider->label() }}</span>
+                                    <span>{{ $providerName ?? $cloudProvider->label() }}</span>
                                 </span>
-                            @else
-                                <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
-                                    {{ $server->hosting_provider ?? 'Server Node' }}
+                            @elseif ($server->provider)
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
+                                    <i class="fa-solid fa-server text-xs"></i>
+                                    <span>{{ ucfirst($server->provider) }}</span>
                                 </span>
                             @endif
 
@@ -497,8 +509,8 @@
 
                     <!-- Footer: Actions -->
                     <div class="flex items-center justify-between pt-3 mt-3 border-t border-[var(--color-border-light)]/60 text-xs">
-                        <span class="text-[11px] font-mono text-[var(--color-ink-soft)]">
-                            {{ $server->provider_label ?? 'Cloud Node' }}
+                        <span class="text-[11px] font-mono text-[var(--color-ink-soft)]" title="Server IP">
+                            {{ $server->ip_address }}
                         </span>
                         <div class="flex items-center gap-2">
                             <button type="button"
@@ -518,7 +530,7 @@
                                         'sshTitle' => $sshTitle,
                                         'jailOk' => $jailOk,
                                         'jailTitle' => $jailTitle,
-                                        'provider' => $server->provider_label ?? $server->provider,
+                                        'provider' => $providerName ?? ($cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : ($server->provider ? ucfirst($server->provider) : 'Manual')),
                                         'showUrl' => route('servers.show', $server),
                                     ]) }})"
                                     class="hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] font-medium inline-flex items-center gap-1 cursor-pointer">
@@ -579,6 +591,17 @@
                                 $jailTitle = $jailOk
                                     ? 'fail2ban provisioned ' . $server->clockwork_jail_provisioned_at->diffForHumans()
                                     : 'fail2ban not provisioned';
+
+                                $cloudProvider = $server->provider ? app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider) : null;
+                                $providerName = match(true) {
+                                    str_starts_with($server->provider ?? '', 'digitalocean') => 'DigitalOcean',
+                                    str_starts_with($server->provider ?? '', 'hetzner') => 'Hetzner',
+                                    str_starts_with($server->provider ?? '', 'vultr') => 'Vultr',
+                                    str_starts_with($server->provider ?? '', 'azure') => 'Azure',
+                                    str_starts_with($server->provider ?? '', 'linode') => 'Linode',
+                                    str_starts_with($server->provider ?? '', 'aws') => 'AWS',
+                                    default => $cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : null,
+                                };
                             @endphp
                             <tr class="server-card"
                                 data-server-id="{{ $server->id }}"
@@ -598,15 +621,19 @@
                                     {{ $server->hostname }}
                                 </td>
                                 <td>
-                                    <div class="flex items-center gap-1.5 text-xs capitalize text-[var(--color-ink-muted)]">
-                                        @if ($server->provider_id)
-                                            @php $cloudProvider = app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider); @endphp
-                                            <i class="{{ $cloudProvider->iconClass() }} text-xs" style="color: {{ $cloudProvider->iconColor() }}" title="{{ $cloudProvider->label() }}"></i>
+                                    <div class="flex items-center gap-1.5 text-xs text-[var(--color-ink-muted)]">
+                                        @if ($cloudProvider && $cloudProvider->id() !== 'null')
+                                            <i class="{{ $cloudProvider->iconClass() }} text-xs shrink-0" style="color: {{ $cloudProvider->iconColor() }}" title="{{ $cloudProvider->label() }}{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
+                                            <span class="font-medium text-[var(--color-ink-strong)]">{{ $providerName ?? $cloudProvider->label() }}</span>
+                                        @elseif ($server->provider)
+                                            <i class="fa-solid fa-server text-xs text-[var(--color-ink-soft)] shrink-0"></i>
+                                            <span class="font-medium text-[var(--color-ink-strong)]">{{ ucfirst($server->provider) }}</span>
+                                        @else
+                                            <span class="text-[var(--color-ink-soft)] italic">Manual</span>
                                         @endif
                                         @if ($server->spinupwp_id)
-                                            <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP"></i>
+                                            <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
                                         @endif
-                                        <span>{{ $server->provider_label ?? ($server->hosting_provider ?? 'manual') }}</span>
                                     </div>
                                 </td>
                                 <td>
