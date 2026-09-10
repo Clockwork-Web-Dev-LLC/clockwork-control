@@ -194,4 +194,55 @@ describe('DashboardController', function () {
             ->assertDontSee('Refresh from SpinupWP')
             ->assertDontSee('Refresh from GridPane');
     });
+
+    it('shows Refresh from GridPane in dashboard actions when gridpane module is enabled', function () {
+        Server::factory()->create();
+        InstalledModule::create(['module_id' => 'gridpane', 'name' => 'GridPane', 'enabled' => true]);
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('Refresh from GridPane')
+            ->assertDontSee('&amp;amp;');
+    });
+
+    it('displays GridPane badge and label on server cards for GridPane servers', function () {
+        $server = Server::factory()->create([
+            'name' => 'gp-node1.example.com',
+            'spinupwp_id' => null,
+            'provider' => Server::PROVIDER_GRIDPANE,
+            'provider_id' => '101',
+        ]);
+
+        expect($server->provider_label)->toBe('GridPane server');
+        expect($server->isGridPane())->toBeTrue();
+        expect($server->isSpinupWp())->toBeFalse();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('GridPane server')
+            ->assertSee('GridPane server #101');
+    });
+
+    it('shows Sync sites from GridPane on the server sites tab for GridPane servers', function () {
+        InstalledModule::create(['module_id' => 'gridpane', 'name' => 'GridPane', 'enabled' => true]);
+        app(ModuleStateResolver::class)->flush();
+
+        $server = Server::factory()->create([
+            'name' => 'gp-node2.example.com',
+            'spinupwp_id' => null,
+            'provider' => Server::PROVIDER_GRIDPANE,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server, 'tab' => 'sites']));
+
+        $response->assertOk()
+            ->assertSee('Sync sites from GridPane');
+    });
 });
+

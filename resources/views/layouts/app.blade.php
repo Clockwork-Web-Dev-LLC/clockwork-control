@@ -330,6 +330,13 @@
                                 <a href="{{ route('settings.index') }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
                                     <i class="fa-solid fa-sliders text-[var(--color-ink-muted)]"></i> Settings Hub
                                 </a>
+                                @foreach (app(\Modules\Core\ModuleRegistry::class)->navItems() as $moduleNavItem)
+                                    @if ($moduleNavItem->isVisible())
+                                        <a href="{{ route($moduleNavItem->route) }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
+                                            <i class="{{ $moduleNavItem->icon }} text-[var(--color-ink-muted)]"></i> {{ $moduleNavItem->label }}
+                                        </a>
+                                    @endif
+                                @endforeach
                                 <form method="POST" action="{{ route('logout') }}" class="border-t border-[var(--color-border-light)] mt-1">
                                     @csrf
                                     <button type="submit" class="w-full text-left flex items-center gap-2 px-3 py-2 text-[var(--color-status-red)] hover:bg-[var(--color-surface-alt)] cursor-pointer">

@@ -199,11 +199,39 @@ class Server extends Model
      */
     public function getProviderLabelAttribute(): string
     {
+        if ($this->provider === self::PROVIDER_GRIDPANE) {
+            return 'GridPane server';
+        }
+
         if (! in_array($this->provider, [self::PROVIDER_DIGITALOCEAN, self::PROVIDER_HETZNER, self::PROVIDER_AZURE, self::PROVIDER_CLOUDWAYS, self::PROVIDER_VULTR, self::PROVIDER_LINODE], true)) {
             return (string) $this->provider;
         }
 
         return app(CloudProviderRegistry::class)->resolve($this->provider)->label();
+    }
+
+    /**
+     * True when this server is provisioned/managed via GridPane.
+     */
+    public function isGridPane(): bool
+    {
+        if ($this->provider === self::PROVIDER_GRIDPANE) {
+            return true;
+        }
+
+        if ($this->relationLoaded('sites')) {
+            return $this->sites->contains(fn (Site $site) => $site->hosting_provider === Site::HOSTING_PROVIDER_GRIDPANE);
+        }
+
+        return false;
+    }
+
+    /**
+     * True when this server is provisioned/managed via SpinupWP.
+     */
+    public function isSpinupWp(): bool
+    {
+        return $this->spinupwp_id !== null;
     }
 
     public function sites(): HasMany

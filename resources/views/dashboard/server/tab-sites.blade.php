@@ -15,6 +15,14 @@
                         <i class="fa-solid fa-rotate"></i> <span>Sync sites from SpinupWP</span>
                     </button>
                 </form>
+            @elseif ($server->isGridPane() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane'))
+                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Sync sites from GridPane</span>
+                    </button>
+                </form>
             @endif
         </div>
     @else

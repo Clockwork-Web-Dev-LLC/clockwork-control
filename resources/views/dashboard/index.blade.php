@@ -66,7 +66,7 @@
     <!-- ================================================================= -->
     <!-- TOP PAGE HEADER & GLOBAL FLEET ACTIONS                            -->
     <!-- ================================================================= -->
-    <x-page-header title="Servers" subtitle="Live infrastructure fleet monitor across provisioned clouds &amp; host nodes.">
+    <x-page-header title="Servers" subtitle="Live infrastructure fleet monitor across provisioned clouds and host nodes.">
         <x-slot:actions>
             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
                 <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="inline">
@@ -356,12 +356,18 @@
                             </span>
                         </div>
 
-                        <!-- Staging, Patches, SpinupWP & Tags -->
+                        <!-- Staging, Patches, SpinupWP/GridPane & Tags -->
                         <div class="flex items-center gap-1.5 flex-wrap mb-3">
                             @if ($server->spinupwp_id)
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="SpinupWP server #{{ $server->spinupwp_id }}">
                                     <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]"></i>
                                     <span>SpinupWP</span>
+                                </span>
+                            @endif
+                            @if ($server->isGridPane())
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
+                                    <i class="fa-solid fa-table-cells text-[10px] text-emerald-500"></i>
+                                    <span>GridPane</span>
                                 </span>
                             @endif
 
@@ -516,7 +522,7 @@
                                         'sshTitle' => $sshTitle,
                                         'jailOk' => $jailOk,
                                         'jailTitle' => $jailTitle,
-                                        'provider' => $providerName ?? ($cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : ($server->provider ? ucfirst($server->provider) : 'Manual')),
+                                        'provider' => $server->isGridPane() ? 'GridPane' : ($providerName ?? ($cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : ($server->provider ? ucfirst($server->provider) : 'Manual'))),
                                         'showUrl' => route('servers.show', $server),
                                     ]) }})"
                                     class="hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] font-medium inline-flex items-center gap-1 cursor-pointer">
@@ -613,12 +619,15 @@
                                             <span class="font-medium text-[var(--color-ink-strong)]">{{ $providerName ?? $cloudProvider->label() }}</span>
                                         @elseif ($server->provider)
                                             <i class="fa-solid fa-server text-xs text-[var(--color-ink-soft)] shrink-0"></i>
-                                            <span class="font-medium text-[var(--color-ink-strong)]">{{ ucfirst($server->provider) }}</span>
+                                            <span class="font-medium text-[var(--color-ink-strong)]">{{ $server->isGridPane() ? 'GridPane' : ucfirst($server->provider) }}</span>
                                         @else
                                             <span class="text-[var(--color-ink-soft)] italic">Manual</span>
                                         @endif
                                         @if ($server->spinupwp_id)
                                             <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
+                                        @endif
+                                        @if ($server->isGridPane())
+                                            <i class="fa-solid fa-table-cells text-[10px] text-emerald-500" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
                                         @endif
                                     </div>
                                 </td>

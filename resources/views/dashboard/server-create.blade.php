@@ -4,7 +4,7 @@
 
 @section('content')
     <x-page-header title="Add a server"
-        subtitle="For Hetzner, hand-rolled, or any host not in your SpinupWP fleet. SpinupWP servers sync automatically via scheduled import.">
+        subtitle="For custom-VPS, hand-rolled, or any host not managed by an automated panel integration. Integrated panel servers sync automatically via scheduled import.">
         <x-slot:actions>
             <a href="{{ route('dashboard') }}" class="btn-pill-nav text-sm">
                 <i class="fa-solid fa-arrow-left"></i>
