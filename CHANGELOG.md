@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-09
+
+### Added
+- **Unified Dual-Layout Architecture**: Seamless switching between **Command Center** (dense operations rail and live telemetric cards) and **Modern Studio** (human-centric, spacious card-forward layout with live search) directly from the top bar. Preferences are saved in `localStorage` with zero-flicker pre-render initialization (`data-layout-style`).
+- **Reactive theme & dark mode system**: Complete dark mode, high-contrast, and system theme parity across all views, drawers, modals, and forms. Real-time solar/moon theme toggle with Alpine reactive store synchronization.
+- **Typography font scaling**: Added accessible font scale controls (Compact, Standard, Comfortable) with dynamic UI scaling.
+- **Three-tier semantic telemetry borders**: Restored intuitive status border styling and metric badge tiers on server cards and table rows: Yellow at ≥ 70% (Caution / Watch), Orange at ≥ 80% (Elevated pressure), and Red at ≥ 90% (Critical pressure).
+- **Modernized Documentation & Runbooks**: Redesigned documentation center with responsive layout offsets, theme-aware typography, breadcrumbs navigation, section table-of-contents, and one-click code copy.
+- **Cloud & control panel provider badges**: Native badges and dynamic actions for DigitalOcean, Hetzner, Vultr, Azure, GridPane, and SpinupWP.
+
+### Changed
+- **Optimized telemetry batching**: Batched stale telemetry queries via SQL `joinSub` in `DashboardController`, eliminating N+1 queries when loading fleet metric health and stale timestamps.
+- **Polling cloud telemetry for staging & unmanaged servers**: Extended `PollServers` metrics collection to support staging and unmanaged servers on manual recheck.
+
+### Fixed
+- **Alpine shell init collision**: Unified Alpine.js layout and theme components into a single root `appChrome` store, preventing component lifecycle collisions that previously caused theme toggle freezing.
+- **Command rail mobile viewport scoping**: Scoped Command Center sidebar rail display to desktop viewports (`min-width: 1024px`), preventing unscoped rail elements from breaking mobile navigation drawers.
+
 ## [1.5.6] - 2026-09-09
 
 ### Added
