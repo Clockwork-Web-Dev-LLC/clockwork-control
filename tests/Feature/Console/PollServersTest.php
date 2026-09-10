@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\Server;
 use App\Models\ServerMetric;
+use App\Models\Tag;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use Modules\Core\Contracts\CloudProvider;
 use Tests\Fixtures\FakeCloudProviderForPollServersTest;
@@ -168,7 +169,7 @@ describe('clockwork:poll-servers', function () {
             'provider_id' => '333',
             'is_ignored' => false,
         ]);
-        $tag = \App\Models\Tag::factory()->create(['slug' => 'staging']);
+        $tag = Tag::factory()->create(['slug' => 'staging']);
         $staging->tags()->attach($tag);
 
         $this->artisan('clockwork:poll-servers')
