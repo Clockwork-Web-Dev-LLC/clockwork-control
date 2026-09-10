@@ -101,6 +101,8 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?Carbon $uptime_maintenance_since
  * @property ?Carbon $uptime_ignored_at
  * @property ?string $uptime_ignore_reason
+ * @property bool $uptime_sla_exempt
+ * @property ?string $uptime_exemption_reason
  * @property ?Carbon $sucuri_unavailable_at
  * @property ?string $sucuri_unavailable_reason
  * @property ?Carbon $psi_unavailable_at
@@ -299,6 +301,8 @@ class Site extends Model
         'uptime_maintenance_since',
         'uptime_ignored_at',
         'uptime_ignore_reason',
+        'uptime_sla_exempt',
+        'uptime_exemption_reason',
         'sucuri_unavailable_at',
         'sucuri_unavailable_reason',
         'psi_unavailable_at',
@@ -389,6 +393,7 @@ class Site extends Model
             'uptime_down_since' => 'datetime',
             'uptime_maintenance_since' => 'datetime',
             'uptime_ignored_at' => 'datetime',
+            'uptime_sla_exempt' => 'boolean',
             'sucuri_unavailable_at' => 'datetime',
             'psi_unavailable_at' => 'datetime',
             'resource_metrics_cursor_at' => 'datetime',
@@ -662,6 +667,9 @@ class Site extends Model
         return $this->hasMany(SiteSecurityScan::class);
     }
 
+    /**
+     * @return HasMany<SiteUptimeEvent, $this>
+     */
     public function uptimeEvents(): HasMany
     {
         return $this->hasMany(SiteUptimeEvent::class);
@@ -868,6 +876,42 @@ class Site extends Model
     public function isUptimeIgnored(): bool
     {
         return $this->uptime_ignored_at !== null;
+    }
+
+    public function isUptimeSlaExempt(): bool
+    {
+        return (bool) $this->uptime_sla_exempt;
+    }
+
+    /**
+     * Latest TYPE_DOWN event (current or most recent completed outage).
+     */
+    public function latestDownEvent(): ?SiteUptimeEvent
+    {
+        if ($this->relationLoaded('uptimeEvents')) {
+            return $this->uptimeEvents
+                ->where('event_type', SiteUptimeEvent::TYPE_DOWN)
+                ->sortByDesc(fn (SiteUptimeEvent $event) => $event->event_at?->getTimestamp() ?? 0)
+                ->first();
+        }
+
+        return $this->uptimeEvents()
+            ->where('event_type', SiteUptimeEvent::TYPE_DOWN)
+            ->orderByDesc('event_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Current outage is SLA-exempt via standing site policy or this incident's down event.
+     */
+    public function isCurrentOutageSlaExempt(): bool
+    {
+        if ($this->uptime_state !== 'down') {
+            return false;
+        }
+
+        return $this->isUptimeSlaExempt() || (bool) $this->latestDownEvent()?->is_sla_exempt;
     }
 
     /**

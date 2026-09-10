@@ -124,19 +124,21 @@ class UptimeStatsCalculator
         // if no prior history exists at all (handled by caller, but
         // defensive-default to 'up' here too).
         $cursorState = $priorEvent !== null ? $priorEvent->event_type : 'up';
+        $cursorIsExempt = $priorEvent !== null && (bool) $priorEvent->is_sla_exempt;
         $cursorAt = $start;
         $downtimeSec = 0;
 
         foreach ($events as $event) {
-            if ($cursorState === 'down') {
+            if ($cursorState === 'down' && ! $cursorIsExempt) {
                 $downtimeSec += (int) $cursorAt->diffInSeconds($event->event_at);
             }
             $cursorState = $event->event_type;
+            $cursorIsExempt = (bool) $event->is_sla_exempt;
             $cursorAt = $event->event_at;
         }
 
         // Trailing window: if we're still 'down' at window end, count the rest.
-        if ($cursorState === 'down') {
+        if ($cursorState === 'down' && ! $cursorIsExempt) {
             $downtimeSec += (int) $cursorAt->diffInSeconds($end);
         }
 

@@ -18,6 +18,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { initThemeSystem, themePicker } from './theme.js';
 import { initFontScaleSystem } from './font-scale.js';
 import { initLayoutStyleSystem, layoutStylePicker } from './layout-style.js';
+import { initTooltipSystem } from './tooltip.js';
 
 echarts.use([
     LineChart,
@@ -343,6 +344,7 @@ Alpine.data('siteDashboardReorder', ({ updateUrl, csrf, order = [], isCustom = f
 initThemeSystem(Alpine);
 initFontScaleSystem(Alpine);
 initLayoutStyleSystem(Alpine);
+initTooltipSystem();
 
 // One Alpine component for the app shell. Spreading layoutStylePicker() and
 // themePicker() into an object literal would collide on init() — Alpine only

@@ -3,7 +3,7 @@
 @section('title', 'SSH credentials · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
+    @include('operations._tabs')
 
     <x-page-header title="SSH credentials"
         subtitle="Manage per-server SSH passwords for automation and update tasks. Default user: {{ config('clockwork.ssh.default_user') }}. Existing values are encrypted at rest.">

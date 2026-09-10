@@ -42,9 +42,8 @@ describe('bulk (GET /servers/credentials)', function () {
         $response->assertOk();
         $response->assertSee('web-test1.example.com');
         $response->assertDontSee('ignored-box.example.com');
-        // Regression: this route is part of the "Operations & Tools"
-        // settings tier — the persistent two-tier settings nav must render.
-        $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
+        // Operations workspace: dedicated operations tabs must render.
+        $response->assertSee('Capacity')->assertSee('SSH Credentials')->assertDontSee('Fleet & Branding');
     });
 });
 

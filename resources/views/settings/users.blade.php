@@ -124,8 +124,23 @@
                     @forelse ($users as $u)
                         <tr class="border-t border-[var(--color-border-light)] {{ $u->revoked_at ? 'opacity-60' : '' }}">
                             <td class="px-6 py-3.5">
-                                <div class="font-medium text-[var(--color-ink-strong)]">{{ $u->name }}</div>
-                                <div class="font-data text-xs text-[var(--color-ink-muted)]">{{ $u->email }}</div>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                                        <img src="{{ $u->avatarUrl(64) }}"
+                                             alt="{{ $u->name }}"
+                                             class="w-full h-full object-cover rounded-full"
+                                             loading="lazy"
+                                             referrerpolicy="no-referrer"
+                                             onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                        <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                            {{ $u->initials() }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="font-medium text-[var(--color-ink-strong)]">{{ $u->name }}</div>
+                                        <div class="font-data text-xs text-[var(--color-ink-muted)]">{{ $u->email }}</div>
+                                    </div>
+                                </div>
                             </td>
                             <td class="px-6 py-3.5">
                                 <span class="text-xs font-medium uppercase tracking-wide {{ $u->isAdmin() ? 'text-[var(--color-brand)]' : 'text-[var(--color-ink-muted)]' }}">{{ $u->role }}</span>

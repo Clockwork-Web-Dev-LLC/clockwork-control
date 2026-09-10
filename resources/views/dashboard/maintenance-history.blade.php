@@ -3,7 +3,7 @@
 @section('title', 'Maintenance history · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
+    @include('operations._tabs')
 
     <x-page-header title="Maintenance history"
         subtitle="Cross-site action log for the selected month — track billable work, automated updates, and covered care-plan events." />

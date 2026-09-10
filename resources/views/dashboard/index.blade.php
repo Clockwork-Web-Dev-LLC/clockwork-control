@@ -197,9 +197,6 @@
                         </button>
                     </form>
                 @endif
-                <a href="{{ route('servers.create') }}" class="px-2.5 py-1.5 rounded-lg bg-[var(--color-brand)] text-white text-xs font-medium hover:opacity-90 transition-opacity shrink-0">
-                    <i class="fa-solid fa-plus text-[10px]"></i> Add server
-                </a>
             </div>
         </div>
     </div>

@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
+use App\Models\SiteUptimeEvent;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionInstaller;
@@ -35,6 +36,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleStateResolver;
@@ -1430,30 +1432,71 @@ class SitesController extends Controller
      */
     public function toggleUptimeIgnore(Site $site, Request $request, ActionLogger $logger): RedirectResponse
     {
+        $validated = $request->validate([
+            'ignore' => 'required|boolean',
+            'reason' => 'nullable|string|max:1000',
+            'is_sla_exempt' => 'sometimes|boolean',
+            'exemption_reason' => ['nullable', 'string', Rule::in(array_keys(SiteUptimeEvent::EXEMPTION_REASONS))],
+        ]);
+
         $ignore = $request->boolean('ignore');
 
         if ($ignore) {
-            $reason = trim((string) $request->input('reason', ''));
+            $reason = trim((string) ($validated['reason'] ?? ''));
+            $isSlaExempt = $request->boolean('is_sla_exempt');
+            $exemptionReason = $isSlaExempt ? ($validated['exemption_reason'] ?? SiteUptimeEvent::REASON_CLIENT_DNS) : null;
+            $actor = (string) (Auth::user()->email ?? 'manual');
+
             $site->forceFill([
                 'uptime_ignored_at' => now(),
-                'uptime_ignore_reason' => $reason !== '' ? $reason : null,
+                'uptime_ignore_reason' => $reason !== '' ? $reason : ($exemptionReason ? (SiteUptimeEvent::EXEMPTION_REASONS[$exemptionReason] ?? $exemptionReason) : null),
+                'uptime_sla_exempt' => $isSlaExempt,
+                'uptime_exemption_reason' => $exemptionReason,
             ])->save();
+
+            if ($isSlaExempt && $site->uptime_state === 'down') {
+                $activeDownEvent = SiteUptimeEvent::query()
+                    ->where('site_id', $site->id)
+                    ->where('event_type', SiteUptimeEvent::TYPE_DOWN)
+                    ->orderByDesc('event_at')
+                    ->first();
+
+                if ($activeDownEvent) {
+                    $activeDownEvent->forceFill([
+                        'is_sla_exempt' => true,
+                        'exemption_reason' => $exemptionReason,
+                        'exemption_notes' => $reason !== '' ? $reason : null,
+                        'exempted_at' => now(),
+                        'exempted_by' => $actor,
+                    ])->save();
+                }
+            }
 
             $logger->record(
                 actionType: ActionLog::TYPE_UPTIME_IGNORED,
-                summary: "Uptime alerts ignored for {$site->domain}".($reason !== '' ? ": {$reason}" : '.'),
+                summary: "Uptime alerts ignored for {$site->domain}".($isSlaExempt ? ' (SLA exempt / not our fault)' : '').($reason !== '' ? ": {$reason}" : '.'),
                 site: $site,
-                details: ['reason' => $reason],
+                details: [
+                    'reason' => $reason,
+                    'is_sla_exempt' => $isSlaExempt,
+                    'exemption_reason' => $exemptionReason,
+                ],
                 ok: true,
-                actor: (string) (Auth::user()->email ?? 'manual'),
+                actor: $actor,
             );
 
-            return back()->with('status', "Uptime alerts ignored for {$site->domain}. Probe still runs; alerts and Issues entries are suppressed until you un-ignore.");
+            $msg = $isSlaExempt
+                ? "Uptime alerts ignored and SLA protected for {$site->domain}. Outage is marked as Not Our Fault and excluded from uptime ratings."
+                : "Uptime alerts ignored for {$site->domain}. Probe still runs; alerts and Issues entries are suppressed until you un-ignore.";
+
+            return back()->with('status', $msg);
         }
 
         $site->forceFill([
             'uptime_ignored_at' => null,
             'uptime_ignore_reason' => null,
+            'uptime_sla_exempt' => false,
+            'uptime_exemption_reason' => null,
         ])->save();
 
         $logger->record(

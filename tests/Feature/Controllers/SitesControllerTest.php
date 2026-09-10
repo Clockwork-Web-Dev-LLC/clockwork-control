@@ -5,6 +5,7 @@ use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\SiteUptimeEvent;
 use App\Models\User;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
@@ -873,6 +874,51 @@ describe('toggle actions', function () {
             });
         }
     }
+
+    it('sets uptime_sla_exempt and retroactively excuses active down event on toggleUptimeIgnore', function () {
+        [, $site] = spinupSite([
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(10),
+        ]);
+
+        $downEvent = SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_DOWN,
+            'event_at' => now()->subHours(10),
+            'is_sla_exempt' => false,
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('sites.uptime-ignore.toggle', $site), [
+                'ignore' => '1',
+                'is_sla_exempt' => '1',
+                'exemption_reason' => SiteUptimeEvent::REASON_CLIENT_DNS,
+                'reason' => 'Client pointed nameservers away',
+            ])
+            ->assertRedirect();
+
+        $freshSite = $site->fresh();
+        $freshEvent = $downEvent->fresh();
+
+        expect($freshSite->uptime_ignored_at)->not->toBeNull()
+            ->and($freshSite->uptime_sla_exempt)->toBeTrue()
+            ->and($freshSite->uptime_exemption_reason)->toBe(SiteUptimeEvent::REASON_CLIENT_DNS)
+            ->and($freshEvent->is_sla_exempt)->toBeTrue()
+            ->and($freshEvent->exemption_reason)->toBe(SiteUptimeEvent::REASON_CLIENT_DNS);
+    });
+
+    it('rejects an unknown exemption reason on toggleUptimeIgnore', function () {
+        [, $site] = spinupSite();
+
+        $this->actingAs(User::factory()->create())
+            ->from(route('sites.show', $site))
+            ->post(route('sites.uptime-ignore.toggle', $site), [
+                'ignore' => '1',
+                'is_sla_exempt' => '1',
+                'exemption_reason' => 'not_a_real_reason',
+            ])
+            ->assertSessionHasErrors('exemption_reason');
+    });
 });
 
 describe('clearCarePlanOverride', function () {

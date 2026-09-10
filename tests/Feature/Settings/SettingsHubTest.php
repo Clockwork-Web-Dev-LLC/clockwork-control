@@ -43,7 +43,6 @@ test('settings tabs partial renders correctly', function () {
         ->assertSee('Overview')
         ->assertSee('Fleet &amp; Branding', false)
         ->assertSee('Integrations &amp; Alerts', false)
-        ->assertSee('Operations &amp; Tools', false)
         ->assertSee('System &amp; Workspace', false);
 });
 

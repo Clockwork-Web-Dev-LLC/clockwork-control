@@ -298,4 +298,16 @@ describe('DashboardController', function () {
             ->assertSee('Last sample')
             ->assertSee('5 days ago');
     });
+
+    it('has Add Server in the layout header and the page header', function () {
+        $server = Server::factory()->create(['name' => 'node1.example.com']);
+        Site::factory()->spinupwp()->create(['server_id' => $server->id]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertDontSee('Fleet sync active');
+        $html = $response->getContent();
+        expect(substr_count($html, route('servers.create')))->toBe(2);
+    });
 });

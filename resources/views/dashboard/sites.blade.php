@@ -86,17 +86,17 @@
                         @php
                             $sslState = $site->sslState();
                             $sslMeta = match (true) {
-                                $site->cert_source === 'redirect_only' => ['class' => 'status-unknown', 'icon' => 'fa-arrow-up-right-from-square', 'title' => 'Redirect-only — SSL monitoring skipped'],
-                                $sslState === 'green' => ['class' => 'status-green', 'icon' => 'fa-lock', 'title' => 'Cert OK'],
-                                $sslState === 'yellow' => ['class' => 'status-yellow', 'icon' => 'fa-clock-rotate-left', 'title' => 'Renewal needed'],
-                                $sslState === 'red' => ['class' => 'status-red', 'icon' => 'fa-lock-open', 'title' => 'Expired'],
-                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'title' => 'No SSL tracked'],
+                                $site->cert_source === 'redirect_only' => ['class' => 'status-unknown', 'icon' => 'fa-arrow-up-right-from-square', 'tooltip' => 'Redirect Only'],
+                                $sslState === 'green' => ['class' => 'status-green', 'icon' => 'fa-lock', 'tooltip' => 'SSL Valid'],
+                                $sslState === 'yellow' => ['class' => 'status-yellow', 'icon' => 'fa-clock-rotate-left', 'tooltip' => 'SSL Expiring Soon'],
+                                $sslState === 'red' => ['class' => 'status-red', 'icon' => 'fa-lock-open', 'tooltip' => 'SSL Expired'],
+                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'No SSL'],
                             };
                             $uptimeMeta = match ($site->uptime_state) {
-                                'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'title' => 'Up'],
-                                'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'title' => 'Down since ' . optional($site->uptime_down_since)->diffForHumans()],
-                                'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'title' => 'In maintenance' . ($site->uptime_maintenance_since ? ' since ' . $site->uptime_maintenance_since->diffForHumans() : '')],
-                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'title' => 'Uptime unknown / not monitored'],
+                                'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'tooltip' => 'Uptime Online'],
+                                'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'tooltip' => 'Site Down'],
+                                'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'tooltip' => 'In Maintenance'],
+                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
                             };
                         @endphp
                         <li class="site-row relative px-5 py-3 flex items-center gap-3 hover:bg-[var(--color-surface-alt)] transition-colors"
@@ -111,38 +111,38 @@
 
                             <span class="font-medium text-[var(--color-ink-strong)] truncate flex-1 relative z-10 pointer-events-none">{{ $site->domain }}</span>
 
-                            <div class="flex items-center gap-3 relative z-10 pointer-events-none">
+                            <div class="flex items-center gap-2 relative z-10">
                                 @if ($site->is_inactive)
-                                    <span class="status-pill status-unknown" title="{{ $site->inactive_reason ? 'Inactive: '.$site->inactive_reason : 'Marked inactive — excluded from Issues and routine-maintenance alerts.' }}">
+                                    <span class="status-pill status-unknown cursor-default" data-tooltip="Site Inactive">
                                         <i class="fa-solid fa-moon"></i>
                                     </span>
                                 @endif
                                 @if ($site->isPressable())
-                                    <span class="status-pill status-unknown" title="Hosted on Pressable">
+                                    <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
                                         <i class="fa-solid fa-cloud"></i> Pressable
                                     </span>
                                 @elseif ($site->server)
-                                    <span class="text-xs font-data text-[var(--color-ink-muted)] truncate max-w-[10rem]" title="{{ $site->server->name }}">
+                                    <span class="text-xs font-data text-[var(--color-ink-muted)] truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
                                         <i class="fa-solid fa-server text-[var(--color-ink-soft)]"></i> {{ $site->server->display_name ?? $site->server->name }}
                                     </span>
                                 @endif
 
-                                <span class="status-pill {{ $uptimeMeta['class'] }}" title="{{ $uptimeMeta['title'] }}">
+                                <span class="status-pill {{ $uptimeMeta['class'] }} cursor-default" data-tooltip="{{ $uptimeMeta['tooltip'] }}">
                                     <i class="fa-solid {{ $uptimeMeta['icon'] }}"></i>
                                 </span>
 
-                                <span class="status-pill {{ $sslMeta['class'] }}" title="{{ $sslMeta['title'] }}">
+                                <span class="status-pill {{ $sslMeta['class'] }} cursor-default" data-tooltip="{{ $sslMeta['tooltip'] }}">
                                     <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
                                 </span>
 
                                 @if ($site->companion_installed)
-                                    <span class="status-pill status-green" title="Companion {{ $site->companion_version }} installed">
+                                    <span class="status-pill status-green cursor-default" data-tooltip="Companion Plugin Active">
                                         <i class="fa-solid fa-plug"></i>
                                     </span>
                                 @endif
 
                                 @if ($site->care_plan_enabled)
-                                    <span class="status-pill status-green" title="On a care plan">
+                                    <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
                                         <i class="fa-solid fa-shield-heart"></i>
                                     </span>
                                 @endif

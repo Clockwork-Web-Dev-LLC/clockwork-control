@@ -2,7 +2,7 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack]
 tracks: [app/Services/Uptime/**, app/Http/Controllers/MonitoringController.php, app/Console/Commands/CheckSiteUptime.php]
@@ -14,7 +14,7 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 
 ## Where to look
 
-- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed. **Re-probe all sites** (`POST /monitoring/refresh`) launches `clockwork:check-site-uptime` in the background (~2–3 min for ~150 sites) — it does not run inside the HTTP request.
+- **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" / "X EXCUSED" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed. **Re-probe all sites** (`POST /monitoring/refresh`) launches `clockwork:check-site-uptime` in the background (~2–3 min for ~150 sites) — it does not run inside the HTTP request.
 - **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min) and failure threshold (1–6 failures). Changes here apply to every monitored site.
 - **`/sites/<id>/overview`** — the Status card on the per-site Overview tab. Shows current state plus how long it's been that way.
 - **Companion → `Tools → Clockwork → Uptime`** — the client-visible version. Same data, friendlier copy. Clients see this in their wp-admin.
@@ -31,6 +31,26 @@ A site is **up** if it responds with HTTP 2xx or 3xx within 10 seconds — or if
 A site has to fail **two probes in a row** (about 10 minutes at the default cadence) before it transitions to `down` and fires the Mattermost alert. Recovery is instant — the moment the next probe succeeds, we transition back to `up` and fire the recovery alert.
 
 The 2-failure threshold is the de-jitter logic. A single bad probe (CF blip, momentary network flicker, a brief WAF rate-limit) won't fire an alert.
+
+## Outage fault attribution & SLA exemption ("Not Our Fault" / Client DNS)
+
+When a client changes their DNS without telling the agency, lets their domain registration expire, or an upstream third-party service fails, the site becomes unreachable. While the site is technically down, the downtime is outside agency control and should not penalize the agency's uptime rating or SLA records.
+
+Clockwork supports **Outage Fault Attribution**. There are two layers — do not conflate them:
+
+- **This incident** (`POST /monitoring/sites/{site}/classify-outage`): tags the latest `TYPE_DOWN` event (`is_sla_exempt` / reason / notes). That is what `UptimeStatsCalculator` uses to exclude downtime from rolling percentages. If the outage is excused, alerts are silenced (`uptime_ignored_at`) for *this* down stretch. **Marking Not Our Fault does not set `sites.uptime_sla_exempt`.** The next outage starts as a legit down unless you also set standing policy. **Mark Legit** clears the event exemption, clears ignore, and also clears standing site SLA flags (overrides a settings-level exemption for this recovery path).
+- **Standing policy** (per-site Settings → ignore + SLA exempt): sets `sites.uptime_sla_exempt` / `uptime_exemption_reason`. New down events inherit that via `UptimeStateUpdater::recordEvent()`. Use this when the site is known to stay out of our control (expired domain, paused project).
+
+KPIs and the amber **NOT OUR FAULT** badge treat a site as excused when it is currently down **and** either the standing site flag is on **or** the latest down event is SLA-exempt. So a monitoring-page classify still shows the badge immediately without poisoning the next outage.
+
+- **Legit Outage**: Internal / infrastructure issues (server crash, PHP-FPM error, origin down). Counts toward downtime and reduces 24h, 7d, and 30d uptime percentages.
+- **Not Our Fault (SLA Exempt)**: External issues outside agency control (Client DNS change, domain expired, upstream third-party outage, client-requested hold).
+  - **Mathematical exclusion**: `UptimeStatsCalculator` excludes excused intervals from `$downtimeSec`. The site's rolling uptime rating is protected (recalculating to 100% or preserving legitimate uptime).
+  - **Fleet SLA protection**: Fleet 7d and 30d averages exclude excused outages.
+  - **Active outage protection**: Marking an ongoing outage as "Not Our Fault" retroactively excuses the current interval immediately.
+  - **Status board representation**: On `/monitoring`, excused sites render with an amber `NOT OUR FAULT` badge with a tooltip showing the cause (e.g. *Client DNS change*) and an SLA protection shield icon `🛡️`, avoiding alarming false-positive red states when infrastructure is healthy.
+  - **1-click classification**: From `/monitoring`, operators can click **"Not our fault?"** to immediately classify the *current* outage via modal, or **"Mark Legit"** to revert. That tags the down event only; standing SLA policy lives on the site Settings tab.
+  - **Site settings controls**: From `/sites/{site}?tab=settings`, operators can silence alerts and choose whether the silence is for a Legit Outage or an SLA-exempt Not Our Fault *policy* that future downs inherit.
 
 ## The 401 / 403 auth-protected carve-out
 

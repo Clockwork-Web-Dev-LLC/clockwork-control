@@ -372,8 +372,52 @@ body {
     background: var(--color-cf-orange-bg);
     color: var(--color-cf-orange);
 }
-.status-cf .status-dot {
-    background: var(--color-cf-orange);
+/* USWDS Top Tooltip Component */
+.cw-tooltip-bubble-global {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background-color: #181e25;
+    color: #ffffff;
+    font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    padding: 5px 9px;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(2px);
+    transition: opacity 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1), visibility 120ms;
+}
+
+.cw-tooltip-bubble-global.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.cw-tooltip-bubble-global .cw-tooltip-arrow {
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #181e25;
+}
+
+.cw-tooltip-bubble-global.is-bottom .cw-tooltip-arrow {
+    bottom: auto;
+    top: -5px;
+    border-top: none;
+    border-bottom: 5px solid #181e25;
 }
 
 /* Card — subtle background, soft shadow, generous radius */

@@ -45,11 +45,9 @@ describe('CapacityController', function () {
         $response = $this->actingAs(User::factory()->create())
             ->get(route('capacity.index'));
 
-        $response->assertOk()->assertSee('shared1.example.com');
-        // Regression: capacity.index is the anchor route for the
-        // "Operations & Tools" settings tier — the persistent two-tier
-        // settings nav must render here too, not just on /capacity/settings.
-        $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
+        // Operations workspace: capacity.index renders dedicated operations tabs
+        // (Capacity, Fleet Updates, Maintenance History, SSH Credentials).
+        $response->assertSee('Fleet Updates')->assertSee('Maintenance History')->assertDontSee('Fleet & Branding');
     });
 
     it('shows the missing-tag notice when no Shared tag exists', function () {

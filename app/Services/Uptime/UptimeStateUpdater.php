@@ -227,6 +227,8 @@ class UptimeStateUpdater
      */
     private function recordEvent(Site $site, string $type, UptimeProbeResult $probe, Carbon $at, ?array $diagnosis = null): void
     {
+        $isExempt = $type === SiteUptimeEvent::TYPE_DOWN && $site->isUptimeSlaExempt();
+
         SiteUptimeEvent::create([
             'site_id' => $site->id,
             'event_type' => $type,
@@ -235,6 +237,10 @@ class UptimeStateUpdater
             'response_time_ms' => $probe->responseTimeMs,
             'diagnosis' => $diagnosis,
             'event_at' => $at,
+            'is_sla_exempt' => $isExempt,
+            'exemption_reason' => $isExempt ? $site->uptime_exemption_reason : null,
+            'exempted_at' => $isExempt ? $at : null,
+            'exempted_by' => $isExempt ? 'policy' : null,
         ]);
     }
 

@@ -16,13 +16,15 @@ Paginated (50/page), searchable by domain, filterable by hosting provider with a
 
 **Search filters instantly as you type** — no need to hit Enter. It's a client-side filter over the currently-loaded page's rows (matching against a lowercased `domain + server name` string baked into each row's `data-search` attribute), with a small clear (×) button that appears once you've typed something. Since it only filters what's already on the page, finding a match outside the visible 50 still needs a real server-side query (Enter, or the search icon). The same instant-filter pattern is also on [Features → Review queue](/docs/features/review-queue) (bans) and [Features → Contact form testing](/docs/features/contact-form-testing) (forms).
 
-- Domain
-- Provider — the server's name for a SpinupWP site, a **Pressable** pill otherwise
-- Uptime state
-- SSL state
-- Companion-installed indicator
-- Care-plan indicator
-- A crescent-moon **Inactive** pill when `site.is_inactive` is set (tooltip shows the reason, if one was given). See [Features → Inactive sites](/docs/features/inactive-sites) for what setting that flag does — it doesn't hide the row here, only from Issues/nav/alerts.
+- Domain (with WordPress or Globe icon)
+- Provider — the server's name for a SpinupWP site, a **Pressable** pill otherwise (`data-tooltip="Host: Pressable"` or `data-tooltip="Server: [name]"`)
+- Uptime status pill (`data-tooltip="Uptime Online"`, `Site Down`, or `In Maintenance`)
+- SSL certificate status pill (`data-tooltip="SSL Valid"`, `SSL Expiring Soon`, or `SSL Expired`)
+- Companion plugin indicator pill (`data-tooltip="Companion Plugin Active"`)
+- Care-plan indicator pill (`data-tooltip="Care Plan Active"`)
+- A crescent-moon **Inactive** pill when `site.is_inactive` is set (`data-tooltip="Site Inactive"`). See [Features → Inactive sites](/docs/features/inactive-sites) for what setting that flag does — it doesn't hide the row here, only from Issues/nav/alerts.
+
+Every status pill uses the centralized [Reference → Tooltip system](/docs/reference/tooltip-system) with instant, top-positioned USWDS floating tooltips and caret indicators on hover.
 
 Same visual language as the existing per-server sites-tab list, just fleet-wide and provider-agnostic.
 

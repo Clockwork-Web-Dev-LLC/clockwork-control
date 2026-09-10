@@ -18,6 +18,11 @@ use Illuminate\Support\Carbon;
  * @property ?int $response_time_ms
  * @property ?array<string, mixed> $diagnosis
  * @property Carbon $event_at
+ * @property bool $is_sla_exempt
+ * @property ?string $exemption_reason
+ * @property ?string $exemption_notes
+ * @property ?Carbon $exempted_at
+ * @property ?string $exempted_by
  * @property ?Carbon $created_at
  * @property-read ?Site $site
  */
@@ -31,6 +36,24 @@ class SiteUptimeEvent extends Model
 
     public const TYPE_MAINTENANCE = 'maintenance';
 
+    public const REASON_CLIENT_DNS = 'client_dns';
+
+    public const REASON_DOMAIN_EXPIRED = 'domain_expired';
+
+    public const REASON_THIRD_PARTY = 'third_party';
+
+    public const REASON_CLIENT_REQUESTED = 'client_requested';
+
+    public const REASON_OTHER = 'other';
+
+    public const EXEMPTION_REASONS = [
+        self::REASON_CLIENT_DNS => 'Client DNS change',
+        self::REASON_DOMAIN_EXPIRED => 'Domain expired',
+        self::REASON_THIRD_PARTY => 'Third-party outage',
+        self::REASON_CLIENT_REQUESTED => 'Client requested',
+        self::REASON_OTHER => 'Other (not our fault)',
+    ];
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -41,6 +64,11 @@ class SiteUptimeEvent extends Model
         'response_time_ms',
         'diagnosis',
         'event_at',
+        'is_sla_exempt',
+        'exemption_reason',
+        'exemption_notes',
+        'exempted_at',
+        'exempted_by',
     ];
 
     protected function casts(): array
@@ -51,7 +79,19 @@ class SiteUptimeEvent extends Model
             'status_code' => 'integer',
             'response_time_ms' => 'integer',
             'diagnosis' => 'array',
+            'is_sla_exempt' => 'boolean',
+            'exempted_at' => 'datetime',
         ];
+    }
+
+    public function isSlaExempt(): bool
+    {
+        return (bool) $this->is_sla_exempt;
+    }
+
+    public function exemptionReasonLabel(): ?string
+    {
+        return $this->exemption_reason ? (self::EXEMPTION_REASONS[$this->exemption_reason] ?? ucfirst(str_replace('_', ' ', $this->exemption_reason))) : null;
     }
 
     public function site(): BelongsTo

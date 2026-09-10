@@ -261,7 +261,7 @@
                             <p class="text-xs text-[var(--color-ink-muted)]">Active infrastructure utilities, capacity tracking, and run histories</p>
                         </div>
                     </div>
-                    <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border-light)]">Operational</span>
+                    <a href="{{ route('capacity.index') }}" class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-brand)] hover:bg-[var(--color-surface)] border border-[var(--color-border-light)] transition-colors">Operations Hub &rarr;</a>
                 </div>
 
                 <div class="divide-y divide-[var(--color-border-light)]">

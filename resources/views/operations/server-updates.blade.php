@@ -8,7 +8,7 @@
         use App\Models\ServerUpdateSnapshot;
     @endphp
 
-    @include('settings._tabs')
+    @include('operations._tabs')
 
     <x-page-header title="Fleet server updates"
         subtitle="Apt-update snapshot for every non-ignored server. Pick servers to queue one-by-one or all at once. Per-server details on each row link to the server's Updates tab." />

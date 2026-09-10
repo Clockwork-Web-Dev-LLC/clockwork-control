@@ -177,11 +177,25 @@
                     </a>
 
                     <a href="{{ route('operations.server-updates.index') }}"
-                       class="cmd-nav-item {{ request()->routeIs('operations.*') ? 'is-active' : '' }}"
+                       class="cmd-nav-item {{ request()->routeIs('operations.server-updates.*') ? 'is-active' : '' }}"
                        :title="!sidebarOpen ? 'Fleet Updates' : ''">
                         <i class="fa-solid fa-cube w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Fleet Updates</span>
                     </a>
+
+                    <a href="{{ route('maintenance-history.index') }}"
+                       class="cmd-nav-item {{ request()->routeIs('maintenance-history.*') ? 'is-active' : '' }}"
+                       :title="!sidebarOpen ? 'Maintenance History' : ''">
+                        <i class="fa-solid fa-clock-rotate-left w-4 text-center shrink-0"></i>
+                        <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Maintenance</span>
+                    </a>
+                </div>
+
+                <!-- Configuration Navigation -->
+                <div class="space-y-1">
+                    <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                        Configuration
+                    </div>
 
                     <a href="{{ route('settings.index') }}"
                        class="cmd-nav-item {{ request()->routeIs('settings.*') ? 'is-active' : '' }}"
@@ -202,8 +216,20 @@
             <!-- Bottom Sidebar Footer (User & Quick Action) -->
             <div class="p-3 border-t border-[var(--color-border-light)] flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0">
-                        {{ strtoupper(substr(auth()->user()?->name ?? 'OP', 0, 2)) }}
+                    <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                        @if (auth()->check())
+                            <img src="{{ auth()->user()->avatarUrl(64) }}"
+                                 alt="{{ auth()->user()->name }}"
+                                 class="w-full h-full object-cover rounded-full"
+                                 loading="lazy"
+                                 referrerpolicy="no-referrer"
+                                 onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                            <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                {{ auth()->user()->initials() }}
+                            </span>
+                        @else
+                            OP
+                        @endif
                     </div>
                     <div x-show="sidebarOpen" x-transition.opacity class="min-w-0 leading-tight">
                         <p class="text-xs font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
@@ -300,17 +326,46 @@
                         <div class="relative" @click.outside="userMenuOpen = false">
                             <button type="button"
                                     @click="userMenuOpen = !userMenuOpen"
-                                    class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] transition-colors cursor-pointer"
+                                    class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] transition-colors cursor-pointer overflow-hidden"
                                     aria-label="User menu">
-                                {{ strtoupper(substr(auth()->user()?->name ?? 'OP', 0, 2)) }}
+                                @if (auth()->check())
+                                    <img src="{{ auth()->user()->avatarUrl(64) }}"
+                                         alt="{{ auth()->user()->name }}"
+                                         class="w-full h-full object-cover rounded-full"
+                                         loading="lazy"
+                                         referrerpolicy="no-referrer"
+                                         onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                    <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                        {{ auth()->user()->initials() }}
+                                    </span>
+                                @else
+                                    OP
+                                @endif
                             </button>
 
                             <div x-show="userMenuOpen"
                                  x-cloak
                                  class="absolute right-0 mt-2 w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl z-50 py-1 text-xs">
-                                <div class="px-3 py-2 border-b border-[var(--color-border-light)]">
-                                    <p class="font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
-                                    <p class="text-[10px] text-[var(--color-ink-soft)] truncate">{{ auth()->user()?->email ?? 'admin@lan' }}</p>
+                                <div class="px-3 py-2 border-b border-[var(--color-border-light)] flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                                        @if (auth()->check())
+                                            <img src="{{ auth()->user()->avatarUrl(64) }}"
+                                                 alt="{{ auth()->user()->name }}"
+                                                 class="w-full h-full object-cover rounded-full"
+                                                 loading="lazy"
+                                                 referrerpolicy="no-referrer"
+                                                 onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                            <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                                {{ auth()->user()->initials() }}
+                                            </span>
+                                        @else
+                                            OP
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0 flex-1 leading-tight">
+                                        <p class="font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
+                                        <p class="text-[10px] text-[var(--color-ink-soft)] truncate">{{ auth()->user()?->email ?? 'admin@lan' }}</p>
+                                    </div>
                                 </div>
                                 <a href="{{ route('settings.users.index') }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
                                     <i class="fa-solid fa-user-gear text-[var(--color-ink-muted)]"></i> Account &amp; Team
@@ -431,11 +486,7 @@
                                 <i class="fa-solid fa-shield-halved"></i> Security
                             </a>
                             <a href="{{ route('capacity.index') }}"
-                               class="studio-nav-tab {{ request()->routeIs('capacity.*') ? 'is-active' : '' }}">
-                                <i class="fa-solid fa-gauge-high"></i> Capacity
-                            </a>
-                            <a href="{{ route('operations.server-updates.index') }}"
-                               class="studio-nav-tab {{ request()->routeIs('operations.*') ? 'is-active' : '' }}">
+                               class="studio-nav-tab {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*')) ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-cube"></i> Operations
                             </a>
                             <a href="{{ route('settings.index') }}"
@@ -505,10 +556,7 @@
                             <i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security
                         </a>
                         <a href="{{ route('capacity.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
-                            <i class="fa-solid fa-gauge-high mr-2 text-[var(--color-ink-muted)]"></i> Capacity
-                        </a>
-                        <a href="{{ route('operations.server-updates.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
-                            <i class="fa-solid fa-cube mr-2 text-[var(--color-ink-muted)]"></i> Operations
+                            <i class="fa-solid fa-cube mr-2 text-[var(--color-brand)]"></i> Operations
                         </a>
                         <a href="{{ route('settings.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
                             <i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings
@@ -608,26 +656,34 @@
                         <span class="flex items-center gap-2"><i class="fa-solid fa-shield-halved w-4 text-[var(--color-brand)]"></i> Security Scans</span>
                         <kbd class="cmd-kbd">G X</kbd>
                     </a>
-                    <a href="{{ route('docs.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
-                        <span class="flex items-center gap-2"><i class="fa-solid fa-book-bookmark w-4 text-[var(--color-brand)]"></i> Documentation &amp; Runbooks</span>
-                        <kbd class="cmd-kbd">G D</kbd>
-                    </a>
                 </div>
 
                 <!-- Operations -->
                 <div class="py-1">
                     <div class="px-3 py-1.5 text-[10px] uppercase font-semibold text-[var(--color-ink-soft)] tracking-wider">Operations</div>
                     <a href="{{ route('capacity.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
-                        <span class="flex items-center gap-2"><i class="fa-solid fa-gauge-high w-4 text-[var(--color-ink-muted)]"></i> Capacity &amp; Resource Usage</span>
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-gauge-high w-4 text-[var(--color-ink-muted)]"></i> Capacity Dashboard</span>
                     </a>
                     <a href="{{ route('operations.server-updates.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
                         <span class="flex items-center gap-2"><i class="fa-solid fa-cube w-4 text-[var(--color-ink-muted)]"></i> Fleet OS Updates</span>
                     </a>
+                    <a href="{{ route('maintenance-history.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left w-4 text-[var(--color-ink-muted)]"></i> Maintenance History</span>
+                    </a>
                     <a href="{{ route('servers.credentials.bulk') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
                         <span class="flex items-center gap-2"><i class="fa-solid fa-key w-4 text-[var(--color-ink-muted)]"></i> Bulk SSH Passwords</span>
                     </a>
+                </div>
+
+                <!-- Configuration -->
+                <div class="py-1">
+                    <div class="px-3 py-1.5 text-[10px] uppercase font-semibold text-[var(--color-ink-soft)] tracking-wider">Configuration</div>
                     <a href="{{ route('settings.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
                         <span class="flex items-center gap-2"><i class="fa-solid fa-sliders w-4 text-[var(--color-ink-muted)]"></i> Global Settings Hub</span>
+                    </a>
+                    <a href="{{ route('docs.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-book-bookmark w-4 text-[var(--color-brand)]"></i> Documentation &amp; Runbooks</span>
+                        <kbd class="cmd-kbd">G D</kbd>
                     </a>
                 </div>
             </div>

@@ -2,6 +2,10 @@
     $isUp = $site->uptime_state === 'up';
     $isDown = $site->uptime_state === 'down';
     $isMaintenance = $site->uptime_state === 'maintenance';
+    $latestDown = $isDown ? $site->latestDownEvent() : null;
+    $isNotOurFault = $isDown && ($site->uptime_sla_exempt || (bool) $latestDown?->is_sla_exempt);
+    $exemptionReason = $site->uptime_exemption_reason ?: $latestDown?->exemption_reason;
+    $reasonLabel = $exemptionReason ? (\App\Models\SiteUptimeEvent::EXEMPTION_REASONS[$exemptionReason] ?? $exemptionReason) : 'Not our fault';
     $authProtected = $isUp && in_array($site->uptime_last_status_code, [401, 403], true);
     $monitoringEnabled = (bool) $site->uptime_monitoring_enabled;
     $pct = $uptimePercentage30d ?? 100.0;
@@ -17,6 +21,10 @@
             @if (! $monitoringEnabled)
                 <span class="status-pill status-unknown text-[10px]">
                     <span class="status-dot"></span> Disabled
+                </span>
+            @elseif ($isNotOurFault)
+                <span class="status-pill text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    <i class="fa-solid fa-shield-halved text-[9px] mr-1"></i> Not Our Fault
                 </span>
             @elseif ($isDown)
                 <span class="status-pill status-red text-[10px]">
@@ -39,7 +47,7 @@
                 <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                     <path class="text-[var(--color-surface-alt)]" stroke-width="3.5" stroke="currentColor" fill="none"
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path class="{{ ! $monitoringEnabled ? 'text-gray-300' : ($isDown ? 'text-rose-500' : ($isMaintenance ? 'text-amber-500' : 'text-emerald-500')) }} transition-all duration-700 ease-out"
+                    <path class="{{ ! $monitoringEnabled ? 'text-gray-300' : ($isNotOurFault ? 'text-amber-500' : ($isDown ? 'text-rose-500' : ($isMaintenance ? 'text-amber-500' : 'text-emerald-500'))) }} transition-all duration-700 ease-out"
                           stroke-dasharray="{{ $monitoringEnabled ? ($pct . ', 100') : '0, 100' }}"
                           stroke-width="3.5"
                           stroke-linecap="round"
@@ -50,6 +58,8 @@
                 <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
                     @if (! $monitoringEnabled)
                         <i class="fa-solid fa-pause text-gray-400 text-xs"></i>
+                    @elseif ($isNotOurFault)
+                        <span class="font-bold text-[8px] text-amber-600 dark:text-amber-400 leading-tight px-0.5">EXCUSED</span>
                     @elseif ($isDown)
                         <span class="font-bold text-[11px] text-rose-600">DOWN</span>
                     @elseif ($isMaintenance)
@@ -61,12 +71,17 @@
             </div>
 
             <div class="min-w-0">
-                <div class="font-display font-semibold text-base text-[var(--color-ink-strong)]">
+                <div class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-1.5">
                     Overall uptime {{ number_format($pct, 1) }}%
+                    @if ($isNotOurFault)
+                        <span class="text-[10px] text-amber-600 dark:text-amber-400 font-normal font-sans">(SLA protected)</span>
+                    @endif
                 </div>
                 <div class="text-xs text-[var(--color-ink-muted)] mt-0.5">
                     @if (! $monitoringEnabled)
                         Monitoring is paused for this site
+                    @elseif ($isNotOurFault && $site->uptime_down_since)
+                        Down for {{ $site->uptime_down_since->diffForHumans(['parts' => 2, 'short' => true]) }} · <span class="text-amber-600 dark:text-amber-400 font-medium">{{ $reasonLabel }}</span>
                     @elseif ($isDown && $site->uptime_down_since)
                         Down for {{ $site->uptime_down_since->diffForHumans(['parts' => 2, 'short' => true]) }}
                         @if ($site->uptime_last_status_code) (HTTP {{ $site->uptime_last_status_code }}) @endif
@@ -95,6 +110,8 @@
                                     <span class="text-emerald-600 font-bold">↑ Up</span>
                                 @elseif ($event->event_type === 'maintenance')
                                     <span class="text-amber-600 font-bold">🔧 Maint</span>
+                                @elseif ($event->is_sla_exempt)
+                                    <span class="text-amber-600 dark:text-amber-400 font-bold">↓ Down (Excused)</span>
                                 @else
                                     <span class="text-rose-600 font-bold">↓ Down</span>
                                 @endif

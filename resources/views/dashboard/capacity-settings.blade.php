@@ -3,7 +3,7 @@
 @section('title', 'Capacity Settings · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
+    @include('operations._tabs')
 
     <x-page-header title="Capacity Settings"
         subtitle="Configure shared-server visit quotas, lookback windows, and server pressure thresholds.">

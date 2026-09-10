@@ -70,9 +70,8 @@ namespace {
             $response->assertOk()
                 ->assertSee('db-primary.example.com')
                 ->assertSee('Fleet server updates');
-            // Regression: this route is part of the "Operations & Tools"
-            // settings tier — the persistent two-tier settings nav must render.
-            $response->assertSee('Operations & Tools')->assertSee('Fleet & Branding');
+            // Operations workspace: dedicated operations tabs must render.
+            $response->assertSee('Capacity')->assertSee('Fleet Updates')->assertDontSee('Fleet & Branding');
         });
 
         it('queues updates for eligible servers and reports skip reasons in the flash message', function () {
@@ -188,6 +187,13 @@ namespace {
                 ->get('/operations/server-updates/refresh');
 
             $response->assertRedirect(route('operations.server-updates.index'));
+        });
+
+        it('redirects /operations to capacity.index', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->get(route('operations.index'));
+
+            $response->assertRedirect(route('capacity.index'));
         });
 
         it('redirects old /operations/system-updates URL with a 301 to /operations/server-updates', function () {

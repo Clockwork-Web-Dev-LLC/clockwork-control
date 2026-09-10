@@ -171,4 +171,208 @@ describe('MonitoringController', function () {
 
         $response->assertSessionHasErrors('interval_minutes');
     });
+
+    it('classifies active outage as Not Our Fault without setting standing site SLA policy', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'dns-issue.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(15),
+            'uptime_sla_exempt' => false,
+        ]);
+
+        $event = SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_DOWN,
+            'event_at' => now()->subHours(15),
+            'is_sla_exempt' => false,
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->post(route('monitoring.sites.classify-outage', $site), [
+                'is_sla_exempt' => 1,
+                'exemption_reason' => SiteUptimeEvent::REASON_CLIENT_DNS,
+                'exemption_notes' => 'Client switched NS to Cloudflare without notifying us',
+            ]);
+
+        $response->assertRedirect();
+        $site->refresh();
+        $event->refresh();
+
+        expect($site->uptime_sla_exempt)->toBeFalse()
+            ->and($site->uptime_exemption_reason)->toBeNull()
+            ->and($site->uptime_ignored_at)->not->toBeNull()
+            ->and($event->is_sla_exempt)->toBeTrue()
+            ->and($event->exemption_reason)->toBe(SiteUptimeEvent::REASON_CLIENT_DNS)
+            ->and($event->exemption_notes)->toBe('Client switched NS to Cloudflare without notifying us');
+    });
+
+    it('reverts outage classification back to Legit Outage', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'revert.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_sla_exempt' => true,
+            'uptime_exemption_reason' => SiteUptimeEvent::REASON_CLIENT_DNS,
+            'uptime_ignored_at' => now()->subHour(),
+            'uptime_ignore_reason' => 'Client DNS change',
+        ]);
+
+        $event = SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_DOWN,
+            'event_at' => now()->subHours(5),
+            'is_sla_exempt' => true,
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->post(route('monitoring.sites.classify-outage', $site), [
+                'is_sla_exempt' => 0,
+            ]);
+
+        $response->assertRedirect();
+        $site->refresh();
+        $event->refresh();
+
+        expect($site->uptime_sla_exempt)->toBeFalse()
+            ->and($site->uptime_exemption_reason)->toBeNull()
+            ->and($site->uptime_ignored_at)->toBeNull()
+            ->and($site->uptime_ignore_reason)->toBeNull()
+            ->and($event->is_sla_exempt)->toBeFalse();
+    });
+
+    it('rejects an unknown exemption reason when classifying an outage', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->from(route('monitoring.index'))
+            ->post(route('monitoring.sites.classify-outage', $site), [
+                'is_sla_exempt' => 1,
+                'exemption_reason' => 'not_a_real_reason',
+            ])
+            ->assertSessionHasErrors('exemption_reason');
+    });
+
+    it('renders Not Our Fault badge and shows excused hero state on monitoring index', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'exempt-site.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(8),
+            'uptime_sla_exempt' => true,
+            'uptime_exemption_reason' => SiteUptimeEvent::REASON_CLIENT_DNS,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('exempt-site.example.com')
+            ->assertSee('NOT OUR FAULT')
+            ->assertSee('1 EXCUSED')
+            ->assertSee('1 not our fault')
+            ->assertSee('classify-outage-modal')
+            ->assertSee('monitoringOpenClassify')
+            ->assertSee('openModal')
+            ->assertSee('Mark Legit')
+            ->assertViewHas('currentlyNotOurFault', 1)
+            ->assertViewHas('currentlyDown', 0);
+    });
+
+    it('renders Not Our Fault from an event-only incident classify without standing site SLA', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'event-only-exempt.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(3),
+            'uptime_sla_exempt' => false,
+            'uptime_exemption_reason' => null,
+        ]);
+
+        SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_DOWN,
+            'event_at' => now()->subHours(3),
+            'is_sla_exempt' => true,
+            'exemption_reason' => SiteUptimeEvent::REASON_DOMAIN_EXPIRED,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('event-only-exempt.example.com')
+            ->assertSee('NOT OUR FAULT')
+            ->assertSee('Domain expired')
+            ->assertViewHas('currentlyNotOurFault', 1)
+            ->assertViewHas('currentlyDown', 0);
+    });
+
+    it('renders Not our fault button for down sites and includes classification modal', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'down-site.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(2),
+            'uptime_sla_exempt' => false,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('down-site.example.com')
+            ->assertSee('Not our fault?')
+            ->assertSee('classify-outage-modal')
+            ->assertSee('classify-outage-form')
+            ->assertSee('monitoringOpenClassify('.$site->id, false)
+            ->assertSee('openModal('.$site->id, false);
+    });
+
+    it('classifies individual historical uptime event', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'event-history.example.com',
+        ]);
+
+        $event = SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_DOWN,
+            'event_at' => now()->subDays(5),
+            'is_sla_exempt' => false,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('monitoring.events.classify', $event), [
+                'is_sla_exempt' => 1,
+                'exemption_reason' => SiteUptimeEvent::REASON_DOMAIN_EXPIRED,
+                'exemption_notes' => 'Domain registration expired at GoDaddy',
+            ]);
+
+        $response->assertRedirect();
+        $event->refresh();
+
+        expect($event->is_sla_exempt)->toBeTrue()
+            ->and($event->exemption_reason)->toBe(SiteUptimeEvent::REASON_DOMAIN_EXPIRED);
+    });
 });

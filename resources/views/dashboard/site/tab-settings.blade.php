@@ -559,7 +559,11 @@
                     <span class="text-[var(--color-ink-muted)]">Alert routing:</span>
                     <span class="font-medium">
                         @if ($site->isUptimeIgnored())
-                            <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-bell-slash text-[10px]"></i> Silenced</span>
+                            @if ($site->isUptimeSlaExempt())
+                                <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-shield-halved text-[10px]"></i> Not Our Fault (SLA Exempt)</span>
+                            @else
+                                <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-bell-slash text-[10px]"></i> Silenced (Legit Outage)</span>
+                            @endif
                         @else
                             <span class="text-emerald-600 flex items-center gap-1"><i class="fa-solid fa-bell text-[10px]"></i> Active</span>
                         @endif
@@ -580,21 +584,56 @@
                     </button>
                 </form>
 
-                <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="space-y-1.5">
+                <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="space-y-2">
                     @csrf
                     @if ($site->isUptimeIgnored())
                         <input type="hidden" name="ignore" value="0">
+                        <div class="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                            <div class="font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-shield-halved text-[11px]"></i>
+                                {{ $site->isUptimeSlaExempt() ? 'SLA Protected (Not Our Fault)' : 'Alerts Silenced' }}
+                            </div>
+                            @if ($site->uptime_ignore_reason)
+                                <div class="text-[11px] mt-0.5 text-amber-600 dark:text-amber-400">{{ $site->uptime_ignore_reason }}</div>
+                            @endif
+                        </div>
                         <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
-                            <i class="fa-solid fa-bell text-emerald-600"></i> Stop ignoring alerts
+                            <i class="fa-solid fa-bell text-emerald-600"></i> Stop ignoring & reset SLA exemption
                         </button>
                     @else
                         <input type="hidden" name="ignore" value="1">
-                        <div class="flex items-center gap-1">
-                            <input type="text" name="reason" maxlength="255" placeholder="Silence reason (optional)"
-                                   class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 focus:outline-none focus:border-[var(--color-brand)]">
-                            <button type="submit" class="btn-pill-nav text-xs shrink-0" title="Silence alerts">
-                                <i class="fa-solid fa-bell-slash text-amber-500"></i> Silence
-                            </button>
+                        <div class="p-2.5 rounded border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/50 space-y-2 text-xs">
+                            <div class="font-semibold text-[var(--color-ink-strong)]">Outage Classification</div>
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="radio" name="is_sla_exempt" value="1" checked class="mt-0.5">
+                                <div>
+                                    <span class="font-medium text-amber-600 dark:text-amber-400">Not Our Fault (SLA Exempt)</span>
+                                    <p class="text-[10px] text-[var(--color-ink-muted)]">Exclude downtime from uptime ratings and fleet SLA (client DNS, expired domain, etc.)</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="radio" name="is_sla_exempt" value="0" class="mt-0.5">
+                                <div>
+                                    <span class="font-medium text-[var(--color-ink-strong)]">Legit Outage</span>
+                                    <p class="text-[10px] text-[var(--color-ink-muted)]">Silence alerts only; downtime still counts against uptime record</p>
+                                </div>
+                            </label>
+                            <div class="space-y-1.5 pt-1.5 border-t border-[var(--color-border-light)]">
+                                <select name="exemption_reason" class="w-full px-2 py-1 rounded border border-[var(--color-border)] text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                                    <option value="client_dns">Client DNS / Nameserver change</option>
+                                    <option value="domain_expired">Domain expired / Registrar hold</option>
+                                    <option value="third_party">Third-party / Upstream outage</option>
+                                    <option value="client_requested">Client requested downtime</option>
+                                    <option value="other">Other (not our fault)</option>
+                                </select>
+                                <div class="flex items-center gap-1">
+                                    <input type="text" name="reason" maxlength="255" placeholder="Reason / notes (optional)"
+                                           class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 focus:outline-none focus:border-[var(--color-brand)] bg-[var(--color-surface)]">
+                                    <button type="submit" class="btn-pill-nav text-xs shrink-0 font-medium" title="Silence alerts">
+                                        <i class="fa-solid fa-shield-halved text-amber-500"></i> Silence
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     @endif
                 </form>

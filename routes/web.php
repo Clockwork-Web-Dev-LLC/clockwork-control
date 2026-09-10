@@ -197,6 +197,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/refresh', [MonitoringController::class, 'refresh'])->name('refresh');
         Route::get('/settings', [MonitoringController::class, 'settings'])->name('settings');
         Route::patch('/settings', [MonitoringController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/sites/{site}/classify-outage', [MonitoringController::class, 'classifyOutage'])->name('sites.classify-outage');
+        Route::post('/events/{event}/classify', [MonitoringController::class, 'classifyEvent'])->name('events.classify');
     });
 
     // Security scans — fleet inventory of latest Sucuri SiteCheck + wp core
@@ -230,7 +232,10 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get('/maintenance-history', [MaintenanceHistoryController::class, 'index'])->name('maintenance-history.index');
 
-    // Fleet-wide server updates dashboard (Settings → Operations). Lists every
+    // Operations workspace root — redirects to Capacity overview
+    Route::get('/operations', fn () => redirect()->route('capacity.index'))->name('operations.index');
+
+    // Fleet-wide server updates dashboard (Operations → Fleet Updates). Lists every
     // non-ignored server with its latest apt-update snapshot and lets the
     // operator queue updates one-by-one or in bulk.
     Route::prefix('operations/server-updates')->name('operations.server-updates.')->group(function () {

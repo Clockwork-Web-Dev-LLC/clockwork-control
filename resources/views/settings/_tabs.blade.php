@@ -24,18 +24,11 @@
             'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*'),
         ],
         [
-            'key' => 'operations',
-            'label' => 'Operations & Tools',
-            'icon' => 'fa-toolbox',
-            'route' => 'capacity.index',
-            'active' => request()->routeIs('capacity.*') || request()->routeIs('operations.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('servers.credentials.*') || request()->routeIs('settings.weird-stats.*'),
-        ],
-        [
             'key' => 'system',
             'label' => 'System & Workspace',
             'icon' => 'fa-server',
             'route' => $isAdmin ? 'settings.users.index' : 'settings.maintenance.index',
-            'active' => request()->routeIs('settings.users.*') || request()->routeIs('settings.updates.*') || request()->routeIs('settings.maintenance.*') || request()->routeIs('settings.diagnostics.*') || request()->routeIs('setup.*') || request()->routeIs('docs.*'),
+            'active' => request()->routeIs('settings.users.*') || request()->routeIs('settings.updates.*') || request()->routeIs('settings.maintenance.*') || request()->routeIs('settings.diagnostics.*') || request()->routeIs('settings.weird-stats.*') || request()->routeIs('setup.*') || request()->routeIs('docs.*'),
         ],
     ];
 
@@ -58,17 +51,12 @@
             ['label' => 'Mattermost', 'icon' => 'fa-solid fa-comment-dots', 'route' => 'settings.mattermost.index', 'active' => request()->routeIs('settings.mattermost.*')],
             ['label' => 'Bill.com Sync', 'icon' => 'fa-solid fa-file-invoice-dollar', 'route' => 'settings.bill-com.index', 'active' => request()->routeIs('settings.bill-com.*')],
         ],
-        'operations' => [
-            ['label' => 'Capacity Dashboard', 'icon' => 'fa-solid fa-gauge-high', 'route' => 'capacity.index', 'active' => request()->routeIs('capacity.*')],
-            ['label' => 'Server Updates', 'icon' => 'fa-solid fa-sliders', 'route' => 'operations.server-updates.index', 'active' => request()->routeIs('operations.server-updates.*')],
-            ['label' => 'Maintenance History', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'maintenance-history.index', 'active' => request()->routeIs('maintenance-history.*')],
-            ['label' => 'Weird Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
-        ],
         'system' => array_values(array_filter([
             $isAdmin ? ['label' => 'Team & Users', 'icon' => 'fa-solid fa-people-group', 'route' => 'settings.users.index', 'active' => request()->routeIs('settings.users.*')] : null,
             ['label' => 'System Updates', 'icon' => 'fa-solid fa-arrows-rotate', 'route' => 'settings.updates.index', 'active' => request()->routeIs('settings.updates.*')],
             ['label' => 'Database Maintenance', 'icon' => 'fa-solid fa-database', 'route' => 'settings.maintenance.index', 'active' => request()->routeIs('settings.maintenance.*')],
             ['label' => 'Diagnostics & Health', 'icon' => 'fa-solid fa-stethoscope', 'route' => 'settings.diagnostics.index', 'active' => request()->routeIs('settings.diagnostics.*')],
+            ['label' => 'Weird Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
         ])),
     ];
 

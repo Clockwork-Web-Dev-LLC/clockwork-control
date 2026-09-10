@@ -105,4 +105,50 @@ class User extends Authenticatable
     {
         return (string) ($this->password ?? '');
     }
+
+    /**
+     * Get the avatar URL for the user.
+     * Prefers custom avatar_url (e.g. from OAuth), falls back to Gravatar.
+     */
+    public function avatarUrl(int $size = 80, string $default = 'mp'): string
+    {
+        if (! empty($this->avatar_url)) {
+            return $this->avatar_url;
+        }
+
+        return $this->gravatarUrl($size, $default);
+    }
+
+    /**
+     * Get the Gravatar URL for the user's email address.
+     */
+    public function gravatarUrl(int $size = 80, string $default = 'mp'): string
+    {
+        $email = strtolower(trim($this->email ?? ''));
+        $hash = $email !== '' ? md5($email) : md5('unknown');
+
+        return "https://www.gravatar.com/avatar/{$hash}?s={$size}&d={$default}";
+    }
+
+    /**
+     * Get user initials (1-2 uppercase characters).
+     */
+    public function initials(): string
+    {
+        $name = trim($this->name ?? '');
+        if ($name === '') {
+            return 'OP';
+        }
+
+        $parts = preg_split('/\s+/', $name);
+        if ($parts && count($parts) >= 2) {
+            $first = substr($parts[0], 0, 1);
+            $last = substr($parts[count($parts) - 1], 0, 1);
+            if ($first !== '' && $last !== '') {
+                return strtoupper($first.$last);
+            }
+        }
+
+        return strtoupper(substr($name, 0, 2));
+    }
 }
