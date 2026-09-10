@@ -92,7 +92,8 @@ class DashboardController extends Controller
     /**
      * Build a per-server bag of: last-24h CPU samples (for sparklines) + the latest reading.
      *
-     * One round-trip query for the whole fleet.
+     * One query for the 24h window; at most one more grouped query for servers
+     * whose latest snapshot is older than that.
      *
      * @return array<int, array{cpu: array<int,float>, latest: ?ServerMetric}>
      */
@@ -115,16 +116,35 @@ class DashboardController extends Controller
             $byServer[$row->server_id]['latest'] = $row;
         }
 
-        // For any servers without samples in the last 24h, fallback to their most recent snapshot
+        // Servers with no samples in the last 24h: one grouped lookup for the
+        // latest snapshot each, instead of N per-server queries.
         $missingIds = array_values(array_diff($serverIds, array_keys($byServer)));
-        foreach ($missingIds as $id) {
-            $latestRow = ServerMetric::query()
-                ->where('server_id', $id)
-                ->latest('recorded_at')
-                ->first(['server_id', 'recorded_at', 'cpu_pct', 'memory_pct', 'disk_pct', 'load_1']);
-            if ($latestRow) {
-                $byServer[$id]['cpu'] = [(float) ($latestRow->cpu_pct ?? 0)];
-                $byServer[$id]['latest'] = $latestRow;
+        if ($missingIds !== []) {
+            $latestSub = ServerMetric::query()
+                ->selectRaw('server_id, MAX(recorded_at) as recorded_at')
+                ->whereIn('server_id', $missingIds)
+                ->groupBy('server_id');
+
+            $fallbackRows = ServerMetric::query()
+                ->joinSub($latestSub, 'latest_metrics', function ($join) {
+                    $join->on('server_metrics.server_id', '=', 'latest_metrics.server_id')
+                        ->on('server_metrics.recorded_at', '=', 'latest_metrics.recorded_at');
+                })
+                ->get([
+                    'server_metrics.server_id',
+                    'server_metrics.recorded_at',
+                    'server_metrics.cpu_pct',
+                    'server_metrics.memory_pct',
+                    'server_metrics.disk_pct',
+                    'server_metrics.load_1',
+                ]);
+
+            foreach ($fallbackRows as $latestRow) {
+                if (isset($byServer[$latestRow->server_id])) {
+                    continue;
+                }
+                $byServer[$latestRow->server_id]['cpu'] = [(float) ($latestRow->cpu_pct ?? 0)];
+                $byServer[$latestRow->server_id]['latest'] = $latestRow;
             }
         }
 

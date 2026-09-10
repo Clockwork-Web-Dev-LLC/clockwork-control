@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Server;
+use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\User;
 use Modules\Core\InstalledModule;
@@ -244,5 +245,57 @@ describe('DashboardController', function () {
         $response->assertOk()
             ->assertSee('Sync sites from GridPane');
     });
-});
 
+    it('wires the app shell so layout and theme init both run', function () {
+        Server::factory()->create();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('x-data="appChrome()"', false);
+    });
+
+    it('cloaks both fleet view panes until Alpine boots', function () {
+        Server::factory()->create();
+
+        $html = $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->getContent();
+
+        expect($html)
+            ->toContain('x-show="viewMode === \'cards\'" x-cloak')
+            ->toContain('x-show="viewMode === \'table\'" x-cloak')
+            ->toContain('querySelectorAll(\'[data-server-id]\')');
+    });
+
+    it('falls back to the latest snapshot when a server has no metrics in the last 24h', function () {
+        $stale = Server::factory()->create(['name' => 'stale-node.example.com']);
+        $fresh = Server::factory()->create(['name' => 'fresh-node.example.com']);
+        Site::factory()->spinupwp()->create(['server_id' => $stale->id, 'domain' => 'stale-site.example.com']);
+        Site::factory()->spinupwp()->create(['server_id' => $fresh->id, 'domain' => 'fresh-site.example.com']);
+
+        ServerMetric::factory()->create([
+            'server_id' => $stale->id,
+            'recorded_at' => now()->subDays(5),
+            'cpu_pct' => 37.0,
+            'memory_pct' => 41.0,
+            'disk_pct' => 19.0,
+        ]);
+        ServerMetric::factory()->create([
+            'server_id' => $fresh->id,
+            'recorded_at' => now()->subHour(),
+            'cpu_pct' => 12.0,
+            'memory_pct' => 22.0,
+            'disk_pct' => 8.0,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('37%')
+            ->assertSee('12%')
+            ->assertSee('Last sample')
+            ->assertSee('5 days ago');
+    });
+});

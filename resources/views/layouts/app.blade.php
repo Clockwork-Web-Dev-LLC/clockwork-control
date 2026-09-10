@@ -69,19 +69,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-[var(--color-surface)] text-[var(--color-ink)] antialiased font-sans"
-      x-data="{
-          sidebarOpen: localStorage.getItem('cw_cc_sidebar') !== 'false',
-          mobileNavOpen: false,
-          userMenuOpen: false,
-          paletteOpen: false,
-          paletteQuery: '',
-          toggleSidebar() {
-              this.sidebarOpen = !this.sidebarOpen;
-              localStorage.setItem('cw_cc_sidebar', this.sidebarOpen);
-          },
-          ...layoutStylePicker(),
-          ...themePicker()
-      }"
+      x-data="appChrome()"
       @keydown.window.cmd.k.prevent="paletteOpen = true"
       @keydown.window.ctrl.k.prevent="paletteOpen = true"
       @keydown.window.cmd.b.prevent="if (style === 'command-center') toggleSidebar()"

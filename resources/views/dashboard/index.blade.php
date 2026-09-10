@@ -306,7 +306,7 @@
         <!-- ============================================================= -->
         <!-- VIEW 1: CARDS GRID (Polymorphic: Modern SaaS or Dense HUD)    -->
         <!-- ============================================================= -->
-        <div x-show="viewMode === 'cards'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div x-show="viewMode === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @foreach ($servers as $server)
                 @php
                     $meta = $statusMeta[$server->status] ?? $statusMeta[Server::STATUS_UNKNOWN];
@@ -316,6 +316,7 @@
                     $memVal = $latest?->memory_pct !== null ? (float) $latest->memory_pct : null;
                     $dskVal = $latest?->disk_pct !== null ? (float) $latest->disk_pct : null;
                     $sparkCpu = $spark['cpu'] ?? [];
+                    $telemetryStale = $latest?->recorded_at?->lt(now()->subDay()) ?? false;
 
                     $cpuColor = $pressureColor($cpuVal);
                     $memColor = $pressureColor($memVal);
@@ -464,7 +465,7 @@
                                             {{ $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—' }}
                                         </span>
                                         @if (!empty($sparkCpu))
-                                            <div title="CPU last 24h">
+                                            <div title="{{ $telemetryStale ? 'Last sample '.$latest->recorded_at->diffForHumans() : 'CPU last 24h' }}">
                                                 {!! $sparkline($sparkCpu, 60, 14) !!}
                                             </div>
                                         @endif
@@ -510,11 +511,17 @@
                                 <div title="Disk"><span class="text-[var(--color-ink-soft)] text-[10px]">DSK</span> <span class="font-bold" @if ($dskColor) style="color: {{ $dskColor }}; font-weight: 600;" @endif>{{ $dskVal !== null ? number_format($dskVal, 0) . '%' : '—' }}</span></div>
                             </div>
                             @if (!empty($sparkCpu))
-                                <div class="shrink-0" title="CPU last 24h">
+                                <div class="shrink-0" title="{{ $telemetryStale ? 'Last sample '.$latest->recorded_at->diffForHumans() : 'CPU last 24h' }}">
                                     {!! $sparkline($sparkCpu, 70, 16) !!}
                                 </div>
                             @endif
                         </div>
+                        @if ($telemetryStale)
+                            <p class="text-[10px] text-[var(--color-ink-soft)] mt-2" title="{{ $latest->recorded_at->toDayDateTimeString() }}">
+                                <i class="fa-regular fa-clock text-[9px] mr-0.5"></i>
+                                Last sample {{ $latest->recorded_at->diffForHumans() }}
+                            </p>
+                        @endif
                     @else
                         <div class="py-3.5 my-1 text-center text-xs text-[var(--color-ink-soft)] bg-[var(--color-surface-alt)]/40 rounded-lg border border-dashed border-[var(--color-border-light)]">
                             <i class="fa-solid fa-chart-line opacity-40 mr-1 text-xs"></i> No telemetry recorded yet
@@ -528,7 +535,7 @@
                         </span>
                         <div class="flex items-center gap-2">
                             <button type="button"
-                                    @click="openInspect({{ json_encode([
+                                    @click="openInspect(@js([
                                         'id' => $server->id,
                                         'name' => $server->display_name,
                                         'hostname' => $server->hostname,
@@ -546,7 +553,7 @@
                                         'jailTitle' => $jailTitle,
                                         'provider' => $server->isGridPane() ? 'GridPane' : ($providerName ?? ($cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : ($server->provider ? ucfirst($server->provider) : 'Manual'))),
                                         'showUrl' => route('servers.show', $server),
-                                    ]) }})"
+                                    ]))"
                                     class="hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] font-medium inline-flex items-center gap-1 cursor-pointer">
                                 <i class="fa-solid fa-eye text-[10px]"></i> Inspect
                             </button>
@@ -563,7 +570,7 @@
         <!-- ============================================================= -->
         <!-- VIEW 2: HIGH-DENSITY DATA GRID TABLE                          -->
         <!-- ============================================================= -->
-        <div x-show="viewMode === 'table'" class="card overflow-hidden">
+        <div x-show="viewMode === 'table'" x-cloak class="card overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="cw-data-table font-mono">
                     <thead>
@@ -590,6 +597,7 @@
                                 $memVal = $latest?->memory_pct !== null ? (float) $latest->memory_pct : null;
                                 $dskVal = $latest?->disk_pct !== null ? (float) $latest->disk_pct : null;
                                 $sparkCpu = $spark['cpu'] ?? [];
+                                $telemetryStale = $latest?->recorded_at?->lt(now()->subDay()) ?? false;
 
                                 $cpuColor = $pressureColor($cpuVal);
                                 $memColor = $pressureColor($memVal);
@@ -678,7 +686,12 @@
                                     <div class="flex items-center gap-2">
                                         <span class="font-bold text-[var(--color-ink-strong)] w-10" @if ($cpuColor) style="color: {{ $cpuColor }}; font-weight: 600;" @endif>{{ $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—' }}</span>
                                         @if (!empty($sparkCpu))
-                                            {!! $sparkline($sparkCpu, 70, 16) !!}
+                                            <span title="{{ $telemetryStale ? 'Last sample '.$latest->recorded_at->diffForHumans() : 'CPU last 24h' }}">
+                                                {!! $sparkline($sparkCpu, 70, 16) !!}
+                                            </span>
+                                        @endif
+                                        @if ($telemetryStale)
+                                            <span class="text-[10px] text-[var(--color-ink-soft)] whitespace-nowrap" title="{{ $latest->recorded_at->toDayDateTimeString() }}">Last sample {{ $latest->recorded_at->diffForHumans() }}</span>
                                         @endif
                                     </div>
                                 </td>
@@ -693,7 +706,7 @@
                                 </td>
                                 <td class="text-right whitespace-nowrap">
                                     <button type="button"
-                                            @click="openInspect({{ json_encode([
+                                            @click="openInspect(@js([
                                                 'id' => $server->id,
                                                 'name' => $server->display_name,
                                                 'hostname' => $server->hostname,
@@ -711,7 +724,7 @@
                                                 'jailTitle' => $jailTitle,
                                                 'provider' => $server->provider_label ?? $server->provider,
                                                 'showUrl' => route('servers.show', $server),
-                                            ]) }})"
+                                            ]))"
                                             class="p-1 hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] cursor-pointer"
                                             title="Quick Telemetry Inspector">
                                         <i class="fa-solid fa-eye text-xs"></i>
@@ -876,7 +889,7 @@
         const sitesList = document.getElementById('fleet-search-sites-list');
         const emptyMsg = document.getElementById('fleet-search-empty');
         const ignored = document.getElementById('ignored-servers');
-        const cards = Array.from(document.querySelectorAll('.server-card'));
+        const fleetNodes = Array.from(document.querySelectorAll('[data-server-id]'));
 
         if (!input) return;
 
@@ -893,17 +906,18 @@
 
             if (clearBtn) clearBtn.classList.toggle('hidden', !hasQuery);
 
-            let visibleServers = 0;
-            cards.forEach(card => {
-                const searchData = card.getAttribute('data-search') || '';
+            const visibleIds = new Set();
+            fleetNodes.forEach(node => {
+                const searchData = node.getAttribute('data-search') || '';
                 const inServerText = searchData.includes(query);
-                const serverId = card.getAttribute('data-server-id');
+                const serverId = node.getAttribute('data-server-id');
                 const inSiteDomains = (domainsByServerId[serverId] || []).some(d => d.includes(query));
                 const matches = !hasQuery || inServerText || inSiteDomains;
 
-                card.style.display = matches ? '' : 'none';
-                if (matches) visibleServers++;
+                node.style.display = matches ? '' : 'none';
+                if (matches && serverId) visibleIds.add(serverId);
             });
+            const visibleServers = visibleIds.size;
 
             if (ignored) ignored.style.display = hasQuery ? 'none' : '';
 

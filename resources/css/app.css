@@ -856,9 +856,6 @@ body {
     display: block;
 }
 
-[data-layout-style="command-center"] .cw-sidebar-rail {
-    display: flex !important;
-}
 [data-layout-style="command-center"] .cw-subnav-tier {
     display: none !important;
 }
@@ -881,6 +878,11 @@ body {
 }
 
 @media (min-width: 1024px) {
+    /* Keep the rail desktop-only — the aside is `hidden lg:flex`. An unscoped
+       display:flex !important would show it on mobile and cover the drawer. */
+    [data-layout-style="command-center"] .cw-sidebar-rail {
+        display: flex !important;
+    }
     /* In Command Center layout on desktop, the left sidebar rail already displays CLOCKWORK CONTROL */
     /* Hide the top header brand lockup so we don't display Clockwork Control twice */
     [data-layout-style="command-center"] .cw-top-brand {

@@ -15,9 +15,9 @@ import {
     VisualMapComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import { initThemeSystem } from './theme.js';
+import { initThemeSystem, themePicker } from './theme.js';
 import { initFontScaleSystem } from './font-scale.js';
-import { initLayoutStyleSystem } from './layout-style.js';
+import { initLayoutStyleSystem, layoutStylePicker } from './layout-style.js';
 
 echarts.use([
     LineChart,
@@ -343,5 +343,38 @@ Alpine.data('siteDashboardReorder', ({ updateUrl, csrf, order = [], isCustom = f
 initThemeSystem(Alpine);
 initFontScaleSystem(Alpine);
 initLayoutStyleSystem(Alpine);
+
+// One Alpine component for the app shell. Spreading layoutStylePicker() and
+// themePicker() into an object literal would collide on init() — Alpine only
+// calls the last one, so layout state stayed "modern" after a FOUC restore.
+export function appChrome() {
+    const layout = layoutStylePicker();
+    const theme = themePicker();
+    const layoutInit = layout.init;
+    const themeInit = theme.init;
+
+    return {
+        sidebarOpen: typeof localStorage !== 'undefined' && localStorage.getItem('cw_cc_sidebar') !== 'false',
+        mobileNavOpen: false,
+        userMenuOpen: false,
+        paletteOpen: false,
+        paletteQuery: '',
+        toggleSidebar() {
+            this.sidebarOpen = !this.sidebarOpen;
+            try {
+                localStorage.setItem('cw_cc_sidebar', this.sidebarOpen);
+            } catch (e) {}
+        },
+        ...layout,
+        ...theme,
+        init() {
+            layoutInit.call(this);
+            themeInit.call(this);
+        },
+    };
+}
+
+window.appChrome = appChrome;
+Alpine.data('appChrome', appChrome);
 
 Alpine.start();
