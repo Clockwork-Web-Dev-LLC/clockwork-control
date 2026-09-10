@@ -302,137 +302,326 @@ class SystemUpdateService
         $subprocessEnv = $this->subprocessEnv();
         $prePullCommit = null;
 
-        // 2. Git Fetch & Pull (if git repo)
+        // Enter maintenance mode during the update window to prevent race conditions on live requests
+        $maintenanceActive = false;
         if ($gitInfo['is_git']) {
-            $branch = $gitInfo['branch'] ?: 'main';
-            $prePullCommit = $this->getCurrentCommitHash();
+            try {
+                Artisan::call('down', [
+                    '--retry' => 15,
+                    '--refresh' => 15,
+                ]);
+                $maintenanceActive = true;
+                Log::info('system_update.maintenance_enabled');
+            } catch (Throwable $e) {
+                Log::warning('system_update.maintenance_down_failed', ['error' => $e->getMessage()]);
+            }
+        }
 
-            Log::info('system_update.started', [
-                'branch' => $branch,
-                'from_commit' => $prePullCommit,
-            ]);
+        try {
+            // 2. Git Fetch & Pull (if git repo)
+            if ($gitInfo['is_git']) {
+                $branch = $gitInfo['branch'] ?: 'main';
+                $prePullCommit = $this->getCurrentCommitHash();
 
-            $result = Process::path($basePath)->timeout(120)->env($subprocessEnv)->run(['git', 'pull', 'origin', $branch]);
+                Log::info('system_update.started', [
+                    'branch' => $branch,
+                    'from_commit' => $prePullCommit,
+                ]);
 
-            $success = $result->successful();
-            $pullOutput = trim($result->output().' '.$result->errorOutput());
-            $steps[] = [
-                'step' => 'Pulling latest updates from git (origin/'.$branch.')',
-                'success' => $success,
-                'output' => $pullOutput,
-            ];
+                $result = Process::path($basePath)->timeout(120)->env($subprocessEnv)->run(['git', 'pull', 'origin', $branch]);
 
-            if (! $success) {
-                Log::error('system_update.git_pull_failed', ['output' => $pullOutput]);
-                $finalResult = [
-                    'success' => false,
-                    'steps' => $steps,
-                    'error' => 'Git pull failed: '.trim($result->errorOutput() ?: $result->output()),
+                $success = $result->successful();
+                $pullOutput = trim($result->output().' '.$result->errorOutput());
+                $steps[] = [
+                    'step' => 'Pulling latest updates from git (origin/'.$branch.')',
+                    'success' => $success,
+                    'output' => $pullOutput,
                 ];
-                $this->persistApplyResult($finalResult, $prePullCommit);
 
-                return $finalResult;
+                if (! $success) {
+                    Log::error('system_update.git_pull_failed', ['output' => $pullOutput]);
+                    $finalResult = [
+                        'success' => false,
+                        'steps' => $steps,
+                        'error' => 'Git pull failed: '.trim($result->errorOutput() ?: $result->output()),
+                    ];
+                    $this->persistApplyResult($finalResult, $prePullCommit);
+
+                    return $finalResult;
+                }
+
+                Log::info('system_update.git_pull_succeeded', ['output' => $pullOutput]);
             }
 
-            Log::info('system_update.git_pull_succeeded', ['output' => $pullOutput]);
-        }
+            $postPullCommit = $this->getCurrentCommitHash();
 
-        $postPullCommit = $this->getCurrentCommitHash();
-
-        // 3. Composer dependencies
-        // Only run composer install if composer.json or composer.lock changed in this update.
-        $needsComposer = true;
-        if ($gitInfo['is_git'] && $prePullCommit && $postPullCommit && $prePullCommit !== $postPullCommit) {
-            $diffCheck = Process::path($basePath)->env($subprocessEnv)->run([
-                'git', 'diff', $prePullCommit, $postPullCommit, '--name-only', '--', 'composer.json', 'composer.lock',
-            ]);
-            if ($diffCheck->successful() && trim($diffCheck->output()) === '') {
-                $needsComposer = false;
+            // 3. Composer dependencies
+            // Only run composer install if composer.json or composer.lock changed in this update.
+            $needsComposer = true;
+            if ($gitInfo['is_git'] && $prePullCommit && $postPullCommit && $prePullCommit !== $postPullCommit) {
+                $diffCheck = Process::path($basePath)->env($subprocessEnv)->run([
+                    'git', 'diff', $prePullCommit, $postPullCommit, '--name-only', '--', 'composer.json', 'composer.lock',
+                ]);
+                if ($diffCheck->successful() && trim($diffCheck->output()) === '') {
+                    $needsComposer = false;
+                }
             }
-        }
 
-        if (! $needsComposer) {
-            $steps[] = [
-                'step' => 'Installing updated dependencies (composer install --no-dev)',
-                'success' => true,
-                'output' => 'No dependency changes in this update; skipping composer install.',
-            ];
-            Log::info('system_update.composer_skipped', ['reason' => 'composer.json and composer.lock unchanged']);
-        } else {
-            Log::info('system_update.composer_started');
-            $composerResult = Process::path($basePath)->timeout(300)->env($subprocessEnv)->run(['composer', 'install', '--no-dev', '--optimize-autoloader']);
-            $composerSuccess = $composerResult->successful();
-            $composerOutput = trim($composerResult->output().' '.$composerResult->errorOutput());
+            if (! $needsComposer) {
+                $steps[] = [
+                    'step' => 'Installing updated dependencies (composer install --no-dev)',
+                    'success' => true,
+                    'output' => 'No dependency changes in this update; skipping composer install.',
+                ];
+                Log::info('system_update.composer_skipped', ['reason' => 'composer.json and composer.lock unchanged']);
+            } else {
+                Log::info('system_update.composer_started');
+                $composerResult = Process::path($basePath)->timeout(300)->env($subprocessEnv)->run(['composer', 'install', '--no-dev', '--optimize-autoloader']);
+                $composerSuccess = $composerResult->successful();
+                $composerOutput = trim($composerResult->output().' '.$composerResult->errorOutput());
 
-            if (! $composerSuccess) {
-                Log::error('system_update.composer_failed', ['output' => $composerOutput]);
+                if (! $composerSuccess) {
+                    Log::error('system_update.composer_failed', ['output' => $composerOutput]);
 
-                // Roll back working copy so disk isn't stranded on uninstalled dependencies
-                $rollbackNote = '';
-                if ($gitInfo['is_git'] && $prePullCommit) {
-                    $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
-                    if ($rollback->successful()) {
-                        $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
-                        Log::warning('system_update.rolled_back_after_composer_failure', ['to_commit' => $prePullCommit]);
-                        try {
-                            Artisan::call('optimize:clear');
-                        } catch (Throwable) {
+                    // Roll back working copy so disk isn't stranded on uninstalled dependencies
+                    $rollbackNote = '';
+                    if ($gitInfo['is_git'] && $prePullCommit) {
+                        $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
+                        if ($rollback->successful()) {
+                            $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
+                            Log::warning('system_update.rolled_back_after_composer_failure', ['to_commit' => $prePullCommit]);
+                            try {
+                                Artisan::call('optimize:clear');
+                            } catch (Throwable) {
+                            }
+                        } else {
+                            $rollbackNote = ' Automatic rollback failed: '.$rollback->errorOutput();
+                            Log::error('system_update.rollback_failed', ['error' => $rollback->errorOutput()]);
                         }
-                    } else {
-                        $rollbackNote = ' Automatic rollback failed: '.$rollback->errorOutput();
-                        Log::error('system_update.rollback_failed', ['error' => $rollback->errorOutput()]);
                     }
+
+                    $steps[] = [
+                        'step' => 'Installing updated dependencies (composer install --no-dev)',
+                        'success' => false,
+                        'output' => $composerOutput.$rollbackNote,
+                    ];
+
+                    $finalResult = [
+                        'success' => false,
+                        'steps' => $steps,
+                        'error' => 'Composer install failed: '.trim($composerResult->errorOutput() ?: $composerResult->output()).$rollbackNote,
+                    ];
+                    $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
+
+                    return $finalResult;
                 }
 
                 $steps[] = [
                     'step' => 'Installing updated dependencies (composer install --no-dev)',
-                    'success' => false,
-                    'output' => $composerOutput.$rollbackNote,
+                    'success' => true,
+                    'output' => $composerOutput,
                 ];
-
-                $finalResult = [
-                    'success' => false,
-                    'steps' => $steps,
-                    'error' => 'Composer install failed: '.trim($composerResult->errorOutput() ?: $composerResult->output()).$rollbackNote,
-                ];
-                $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
-
-                return $finalResult;
+                Log::info('system_update.composer_succeeded');
             }
 
-            $steps[] = [
-                'step' => 'Installing updated dependencies (composer install --no-dev)',
-                'success' => true,
-                'output' => $composerOutput,
-            ];
-            Log::info('system_update.composer_succeeded');
-        }
+            // 4. Frontend assets & npm dependencies
+            $hasNpm = false;
+            try {
+                $npmCheck = Process::path($basePath)->env($subprocessEnv)->run(['npm', '--version']);
+                $hasNpm = $npmCheck->successful() && trim($npmCheck->output()) !== '';
+            } catch (Throwable) {
+                $hasNpm = false;
+            }
 
-        // 4. Database migrations
-        try {
-            Log::info('system_update.migrate_started');
-            $exitCode = Artisan::call('migrate', ['--force' => true]);
-            $migrateOutput = trim((string) Artisan::output());
-            $migrateSuccess = ($exitCode === 0);
+            if ($hasNpm) {
+                // Check if package dependencies changed or node_modules is missing
+                $needsNpmInstall = ! is_dir($basePath.'/node_modules');
+                if (! $needsNpmInstall && $gitInfo['is_git'] && $prePullCommit && $postPullCommit && $prePullCommit !== $postPullCommit) {
+                    $pkgDiff = Process::path($basePath)->env($subprocessEnv)->run([
+                        'git', 'diff', $prePullCommit, $postPullCommit, '--name-only', '--', 'package.json', 'package-lock.json',
+                    ]);
+                    if ($pkgDiff->successful() && trim($pkgDiff->output()) !== '') {
+                        $needsNpmInstall = true;
+                    }
+                }
 
-            $steps[] = [
-                'step' => 'Running database migrations (php artisan migrate --force)',
-                'success' => $migrateSuccess,
-                'output' => $migrateOutput ?: ($migrateSuccess ? 'Nothing to migrate.' : 'Migration command failed with non-zero exit code.'),
-            ];
+                if ($needsNpmInstall) {
+                    Log::info('system_update.npm_install_started');
+                    $npmInstallResult = Process::path($basePath)->timeout(300)->env($subprocessEnv)->run(['npm', 'install', '--no-audit', '--no-fund']);
+                    $npmInstallSuccess = $npmInstallResult->successful();
+                    $npmInstallOutput = trim($npmInstallResult->output().' '.$npmInstallResult->errorOutput());
 
-            if (! $migrateSuccess) {
-                Log::error('system_update.migrate_failed', [
-                    'exit_code' => $exitCode,
-                    'output' => $migrateOutput,
-                ]);
+                    if (! $npmInstallSuccess) {
+                        Log::error('system_update.npm_install_failed', ['output' => $npmInstallOutput]);
+
+                        $rollbackNote = '';
+                        if ($gitInfo['is_git'] && $prePullCommit) {
+                            $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
+                            if ($rollback->successful()) {
+                                $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
+                                Log::warning('system_update.rolled_back_after_npm_install_failure', ['to_commit' => $prePullCommit]);
+                                try {
+                                    Artisan::call('optimize:clear');
+                                } catch (Throwable) {
+                                }
+                            } else {
+                                $rollbackNote = ' Automatic rollback failed: '.$rollback->errorOutput();
+                            }
+                        }
+
+                        $steps[] = [
+                            'step' => 'Installing frontend dependencies (npm install)',
+                            'success' => false,
+                            'output' => $npmInstallOutput.$rollbackNote,
+                        ];
+
+                        $finalResult = [
+                            'success' => false,
+                            'steps' => $steps,
+                            'error' => 'Frontend dependency install failed: '.trim($npmInstallResult->errorOutput() ?: $npmInstallResult->output()).$rollbackNote,
+                        ];
+                        $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
+
+                        return $finalResult;
+                    }
+
+                    $steps[] = [
+                        'step' => 'Installing frontend dependencies (npm install)',
+                        'success' => true,
+                        'output' => $npmInstallOutput ?: 'Frontend dependencies updated successfully.',
+                    ];
+                    Log::info('system_update.npm_install_succeeded');
+                }
+
+                // Check if frontend build is needed (manifest missing or frontend source files changed)
+                $needsBuild = ! file_exists($basePath.'/public/build/manifest.json');
+                if (! $needsBuild && $gitInfo['is_git'] && $prePullCommit && $postPullCommit && $prePullCommit !== $postPullCommit) {
+                    $assetDiff = Process::path($basePath)->env($subprocessEnv)->run([
+                        'git', 'diff', $prePullCommit, $postPullCommit, '--name-only', '--', 'resources/css', 'resources/js', 'vite.config.js', 'package.json', 'package-lock.json',
+                    ]);
+                    if ($assetDiff->successful() && trim($assetDiff->output()) !== '') {
+                        $needsBuild = true;
+                    }
+                }
+
+                if ($needsBuild) {
+                    Log::info('system_update.npm_build_started');
+                    $buildResult = Process::path($basePath)->timeout(300)->env($subprocessEnv)->run(['npm', 'run', 'build']);
+                    $buildSuccess = $buildResult->successful();
+                    $buildOutput = trim($buildResult->output().' '.$buildResult->errorOutput());
+
+                    if (! $buildSuccess) {
+                        Log::error('system_update.npm_build_failed', ['output' => $buildOutput]);
+
+                        $rollbackNote = '';
+                        if ($gitInfo['is_git'] && $prePullCommit) {
+                            $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
+                            if ($rollback->successful()) {
+                                $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
+                                Log::warning('system_update.rolled_back_after_npm_build_failure', ['to_commit' => $prePullCommit]);
+                                try {
+                                    Artisan::call('optimize:clear');
+                                } catch (Throwable) {
+                                }
+                            } else {
+                                $rollbackNote = ' Automatic rollback failed: '.$rollback->errorOutput();
+                            }
+                        }
+
+                        $steps[] = [
+                            'step' => 'Building frontend production assets (npm run build)',
+                            'success' => false,
+                            'output' => $buildOutput.$rollbackNote,
+                        ];
+
+                        $finalResult = [
+                            'success' => false,
+                            'steps' => $steps,
+                            'error' => 'Frontend asset build failed: '.trim($buildResult->errorOutput() ?: $buildResult->output()).$rollbackNote,
+                        ];
+                        $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
+
+                        return $finalResult;
+                    }
+
+                    $steps[] = [
+                        'step' => 'Building frontend production assets (npm run build)',
+                        'success' => true,
+                        'output' => $buildOutput ?: 'Frontend production assets compiled successfully.',
+                    ];
+                    Log::info('system_update.npm_build_succeeded');
+                } else {
+                    $steps[] = [
+                        'step' => 'Building frontend production assets (npm run build)',
+                        'success' => true,
+                        'output' => 'No frontend asset changes in this update; compiled assets are up to date.',
+                    ];
+                    Log::info('system_update.npm_build_skipped', ['reason' => 'assets unchanged']);
+                }
+            } else {
+                // npm not available
+                $steps[] = [
+                    'step' => 'Building frontend production assets (npm run build)',
+                    'success' => true,
+                    'output' => 'Notice: Node.js / npm not detected in environment; skipped asset build.',
+                ];
+                Log::info('system_update.npm_skipped_not_installed');
+            }
+
+            // 5. Database migrations
+            try {
+                Log::info('system_update.migrate_started');
+                $exitCode = Artisan::call('migrate', ['--force' => true]);
+                $migrateOutput = trim((string) Artisan::output());
+                $migrateSuccess = ($exitCode === 0);
+
+                $steps[] = [
+                    'step' => 'Running database migrations (php artisan migrate --force)',
+                    'success' => $migrateSuccess,
+                    'output' => $migrateOutput ?: ($migrateSuccess ? 'Nothing to migrate.' : 'Migration command failed with non-zero exit code.'),
+                ];
+
+                if (! $migrateSuccess) {
+                    Log::error('system_update.migrate_failed', [
+                        'exit_code' => $exitCode,
+                        'output' => $migrateOutput,
+                    ]);
+
+                    $rollbackNote = '';
+                    if ($gitInfo['is_git'] && $prePullCommit) {
+                        $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
+                        if ($rollback->successful()) {
+                            $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
+                            Log::warning('system_update.rolled_back_after_migrate_failure', ['to_commit' => $prePullCommit]);
+                            try {
+                                Artisan::call('optimize:clear');
+                            } catch (Throwable) {
+                            }
+                        } else {
+                            $rollbackNote = ' Automatic rollback failed: '.$rollback->errorOutput();
+                        }
+                    }
+
+                    $finalResult = [
+                        'success' => false,
+                        'steps' => $steps,
+                        'error' => 'Migration failed: '.($migrateOutput ?: 'Artisan migrate returned non-zero exit code.').$rollbackNote,
+                    ];
+                    $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
+
+                    return $finalResult;
+                }
+
+                Log::info('system_update.migrate_succeeded', ['output' => $migrateOutput]);
+            } catch (Throwable $e) {
+                Log::error('system_update.migrate_exception', ['error' => $e->getMessage()]);
 
                 $rollbackNote = '';
                 if ($gitInfo['is_git'] && $prePullCommit) {
                     $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
                     if ($rollback->successful()) {
                         $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
-                        Log::warning('system_update.rolled_back_after_migrate_failure', ['to_commit' => $prePullCommit]);
+                        Log::warning('system_update.rolled_back_after_migrate_exception', ['to_commit' => $prePullCommit]);
                         try {
                             Artisan::call('optimize:clear');
                         } catch (Throwable) {
@@ -440,80 +629,63 @@ class SystemUpdateService
                     }
                 }
 
+                $steps[] = [
+                    'step' => 'Running database migrations',
+                    'success' => false,
+                    'output' => $e->getMessage().$rollbackNote,
+                ];
+
                 $finalResult = [
                     'success' => false,
                     'steps' => $steps,
-                    'error' => 'Migration failed: '.($migrateOutput ?: 'Artisan migrate returned non-zero exit code.').$rollbackNote,
+                    'error' => 'Migration failed: '.$e->getMessage().$rollbackNote,
                 ];
                 $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
 
                 return $finalResult;
             }
 
-            Log::info('system_update.migrate_succeeded', ['output' => $migrateOutput]);
-        } catch (Throwable $e) {
-            Log::error('system_update.migrate_exception', ['error' => $e->getMessage()]);
-
-            $rollbackNote = '';
-            if ($gitInfo['is_git'] && $prePullCommit) {
-                $rollback = Process::path($basePath)->env($subprocessEnv)->run(['git', 'reset', '--hard', $prePullCommit]);
-                if ($rollback->successful()) {
-                    $rollbackNote = " Codebase was automatically rolled back to {$prePullCommit}.";
-                    Log::warning('system_update.rolled_back_after_migrate_exception', ['to_commit' => $prePullCommit]);
-                    try {
-                        Artisan::call('optimize:clear');
-                    } catch (Throwable) {
-                    }
-                }
+            // 6. Cache clear & optimization
+            try {
+                Artisan::call('optimize:clear');
+                $optimizeOutput = trim((string) Artisan::output());
+                $steps[] = [
+                    'step' => 'Rebuilding system caches (php artisan optimize:clear)',
+                    'success' => true,
+                    'output' => $optimizeOutput ?: 'Caches cleared successfully.',
+                ];
+                Log::info('system_update.optimize_cleared');
+            } catch (Throwable $e) {
+                $steps[] = [
+                    'step' => 'Rebuilding system caches',
+                    'success' => true, // Non-fatal
+                    'output' => 'Notice: '.$e->getMessage(),
+                ];
+                Log::warning('system_update.optimize_clear_failed', ['error' => $e->getMessage()]);
             }
 
-            $steps[] = [
-                'step' => 'Running database migrations',
-                'success' => false,
-                'output' => $e->getMessage().$rollbackNote,
-            ];
+            // 7. Bust update cache so status reflects the update
+            Cache::forget(self::CACHE_KEY_RELEASE);
+            $this->settings->put(self::SETTING_LAST_CHECKED, now()->toIso8601String());
 
             $finalResult = [
-                'success' => false,
+                'success' => true,
                 'steps' => $steps,
-                'error' => 'Migration failed: '.$e->getMessage().$rollbackNote,
             ];
             $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
+            Log::info('system_update.completed', ['steps_count' => count($steps)]);
 
             return $finalResult;
+        } finally {
+            if ($maintenanceActive) {
+                try {
+                    Artisan::call('up');
+                    Log::info('system_update.maintenance_disabled');
+                } catch (Throwable $e) {
+                    Log::error('system_update.maintenance_up_failed', ['error' => $e->getMessage()]);
+                }
+            }
         }
-
-        // 5. Cache clear & optimization
-        try {
-            Artisan::call('optimize:clear');
-            $optimizeOutput = trim((string) Artisan::output());
-            $steps[] = [
-                'step' => 'Rebuilding system caches (php artisan optimize:clear)',
-                'success' => true,
-                'output' => $optimizeOutput ?: 'Caches cleared successfully.',
-            ];
-            Log::info('system_update.optimize_cleared');
-        } catch (Throwable $e) {
-            $steps[] = [
-                'step' => 'Rebuilding system caches',
-                'success' => true, // Non-fatal
-                'output' => 'Notice: '.$e->getMessage(),
-            ];
-            Log::warning('system_update.optimize_clear_failed', ['error' => $e->getMessage()]);
-        }
-
-        // 6. Bust update cache so status reflects the update
-        Cache::forget(self::CACHE_KEY_RELEASE);
-        $this->settings->put(self::SETTING_LAST_CHECKED, now()->toIso8601String());
-
-        $finalResult = [
-            'success' => true,
-            'steps' => $steps,
-        ];
-        $this->persistApplyResult($finalResult, $prePullCommit, $postPullCommit);
-        Log::info('system_update.completed', ['steps_count' => count($steps)]);
-
-        return $finalResult;
     }
 
     /**
@@ -592,6 +764,10 @@ class SystemUpdateService
             $effectiveHome.'/.config/herd/bin',
             $effectiveHome.'/Library/Application Support/Herd/bin',
             $effectiveHome.'/.composer/vendor/bin',
+            $effectiveHome.'/.nvm/current/bin',
+            $effectiveHome.'/.volta/bin',
+            $effectiveHome.'/.asdf/shims',
+            $effectiveHome.'/.bun/bin',
         ];
 
         $pathSegments = explode(':', $currentPath);

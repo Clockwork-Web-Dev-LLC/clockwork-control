@@ -441,34 +441,34 @@
 
                         <!-- Cloud Provider Integration Guide (shown only for cloud providers) -->
                         <template x-if="isCloudProvider">
-                            <div class="p-4 rounded-xl bg-blue-50/80 border border-blue-200 text-slate-800 space-y-2.5 shadow-2xs">
+                            <div class="p-4 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-slate-800 dark:text-slate-200 space-y-2.5 shadow-2xs">
                                 <div class="flex items-center gap-2">
-                                    <div class="w-6 h-6 rounded-md bg-blue-500/15 text-blue-700 flex items-center justify-center text-xs">
+                                    <div class="w-6 h-6 rounded-md bg-blue-500/15 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs">
                                         <i class="fa-solid fa-cloud"></i>
                                     </div>
-                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-950">
+                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-950 dark:text-blue-200">
                                         How <span x-text="serviceName"></span> Integrates with Clockwork
                                     </span>
                                 </div>
-                                <p class="text-xs text-slate-700 leading-relaxed">
+                                <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                                     <strong>Hosting Panels vs Cloud Infrastructure:</strong> Server management panels (like <strong>SpinupWP</strong> or <strong>GridPane</strong>) manage your WordPress sites, Nginx configs, and databases. <strong x-text="serviceName"></strong> manages the underlying virtual machines and hardware specifications.
                                 </p>
                                 <div class="grid sm:grid-cols-2 gap-2 pt-1 text-xs">
-                                    <div class="p-2.5 rounded-lg bg-white/80 border border-blue-100 space-y-1">
-                                        <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                    <div class="p-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] space-y-1">
+                                        <div class="font-semibold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
                                             <i class="fa-solid fa-server text-blue-600 text-[11px]"></i>
                                             <span>Hosting Panel Managed</span>
                                         </div>
-                                        <p class="text-[11px] text-slate-600 leading-normal">
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
                                             When you import from SpinupWP or GridPane, Clockwork automatically matches servers to <span x-text="serviceName"></span> instances by IP address to monitor CPU, RAM, and hardware health.
                                         </p>
                                     </div>
-                                    <div class="p-2.5 rounded-lg bg-white/80 border border-blue-100 space-y-1">
-                                        <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                                    <div class="p-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] space-y-1">
+                                        <div class="font-semibold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
                                             <i class="fa-solid fa-cloud-arrow-down text-blue-600 text-[11px]"></i>
                                             <span>Standalone Cloud Server</span>
                                         </div>
-                                        <p class="text-[11px] text-slate-600 leading-normal">
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
                                             Import any standalone <span x-text="serviceName"></span> instance directly into your Server Fleet below to track uptime and hardware specifications.
                                         </p>
                                     </div>

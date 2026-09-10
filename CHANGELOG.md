@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-09-10
+
+### Fixed
+- **Atomic self-updates & frontend asset compilation** ([#19](https://github.com/Clockwork-Web-Dev-LLC/clockwork-control/issues/19)):
+  - Brackets update execution in maintenance mode (`php artisan down --retry=15 --refresh=15`) with guaranteed recovery in a `finally` block (`php artisan up`), preventing race conditions and HTTP 500 errors on concurrent user requests while files are updated.
+  - Automatically runs `npm install` when dependencies change and compiles production assets via `npm run build` when frontend source files (`resources/css`, `resources/js`, `vite.config.js`, `package.json`, `package-lock.json`) are modified or when the asset manifest is missing.
+  - Subprocess environments now explicitly include common Node, Volta, ASDF, and Bun binary search paths.
+  - Updates automatically roll back working tree changes via `git reset --hard` if Composer, npm, or database migrations fail.
+- **High-contrast theme illegibility & white-on-white blocks** ([#20](https://github.com/Clockwork-Web-Dev-LLC/clockwork-control/issues/20)):
+  - Added global high-contrast theme overrides in `app.css` to invert hardcoded light backgrounds (`.bg-white`, `.bg-*-50`), form inputs, textareas, selects, and inline code blocks under `:root[data-theme="high-contrast"]`.
+  - Replaced hardcoded `bg-white` and light blue background utilities with semantic surface variables (`bg-[var(--color-surface)]`, `bg-[var(--color-surface-alt)]`) and dark-mode compatible variants in service integration limits and setup wizard templates.
+  - Included `[data-theme="midnight"]` in Tailwind `@custom-variant dark`.
+- **Setup integration test status honesty & credential validation**:
+  - Connection test failures in setup now honestly render error feedback instead of deceptively showing green success checkmarks when an API key fails authentication.
+  - Correctly validates multi-field required credentials across all services before declaring a service ready.
+  - Removed misleading "Get API Key" link from the Account Email field for Cloudways integration.
+
 ## [1.6.2] - 2026-09-10
 
 ### Added

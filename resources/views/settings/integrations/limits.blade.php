@@ -152,7 +152,7 @@
                                     <div class="flex items-center justify-between flex-wrap gap-2">
                                         <div>
                                             <span class="text-xs font-bold text-[var(--color-ink-strong)]">{{ $cred['label'] }}</span>
-                                            <code class="font-data text-[11px] text-[var(--color-ink-soft)] ml-1.5 px-1.5 py-0.5 rounded bg-white border border-[var(--color-border-light)]">{{ $cred['env_var'] }}</code>
+                                            <code class="font-data text-[11px] text-[var(--color-ink-soft)] ml-1.5 px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">{{ $cred['env_var'] }}</code>
                                         </div>
                                         <div class="flex items-center gap-2">
                                             @if ($cred['configured'])
@@ -175,7 +175,7 @@
                                     <input type="{{ $cred['secret'] ? 'password' : 'text' }}"
                                            name="cred_{{ $cred['field'] }}"
                                            placeholder="{{ $cred['configured'] ? 'Currently set in .env (' . ($cred['preview'] ?? 'configured') . ') — paste new value to replace' : 'Paste ' . $cred['label'] . ' here' }}"
-                                           class="w-full font-data text-xs text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                           class="w-full font-data text-xs text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
 
                                     <div class="flex items-center justify-between text-[11px] text-[var(--color-ink-soft)] flex-wrap gap-1">
                                         <span>{{ $cred['guide'] }}</span>
@@ -192,7 +192,7 @@
                             <div class="flex justify-between items-center pt-2 border-t border-[var(--color-border-light)] flex-wrap gap-2">
                                 @if (!empty($testable))
                                     <button type="submit" formaction="{{ route('settings.integrations.test', $service['id']) }}" formmethod="POST"
-                                            class="btn-pill-nav text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-primary-600)] hover:bg-white border border-[var(--color-border)] shadow-2xs flex items-center gap-1.5 px-3 py-2 cursor-pointer">
+                                            class="btn-pill-nav text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-primary-600)] hover:bg-[var(--color-surface-alt)] border border-[var(--color-border)] shadow-2xs flex items-center gap-1.5 px-3 py-2 cursor-pointer">
                                         <i class="fa-solid fa-bolt text-amber-500"></i>
                                         <span>Test Connection</span>
                                     </button>
@@ -214,37 +214,37 @@
 
                 @if ($isCloudProvider)
                     <!-- Card: How this integrates (Cloud Provider Architecture) -->
-                    <div class="p-5 rounded-xl bg-blue-50/80 border border-blue-200 text-slate-800 space-y-3">
+                    <div class="p-5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-slate-800 dark:text-slate-200 space-y-3">
                         <div class="flex items-center gap-2.5">
                             <div class="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-700 flex items-center justify-center text-sm flex-shrink-0">
                                 <i class="fa-solid fa-cloud"></i>
                             </div>
                             <div>
-                                <h3 class="font-display font-bold text-sm text-blue-950 leading-tight">
+                                <h3 class="font-display font-bold text-sm text-blue-950 dark:text-blue-200 leading-tight">
                                     How {{ $service['name'] }} Integrates with Clockwork Control
                                 </h3>
-                                <span class="text-xs text-slate-600">Hardware Telemetry &bull; Alive/Dead Status Checks &bull; IP Matching</span>
+                                <span class="text-xs text-slate-600 dark:text-slate-400">Hardware Telemetry &bull; Alive/Dead Status Checks &bull; IP Matching</span>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-700 leading-relaxed">
+                        <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                             <strong>Hosting Panels vs Cloud Infrastructure:</strong> Server management panels (like <strong>SpinupWP</strong> or <strong>GridPane</strong>) manage your WordPress sites, Nginx configs, and database credentials. <strong>{{ $service['name'] }}</strong> manages the underlying virtual machines and hardware specifications (vCPUs, RAM, disk, alive state).
                         </p>
                         <div class="grid sm:grid-cols-2 gap-2.5 pt-1 text-xs">
-                            <div class="p-3 rounded-lg bg-white/90 border border-blue-100 space-y-1">
-                                <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                            <div class="p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] space-y-1">
+                                <div class="font-semibold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
                                     <i class="fa-solid fa-server text-blue-600 text-xs"></i>
                                     <span>Hosting Panel Managed Server</span>
                                 </div>
-                                <p class="text-[11px] text-slate-600 leading-normal">
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
                                     When you import from SpinupWP or GridPane, Clockwork matches servers to {{ $service['name'] }} instances by IP address to monitor CPU, RAM, and droplet health.
                                 </p>
                             </div>
-                            <div class="p-3 rounded-lg bg-white/90 border border-blue-100 space-y-1">
-                                <div class="font-semibold text-blue-950 flex items-center gap-1.5">
+                            <div class="p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] space-y-1">
+                                <div class="font-semibold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
                                     <i class="fa-solid fa-cloud-arrow-down text-blue-600 text-xs"></i>
                                     <span>Standalone Cloud Server</span>
                                 </div>
-                                <p class="text-[11px] text-slate-600 leading-normal">
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
                                     Import any standalone {{ $service['name'] }} instance directly into your Server Fleet below to track uptime and hardware specifications.
                                 </p>
                             </div>
@@ -255,7 +255,7 @@
                     <div class="card p-6 border-l-4 border-l-blue-600">
                         <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
                             <div class="flex items-center gap-2.5">
-                                <div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                <div class="w-9 h-9 rounded-lg bg-blue-500/15 text-blue-600 flex items-center justify-center flex-shrink-0">
                                     <i class="fa-solid fa-network-wired text-base"></i>
                                 </div>
                                 <div>
@@ -284,7 +284,7 @@
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="font-display font-bold text-sm text-[var(--color-ink-strong)]">{{ $inst['name'] ?: ($inst['ip'] ?: $inst['id']) }}</span>
                                                 @if (!empty($inst['ip']))
-                                                    <code class="font-data text-xs text-[var(--color-ink-soft)] px-1.5 py-0.5 rounded bg-white border border-[var(--color-border-light)]">{{ $inst['ip'] }}</code>
+                                                    <code class="font-data text-xs text-[var(--color-ink-soft)] px-1.5 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)]">{{ $inst['ip'] }}</code>
                                                 @endif
                                                 @if (!empty($inst['region']))
                                                     <span class="status-pill status-blue text-[10px] font-mono">{{ $inst['region'] }}</span>
@@ -309,7 +309,7 @@
                                         <!-- Specs Row -->
                                         <div class="flex items-center gap-2.5 text-xs text-[var(--color-ink-muted)] flex-wrap">
                                             @if (!empty($inst['plan']))
-                                                <span class="font-mono text-xs px-2 py-0.5 rounded bg-white border border-[var(--color-border-light)] font-semibold text-[var(--color-ink-strong)]">{{ $inst['plan'] }}</span>
+                                                <span class="font-mono text-xs px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] font-semibold text-[var(--color-ink-strong)]">{{ $inst['plan'] }}</span>
                                             @endif
                                             @if ($inst['vcpus'])
                                                 <span><strong>{{ $inst['vcpus'] }}</strong> vCPU</span>
@@ -518,7 +518,7 @@
                                             Copy URL
                                         </button>
                                     </div>
-                                    <div class="p-2.5 bg-white rounded border border-[var(--color-border-light)] font-data text-xs text-[var(--color-ink-strong)] select-all break-all">
+                                    <div class="p-2.5 bg-[var(--color-surface-alt)] rounded border border-[var(--color-border-light)] font-data text-xs text-[var(--color-ink-strong)] select-all break-all">
                                         {{ $redirectUri }}
                                     </div>
                                     <p class="text-[11px] text-[var(--color-ink-soft)] leading-normal">
@@ -615,7 +615,7 @@
                                 </div>
                                 <input type="number" name="rate_limit" id="field-rate-limit" min="1" max="1000000"
                                        value="{{ old('rate_limit', $tunables['rate_limit']) }}"
-                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
                                 <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ number_format($service['defaults']['rate_limit'] ?? 100) }} {{ $service['defaults']['rate_limit_unit'] ?? 'requests / minute' }}</span>
                             </div>
                         @endif
@@ -630,7 +630,7 @@
                             </div>
                             <input type="number" name="timeout" id="field-timeout" min="1" max="300"
                                    value="{{ old('timeout', $tunables['timeout']) }}"
-                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
                             <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['timeout'] ?? 15 }}s (Max allowed: 300s)</span>
                         </div>
 
@@ -645,7 +645,7 @@
                                 </div>
                                 <input type="number" name="concurrency" id="field-concurrency" min="1" max="10"
                                        value="{{ old('concurrency', $tunables['concurrency']) }}"
-                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
                                 <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Default: {{ $service['defaults']['concurrency'] ?? 2 }} parallel connections</span>
                             </div>
 
@@ -659,7 +659,7 @@
                                 </div>
                                 <input type="number" name="delay_ms" id="field-delay" min="0" max="5000" step="10"
                                        value="{{ old('delay_ms', $tunables['delay_ms']) }}"
-                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                       class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
                                 <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Sleeps between successive calls to smooth bursts (Default: {{ $service['defaults']['delay_ms'] ?? 0 }}ms)</span>
                             </div>
                         @endif
@@ -674,7 +674,7 @@
                             </div>
                             <input type="number" name="retry_attempts" id="field-retries" min="0" max="5"
                                    value="{{ old('retry_attempts', $tunables['retry_attempts']) }}"
-                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                                   class="w-full font-data text-sm text-[var(--color-ink-strong)] border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
                             <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">Retries with exponential backoff on transient errors (Default: {{ $service['defaults']['retry_attempts'] ?? 2 }})</span>
                         </div>
 

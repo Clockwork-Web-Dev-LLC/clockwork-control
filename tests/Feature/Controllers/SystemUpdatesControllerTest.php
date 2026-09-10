@@ -257,7 +257,7 @@ it('displays companion plugin fleet breakdown properly', function () {
         ->assertSee('Older Version Pending');
 });
 
-it('enriches subprocess PATH with Homebrew, Herd, and Composer paths', function () {
+it('enriches subprocess PATH with Homebrew, Herd, Composer, and Node paths', function () {
     $env = app(SystemUpdateService::class)->subprocessEnv();
 
     expect($env)->toHaveKeys(['HOME', 'COMPOSER_HOME', 'PATH'])
@@ -266,7 +266,11 @@ it('enriches subprocess PATH with Homebrew, Herd, and Composer paths', function 
         ->and($env['PATH'])->toContain('/usr/local/bin')
         ->and($env['PATH'])->toContain('/usr/local/sbin')
         ->and($env['PATH'])->toContain('.config/herd/bin')
-        ->and($env['PATH'])->toContain('.composer/vendor/bin');
+        ->and($env['PATH'])->toContain('.composer/vendor/bin')
+        ->and($env['PATH'])->toContain('.nvm/current/bin')
+        ->and($env['PATH'])->toContain('.volta/bin')
+        ->and($env['PATH'])->toContain('.asdf/shims')
+        ->and($env['PATH'])->toContain('.bun/bin');
 });
 
 it('skips composer install when composer.json and composer.lock have not changed', function () {
@@ -496,4 +500,151 @@ it('renders authenticated pages without 500 error even if IssueCounter throws an
 
     $response->assertOk()
         ->assertSee('Clockwork Updates');
+});
+
+it('brackets update execution in maintenance mode (down and up)', function () {
+    Artisan::spy();
+
+    Process::fake(function ($process) {
+        return Process::result('');
+    });
+
+    $this->mockIssueCounterZero();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('settings.updates.apply'));
+
+    Artisan::shouldHaveReceived('call')
+        ->with('down', ['--retry' => 15, '--refresh' => 15])
+        ->once();
+
+    Artisan::shouldHaveReceived('call')
+        ->with('up')
+        ->once();
+});
+
+it('runs npm install when package.json changes in git pull', function () {
+    $revParseCount = 0;
+    Process::fake(function ($process) use (&$revParseCount) {
+        $cmd = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+
+        if (str_contains($cmd, 'git rev-parse HEAD')) {
+            $revParseCount++;
+
+            return Process::result($revParseCount === 1 ? 'commit_before' : 'commit_after');
+        }
+
+        if (str_contains($cmd, 'npm --version')) {
+            return Process::result("10.8.2\n");
+        }
+
+        if (str_contains($cmd, 'git diff') && str_contains($cmd, 'resources/css')) {
+            return Process::result("resources/css/app.css\n");
+        }
+
+        if (str_contains($cmd, 'git diff') && str_contains($cmd, 'package.json')) {
+            return Process::result("package.json\n");
+        }
+
+        if (str_contains($cmd, 'npm install')) {
+            return Process::result('added 5 packages');
+        }
+
+        if (str_contains($cmd, 'npm run build')) {
+            return Process::result('vite build complete');
+        }
+
+        return Process::result('');
+    });
+
+    $this->mockIssueCounterZero();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('settings.updates.apply'));
+
+    Process::assertRan(fn ($p) => is_array($p->command) && str($p->command[0] ?? '')->contains('npm') && ($p->command[1] ?? '') === 'install');
+    Process::assertRan(fn ($p) => is_array($p->command) && str($p->command[0] ?? '')->contains('npm') && ($p->command[1] ?? '') === 'run' && ($p->command[2] ?? '') === 'build');
+
+    $lastResult = app(SystemUpdateService::class)->getLastApplyResult();
+    expect($lastResult['success'])->toBeTrue();
+});
+
+it('automatically rolls back git working copy when npm build fails', function () {
+    $revParseCount = 0;
+    Process::fake(function ($process) use (&$revParseCount) {
+        $cmd = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+
+        if (str_contains($cmd, 'git rev-parse HEAD')) {
+            $revParseCount++;
+
+            return Process::result($revParseCount === 1 ? 'commit_before_pull' : 'commit_after_pull');
+        }
+
+        if (str_contains($cmd, 'npm --version')) {
+            return Process::result("10.8.2\n");
+        }
+
+        if (str_contains($cmd, 'git diff') && str_contains($cmd, 'resources/css')) {
+            return Process::result("resources/css/app.css\n");
+        }
+
+        if (str_contains($cmd, 'git diff') && str_contains($cmd, 'package.json')) {
+            return Process::result('');
+        }
+
+        if (str_contains($cmd, 'npm run build')) {
+            return Process::result(output: '', errorOutput: 'vite: syntax error', exitCode: 1);
+        }
+
+        if (str_contains($cmd, 'git reset --hard')) {
+            return Process::result('HEAD is now at commit_before_pull');
+        }
+
+        return Process::result('');
+    });
+
+    $this->mockIssueCounterZero();
+
+    $response = $this->actingAs(User::factory()->create())
+        ->post(route('settings.updates.apply'));
+
+    $response->assertRedirect(route('settings.updates.index'))
+        ->assertSessionHas('status_update_error');
+
+    Process::assertRan(function ($p) {
+        $cmd = is_array($p->command) ? implode(' ', $p->command) : (string) $p->command;
+
+        return str_contains($cmd, 'git reset --hard commit_before_pull');
+    });
+
+    $lastResult = app(SystemUpdateService::class)->getLastApplyResult();
+    expect($lastResult)->not->toBeNull()
+        ->and($lastResult['success'])->toBeFalse()
+        ->and($lastResult['error'])->toContain('Frontend asset build failed')
+        ->and($lastResult['error'])->toContain('Codebase was automatically rolled back to commit_before_pull');
+});
+
+it('records notice step when npm is not installed in the environment', function () {
+    Process::fake(function ($process) {
+        $cmd = is_array($process->command) ? implode(' ', $process->command) : (string) $process->command;
+
+        if (str_contains($cmd, 'npm --version')) {
+            return Process::result(output: '', errorOutput: 'npm: command not found', exitCode: 127);
+        }
+
+        return Process::result('');
+    });
+
+    $this->mockIssueCounterZero();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('settings.updates.apply'));
+
+    $lastResult = app(SystemUpdateService::class)->getLastApplyResult();
+    expect($lastResult)->not->toBeNull()
+        ->and($lastResult['success'])->toBeTrue();
+
+    $buildStep = collect($lastResult['steps'])->firstWhere('step', 'Building frontend production assets (npm run build)');
+    expect($buildStep)->not->toBeNull()
+        ->and($buildStep['output'])->toContain('Node.js / npm not detected in environment; skipped asset build.');
 });

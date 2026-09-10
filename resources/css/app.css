@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@400;500;600;700&family=Poppins:wght@400;500;600&family=Roboto:wght@400;500;600&display=swap');
 @import 'tailwindcss';
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="midnight"], [data-theme="midnight"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));
 @import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
 @import '@fortawesome/fontawesome-free/css/solid.min.css';
 @import '@fortawesome/fontawesome-free/css/regular.min.css';
@@ -249,6 +249,29 @@ html {
 :root[data-theme="high-contrast"] input[type="checkbox"] {
     background-color: var(--color-surface-alt);
     border-color: var(--color-border);
+}
+
+/* Ensure hardcoded light background utilities invert in high-contrast mode */
+:root[data-theme="high-contrast"] .bg-white:not(.toggle-knob):not(.cw-switch__knob):not([role="switch"] *) {
+    background-color: var(--color-surface) !important;
+}
+
+:root[data-theme="high-contrast"] [class*="bg-"][class*="-50"]:not(.toggle-knob):not(.cw-switch__knob) {
+    background-color: var(--color-surface-alt) !important;
+}
+
+:root[data-theme="high-contrast"] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+:root[data-theme="high-contrast"] select,
+:root[data-theme="high-contrast"] textarea {
+    background-color: var(--color-surface) !important;
+    color: var(--color-ink-strong) !important;
+    border-color: var(--color-border) !important;
+}
+
+:root[data-theme="high-contrast"] pre,
+:root[data-theme="high-contrast"] code:not(pre code) {
+    background-color: var(--color-surface-alt) !important;
+    color: var(--color-ink-strong) !important;
 }
 
 /* Base — dynamic theme background, ink text, DM Sans default */
