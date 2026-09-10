@@ -104,13 +104,15 @@
                                 @php
                                     $isActive = (bool) $service['enabled'];
                                     $isConfigured = (bool) ($service['is_configured'] ?? false);
+                                    $testStatus = (string) ($service['test_status'] ?? 'untested');
+                                    $isFailing = ($testStatus === 'fail') || ! $isConfigured;
 
                                     if ($isActive) {
-                                        if ($isConfigured) {
+                                        if (! $isFailing) {
                                             // Turned ON + Integrated properly: soft green gradient with lighter green 1px border
                                             $cardStateClasses = 'border border-emerald-500 bg-gradient-to-r from-emerald-50/75 via-emerald-50/30 to-teal-50/40 shadow-xs';
                                         } else {
-                                            // Turned ON + NOT configured: slightly red background/gradient with solid red 1px border
+                                            // Turned ON + NOT configured or failed: slightly red background/gradient with solid red 1px border
                                             $cardStateClasses = 'border border-rose-600 bg-gradient-to-r from-rose-50/90 via-rose-50/40 to-red-50/60 shadow-xs';
                                         }
                                     } else {
@@ -121,7 +123,8 @@
                                 <div class="service-row flex items-center justify-between transition-all duration-200 {{ $cardStateClasses }}"
                                      style="padding: 1.125rem 1.25rem; border-radius: 0.75rem;"
                                      data-service-id="{{ $service['id'] }}"
-                                     data-configured="{{ $isConfigured ? 'true' : 'false' }}">
+                                     data-configured="{{ $isConfigured ? 'true' : 'false' }}"
+                                     data-test-status="{{ $testStatus }}">
 
                                     <!-- Left: Logo & Info (No grey background on logo) -->
                                     <div class="flex items-center gap-3.5 min-w-0 pr-2">
@@ -143,6 +146,11 @@
                                                         {!! $service['in_use_reason'] !!}
                                                     </span>
                                                 @endif
+
+                                                <span class="service-fail-badge status-pill status-red text-[10px] font-mono" style="{{ ($isActive && $isFailing) ? '' : 'display: none;' }}">
+                                                    <i class="fa-solid fa-triangle-exclamation text-rose-600 text-[10px]"></i>
+                                                    <span class="service-fail-text">{{ $testStatus === 'fail' ? 'Connection Failed' : 'Needs Config' }}</span>
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -193,11 +201,11 @@
                                                    class="sr-only service-toggle"
                                                    @checked($isActive)>
 
-                                            <!-- Toggle Track (Green when active, Red when inactive) -->
-                                            <div class="toggle-track w-14 h-7 rounded-full transition-colors duration-200 ease-in-out p-1 flex items-center {{ $isActive ? 'bg-emerald-600 justify-end' : 'bg-rose-600 justify-start' }}">
+                                            <!-- Toggle Track (Green when active & working, Red/Rose when inactive or active but failing) -->
+                                            <div class="toggle-track w-14 h-7 rounded-full transition-colors duration-200 ease-in-out p-1 flex items-center {{ $isActive ? ($isFailing ? 'bg-rose-500 justify-end' : 'bg-emerald-600 justify-end') : 'bg-rose-600 justify-start' }}">
                                                 <!-- Toggle Knob with icon -->
-                                                <div class="toggle-knob w-5 h-5 bg-white rounded-full shadow-md transition-transform flex items-center justify-center text-[10px] font-bold {{ $isActive ? 'text-emerald-600' : 'text-rose-600' }}">
-                                                    <i class="fa-solid {{ $isActive ? 'fa-check' : 'fa-xmark' }}"></i>
+                                                <div class="toggle-knob w-5 h-5 bg-white rounded-full shadow-md transition-transform flex items-center justify-center text-[10px] font-bold {{ $isActive ? ($isFailing ? 'text-rose-600' : 'text-emerald-600') : 'text-rose-600' }}">
+                                                    <i class="fa-solid {{ $isActive ? ($isFailing ? ($testStatus === 'fail' ? 'fa-triangle-exclamation' : 'fa-exclamation') : 'fa-check') : 'fa-xmark' }}"></i>
                                                 </div>
                                             </div>
                                         </label>
@@ -354,7 +362,7 @@
                                                 <span x-text="cred.guide"></span>
                                                 <template x-if="cred.url">
                                                     <a :href="cred.url" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1 font-medium">
-                                                        <span>Get API Key</span>
+                                                        <span x-text="cred.url_label || (cred.label && cred.label.toLowerCase().includes('token') ? 'Get Token' : 'Get API Key')">Get API Key</span>
                                                         <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                                     </a>
                                                 </template>
@@ -1199,6 +1207,18 @@
                             detail: data.detail || null,
                             duration_ms: data.duration_ms
                         };
+
+                        const row = document.querySelector(`.service-row[data-service-id="${this.serviceId}"]`);
+                        if (row) {
+                            row.dataset.testStatus = this.testResult.status;
+                            if (typeof window.clockworkUpdateServiceBadge === 'function') {
+                                window.clockworkUpdateServiceBadge(row, this.testResult.status, this.testResult.summary);
+                            }
+                            const toggle = row.querySelector('.service-toggle');
+                            if (toggle && typeof window.clockworkApplyToggleState === 'function') {
+                                window.clockworkApplyToggleState(row, toggle);
+                            }
+                        }
                     } catch (err) {
                         this.testing = false;
                         this.testResult = {
@@ -1207,6 +1227,18 @@
                             summary: 'Network error contacting server: ' + (err.message || 'Unknown error'),
                             duration_ms: null
                         };
+
+                        const row = document.querySelector(`.service-row[data-service-id="${this.serviceId}"]`);
+                        if (row) {
+                            row.dataset.testStatus = 'fail';
+                            if (typeof window.clockworkUpdateServiceBadge === 'function') {
+                                window.clockworkUpdateServiceBadge(row, 'fail', this.testResult.summary);
+                            }
+                            const toggle = row.querySelector('.service-toggle');
+                            if (toggle && typeof window.clockworkApplyToggleState === 'function') {
+                                window.clockworkApplyToggleState(row, toggle);
+                            }
+                        }
                     }
                 }
             };
@@ -1258,6 +1290,23 @@
                 'opacity-75', 'shadow-xs', 'shadow-sm'
             ];
 
+            function updateServiceBadge(row, status, summary) {
+                if (!row) return;
+                const badgeContainer = row.querySelector('.service-status-badge');
+                if (!badgeContainer) return;
+
+                if (status === 'ok') {
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300" title="${summary || 'Healthy'}"><i class="fa-solid fa-circle-check text-emerald-600"></i><span>Healthy</span></span>`;
+                } else if (status === 'warn') {
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title="${summary || 'Degraded'}"><i class="fa-solid fa-triangle-exclamation text-amber-600"></i><span>Degraded</span></span>`;
+                } else if (status === 'fail' || status === 'error') {
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300" title="${summary || 'Offline'}"><i class="fa-solid fa-circle-xmark text-rose-600"></i><span>Offline</span></span>`;
+                } else {
+                    badgeContainer.innerHTML = '';
+                }
+            }
+            window.clockworkUpdateServiceBadge = updateServiceBadge;
+
             function applyToggleState(row, checkbox) {
                 if (!row) return;
 
@@ -1265,16 +1314,18 @@
                 const knob = row.querySelector('.toggle-knob');
                 const icon = knob?.querySelector('i');
                 const isConfigured = row.dataset.configured === 'true';
+                const testStatus = row.dataset.testStatus || '';
+                const isFailing = testStatus === 'fail' || testStatus === 'error';
 
                 // Strip prior state classes
                 row.classList.remove(...ALL_CARD_CLASSES);
 
                 if (checkbox.checked) {
-                    if (isConfigured) {
-                        // Integrated properly: light green gradient with darker green border
+                    if (isConfigured && !isFailing) {
+                        // Integrated properly & healthy: light green gradient with darker green border
                         row.classList.add(...GREEN_CARD_CLASSES);
                     } else {
-                        // Turned on but NOT configured: slightly red background/gradient with solid red border
+                        // Turned on but NOT configured OR connection test failing: slightly red background/gradient with solid red border
                         row.classList.add(...RED_CARD_CLASSES);
                     }
 

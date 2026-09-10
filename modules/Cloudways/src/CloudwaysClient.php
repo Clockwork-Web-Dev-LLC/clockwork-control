@@ -47,8 +47,8 @@ class CloudwaysClient
     ) {
         $settings = function_exists('app') && app()->bound(Settings::class) ? app(Settings::class) : null;
 
-        $this->apiKey ??= (string) config('clockwork.cloudways.api_key');
-        $this->email ??= (string) config('clockwork.cloudways.email');
+        $this->apiKey = trim((string) ($this->apiKey ?? config('clockwork.cloudways.api_key', '')));
+        $this->email = trim((string) ($this->email ?? config('clockwork.cloudways.email', '')));
         $this->baseUrl ??= (string) config('clockwork.cloudways.base_url', 'https://api.cloudways.com/api/v2');
         $this->timeout ??= (int) ($settings?->get('services.cloudways.timeout') ?? config('clockwork.cloudways.timeout', 15));
         $this->viewOnly = $viewOnly ?? (bool) config('clockwork.cloudways.view_only', true);

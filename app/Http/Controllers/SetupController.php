@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
@@ -218,6 +219,8 @@ class SetupController extends Controller
                 'in_use' => $detection['in_use'],
                 'in_use_reason' => $detection['reason'],
                 'is_configured' => $detection['is_configured'],
+                'test_status' => $detection['test_status'] ?? null,
+                'test_summary' => $detection['test_summary'] ?? null,
                 'field_count' => count($item['manifest']->credentialFields),
                 'has_settings' => $hasSettings,
                 'has_rate_limits' => $hasRateLimits,
@@ -263,24 +266,36 @@ class SetupController extends Controller
         $envManager = app(EnvCredentialManager::class);
         $envFields = $envManager->getFieldsForService($id);
         $hasEnvCreds = false;
-        foreach ($envFields as $field) {
-            if ($field['configured']) {
-                $hasEnvCreds = true;
-                break;
+        if (count($envFields) > 0) {
+            $requiredEnvFields = match ($id) {
+                'wpengine' => ['api_user_id', 'api_password'],
+                'kinsta' => ['api_key'],
+                default => array_keys($envFields),
+            };
+            $configuredCount = 0;
+            foreach ($requiredEnvFields as $reqField) {
+                if (! empty($envFields[$reqField]['configured'])) {
+                    $configuredCount++;
+                }
             }
+            $hasEnvCreds = ($configuredCount === count($requiredEnvFields));
         }
 
         // Check credentials via legacy / database CredentialResolver
         $resolver = app(CredentialResolver::class);
+        $manifestSecretFields = array_filter(
+            array_keys($manifest->credentialFields),
+            fn ($key) => ! in_array($key, ['base_url', 'view_only', 'ssh_private_key', 'ssh_password'], true)
+        );
         $hasResolverCreds = false;
-        foreach (array_keys($manifest->credentialFields) as $key) {
-            if (in_array($key, ['base_url', 'view_only'], true)) {
-                continue;
+        if (count($manifestSecretFields) > 0) {
+            $configuredResolverCount = 0;
+            foreach ($manifestSecretFields as $key) {
+                if ($resolver->source("{$id}.{$key}") !== 'unset') {
+                    $configuredResolverCount++;
+                }
             }
-            if ($resolver->source("{$id}.{$key}") !== 'unset') {
-                $hasResolverCreds = true;
-                break;
-            }
+            $hasResolverCreds = ($configuredResolverCount === count($manifestSecretFields));
         }
 
         // Special checks for webhooks, OAuth, and monitoring services
@@ -334,6 +349,10 @@ class SetupController extends Controller
             }
         }
 
+        $testResult = Cache::get("integration_test_result:{$id}");
+        $testStatus = is_array($testResult) ? ($testResult['status'] ?? null) : null;
+        $testSummary = is_array($testResult) ? ($testResult['summary'] ?? null) : null;
+
         $requiresCredentials = (count($envFields) > 0) || (count($manifest->credentialFields) > 0);
         $hasCredentials = $hasEnvCreds || $hasResolverCreds;
 
@@ -342,13 +361,17 @@ class SetupController extends Controller
         // 2. Or it has credentials configured in .env / database
         // 3. Or it already has active servers or sites recorded in the fleet
         // 4. Or it has recorded activity in the fleet
-        $isConfigured = ! $requiresCredentials || $hasCredentials || ($serverCount > 0) || ($siteCount > 0) || $hasActivity;
+        // AND its most recent connection test did not explicitly fail!
+        $isConfigured = (! $requiresCredentials || $hasCredentials || ($serverCount > 0) || ($siteCount > 0) || $hasActivity)
+            && ($testStatus !== 'fail');
 
         $inUse = count($reasons) > 0 || $hasCredentials || $hasActivity;
 
         return [
             'in_use' => $inUse,
             'is_configured' => $isConfigured,
+            'test_status' => $testStatus,
+            'test_summary' => $testSummary,
             'reason' => count($reasons) > 0 ? implode(' &middot; ', $reasons) : null,
         ];
     }

@@ -40,8 +40,8 @@ class CloudwaysCheck implements DiagnosticCheck
 
     public function run(): CheckResult
     {
-        $apiKey = (string) $this->resolver->get('cloudways.api_key');
-        $email = (string) $this->resolver->get('cloudways.email');
+        $apiKey = trim((string) $this->resolver->get('cloudways.api_key'));
+        $email = trim((string) $this->resolver->get('cloudways.email'));
         if ($apiKey === '' || $email === '') {
             return CheckResult::skipped('No CLOCKWORK_CLOUDWAYS_API_KEY / CLOCKWORK_CLOUDWAYS_EMAIL set');
         }

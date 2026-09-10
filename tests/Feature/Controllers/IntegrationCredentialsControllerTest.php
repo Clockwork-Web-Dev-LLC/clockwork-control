@@ -4,6 +4,7 @@ use App\Models\IntegrationCredential;
 use App\Models\User;
 use App\Services\Diagnostics\CheckResult;
 use App\Services\Diagnostics\Checks\GoogleSafeBrowsingCheck;
+use Illuminate\Support\Facades\Cache;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -286,6 +287,11 @@ describe('test', function () {
             ->assertJsonPath('summary', 'HTTP 401 Unauthorized')
             ->assertJsonPath('detail', 'API Key rejected')
             ->assertJsonPath('duration_ms', 120);
+
+        $cached = Cache::get('integration_test_result:security_scans');
+        expect($cached)->not->toBeNull()
+            ->and($cached['status'])->toBe('fail')
+            ->and($cached['summary'])->toBe('HTTP 401 Unauthorized');
     });
 
     it('returns 404 JSON for unsupported integrations via AJAX', function () {

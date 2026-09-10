@@ -196,7 +196,7 @@ class EnvCredentialManager
                 'label' => 'Account Email',
                 'secret' => false,
                 'guide' => 'Email address associated with your Cloudways account',
-                'url' => 'https://platform.cloudways.com/api',
+                'url' => '',
                 'config_path' => 'clockwork.cloudways.email',
             ],
         ],
@@ -332,7 +332,7 @@ class EnvCredentialManager
                 'label' => 'Default Channel (optional)',
                 'secret' => false,
                 'guide' => 'Optional Slack channel override (e.g. #monitoring-alerts)',
-                'url' => 'https://api.slack.com/apps',
+                'url' => '',
                 'config_path' => 'clockwork.slack.channel',
             ],
         ],
@@ -351,7 +351,7 @@ class EnvCredentialManager
                 'label' => 'Default Channel (optional)',
                 'secret' => false,
                 'guide' => 'Optional Mattermost channel name (e.g. alerts)',
-                'url' => 'https://mattermost.com/docs/guides/administration/integrations/incoming-webhooks/',
+                'url' => '',
                 'config_path' => 'clockwork.mattermost.channel',
             ],
         ],
@@ -486,7 +486,7 @@ class EnvCredentialManager
                 'label' => 'Hosted Domain (optional)',
                 'secret' => false,
                 'guide' => 'Optional Google Workspace domain restriction (e.g. your-agency.com)',
-                'url' => 'https://console.cloud.google.com/apis/credentials',
+                'url' => '',
                 'config_path' => 'services.google.hosted_domain',
             ],
         ],
@@ -612,6 +612,7 @@ class EnvCredentialManager
                 'secret' => $meta['secret'],
                 'guide' => $meta['guide'],
                 'url' => $meta['url'],
+                'url_label' => $meta['url_label'] ?? null,
             ];
         }
 

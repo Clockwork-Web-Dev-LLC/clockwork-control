@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Modules\Core\ModuleRegistry;
@@ -156,6 +157,7 @@ class ServiceApiLimitsController extends Controller
         // a fresh process every minute and picks up .env changes on its own.
         if ($credentialsChanged) {
             Artisan::call('queue:restart');
+            Cache::forget("integration_test_result:{$service}");
         }
 
         $updatedTunables = $registry->getTunables($service);
@@ -193,6 +195,7 @@ class ServiceApiLimitsController extends Controller
 
         if ($removed) {
             Artisan::call('queue:restart');
+            Cache::forget("integration_test_result:{$service}");
         }
 
         $message = "Removed {$label} ({$envVar}) from your .env file.";

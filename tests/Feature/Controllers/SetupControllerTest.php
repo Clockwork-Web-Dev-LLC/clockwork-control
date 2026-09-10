@@ -5,6 +5,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\CredentialResolver;
 use App\Support\EnvCredentialManager;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
@@ -217,6 +218,41 @@ describe('Step 1: Which services are you using? (GET/POST /setup)', function () 
             usort($sortedNames, fn ($a, $b) => strcasecmp($a, $b));
             expect($names)->toEqual($sortedNames);
         }
+    });
+
+    it('marks a service as not configured when its recent connection test failed', function () {
+        $user = User::factory()->create();
+        Server::factory()->create(['provider' => 'digitalocean']);
+
+        Cache::put('integration_test_result:digitalocean', [
+            'status' => 'fail',
+            'summary' => 'Invalid token',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+        $response->assertOk();
+
+        $categories = $response->viewData('categories');
+        $allServices = collect($categories)->pluck('services')->flatten(1)->keyBy('id');
+
+        expect($allServices['digitalocean']['is_configured'])->toBeFalse()
+            ->and($allServices['digitalocean']['test_status'])->toBe('fail')
+            ->and($allServices['digitalocean']['test_summary'])->toBe('Invalid token');
+    });
+
+    it('requires all mandatory env credentials before treating multi-field services as configured', function () {
+        $user = User::factory()->create();
+
+        // Only configure wpengine api_user_id without api_password
+        app(EnvCredentialManager::class)->save('wpengine', 'api_user_id', 'user123');
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+        $response->assertOk();
+
+        $categories = $response->viewData('categories');
+        $allServices = collect($categories)->pluck('services')->flatten(1)->keyBy('id');
+
+        expect($allServices['wpengine']['is_configured'])->toBeFalse();
     });
 
     it('saves selected services and finishes setup redirecting to dashboard', function () {

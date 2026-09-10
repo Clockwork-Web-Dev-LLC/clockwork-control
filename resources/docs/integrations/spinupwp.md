@@ -2,10 +2,10 @@
 title: SpinupWP
 section: Integrations
 order: 20
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
-tags: [integrations, spinupwp, inventory, wordpress]
-tracks: [modules/SpinupWp/src/**, app/Console/Commands/ImportSpinupWp.php, app/Console/Commands/SpinupWpTest.php]
+tags: [integrations, spinupwp, inventory, wordpress, backups]
+tracks: [modules/SpinupWp/src/**, app/Console/Commands/ImportSpinupWp.php, app/Console/Commands/SpinupWpTest.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
 ---
 
 SpinupWP is the WordPress hosting control plane sitting under our fleet. We use its API for **inventory bootstrap** — initial server + site import, periodic resync, single-site refresh on demand. All runtime traffic (banning, plugin probing, log tailing) goes over SSH directly. This module is **verified** and in active production use.
@@ -14,11 +14,20 @@ SpinupWP is the WordPress hosting control plane sitting under our fleet. We use 
 
 A daily SpinupWP import keeps our local view of the fleet honest as the operator adds, removes, or re-tiers sites. SpinupWP also exposes the SSL renewal date, which we feed into the per-site cert state machine. Additionally, SpinupWP integrates with our multi-provider [Backup Relay](/docs/features/backup-relay) pipeline via `SpinupWpBackupRelayAdapter` (`CAP_BACKUP_RELAY`), streaming backups to S3 Glacier Instant Retrieval.
 
-What SpinupWP **cannot** tell us:
+What SpinupWP **cannot** tell us directly:
 
 - Plugin inventory per site — exposed only as boolean update flags. Our `WpPluginDetector` does an SSH + wp-cli probe instead.
-- Backup history — only configuration. We list DigitalOcean Spaces directly.
+- Backup execution history — only configuration. We query DigitalOcean Spaces directly to track real snapshot runs and archive sizes.
 - DB credentials — only `database.table_prefix`. We extract the rest from `wp-config.php` over SSH on first onboarding.
+
+## Backup Monitoring with DigitalOcean Spaces
+
+SpinupWP writes automated backup archives directly to an S3-compatible DigitalOcean Spaces bucket. While SpinupWP's API only exposes backup configuration (schedule and retention), Clockwork Control integrates with DigitalOcean Spaces to monitor actual backup execution:
+
+- **Site Overview Card**: The Backups card on the site overview dashboard detects SpinupWP sites configured with Spaces. If backup archives exist for the site's domain (`<domain>/<timestamp>-<suffix>`), the site displays as **Protected** with destination `DigitalOcean Spaces (SpinupWP)` and the latest backup timestamp.
+- **Snapshot History Modal**: An interactive "Snapshots" modal on the card queries `GET /sites/{site}/backups-history` to display recent database and file archive runs, individual file/database sizes, and total archive sizes directly from the bucket.
+- **Companion Plugin Sync**: The daily `clockwork:push-companion-backups` command feeds this Spaces history and SpinupWP schedule to the Companion plugin on each site, surfacing it to clients in `wp-admin`.
+- **Offsite Glacier Relay**: SpinupWP sites can also participate in the multi-provider [Backup Relay](/docs/features/backup-relay) pipeline (`SpinupWpBackupRelayAdapter`), streaming long-term archives to AWS S3 Glacier Instant Retrieval.
 
 ## Setup
 

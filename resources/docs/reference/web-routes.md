@@ -83,6 +83,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/sites/{site}/{tab?}` | Site detail. `tab` ∈ `overview|traffic|bans|security|performance|settings|forms|updates`. For a Pressable site, `traffic`/`bans` fall back to `overview` (no SSH/server access to source either from). |
+| GET | `/sites/{site}/backups-history` | JSON backup history. Returns DigitalOcean Spaces backup runs and S3 Glacier Relay long-term archives for the Backups widget snapshots modal. |
 | GET | `/search/sites` | JSON site search (focused with `/`). |
 | PATCH | `/sites/{site}/cert` · POST `/cert/recheck` | SSL source + recheck. |
 | POST | `/sites/{site}/uptime/recheck` | On-demand uptime probe for one site. |

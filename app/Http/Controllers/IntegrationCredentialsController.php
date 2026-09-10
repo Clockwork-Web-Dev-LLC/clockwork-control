@@ -9,6 +9,7 @@ use App\Support\CredentialResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Modules\Core\ModuleDirectoryClient;
@@ -174,6 +175,7 @@ class IntegrationCredentialsController extends Controller
                 $nowSource = $resolver->source($path);
                 if ($wasSource !== $nowSource) {
                     $diff[$path] = ['was' => $wasSource, 'now' => $nowSource];
+                    Cache::forget("integration_test_result:{$id}");
                 }
             }
         }
@@ -221,6 +223,24 @@ class IntegrationCredentialsController extends Controller
         }
 
         $result = $check->run();
+
+        Cache::put("integration_test_result:{$canonicalId}", [
+            'status' => $result->status,
+            'summary' => $result->summary,
+            'detail' => $result->detail,
+            'duration_ms' => $result->durationMs,
+            'tested_at' => now()->timestamp,
+        ], now()->addDays(7));
+
+        if ($canonicalId !== $integration) {
+            Cache::put("integration_test_result:{$integration}", [
+                'status' => $result->status,
+                'summary' => $result->summary,
+                'detail' => $result->detail,
+                'duration_ms' => $result->durationMs,
+                'tested_at' => now()->timestamp,
+            ], now()->addDays(7));
+        }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

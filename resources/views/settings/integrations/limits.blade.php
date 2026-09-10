@@ -181,7 +181,7 @@
                                         <span>{{ $cred['guide'] }}</span>
                                         @if (!empty($cred['url']))
                                             <a href="{{ $cred['url'] }}" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1 font-medium">
-                                                <span>Get API Key</span>
+                                                <span>{{ $cred['url_label'] ?? (str_contains(strtolower($cred['label']), 'token') ? 'Get Token' : 'Get API Key') }}</span>
                                                 <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                                             </a>
                                         @endif

@@ -699,4 +699,21 @@ describe('cloud instance discovery & actions', function () {
             ->assertSee('Reconcile Hardware Specs')
             ->assertSee('Import as Standalone Server');
     });
+
+    it('does not render get api key link for non-api-key credential fields like cloudways account email', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('settings.integrations.limits', 'cloudways'));
+
+        $response->assertOk()
+            ->assertSee('Account Email')
+            ->assertSee('CLOCKWORK_CLOUDWAYS_EMAIL')
+            ->assertSee('Email address associated with your Cloudways account');
+
+        $content = $response->getContent();
+        // API Key field gets the link; Account Email does not offer a link to API keys
+        expect(substr_count($content, 'https://platform.cloudways.com/api'))->toBe(1)
+            ->and(substr_count($content, 'Get API Key'))->toBe(1);
+    });
 });
