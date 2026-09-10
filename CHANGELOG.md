@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-09-10
+
+### Added
+- **Outage fault attribution & SLA exemption**: Extended uptime incident tracking with root-cause fault classification (`provider`, `client_dns`, `domain_expired`, `third_party`, `client_requested`, `other`) and SLA exemption flags. Legitimate infrastructure failures count against contractual targets, while verified external blockers (e.g. client DNS modifications, expired domain registration, third-party API dependencies) are excused from SLA penalty.
+- **SLA calculations & reporting**: `UptimeStatsCalculator` now preserves contractual uptime percentages by isolating excused outages from downtime totals. An interactive outage inspection modal allows one-click classification with audit notes.
+- **Operations vs. Settings workspace split**: Reorganized administrative navigation into a dedicated **Operations** workspace (Capacity, Fleet Updates, Maintenance History, and Bulk Credentials) with subtab navigation, streamlining **Settings** into four clean configuration pillars (Configuration, Security & Scanning, Backups & Archival, System & Integrations).
+- **Gravatar profile avatars**: Added Gravatar integration for user profiles with automatic uppercase initial fallbacks, secure `sha256` hashing, and `no-referrer` / `lazy` loading policies.
+- **USWDS-style accessible tooltips**: Introduced a centralized floating singleton tooltip system modeled on the U.S. Web Design System, providing contextual guidance with accessible `aria-describedby` associations, directional positioning, and keyboard/focus management across status pills, action buttons, and operational metrics.
+
 ## [1.6.1] - 2026-09-09
 
 ### Fixed
