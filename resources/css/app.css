@@ -848,6 +848,34 @@ body {
 [data-layout-style="command-center"] .cw-top-header {
     border-bottom-color: var(--color-border-light);
 }
+[data-layout-style="command-center"] .cw-toolbar-inner {
+    max-width: 100% !important;
+}
+
+/* Header Dual-Layout Elements */
+.cw-top-brand {
+    display: flex;
+}
+.cw-top-cmd-search {
+    display: none;
+}
+.cw-top-jump-btn {
+    display: inline-flex;
+}
+
+@media (min-width: 1024px) {
+    /* In Command Center layout on desktop, the left sidebar rail already displays CLOCKWORK CONTROL */
+    /* Hide the top header brand lockup so we don't display Clockwork Control twice */
+    [data-layout-style="command-center"] .cw-top-brand {
+        display: none !important;
+    }
+    [data-layout-style="command-center"] .cw-top-cmd-search {
+        display: flex !important;
+    }
+    [data-layout-style="command-center"] .cw-top-jump-btn {
+        display: none !important;
+    }
+}
 
 /* 2. Command Center Specific Elements */
 .cmd-nav-item {

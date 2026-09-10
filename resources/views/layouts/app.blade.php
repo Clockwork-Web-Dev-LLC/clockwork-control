@@ -232,23 +232,35 @@
             <!-- Global Top Navigation Header -->
             <header class="cw-top-header border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-40 shadow-xs">
                 <!-- Tier 1: Primary Toolbar -->
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-                    <!-- Left: Brand (Modern) or Scope/Breadcrumb (Command Center) -->
+                <div class="cw-toolbar-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+                    <!-- Left: Brand (Modern Studio) or Command Search (Command Center) -->
                     <div class="flex items-center gap-3 min-w-0">
-                        <a href="{{ route('dashboard') }}" class="flex items-center gap-2.5">
+                        <a href="{{ route('dashboard') }}" class="cw-top-brand flex items-center gap-2.5 shrink-0">
                             <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-[var(--color-brand)] to-sky-400 flex items-center justify-center text-white shadow-xs">
                                 <i class="fa-solid fa-clock text-sm"></i>
                             </div>
                             <span class="font-display text-lg font-bold tracking-tight text-[var(--color-ink-strong)]">Clockwork Control</span>
                         </a>
+
+                        <div class="cw-top-cmd-search items-center gap-2">
+                            <button type="button"
+                                    @click="paletteOpen = true"
+                                    class="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)]/60 text-xs text-[var(--color-ink-muted)] hover:border-[var(--color-brand)] focus:outline-none transition-all cursor-pointer shadow-2xs w-64 sm:w-80">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fa-solid fa-magnifying-glass text-[var(--color-ink-soft)] text-xs"></i>
+                                    <span class="truncate">Search fleet, commands, servers…</span>
+                                </div>
+                                <kbd class="cmd-kbd">⌘K</kbd>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Right Controls: ⌘K Palette, Layout Switcher, Font Stepper, Theme, Profile -->
                     <div class="flex items-center gap-2 sm:gap-3">
-                        <!-- Quick Jump / Command Palette Button -->
+                        <!-- Quick Jump / Command Palette Button (Modern Studio) -->
                         <button type="button"
                                 @click="paletteOpen = true"
-                                class="hidden sm:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-alt)] text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer"
+                                class="cw-top-jump-btn hidden sm:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-alt)] text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer"
                                 title="Quick Command Palette (⌘K)">
                             <i class="fa-solid fa-terminal text-[11px]"></i>
                             <span>Jump</span>
