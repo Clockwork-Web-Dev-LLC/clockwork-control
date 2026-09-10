@@ -10,7 +10,7 @@ test('guests are redirected to login from /settings', function () {
         ->assertRedirect(route('login'));
 });
 
-test('authenticated operators can access /settings hub with all 4 categories', function () {
+test('authenticated operators can access /settings hub with all categories', function () {
     $this->mockIssueCounterZero();
     $user = User::factory()->create();
 
@@ -18,13 +18,15 @@ test('authenticated operators can access /settings hub with all 4 categories', f
 
     $response->assertOk()
         ->assertSee('Settings &amp; Operations', false)
-        ->assertSee('Fleet &amp; Branding', false)
+        ->assertSee('Agency Branding', false)
+        ->assertSee('Fleet Policies', false)
         ->assertSee('Integrations &amp; Alerts', false)
         ->assertSee('Operations &amp; Tools', false)
         ->assertSee('System &amp; Workspace', false)
         // Check key destinations are present
         ->assertSee(route('settings.companion.index'))
         ->assertSee(route('settings.tags.index'))
+        ->assertSee(route('settings.wordpress-plugins.index'))
         ->assertSee(route('settings.integrations.index'))
         ->assertSee(route('settings.modules.index'))
         ->assertSee(route('capacity.index'))
@@ -41,7 +43,8 @@ test('settings tabs partial renders correctly', function () {
 
     $response->assertOk()
         ->assertSee('Overview')
-        ->assertSee('Fleet &amp; Branding', false)
+        ->assertSee('Agency Branding', false)
+        ->assertSee('Fleet Policies', false)
         ->assertSee('Integrations &amp; Alerts', false)
         ->assertSee('System &amp; Workspace', false);
 });
@@ -58,40 +61,47 @@ test('module directory renders with search input in header and tabs', function (
         ->assertSee('Integrations &amp; Alerts', false);
 });
 
-test('settings pages render persistent two-tier navigation', function () {
+test('settings pages render persistent navigation', function () {
     $this->mockIssueCounterZero();
     $user = User::factory()->create();
 
-    // 1. Fleet & Branding (White Labeling)
+    // 1. Agency Branding (White Labeling)
     $response = $this->actingAs($user)->get(route('settings.companion.index'));
     $response->assertOk()
-        ->assertSee('Fleet &amp; Branding', false)
-        ->assertSee('White Labeling')
-        ->assertSee('Server Tags')
-        ->assertSee('WordPress Plugins');
+        ->assertSee('Agency Branding', false)
+        ->assertSee('White Label &amp; Styling Hub', false);
 
-    // 2. Integrations & Alerts
+    // 2. Fleet Policies (WordPress Plugins)
+    $response = $this->actingAs($user)->get(route('settings.wordpress-plugins.index'));
+    $response->assertOk()
+        ->assertSee('Fleet Policies', false)
+        ->assertSee('WordPress Plugins')
+        ->assertSee('Scheduling &amp; Ingest', false)
+        ->assertSee('Security Scans')
+        ->assertSee('Backup Relay');
+
+    // 3. Integrations & Alerts
     $response = $this->actingAs($user)->get(route('settings.integrations.index'));
     $response->assertOk()
         ->assertSee('Integrations &amp; Alerts', false)
         ->assertSee('API Credentials')
         ->assertSee('Module Directory');
 
-    // 3. System & Workspace (Users)
+    // 4. System & Workspace (Users)
     $response = $this->actingAs($user)->get(route('settings.users.index'));
     $response->assertOk()
         ->assertSee('System &amp; Workspace', false)
         ->assertSee('Team &amp; Users', false)
         ->assertSee('Database Maintenance');
 
-    // 4. System Updates
+    // 5. System Updates
     $response = $this->actingAs($user)->get(route('settings.updates.index'));
     $response->assertOk()
         ->assertSee('System &amp; Workspace', false)
         ->assertSee('System Updates')
         ->assertSee('Database Maintenance');
 
-    // 5. Diagnostics
+    // 6. Diagnostics
     $response = $this->actingAs($user)->get(route('settings.diagnostics.index'));
     $response->assertOk()
         ->assertSee('System &amp; Workspace', false)

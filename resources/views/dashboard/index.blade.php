@@ -94,6 +94,9 @@
                     </button>
                 </form>
             @endif
+            <a href="{{ route('settings.tags.index') }}" class="btn-pill-nav text-xs ml-1 sm:ml-2" title="Manage server environment tags">
+                <i class="fa-solid fa-tags"></i> <span>Manage Tags</span>
+            </a>
             <a href="{{ route('servers.create') }}" class="btn-primary text-xs ml-1 sm:ml-2">
                 <i class="fa-solid fa-plus"></i> <span>Add Server</span>
             </a>
@@ -258,8 +261,8 @@
         </div>
 
         <!-- Tag Filters -->
-        @if ($tags->isNotEmpty())
-            <div class="flex items-center gap-1.5 flex-wrap text-xs">
+        <div class="flex items-center gap-1.5 flex-wrap text-xs">
+            @if ($tags->isNotEmpty())
                 @foreach ($tags as $tag)
                     @php $isActive = $activeTag && $activeTag->id === $tag->id; @endphp
                     <a href="{{ route('dashboard', $isActive ? [] : ['tag' => $tag->slug]) }}"
@@ -270,8 +273,15 @@
                         <span class="opacity-60 text-[10px]">({{ $tag->servers_count }})</span>
                     </a>
                 @endforeach
-            </div>
-        @endif
+            @endif
+
+            <a href="{{ route('settings.tags.index') }}"
+               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors border border-dashed border-[var(--color-border)]"
+               title="Manage or add server tags">
+                <i class="fa-solid fa-tags text-[10px]"></i>
+                <span>Manage Tags</span>
+            </a>
+        </div>
 
         <!-- View Switcher (Cards vs Data Grid Table) -->
         <div class="inline-flex items-center p-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)]/60 text-xs ml-auto">

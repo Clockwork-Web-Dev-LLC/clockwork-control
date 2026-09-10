@@ -33,32 +33,32 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {{-- 1. Fleet & Branding --}}
+        {{-- 1. Agency Branding --}}
         <div class="card p-5 flex flex-col justify-between"
-             x-show="matches('fleet branding companion white label tags wordpress plugins ingest scheduling security scans backup relay')">
+             x-show="matches('agency branding companion white label mu plugin logo palette colors reports email')">
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
-                            <i class="fa-solid fa-sliders"></i>
+                        <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-100/80 dark:border-purple-900/40 flex items-center justify-center text-sm shadow-2xs">
+                            <i class="fa-solid fa-paintbrush"></i>
                         </div>
                         <div>
-                            <h2 class="text-sm font-semibold text-[var(--color-ink-strong)]">Fleet &amp; Branding</h2>
-                            <p class="text-xs text-[var(--color-ink-muted)]">Customization and policies applied across monitored sites</p>
+                            <h2 class="text-sm font-semibold text-[var(--color-ink-strong)]">Agency Branding</h2>
+                            <p class="text-xs text-[var(--color-ink-muted)]">White-labeling, brand colors, and client-facing styling</p>
                         </div>
                     </div>
-                    <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border-light)]">Fleet</span>
+                    <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border-light)]">Branding</span>
                 </div>
 
                 <div class="divide-y divide-[var(--color-border-light)]">
                     <a href="{{ route('settings.companion.index') }}"
-                       x-show="matches('white labeling companion white label mu plugin branding logo reports email')"
+                       x-show="matches('white labeling companion white label mu plugin branding logo palette reports email')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
                         <div class="flex items-start gap-3 min-w-0">
-                            <i class="fa-solid fa-paintbrush text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
+                            <i class="fa-solid fa-palette text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
                             <div class="min-w-0">
-                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">White Labeling</div>
-                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Brand WordPress admin, Client Reports, and notification emails</div>
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">White Label &amp; Styling Hub</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Master Agency Palette, WordPress admin Companion, Client Reports, and notification emails</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0 ml-3">
@@ -68,25 +68,28 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform"></i>
                         </div>
                     </a>
+                </div>
+            </div>
+        </div>
 
-                    <a href="{{ route('settings.tags.index') }}"
-                       x-show="matches('server tags labels production staging environment')"
-                       class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
-                        <div class="flex items-start gap-3 min-w-0">
-                            <i class="fa-solid fa-tags text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
-                            <div class="min-w-0">
-                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Server Tags</div>
-                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Color-coded environment categories (Production, Staging, Shared)</div>
-                            </div>
+        {{-- 2. Fleet Policies --}}
+        <div class="card p-5 flex flex-col justify-between"
+             x-show="matches('fleet policies wordpress plugins ingest scheduling security scans backup relay tags labels')">
+            <div>
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 flex items-center justify-center text-sm shadow-2xs">
+                            <i class="fa-solid fa-sliders"></i>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
-                            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]">
-                                {{ $tagsCount }} {{ Str::plural('tag', $tagsCount) }}
-                            </span>
-                            <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform"></i>
+                        <div>
+                            <h2 class="text-sm font-semibold text-[var(--color-ink-strong)]">Fleet Policies</h2>
+                            <p class="text-xs text-[var(--color-ink-muted)]">Automated policies and remote site operations across the fleet</p>
                         </div>
-                    </a>
+                    </div>
+                    <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] border border-[var(--color-border-light)]">Fleet</span>
+                </div>
 
+                <div class="divide-y divide-[var(--color-border-light)]">
                     <a href="{{ route('settings.wordpress-plugins.index') }}"
                        x-show="matches('wordpress plugins curated mu-plugins catalog')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
@@ -137,6 +140,24 @@
                             </div>
                         </div>
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
+                    </a>
+
+                    <a href="{{ route('settings.tags.index') }}"
+                       x-show="matches('server tags labels production staging environment')"
+                       class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <i class="fa-solid fa-tags text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Server Tags</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Color-coded environment categories for the dashboard</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]">
+                                {{ $tagsCount }} {{ Str::plural('tag', $tagsCount) }}
+                            </span>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform"></i>
+                        </div>
                     </a>
                 </div>
             </div>

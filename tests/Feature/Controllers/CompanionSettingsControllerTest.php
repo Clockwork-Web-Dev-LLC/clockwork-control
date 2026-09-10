@@ -172,12 +172,17 @@ describe('CompanionSettingsController', function () {
             $logoUrl = app(CompanionBrandingManager::class)->get()['logo_url'];
             expect($logoUrl)->not->toBe('');
 
-            // The real settings.companion form has no logo_url field at all —
-            // this mirrors that by never mentioning it.
+            $logoPath = 'branding/'.basename((string) parse_url($logoUrl, PHP_URL_PATH));
+            Storage::disk('public')->assertExists($logoPath);
+
+            // The Companion form always posts logo_url. Re-saving the uploaded
+            // URL must keep the file on disk.
             $this->actingAs($user)->patch(route('settings.companion.update'), [
                 'company_name' => 'Renamed Agency',
+                'logo_url' => $logoUrl,
             ]);
 
+            Storage::disk('public')->assertExists($logoPath);
             expect(app(CompanionBrandingManager::class)->get()['logo_url'])->toBe($logoUrl);
         });
     });
@@ -553,6 +558,86 @@ describe('CompanionSettingsController', function () {
                 ->and($renderedHtml)->toContain('Urgent CVE Alert')
                 ->and($renderedHtml)->toContain('Custom Care Ops')
                 ->and($renderedHtml)->toContain('24/7 Security Hotline: (800) 555-0199');
+        });
+    });
+
+    describe('master palette and companion colors controller handling', function () {
+        it('saves companion primary and accent colors', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'companion',
+                'primary_color' => '#4F46E5',
+                'accent_color' => '#10B981',
+            ]);
+
+            $response->assertRedirect(route('settings.companion.index'));
+            $manager = app(CompanionBrandingManager::class);
+            $branding = $manager->get();
+
+            expect($branding['primary_color'])->toBe('#4F46E5')
+                ->and($branding['accent_color'])->toBe('#10B981');
+        });
+
+        it('saves master palette and cascades to all 3 surfaces', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'master',
+                'primary_color' => '#0F172A',
+                'accent_color' => '#F59E0B',
+                'apply_to_all' => '1',
+            ]);
+
+            $response->assertRedirect(route('settings.companion.index', ['tab' => 'companion']));
+            $manager = app(CompanionBrandingManager::class);
+
+            expect($manager->getMasterPalette()['primary_color'])->toBe('#0F172A')
+                ->and($manager->getMasterPalette()['accent_color'])->toBe('#F59E0B')
+                ->and($manager->get()['primary_color'])->toBe('#0F172A')
+                ->and($manager->getReportsBranding()['primary_color'])->toBe('#0F172A')
+                ->and($manager->getEmailBranding()['header_bg'])->toBe('#0F172A');
+        });
+
+        it('supports both POST and PATCH methods for AJAX master palette save', function () {
+            $user = User::factory()->create();
+
+            $responsePost = $this->actingAs($user)->postJson(route('settings.companion.update'), [
+                'tab' => 'master',
+                'primary_color' => '#2D2062',
+                'accent_color' => '#7EFF83',
+                'apply_to_all' => false,
+            ]);
+
+            $responsePost->assertOk()
+                ->assertJson(['success' => true]);
+
+            $responsePatch = $this->actingAs($user)->patchJson(route('settings.companion.update'), [
+                'tab' => 'master',
+                'primary_color' => '#18181B',
+                'accent_color' => '#38BDF8',
+                'apply_to_all' => false,
+            ]);
+
+            $responsePatch->assertOk()
+                ->assertJson(['success' => true]);
+        });
+
+        it('rejects non-hex brand colors', function () {
+            $user = User::factory()->create();
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'companion',
+                'primary_color' => 'red; } body { display:none',
+                'accent_color' => '#7EFF83',
+            ])->assertSessionHasErrors(['primary_color']);
+
+            $this->actingAs($user)->patchJson(route('settings.companion.update'), [
+                'tab' => 'master',
+                'primary_color' => '#2D2062',
+                'accent_color' => 'not-a-color',
+            ])->assertUnprocessable()
+                ->assertJsonValidationErrors(['accent_color']);
         });
     });
 });

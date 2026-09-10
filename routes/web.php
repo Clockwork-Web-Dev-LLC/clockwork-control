@@ -321,7 +321,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Companion white-label branding & customization settings
     Route::get('/settings/companion', [CompanionSettingsController::class, 'index'])->name('settings.companion.index');
     Route::get('/settings/companion/preview', [CompanionSettingsController::class, 'preview'])->name('settings.companion.preview');
-    Route::patch('/settings/companion', [CompanionSettingsController::class, 'update'])->name('settings.companion.update');
+    Route::match(['patch', 'post'], '/settings/companion', [CompanionSettingsController::class, 'update'])->name('settings.companion.update');
     Route::post('/settings/companion/logo', [CompanionSettingsController::class, 'uploadLogo'])->name('settings.companion.logo');
     Route::post('/settings/companion/sync', [CompanionSettingsController::class, 'sync'])->name('settings.companion.sync');
     Route::post('/settings/companion/reset', [CompanionSettingsController::class, 'reset'])->name('settings.companion.reset');

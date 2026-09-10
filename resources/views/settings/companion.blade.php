@@ -4,47 +4,100 @@
 
 @section('content')
     <div x-data="{
-        activeTab: '{{ $activeTab }}',
+        activeTab: @js($activeTab),
 
         {{-- Companion state --}}
-        enabled: {{ $branding['enabled'] ? 'true' : 'false' }},
-        companyName: '{{ addslashes($branding['company_name']) }}',
-        companyUrl: '{{ addslashes($branding['company_url']) }}',
-        supportEmail: '{{ addslashes($branding['support_email']) }}',
-        supportUrl: '{{ addslashes($branding['support_url']) }}',
-        pluginName: '{{ addslashes($branding['plugin_name']) }}',
-        pluginDescription: '{{ addslashes($branding['plugin_description']) }}',
-        menuTitle: '{{ addslashes($branding['menu_title']) }}',
-        menuIcon: '{{ addslashes($branding['menu_icon']) }}',
-        logoUrl: '{{ addslashes($branding['logo_url']) }}',
-        hidePluginRow: {{ $branding['hide_plugin_row'] ? 'true' : 'false' }},
-        hideHelpLinks: {{ $branding['hide_help_links'] ? 'true' : 'false' }},
-        footerText: '{{ addslashes($branding['footer_text']) }}',
+        enabled: @js((bool) $branding['enabled']),
+        companyName: @js($branding['company_name']),
+        companyUrl: @js($branding['company_url']),
+        supportEmail: @js($branding['support_email']),
+        supportUrl: @js($branding['support_url']),
+        pluginName: @js($branding['plugin_name']),
+        pluginDescription: @js($branding['plugin_description']),
+        menuTitle: @js($branding['menu_title']),
+        menuIcon: @js($branding['menu_icon']),
+        brandText: @js($branding['brand_text'] ?? 'Companion'),
+        logoUrl: @js($branding['logo_url']),
+        primaryColor: @js($branding['primary_color'] ?? '#2D2062'),
+        accentColor: @js($branding['accent_color'] ?? '#7EFF83'),
+        hidePluginRow: @js((bool) $branding['hide_plugin_row']),
+        hideHelpLinks: @js((bool) $branding['hide_help_links']),
+        footerText: @js($branding['footer_text']),
         previewTab: 'screen',
         syncing: false,
 
+        {{-- Master Agency Palette state --}}
+        masterPrimaryColor: @js($masterPalette['primary_color'] ?? '#2D2062'),
+        masterAccentColor: @js($masterPalette['accent_color'] ?? '#7EFF83'),
+        masterSaving: false,
+        masterMessage: null,
+
+        applyMasterToAll() {
+            this.primaryColor = this.masterPrimaryColor;
+            this.accentColor = this.masterAccentColor;
+            this.reportsPrimaryColor = this.masterPrimaryColor;
+            this.reportsAccentColor = this.masterAccentColor;
+            this.emailHeaderBg = this.masterPrimaryColor;
+            this.emailAccentColor = this.masterAccentColor;
+        },
+
+        async saveMaster(applyToAll = false) {
+            this.masterSaving = true;
+            this.masterMessage = null;
+            try {
+                const res = await fetch('{{ route('settings.companion.update') }}', {
+                    method: 'PATCH',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tab: 'master',
+                        primary_color: this.masterPrimaryColor,
+                        accent_color: this.masterAccentColor,
+                        apply_to_all: applyToAll ? 1 : 0,
+                    }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                    if (applyToAll) {
+                        this.applyMasterToAll();
+                    }
+                    this.masterMessage = { ok: true, text: data.message };
+                    setTimeout(() => { this.masterMessage = null; }, 4000);
+                } else {
+                    this.masterMessage = { ok: false, text: data.message || 'Failed to save master palette.' };
+                }
+            } catch (e) {
+                this.masterMessage = { ok: false, text: 'Request failed: ' + e.message };
+            } finally {
+                this.masterSaving = false;
+            }
+        },
+
         {{-- Reports state --}}
-        reportsEnabled: {{ $reportsBranding['enabled'] ? 'true' : 'false' }},
-        reportsCompanyName: '{{ addslashes($reportsBranding['company_name']) }}',
-        reportsSupportEmail: '{{ addslashes($reportsBranding['support_email']) }}',
-        reportsSupportUrl: '{{ addslashes($reportsBranding['support_url']) }}',
-        reportsPrimaryColor: '{{ addslashes($reportsBranding['primary_color']) }}',
-        reportsAccentColor: '{{ addslashes($reportsBranding['accent_color']) }}',
-        reportsFooterText: '{{ addslashes($reportsBranding['footer_text']) }}',
+        reportsEnabled: @js((bool) $reportsBranding['enabled']),
+        reportsCompanyName: @js($reportsBranding['company_name']),
+        reportsSupportEmail: @js($reportsBranding['support_email']),
+        reportsSupportUrl: @js($reportsBranding['support_url']),
+        reportsPrimaryColor: @js($reportsBranding['primary_color']),
+        reportsAccentColor: @js($reportsBranding['accent_color']),
+        reportsFooterText: @js($reportsBranding['footer_text']),
 
         {{-- Email notification state --}}
-        emailEnabled: {{ $emailBranding['enabled'] ? 'true' : 'false' }},
-        emailCompanyName: '{{ addslashes($emailBranding['company_name']) }}',
-        emailSenderName: '{{ addslashes($emailBranding['sender_name']) }}',
-        emailReplyTo: '{{ addslashes($emailBranding['reply_to']) }}',
-        emailHeaderBg: '{{ addslashes($emailBranding['header_bg']) }}',
-        emailAccentColor: '{{ addslashes($emailBranding['accent_color']) }}',
-        emailBadgeText: '{{ addslashes($emailBranding['badge_text']) }}',
-        emailFooterText: '{{ addslashes($emailBranding['footer_text']) }}',
-        emailUseLogo: {{ $emailBranding['use_logo'] ? 'true' : 'false' }},
+        emailEnabled: @js((bool) $emailBranding['enabled']),
+        emailCompanyName: @js($emailBranding['company_name']),
+        emailSenderName: @js($emailBranding['sender_name']),
+        emailReplyTo: @js($emailBranding['reply_to']),
+        emailHeaderBg: @js($emailBranding['header_bg']),
+        emailAccentColor: @js($emailBranding['accent_color']),
+        emailBadgeText: @js($emailBranding['badge_text']),
+        emailFooterText: @js($emailBranding['footer_text']),
+        emailUseLogo: @js((bool) $emailBranding['use_logo']),
 
         {{-- Test email sender state --}}
-        testRecipient: '{{ auth()->user()->email ?? 'admin@example.com' }}',
+        testRecipient: @js(auth()->user()->email ?? 'admin@example.com'),
         testSending: false,
         testResult: null,
 
@@ -170,6 +223,74 @@
             </div>
         </div>
 
+        {{-- Master Agency Palette Quick-Bar --}}
+        <div class="card p-5 mb-6 max-w-6xl bg-gradient-to-r from-[var(--color-surface)] via-[var(--color-surface)] to-indigo-50/20 dark:to-indigo-950/20 border border-[var(--color-border)] shadow-xs">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm font-semibold">
+                            <i class="fa-solid fa-palette"></i>
+                        </span>
+                        <h2 class="text-sm font-bold text-[var(--color-ink-strong)]">Master Agency Brand Palette</h2>
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">Global Control</span>
+                    </div>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-1">
+                        Control brand colors across all three surfaces. <strong>Apply to All 3 Hubs</strong> copies into the forms below (unsaved). <strong>Save Master</strong> stores the palette only. <strong>Save &amp; Cascade All</strong> writes Master plus Companion, Reports, and Email in the database — WordPress sites still need Sync Fleet / Companion save-with-push.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" 
+                        @click="applyMasterToAll()" 
+                        class="btn-pill-nav text-xs inline-flex items-center gap-2 bg-indigo-600! text-white! hover:bg-indigo-700! cursor-pointer shadow-xs"
+                        title="Copy master colors into the three hub forms. You still need to save each tab, or use Save &amp; Cascade All.">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Apply to All 3 Hubs</span>
+                    </button>
+                    <button type="button" 
+                        @click="saveMaster(false)" 
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        :disabled="masterSaving">
+                        <i class="fa-solid" :class="masterSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk text-[var(--color-ink-muted)]'"></i>
+                        <span x-text="masterSaving ? 'Saving...' : 'Save Master'"></span>
+                    </button>
+                    <button type="button" 
+                        @click="saveMaster(true)" 
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        :disabled="masterSaving"
+                        title="Save Master Palette and immediately save to all 3 surfaces in the database">
+                        <i class="fa-solid fa-bolt text-amber-500"></i>
+                        <span>Save &amp; Cascade All</span>
+                    </button>
+                </div>
+            </div>
+
+            {{-- Message toast if master saved --}}
+            <template x-if="masterMessage">
+                <div class="mt-3 p-2.5 rounded-lg text-xs flex items-center gap-2"
+                     :class="masterMessage.ok ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'">
+                    <i class="fa-solid" :class="masterMessage.ok ? 'fa-circle-check text-emerald-600' : 'fa-circle-xmark text-rose-600'"></i>
+                    <span x-text="masterMessage.text"></span>
+                </div>
+            </template>
+
+            <div class="mt-4 pt-4 border-t border-[var(--color-border-light)] grid grid-cols-1 md:grid-cols-2 gap-6">
+                <x-color-picker 
+                    model="masterPrimaryColor" 
+                    label="Master Primary Brand Color" 
+                    help="Default for Companion header bar, Client Report covers/titles, and notification email headers."
+                    presetType="primary"
+                    placeholder="#2D2062" />
+
+                <x-color-picker 
+                    model="masterAccentColor" 
+                    label="Master Accent &amp; Highlight Color" 
+                    help="Default accent for status pills, badge highlights, and decorative border lines."
+                    presetType="accent"
+                    placeholder="#7EFF83" />
+            </div>
+        </div>
+
         {{-- White Labeling Surface Selector (Segmented Pill Control) --}}
         <div class="inline-flex items-center p-1 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] mb-6 overflow-x-auto max-w-full">
             <button type="button" @click="activeTab = 'companion'"
@@ -261,6 +382,19 @@
                                 class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
                                 placeholder="https://clients.youragency.com/tickets">
                         </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)]">Header Logo Image URL <span class="text-slate-400 font-normal">(optional)</span></label>
+                                <button type="button" @click="logoUrl = 'https://clockworkwd.com/wp-content/mu-plugins/clockwork-companion/assets/clockwork-logo.png'" class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer">
+                                    Use Clockwork Logo URL
+                                </button>
+                            </div>
+                            <input type="url" name="logo_url" x-model="logoUrl"
+                                class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
+                                placeholder="https://clockworkwd.com/wp-content/mu-plugins/clockwork-companion/assets/clockwork-logo.png">
+                            <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Direct URL to your brand logo. Avoids manual file uploads and synchronizes across the entire fleet.</p>
+                        </div>
                     </div>
 
                     <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
@@ -309,6 +443,14 @@
                         </div>
 
                         <div>
+                            <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Header Brand Text <span class="text-slate-400 font-normal">(displayed next to logo)</span></label>
+                            <input type="text" name="brand_text" x-model="brandText"
+                                class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
+                                placeholder="Companion">
+                            <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Text shown next to the logo in the dark header bar (default: <code>Companion</code>).</p>
+                        </div>
+
+                        <div>
                             <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Admin Footer Notice / Custom Credit <span class="text-slate-400 font-normal">(optional)</span></label>
                             <input type="text" name="footer_text" x-model="footerText"
                                 class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)]"
@@ -316,8 +458,38 @@
                         </div>
                     </div>
 
+                    {{-- Section 4: Brand Palette & Accents --}}
+                    <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">4. Brand Palette &amp; Accents</h3>
+                            <button type="button" 
+                                @click="primaryColor = masterPrimaryColor; accentColor = masterAccentColor"
+                                class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Match Master Palette
+                            </button>
+                        </div>
+
+                        <x-color-picker 
+                            name="primary_color" 
+                            model="primaryColor" 
+                            label="Primary Brand Color (Header Band &amp; Main Elements)"
+                            help="Sets the background color of the top header band in the client's WordPress admin dashboard."
+                            presetType="primary"
+                            masterModel="masterPrimaryColor"
+                            placeholder="#2D2062" />
+
+                        <x-color-picker 
+                            name="accent_color" 
+                            model="accentColor" 
+                            label="Accent &amp; Status Highlight Color"
+                            help="Used for badges, highlights, and accent touches across the Companion interface."
+                            presetType="accent"
+                            masterModel="masterAccentColor"
+                            placeholder="#7EFF83" />
+                    </div>
+
                     <div class="border-t border-[var(--color-border-light)] pt-5 space-y-3">
-                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">4. Client Access &amp; Visibility Controls</h3>
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">5. Client Access &amp; Visibility Controls</h3>
 
                         <label class="flex items-start gap-3 cursor-pointer">
                             <input type="checkbox" name="hide_plugin_row" value="1" x-model="hidePluginRow"
@@ -426,21 +598,21 @@
                         {{-- VIEW 1: Full Companion Plugin Screen Mockup --}}
                         <div x-show="previewTab === 'screen'" class="space-y-4">
                             <div class="bg-white text-slate-900 rounded-lg overflow-hidden border border-slate-200 shadow-md">
-                                <div class="bg-[#2D2062] text-white p-3.5 flex items-center justify-between">
+                                <div class="text-white p-3.5 flex items-center justify-between transition-colors" :style="'background-color:' + (primaryColor || '#2D2062')">
                                     <div class="flex items-center gap-2.5">
                                         <template x-if="logoUrl">
-                                            <img :src="logoUrl" alt="Brand Logo" class="h-6 max-w-[120px] object-contain">
+                                            <img :src="logoUrl" alt="Brand Logo" class="h-6 max-w-[140px] object-contain">
                                         </template>
                                         <template x-if="!logoUrl">
                                             <div class="w-6 h-6 rounded bg-indigo-500 text-white flex items-center justify-center font-bold text-xs" x-text="(companyName || 'C').charAt(0)"></div>
                                         </template>
-                                        <span class="text-xs uppercase tracking-wide text-white/80 font-medium" x-text="(menuTitle || 'Clockwork') + ' Companion'"></span>
+                                        <span class="text-xs uppercase tracking-wide text-white/70 font-medium" x-text="brandText || 'Companion'"></span>
                                     </div>
 
                                     <div class="flex items-center gap-2">
                                         <template x-if="!hideHelpLinks">
                                             <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-white/10 text-white border border-white/20">
-                                                <i class="fa-solid fa-headset mr-1"></i> Get Support
+                                                Get Support
                                             </span>
                                         </template>
                                         <span class="text-[10px] font-mono text-white/50">v1.34.0</span>
@@ -451,35 +623,45 @@
                                     <span class="py-2 font-semibold text-indigo-700 border-b-2 border-indigo-600 whitespace-nowrap">Activity</span>
                                     <span class="py-2 text-slate-500 whitespace-nowrap">Uptime</span>
                                     <span class="py-2 text-slate-500 whitespace-nowrap">Security</span>
+                                    <span class="py-2 text-slate-500 whitespace-nowrap">2FA</span>
+                                    <span class="py-2 text-slate-500 whitespace-nowrap">Performance</span>
+                                    <span class="py-2 text-slate-500 whitespace-nowrap">Traffic</span>
+                                    <span class="py-2 text-slate-500 whitespace-nowrap">Forms</span>
                                     <span class="py-2 text-slate-500 whitespace-nowrap">Backups</span>
+                                    <span class="py-2 text-slate-500 whitespace-nowrap">Notifications</span>
                                 </div>
 
                                 <div class="p-3.5 space-y-3 bg-slate-50">
-                                    <div class="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
-                                        <div>
-                                            <div class="text-xs font-bold text-slate-900" x-text="'Managed by ' + (companyName || 'Clockwork Web Dev')"></div>
-                                            <div class="text-[11px] text-slate-500 mt-0.5">24/7 site monitoring &amp; maintenance active</div>
-                                        </div>
-                                        <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">Care Active</span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-slate-900">Activity</h3>
+                                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'A log of the maintenance work ' + (companyName || 'Clockwork Web Dev') + ' has performed on this site.'"></p>
                                     </div>
 
-                                    <div class="grid grid-cols-3 gap-2 text-center">
-                                        <div class="bg-white p-2 rounded border border-slate-200">
-                                            <div class="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Uptime</div>
-                                            <div class="text-xs font-bold text-emerald-600 mt-0.5">99.98%</div>
+                                    <div class="bg-indigo-50 border border-indigo-100 p-2.5 rounded-lg flex items-center gap-2.5">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-indigo-600 text-xs"></i>
+                                        <div class="text-[11px] text-indigo-900">
+                                            <span class="font-semibold">You're on a care plan.</span>
+                                            <span class="text-indigo-700">Sit back and relax — everything below is handled for you and fully covered by your plan.</span>
                                         </div>
-                                        <div class="bg-white p-2 rounded border border-slate-200">
-                                            <div class="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Security</div>
-                                            <div class="text-xs font-bold text-indigo-600 mt-0.5">Protected</div>
-                                        </div>
-                                        <div class="bg-white p-2 rounded border border-slate-200">
-                                            <div class="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Backups</div>
-                                            <div class="text-xs font-bold text-slate-800 mt-0.5">Daily Offsite</div>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5 text-[10px] font-medium pt-1">
+                                        <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600">May 2026</span>
+                                        <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600">Jun 2026</span>
+                                        <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600">Jul 2026</span>
+                                        <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600">Aug 2026</span>
+                                        <span class="px-2 py-0.5 rounded bg-indigo-700 text-white">Sep 2026</span>
+                                    </div>
+
+                                    <div class="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+                                        <div>
+                                            <div class="text-base font-bold text-slate-900">39 <span class="text-xs font-normal text-slate-500">actions this month</span></div>
+                                            <div class="text-[10px] text-indigo-600 mt-0.5">&starf; Run automatically — all part of your care plan</div>
                                         </div>
                                     </div>
 
                                     <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-200 flex items-center justify-between">
-                                        <span x-text="footerText || ('Maintained by ' + (companyName || 'Clockwork Web Dev, LLC'))"></span>
+                                        <span x-text="footerText || ('Maintained by ' + (companyName || 'Clockwork Web Dev'))"></span>
                                         <span class="text-slate-400">WP 6.7</span>
                                     </div>
                                 </div>
@@ -598,45 +780,32 @@
 
                             {{-- Section 2: Report Color Palette --}}
                             <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
-                                <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">2. Brand Palette &amp; Accents</h3>
-
-                                <div>
-                                    <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Primary Brand Color (Header &amp; Card Accents)</label>
-                                    <div class="flex items-center gap-3">
-                                        <input type="color" x-model="reportsPrimaryColor" class="w-9 h-9 p-0.5 rounded border border-slate-300 cursor-pointer">
-                                        <input type="text" name="primary_color" x-model="reportsPrimaryColor"
-                                            class="w-36 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md font-mono focus:outline-none focus:border-[var(--color-brand)]">
-                                        
-                                        {{-- Color Presets --}}
-                                        <div class="flex items-center gap-1.5 ml-2">
-                                            <button type="button" @click="reportsPrimaryColor = '#2D2062'" title="Clockwork Purple" class="w-6 h-6 rounded-full bg-[#2D2062] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsPrimaryColor = '#4F46E5'" title="Indigo" class="w-6 h-6 rounded-full bg-[#4F46E5] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsPrimaryColor = '#0F172A'" title="Slate Navy" class="w-6 h-6 rounded-full bg-[#0F172A] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsPrimaryColor = '#065F46'" title="Forest Green" class="w-6 h-6 rounded-full bg-[#065F46] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsPrimaryColor = '#334155'" title="Slate Gray" class="w-6 h-6 rounded-full bg-[#334155] border border-white shadow-xs cursor-pointer"></button>
-                                        </div>
-                                    </div>
-                                    <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Used for cover banner backgrounds, major titles, and metric cards.</p>
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">2. Brand Palette &amp; Accents</h3>
+                                    <button type="button" 
+                                        @click="reportsPrimaryColor = masterPrimaryColor; reportsAccentColor = masterAccentColor"
+                                        class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer flex items-center gap-1">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Match Master Palette
+                                    </button>
                                 </div>
 
-                                <div>
-                                    <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Accent Strip &amp; Highlight Color</label>
-                                    <div class="flex items-center gap-3">
-                                        <input type="color" x-model="reportsAccentColor" class="w-9 h-9 p-0.5 rounded border border-slate-300 cursor-pointer">
-                                        <input type="text" name="accent_color" x-model="reportsAccentColor"
-                                            class="w-36 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md font-mono focus:outline-none focus:border-[var(--color-brand)]">
-                                        
-                                        {{-- Color Presets --}}
-                                        <div class="flex items-center gap-1.5 ml-2">
-                                            <button type="button" @click="reportsAccentColor = '#7EFF83'" title="Mint Accent" class="w-6 h-6 rounded-full bg-[#7EFF83] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsAccentColor = '#10B981'" title="Emerald" class="w-6 h-6 rounded-full bg-[#10B981] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsAccentColor = '#F59E0B'" title="Amber" class="w-6 h-6 rounded-full bg-[#F59E0B] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsAccentColor = '#0EA5E9'" title="Sky Blue" class="w-6 h-6 rounded-full bg-[#0EA5E9] border border-white shadow-xs cursor-pointer"></button>
-                                            <button type="button" @click="reportsAccentColor = '#F43F5E'" title="Rose" class="w-6 h-6 rounded-full bg-[#F43F5E] border border-white shadow-xs cursor-pointer"></button>
-                                        </div>
-                                    </div>
-                                    <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Used for decorative accent bars, badges, and status highlights.</p>
-                                </div>
+                                <x-color-picker 
+                                    name="primary_color" 
+                                    model="reportsPrimaryColor" 
+                                    label="Primary Brand Color (Header &amp; Card Accents)"
+                                    help="Used for cover banner backgrounds, major titles, and metric cards."
+                                    presetType="primary"
+                                    masterModel="masterPrimaryColor"
+                                    placeholder="#2D2062" />
+
+                                <x-color-picker 
+                                    name="accent_color" 
+                                    model="reportsAccentColor" 
+                                    label="Accent Strip &amp; Highlight Color"
+                                    help="Used for decorative accent bars, badges, and status highlights."
+                                    presetType="accent"
+                                    masterModel="masterAccentColor"
+                                    placeholder="#7EFF83" />
                             </div>
 
                             {{-- Section 3: Footer & Disclaimer --}}
@@ -845,44 +1014,32 @@
 
                     {{-- Section 2: Header Styling & Color Palette --}}
                     <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
-                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">2. Header Styling &amp; Colors</h3>
-
-                        <div>
-                            <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Header Banner Background Color</label>
-                            <div class="flex items-center gap-3">
-                                <input type="color" x-model="emailHeaderBg" class="w-9 h-9 p-0.5 rounded border border-slate-300 cursor-pointer">
-                                <input type="text" name="header_bg" x-model="emailHeaderBg"
-                                    class="w-36 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md font-mono focus:outline-none focus:border-[var(--color-brand)]">
-                                
-                                {{-- Color Presets --}}
-                                <div class="flex items-center gap-1.5 ml-2">
-                                    <button type="button" @click="emailHeaderBg = '#2D2062'" title="Clockwork Purple" class="w-6 h-6 rounded-full bg-[#2D2062] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailHeaderBg = '#0F172A'" title="Slate Navy" class="w-6 h-6 rounded-full bg-[#0F172A] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailHeaderBg = '#1E1B4B'" title="Midnight Indigo" class="w-6 h-6 rounded-full bg-[#1E1B4B] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailHeaderBg = '#042F2E'" title="Dark Teal" class="w-6 h-6 rounded-full bg-[#042F2E] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailHeaderBg = '#18181B'" title="Zinc Charcoal" class="w-6 h-6 rounded-full bg-[#18181B] border border-white shadow-xs cursor-pointer"></button>
-                                </div>
-                            </div>
-                            <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Replaces the default deep purple header band on outgoing HTML security emails.</p>
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">2. Header Styling &amp; Colors</h3>
+                            <button type="button" 
+                                @click="emailHeaderBg = masterPrimaryColor; emailAccentColor = masterAccentColor"
+                                class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Match Master Palette
+                            </button>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Accent Strip Color</label>
-                            <div class="flex items-center gap-3">
-                                <input type="color" x-model="emailAccentColor" class="w-9 h-9 p-0.5 rounded border border-slate-300 cursor-pointer">
-                                <input type="text" name="accent_color" x-model="emailAccentColor"
-                                    class="w-36 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md font-mono focus:outline-none focus:border-[var(--color-brand)]">
-                                
-                                {{-- Color Presets --}}
-                                <div class="flex items-center gap-1.5 ml-2">
-                                    <button type="button" @click="emailAccentColor = '#7EFF83'" title="Mint / Lime" class="w-6 h-6 rounded-full bg-[#7EFF83] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailAccentColor = '#38BDF8'" title="Sky Blue" class="w-6 h-6 rounded-full bg-[#38BDF8] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailAccentColor = '#34D399'" title="Emerald" class="w-6 h-6 rounded-full bg-[#34D399] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailAccentColor = '#FBBF24'" title="Amber" class="w-6 h-6 rounded-full bg-[#FBBF24] border border-white shadow-xs cursor-pointer"></button>
-                                    <button type="button" @click="emailAccentColor = '#F43F5E'" title="Rose" class="w-6 h-6 rounded-full bg-[#F43F5E] border border-white shadow-xs cursor-pointer"></button>
-                                </div>
-                            </div>
-                        </div>
+                        <x-color-picker 
+                            name="header_bg" 
+                            model="emailHeaderBg" 
+                            label="Header Banner Background Color"
+                            help="Replaces the default deep purple header band on outgoing HTML security emails."
+                            presetType="primary"
+                            masterModel="masterPrimaryColor"
+                            placeholder="#2D2062" />
+
+                        <x-color-picker 
+                            name="accent_color" 
+                            model="emailAccentColor" 
+                            label="Accent Strip Color"
+                            help="Replaces the lime green accent line below the email header."
+                            presetType="accent"
+                            masterModel="masterAccentColor"
+                            placeholder="#7EFF83" />
 
                         <div>
                             <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Header Badge Label</label>

@@ -10,11 +10,11 @@
     <style>
         :root {
             --wp-admin-theme-color: #2271b1;
-            --cwk-primary: #6953C4;
-            --cwk-primary-dark: #2D2062;
-            --cwk-primary-soft: #D1C9F4;
+            --cwk-primary: {{ \App\Services\Companion\CompanionBrandingManager::deriveMediumTone($branding['primary_color'] ?? '#2D2062') }};
+            --cwk-primary-dark: {{ $branding['primary_color'] ?? '#2D2062' }};
+            --cwk-primary-soft: {{ \App\Services\Companion\CompanionBrandingManager::deriveSoftColor($branding['primary_color'] ?? '#2D2062') }};
             --cwk-page-bg: #FFFFFF;
-            --cwk-accent: #7EFF83;
+            --cwk-accent: {{ $branding['accent_color'] ?? '#7EFF83' }};
             --cwk-text: #212025;
             --cwk-text-muted: #5b5566;
             --cwk-text-soft: #8a8294;
@@ -386,22 +386,22 @@
                                 {{ substr($branding['company_name'] ?: 'C', 0, 1) }}
                             </div>
                         @endif
-                        <span class="clockwork-admin__brand-text">{{ $branding['menu_title'] ?: 'Clockwork' }} Companion</span>
+                        <span class="clockwork-admin__brand-text">{{ $branding['brand_text'] ?? 'Companion' }}</span>
                     </div>
 
                     <div style="display: flex; align-items: center; gap: 14px;">
                         @if (! $branding['hide_help_links'])
                             @if (! empty($branding['support_url']))
                                 <a href="{{ $branding['support_url'] }}" target="_blank" class="cwk-header-support-btn">
-                                    <i class="fa-solid fa-circle-question mr-1"></i> Get Support
+                                    Get Support
                                 </a>
                             @elseif (! empty($branding['support_email']))
-                                <a href="mailto:{{ $branding['support_email'] }}" class="cwk-header-support-btn">
-                                    <i class="fa-solid fa-envelope mr-1"></i> Contact {{ $branding['company_name'] ?: 'Support' }}
-                                </a>
+                                <button type="button" class="cwk-header-support-btn">
+                                    Get Support
+                                </button>
                             @else
                                 <button type="button" class="cwk-header-support-btn">
-                                    <i class="fa-solid fa-headset mr-1"></i> Get Support
+                                    Get Support
                                 </button>
                             @endif
                         @endif

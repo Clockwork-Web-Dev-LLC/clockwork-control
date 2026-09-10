@@ -10,11 +10,18 @@
             'active' => request()->routeIs('settings.index'),
         ],
         [
-            'key' => 'fleet',
-            'label' => 'Fleet & Branding',
-            'icon' => 'fa-sliders',
+            'key' => 'branding',
+            'label' => 'Agency Branding',
+            'icon' => 'fa-paintbrush',
             'route' => 'settings.companion.index',
-            'active' => request()->routeIs('settings.companion.*') || request()->routeIs('settings.tags.*') || request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*'),
+            'active' => request()->routeIs('settings.companion.*'),
+        ],
+        [
+            'key' => 'fleet',
+            'label' => 'Fleet Policies',
+            'icon' => 'fa-sliders',
+            'route' => 'settings.wordpress-plugins.index',
+            'active' => request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*') || request()->routeIs('settings.tags.*'),
         ],
         [
             'key' => 'integrations',
@@ -35,9 +42,10 @@
     $activeKey = collect($tabs)->firstWhere('active', true)['key'] ?? null;
 
     $categoryTools = [
+        'branding' => [
+            ['label' => 'White Label & Styling Hub', 'icon' => 'fa-solid fa-paintbrush', 'route' => 'settings.companion.index', 'active' => request()->routeIs('settings.companion.*')],
+        ],
         'fleet' => [
-            ['label' => 'White Labeling', 'icon' => 'fa-solid fa-paintbrush', 'route' => 'settings.companion.index', 'active' => request()->routeIs('settings.companion.*')],
-            ['label' => 'Server Tags', 'icon' => 'fa-solid fa-tags', 'route' => 'settings.tags.index', 'active' => request()->routeIs('settings.tags.*')],
             ['label' => 'WordPress Plugins', 'icon' => 'fa-brands fa-wordpress', 'route' => 'settings.wordpress-plugins.index', 'active' => request()->routeIs('settings.wordpress-plugins.*')],
             ['label' => 'Scheduling & Ingest', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'settings.ingest.index', 'active' => request()->routeIs('settings.ingest.*')],
             ['label' => 'Security Scans', 'icon' => 'fa-solid fa-shield-halved', 'route' => 'settings.security-scans.index', 'active' => request()->routeIs('settings.security-scans.*')],
@@ -78,8 +86,8 @@
         @endforeach
     </div>
 
-    {{-- Tier 2: Category Tools Ribbon (visible when viewing a specific section) --}}
-    @if (!empty($currentTools) && $activeKey !== 'hub')
+    {{-- Tier 2: Category Tools Ribbon (visible when viewing a multi-tool section) --}}
+    @if (!empty($currentTools) && count($currentTools) > 1 && $activeKey !== 'hub')
         <div class="p-1 rounded-xl bg-[var(--color-surface-alt)]/70 border border-[var(--color-border-light)] flex items-center gap-1 overflow-x-auto text-xs">
             @foreach ($currentTools as $tool)
                 <a href="{{ route($tool['route']) }}"

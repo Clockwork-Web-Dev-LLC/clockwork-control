@@ -30,6 +30,18 @@ class CompanionBrandingManager
 
     public const DEFAULT_MENU_ICON = 'dashicons-clock';
 
+    public const DEFAULT_BRAND_TEXT = 'Companion';
+
+    public const DEFAULT_LOGO_URL = 'https://clockworkwd.com/wp-content/mu-plugins/clockwork-companion/assets/clockwork-logo.png';
+
+    public const DEFAULT_PRIMARY_COLOR = '#2D2062';
+
+    public const DEFAULT_ACCENT_COLOR = '#7EFF83';
+
+    public const DEFAULT_MASTER_PRIMARY_COLOR = '#2D2062';
+
+    public const DEFAULT_MASTER_ACCENT_COLOR = '#7EFF83';
+
     public const DEFAULT_REPORTS_PRIMARY_COLOR = '#2D2062';
 
     public const DEFAULT_REPORTS_ACCENT_COLOR = '#7EFF83';
@@ -40,9 +52,31 @@ class CompanionBrandingManager
 
     public const DEFAULT_EMAIL_BADGE_TEXT = 'Security Alert';
 
+    public const HEX_COLOR_REGEX = '/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/';
+
     public function __construct(
         protected Settings $settings
     ) {}
+
+    /**
+     * Laravel validation rules for a brand palette hex color.
+     *
+     * @return list<string>
+     */
+    public static function hexColorRules(): array
+    {
+        return ['nullable', 'string', 'max:7', 'regex:'.self::HEX_COLOR_REGEX];
+    }
+
+    /**
+     * Accept #RGB / #RRGGBB (any case); otherwise return $default.
+     */
+    public static function normalizeHexColor(mixed $value, string $default): string
+    {
+        $color = trim((string) $value);
+
+        return preg_match(self::HEX_COLOR_REGEX, $color) === 1 ? $color : $default;
+    }
 
     /**
      * Get the active branding settings merged with defaults.
@@ -57,7 +91,10 @@ class CompanionBrandingManager
      *     plugin_description: string,
      *     menu_title: string,
      *     menu_icon: string,
+     *     brand_text: string,
      *     logo_url: string,
+     *     primary_color: string,
+     *     accent_color: string,
      *     hide_plugin_row: bool,
      *     hide_help_links: bool,
      *     footer_text: string,
@@ -75,9 +112,18 @@ class CompanionBrandingManager
         $pluginDesc = (string) $this->settings->get('companion.branding.plugin_description', self::DEFAULT_PLUGIN_DESCRIPTION);
         $menuTitle = (string) $this->settings->get('companion.branding.menu_title', self::DEFAULT_MENU_TITLE);
         $menuIcon = (string) $this->settings->get('companion.branding.menu_icon', self::DEFAULT_MENU_ICON);
+        $brandText = (string) $this->settings->get('companion.branding.brand_text', self::DEFAULT_BRAND_TEXT);
         $logoUrl = (string) $this->settings->get('companion.branding.logo_url', '');
+        $primaryColor = self::normalizeHexColor(
+            $this->settings->get('companion.branding.primary_color', self::DEFAULT_PRIMARY_COLOR),
+            self::DEFAULT_PRIMARY_COLOR,
+        );
+        $accentColor = self::normalizeHexColor(
+            $this->settings->get('companion.branding.accent_color', self::DEFAULT_ACCENT_COLOR),
+            self::DEFAULT_ACCENT_COLOR,
+        );
         $hidePluginRow = (bool) $this->settings->get('companion.branding.hide_plugin_row', false);
-        $hideHelpLinks = (bool) $this->settings->get('companion.branding.hide_help_links', true);
+        $hideHelpLinks = (bool) $this->settings->get('companion.branding.hide_help_links', false);
         $footerText = (string) $this->settings->get('companion.branding.footer_text', '');
 
         $isCustom = $enabled || $this->settings->get('companion.branding.company_name') !== null;
@@ -92,7 +138,10 @@ class CompanionBrandingManager
             'plugin_description' => $pluginDesc !== '' ? $pluginDesc : self::DEFAULT_PLUGIN_DESCRIPTION,
             'menu_title' => $menuTitle !== '' ? $menuTitle : self::DEFAULT_MENU_TITLE,
             'menu_icon' => $menuIcon !== '' ? $menuIcon : self::DEFAULT_MENU_ICON,
+            'brand_text' => $brandText !== '' ? $brandText : self::DEFAULT_BRAND_TEXT,
             'logo_url' => $logoUrl,
+            'primary_color' => $primaryColor,
+            'accent_color' => $accentColor,
             'hide_plugin_row' => $hidePluginRow,
             'hide_help_links' => $hideHelpLinks,
             'footer_text' => $footerText,
@@ -122,15 +171,35 @@ class CompanionBrandingManager
             'companion.branding.footer_text' => trim((string) ($data['footer_text'] ?? '')),
         ];
 
+        if (array_key_exists('brand_text', $data)) {
+            $payload['companion.branding.brand_text'] = trim((string) $data['brand_text']);
+        }
+
+        if (array_key_exists('primary_color', $data)) {
+            $payload['companion.branding.primary_color'] = self::normalizeHexColor(
+                $data['primary_color'],
+                self::DEFAULT_PRIMARY_COLOR,
+            );
+        }
+
+        if (array_key_exists('accent_color', $data)) {
+            $payload['companion.branding.accent_color'] = self::normalizeHexColor(
+                $data['accent_color'],
+                self::DEFAULT_ACCENT_COLOR,
+            );
+        }
+
         if (array_key_exists('logo_url', $data)) {
-            // Setting a raw logo_url directly (bypassing uploadLogo()) always
-            // refers to something other than our own locally-stored file —
-            // drop the stale local file (if any) so it doesn't linger as an
-            // orphan, and clear logo_path so a later uploadLogo() call never
-            // mistakenly deletes a file this save() call didn't create.
-            $this->deleteStoredLogoFile();
-            $payload['companion.branding.logo_url'] = trim((string) $data['logo_url']);
-            $payload['companion.branding.logo_path'] = null;
+            $incoming = trim((string) $data['logo_url']);
+            $current = (string) $this->settings->get('companion.branding.logo_url', '');
+
+            // The Companion form always posts logo_url. Re-saving the same
+            // uploaded URL must not delete the file from disk.
+            if ($incoming !== $current) {
+                $this->deleteStoredLogoFile();
+                $payload['companion.branding.logo_url'] = $incoming;
+                $payload['companion.branding.logo_path'] = null;
+            }
         }
 
         $this->settings->putMany($payload);
@@ -188,11 +257,14 @@ class CompanionBrandingManager
             'companion.branding.plugin_description' => null,
             'companion.branding.menu_title' => null,
             'companion.branding.menu_icon' => null,
+            'companion.branding.brand_text' => null,
             'companion.branding.logo_url' => null,
             'companion.branding.logo_path' => null,
             'companion.branding.hide_plugin_row' => null,
             'companion.branding.hide_help_links' => null,
             'companion.branding.footer_text' => null,
+            'companion.branding.primary_color' => null,
+            'companion.branding.accent_color' => null,
         ]);
     }
 
@@ -220,8 +292,14 @@ class CompanionBrandingManager
         $supportEmail = (string) $this->settings->get('reports.branding.support_email', '');
         $supportUrl = (string) $this->settings->get('reports.branding.support_url', '');
         $logoUrl = (string) $this->settings->get('reports.branding.logo_url', '');
-        $primaryColor = (string) $this->settings->get('reports.branding.primary_color', self::DEFAULT_REPORTS_PRIMARY_COLOR);
-        $accentColor = (string) $this->settings->get('reports.branding.accent_color', self::DEFAULT_REPORTS_ACCENT_COLOR);
+        $primaryColor = self::normalizeHexColor(
+            $this->settings->get('reports.branding.primary_color', self::DEFAULT_REPORTS_PRIMARY_COLOR),
+            self::DEFAULT_REPORTS_PRIMARY_COLOR,
+        );
+        $accentColor = self::normalizeHexColor(
+            $this->settings->get('reports.branding.accent_color', self::DEFAULT_REPORTS_ACCENT_COLOR),
+            self::DEFAULT_REPORTS_ACCENT_COLOR,
+        );
         $footerText = (string) $this->settings->get('reports.branding.footer_text', '');
 
         $isCustom = $enabled || $companyName !== '' || $primaryColor !== self::DEFAULT_REPORTS_PRIMARY_COLOR;
@@ -233,8 +311,8 @@ class CompanionBrandingManager
             'support_email' => $supportEmail !== '' ? $supportEmail : $shared['support_email'],
             'support_url' => $supportUrl !== '' ? $supportUrl : $shared['support_url'],
             'logo_url' => $logoUrl !== '' ? $logoUrl : $shared['logo_url'],
-            'primary_color' => $primaryColor !== '' ? $primaryColor : self::DEFAULT_REPORTS_PRIMARY_COLOR,
-            'accent_color' => $accentColor !== '' ? $accentColor : self::DEFAULT_REPORTS_ACCENT_COLOR,
+            'primary_color' => $primaryColor,
+            'accent_color' => $accentColor,
             'footer_text' => $footerText,
             'is_custom' => $isCustom,
         ];
@@ -252,8 +330,8 @@ class CompanionBrandingManager
             'reports.branding.company_name' => trim((string) ($data['company_name'] ?? '')),
             'reports.branding.support_email' => trim((string) ($data['support_email'] ?? '')),
             'reports.branding.support_url' => trim((string) ($data['support_url'] ?? '')),
-            'reports.branding.primary_color' => trim((string) ($data['primary_color'] ?? self::DEFAULT_REPORTS_PRIMARY_COLOR)),
-            'reports.branding.accent_color' => trim((string) ($data['accent_color'] ?? self::DEFAULT_REPORTS_ACCENT_COLOR)),
+            'reports.branding.primary_color' => self::normalizeHexColor($data['primary_color'] ?? null, self::DEFAULT_REPORTS_PRIMARY_COLOR),
+            'reports.branding.accent_color' => self::normalizeHexColor($data['accent_color'] ?? null, self::DEFAULT_REPORTS_ACCENT_COLOR),
             'reports.branding.footer_text' => trim((string) ($data['footer_text'] ?? '')),
         ];
 
@@ -307,8 +385,14 @@ class CompanionBrandingManager
         $companyName = (string) $this->settings->get('email.branding.company_name', '');
         $senderName = (string) $this->settings->get('email.branding.sender_name', '');
         $replyTo = (string) $this->settings->get('email.branding.reply_to', '');
-        $headerBg = (string) $this->settings->get('email.branding.header_bg', self::DEFAULT_EMAIL_HEADER_BG);
-        $accentColor = (string) $this->settings->get('email.branding.accent_color', self::DEFAULT_EMAIL_ACCENT_COLOR);
+        $headerBg = self::normalizeHexColor(
+            $this->settings->get('email.branding.header_bg', self::DEFAULT_EMAIL_HEADER_BG),
+            self::DEFAULT_EMAIL_HEADER_BG,
+        );
+        $accentColor = self::normalizeHexColor(
+            $this->settings->get('email.branding.accent_color', self::DEFAULT_EMAIL_ACCENT_COLOR),
+            self::DEFAULT_EMAIL_ACCENT_COLOR,
+        );
         $badgeText = (string) $this->settings->get('email.branding.badge_text', self::DEFAULT_EMAIL_BADGE_TEXT);
         $footerText = (string) $this->settings->get('email.branding.footer_text', '');
         $useLogo = (bool) $this->settings->get('email.branding.use_logo', true);
@@ -323,8 +407,8 @@ class CompanionBrandingManager
             'reply_to' => $replyTo !== '' ? $replyTo : $shared['support_email'],
             'support_email' => $shared['support_email'],
             'logo_url' => $shared['logo_url'],
-            'header_bg' => $headerBg !== '' ? $headerBg : self::DEFAULT_EMAIL_HEADER_BG,
-            'accent_color' => $accentColor !== '' ? $accentColor : self::DEFAULT_EMAIL_ACCENT_COLOR,
+            'header_bg' => $headerBg,
+            'accent_color' => $accentColor,
             'badge_text' => $badgeText !== '' ? $badgeText : self::DEFAULT_EMAIL_BADGE_TEXT,
             'footer_text' => $footerText,
             'use_logo' => $useLogo,
@@ -344,8 +428,8 @@ class CompanionBrandingManager
             'email.branding.company_name' => trim((string) ($data['company_name'] ?? '')),
             'email.branding.sender_name' => trim((string) ($data['sender_name'] ?? '')),
             'email.branding.reply_to' => trim((string) ($data['reply_to'] ?? '')),
-            'email.branding.header_bg' => trim((string) ($data['header_bg'] ?? self::DEFAULT_EMAIL_HEADER_BG)),
-            'email.branding.accent_color' => trim((string) ($data['accent_color'] ?? self::DEFAULT_EMAIL_ACCENT_COLOR)),
+            'email.branding.header_bg' => self::normalizeHexColor($data['header_bg'] ?? null, self::DEFAULT_EMAIL_HEADER_BG),
+            'email.branding.accent_color' => self::normalizeHexColor($data['accent_color'] ?? null, self::DEFAULT_EMAIL_ACCENT_COLOR),
             'email.branding.badge_text' => trim((string) ($data['badge_text'] ?? self::DEFAULT_EMAIL_BADGE_TEXT)),
             'email.branding.footer_text' => trim((string) ($data['footer_text'] ?? '')),
             'email.branding.use_logo' => ! empty($data['use_logo']),
@@ -391,10 +475,14 @@ class CompanionBrandingManager
             'plugin_description' => $data['plugin_description'],
             'menu_title' => $data['menu_title'],
             'menu_icon' => $data['menu_icon'],
+            'brand_text' => $data['brand_text'],
             'logo_url' => $data['logo_url'],
             'hide_plugin_row' => $data['hide_plugin_row'],
             'hide_help_links' => $data['hide_help_links'],
             'footer_text' => $data['footer_text'],
+            'primary_color' => $data['primary_color'],
+            'primary_dark_color' => $data['primary_color'],
+            'accent_color' => $data['accent_color'],
             'synced_at' => now()->toIso8601String(),
         ];
     }
@@ -456,5 +544,153 @@ class CompanionBrandingManager
             'failed' => $failed,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Get the master agency color palette.
+     *
+     * @return array{primary_color: string, accent_color: string}
+     */
+    public function getMasterPalette(): array
+    {
+        return [
+            'primary_color' => self::normalizeHexColor(
+                $this->settings->get('master.branding.primary_color', self::DEFAULT_MASTER_PRIMARY_COLOR),
+                self::DEFAULT_MASTER_PRIMARY_COLOR,
+            ),
+            'accent_color' => self::normalizeHexColor(
+                $this->settings->get('master.branding.accent_color', self::DEFAULT_MASTER_ACCENT_COLOR),
+                self::DEFAULT_MASTER_ACCENT_COLOR,
+            ),
+        ];
+    }
+
+    /**
+     * Save the master agency color palette, optionally cascading it to all 3 hubs.
+     *
+     * @param  array{primary_color?: string, accent_color?: string}  $data
+     */
+    public function saveMasterPalette(array $data, bool $applyToAll = false): void
+    {
+        $primary = self::normalizeHexColor($data['primary_color'] ?? null, self::DEFAULT_MASTER_PRIMARY_COLOR);
+        $accent = self::normalizeHexColor($data['accent_color'] ?? null, self::DEFAULT_MASTER_ACCENT_COLOR);
+
+        $payload = [
+            'master.branding.primary_color' => $primary,
+            'master.branding.accent_color' => $accent,
+        ];
+
+        if ($applyToAll) {
+            $payload['companion.branding.primary_color'] = $primary;
+            $payload['companion.branding.accent_color'] = $accent;
+            $payload['reports.branding.primary_color'] = $primary;
+            $payload['reports.branding.accent_color'] = $accent;
+            $payload['email.branding.header_bg'] = $primary;
+            $payload['email.branding.accent_color'] = $accent;
+        }
+
+        $this->settings->putMany($payload);
+    }
+
+    /**
+     * Derive a harmonious pastel soft color (e.g. for badges, chips, card highlights)
+     * by blending the primary dark hex with 85% white.
+     */
+    public static function deriveSoftColor(string $hex): string
+    {
+        $hex = ltrim(self::normalizeHexColor($hex, self::DEFAULT_PRIMARY_COLOR), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+        if (strlen($hex) !== 6) {
+            return '#E0DEE7';
+        }
+
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+
+        $softR = (int) round($r * 0.15 + 255 * 0.85);
+        $softG = (int) round($g * 0.15 + 255 * 0.85);
+        $softB = (int) round($b * 0.15 + 255 * 0.85);
+
+        return sprintf('#%02X%02X%02X', $softR, $softG, $softB);
+    }
+
+    /**
+     * Derive a vibrant medium interactive tone from a dark primary hex color
+     * to ensure two-tone contrast between header and active tabs/buttons.
+     */
+    public static function deriveMediumTone(string $hex): string
+    {
+        $hex = ltrim(self::normalizeHexColor($hex, self::DEFAULT_PRIMARY_COLOR), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+        if (strlen($hex) !== 6) {
+            return '#6953C4';
+        }
+
+        $r = hexdec(substr($hex, 0, 2)) / 255;
+        $g = hexdec(substr($hex, 2, 2)) / 255;
+        $b = hexdec(substr($hex, 4, 2)) / 255;
+
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $l = ($max + $min) / 2;
+
+        if ($max === $min) {
+            $targetL = min(max($l + 0.30, 0.45), 0.65);
+            $v = (int) round($targetL * 255);
+
+            return sprintf('#%02X%02X%02X', $v, $v, $v);
+        }
+
+        $d = $max - $min;
+        $s = $l > 0.5 ? $d / (2 - $max - $min) : $d / ($max + $min);
+        switch ($max) {
+            case $r:
+                $h = ($g - $b) / $d + ($g < $b ? 6 : 0);
+                break;
+            case $g:
+                $h = ($b - $r) / $d + 2;
+                break;
+            case $b:
+                $h = ($r - $g) / $d + 4;
+                break;
+        }
+        $h /= 6;
+
+        $targetL = min(max($l + 0.28, 0.48), 0.65);
+        $targetS = max($s, 0.50);
+
+        $q = $targetL < 0.5 ? $targetL * (1 + $targetS) : $targetL + $targetS - $targetL * $targetS;
+        $p = 2 * $targetL - $q;
+
+        $hue2rgb = function ($p, $q, $t) {
+            if ($t < 0) {
+                $t += 1;
+            }
+            if ($t > 1) {
+                $t -= 1;
+            }
+            if ($t < 1 / 6) {
+                return $p + ($q - $p) * 6 * $t;
+            }
+            if ($t < 1 / 2) {
+                return $q;
+            }
+            if ($t < 2 / 3) {
+                return $p + ($q - $p) * (2 / 3 - $t) * 6;
+            }
+
+            return $p;
+        };
+
+        $medR = (int) round($hue2rgb($p, $q, $h + 1 / 3) * 255);
+        $medG = (int) round($hue2rgb($p, $q, $h) * 255);
+        $medB = (int) round($hue2rgb($p, $q, $h - 1 / 3) * 255);
+
+        return sprintf('#%02X%02X%02X', $medR, $medG, $medB);
     }
 }

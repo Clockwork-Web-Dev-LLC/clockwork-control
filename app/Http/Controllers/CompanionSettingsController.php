@@ -40,6 +40,7 @@ class CompanionSettingsController extends Controller
             'branding' => $branding,
             'reportsBranding' => $reportsBranding,
             'emailBranding' => $emailBranding,
+            'masterPalette' => $brandingManager->getMasterPalette(),
             'reportsModuleEnabled' => $reportsModuleEnabled,
             'activeTab' => $activeTab,
             'totalInstalled' => $totalInstalled,
@@ -60,14 +61,42 @@ class CompanionSettingsController extends Controller
     {
         $tab = $request->input('tab', 'companion');
 
+        if ($tab === 'master') {
+            $validated = $request->validate([
+                'primary_color' => CompanionBrandingManager::hexColorRules(),
+                'accent_color' => CompanionBrandingManager::hexColorRules(),
+                'apply_to_all' => 'nullable|boolean',
+            ]);
+
+            $applyToAll = $request->boolean('apply_to_all');
+            $brandingManager->saveMasterPalette([
+                'primary_color' => $validated['primary_color'] ?? null,
+                'accent_color' => $validated['accent_color'] ?? null,
+            ], $applyToAll);
+
+            $msg = $applyToAll
+                ? 'Master agency palette saved and applied to Companion, Reports, and Emails.'
+                : 'Master agency palette saved successfully.';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'masterPalette' => $brandingManager->getMasterPalette(),
+                ]);
+            }
+
+            return redirect()->route('settings.companion.index', ['tab' => $request->input('current_tab', 'companion')])->with('status', $msg);
+        }
+
         if ($tab === 'reports') {
             $validated = $request->validate([
                 'enabled' => 'nullable|boolean',
                 'company_name' => 'nullable|string|max:120',
                 'support_email' => 'nullable|email|max:120',
                 'support_url' => 'nullable|string|max:255',
-                'primary_color' => 'nullable|string|max:30',
-                'accent_color' => 'nullable|string|max:30',
+                'primary_color' => CompanionBrandingManager::hexColorRules(),
+                'accent_color' => CompanionBrandingManager::hexColorRules(),
                 'footer_text' => 'nullable|string|max:500',
             ]);
 
@@ -100,8 +129,8 @@ class CompanionSettingsController extends Controller
                 'company_name' => 'nullable|string|max:120',
                 'sender_name' => 'nullable|string|max:120',
                 'reply_to' => 'nullable|email|max:120',
-                'header_bg' => 'nullable|string|max:30',
-                'accent_color' => 'nullable|string|max:30',
+                'header_bg' => CompanionBrandingManager::hexColorRules(),
+                'accent_color' => CompanionBrandingManager::hexColorRules(),
                 'badge_text' => 'nullable|string|max:60',
                 'footer_text' => 'nullable|string|max:500',
                 'use_logo' => 'nullable|boolean',
@@ -142,12 +171,16 @@ class CompanionSettingsController extends Controller
             'plugin_description' => 'nullable|string|max:500',
             'menu_title' => 'nullable|string|max:60',
             'menu_icon' => 'nullable|string|max:60',
+            'brand_text' => 'nullable|string|max:60',
+            'logo_url' => 'nullable|string|max:500',
+            'primary_color' => CompanionBrandingManager::hexColorRules(),
+            'accent_color' => CompanionBrandingManager::hexColorRules(),
             'hide_plugin_row' => 'nullable|boolean',
             'hide_help_links' => 'nullable|boolean',
             'footer_text' => 'nullable|string|max:255',
         ]);
 
-        $brandingManager->save([
+        $brandingData = [
             'enabled' => $request->boolean('enabled'),
             'company_name' => $validated['company_name'] ?? null,
             'company_url' => $validated['company_url'] ?? null,
@@ -157,10 +190,19 @@ class CompanionSettingsController extends Controller
             'plugin_description' => $validated['plugin_description'] ?? null,
             'menu_title' => $validated['menu_title'] ?? null,
             'menu_icon' => $validated['menu_icon'] ?? null,
+            'brand_text' => $validated['brand_text'] ?? null,
+            'primary_color' => $validated['primary_color'] ?? null,
+            'accent_color' => $validated['accent_color'] ?? null,
             'hide_plugin_row' => $request->boolean('hide_plugin_row'),
             'hide_help_links' => $request->boolean('hide_help_links'),
             'footer_text' => $validated['footer_text'] ?? null,
-        ]);
+        ];
+
+        if ($request->has('logo_url')) {
+            $brandingData['logo_url'] = $request->input('logo_url');
+        }
+
+        $brandingManager->save($brandingData);
 
         if ($request->boolean('sync_fleet')) {
             PushCompanionBrandingJob::dispatch();

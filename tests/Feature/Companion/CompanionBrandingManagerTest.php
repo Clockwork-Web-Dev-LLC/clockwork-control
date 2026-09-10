@@ -21,7 +21,7 @@ describe('CompanionBrandingManager', function () {
             ->and($branding['menu_title'])->toBe(CompanionBrandingManager::DEFAULT_MENU_TITLE)
             ->and($branding['menu_icon'])->toBe(CompanionBrandingManager::DEFAULT_MENU_ICON)
             ->and($branding['hide_plugin_row'])->toBeFalse()
-            ->and($branding['hide_help_links'])->toBeTrue()
+            ->and($branding['hide_help_links'])->toBeFalse()
             ->and($branding['is_custom'])->toBeFalse();
     });
 
@@ -158,6 +158,23 @@ describe('CompanionBrandingManager', function () {
             Storage::disk('public')->assertMissing($uploadedPath);
             expect($manager->get()['logo_url'])->toBe('https://external.example.com/logo.svg');
         });
+
+        it('keeps the uploaded file when save() re-posts the same logo_url', function () {
+            Storage::fake('public');
+            $manager = app(CompanionBrandingManager::class);
+
+            $uploadedUrl = $manager->uploadLogo(UploadedFile::fake()->image('logo.png', 100, 100));
+            $uploadedPath = 'branding/'.basename(parse_url($uploadedUrl, PHP_URL_PATH));
+            Storage::disk('public')->assertExists($uploadedPath);
+
+            $manager->save([
+                'company_name' => 'Same Logo Agency',
+                'logo_url' => $uploadedUrl,
+            ]);
+
+            Storage::disk('public')->assertExists($uploadedPath);
+            expect($manager->get()['logo_url'])->toBe($uploadedUrl);
+        });
     });
 
     describe('reset', function () {
@@ -293,6 +310,61 @@ describe('CompanionBrandingManager', function () {
             $jobFleet->handle(app(CompanionBrandingManager::class));
 
             Http::assertSentCount(2);
+        });
+    });
+
+    describe('color palette and master palette', function () {
+        it('persists primary_color and accent_color and includes them in payload', function () {
+            $manager = app(CompanionBrandingManager::class);
+            $manager->save([
+                'primary_color' => '#0F172A',
+                'accent_color' => '#38BDF8',
+            ]);
+
+            $branding = $manager->get();
+            expect($branding['primary_color'])->toBe('#0F172A')
+                ->and($branding['accent_color'])->toBe('#38BDF8');
+
+            $payload = $manager->payload();
+            expect($payload['primary_color'])->toBe('#0F172A')
+                ->and($payload['primary_dark_color'])->toBe('#0F172A')
+                ->and($payload['accent_color'])->toBe('#38BDF8');
+        });
+
+        it('saves and cascades master palette to all 3 surfaces when requested', function () {
+            $manager = app(CompanionBrandingManager::class);
+            $manager->saveMasterPalette([
+                'primary_color' => '#1E1B4B',
+                'accent_color' => '#F43F5E',
+            ], applyToAll: true);
+
+            $master = $manager->getMasterPalette();
+            expect($master['primary_color'])->toBe('#1E1B4B')
+                ->and($master['accent_color'])->toBe('#F43F5E');
+
+            $companion = $manager->get();
+            expect($companion['primary_color'])->toBe('#1E1B4B')
+                ->and($companion['accent_color'])->toBe('#F43F5E');
+
+            $reports = $manager->getReportsBranding();
+            expect($reports['primary_color'])->toBe('#1E1B4B')
+                ->and($reports['accent_color'])->toBe('#F43F5E');
+
+            $email = $manager->getEmailBranding();
+            expect($email['header_bg'])->toBe('#1E1B4B')
+                ->and($email['accent_color'])->toBe('#F43F5E');
+        });
+
+        it('normalizes invalid stored hex colors back to defaults', function () {
+            $manager = app(CompanionBrandingManager::class);
+            $manager->save([
+                'primary_color' => 'not-a-color',
+                'accent_color' => '#38BDF8',
+            ]);
+
+            $branding = $manager->get();
+            expect($branding['primary_color'])->toBe(CompanionBrandingManager::DEFAULT_PRIMARY_COLOR)
+                ->and($branding['accent_color'])->toBe('#38BDF8');
         });
     });
 });
