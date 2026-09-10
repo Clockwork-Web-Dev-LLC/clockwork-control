@@ -110,20 +110,6 @@
                     </button>
                 </div>
 
-                <!-- Scope Tag / Live Indicator -->
-                <div x-show="sidebarOpen" x-transition.opacity class="px-2">
-                    <div class="p-2 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] flex items-center justify-between text-xs">
-                        <div class="flex items-center gap-2 truncate">
-                            <span class="relative flex h-2 w-2">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-status-green)] opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-status-green)]"></span>
-                            </span>
-                            <span class="font-medium text-[var(--color-ink-strong)] truncate">LAN Cluster</span>
-                        </div>
-                        <span class="font-data text-[10px] text-[var(--color-ink-soft)] uppercase tracking-wider">LIVE</span>
-                    </div>
-                </div>
-
                 <!-- Primary Workspaces Navigation -->
                 <div class="space-y-1">
                     <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
@@ -486,7 +472,7 @@
                         <a href="{{ route('docs.index') }}" class="hover:text-[var(--color-ink-strong)]">Documentation</a>
                     </div>
                     <div>
-                        Self-hosted fleet control panel · LAN operational environment
+                        Self-hosted fleet control panel
                     </div>
                 </div>
             </footer>

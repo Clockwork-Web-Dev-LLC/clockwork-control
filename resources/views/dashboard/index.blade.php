@@ -115,8 +115,6 @@
             </div>
             <div class="flex items-center gap-2 mt-1 text-xs text-[var(--color-ink-muted)] font-data">
                 <span><i class="fa-solid fa-microchip text-[var(--color-brand)] text-xs mr-1"></i>SSH Polled</span>
-                <span>·</span>
-                <span><i class="fa-solid fa-network-wired text-emerald-500 text-xs mr-1"></i>LAN Cluster</span>
             </div>
         </div>
 
