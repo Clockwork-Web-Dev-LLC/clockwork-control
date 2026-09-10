@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]
@@ -12,14 +12,28 @@ The home page (`/`) is the fleet view — of servers. One card per server, sorte
 
 This page is server-centric, so **Pressable sites don't appear here at all** — Pressable has no server concept for a card to represent. For a fleet view that covers both hosting providers, see [Features → Sites (fleet view)](/docs/features/sites-fleet-view).
 
+## Dual-Layout Architecture (Command Center vs. Modern Studio)
+
+Clockwork Control provides two complementary layout philosophies selectable on the fly via the layout switcher in the top navigation bar:
+
+1. **Command Center (`command-center`)**: A dense, high-information density layout tailored for mission control operations. Features a persistent left-hand navigation and operations rail, compact telemetry readouts, quick SSH diagnostic actions, and dense status indicators.
+2. **Modern Studio (`modern`)**: A spacious, card-forward, human-centric interface with floating filter chips, integrated fleet-wide search, expandable quick drawers, and modern whitespace.
+
+Layout preferences are saved locally in the browser (`localStorage.getItem('cw_layout_style')`) and initialized before document render via `data-layout-style` on `<html>` to ensure zero flash of unstyled content (FOUC). Both layouts operate on top of a unified Alpine.js `appChrome` store and share underlying live telemetric models.
+
 ## What you see
 
 Each server gets a card with:
 
 - A health pill — **green** (fine), **yellow** (needs attention), **red** (something's wrong now), **gray** (ignored or unreachable).
-- A 1px **status-tinted card border** matching the pill — yellow for Watch, red for Alert, gray for Unknown. Healthy cards keep the default neutral border so the eye is drawn only to the cards that need attention.
-- Three sparklines and a numeric readout: CPU %, memory %, disk %.
-- A site count and the top sites by current PHP-FPM share.
+- A 3-tier **status-tinted card border** and metric badge hierarchy:
+  - **Yellow border & badge (≥ 70%)**: Caution / Watch threshold.
+  - **Orange border & badge (≥ 80%)**: Elevated resource pressure.
+  - **Red border & badge (≥ 90%)**: Critical threshold / alert status.
+  - Healthy servers (< 70%) maintain neutral borders so operator attention is immediately drawn to pressured nodes.
+- Three sparklines and numeric telemetry readouts: CPU %, memory %, disk %, and load averages, plus a "Stale" indicator if recent metrics have timed out.
+- A site count and top sites by PHP-FPM / CPU utilization.
+- Cloud and control panel provider badges (DigitalOcean, Hetzner, Vultr, Azure, GridPane, SpinupWP).
 - Inline status pills for SSL state, Cloudflare state, and recent ban activity.
 - Gray tag pills for whatever tags the server carries (color comes from the tag itself, rendered low-contrast so it doesn't compete with the health pill). A server tagged **staging** additionally gets a "Not monitored" pill — see below.
 - Per-server action buttons: View detail, Test SSH, Provision fail2ban (when not yet provisioned), Toggle ignore.

@@ -2,7 +2,7 @@
 title: Companion & White Label
 section: Features
 order: 93
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [companion, branding, white-label, agency, wordpress]
 tracks: [app/Http/Controllers/CompanionSettingsController.php, app/Services/Companion/CompanionBrandingManager.php, app/Jobs/PushCompanionBrandingJob.php, app/Console/Commands/PushCompanionBranding.php, resources/views/settings/companion.blade.php]

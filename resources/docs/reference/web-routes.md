@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]

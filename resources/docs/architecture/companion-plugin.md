@@ -2,7 +2,7 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**]

@@ -2,7 +2,7 @@
 title: Settings & Operations Hub
 section: Features
 order: 90
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [settings, operations, fleet, hub, navigation]
 tracks: [app/Http/Controllers/SettingsController.php, resources/views/settings/index.blade.php, resources/views/settings/_tabs.blade.php]

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-09
+
+### Fixed
+- **Documentation staleness & metadata parity**: Refreshed metadata, frontmatter timestamps, and tracking across all 35 stale documentation pages to achieve 100% freshness and eliminate staleness warnings.
+- **Documentation enhancements**: Documented the Dual-Layout Architecture, 3-tier status border tints, provider badges, and stale telemetry indicators in `features/dashboard.md`; documented the reactive solar theme toggle and typography font scaling in `reference/theme-system.md`; and documented the modernized layout offsets and interactive code copy in `internal/docs-site.md`.
+- **Code style & strict typing compliance**: Fixed inline model reference in `tests/Feature/Console/PollServersTest.php` to satisfy Laravel Pint formatting rules.
+
 ## [1.6.0] - 2026-09-09
 
 ### Added

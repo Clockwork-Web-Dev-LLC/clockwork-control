@@ -2,13 +2,13 @@
 title: The docs site itself
 section: Internal
 order: 10
-updated: 2026-09-07
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [internal, docs, meta, tooling]
 tracks: [app/Http/Controllers/DocsController.php, app/Http/Controllers/Controller.php, app/Services/Docs/**, resources/views/docs/**]
 ---
 
-How `/docs` — the page you're reading this on — actually works. It's a small, self-contained subsystem: no database table, no admin UI for authoring, just markdown files on disk parsed at request time. This page exists because that subsystem had gone completely undocumented, which is a little on the nose given it's also the thing that generates the staleness/coverage report this very page was written in response to.
+How `/docs` — the page you're reading this on — actually works. It's a small, self-contained subsystem: no database table, no admin UI for authoring, just markdown files on disk parsed at request time. It features a modern responsive reading interface with sticky section table-of-contents navigation, theme-aware syntax styling, breadcrumbs, and interactive one-click code copying.
 
 ## Every controller shares one trivial base class
 

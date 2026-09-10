@@ -2,7 +2,7 @@
 title: GridPane
 section: Integrations
 order: 25
-updated: 2026-09-06
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [integrations, gridpane, hosting, control-panel, wordpress]
 tracks: [modules/GridPane/**, app/Console/Commands/ImportGridPane.php, app/Console/Commands/GridPaneTest.php]

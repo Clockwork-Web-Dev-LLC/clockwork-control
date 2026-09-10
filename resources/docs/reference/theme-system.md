@@ -2,7 +2,7 @@
 title: Theme System
 section: Reference
 order: 25
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [reference, frontend, css, themes, ui]
 tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php]
@@ -16,6 +16,17 @@ Clockwork Control features a multi-scheme theme system built on Tailwind CSS v4 
 2. **Dark (`dark`)**: Built on the native `--color-surface-dark` token (`#181e25`) with deep slate tones and soft inverted text.
 3. **High Contrast (`high-contrast`)**: An accessibility-first high visibility palette utilizing pure `#000000` surface with maximum contrast borders and white ink.
 4. **Auto / System (`system`)**: Follows the client operating system's `prefers-color-scheme` media query, automatically switching between light and dark.
+
+Operators can toggle quickly between Light and Dark via the solar icon button (`fa-sun` / `fa-moon`) in the top navigation bar, or select specific palettes and configure system sync in Settings → Appearance.
+
+## Font Scaling (Typography Accessibility)
+
+Clockwork Control provides three dynamic typography scales:
+- **Compact (`compact`)**: Higher density for smaller screens or high-information-density monitoring.
+- **Standard (`standard`)**: Canonical balanced interface typography.
+- **Comfortable (`comfortable`)**: Increased font size and line spacing for relaxed reading.
+
+Font scaling applies `data-font-scale` to `<html>` and persists the selection in `localStorage` under `cw_font_scale`.
 
 **Removed: Midnight.** The `midnight` scheme (a navy / Darcula palette) was removed in v1.4.0 in favor of the 4-option grid above. Operators who previously selected Midnight aren't left with a broken preference: the `:root[data-theme="dark"]` CSS block also matches `:root[data-theme="midnight"]` (so any stale `data-theme="midnight"` attribute still renders the Dark palette), and `resources/js/theme.js` normalizes a stored `cw_theme=midnight` cookie to `dark` on init. `AppearanceSettingsController::VALID_THEMES` no longer accepts `midnight` as a value to persist going forward.
 

@@ -2,7 +2,7 @@
 title: Hetzner Cloud
 section: Integrations
 order: 11
-updated: 2026-09-07
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [integrations, hetzner, monitoring]
 tracks: [modules/Hetzner/src/**, app/Console/Commands/PollServers.php, app/Console/Commands/HetznerTest.php]

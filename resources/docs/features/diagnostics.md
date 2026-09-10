@@ -2,7 +2,7 @@
 title: Diagnostics
 section: Features
 order: 90
-updated: 2026-09-06
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [diagnostics, integrations, connectivity, smoke-tests, pressable]
 tracks: [app/Services/Diagnostics/**, app/Http/Controllers/DiagnosticsController.php, modules/*/src/*Check.php]

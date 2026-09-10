@@ -2,7 +2,7 @@
 title: SpinupWP
 section: Integrations
 order: 20
-updated: 2026-09-08
+updated: 2026-09-09
 author: Aaron Reimann
 tags: [integrations, spinupwp, inventory, wordpress]
 tracks: [modules/SpinupWp/src/**, app/Console/Commands/ImportSpinupWp.php, app/Console/Commands/SpinupWpTest.php]
