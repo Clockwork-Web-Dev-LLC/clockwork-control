@@ -253,7 +253,8 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` | empty | Optional. Free, 10k/day. |
+| `CLOCKWORK_GOOGLE_WEB_RISK_KEY` | empty | Google Cloud Web Risk API (commercial standard). Free up to 100k req/mo. |
+| `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` | empty | Legacy non-commercial Safe Browsing v4 fallback. Free, 10k/day. |
 | `CLOCKWORK_URLHAUS_AUTH_KEY` | empty | Optional. Free registration at auth.abuse.ch. |
 | `CLOCKWORK_BLACKLIST_TIMEOUT` | `10` | Per-source timeout. |
 | `CLOCKWORK_SUCURI_BASE_URL` | `https://sitecheck.sucuri.net` | |

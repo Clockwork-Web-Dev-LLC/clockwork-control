@@ -62,15 +62,19 @@ class PageSpeedInsightsClient
             // PSI is a slow API — Lighthouse takes 20-60s on a real page.
             // We run sequentially, one site at a time, so the 90s timeout is
             // generous. retry(2) covers the occasional transient timeout.
+            $query = http_build_query([
+                'url' => $url,
+                'strategy' => $strategy,
+                'key' => $this->apiKey,
+            ]);
+            $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+            $catQuery = implode('&', array_map(fn ($c) => 'category='.urlencode($c), $categories));
+            $requestUrl = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?{$query}&{$catQuery}";
+
             $response = Http::timeout($this->timeout)
                 ->retry(2, 2_000, throw: false)
                 ->acceptJson()
-                ->get('https://www.googleapis.com/pagespeedonline/v5/runPagespeed', [
-                    'url' => $url,
-                    'strategy' => $strategy,
-                    'category' => 'performance',
-                    'key' => $this->apiKey,
-                ]);
+                ->get($requestUrl);
 
             $elapsedMs = (int) (microtime(true) * 1000) - $started;
 
@@ -129,6 +133,15 @@ class PageSpeedInsightsClient
             );
         }
 
+        $accScore = data_get($payload, 'lighthouseResult.categories.accessibility.score');
+        $accessibilityScore = is_numeric($accScore) ? (int) round((float) $accScore * 100) : null;
+
+        $bpScore = data_get($payload, 'lighthouseResult.categories.best-practices.score');
+        $bestPracticesScore = is_numeric($bpScore) ? (int) round((float) $bpScore * 100) : null;
+
+        $seoScore = data_get($payload, 'lighthouseResult.categories.seo.score');
+        $seoScore = is_numeric($seoScore) ? (int) round((float) $seoScore * 100) : null;
+
         $audits = data_get($payload, 'lighthouseResult.audits', []);
 
         $lcpMs = $this->numericMs($audits, 'largest-contentful-paint');
@@ -147,6 +160,9 @@ class PageSpeedInsightsClient
             status: SitePerformanceScan::STATUS_OK,
             strategy: $strategy,
             performanceScore: (int) round((float) $score * 100),
+            accessibilityScore: $accessibilityScore,
+            bestPracticesScore: $bestPracticesScore,
+            seoScore: $seoScore,
             lcpMs: $lcpMs,
             fcpMs: $fcpMs,
             tbtMs: $tbtMs,

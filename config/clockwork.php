@@ -389,12 +389,14 @@ return [
         // runs always (DNS lookup, no key). The other two sources are opt-in
         // free registrations:
         //
-        //   GOOGLE_SAFE_BROWSING_KEY — Google Cloud Console, free, 10k/day.
-        //     Highest signal: drives Chrome's red-page warning.
+        //   GOOGLE_WEB_RISK_KEY     — Google Cloud Web Risk API (commercial standard).
+        //     Free up to 100k req/month. Highest signal for malware, phishing, unwanted software.
+        //   GOOGLE_SAFE_BROWSING_KEY — Legacy non-commercial Safe Browsing v4 fallback.
         //   URLHAUS_AUTH_KEY        — auth.abuse.ch, free, generous limits.
         //     Catches malware-host status (4M+ entries).
         //
-        // All three sources unset = Spamhaus DBL only (still useful baseline).
+        // All sources unset = Spamhaus DBL only (still useful baseline).
+        'google_web_risk_key' => env('CLOCKWORK_GOOGLE_WEB_RISK_KEY', env('CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY', '')),
         'google_safe_browsing_key' => env('CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY', ''),
         'urlhaus_auth_key' => env('CLOCKWORK_URLHAUS_AUTH_KEY', ''),
         'blacklist_timeout' => env('CLOCKWORK_BLACKLIST_TIMEOUT', 10),

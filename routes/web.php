@@ -285,6 +285,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/companion/plugin-update', [SitesController::class, 'updatePlugin'])->name('sites.companion.plugin-update');
     Route::post('/sites/{site}/pressable/flush-object-cache', [SitesController::class, 'flushPressableObjectCache'])->name('sites.pressable.flush-object-cache');
     Route::get('/sites/{site}/pressable/resource-metrics', [SitesController::class, 'pressableResourceMetrics'])->name('sites.pressable.resource-metrics');
+    Route::get('/sites/{site}/backups-history', [SitesController::class, 'backupsHistory'])->name('sites.backups.history');
     Route::post('/sites/{site}/care-plan', [SitesController::class, 'toggleCarePlan'])->name('sites.care-plan');
     Route::post('/sites/{site}/care-plan/clear-override', [SitesController::class, 'clearCarePlanOverride'])->name('sites.care-plan.clear-override');
     Route::post('/sites/{site}/auto-updates/toggle', [SitesController::class, 'togglePauseAutoUpdates'])->name('sites.auto-updates.toggle');

@@ -109,7 +109,7 @@
                 <div><dt class="text-[var(--color-ink-muted)] uppercase tracking-wide text-[10px]">Page weight</dt><dd class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $formatBytes($m->page_weight_bytes) }}</dd></div>
             </dl>
             @if ($m->accessibility_score !== null || $m->best_practices_score !== null || $m->seo_score !== null)
-                {{-- Only Pressable's engine currently reports these — GTmetrix's API doesn't expose them, and requesting them from PSI would slow down every fallback scan. --}}
+                {{-- Reported by PageSpeed Insights and Pressable engines — GTmetrix's API does not expose them. --}}
                 <dl class="grid grid-cols-3 gap-3 text-xs mt-3 pt-3 border-t border-[var(--color-border-light)]">
                     <div><dt class="text-[var(--color-ink-muted)] uppercase tracking-wide text-[10px]">Accessibility</dt><dd class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $m->accessibility_score ?? '—' }}</dd></div>
                     <div><dt class="text-[var(--color-ink-muted)] uppercase tracking-wide text-[10px]">Best Practices</dt><dd class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $m->best_practices_score ?? '—' }}</dd></div>

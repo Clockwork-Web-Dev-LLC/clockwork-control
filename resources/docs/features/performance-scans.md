@@ -24,7 +24,7 @@ PSI stays wired up as a fallback: if GTmetrix errors on a site, the same run ret
 
 - Performance score (0-100).
 - Core Web Vitals: LCP, FCP, TBT, SI, CLS.
-- **Accessibility, Best Practices, and SEO scores** (0-100 each, nullable). Every engine's raw API response carries these alongside the Performance score. **Currently populated for Pressable rows** — `PressableLighthouseClient` extracts them, while GTmetrix's current tier focuses primarily on Performance metrics.
+- **Accessibility, Best Practices, and SEO scores** (0-100 each, nullable). Every engine's raw API response carries these alongside the Performance score. Populated for both **PageSpeed Insights** and **Pressable** rows — `PageSpeedInsightsClient` and `PressableLighthouseClient` extract them, while GTmetrix's current tier focuses primarily on Performance metrics.
 - Page weight (bytes), request count.
 - Strategy (mobile or desktop), region, the URL scanned.
 - **Engine**: `gtmetrix`, `psi`, `psi-fallback`, or `pressable`. `psi-fallback` means GTmetrix errored that night and PSI filled in — so the column always tells primary data from safety-net data. `pressable` is Pressable's own report, not part of the GTmetrix/PSI chain at all (see below).

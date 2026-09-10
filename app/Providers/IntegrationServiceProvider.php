@@ -53,6 +53,7 @@ class IntegrationServiceProvider extends ServiceProvider
             $r = $app->make(CredentialResolver::class);
 
             return new BlacklistChecker(
+                webRiskApiKey: $r->get('security_scans.google_web_risk_key', ''),
                 gsbApiKey: $r->get('security_scans.google_safe_browsing_key', ''),
                 urlhausAuthKey: $r->get('security_scans.urlhaus_auth_key', ''),
                 httpTimeout: (int) $r->get('security_scans.blacklist_timeout', 10),
