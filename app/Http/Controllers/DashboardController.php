@@ -115,6 +115,19 @@ class DashboardController extends Controller
             $byServer[$row->server_id]['latest'] = $row;
         }
 
+        // For any servers without samples in the last 24h, fallback to their most recent snapshot
+        $missingIds = array_values(array_diff($serverIds, array_keys($byServer)));
+        foreach ($missingIds as $id) {
+            $latestRow = ServerMetric::query()
+                ->where('server_id', $id)
+                ->latest('recorded_at')
+                ->first(['server_id', 'recorded_at', 'cpu_pct', 'memory_pct', 'disk_pct', 'load_1']);
+            if ($latestRow) {
+                $byServer[$id]['cpu'] = [(float) ($latestRow->cpu_pct ?? 0)];
+                $byServer[$id]['latest'] = $latestRow;
+            }
+        }
+
         return $byServer;
     }
 

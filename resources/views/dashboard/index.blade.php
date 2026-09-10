@@ -6,17 +6,17 @@
     use App\Models\Server;
 
     $statusMeta = [
-        Server::STATUS_GREEN => ['label' => 'Healthy', 'class' => 'status-green', 'icon' => 'fa-circle-check'],
-        Server::STATUS_YELLOW => ['label' => 'Watch', 'class' => 'status-yellow', 'icon' => 'fa-triangle-exclamation'],
-        Server::STATUS_RED => ['label' => 'Alert', 'class' => 'status-red', 'icon' => 'fa-circle-exclamation'],
-        Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown', 'icon' => 'fa-circle-question'],
+        Server::STATUS_GREEN => ['label' => 'Healthy', 'class' => 'status-green', 'card' => ''],
+        Server::STATUS_YELLOW => ['label' => 'Watch', 'class' => 'status-yellow', 'card' => 'border-l-4 border-l-[var(--color-status-yellow)]'],
+        Server::STATUS_RED => ['label' => 'Alert', 'class' => 'status-red', 'card' => 'border-l-4 border-l-[var(--color-status-red)]'],
+        Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown', 'card' => ''],
     ];
 
-    $pressureColor = function (?float $pct): string {
-        if ($pct === null) return 'var(--color-primary-500)';
-        if ($pct > 90) return 'var(--color-status-red)';
-        if ($pct > 80) return 'var(--color-status-yellow)';
-        return 'var(--color-primary-500)';
+    $pressureColor = function (?float $pct): ?string {
+        if ($pct === null) return null;
+        if ($pct >= 90) return 'var(--color-status-red)';
+        if ($pct >= 80) return 'var(--color-status-yellow)';
+        return null;
     };
 
     $sparkline = function (array $samples, int $width = 80, int $height = 18): string {
@@ -34,7 +34,7 @@
             $y = number_format($height - (($v / $max) * $height), 2, '.', '');
             $points[] = "{$x},{$y}";
         }
-        return '<svg viewBox="0 0 ' . $width . ' ' . $height . '" width="' . $width . '" height="' . $height . '" preserveAspectRatio="none" class="text-[var(--color-primary-500)] shrink-0">'
+        return '<svg viewBox="0 0 ' . $width . ' ' . $height . '" width="' . $width . '" height="' . $height . '" preserveAspectRatio="none" class="text-[var(--color-primary-light)] shrink-0">'
             . '<polyline fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" points="' . implode(' ', $points) . '"/>'
             . '</svg>';
     };
@@ -62,51 +62,97 @@
         this.inspectOpen = true;
     }
 }">
+
     <!-- ================================================================= -->
-    <!-- FLEET KPI & HUD METRICS ROW                                       -->
+    <!-- TOP PAGE HEADER & GLOBAL FLEET ACTIONS                            -->
     <!-- ================================================================= -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-8">
-        <!-- Metric 1: Fleet Availability -->
+    <x-page-header title="Servers" subtitle="Live infrastructure fleet monitor across provisioned clouds &amp; host nodes.">
+        <x-slot:actions>
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
+                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="inline">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            title="Re-pull servers + sites from SpinupWP API"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
+                    </button>
+                </form>
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane'))
+                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="inline ml-1 sm:ml-2">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            title="Re-pull servers + sites from GridPane API"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from GridPane</span>
+                    </button>
+                </form>
+            @endif
+            <a href="{{ route('servers.create') }}" class="btn-primary text-xs ml-1 sm:ml-2">
+                <i class="fa-solid fa-plus"></i> <span>Add Server</span>
+            </a>
+        </x-slot:actions>
+    </x-page-header>
+
+    <!-- ================================================================= -->
+    <!-- TELEMETRY & FLEET KPI METRICS                                     -->
+    <!-- ================================================================= -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- Metric 1: Fleet Health Score -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
-                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Fleet Availability</span>
-                <span class="inline-flex items-center gap-1 text-[var(--color-status-green)] font-semibold font-data">
+                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Fleet Health</span>
+                <i class="fa-solid fa-heart-pulse text-xs text-emerald-500"></i>
+            </div>
+            <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $healthPct }}%</span>
+                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Optimal</span>
+            </div>
+            <div class="flex items-center gap-1.5 mt-2 text-xs font-data">
+                <span class="inline-flex items-center gap-1 text-[var(--color-status-green)] font-semibold">
                     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-status-green)]"></span>
-                    {{ $healthPct }}%
+                    {{ $healthyCount }} Healthy
                 </span>
-            </div>
-            <div class="flex items-baseline justify-between gap-2 mt-1">
-                <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $healthyCount }} / {{ $totalCount }}</span>
-                <span class="text-xs text-[var(--color-ink-muted)]">Nodes Online</span>
-            </div>
-            <div class="flex items-center gap-2 mt-2 text-[11px] text-[var(--color-ink-muted)]">
-                <span class="inline-flex items-center gap-1 font-data"><span class="w-2 h-2 rounded-full bg-[var(--color-status-green)]"></span> {{ $healthyCount }} ok</span>
-                <span class="inline-flex items-center gap-1 font-data"><span class="w-2 h-2 rounded-full bg-[var(--color-status-yellow)]"></span> {{ $watchCount }} watch</span>
+                @if ($watchCount > 0)
+                    <span class="text-[var(--color-ink-soft)]">·</span>
+                    <span class="inline-flex items-center gap-1 text-[var(--color-status-yellow)] font-semibold">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-status-yellow)]"></span>
+                        {{ $watchCount }} Watch
+                    </span>
+                @endif
                 @if ($alertCount > 0)
-                    <span class="inline-flex items-center gap-1 font-data text-[var(--color-status-red)] font-semibold"><span class="w-2 h-2 rounded-full bg-[var(--color-status-red)] animate-pulse"></span> {{ $alertCount }} alert</span>
+                    <span class="text-[var(--color-ink-soft)]">·</span>
+                    <span class="inline-flex items-center gap-1 text-[var(--color-status-red)] font-semibold">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-status-red)]"></span>
+                        {{ $alertCount }} Alert
+                    </span>
                 @endif
             </div>
         </div>
 
-        <!-- Metric 2: Managed Workloads -->
+        <!-- Metric 2: Active Hosted Sites -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
-                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Managed Workloads</span>
-                <i class="fa-brands fa-wordpress text-sky-500 text-sm"></i>
+                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Managed Sites</span>
+                <i class="fa-solid fa-globe text-sky-500 text-xs"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalSites }}</span>
-                <span class="text-xs text-[var(--color-ink-soft)]">Total Sites</span>
+                <span class="text-xs text-[var(--color-ink-soft)]">Active Domains</span>
             </div>
-            <div class="text-xs text-[var(--color-ink-muted)] mt-1 truncate">
-                WordPress instances across fleet
+            <div class="flex items-center justify-between text-xs text-[var(--color-ink-muted)] mt-2">
+                <a href="{{ route('sites.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1">
+                    <span>Sites Directory</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+                <span class="font-data text-[11px] text-[var(--color-ink-soft)]">{{ $totalCount > 0 ? round($totalSites / $totalCount, 1) : 0 }} / node</span>
             </div>
         </div>
 
-        <!-- Metric 3: Node Infrastructure -->
+        <!-- Metric 3: Total Monitored Nodes -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
-                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Node Infrastructure</span>
+                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Total Nodes</span>
                 <i class="fa-solid fa-server text-[var(--color-brand)] text-sm"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
@@ -131,7 +177,7 @@
                         <button type="submit" class="w-full text-center px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] transition-all cursor-pointer"
                                 title="Re-pull from SpinupWP API"
                                 onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>Refresh from SpinupWP</span>
+                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>SpinupWP</span>
                         </button>
                     </form>
                 @endif
@@ -141,7 +187,7 @@
                         <button type="submit" class="w-full text-center px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] transition-all cursor-pointer"
                                 title="Re-pull from GridPane API"
                                 onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>Refresh from GridPane</span>
+                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>GridPane</span>
                         </button>
                     </form>
                 @endif
@@ -260,19 +306,35 @@
                     $meta = $statusMeta[$server->status] ?? $statusMeta[Server::STATUS_UNKNOWN];
                     $spark = $sparklines[$server->id] ?? null;
                     $latest = $spark['latest'] ?? null;
-                    $cpuVal = $latest['cpu_usage'] ?? null;
-                    $memVal = $latest['memory_usage'] ?? null;
-                    $dskVal = $latest['disk_usage'] ?? null;
+                    $cpuVal = $latest?->cpu_pct !== null ? (float) $latest->cpu_pct : null;
+                    $memVal = $latest?->memory_pct !== null ? (float) $latest->memory_pct : null;
+                    $dskVal = $latest?->disk_pct !== null ? (float) $latest->disk_pct : null;
+                    $sparkCpu = $spark['cpu'] ?? [];
+
+                    $cpuColor = $pressureColor($cpuVal);
+                    $memColor = $pressureColor($memVal);
+                    $dskColor = $pressureColor($dskVal);
+
+                    $sshOk = (bool) ($server->last_ssh_ok_at ?? $server->clockwork_jail_provisioned_at);
+                    $jailOk = (bool) $server->clockwork_jail_provisioned_at;
+                    $sshTitle = $server->last_ssh_ok_at
+                        ? 'SSH verified ' . $server->last_ssh_ok_at->diffForHumans()
+                        : ($server->clockwork_jail_provisioned_at
+                            ? 'SSH verified at provisioning ' . $server->clockwork_jail_provisioned_at->diffForHumans()
+                            : 'SSH not verified — set credentials and Test');
+                    $jailTitle = $jailOk
+                        ? 'fail2ban provisioned ' . $server->clockwork_jail_provisioned_at->diffForHumans()
+                        : 'fail2ban not provisioned';
                 @endphp
-                <div class="cw-server-card flex flex-col justify-between server-card relative group"
+                <div class="cw-server-card flex flex-col justify-between server-card relative group {{ $meta['card'] }}"
                      data-server-id="{{ $server->id }}"
                      data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}">
 
                     <!-- Card Header -->
                     <div>
-                        <div class="flex items-start justify-between gap-3 mb-3">
+                        <div class="flex items-start justify-between gap-3 mb-2.5">
                             <div class="min-w-0 flex-1">
-                                <a href="{{ route('servers.show', $server) }}" class="font-display font-bold text-base text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] truncate block transition-colors">
+                                <a href="{{ route('servers.show', $server) }}" class="font-display font-bold text-base text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] truncate block transition-colors" title="{{ $server->name }}">
                                     {{ $server->display_name }}
                                 </a>
                                 <p class="text-xs text-[var(--color-ink-soft)] font-mono truncate mt-0.5">{{ $server->hostname }}</p>
@@ -283,101 +345,189 @@
                             </span>
                         </div>
 
-                        <!-- Provider & Tags -->
-                        <div class="flex items-center gap-1.5 flex-wrap mb-4">
-                            <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
-                                {{ $server->hosting_provider ?? 'Server Node' }}
-                            </span>
+                        <!-- Provider, Staging, Patches & Tags -->
+                        <div class="flex items-center gap-1.5 flex-wrap mb-3">
+                            {{-- Cloud Provider Icon / Label --}}
+                            @if ($server->provider_id)
+                                @php $cloudProvider = app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider); @endphp
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]" title="{{ $cloudProvider->label() }} #{{ $server->provider_id }}">
+                                    <i class="{{ $cloudProvider->iconClass() }} text-xs" style="color: {{ $cloudProvider->iconColor() }}"></i>
+                                    <span>{{ $cloudProvider->label() }}</span>
+                                </span>
+                            @else
+                                <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
+                                    {{ $server->hosting_provider ?? 'Server Node' }}
+                                </span>
+                            @endif
+
+                            @if ($server->spinupwp_id)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="SpinupWP server #{{ $server->spinupwp_id }}">
+                                    <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]"></i>
+                                    <span>SpinupWP</span>
+                                </span>
+                            @endif
+
+                            {{-- Tags --}}
                             @foreach ($server->tags as $tag)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]">
-                                    <span class="w-1.5 h-1.5 rounded-full" style="background: {{ $tag->color }}"></span>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]"
+                                      title="{{ $tag->description ?: $tag->name }}">
+                                    <span class="inline-flex w-1.5 h-1.5 rounded-full" style="background: {{ $tag->color }}"></span>
                                     {{ $tag->name }}
                                 </span>
                             @endforeach
+
+                            @if ($server->isStaging())
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] italic"
+                                      title="This server is tagged as staging — its sites are excluded from uptime probes, scans, and alerts.">
+                                    <i class="fa-solid fa-eye-slash text-[9px]"></i>
+                                    Not monitored
+                                </span>
+                            @endif
+
                             @if ($server->upgrade_required)
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">
-                                    Updates
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-status-yellow)] text-white"
+                                      title="Patches available — open Updates tab to run">
+                                    <i class="fa-solid fa-cube text-[9px]"></i> Patches
                                 </span>
                             @endif
                             @if ($server->reboot_required)
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">
-                                    Reboot
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-status-yellow)] text-white"
+                                      title="Reboot required — open Updates tab to schedule">
+                                    <i class="fa-solid fa-power-off text-[9px]"></i> Reboot
                                 </span>
                             @endif
                         </div>
+
+                        <!-- Connectivity & Health Bar: Sites Count, SSH, and Fail2ban Jail -->
+                        <div class="flex items-center justify-between gap-3 text-xs py-2 px-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)] mb-3">
+                            <span class="inline-flex items-center gap-1.5 text-[var(--color-ink-muted)]">
+                                <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-xs"></i>
+                                <span class="font-medium">{{ $server->sites_count ?? $server->sites->count() }} {{ Str::plural('site', $server->sites_count ?? $server->sites->count()) }}</span>
+                            </span>
+
+                            <div class="flex items-center gap-3">
+                                {{-- SSH Status Indicator --}}
+                                <span class="inline-flex items-center gap-1 cursor-help"
+                                      title="{{ $sshTitle }}"
+                                      style="color: {{ $sshOk ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
+                                    <i class="fa-solid fa-key text-[10px]"></i>
+                                    <span class="font-semibold text-[11px]">SSH</span>
+                                </span>
+
+                                {{-- Jail / Fail2ban Status Indicator --}}
+                                <span class="inline-flex items-center gap-1 cursor-help"
+                                      title="{{ $jailTitle }}"
+                                      style="color: {{ $jailOk ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
+                                    <i class="fa-solid fa-shield-halved text-[10px]"></i>
+                                    <span class="font-semibold text-[11px]">Jail</span>
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Telemetry Meters (Progress Bars & Inline Sparkline) -->
-                    <div class="space-y-3 pt-4 border-t border-[var(--color-border-light)]">
-                        <!-- CPU -->
-                        <div>
-                            <div class="flex justify-between items-center text-xs mb-1 font-medium">
-                                <span class="text-[var(--color-ink-muted)]">CPU Usage</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $cpuVal !== null ? round($cpuVal) . '%' : '—' }}</span>
-                                    @if ($spark && !empty($spark['samples']))
-                                        {!! $sparkline($spark['samples'], 60, 14) !!}
-                                    @endif
+                    <!-- Telemetry Meters: Studio (Progress Bars) vs Command Center (Dense HUD) -->
+                    @if ($latest)
+                        <!-- Modern Studio Meters -->
+                        <div class="cw-meter-studio space-y-2.5 pt-3 border-t border-[var(--color-border-light)]">
+                            <!-- CPU -->
+                            <div>
+                                <div class="flex justify-between items-center text-xs mb-1 font-medium">
+                                    <span class="text-[var(--color-ink-muted)]">CPU Usage</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-data font-semibold text-[var(--color-ink-strong)]" @if ($cpuColor) style="color: {{ $cpuColor }}; font-weight: 600;" @endif>
+                                            {{ $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—' }}
+                                        </span>
+                                        @if (!empty($sparkCpu))
+                                            <div title="CPU last 24h">
+                                                {!! $sparkline($sparkCpu, 60, 14) !!}
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="studio-progress-bar">
+                                    <div class="studio-progress-fill" style="width: {{ min(100, max(0, $cpuVal ?? 0)) }}%; background-color: {{ $cpuColor ?? 'var(--color-primary-500)' }};"></div>
                                 </div>
                             </div>
-                            <div class="studio-progress-bar">
-                                <div class="studio-progress-fill" style="width: {{ min(100, max(0, $cpuVal ?? 0)) }}%; background-color: {{ $pressureColor($cpuVal) }};"></div>
+
+                            <!-- Memory -->
+                            <div>
+                                <div class="flex justify-between text-xs mb-1 font-medium">
+                                    <span class="text-[var(--color-ink-muted)]">Memory (RAM)</span>
+                                    <span class="font-data font-semibold text-[var(--color-ink-strong)]" @if ($memColor) style="color: {{ $memColor }}; font-weight: 600;" @endif>
+                                        {{ $memVal !== null ? number_format($memVal, 0) . '%' : '—' }}
+                                    </span>
+                                </div>
+                                <div class="studio-progress-bar">
+                                    <div class="studio-progress-fill" style="width: {{ min(100, max(0, $memVal ?? 0)) }}%; background-color: {{ $memColor ?? 'var(--color-primary-500)' }};"></div>
+                                </div>
+                            </div>
+
+                            <!-- Disk -->
+                            <div>
+                                <div class="flex justify-between text-xs mb-1 font-medium">
+                                    <span class="text-[var(--color-ink-muted)]">Disk Allocation</span>
+                                    <span class="font-data font-semibold text-[var(--color-ink-strong)]" @if ($dskColor) style="color: {{ $dskColor }}; font-weight: 600;" @endif>
+                                        {{ $dskVal !== null ? number_format($dskVal, 0) . '%' : '—' }}
+                                    </span>
+                                </div>
+                                <div class="studio-progress-bar">
+                                    <div class="studio-progress-fill" style="width: {{ min(100, max(0, $dskVal ?? 0)) }}%; background-color: {{ $dskColor ?? 'var(--color-primary-500)' }};"></div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Memory -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1 font-medium">
-                                <span class="text-[var(--color-ink-muted)]">Memory (RAM)</span>
-                                <span class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $memVal !== null ? round($memVal) . '%' : '—' }}</span>
+                        <!-- Command Center Compact Telemetry -->
+                        <div class="cw-meter-cmd mt-3 pt-2.5 border-t border-[var(--color-border-light)] items-center justify-between gap-3 text-xs font-mono">
+                            <div class="grid grid-cols-3 gap-2 flex-1 min-w-0">
+                                <div title="CPU"><span class="text-[var(--color-ink-soft)] text-[10px]">CPU</span> <span class="font-bold" @if ($cpuColor) style="color: {{ $cpuColor }}; font-weight: 600;" @endif>{{ $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—' }}</span></div>
+                                <div title="Memory"><span class="text-[var(--color-ink-soft)] text-[10px]">RAM</span> <span class="font-bold" @if ($memColor) style="color: {{ $memColor }}; font-weight: 600;" @endif>{{ $memVal !== null ? number_format($memVal, 0) . '%' : '—' }}</span></div>
+                                <div title="Disk"><span class="text-[var(--color-ink-soft)] text-[10px]">DSK</span> <span class="font-bold" @if ($dskColor) style="color: {{ $dskColor }}; font-weight: 600;" @endif>{{ $dskVal !== null ? number_format($dskVal, 0) . '%' : '—' }}</span></div>
                             </div>
-                            <div class="studio-progress-bar">
-                                <div class="studio-progress-fill" style="width: {{ min(100, max(0, $memVal ?? 0)) }}%; background-color: {{ $pressureColor($memVal) }};"></div>
-                            </div>
+                            @if (!empty($sparkCpu))
+                                <div class="shrink-0" title="CPU last 24h">
+                                    {!! $sparkline($sparkCpu, 70, 16) !!}
+                                </div>
+                            @endif
                         </div>
-
-                        <!-- Disk -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1 font-medium">
-                                <span class="text-[var(--color-ink-muted)]">Disk Allocation</span>
-                                <span class="font-data font-semibold text-[var(--color-ink-strong)]">{{ $dskVal !== null ? round($dskVal) . '%' : '—' }}</span>
-                            </div>
-                            <div class="studio-progress-bar">
-                                <div class="studio-progress-fill" style="width: {{ min(100, max(0, $dskVal ?? 0)) }}%; background-color: {{ $pressureColor($dskVal) }};"></div>
-                            </div>
+                    @else
+                        <div class="py-3.5 my-1 text-center text-xs text-[var(--color-ink-soft)] bg-[var(--color-surface-alt)]/40 rounded-lg border border-dashed border-[var(--color-border-light)]">
+                            <i class="fa-solid fa-chart-line opacity-40 mr-1 text-xs"></i> No telemetry recorded yet
                         </div>
+                    @endif
 
-                        <!-- Footer: Sites Count + Quick Inspect + Manage -->
-                        <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border-light)]/60 text-xs">
-                            <span class="text-[var(--color-ink-soft)] font-medium">
-                                <i class="fa-solid fa-globe text-xs mr-1 text-[var(--color-brand)]"></i>
-                                {{ $server->sites_count ?? $server->sites->count() }} sites
-                            </span>
-                            <div class="flex items-center gap-2">
-                                <button type="button"
-                                        @click="openInspect({{ json_encode([
-                                            'id' => $server->id,
-                                            'name' => $server->display_name,
-                                            'hostname' => $server->hostname,
-                                            'ip' => $server->ip_address,
-                                            'status' => $server->status,
-                                            'statusLabel' => $meta['label'],
-                                            'statusClass' => $meta['class'],
-                                            'sitesCount' => $server->sites_count ?? $server->sites->count(),
-                                            'cpu' => $cpuVal !== null ? round($cpuVal) . '%' : '—',
-                                            'mem' => $memVal !== null ? round($memVal) . '%' : '—',
-                                            'dsk' => $dskVal !== null ? round($dskVal) . '%' : '—',
-                                            'provider' => $server->hosting_provider ?? 'manual',
-                                            'showUrl' => route('servers.show', $server),
-                                        ]) }})"
-                                        class="hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] font-medium inline-flex items-center gap-1 cursor-pointer">
-                                    <i class="fa-solid fa-eye text-[10px]"></i> Inspect
-                                </button>
-                                <span>·</span>
-                                <a href="{{ route('servers.show', $server) }}" class="font-semibold text-[var(--color-brand)] hover:underline inline-flex items-center gap-1">
-                                    Manage &rarr;
-                                </a>
-                            </div>
+                    <!-- Footer: Actions -->
+                    <div class="flex items-center justify-between pt-3 mt-3 border-t border-[var(--color-border-light)]/60 text-xs">
+                        <span class="text-[11px] font-mono text-[var(--color-ink-soft)]">
+                            {{ $server->provider_label ?? 'Cloud Node' }}
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @click="openInspect({{ json_encode([
+                                        'id' => $server->id,
+                                        'name' => $server->display_name,
+                                        'hostname' => $server->hostname,
+                                        'ip' => $server->ip_address,
+                                        'status' => $server->status,
+                                        'statusLabel' => $meta['label'],
+                                        'statusClass' => $meta['class'],
+                                        'sitesCount' => $server->sites_count ?? $server->sites->count(),
+                                        'cpu' => $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—',
+                                        'mem' => $memVal !== null ? number_format($memVal, 0) . '%' : '—',
+                                        'dsk' => $dskVal !== null ? number_format($dskVal, 0) . '%' : '—',
+                                        'sshOk' => $sshOk,
+                                        'sshTitle' => $sshTitle,
+                                        'jailOk' => $jailOk,
+                                        'jailTitle' => $jailTitle,
+                                        'provider' => $server->provider_label ?? $server->provider,
+                                        'showUrl' => route('servers.show', $server),
+                                    ]) }})"
+                                    class="hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] font-medium inline-flex items-center gap-1 cursor-pointer">
+                                <i class="fa-solid fa-eye text-[10px]"></i> Inspect
+                            </button>
+                            <span>·</span>
+                            <a href="{{ route('servers.show', $server) }}" class="font-semibold text-[var(--color-brand)] hover:underline inline-flex items-center gap-1">
+                                Manage &rarr;
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -394,8 +544,9 @@
                         <tr>
                             <th>Status</th>
                             <th>Server Node</th>
-                            <th>IP / Hostname</th>
+                            <th>Hostname</th>
                             <th>Provider</th>
+                            <th>Security</th>
                             <th>CPU History</th>
                             <th>RAM</th>
                             <th>Disk</th>
@@ -409,9 +560,25 @@
                                 $meta = $statusMeta[$server->status] ?? $statusMeta[Server::STATUS_UNKNOWN];
                                 $spark = $sparklines[$server->id] ?? null;
                                 $latest = $spark['latest'] ?? null;
-                                $cpuVal = $latest['cpu_usage'] ?? null;
-                                $memVal = $latest['memory_usage'] ?? null;
-                                $dskVal = $latest['disk_usage'] ?? null;
+                                $cpuVal = $latest?->cpu_pct !== null ? (float) $latest->cpu_pct : null;
+                                $memVal = $latest?->memory_pct !== null ? (float) $latest->memory_pct : null;
+                                $dskVal = $latest?->disk_pct !== null ? (float) $latest->disk_pct : null;
+                                $sparkCpu = $spark['cpu'] ?? [];
+
+                                $cpuColor = $pressureColor($cpuVal);
+                                $memColor = $pressureColor($memVal);
+                                $dskColor = $pressureColor($dskVal);
+
+                                $sshOk = (bool) ($server->last_ssh_ok_at ?? $server->clockwork_jail_provisioned_at);
+                                $jailOk = (bool) $server->clockwork_jail_provisioned_at;
+                                $sshTitle = $server->last_ssh_ok_at
+                                    ? 'SSH verified ' . $server->last_ssh_ok_at->diffForHumans()
+                                    : ($server->clockwork_jail_provisioned_at
+                                        ? 'SSH verified at provisioning ' . $server->clockwork_jail_provisioned_at->diffForHumans()
+                                        : 'SSH not verified — set credentials and Test');
+                                $jailTitle = $jailOk
+                                    ? 'fail2ban provisioned ' . $server->clockwork_jail_provisioned_at->diffForHumans()
+                                    : 'fail2ban not provisioned';
                             @endphp
                             <tr class="server-card"
                                 data-server-id="{{ $server->id }}"
@@ -427,25 +594,46 @@
                                         {{ $server->display_name }}
                                     </a>
                                 </td>
-                                <td class="text-[var(--color-ink-soft)] font-mono">
+                                <td class="text-[var(--color-ink-soft)] font-mono text-xs">
                                     {{ $server->hostname }}
                                 </td>
-                                <td class="capitalize text-[var(--color-ink-muted)]">
-                                    {{ $server->hosting_provider ?? 'manual' }}
+                                <td>
+                                    <div class="flex items-center gap-1.5 text-xs capitalize text-[var(--color-ink-muted)]">
+                                        @if ($server->provider_id)
+                                            @php $cloudProvider = app(\App\Services\CloudProvider\CloudProviderRegistry::class)->resolve($server->provider); @endphp
+                                            <i class="{{ $cloudProvider->iconClass() }} text-xs" style="color: {{ $cloudProvider->iconColor() }}" title="{{ $cloudProvider->label() }}"></i>
+                                        @endif
+                                        @if ($server->spinupwp_id)
+                                            <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP"></i>
+                                        @endif
+                                        <span>{{ $server->provider_label ?? ($server->hosting_provider ?? 'manual') }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="flex items-center gap-2.5 text-xs">
+                                        <span class="inline-flex items-center gap-1" title="{{ $sshTitle }}" style="color: {{ $sshOk ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
+                                            <i class="fa-solid fa-key text-[10px]"></i>
+                                            <span class="font-semibold text-[10px]">SSH</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1" title="{{ $jailTitle }}" style="color: {{ $jailOk ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
+                                            <i class="fa-solid fa-shield-halved text-[10px]"></i>
+                                            <span class="font-semibold text-[10px]">Jail</span>
+                                        </span>
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="flex items-center gap-2">
-                                        <span class="font-bold text-[var(--color-ink-strong)] w-8">{{ $cpuVal !== null ? round($cpuVal) . '%' : '—' }}</span>
-                                        @if ($spark && !empty($spark['samples']))
-                                            {!! $sparkline($spark['samples'], 70, 16) !!}
+                                        <span class="font-bold text-[var(--color-ink-strong)] w-10" @if ($cpuColor) style="color: {{ $cpuColor }}; font-weight: 600;" @endif>{{ $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—' }}</span>
+                                        @if (!empty($sparkCpu))
+                                            {!! $sparkline($sparkCpu, 70, 16) !!}
                                         @endif
                                     </div>
                                 </td>
-                                <td class="font-bold text-[var(--color-ink-strong)]">
-                                    {{ $memVal !== null ? round($memVal) . '%' : '—' }}
+                                <td class="font-bold text-[var(--color-ink-strong)]" @if ($memColor) style="color: {{ $memColor }}; font-weight: 600;" @endif>
+                                    {{ $memVal !== null ? number_format($memVal, 0) . '%' : '—' }}
                                 </td>
-                                <td class="font-bold text-[var(--color-ink-strong)]">
-                                    {{ $dskVal !== null ? round($dskVal) . '%' : '—' }}
+                                <td class="font-bold text-[var(--color-ink-strong)]" @if ($dskColor) style="color: {{ $dskColor }}; font-weight: 600;" @endif>
+                                    {{ $dskVal !== null ? number_format($dskVal, 0) . '%' : '—' }}
                                 </td>
                                 <td class="text-[var(--color-ink-muted)]">
                                     {{ $server->sites_count ?? $server->sites->count() }} sites
@@ -461,10 +649,14 @@
                                                 'statusLabel' => $meta['label'],
                                                 'statusClass' => $meta['class'],
                                                 'sitesCount' => $server->sites_count ?? $server->sites->count(),
-                                                'cpu' => $cpuVal !== null ? round($cpuVal) . '%' : '—',
-                                                'mem' => $memVal !== null ? round($memVal) . '%' : '—',
-                                                'dsk' => $dskVal !== null ? round($dskVal) . '%' : '—',
-                                                'provider' => $server->hosting_provider ?? 'manual',
+                                                'cpu' => $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—',
+                                                'mem' => $memVal !== null ? number_format($memVal, 0) . '%' : '—',
+                                                'dsk' => $dskVal !== null ? number_format($dskVal, 0) . '%' : '—',
+                                                'sshOk' => $sshOk,
+                                                'sshTitle' => $sshTitle,
+                                                'jailOk' => $jailOk,
+                                                'jailTitle' => $jailTitle,
+                                                'provider' => $server->provider_label ?? $server->provider,
                                                 'showUrl' => route('servers.show', $server),
                                             ]) }})"
                                             class="p-1 hover:text-[var(--color-brand)] text-[var(--color-ink-muted)] cursor-pointer"
@@ -481,6 +673,41 @@
                 </table>
             </div>
         </div>
+    @endif
+
+    <!-- ================================================================= -->
+    <!-- IGNORED SERVERS SECTION                                           -->
+    <!-- ================================================================= -->
+    @if ($ignoredServers->isNotEmpty())
+        <section class="mt-14" id="ignored-servers">
+            <div class="flex items-end justify-between mb-4">
+                <h2 class="font-display text-lg font-bold text-[var(--color-ink-muted)]">Ignored Servers</h2>
+                <span class="text-xs text-[var(--color-ink-soft)] font-mono uppercase tracking-wide">
+                    {{ $ignoredServers->count() }} excluded from monitoring stats
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 opacity-75">
+                @foreach ($ignoredServers as $server)
+                    <a href="{{ route('servers.show', $server) }}"
+                       class="card p-4 block border-dashed hover:opacity-100 transition-opacity">
+                       <div class="flex items-start gap-2.5 mb-2">
+                           <i class="fa-solid fa-eye-slash text-[var(--color-ink-soft)] mt-0.5 text-sm"></i>
+                           <div class="min-w-0 flex-1">
+                               <div class="font-semibold text-[var(--color-ink-strong)] truncate text-sm" title="{{ $server->name }}">{{ $server->display_name }}</div>
+                               <div class="text-xs text-[var(--color-ink-soft)] font-mono truncate">{{ $server->hostname }}</div>
+                           </div>
+                       </div>
+                       <div class="text-xs text-[var(--color-ink-soft)]">
+                           {{ $server->sites_count }} {{ Str::plural('site', $server->sites_count) }}
+                           @if ($server->ignore_reason)
+                               · {{ $server->ignore_reason }}
+                           @endif
+                       </div>
+                    </a>
+                @endforeach
+            </div>
+        </section>
     @endif
 
     <!-- ================================================================= -->
@@ -510,11 +737,31 @@
 
                     <!-- Node State -->
                     <div class="p-3 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] flex items-center justify-between text-xs">
-                        <span class="text-[var(--color-ink-muted)]">Node State:</span>
+                        <span class="text-[var(--color-ink-muted)] font-medium">Node State:</span>
                         <span class="status-pill text-[10px]" :class="inspectServer.statusClass">
                             <span class="status-dot"></span>
                             <span x-text="inspectServer.statusLabel"></span>
                         </span>
+                    </div>
+
+                    <!-- Security & Connectivity State -->
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+                            <div class="text-[10px] uppercase font-mono text-[var(--color-ink-soft)] mb-1">SSH Access</div>
+                            <div class="flex items-center gap-1.5 font-semibold text-xs" :class="inspectServer.sshOk ? 'text-[var(--color-status-green)]' : 'text-[var(--color-ink-soft)]'">
+                                <i class="fa-solid fa-key text-[10px]"></i>
+                                <span x-text="inspectServer.sshOk ? 'Verified' : 'Unverified'"></span>
+                            </div>
+                            <div class="text-[10px] text-[var(--color-ink-soft)] truncate mt-0.5" x-text="inspectServer.sshTitle"></div>
+                        </div>
+                        <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+                            <div class="text-[10px] uppercase font-mono text-[var(--color-ink-soft)] mb-1">Fail2ban Jail</div>
+                            <div class="flex items-center gap-1.5 font-semibold text-xs" :class="inspectServer.jailOk ? 'text-[var(--color-status-green)]' : 'text-[var(--color-ink-soft)]'">
+                                <i class="fa-solid fa-shield-halved text-[10px]"></i>
+                                <span x-text="inspectServer.jailOk ? 'Provisioned' : 'Not Active'"></span>
+                            </div>
+                            <div class="text-[10px] text-[var(--color-ink-soft)] truncate mt-0.5" x-text="inspectServer.jailTitle"></div>
+                        </div>
                     </div>
 
                     <!-- Metrics Grid -->
@@ -575,6 +822,7 @@
         const sitesPanel = document.getElementById('fleet-search-sites');
         const sitesList = document.getElementById('fleet-search-sites-list');
         const emptyMsg = document.getElementById('fleet-search-empty');
+        const ignored = document.getElementById('ignored-servers');
         const cards = Array.from(document.querySelectorAll('.server-card'));
 
         if (!input) return;
@@ -603,6 +851,8 @@
                 card.style.display = matches ? '' : 'none';
                 if (matches) visibleServers++;
             });
+
+            if (ignored) ignored.style.display = hasQuery ? 'none' : '';
 
             if (!hasQuery) {
                 if (sitesPanel) sitesPanel.classList.add('hidden');

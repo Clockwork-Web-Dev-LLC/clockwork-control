@@ -938,6 +938,19 @@ body {
     border-radius: 0.75rem;
 }
 
+[data-layout-style="modern"] .cw-meter-cmd {
+    display: none !important;
+}
+[data-layout-style="modern"] .cw-meter-studio {
+    display: block !important;
+}
+[data-layout-style="command-center"] .cw-meter-studio {
+    display: none !important;
+}
+[data-layout-style="command-center"] .cw-meter-cmd {
+    display: flex !important;
+}
+
 /* 4. High-Density Telemetry Data Grid Table */
 .cw-data-table {
     width: 100%;
