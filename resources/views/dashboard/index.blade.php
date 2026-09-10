@@ -179,8 +179,9 @@
                 <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="inline">
                     @csrf
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-[var(--color-ink-strong)]"
-                            title="Sync SpinupWP inventory">
-                        <i class="fa-solid fa-rotate text-xs mr-1 text-[var(--color-ink-muted)]"></i> SpinupWP Sync
+                            title="Sync SpinupWP inventory"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate text-xs mr-1 text-[var(--color-ink-muted)]"></i> <span>Refresh from SpinupWP</span>
                     </button>
                 </form>
             @endif
@@ -188,8 +189,9 @@
                 <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="inline">
                     @csrf
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-[var(--color-ink-strong)]"
-                            title="Sync GridPane inventory">
-                        <i class="fa-solid fa-rotate text-xs mr-1 text-[var(--color-ink-muted)]"></i> GridPane Sync
+                            title="Sync GridPane inventory"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate text-xs mr-1 text-[var(--color-ink-muted)]"></i> <span>Refresh from GridPane</span>
                     </button>
                 </form>
             @endif
