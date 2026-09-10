@@ -426,7 +426,7 @@
                         <div class="flex items-center justify-between gap-3 text-xs py-2 px-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)] mb-3">
                             <span class="inline-flex items-center gap-1.5 text-[var(--color-ink-muted)]">
                                 <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-xs"></i>
-                                <span class="font-medium">{{ $server->sites_count ?? $server->sites->count() }} {{ Str::plural('site', $server->sites_count ?? $server->sites->count()) }}</span>
+                                <span class="font-medium font-data">{{ $server->sites_count ?? $server->sites->count() }}</span>
                             </span>
 
                             <div class="flex items-center gap-3">
@@ -698,8 +698,8 @@
                                 <td class="font-bold text-[var(--color-ink-strong)]" @if ($dskColor) style="color: {{ $dskColor }}; font-weight: 600;" @endif>
                                     {{ $dskVal !== null ? number_format($dskVal, 0) . '%' : '—' }}
                                 </td>
-                                <td class="text-[var(--color-ink-muted)]">
-                                    {{ $server->sites_count ?? $server->sites->count() }} sites
+                                <td class="text-[var(--color-ink-muted)] font-data">
+                                    {{ $server->sites_count ?? $server->sites->count() }}
                                 </td>
                                 <td class="text-right whitespace-nowrap">
                                     <button type="button"
@@ -762,7 +762,7 @@
                            </div>
                        </div>
                        <div class="text-xs text-[var(--color-ink-soft)]">
-                           {{ $server->sites_count }} {{ Str::plural('site', $server->sites_count) }}
+                           {{ $server->sites_count }}
                            @if ($server->ignore_reason)
                                · {{ $server->ignore_reason }}
                            @endif
@@ -854,7 +854,7 @@
                         </div>
                         <div class="flex justify-between py-1 border-b border-[var(--color-border-light)]/50">
                             <span class="text-[var(--color-ink-soft)]">Hosted Sites:</span>
-                            <span class="font-medium text-[var(--color-ink-strong)] font-mono" x-text="inspectServer.sitesCount + ' sites'"></span>
+                            <span class="font-medium text-[var(--color-ink-strong)] font-mono" x-text="inspectServer.sitesCount"></span>
                         </div>
                         <div class="flex justify-between py-1">
                             <span class="text-[var(--color-ink-soft)]">Transport Protocol:</span>

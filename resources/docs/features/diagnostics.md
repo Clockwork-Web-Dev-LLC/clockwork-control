@@ -2,7 +2,7 @@
 title: Diagnostics
 section: Features
 order: 90
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [diagnostics, integrations, connectivity, smoke-tests, pressable]
 tracks: [app/Services/Diagnostics/**, app/Http/Controllers/DiagnosticsController.php, modules/*/src/*Check.php]
@@ -43,7 +43,7 @@ As of the modularization roadmap, 15 of these checks are contributed by their re
 | **Twilio API** | Fetches the account resource via the official SDK (`$client->api->v2010->accounts($sid)->fetch()`) — read-only, never sends an SMS. Skipped unless `TWILIO_ENABLED` and all three credential vars are set. |
 | **Sucuri SiteCheck** | GETs `sitecheck.sucuri.net` — anonymous endpoint, no token. Sucuri returns 403 to non-browser User-Agents but the host is up; treated as OK as long as the response is < 500. |
 | **wpvulnerability.net** | GETs a real, always-installed slug (`akismet`) — the API is free and keyless, so there's no credential to validate, only reachability. Feeds `clockwork:refresh-plugin-vulnerabilities`. |
-| **Google Safe Browsing API** | POSTs the same minimal `threatMatches:find` request shape `BlacklistChecker` uses in the real daily scan, checking one known-clean URL. A 200 (even with zero matches) proves the key is valid — Google returns 400 with an explicit "API key not valid" message for a bad one. |
+| **Google Web Risk / Safe Browsing** | Prefers `GET webrisk.googleapis.com/v1/uris:search` when `CLOCKWORK_GOOGLE_WEB_RISK_KEY` is set. If that key is empty, POSTs the same minimal `threatMatches:find` shape `BlacklistChecker` uses for legacy v4. A 200 (even with empty `{}` / zero matches) proves the key is valid. |
 
 ## Status meanings
 

@@ -2,10 +2,10 @@
 title: DigitalOcean Spaces
 section: Integrations
 order: 15
-updated: 2026-09-07
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [integrations, digitalocean, spaces, backups]
-tracks: [app/Services/DigitalOcean/SpacesClient.php, app/Console/Commands/DoSpacesTest.php]
+tracks: [app/Services/DigitalOcean/SpacesClient.php, app/Console/Commands/DoSpacesTest.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php, app/Http/Controllers/SitesController.php]
 ---
 
 DigitalOcean Spaces is the S3-compatible object storage where SpinupWP writes our backups. We list it directly because SpinupWP's REST API exposes backup *configuration* but never backup *history*.
@@ -61,6 +61,8 @@ Once we have the raw object list:
 ## Files
 
 - `app/Services/DigitalOcean/SpacesClient.php` — `listSiteBackupObjects`, `toHistoryRows`, `inferSchedules`.
+- `app/Http/Controllers/SitesController.php` — `backupsHistory()` JSON for the overview Snapshots modal.
+- `resources/views/dashboard/site/widgets/_widget-backups.blade.php` — overview card; does not claim Protected until history exists.
 - `app/Console/Commands/DoSpacesTest.php` — connectivity check.
 - Config: `config/clockwork.php` → `do_spaces` key.
 
@@ -72,8 +74,19 @@ Once we have the raw object list:
 
 Push runs after the 03:30 SpinupWP inventory import so the local copy of `backups` config is fresh.
 
+## Site Overview Backups widget
+
+`_widget-backups.blade.php` used to treat “SpinupWP + Spaces credentials exist” as **Protected** / “Backups are successful.” That was a fleet-wide config flag, not evidence this site has objects in the bucket.
+
+Current behavior:
+
+- **Pressable native backups** or **S3 Glacier relay** (`backup_relay_enabled` / `backup_relay_last_archived_at`) still SSR as Protected, with a last-archive timestamp when we have one.
+- **SpinupWP + Spaces:** first paint is **Checking…**. Alpine prefetches `GET /sites/{site}/backups-history` (`sites.backups.history`) after load — the same JSON the Snapshots modal uses. If `spaces_history` has rows, the pill becomes Protected, copy becomes “Backups are successful,” and **Last Spaces run** is the newest `date`. If the list is empty, the pill is **No snapshots**.
+- The history endpoint lists Spaces objects only for SpinupWP sites and does not block the overview PHP render.
+
 ## Gotchas
 
 - **Wrong credentials = wrong-page redirect in the DO dashboard.** Bookmark the bucket Settings tab directly.
 - **The prefix template is overridable** — `CLOCKWORK_DO_SPACES_PREFIX_TEMPLATE` defaults to `{domain}/`. Override only if you're not on SpinupWP.
 - **List-only access pattern.** We never write or delete. Don't promote the credential to a write key just because it's there.
+- **Configured ≠ Protected.** Fleet Spaces credentials do not mean this site has been backed up. The overview widget waits for `spaces_history` before claiming success.

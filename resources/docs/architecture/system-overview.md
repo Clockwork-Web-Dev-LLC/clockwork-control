@@ -2,7 +2,7 @@
 title: System overview
 section: Architecture
 order: 10
-updated: 2026-09-03
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [architecture, overview, stack, pressable]
 ---
@@ -48,7 +48,7 @@ WP sites (SSH+SQL fallback) ─────┤      ┌────────�
 nginx logs (SSH tail) ───────────┼─────►│ Clockwork   │──► Mattermost / Slack alerts
 LLAR / Wordfence (DB pull) ──────┤      │  Laravel    │──► Mailgun (forms)
 External blacklists ─────────────┤      │  + MySQL    │──► fail2ban over SSH
-GTmetrix / PSI / Sucuri / Safe Browsing ─┤      └──────┬──────┘   ──► (admin web UI)
+GTmetrix / PSI / Sucuri / Web Risk ─┤      └──────┬──────┘   ──► (admin web UI)
                                                         │
                                                         └──► S3 (targets.json, read by
                                                              standalone backup-relay droplet)

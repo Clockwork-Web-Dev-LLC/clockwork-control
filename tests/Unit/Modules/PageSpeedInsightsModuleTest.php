@@ -83,6 +83,16 @@ describe('PageSpeedInsights module', function () {
         expect($result->bestPracticesScore)->toBe(92);
         expect($result->seoScore)->toBe(100);
         expect($result->lcpMs)->toBe(1250);
+
+        Http::assertSent(function ($request) {
+            $url = $request->url();
+
+            return str_contains($url, 'category=performance')
+                && str_contains($url, 'category=accessibility')
+                && str_contains($url, 'category=best-practices')
+                && str_contains($url, 'category=seo')
+                && ! str_contains($url, 'category[');
+        });
         expect($result->fcpMs)->toBe(850);
         expect($result->tbtMs)->toBe(45);
         expect($result->siMs)->toBe(980);

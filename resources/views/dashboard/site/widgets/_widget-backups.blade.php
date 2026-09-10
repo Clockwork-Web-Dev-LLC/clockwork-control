@@ -4,7 +4,9 @@
     $spacesConfigured = app(\App\Services\DigitalOcean\SpacesClient::class)->isConfigured();
     $relayEnabled = (bool) $site->backup_relay_enabled;
     $lastArchived = $site->backup_relay_last_archived_at;
-    $hasBackups = $isPressable || $relayEnabled || $lastArchived !== null || ($isSpinupWp && $spacesConfigured);
+    $hasRelayOrPressable = $isPressable || $relayEnabled || $lastArchived !== null;
+    $spacesEligible = $isSpinupWp && $spacesConfigured;
+    $showSnapshots = $hasRelayOrPressable || $spacesEligible;
 @endphp
 
 <div class="card p-5 flex flex-col justify-between h-full"
@@ -14,6 +16,10 @@
          loaded: false,
          data: null,
          error: null,
+         spacesEligible: {{ $spacesEligible ? 'true' : 'false' }},
+         hasRelayOrPressable: {{ $hasRelayOrPressable ? 'true' : 'false' }},
+         spacesRunCount: 0,
+         latestSpacesDate: null,
          formatBytes(bytes) {
              if (!bytes || bytes <= 0) return '—';
              const k = 1024;
@@ -26,40 +32,52 @@
              const d = new Date(dateStr);
              return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
          },
+         applyHistory(json) {
+             this.data = json;
+             this.loaded = true;
+             const rows = json.spaces_history || [];
+             this.spacesRunCount = rows.length;
+             this.latestSpacesDate = rows[0] ? rows[0].date : null;
+         },
+         fetchHistory() {
+             return fetch('{{ route('sites.backups.history', $site) }}', {
+                 headers: { 'Accept': 'application/json' }
+             }).then(res => {
+                 if (!res.ok) throw new Error('HTTP ' + res.status);
+                 return res.json();
+             }).then(json => this.applyHistory(json));
+         },
+         prefetch() {
+             if (!this.spacesEligible || this.loaded) return;
+             this.fetchHistory().catch(() => {});
+         },
          loadSnapshots() {
              this.modalOpen = true;
              if (this.loaded) return;
              this.loading = true;
              this.error = null;
-             fetch('{{ route('sites.backups.history', $site) }}', {
-                 headers: { 'Accept': 'application/json' }
-             })
-             .then(res => {
-                 if (!res.ok) throw new Error('HTTP ' + res.status);
-                 return res.json();
-             })
-             .then(json => {
-                 this.data = json;
-                 this.loaded = true;
-             })
-             .catch(err => {
-                 this.error = err.message || 'Failed to load backup snapshots';
-             })
-             .finally(() => {
-                 this.loading = false;
-             });
-         }
-     }">
+             this.fetchHistory()
+                 .catch(err => { this.error = err.message || 'Failed to load backup snapshots'; })
+                 .finally(() => { this.loading = false; });
+         },
+         get spacesProtected() { return this.spacesRunCount > 0; },
+         get showProtected() { return this.hasRelayOrPressable || this.spacesProtected; }
+     }"
+     x-init="prefetch()">
     <div>
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                 <i class="fa-solid fa-box-archive text-emerald-600"></i>
                 Backups
             </h3>
-            @if ($hasBackups)
+            @if ($hasRelayOrPressable)
                 <span class="status-pill status-green text-[10px]">
                     <span class="status-dot"></span> Protected
                 </span>
+            @elseif ($spacesEligible)
+                <span class="status-pill text-[10px]"
+                      :class="showProtected ? 'status-green' : 'status-unknown'"
+                      x-text="showProtected ? 'Protected' : (loaded ? 'No snapshots' : 'Checking…')">Checking…</span>
             @else
                 <span class="status-pill status-unknown text-[10px]">
                     <span class="status-dot"></span> Unconfigured
@@ -67,7 +85,7 @@
             @endif
         </div>
 
-        @if ($hasBackups)
+        @if ($hasRelayOrPressable)
             <div class="py-2">
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 text-base">
@@ -84,8 +102,6 @@
                                 <div class="text-[10px] text-[var(--color-ink-muted)] font-mono mt-0.5">({{ $lastArchived->format('Y-m-d H:i:s') }})</div>
                             @elseif ($isPressable)
                                 Automated daily snapshots managed by Pressable API.
-                            @elseif ($isSpinupWp && $spacesConfigured)
-                                Automated daily backups stored in DigitalOcean Spaces.
                             @else
                                 Automated relay snapshots configured.
                             @endif
@@ -101,12 +117,43 @@
                                 AWS S3 Glacier Relay
                             @elseif ($isPressable)
                                 Pressable Cloud Snapshot
-                            @elseif ($isSpinupWp && $spacesConfigured)
-                                DigitalOcean Spaces (SpinupWP)
                             @else
                                 Host Snapshot
                             @endif
                         </span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Cadence:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">Daily (Nightly)</span>
+                    </div>
+                </div>
+            </div>
+        @elseif ($spacesEligible)
+            <div class="py-2">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 text-base">
+                        <i class="fa-solid fa-server"></i>
+                    </div>
+                    <div>
+                        <div class="font-semibold text-sm text-[var(--color-ink-strong)]"
+                             x-text="spacesProtected ? 'Backups are successful' : (loaded ? 'Spaces configured — no snapshots yet' : 'Checking DigitalOcean Spaces…')">
+                            Checking DigitalOcean Spaces…
+                        </div>
+                        <div class="text-xs text-[var(--color-ink-muted)] mt-1">
+                            <span x-show="latestSpacesDate" x-cloak>
+                                Last Spaces run: <span class="font-medium text-[var(--color-ink-strong)]" x-text="formatDate(latestSpacesDate)"></span>
+                            </span>
+                            <span x-show="!latestSpacesDate">
+                                Automated daily backups stored in DigitalOcean Spaces. Open Snapshots to inspect runs.
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Destination:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">DigitalOcean Spaces (SpinupWP)</span>
                     </div>
                     <div class="flex items-center justify-between text-[11px]">
                         <span class="text-[var(--color-ink-muted)]">Cadence:</span>
@@ -132,7 +179,7 @@
             {{ $site->hosting_provider }} hosting
         </span>
         <div class="flex items-center gap-2">
-            @if ($hasBackups)
+            @if ($showSnapshots)
                 <button type="button"
                         @click="loadSnapshots()"
                         class="btn-pill-nav text-xs font-medium text-emerald-700 hover:underline cursor-pointer">

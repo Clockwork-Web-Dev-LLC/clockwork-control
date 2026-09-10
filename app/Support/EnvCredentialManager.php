@@ -265,13 +265,21 @@ class EnvCredentialManager
         ],
 
         'security_scans' => [
+            'google_web_risk_key' => [
+                'env_var' => 'CLOCKWORK_GOOGLE_WEB_RISK_KEY',
+                'label' => 'Google Web Risk Key',
+                'secret' => true,
+                'guide' => 'Google Cloud API key with Web Risk API enabled (commercial standard)',
+                'url' => 'https://console.cloud.google.com/apis/credentials',
+                'config_path' => 'clockwork.security_scans.google_web_risk_key',
+            ],
             'google_safe_browsing_key' => [
                 'env_var' => 'CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY',
-                'label' => 'Google Safe Browsing Key',
+                'label' => 'Google Safe Browsing Key (legacy v4)',
                 'secret' => true,
-                'guide' => 'Google Cloud API key with Safe Browsing API enabled',
+                'guide' => 'Legacy non-commercial Safe Browsing v4 fallback. Prefer CLOCKWORK_GOOGLE_WEB_RISK_KEY.',
                 'url' => 'https://console.cloud.google.com/apis/credentials',
-                'config_path' => 'clockwork.google_safe_browsing_key',
+                'config_path' => 'clockwork.security_scans.google_safe_browsing_key',
             ],
             'urlhaus_auth_key' => [
                 'env_var' => 'CLOCKWORK_URLHAUS_AUTH_KEY',
@@ -279,7 +287,7 @@ class EnvCredentialManager
                 'secret' => true,
                 'guide' => 'Free abuse.ch URLHaus authentication key',
                 'url' => 'https://auth.abuse.ch/',
-                'config_path' => 'clockwork.urlhaus_auth_key',
+                'config_path' => 'clockwork.security_scans.urlhaus_auth_key',
             ],
         ],
 

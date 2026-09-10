@@ -114,4 +114,47 @@ class BlacklistCheckerTest extends TestCase
             return str_starts_with($request->url(), 'https://safebrowsing.googleapis.com/v4/threatMatches:find');
         });
     }
+
+    public function test_container_uses_safe_browsing_when_only_the_v4_key_is_configured(): void
+    {
+        config([
+            'clockwork.security_scans.google_web_risk_key' => '',
+            'clockwork.security_scans.google_safe_browsing_key' => 'legacy-gsb-key',
+        ]);
+
+        Http::fake([
+            'https://webrisk.googleapis.com/*' => Http::response(['error' => 'wrong api'], 400),
+            'https://safebrowsing.googleapis.com/v4/threatMatches:find*' => Http::response(['matches' => []], 200),
+        ]);
+
+        $site = Site::factory()->make(['domain' => 'gsb-env.com']);
+        $result = app(BlacklistChecker::class)->check($site);
+
+        expect($result->status)->toBe(SiteSecurityScan::STATUS_CLEAN)
+            ->and($result->details['sources_attempted'])->toContain(BlacklistChecker::SOURCE_GSB)
+            ->and($result->details['sources_attempted'])->not->toContain(BlacklistChecker::SOURCE_WEB_RISK);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'webrisk.googleapis.com'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'safebrowsing.googleapis.com'));
+    }
+
+    public function test_whitespace_only_web_risk_key_is_treated_as_unset(): void
+    {
+        $site = Site::factory()->make(['domain' => 'whitespace.com']);
+
+        Http::fake([
+            'https://safebrowsing.googleapis.com/v4/threatMatches:find*' => Http::response(['matches' => []], 200),
+        ]);
+
+        $checker = new BlacklistChecker(
+            webRiskApiKey: '   ',
+            gsbApiKey: 'gsb-key',
+            urlhausAuthKey: '',
+        );
+
+        $checker->check($site);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'webrisk.googleapis.com'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'safebrowsing.googleapis.com'));
+    }
 }

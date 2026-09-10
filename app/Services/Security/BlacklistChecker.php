@@ -15,10 +15,12 @@ use Throwable;
  *
  * Sources, in order of signal strength:
  *
- *   1. **Google Safe Browsing v4 Lookup** — the gold standard. Drives
- *      Chrome's "this site may harm your computer" warning. Free, but needs
- *      an API key (registered on Google Cloud, 10k req/day). Skipped if
- *      `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` is unset.
+ *   1. **Google Cloud Web Risk** (`uris:search`) — commercial-standard lookup
+ *      that drives Chrome's interstitial. Needs `CLOCKWORK_GOOGLE_WEB_RISK_KEY`.
+ *      If that key is empty, falls back to legacy **Safe Browsing v4**
+ *      (`threatMatches:find`) when `CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY` is set.
+ *      The two keys are not interchangeable; do not copy a v4 secret into the
+ *      Web Risk config slot.
  *   2. **URLHaus by abuse.ch** — open malware-host database, 4M+ entries.
  *      Free, but requires an Auth-Key header since 2024 (free registration at
  *      abuse.ch's account portal). Catches sites used as malware C2 or in
@@ -53,9 +55,9 @@ class BlacklistChecker
         protected ?string $urlhausAuthKey = null,
         protected ?int $httpTimeout = null,
     ) {
-        $this->webRiskApiKey ??= (string) config('clockwork.security_scans.google_web_risk_key', '');
-        $this->gsbApiKey ??= (string) config('clockwork.security_scans.google_safe_browsing_key', '');
-        $this->urlhausAuthKey ??= (string) config('clockwork.security_scans.urlhaus_auth_key', '');
+        $this->webRiskApiKey = trim((string) ($this->webRiskApiKey ?? config('clockwork.security_scans.google_web_risk_key', '')));
+        $this->gsbApiKey = trim((string) ($this->gsbApiKey ?? config('clockwork.security_scans.google_safe_browsing_key', '')));
+        $this->urlhausAuthKey = trim((string) ($this->urlhausAuthKey ?? config('clockwork.security_scans.urlhaus_auth_key', '')));
         $this->httpTimeout ??= (int) config('clockwork.security_scans.blacklist_timeout', 10);
     }
 
@@ -170,10 +172,6 @@ class BlacklistChecker
                 ->get($url);
 
             if ($response->failed()) {
-                if ($this->gsbApiKey !== '' && $this->gsbApiKey !== $this->webRiskApiKey) {
-                    return $this->checkGoogleSafeBrowsing($domain);
-                }
-
                 return ['hit' => false, 'error' => "web_risk_http_{$response->status()}"];
             }
 

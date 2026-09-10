@@ -2,13 +2,13 @@
 title: URLhaus + Spamhaus DBL
 section: Integrations
 order: 90
-updated: 2026-09-07
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [integrations, security, blacklist, urlhaus, spamhaus]
 tracks: [app/Services/Security/BlacklistChecker.php]
 ---
 
-Two domain-blacklist sources we query daily. Neither needs a paid account — Spamhaus DBL is a free DNS lookup, URLhaus is a free registration. Together with Google Safe Browsing, they form the daily blacklist scan that recovers the signal Sucuri loses when Cloudflare 403s its scanner.
+Two domain-blacklist sources we query daily. Neither needs a paid account — Spamhaus DBL is a free DNS lookup, URLhaus is a free registration. Together with Google Web Risk (or legacy Safe Browsing v4), they form the daily blacklist scan that recovers the signal Sucuri loses when Cloudflare 403s its scanner.
 
 ## Why we use it
 
@@ -63,7 +63,7 @@ URLhaus catches **malware-host** status — 4M+ entries focused on phishing camp
 
 ## Files
 
-- `app/Services/Security/BlacklistChecker.php` — the all-in-one blacklist client (handles GSB, URLhaus, Spamhaus).
+- `app/Services/Security/BlacklistChecker.php` — the all-in-one blacklist client (handles Web Risk / GSB, URLhaus, Spamhaus).
 - `app/Console/Commands/CheckBlacklists.php`
 - Config: `config/clockwork.php` → `security_scans.urlhaus_auth_key` + `security_scans.blacklist_timeout`.
 

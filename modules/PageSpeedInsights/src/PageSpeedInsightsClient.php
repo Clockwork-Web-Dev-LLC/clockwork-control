@@ -15,13 +15,18 @@ use Throwable;
  *
  * Endpoint:
  *   GET https://www.googleapis.com/pagespeedonline/v5/runPagespeed
- *       ?url=...&strategy=mobile|desktop&category=performance&key=KEY
+ *       ?url=...&strategy=mobile|desktop&key=KEY
+ *       &category=performance&category=accessibility&category=best-practices&category=seo
  *
- * The response is the full Lighthouse JSON. We pluck the Performance category
- * score and the five scoring audits (LCP, FCP, TBT, SI, CLS) plus total byte
- * weight + network request count. We don't store the raw response — Lighthouse
- * payloads are 200KB+ each and the columns we keep capture everything a client
- * report needs. If we ever need the raw audit detail, we can re-run the scan.
+ * Repeating `category=` is required — `http_build_query` bracket arrays
+ * (`category[0]=...`) are ignored by PSI v5. One request is one Lighthouse
+ * run and one quota unit; extra categories are not extra HTTP calls.
+ *
+ * The response is the full Lighthouse JSON. We pluck Performance, Accessibility,
+ * Best Practices, and SEO category scores plus the five scoring audits (LCP,
+ * FCP, TBT, SI, CLS) and total byte weight + network request count. We don't
+ * store the raw response — Lighthouse payloads are 200KB+ each. If we ever
+ * need the raw audit detail, we can re-run the scan.
  */
 class PageSpeedInsightsClient
 {

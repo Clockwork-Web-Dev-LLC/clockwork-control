@@ -430,7 +430,8 @@ Schedule::command('clockwork:run-companion-malware-scans')
 // (the "is this domain blacklisted?" signal) without depending on Sucuri being
 // able to fetch the homepage. CF WAFs in front of our sites 403 Sucuri's
 // scanner; this path queries blacklist sources directly. URLHaus + Spamhaus
-// DBL always; Google Safe Browsing if CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY set.
+// DBL always; Google Web Risk if CLOCKWORK_GOOGLE_WEB_RISK_KEY is set,
+// else legacy Safe Browsing v4 if CLOCKWORK_GOOGLE_SAFE_BROWSING_KEY is set.
 // Hosting-tier feature, runs against every site, not gated on care plan.
 Schedule::command('clockwork:check-blacklists')
     ->dailyAt('02:15')
