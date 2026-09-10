@@ -39,6 +39,8 @@ use Throwable;
  */
 class BlacklistChecker
 {
+    public const SOURCE_WEB_RISK = 'google_web_risk';
+
     public const SOURCE_GSB = 'google_safe_browsing';
 
     public const SOURCE_URLHAUS = 'urlhaus';
@@ -46,10 +48,12 @@ class BlacklistChecker
     public const SOURCE_SPAMHAUS_DBL = 'spamhaus_dbl';
 
     public function __construct(
+        protected ?string $webRiskApiKey = null,
         protected ?string $gsbApiKey = null,
         protected ?string $urlhausAuthKey = null,
         protected ?int $httpTimeout = null,
     ) {
+        $this->webRiskApiKey ??= (string) config('clockwork.security_scans.google_web_risk_key', '');
         $this->gsbApiKey ??= (string) config('clockwork.security_scans.google_safe_browsing_key', '');
         $this->urlhausAuthKey ??= (string) config('clockwork.security_scans.urlhaus_auth_key', '');
         $this->httpTimeout ??= (int) config('clockwork.security_scans.blacklist_timeout', 10);
@@ -63,8 +67,14 @@ class BlacklistChecker
         $hits = [];
         $errors = [];
 
-        $gsb = $this->checkGoogleSafeBrowsing($domain);
-        $this->recordSourceOutcome(self::SOURCE_GSB, $gsb, $hits, $errors);
+        $googleSource = $this->effectiveGoogleSource();
+        if ($googleSource === self::SOURCE_WEB_RISK) {
+            $google = $this->checkGoogleWebRisk($domain);
+            $this->recordSourceOutcome(self::SOURCE_WEB_RISK, $google, $hits, $errors);
+        } elseif ($googleSource === self::SOURCE_GSB) {
+            $google = $this->checkGoogleSafeBrowsing($domain);
+            $this->recordSourceOutcome(self::SOURCE_GSB, $google, $hits, $errors);
+        }
 
         $urlhaus = $this->checkUrlhaus($domain);
         $this->recordSourceOutcome(self::SOURCE_URLHAUS, $urlhaus, $hits, $errors);
@@ -121,6 +131,63 @@ class BlacklistChecker
             ],
             elapsedMs: $elapsed,
         );
+    }
+
+    private function effectiveGoogleSource(): ?string
+    {
+        if ($this->webRiskApiKey !== '') {
+            return self::SOURCE_WEB_RISK;
+        }
+        if ($this->gsbApiKey !== '') {
+            return self::SOURCE_GSB;
+        }
+
+        return null;
+    }
+
+    /**
+     * Google Cloud Web Risk API lookup. Commercial-standard drop-in for Safe Browsing.
+     *
+     * @return array{hit: bool, error?: string, threat_types?: list<string>}
+     */
+    private function checkGoogleWebRisk(string $domain): array
+    {
+        if ($this->webRiskApiKey === '') {
+            return ['hit' => false, 'error' => 'web_risk_key_not_configured'];
+        }
+
+        try {
+            $threatParams = ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'];
+            $threatQuery = implode('&', array_map(fn ($t) => 'threatTypes='.urlencode($t), $threatParams));
+            $url = 'https://webrisk.googleapis.com/v1/uris:search?'.http_build_query([
+                'uri' => 'https://'.$domain.'/',
+                'key' => $this->webRiskApiKey,
+            ]).'&'.$threatQuery;
+
+            $response = Http::timeout($this->httpTimeout)
+                ->retry(2, 500, throw: false)
+                ->acceptJson()
+                ->get($url);
+
+            if ($response->failed()) {
+                if ($this->gsbApiKey !== '' && $this->gsbApiKey !== $this->webRiskApiKey) {
+                    return $this->checkGoogleSafeBrowsing($domain);
+                }
+
+                return ['hit' => false, 'error' => "web_risk_http_{$response->status()}"];
+            }
+
+            $threat = $response->json('threat');
+            if (! is_array($threat) || empty($threat['threatTypes'])) {
+                return ['hit' => false];
+            }
+
+            $types = is_array($threat['threatTypes']) ? $threat['threatTypes'] : [$threat['threatTypes']];
+
+            return ['hit' => true, 'threat_types' => array_values($types)];
+        } catch (Throwable $e) {
+            return ['hit' => false, 'error' => 'web_risk_exception: '.substr($e->getMessage(), 0, 120)];
+        }
     }
 
     /**
@@ -283,6 +350,7 @@ class BlacklistChecker
             // deliberate "this source is opt-in" state. Other errors are
             // recorded so the UI can show partial results honestly.
             $optInSentinels = [
+                self::SOURCE_WEB_RISK => 'web_risk_key_not_configured',
                 self::SOURCE_GSB => 'gsb_key_not_configured',
                 self::SOURCE_URLHAUS => 'urlhaus_key_not_configured',
             ];
@@ -308,8 +376,9 @@ class BlacklistChecker
         if ($this->urlhausAuthKey !== '') {
             array_unshift($sources, self::SOURCE_URLHAUS);
         }
-        if ($this->gsbApiKey !== '') {
-            array_unshift($sources, self::SOURCE_GSB);
+        $googleSource = $this->effectiveGoogleSource();
+        if ($googleSource !== null) {
+            array_unshift($sources, $googleSource);
         }
 
         return $sources;

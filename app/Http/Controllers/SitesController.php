@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleStateResolver;
 use Modules\Pressable\PressableClient;
@@ -1715,6 +1716,43 @@ class SitesController extends Controller
             'recipient' => $validated['recipient'],
             'count' => count($vulns),
             'mailer' => config('mail.default'),
+        ]);
+    }
+
+    public function backupsHistory(Site $site, SpacesClient $spaces): JsonResponse
+    {
+        $relayArchives = [];
+        if ($site->backup_relay_enabled || $site->backup_relay_last_archived_at !== null) {
+            try {
+                if (class_exists(BackupArchiveEnumerator::class)) {
+                    $enumerator = app(BackupArchiveEnumerator::class);
+                    $relayData = $enumerator->forSite($site);
+                    $relayArchives = $relayData['archives'] ?? [];
+                }
+            } catch (Throwable) {
+                // S3 disk or credentials may be unconfigured
+            }
+        }
+
+        $spacesHistory = [];
+        $spacesConfigured = $spaces->isConfigured();
+        if ($spacesConfigured && $site->isSpinupWp()) {
+            try {
+                $objects = $spaces->listSiteBackupObjects($site);
+                $spacesHistory = $spaces->toHistoryRows($objects);
+            } catch (Throwable) {
+                // Spaces disk error
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'site_id' => $site->id,
+            'domain' => $site->domain,
+            'hosting_provider' => $site->hosting_provider,
+            'spaces_configured' => $spacesConfigured,
+            'spaces_history' => $spacesHistory,
+            'relay_archives' => $relayArchives,
         ]);
     }
 }

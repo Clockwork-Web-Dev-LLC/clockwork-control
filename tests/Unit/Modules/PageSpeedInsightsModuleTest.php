@@ -50,6 +50,9 @@ describe('PageSpeedInsights module', function () {
                 'lighthouseResult' => [
                     'categories' => [
                         'performance' => ['score' => 0.95],
+                        'accessibility' => ['score' => 0.98],
+                        'best-practices' => ['score' => 0.92],
+                        'seo' => ['score' => 1.0],
                     ],
                     'audits' => [
                         'largest-contentful-paint' => ['numericValue' => 1250],
@@ -76,6 +79,9 @@ describe('PageSpeedInsights module', function () {
 
         expect($result->status)->toBe(SitePerformanceScan::STATUS_OK);
         expect($result->performanceScore)->toBe(95);
+        expect($result->accessibilityScore)->toBe(98);
+        expect($result->bestPracticesScore)->toBe(92);
+        expect($result->seoScore)->toBe(100);
         expect($result->lcpMs)->toBe(1250);
         expect($result->fcpMs)->toBe(850);
         expect($result->tbtMs)->toBe(45);

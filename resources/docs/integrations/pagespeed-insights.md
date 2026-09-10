@@ -44,11 +44,12 @@ No key required strictly speaking — the Google API permits anonymous calls at 
 
 `GET https://www.googleapis.com/pagespeedonline/v5/runPagespeed`
 
-Query params: `url`, `key`, `strategy=mobile` (or `desktop`), `category=PERFORMANCE`.
+Query params: `url`, `key`, `strategy=mobile` (or `desktop`), repeating `category=performance&category=accessibility&category=best-practices&category=seo`.
 
-Response is parsed via `GoogleLighthouseParser` (in `modules/PageSpeedInsights/src/`). We extract:
+Response is parsed via `PageSpeedInsightsClient`. We extract:
 
-- Performance score (0–100, mapped to `overall_score`)
+- Performance score (0–100)
+- Accessibility, Best Practices, and SEO scores (0–100)
 - Core Web Vitals: LCP, FCP, TBT, Speed Index, CLS
 - Page weight (bytes), network request count
 

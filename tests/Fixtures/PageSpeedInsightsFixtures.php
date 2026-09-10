@@ -15,7 +15,12 @@ class PageSpeedInsightsFixtures
     {
         return [
             'lighthouseResult' => [
-                'categories' => ['performance' => ['score' => $score]],
+                'categories' => [
+                    'performance' => ['score' => $score],
+                    'accessibility' => ['score' => 0.96],
+                    'best-practices' => ['score' => 0.92],
+                    'seo' => ['score' => 1.0],
+                ],
                 'audits' => [
                     'largest-contentful-paint' => ['numericValue' => 1900],
                     'first-contentful-paint' => ['numericValue' => 950],

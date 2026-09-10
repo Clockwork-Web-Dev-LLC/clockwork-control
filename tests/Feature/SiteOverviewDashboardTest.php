@@ -187,4 +187,49 @@ describe('Site Overview Command Center Dashboard', function () {
 
         expect($site->fresh()->notes)->toBe('Saved via web form submit.');
     });
+
+    it('renders backup protection and destination for SpinupWP sites when DO Spaces is configured', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        config([
+            'clockwork.do_spaces.key' => 'test-spaces-key',
+            'clockwork.do_spaces.secret' => 'test-spaces-secret',
+            'clockwork.do_spaces.bucket' => 'test-bucket',
+        ]);
+
+        $site = Site::factory()->create([
+            'domain' => 'spinup-backup-test.example.com',
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'backup_relay_enabled' => false,
+            'backup_relay_last_archived_at' => null,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('sites.show', $site));
+
+        $response->assertOk();
+        $response->assertSee('Protected');
+        $response->assertSee('DigitalOcean Spaces (SpinupWP)');
+        $response->assertSee('Snapshots');
+    });
+
+    it('returns backup history json from backups-history endpoint', function () {
+        $user = User::factory()->create();
+
+        $site = Site::factory()->create([
+            'domain' => 'api-history-test.example.com',
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'backup_relay_enabled' => false,
+        ]);
+
+        $response = $this->actingAs($user)->getJson(route('sites.backups.history', $site));
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            ]);
+    });
 });
