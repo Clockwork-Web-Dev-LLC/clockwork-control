@@ -827,4 +827,146 @@ body {
     color: var(--color-brand);
 }
 
+/* ==========================================================================
+   UNIFIED DUAL-LAYOUT ARCHITECTURE (Command Center vs Modern Studio)
+   ========================================================================== */
+
+/* 1. Layout Switching Visibility Controls */
+[data-layout-style="modern"] .cw-sidebar-rail {
+    display: none !important;
+}
+[data-layout-style="modern"] .cw-subnav-tier {
+    display: block;
+}
+
+[data-layout-style="command-center"] .cw-sidebar-rail {
+    display: flex !important;
+}
+[data-layout-style="command-center"] .cw-subnav-tier {
+    display: none !important;
+}
+[data-layout-style="command-center"] .cw-top-header {
+    border-bottom-color: var(--color-border-light);
+}
+
+/* 2. Command Center Specific Elements */
+.cmd-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+    transition: all 120ms ease;
+    text-decoration: none;
+    position: relative;
+}
+
+.cmd-nav-item:hover {
+    background-color: var(--color-surface-alt);
+    color: var(--color-ink-strong);
+}
+
+.cmd-nav-item.is-active {
+    background-color: var(--color-primary-50);
+    color: var(--color-primary-700);
+    font-weight: 600;
+}
+
+:root[data-theme="dark"] .cmd-nav-item.is-active,
+:root[data-theme="high-contrast"] .cmd-nav-item.is-active {
+    background-color: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+}
+
+.cmd-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-family: var(--font-data);
+    font-size: 0.6875rem;
+    background-color: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    color: var(--color-ink-soft);
+}
+
+.cmd-drawer {
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+}
+
+/* 3. Polymorphic Card & HUD System */
+.cw-kpi-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+    transition: all 150ms ease;
+}
+
+[data-layout-style="command-center"] .cw-kpi-card {
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-color: var(--color-border-light);
+}
+
+[data-layout-style="command-center"] .cw-kpi-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.cw-server-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cw-server-card:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+    border-color: rgba(20, 86, 240, 0.25);
+    transform: translateY(-2px);
+}
+
+[data-layout-style="command-center"] .cw-server-card {
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+}
+
+/* 4. High-Density Telemetry Data Grid Table */
+.cw-data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.75rem;
+}
+
+.cw-data-table th {
+    padding: 0.625rem 0.875rem;
+    background: var(--color-surface-alt);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.6875rem;
+    color: var(--color-ink-muted);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.cw-data-table td {
+    padding: 0.75rem 0.875rem;
+    border-bottom: 1px solid var(--color-border-light);
+    color: var(--color-ink);
+    vertical-align: middle;
+}
+
+.cw-data-table tbody tr:hover td {
+    background: var(--color-surface-alt);
+}
+
+
 
