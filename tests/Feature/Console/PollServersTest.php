@@ -149,4 +149,36 @@ describe('clockwork:poll-servers', function () {
 
         expect($server->fresh()->last_alert_at->timestamp)->toBe($originalAlertAt->timestamp);
     });
+
+    it('polls telemetry and writes metrics for servers tagged staging as long as they are not ignored', function () {
+        $fake = new FakeCloudProviderForPollServersTest('digitalocean', [
+            'cpu_pct' => 15.0,
+            'memory_pct' => 45.0,
+            'disk_pct' => 25.0,
+            'load_1' => 0.5,
+        ]);
+
+        $this->mock(CloudProviderRegistry::class, function ($mock) use ($fake) {
+            $mock->shouldReceive('all')->andReturn([$fake]);
+            $mock->shouldReceive('resolve')->andReturn($fake);
+        });
+
+        $staging = Server::factory()->create([
+            'provider' => 'digitalocean',
+            'provider_id' => '333',
+            'is_ignored' => false,
+        ]);
+        $tag = \App\Models\Tag::factory()->create(['slug' => 'staging']);
+        $staging->tags()->attach($tag);
+
+        $this->artisan('clockwork:poll-servers')
+            ->assertSuccessful()
+            ->expectsOutputToContain('green=1');
+
+        expect(ServerMetric::where('server_id', $staging->id)->count())->toBe(1);
+        $metric = ServerMetric::where('server_id', $staging->id)->first();
+        expect((float) $metric->cpu_pct)->toBe(15.0)
+            ->and((float) $metric->memory_pct)->toBe(45.0)
+            ->and((float) $metric->disk_pct)->toBe(25.0);
+    });
 });

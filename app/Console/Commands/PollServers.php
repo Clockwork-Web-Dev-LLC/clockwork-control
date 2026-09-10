@@ -37,11 +37,11 @@ class PollServers extends Command
 
         $linked = Server::query()
             ->whereNotNull('provider_id')
-            ->monitored()
+            ->where('is_ignored', false)
             ->get();
         $unlinked = Server::query()
             ->whereNull('provider_id')
-            ->monitored()
+            ->where('is_ignored', false)
             ->count();
         $ignored = Server::query()->where('is_ignored', true)->count();
 

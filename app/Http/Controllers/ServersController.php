@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Server;
+use App\Models\ServerMetric;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use App\Services\Monitoring\CpuStatusClassifier;
 use App\Services\Process\BackgroundArtisan;
@@ -251,7 +252,8 @@ class ServersController extends Controller
         $start = $end - ($windowMinutes * 60);
 
         try {
-            $cpuPct = $registry->resolve($server->provider)->metrics($server, $start, $end)['cpu_pct'];
+            $sample = $registry->resolve($server->provider)->metrics($server, $start, $end);
+            $cpuPct = $sample['cpu_pct'];
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
         }
@@ -265,6 +267,15 @@ class ServersController extends Controller
             $server->last_alert_at = $now;
         }
         $server->save();
+
+        ServerMetric::create([
+            'server_id' => $server->id,
+            'recorded_at' => $now,
+            'cpu_pct' => $sample['cpu_pct'],
+            'memory_pct' => $sample['memory_pct'],
+            'disk_pct' => $sample['disk_pct'],
+            'load_1' => $sample['load_1'] ?? null,
+        ]);
 
         return response()->json([
             'ok' => true,

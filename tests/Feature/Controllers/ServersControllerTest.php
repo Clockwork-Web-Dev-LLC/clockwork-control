@@ -395,6 +395,7 @@ describe('ServersController', function () {
             $server->refresh();
             expect($server->status)->toBe(Server::STATUS_GREEN);
             expect($server->last_polled_at)->not->toBeNull();
+            expect(ServerMetric::where('server_id', $server->id)->count())->toBe(1);
         });
 
         it('classifies red status at/above the red threshold and stamps last_alert_at on the transition into red', function () {
