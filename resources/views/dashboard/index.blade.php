@@ -24,6 +24,7 @@
     $alertCount = $statusCounts[Server::STATUS_RED] ?? 0;
     $totalCount = $servers->count();
     $healthPct = $totalCount > 0 ? round(($healthyCount / $totalCount) * 100, 1) : 100;
+    $missingCreds = $servers->whereNull('ssh_password')->count();
 @endphp
 
 @section('content')
