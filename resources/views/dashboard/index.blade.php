@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Servers · Modern Studio')
+@section('title', 'Servers · Clockwork Control')
 
 @php
     use App\Models\Server;
@@ -315,33 +315,114 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        const sites = @json($siteIndex ?? []);
         const input = document.getElementById('fleet-search');
         const clearBtn = document.getElementById('fleet-search-clear');
+        const sitesPanel = document.getElementById('fleet-search-sites');
+        const sitesList = document.getElementById('fleet-search-sites-list');
         const emptyMsg = document.getElementById('fleet-search-empty');
+        const cards = Array.from(document.querySelectorAll('.server-card'));
+
         if (!input) return;
 
-        input.addEventListener('input', () => {
-            const query = input.value.trim().toLowerCase();
-            if (clearBtn) clearBtn.classList.toggle('hidden', query === '');
+        // Pre-index sites by server ID for fast domain-to-server matching
+        const domainsByServerId = {};
+        sites.forEach(s => {
+            const id = String(s.server_id);
+            (domainsByServerId[id] = domainsByServerId[id] || []).push(s.domain.toLowerCase());
+        });
 
-            let matchCount = 0;
-            document.querySelectorAll('.server-card').forEach(el => {
-                const searchData = el.getAttribute('data-search') || '';
-                const matches = query === '' || searchData.includes(query);
-                el.classList.toggle('hidden', !matches);
-                if (matches) matchCount++;
+        function filterFleet() {
+            const query = input.value.trim().toLowerCase();
+            const hasQuery = query.length > 0;
+
+            if (clearBtn) clearBtn.classList.toggle('hidden', !hasQuery);
+
+            let visibleServers = 0;
+            cards.forEach(card => {
+                const searchData = card.getAttribute('data-search') || '';
+                const inServerText = searchData.includes(query);
+                const serverId = card.getAttribute('data-server-id');
+                const inSiteDomains = (domainsByServerId[serverId] || []).some(d => d.includes(query));
+                const matches = !hasQuery || inServerText || inSiteDomains;
+
+                card.style.display = matches ? '' : 'none';
+                if (matches) visibleServers++;
             });
 
-            if (emptyMsg) emptyMsg.classList.toggle('hidden', matchCount > 0 || query === '');
-        });
+            if (!hasQuery) {
+                if (sitesPanel) sitesPanel.classList.add('hidden');
+                if (emptyMsg) emptyMsg.classList.add('hidden');
+                if (sitesList) sitesList.innerHTML = '';
+                return;
+            }
+
+            // Matching site list popup
+            const matchingSites = sites
+                .filter(s => s.domain.toLowerCase().includes(query))
+                .slice(0, 20);
+
+            if (sitesPanel && sitesList) {
+                if (matchingSites.length > 0) {
+                    sitesList.innerHTML = matchingSites.map(s => `
+                        <a href="${s.url}" class="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--color-surface-alt)] transition-colors group">
+                            <span class="font-medium text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] truncate">
+                                <i class="fa-brands fa-wordpress text-xs text-sky-500 mr-1.5"></i>
+                                ${escapeHtml(s.domain)}
+                            </span>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] font-mono shrink-0 ml-2">
+                                ${escapeHtml(s.server_name || '')}
+                            </span>
+                        </a>
+                    `).join('');
+                    sitesPanel.classList.remove('hidden');
+                } else {
+                    sitesPanel.classList.add('hidden');
+                    sitesList.innerHTML = '';
+                }
+            }
+
+            if (emptyMsg) {
+                const totalMatches = visibleServers + matchingSites.length;
+                emptyMsg.classList.toggle('hidden', totalMatches > 0);
+            }
+        }
+
+        function escapeHtml(str) {
+            const p = document.createElement('p');
+            p.textContent = str;
+            return p.innerHTML;
+        }
+
+        input.addEventListener('input', filterFleet);
 
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
                 input.value = '';
-                input.dispatchEvent(new Event('input'));
+                filterFleet();
                 input.focus();
             });
         }
+
+        // Close sites dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (sitesPanel && !sitesPanel.contains(e.target) && e.target !== input) {
+                sitesPanel.classList.add('hidden');
+            }
+        });
+
+        // Keyboard navigation shortcuts: '/' or 'Cmd+K' / 'Ctrl+K' focuses search, 'Esc' closes/clears
+        document.addEventListener('keydown', (e) => {
+            if ((e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) ||
+                ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+                e.preventDefault();
+                input.focus();
+                input.select();
+            } else if (e.key === 'Escape' && document.activeElement === input) {
+                if (sitesPanel) sitesPanel.classList.add('hidden');
+                input.blur();
+            }
+        });
     });
 </script>
 @endsection

@@ -18,53 +18,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Clockwork Control') · Modern Studio</title>
+    <title>@yield('title', 'Clockwork Control')</title>
     <script>
         (function () {
             try {
-                var match = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
-                var theme = match ? decodeURIComponent(match[1]) : 'light';
-                var resolved = theme;
-                if (!resolved || resolved === 'system') {
-                    resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                // Theme pre-application (zero-FOUC)
+                var themeMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
+                var theme = themeMatch ? decodeURIComponent(themeMatch[1]) : 'light';
+                var resolvedTheme = theme;
+                if (!resolvedTheme || resolvedTheme === 'system') {
+                    resolvedTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 }
-                if (resolved === 'midnight') {
-                    resolved = 'dark';
+                if (resolvedTheme === 'midnight') {
+                    resolvedTheme = 'dark';
                 }
-                document.documentElement.setAttribute('data-theme', resolved);
+                document.documentElement.setAttribute('data-theme', resolvedTheme);
+
+                // Root font-scale pre-application (zero-FOUT)
+                var scale = localStorage.getItem('cw_font_scale');
+                if (!scale) {
+                    var scaleMatch = document.cookie.match(/(?:^|; )cw_font_scale=([^;]*)/);
+                    scale = scaleMatch ? decodeURIComponent(scaleMatch[1]) : null;
+                }
+                if (scale) {
+                    var parsed = parseInt(scale, 10);
+                    if (!isNaN(parsed) && parsed >= 85 && parsed <= 125) {
+                        document.documentElement.style.fontSize = parsed + '%';
+                    }
+                }
             } catch (e) {}
         })();
     </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-[var(--color-surface)] text-[var(--color-ink)] antialiased font-sans"
+<body class="min-h-screen bg-[var(--color-surface)] text-[var(--color-ink)] antialiased font-sans flex flex-col justify-between"
       x-data="{
           mobileNavOpen: false,
           userMenuOpen: false,
-          settingsMenuOpen: false,
           ...themePicker()
       }">
 
     <!-- ===================================================================== -->
-    <!-- DUAL-TIER TOP NAVIGATION BAR (Vercel / Stripe SaaS Style)              -->
+    <!-- DUAL-TIER TOP NAVIGATION BAR (Modern SaaS Style)                       -->
     <!-- ===================================================================== -->
     <header class="border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-40 shadow-xs">
         <!-- Tier 1: Global Header -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-            <!-- Left: Logo + Scope -->
+            <!-- Left: Logo & Brand Lockup -->
             <div class="flex items-center gap-3 min-w-0">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-2.5">
                     <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-[var(--color-brand)] to-sky-400 flex items-center justify-center text-white shadow-xs">
                         <i class="fa-solid fa-clock text-sm"></i>
                     </div>
-                    <span class="font-display text-lg font-bold tracking-tight text-[var(--color-ink-strong)]">Clockwork</span>
+                    <span class="font-display text-lg font-bold tracking-tight text-[var(--color-ink-strong)]">Clockwork Control</span>
                 </a>
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]">
-                    Studio
-                </span>
             </div>
 
-            <!-- Right: Search, Actions, Profile -->
+            <!-- Right: Status, Font Scaler, Theme Toggle, Add Server, Profile -->
             <div class="flex items-center gap-3">
                 <!-- Fleet Status Pill -->
                 @isset($statusCounts)
@@ -82,25 +92,38 @@
                     </div>
                 @endisset
 
-                <!-- Primary Action -->
+                <!-- Primary Action: Add Server -->
                 <a href="{{ route('servers.create') }}" class="px-3.5 py-1.5 rounded-lg bg-[var(--color-brand)] text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
                     <i class="fa-solid fa-plus text-xs"></i>
-                    <span>Add Server</span>
+                    <span class="hidden sm:inline">Add Server</span>
                 </a>
 
-                <!-- Theme Toggle -->
+                <!-- Font Size Stepper (+ / -) -->
+                <div class="hidden sm:inline-flex cw-font-stepper text-xs" x-data="fontScaler" title="Adjust application font size">
+                    <button type="button" @click="decrease()" :disabled="scale <= min" aria-label="Decrease font size" title="Smaller text (A-)">
+                        <i class="fa-solid fa-minus text-[10px]"></i>
+                    </button>
+                    <span class="cw-font-value" @click="reset()" x-text="scale + '%'" title="Click to reset font size to 100%"></span>
+                    <button type="button" @click="increase()" :disabled="scale >= max" aria-label="Increase font size" title="Larger text (A+)">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                    </button>
+                </div>
+
+                <!-- Dark / Light Theme Toggle -->
                 <button type="button"
-                        @click="setTheme(isDark ? 'light' : 'dark')"
-                        class="p-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-colors text-xs"
-                        :title="isDark ? 'Light mode' : 'Dark mode'">
-                    <i :class="isDark ? 'fa-solid fa-moon text-sky-400' : 'fa-solid fa-sun text-amber-500'"></i>
+                        @click="toggleDark()"
+                        class="p-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors text-xs cursor-pointer"
+                        :title="isDark ? 'Switch to Light mode' : 'Switch to Dark mode'"
+                        :aria-label="isDark ? 'Switch to Light mode' : 'Switch to Dark mode'">
+                    <i :class="isDark ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon text-indigo-500'"></i>
                 </button>
 
                 <!-- Profile Menu -->
                 <div class="relative" @click.outside="userMenuOpen = false">
                     <button type="button"
                             @click="userMenuOpen = !userMenuOpen"
-                            class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] transition-colors cursor-pointer">
+                            class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] transition-colors cursor-pointer"
+                            aria-label="User menu">
                         {{ strtoupper(substr(auth()->user()?->name ?? 'OP', 0, 2)) }}
                     </button>
 
@@ -129,8 +152,9 @@
                 <!-- Mobile Menu Button -->
                 <button type="button"
                         @click="mobileNavOpen = !mobileNavOpen"
-                        class="md:hidden p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]">
-                    <i class="fa-solid fa-bars"></i>
+                        class="md:hidden p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]"
+                        aria-label="Toggle navigation drawer">
+                    <i :class="mobileNavOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars'"></i>
                 </button>
             </div>
         </div>
@@ -193,6 +217,53 @@
                 </nav>
             </div>
         </div>
+
+        <!-- Mobile Drawer Navigation -->
+        <div x-show="mobileNavOpen"
+             x-cloak
+             class="md:hidden border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 space-y-2 text-xs">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--color-border-light)]">
+                <span class="font-semibold text-[var(--color-ink-muted)]">Font Size</span>
+                <div class="inline-flex cw-font-stepper" x-data="fontScaler">
+                    <button type="button" @click="decrease()" :disabled="scale <= min" aria-label="Decrease font size">
+                        <i class="fa-solid fa-minus text-[10px]"></i>
+                    </button>
+                    <span class="cw-font-value" @click="reset()" x-text="scale + '%'"></span>
+                    <button type="button" @click="increase()" :disabled="scale >= max" aria-label="Increase font size">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-1 pt-1">
+                <a href="{{ route('dashboard') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-server mr-2 text-[var(--color-brand)]"></i> Servers
+                </a>
+                <a href="{{ route('sites.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-globe mr-2 text-[var(--color-brand)]"></i> Sites
+                </a>
+                <a href="{{ route('issues.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues
+                </a>
+                <a href="{{ route('updates.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-rotate mr-2 text-[var(--color-brand)]"></i> Updates
+                </a>
+                <a href="{{ route('monitoring.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-status-green)]"></i> Monitoring
+                </a>
+                <a href="{{ route('security.scans') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security
+                </a>
+                <a href="{{ route('capacity.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-gauge-high mr-2 text-[var(--color-ink-muted)]"></i> Capacity
+                </a>
+                <a href="{{ route('operations.server-updates.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-cube mr-2 text-[var(--color-ink-muted)]"></i> Operations
+                </a>
+                <a href="{{ route('settings.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                    <i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings
+                </a>
+            </div>
+        </div>
     </header>
 
     <!-- Stale scheduler warning -->
@@ -216,7 +287,7 @@
         @yield('content')
     </main>
 
-    <!-- Clean Studio Footer -->
+    <!-- Clean Clockwork Control Footer -->
     <footer class="border-t border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-ink-muted)] py-6 mt-16">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">

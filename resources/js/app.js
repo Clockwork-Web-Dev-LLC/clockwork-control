@@ -16,6 +16,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { initThemeSystem } from './theme.js';
+import { initFontScaleSystem } from './font-scale.js';
 
 echarts.use([
     LineChart,
@@ -339,5 +340,6 @@ Alpine.data('siteDashboardReorder', ({ updateUrl, csrf, order = [], isCustom = f
 }));
 
 initThemeSystem(Alpine);
+initFontScaleSystem(Alpine);
 
 Alpine.start();
