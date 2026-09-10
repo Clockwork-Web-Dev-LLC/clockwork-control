@@ -359,6 +359,7 @@ export function appChrome() {
         sidebarOpen: typeof localStorage !== 'undefined' && localStorage.getItem('cw_cc_sidebar') !== 'false',
         mobileNavOpen: false,
         userMenuOpen: false,
+        sidebarUserMenuOpen: false,
         paletteOpen: false,
         paletteQuery: '',
         toggleSidebar() {

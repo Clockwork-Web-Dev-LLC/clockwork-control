@@ -74,13 +74,13 @@
       @keydown.window.ctrl.k.prevent="paletteOpen = true"
       @keydown.window.cmd.b.prevent="if (style === 'command-center') toggleSidebar()"
       @keydown.window.ctrl.b.prevent="if (style === 'command-center') toggleSidebar()"
-      @keydown.escape="paletteOpen = false">
+      @keydown.escape="paletteOpen = false; userMenuOpen = false; sidebarUserMenuOpen = false">
 
     <div class="flex min-h-screen">
         <!-- ================================================================= -->
         <!-- COMMAND RAIL (Left Sidebar - Command Center Layout Only)          -->
         <!-- ================================================================= -->
-        <aside class="cw-sidebar-rail hidden lg:flex flex-col justify-between sticky top-0 h-screen border-r border-[var(--color-border-light)] bg-[var(--color-surface)] z-30 transition-all duration-200 select-none shrink-0"
+        <aside class="cw-sidebar-rail hidden lg:flex flex-col justify-between sticky top-0 h-screen border-r border-[var(--color-border-light)] bg-[var(--color-surface)] z-40 transition-all duration-200 select-none shrink-0"
                :class="sidebarOpen ? 'w-64' : 'w-18'">
 
             <!-- Top Sidebar Header & Navigation -->
@@ -213,35 +213,96 @@
                 </div>
             </div>
 
-            <!-- Bottom Sidebar Footer (User & Quick Action) -->
-            <div class="p-3 border-t border-[var(--color-border-light)] flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
-                        @if (auth()->check())
-                            <img src="{{ auth()->user()->avatarUrl(64) }}"
-                                 alt="{{ auth()->user()->name }}"
-                                 class="w-full h-full object-cover rounded-full"
-                                 loading="lazy"
-                                 referrerpolicy="no-referrer"
-                                 onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
-                            <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
-                                {{ auth()->user()->initials() }}
-                            </span>
-                        @else
-                            OP
+            <!-- Bottom Sidebar Footer (User & Popover Menu) -->
+            <div class="p-3 border-t border-[var(--color-border-light)] relative"
+                 @click.outside="sidebarUserMenuOpen = false">
+                <button type="button"
+                        @click="sidebarUserMenuOpen = !sidebarUserMenuOpen"
+                        class="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-[var(--color-surface-alt)] transition-colors cursor-pointer group text-left"
+                        :class="[
+                            sidebarUserMenuOpen ? 'bg-[var(--color-surface-alt)]' : '',
+                            sidebarOpen ? 'justify-between' : 'justify-center'
+                        ]"
+                        aria-label="User menu"
+                        :title="!sidebarOpen ? '{{ auth()->user()?->name ?? 'Operator' }}' : ''">
+                    <div class="flex items-center gap-2.5 min-w-0" :class="sidebarOpen ? '' : 'justify-center'">
+                        <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] group-hover:border-[var(--color-brand)] transition-colors flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                            @if (auth()->check())
+                                <img src="{{ auth()->user()->avatarUrl(64) }}"
+                                     alt="{{ auth()->user()->name }}"
+                                     class="w-full h-full object-cover rounded-full"
+                                     loading="lazy"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                    {{ auth()->user()->initials() }}
+                                </span>
+                            @else
+                                OP
+                            @endif
+                        </div>
+                        <div x-show="sidebarOpen" x-transition.opacity class="min-w-0 leading-tight">
+                            <p class="text-xs font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
+                            <p class="text-[10px] text-[var(--color-ink-soft)] truncate">{{ auth()->user()?->email ?? 'admin@lan' }}</p>
+                        </div>
+                    </div>
+                    <div x-show="sidebarOpen" x-transition.opacity class="text-[var(--color-ink-soft)] group-hover:text-[var(--color-ink-strong)] transition-colors shrink-0 pr-1">
+                        <i class="fa-solid fa-ellipsis-vertical text-xs"></i>
+                    </div>
+                </button>
+
+                <!-- Upward Popover Menu -->
+                <div x-show="sidebarUserMenuOpen"
+                     x-cloak
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="opacity-100 translate-y-0"
+                     x-transition:leave-end="opacity-0 translate-y-2"
+                     class="absolute bottom-full left-2 mb-2 w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl z-50 py-1 text-xs">
+                    <div class="px-3 py-2 border-b border-[var(--color-border-light)] flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                            @if (auth()->check())
+                                <img src="{{ auth()->user()->avatarUrl(64) }}"
+                                     alt="{{ auth()->user()->name }}"
+                                     class="w-full h-full object-cover rounded-full"
+                                     loading="lazy"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                <span class="hidden font-bold text-xs text-[var(--color-ink-strong)]">
+                                    {{ auth()->user()->initials() }}
+                                </span>
+                            @else
+                                OP
+                            @endif
+                        </div>
+                        <div class="min-w-0 flex-1 leading-tight">
+                            <p class="font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
+                            <p class="text-[10px] text-[var(--color-ink-soft)] truncate">{{ auth()->user()?->email ?? 'admin@lan' }}</p>
+                        </div>
+                    </div>
+                    <a href="{{ route('settings.users.index') }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
+                        <i class="fa-solid fa-user-gear text-[var(--color-ink-muted)]"></i> Account &amp; Team
+                    </a>
+                    <a href="{{ route('settings.index') }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
+                        <i class="fa-solid fa-sliders text-[var(--color-ink-muted)]"></i> Settings Hub
+                    </a>
+                    @foreach (app(\Modules\Core\ModuleRegistry::class)->navItems() as $moduleNavItem)
+                        @if ($moduleNavItem->isVisible())
+                            <a href="{{ route($moduleNavItem->route) }}" class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
+                                <i class="{{ $moduleNavItem->icon }} text-[var(--color-ink-muted)]"></i> {{ $moduleNavItem->label }}
+                            </a>
                         @endif
-                    </div>
-                    <div x-show="sidebarOpen" x-transition.opacity class="min-w-0 leading-tight">
-                        <p class="text-xs font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()?->name ?? 'Operator' }}</p>
-                        <p class="text-[10px] text-[var(--color-ink-soft)] truncate">Online</p>
-                    </div>
+                    @endforeach
+
+                    <form method="POST" action="{{ route('logout') }}" class="border-t border-[var(--color-border-light)] mt-1">
+                        @csrf
+                        <button type="submit" class="w-full text-left flex items-center gap-2 px-3 py-2 text-[var(--color-status-red)] hover:bg-[var(--color-surface-alt)] cursor-pointer">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out
+                        </button>
+                    </form>
                 </div>
-                <form x-show="sidebarOpen" x-transition.opacity method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="p-1.5 rounded-md text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] transition-colors cursor-pointer" title="Sign out">
-                        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
-                    </button>
-                </form>
             </div>
         </aside>
 
@@ -322,8 +383,8 @@
                             <span class="hidden sm:inline">Add Server</span>
                         </a>
 
-                        <!-- Profile Dropdown Menu -->
-                        <div class="relative" @click.outside="userMenuOpen = false">
+                        <!-- Profile Dropdown Menu (Modern Studio Layout / Mobile) -->
+                        <div class="relative cw-top-profile" @click.outside="userMenuOpen = false">
                             <button type="button"
                                     @click="userMenuOpen = !userMenuOpen"
                                     class="w-8 h-8 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border)] flex items-center justify-center font-bold text-xs text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] transition-colors cursor-pointer overflow-hidden"

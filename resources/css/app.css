@@ -943,6 +943,9 @@ body {
 .cw-top-jump-btn {
     display: inline-flex;
 }
+.cw-top-profile {
+    display: block;
+}
 
 @media (min-width: 1024px) {
     /* Keep the rail desktop-only — the aside is `hidden lg:flex`. An unscoped
@@ -959,6 +962,10 @@ body {
         display: flex !important;
     }
     [data-layout-style="command-center"] .cw-top-jump-btn {
+        display: none !important;
+    }
+    /* In Command Center layout on desktop, hide top-right profile since it lives in the sidebar footer */
+    [data-layout-style="command-center"] .cw-top-profile {
         display: none !important;
     }
 }
