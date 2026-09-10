@@ -7,15 +7,21 @@
 
     $statusMeta = [
         Server::STATUS_GREEN => ['label' => 'Healthy', 'class' => 'status-green', 'card' => ''],
-        Server::STATUS_YELLOW => ['label' => 'Watch', 'class' => 'status-yellow', 'card' => 'border-l-4 border-l-[var(--color-status-yellow)]'],
-        Server::STATUS_RED => ['label' => 'Alert', 'class' => 'status-red', 'card' => 'border-l-4 border-l-[var(--color-status-red)]'],
-        Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown', 'card' => ''],
+        Server::STATUS_YELLOW => ['label' => 'Watch', 'class' => 'status-yellow', 'card' => 'card-status-yellow'],
+        Server::STATUS_RED => ['label' => 'Alert', 'class' => 'status-red', 'card' => 'card-status-red'],
+        Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown', 'card' => 'card-status-unknown'],
     ];
 
+    // Pressure tier for CPU/MEM/DSK readouts & meters:
+    //   < 70%  → normal (brand primary / default ink)
+    //   70-79% → yellow (watch)
+    //   80-89% → orange (elevated pressure)
+    //   >= 90% → red (alert)
     $pressureColor = function (?float $pct): ?string {
         if ($pct === null) return null;
         if ($pct >= 90) return 'var(--color-status-red)';
-        if ($pct >= 80) return 'var(--color-status-yellow)';
+        if ($pct >= 80) return 'var(--color-status-orange)';
+        if ($pct >= 70) return 'var(--color-status-yellow)';
         return null;
     };
 
@@ -336,8 +342,24 @@
                         str_starts_with($server->provider ?? '', 'aws') => 'AWS',
                         default => $cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : null,
                     };
+
+                    $maxMetric = max((float) ($cpuVal ?? 0), (float) ($memVal ?? 0), (float) ($dskVal ?? 0));
+                    $cardStatusClass = match(true) {
+                        $server->status === Server::STATUS_RED || $maxMetric >= 90 => 'card-status-red',
+                        $maxMetric >= 80 => 'card-status-orange',
+                        $server->status === Server::STATUS_YELLOW || $maxMetric >= 70 => 'card-status-yellow',
+                        $server->status === Server::STATUS_UNKNOWN => 'card-status-unknown',
+                        default => '',
+                    };
+                    $cardPill = match(true) {
+                        $server->status === Server::STATUS_RED || $maxMetric >= 90 => ['label' => 'Alert', 'class' => 'status-red'],
+                        $maxMetric >= 80 => ['label' => 'Watch', 'class' => 'status-orange'],
+                        $server->status === Server::STATUS_YELLOW || $maxMetric >= 70 => ['label' => 'Watch', 'class' => 'status-yellow'],
+                        $server->status === Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown'],
+                        default => ['label' => 'Healthy', 'class' => 'status-green'],
+                    };
                 @endphp
-                <div class="cw-server-card flex flex-col justify-between server-card relative group {{ $meta['card'] }}"
+                <div class="cw-server-card flex flex-col justify-between server-card relative group {{ $cardStatusClass }}"
                      data-server-id="{{ $server->id }}"
                      data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}">
 
@@ -350,9 +372,9 @@
                                 </a>
                                 <p class="text-xs text-[var(--color-ink-soft)] font-mono truncate mt-0.5">{{ $server->hostname }}</p>
                             </div>
-                            <span class="status-pill {{ $meta['class'] }} text-xs shrink-0">
+                            <span class="status-pill {{ $cardPill['class'] }} text-xs shrink-0">
                                 <span class="status-dot"></span>
-                                {{ $meta['label'] }}
+                                {{ $cardPill['label'] }}
                             </span>
                         </div>
 
@@ -512,8 +534,8 @@
                                         'hostname' => $server->hostname,
                                         'ip' => $server->ip_address,
                                         'status' => $server->status,
-                                        'statusLabel' => $meta['label'],
-                                        'statusClass' => $meta['class'],
+                                        'statusLabel' => $cardPill['label'],
+                                        'statusClass' => $cardPill['class'],
                                         'sitesCount' => $server->sites_count ?? $server->sites->count(),
                                         'cpu' => $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—',
                                         'mem' => $memVal !== null ? number_format($memVal, 0) . '%' : '—',
@@ -594,14 +616,23 @@
                                     str_starts_with($server->provider ?? '', 'aws') => 'AWS',
                                     default => $cloudProvider && $cloudProvider->id() !== 'null' ? $cloudProvider->label() : null,
                                 };
+
+                                $maxMetric = max((float) ($cpuVal ?? 0), (float) ($memVal ?? 0), (float) ($dskVal ?? 0));
+                                $cardPill = match(true) {
+                                    $server->status === Server::STATUS_RED || $maxMetric >= 90 => ['label' => 'Alert', 'class' => 'status-red'],
+                                    $maxMetric >= 80 => ['label' => 'Watch', 'class' => 'status-orange'],
+                                    $server->status === Server::STATUS_YELLOW || $maxMetric >= 70 => ['label' => 'Watch', 'class' => 'status-yellow'],
+                                    $server->status === Server::STATUS_UNKNOWN => ['label' => 'Unknown', 'class' => 'status-unknown'],
+                                    default => ['label' => 'Healthy', 'class' => 'status-green'],
+                                };
                             @endphp
                             <tr class="server-card"
                                 data-server-id="{{ $server->id }}"
                                 data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}">
                                 <td>
-                                    <span class="status-pill {{ $meta['class'] }} text-[10px]">
+                                    <span class="status-pill {{ $cardPill['class'] }} text-[10px]">
                                         <span class="status-dot"></span>
-                                        {{ $meta['label'] }}
+                                        {{ $cardPill['label'] }}
                                     </span>
                                 </td>
                                 <td class="font-sans font-semibold text-[var(--color-ink-strong)]">
@@ -668,8 +699,8 @@
                                                 'hostname' => $server->hostname,
                                                 'ip' => $server->ip_address,
                                                 'status' => $server->status,
-                                                'statusLabel' => $meta['label'],
-                                                'statusClass' => $meta['class'],
+                                                'statusLabel' => $cardPill['label'],
+                                                'statusClass' => $cardPill['class'],
                                                 'sitesCount' => $server->sites_count ?? $server->sites->count(),
                                                 'cpu' => $cpuVal !== null ? number_format($cpuVal, 0) . '%' : '—',
                                                 'mem' => $memVal !== null ? number_format($memVal, 0) . '%' : '—',

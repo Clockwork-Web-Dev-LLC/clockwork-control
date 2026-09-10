@@ -63,6 +63,8 @@ html {
     --color-status-green-bg: #e8ffea;
     --color-status-yellow: #d97706;
     --color-status-yellow-bg: #fff7ed;
+    --color-status-orange: #ea580c;
+    --color-status-orange-bg: #fff7ed;
     --color-status-red: #dc2626;
     --color-status-red-bg: #fef2f2;
     --color-status-unknown: #8e8e93;
@@ -105,6 +107,8 @@ html {
     --color-status-green-bg: #e8ffea;
     --color-status-yellow: #d97706;
     --color-status-yellow-bg: #fff7ed;
+    --color-status-orange: #ea580c;
+    --color-status-orange-bg: #fff7ed;
     --color-status-red: #dc2626;
     --color-status-red-bg: #fef2f2;
     --color-status-unknown: #8e8e93;
@@ -155,6 +159,8 @@ html {
     --color-status-green-bg: rgba(34, 197, 94, 0.15);
     --color-status-yellow: #f59e0b;
     --color-status-yellow-bg: rgba(245, 158, 11, 0.15);
+    --color-status-orange: #fb923c;
+    --color-status-orange-bg: rgba(251, 146, 60, 0.15);
     --color-status-red: #ef4444;
     --color-status-red-bg: rgba(239, 68, 68, 0.15);
     --color-status-unknown: #94a3b8;
@@ -204,6 +210,8 @@ html {
     --color-status-green-bg: rgba(74, 222, 128, 0.25);
     --color-status-yellow: #fde047;
     --color-status-yellow-bg: rgba(253, 224, 71, 0.25);
+    --color-status-orange: #fdba74;
+    --color-status-orange-bg: rgba(253, 186, 116, 0.25);
     --color-status-red: #f87171;
     --color-status-red-bg: rgba(248, 113, 113, 0.25);
     --color-status-unknown: #e4e4e7;
@@ -336,6 +344,14 @@ body {
     background: var(--color-status-yellow);
 }
 
+.status-orange {
+    background: var(--color-status-orange-bg);
+    color: var(--color-status-orange);
+}
+.status-orange .status-dot {
+    background: var(--color-status-orange);
+}
+
 .status-red {
     background: var(--color-status-red-bg);
     color: var(--color-status-red);
@@ -375,10 +391,11 @@ body {
 
 /* Card border tints — keep width at 1px, swap the color to match server status.
    Healthy stays the default neutral grey from `.card` so it doesn't read as
-   visually loud — only watch/alert/unknown earn a colored border. */
-.card-status-yellow  { border-color: var(--color-status-yellow); }
-.card-status-red     { border-color: var(--color-status-red); }
-.card-status-unknown { border-color: var(--color-status-unknown); }
+   visually loud — only watch/orange/alert/unknown earn a colored border. */
+.card-status-yellow  { border-color: var(--color-status-yellow) !important; }
+.card-status-orange  { border-color: var(--color-status-orange) !important; }
+.card-status-red     { border-color: var(--color-status-red) !important; }
+.card-status-unknown { border-color: var(--color-status-unknown) !important; }
 
 .card-link:hover {
     box-shadow: var(--shadow-card-lift);
@@ -959,6 +976,35 @@ body {
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
     border-color: rgba(20, 86, 240, 0.25);
     transform: translateY(-2px);
+}
+
+/* Status-specific card borders & hover glow */
+.cw-server-card.card-status-yellow {
+    border-color: var(--color-status-yellow) !important;
+}
+.cw-server-card.card-status-yellow:hover {
+    border-color: var(--color-status-yellow) !important;
+    box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.15), 0 8px 10px -6px rgba(217, 119, 6, 0.1);
+}
+
+.cw-server-card.card-status-orange {
+    border-color: var(--color-status-orange) !important;
+}
+.cw-server-card.card-status-orange:hover {
+    border-color: var(--color-status-orange) !important;
+    box-shadow: 0 10px 25px -5px rgba(234, 88, 12, 0.15), 0 8px 10px -6px rgba(234, 88, 12, 0.1);
+}
+
+.cw-server-card.card-status-red {
+    border-color: var(--color-status-red) !important;
+}
+.cw-server-card.card-status-red:hover {
+    border-color: var(--color-status-red) !important;
+    box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.18), 0 8px 10px -6px rgba(220, 38, 38, 0.12);
+}
+
+.cw-server-card.card-status-unknown {
+    border-color: var(--color-status-unknown) !important;
 }
 
 [data-layout-style="command-center"] .cw-server-card {
