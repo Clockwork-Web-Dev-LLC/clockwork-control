@@ -2,8 +2,8 @@
 // Handles client-side layout selection: 'modern' (Clean SaaS Top-Nav) vs 'command-center' (Collapsible Sidebar Rail & Dense HUD).
 // Persists preference to localStorage and cookie for zero-FOUC initial renders.
 
-export function initLayoutStyleSystem(Alpine) {
-    Alpine.data('layoutStylePicker', () => ({
+export function layoutStylePicker() {
+    return {
         style: 'modern',
 
         init() {
@@ -44,5 +44,10 @@ export function initLayoutStyleSystem(Alpine) {
         applyStyle() {
             document.documentElement.setAttribute('data-layout-style', this.style);
         }
-    }));
+    };
+}
+
+export function initLayoutStyleSystem(Alpine) {
+    window.layoutStylePicker = layoutStylePicker;
+    Alpine.data('layoutStylePicker', layoutStylePicker);
 }

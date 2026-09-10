@@ -23,8 +23,14 @@
         (function () {
             try {
                 // 1. Theme pre-application (zero-FOUC)
-                var themeMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
-                var theme = themeMatch ? decodeURIComponent(themeMatch[1]) : 'light';
+                var theme = null;
+                try {
+                    theme = localStorage.getItem('cw_theme');
+                } catch (e) {}
+                if (!theme) {
+                    var themeMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
+                    theme = themeMatch ? decodeURIComponent(themeMatch[1]) : null;
+                }
                 var resolvedTheme = theme;
                 if (!resolvedTheme || resolvedTheme === 'system') {
                     resolvedTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

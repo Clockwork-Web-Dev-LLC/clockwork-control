@@ -2,8 +2,8 @@
 // Handles client-side theme selection, OS preference resolution, live switching,
 // cookie/backend persistence, and ECharts dynamic color updating.
 
-export function initThemeSystem(Alpine) {
-    Alpine.data('themePicker', () => ({
+export function themePicker() {
+    return {
         // Active preference: 'system' | 'light' | 'dark' | 'high-contrast'
         current: 'system',
         schemes: [
@@ -14,13 +14,28 @@ export function initThemeSystem(Alpine) {
         saving: false,
 
         init() {
-            // Read active preference from cookie, fallback to system
-            const cookieMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
-            if (cookieMatch) {
-                const storedTheme = decodeURIComponent(cookieMatch[1]);
+            // Read active preference from localStorage, cookie, or documentElement
+            let storedTheme = null;
+            try {
+                storedTheme = localStorage.getItem('cw_theme');
+            } catch (e) {}
+
+            if (!storedTheme) {
+                const cookieMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
+                if (cookieMatch) {
+                    storedTheme = decodeURIComponent(cookieMatch[1]);
+                }
+            }
+
+            if (storedTheme) {
                 this.current = storedTheme === 'midnight' ? 'dark' : storedTheme;
             } else {
-                this.current = 'system';
+                const htmlTheme = document.documentElement.getAttribute('data-theme');
+                if (htmlTheme && ['light', 'dark', 'high-contrast'].includes(htmlTheme)) {
+                    this.current = htmlTheme;
+                } else {
+                    this.current = 'system';
+                }
             }
 
             // Listen for OS scheme changes when in system mode
@@ -65,8 +80,11 @@ export function initThemeSystem(Alpine) {
             this.current = theme;
             this.applyResolvedTheme(theme);
 
-            // Update cookie synchronously for immediate future requests
-            document.cookie = `cw_theme=${encodeURIComponent(theme)}; path=/; max-age=31536000; SameSite=Lax`;
+            // Update cookie & localStorage synchronously for immediate future requests
+            try {
+                localStorage.setItem('cw_theme', theme);
+                document.cookie = `cw_theme=${encodeURIComponent(theme)}; path=/; max-age=31536000; SameSite=Lax`;
+            } catch (e) {}
 
             // Persist to server if authenticated
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
@@ -84,12 +102,17 @@ export function initThemeSystem(Alpine) {
                     body: JSON.stringify({ theme }),
                 });
             } catch (err) {
-                console.error('Failed to persist theme preference', err);
+                // Silently handle offline/guest mode
             } finally {
                 this.saving = false;
             }
         },
-    }));
+    };
+}
+
+export function initThemeSystem(Alpine) {
+    window.themePicker = themePicker;
+    Alpine.data('themePicker', themePicker);
 
     // ECharts theme observer: dynamically updates all rendered charts on theme change
     window.addEventListener('theme-changed', () => {
