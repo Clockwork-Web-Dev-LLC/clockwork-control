@@ -147,6 +147,11 @@
                        :title="!sidebarOpen ? 'Updates' : ''">
                         <i class="fa-solid fa-rotate w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Updates</span>
+                        @isset($updatesPendingCount)
+                            @if ($updatesPendingCount > 0)
+                                <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">{{ $updatesPendingCount }}</span>
+                            @endif
+                        @endisset
                     </a>
 
                     <a href="{{ route('monitoring.index') }}"
@@ -412,11 +417,21 @@
                         <a href="{{ route('sites.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
                             <i class="fa-solid fa-globe mr-2 text-[var(--color-brand)]"></i> Sites
                         </a>
-                        <a href="{{ route('issues.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
-                            <i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues
+                        <a href="{{ route('issues.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                            <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues</span>
+                            @isset($issueCount)
+                                @if ($issueCount > 0)
+                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
+                                @endif
+                            @endisset
                         </a>
-                        <a href="{{ route('updates.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
-                            <i class="fa-solid fa-rotate mr-2 text-[var(--color-brand)]"></i> Updates
+                        <a href="{{ route('updates.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                            <span><i class="fa-solid fa-rotate mr-2 text-[var(--color-brand)]"></i> Updates</span>
+                            @isset($updatesPendingCount)
+                                @if ($updatesPendingCount > 0)
+                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">{{ $updatesPendingCount }}</span>
+                                @endif
+                            @endisset
                         </a>
                         <a href="{{ route('monitoring.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
                             <i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-status-green)]"></i> Monitoring
