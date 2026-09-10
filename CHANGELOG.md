@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-09-10
+
+### Changed
+- **Command Center navigation & user menu relocation**:
+  - Relocated the user profile menu to the left sidebar rail footer in Command Center layout, removing the redundant top-right profile avatar on desktop viewports.
+  - Upgraded the bottom-left sidebar rail footer into an interactive user card that opens an upward-oriented popover menu (Slack / Linear style) containing user identity, Account & Team, Settings Hub, dynamic module navigation items (Code Snippets, Clients, Client reports, Mattermost, SMS, Bill.com), and Sign out.
+  - Retained the top-right user menu in Modern Studio layout and on mobile viewports when the left sidebar rail is inactive.
+
 ## [1.6.3] - 2026-09-10
 
 ### Fixed
