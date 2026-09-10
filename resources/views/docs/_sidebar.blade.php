@@ -37,21 +37,28 @@
 <aside class="docs-sidebar" x-data="docsSidebar({{ \Illuminate\Support\Js::from($initialOpen) }})">
     <div class="docs-sidebar__inner">
         <div class="mb-3">
-            <a href="{{ route('docs.index') }}" class="docs-sidebar__home">
-                <i class="fa-solid fa-book text-[var(--color-primary-600)]"></i>
-                <span>Documentation Home</span>
+            <a href="{{ route('docs.index') }}" class="docs-sidebar__home group">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-6 h-6 rounded-md bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)] text-[var(--color-primary-600)] dark:text-sky-400 flex items-center justify-center text-xs shrink-0 border border-[var(--color-border-light)]">
+                        <i class="fa-solid fa-book-open"></i>
+                    </span>
+                    <span class="truncate font-semibold group-hover:text-[var(--color-brand)] transition-colors">Documentation Home</span>
+                </div>
+                <i class="fa-solid fa-arrow-left text-[10px] text-[var(--color-ink-soft)] opacity-60 group-hover:opacity-100 group-hover:-translate-x-0.5 transition-all"></i>
             </a>
         </div>
 
-        {{-- Interactive Search with Category Badges --}}
+        {{-- Interactive Search with Category Badges & '/' Shortcut --}}
         <div
             x-data="docsSearch({{ \Illuminate\Support\Js::from($searchIndex) }})"
             @keydown.escape.window="open = false"
+            @keydown.window.slash="if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') { $event.preventDefault(); $refs.docsSearchInput.focus(); open = true; }"
             class="docs-sidebar__search"
         >
             <div class="docs-sidebar__search-input-wrap">
                 <i class="fa-solid fa-magnifying-glass docs-sidebar__search-icon"></i>
                 <input
+                    x-ref="docsSearchInput"
                     type="text"
                     x-model="query"
                     @focus="open = true"
@@ -60,23 +67,26 @@
                     class="docs-sidebar__search-input"
                     autocomplete="off"
                 >
+                <div class="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <kbd class="cmd-kbd text-[9px] px-1 py-0.5 text-[var(--color-ink-soft)]">/</kbd>
+                </div>
             </div>
             <div x-show="open && query.trim().length >= 2" x-cloak class="docs-sidebar__search-results">
                 <template x-if="results.length === 0">
-                    <div class="docs-sidebar__search-empty">No matching pages.</div>
+                    <div class="docs-sidebar__search-empty">No matching pages found for "<span class="font-medium text-[var(--color-ink-strong)]" x-text="query"></span>".</div>
                 </template>
                 <template x-for="r in results" :key="r.url">
-                    <a :href="r.url" class="docs-sidebar__search-result">
+                    <a :href="r.url" class="docs-sidebar__search-result group">
                         <div class="min-w-0 flex-1">
-                            <div class="docs-sidebar__search-result-title" x-text="r.title"></div>
+                            <div class="docs-sidebar__search-result-title group-hover:text-[var(--color-brand)]" x-text="r.title"></div>
                             <template x-if="r.excerpt">
-                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate mt-0.5" x-text="r.excerpt"></div>
+                                <div class="text-[11px] text-[var(--color-ink-muted)] truncate mt-0.5" x-text="r.excerpt"></div>
                             </template>
                         </div>
                         <span class="docs-sidebar__search-result-section ml-2">
                             <span x-text="r.section"></span>
                             <template x-if="r.category && r.category !== r.section">
-                                <span class="opacity-70 font-normal" x-text="' &rsaquo; ' + r.category"></span>
+                                <span class="opacity-75 font-normal" x-text="' › ' + r.category"></span>
                             </template>
                         </span>
                     </a>
@@ -85,23 +95,23 @@
         </div>
 
         {{-- Collapsible Sections Accordion --}}
-        <div class="space-y-3">
+        <div class="space-y-2">
             @foreach ($orderedSections as $section)
                 @php
                     $pages = $tree->get($section, collect());
                     $icon = $sectionIcons[$section] ?? 'fa-folder text-[var(--color-ink-soft)]';
                     $hasSubcategories = isset($groupedTree) && $groupedTree->has($section) && $groupedTree->get($section)->count() > 1;
                 @endphp
-                <div class="docs-sidebar__section rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] overflow-hidden shadow-2xs">
+                <div class="docs-sidebar__section rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] overflow-hidden shadow-2xs">
                     {{-- Section Accordion Header --}}
                     <button type="button"
                             @click="toggleSection('{{ $section }}')"
                             class="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors cursor-pointer select-none">
                         <div class="flex items-center gap-2 min-w-0">
-                            <i class="fa-solid {{ $icon }} text-xs flex-shrink-0"></i>
+                            <i class="fa-solid {{ $icon }} text-xs shrink-0"></i>
                             <span class="truncate">{{ $section }}</span>
                         </div>
-                        <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        <div class="flex items-center gap-1.5 shrink-0 ml-2">
                             <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
                                 {{ $pages->count() }}
                             </span>
@@ -123,6 +133,7 @@
                                     @if ($categoryName !== 'General' && $categoryName !== $section)
                                         <div class="docs-sidebar__category-title">
                                             <span>{{ $categoryName }}</span>
+                                            <span class="font-mono text-[9px] opacity-70">{{ $catPages->count() }}</span>
                                         </div>
                                     @endif
                                     <ul class="docs-sidebar__list space-y-0.5">
@@ -130,7 +141,7 @@
                                             <li>
                                                 <a href="{{ $p->url() }}"
                                                    class="docs-sidebar__link {{ $currentSlug === $p->slug ? 'docs-sidebar__link--active' : '' }}">
-                                                    {{ $p->title }}
+                                                    <span class="truncate">{{ $p->title }}</span>
                                                 </a>
                                             </li>
                                         @endforeach
@@ -143,7 +154,7 @@
                                     <li>
                                         <a href="{{ $p->url() }}"
                                            class="docs-sidebar__link {{ $currentSlug === $p->slug ? 'docs-sidebar__link--active' : '' }}">
-                                            {{ $p->title }}
+                                            <span class="truncate">{{ $p->title }}</span>
                                         </a>
                                     </li>
                                 @endforeach

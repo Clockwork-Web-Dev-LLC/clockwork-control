@@ -204,6 +204,13 @@
                         <i class="fa-solid fa-sliders w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Settings</span>
                     </a>
+
+                    <a href="{{ route('docs.index') }}"
+                       class="cmd-nav-item {{ request()->routeIs('docs.*') ? 'is-active' : '' }}"
+                       :title="!sidebarOpen ? 'Documentation' : ''">
+                        <i class="fa-solid fa-book-bookmark w-4 text-center shrink-0"></i>
+                        <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Docs &amp; Runbooks</span>
+                    </a>
                 </div>
             </div>
 
@@ -388,6 +395,10 @@
                                class="studio-nav-tab {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-sliders"></i> Settings
                             </a>
+                            <a href="{{ route('docs.index') }}"
+                               class="studio-nav-tab {{ request()->routeIs('docs.*') ? 'is-active' : '' }}">
+                                <i class="fa-solid fa-book-bookmark"></i> Docs
+                            </a>
                         </nav>
                     </div>
                 </div>
@@ -435,6 +446,9 @@
                         </a>
                         <a href="{{ route('settings.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
                             <i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings
+                        </a>
+                        <a href="{{ route('docs.index') }}" class="px-3 py-2 rounded-lg text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] font-medium">
+                            <i class="fa-solid fa-book-bookmark mr-2 text-[var(--color-brand)]"></i> Docs
                         </a>
                     </div>
                 </div>
@@ -527,6 +541,10 @@
                     <a href="{{ route('security.scans') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
                         <span class="flex items-center gap-2"><i class="fa-solid fa-shield-halved w-4 text-[var(--color-brand)]"></i> Security Scans</span>
                         <kbd class="cmd-kbd">G X</kbd>
+                    </a>
+                    <a href="{{ route('docs.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-book-bookmark w-4 text-[var(--color-brand)]"></i> Documentation &amp; Runbooks</span>
+                        <kbd class="cmd-kbd">G D</kbd>
                     </a>
                 </div>
 
