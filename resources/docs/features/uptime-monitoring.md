@@ -27,6 +27,7 @@ A site is **up** if it responds with HTTP 2xx or 3xx within 10 seconds — or if
 - HTTP 4xx other than 401 (with `WWW-Authenticate`) and 403
 - Connection refused, DNS failure, TLS handshake failure
 - Request timeout
+- HTTP 200/3xx whose body is a white screen (under ~200 visible characters) or contains WordPress/PHP fatal signatures (`There has been a critical error`, `Fatal error`, etc.). Optional per-site `uptime_require_keyword` on the site Settings tab also fails a 200 that does not contain that string. The probe does not issue a second HTTP request — it inspects the body already fetched.
 
 A site has to fail **two probes in a row** (about 10 minutes at the default cadence) before it transitions to `down` and fires the Mattermost alert. Recovery is instant — the moment the next probe succeeds, we transition back to `up` and fire the recovery alert.
 

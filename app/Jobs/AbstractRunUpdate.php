@@ -276,6 +276,7 @@ abstract class AbstractRunUpdate implements ShouldQueue
             $lock->release();
 
             $this->maybeRefreshSnapshot($row);
+            $this->maybePurgeSiteCache($row);
 
             // Real-time Mattermost ping for nightly auto-update failures.
             // Manual bulk-update failures stay quiet — the operator is
@@ -462,5 +463,32 @@ abstract class AbstractRunUpdate implements ShouldQueue
                 '--site' => $site->domain,
             ]);
         }
+    }
+
+    /**
+     * Once this site has no more live rows in the batch, and at least one
+     * update succeeded, flush caches once — not after every plugin row.
+     */
+    private function maybePurgeSiteCache(PluginUpdateJob $row): void
+    {
+        $stillLive = PluginUpdateJob::where('batch_id', $row->batch_id)
+            ->where('site_id', $row->site_id)
+            ->whereIn('status', PluginUpdateJob::LIVE_STATUSES)
+            ->exists();
+
+        if ($stillLive) {
+            return;
+        }
+
+        $anySucceeded = PluginUpdateJob::where('batch_id', $row->batch_id)
+            ->where('site_id', $row->site_id)
+            ->where('status', PluginUpdateJob::STATUS_COMPLETE)
+            ->exists();
+
+        if (! $anySucceeded) {
+            return;
+        }
+
+        PurgeSiteCacheJob::dispatch($row->site_id);
     }
 }

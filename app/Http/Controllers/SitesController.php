@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Console\Commands\PushCompanionTraffic;
+use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
@@ -582,7 +583,7 @@ class SitesController extends Controller
         }
 
         try {
-            $probe = $prober->probe('https://'.$site->domain.'/');
+            $probe = $prober->probe('https://'.$site->domain.'/', requireKeyword: $site->uptime_require_keyword);
             $updater->update($site, $probe);
             $site->refresh();
 
@@ -1422,6 +1423,32 @@ class SitesController extends Controller
                 ? "Uptime monitoring enabled for {$site->domain}. Next probe runs within 5 min."
                 : "Uptime monitoring disabled for {$site->domain}. Probe will skip this site."
         );
+    }
+
+    public function updateUptimeKeyword(Request $request, Site $site): RedirectResponse
+    {
+        $validated = $request->validate([
+            'uptime_require_keyword' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $keyword = trim((string) ($validated['uptime_require_keyword'] ?? ''));
+        $site->forceFill([
+            'uptime_require_keyword' => $keyword !== '' ? $keyword : null,
+        ])->save();
+
+        return back()->with(
+            'status',
+            $keyword !== ''
+                ? "Uptime keyword set for {$site->domain}."
+                : "Uptime keyword cleared for {$site->domain}."
+        );
+    }
+
+    public function purgeCache(Site $site): RedirectResponse
+    {
+        PurgeSiteCacheJob::dispatch($site->id, actor: 'user:'.(auth()->id() ?? 'unknown'));
+
+        return back()->with('status', "Cache purge queued for {$site->domain}.");
     }
 
     /**

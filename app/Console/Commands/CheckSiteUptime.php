@@ -49,7 +49,7 @@ class CheckSiteUptime extends Command
         foreach ($sites as $site) {
             $url = 'https://'.$site->domain.'/';
             try {
-                $probe = $prober->probe($url);
+                $probe = $prober->probe($url, requireKeyword: $site->uptime_require_keyword);
                 $updater->update($site, $probe);
                 try {
                     $seoChecker->checkFromProbeResult($site, $probe);

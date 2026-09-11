@@ -238,6 +238,25 @@ class CloudflareClient
         $this->putRateLimitRules($zoneId, $filtered);
     }
 
+    /**
+     * Purge specific URLs from a zone's edge cache. Requires Cache Purge on
+     * the write token. Never call this with the read-only token.
+     *
+     * @param  list<string>  $files
+     */
+    public function purgeCacheFiles(string $zoneId, array $files): void
+    {
+        $response = $this->writeClient()->post("/zones/{$zoneId}/purge_cache", [
+            'files' => array_values($files),
+        ]);
+
+        if (! $response->successful() || $response->json('success') !== true) {
+            $errors = $response->json('errors.0.message') ?? $response->body();
+
+            throw new RuntimeException('Cloudflare cache purge failed: '.$errors);
+        }
+    }
+
     protected function writeClient(): PendingRequest
     {
         if (! $this->isWriteConfigured()) {

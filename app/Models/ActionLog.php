@@ -118,6 +118,8 @@ class ActionLog extends Model
 
     public const TYPE_WFLS_PLUGIN_REMOVED = 'wfls_plugin_removed';
 
+    public const TYPE_CACHE_PURGED = 'cache_purged';
+
     /**
      * The four update-job kinds, grouped for the maintenance-history
      * "All updates" quick filter — kept here so any future caller that

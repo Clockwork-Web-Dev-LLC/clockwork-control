@@ -12,6 +12,7 @@ use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Security\CoreChecksumAllowlist;
+use App\Services\Security\FleetAdminAuditor;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -232,7 +233,14 @@ class IssueCounter
             // Missing settings table on a half-installed box shouldn't zero the whole badge.
         }
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale;
+        $flaggedAdmins = 0;
+        try {
+            $flaggedAdmins = app(FleetAdminAuditor::class)->flaggedSites()->count();
+        } catch (Throwable $e) {
+            Log::warning('issue_counter.flagged_admins_failed', ['error' => $e->getMessage()]);
+        }
+
+        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale + $flaggedAdmins;
     }
 
     /**

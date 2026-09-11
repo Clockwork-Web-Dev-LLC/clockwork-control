@@ -1,9 +1,9 @@
-# Roadmap plans — 2026-09-05
+# Roadmap plans
 
-Four independent, researched implementation plans, drafted by Claude (with parallel research/design
-subagents grounded directly in this codebase) for Aaron to hand off to Gemini to build. Each plan
-is self-contained: context, key architectural decisions with rationale, phased file-level steps,
-and a verification section. None of this has been implemented yet — these are plans only.
+Researched implementation plans for Clockwork Control. Several of the 2026-09-05 batch
+have already shipped (installer, theme system, SemVer/release cadence, backup relay,
+domain expiration, SEO indexability). Treat each file's own status notes as authoritative;
+this index is a map, not a claim that everything below is still unbuilt.
 
 Recommended build order: **versioning** (mostly process, unblocks tagging real releases for the
 rest) → **theme-system** → **installer** → **backup-relay-generalization**.
@@ -29,9 +29,9 @@ rest) → **theme-system** → **installer** → **backup-relay-generalization**
   candidate features, free public APIs, and ecosystem integrations across 5 research domains.
 - [`module-submission-workflow.md`](./module-submission-workflow.md) — Architecture and implementation plan
   for the community module submission flow, intake forms, automated feed validation, and in-app directory UX.
-- [`rdap-domain-expiration.md`](./rdap-domain-expiration.md) — Automated domain expiration & registrar tracking
+- [`archive/rdap-domain-expiration.md`](./archive/rdap-domain-expiration.md) — Automated domain expiration & registrar tracking (superseded)
   via the free ICANN RDAP bootstrap API (`rdap.org`), with multi-tier warnings (30/14/7 days).
-- [`accidental-noindex-watchdog.md`](./accidental-noindex-watchdog.md) — Sentinel monitoring production sites for
+- [`archive/accidental-noindex-watchdog.md`](./archive/accidental-noindex-watchdog.md) — Sentinel monitoring production sites for
   accidental `noindex` meta tags, `X-Robots-Tag` headers, and `robots.txt` blockers after launch.
 
 ---
@@ -74,12 +74,12 @@ shape, migration split, Blade section/table/recheck-button structure, `IssueCoun
 sync contract) rather than the module structure Gemini's original drafts proposed.
 
 - [`domain-expiration-tracking.md`](./domain-expiration-tracking.md) — supersedes
-  `rdap-domain-expiration.md`. Corrections: `app/Services/Domains/` not `modules/DomainExpiration`;
+  [`archive/rdap-domain-expiration.md`](./archive/rdap-domain-expiration.md). Corrections: `app/Services/Domains/` not `modules/DomainExpiration`;
   3-state (green/yellow/red) not 4; `jeremykendall/php-domain-parser` instead of hand-rolled root-domain
   regex; rdap.org's 10-req/10-sec rate limit called out explicitly; exact `IssueCounter`/Blade
   integration steps spelled out.
 - [`seo-indexability-watchdog.md`](./seo-indexability-watchdog.md) — supersedes
-  `accidental-noindex-watchdog.md`. Corrections: piggybacks on the existing 5-minute uptime probe instead
+  [`archive/accidental-noindex-watchdog.md`](./archive/accidental-noindex-watchdog.md). Corrections: piggybacks on the existing 5-minute uptime probe instead
   of adding a redundant 6-hourly fetch; the WordPress-side `blog_public` signal is scoped as real,
   separate Companion-repo work rather than something already available; `bopoda/robots-txt-parser`
   (verified to correctly implement Allow/Disallow precedence) instead of hand-rolled parsing; a real DOM

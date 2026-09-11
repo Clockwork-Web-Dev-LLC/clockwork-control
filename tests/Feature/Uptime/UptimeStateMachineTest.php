@@ -456,7 +456,7 @@ describe('UptimeStateUpdater', function () {
 
 describe('CheckSiteUptime command (uptime_monitoring_enabled gate)', function () {
     it('skips uptime_monitoring_enabled=false sites entirely — they are never probed or updated', function () {
-        Http::fake(['*' => Http::response('ok', 200)]);
+        Http::fake(['*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200)]);
 
         $enabled = Site::factory()->create([
             'domain' => 'enabled-site.example.test',

@@ -40,7 +40,7 @@ class UptimeProber
         return 'Clockwork-Uptime/1.0'.($contactEmail ? " (+{$contactEmail})" : '');
     }
 
-    public function probe(string $url, int $timeoutSec = 10): UptimeProbeResult
+    public function probe(string $url, int $timeoutSec = 10, ?string $requireKeyword = null): UptimeProbeResult
     {
         $started = microtime(true);
 
@@ -68,9 +68,20 @@ class UptimeProber
         $body = $response->body();
         $xRobotsTag = $response->header('X-Robots-Tag') ?: null;
 
-        // 2xx OR 3xx → up. We follow redirects so 3xx as the final response is
-        // unusual (server didn't honor allow_redirects), but treat as success.
-        if ($status >= 200 && $status < 400) {
+        // 2xx → up (subject to body check for WSOD, fatal errors, and required keyword).
+        if ($status >= 200 && $status < 300) {
+            $bodyFailure = app(HomepageBodyCheck::class)->evaluate($body, $requireKeyword);
+            if ($bodyFailure !== null) {
+                return UptimeProbeResult::badStatus($status, $elapsed, $bodyFailure, $body, $xRobotsTag);
+            }
+
+            return UptimeProbeResult::success($status, $elapsed, $body, $xRobotsTag);
+        }
+
+        // 3xx as final status → up. We follow redirects so 3xx here means redirects
+        // stopped or were not followed. The server is responding; skip body checks
+        // since redirect stubs are minimal (<title>Moved</title>).
+        if ($status >= 300 && $status < 400) {
             return UptimeProbeResult::success($status, $elapsed, $body, $xRobotsTag);
         }
 

@@ -30,13 +30,13 @@ This board tracks candidate features, API integrations, and new modules discover
 ## 📐 Priority 1: Planned Modules & Architecture (Detailed Specs Available)
 
 ### 1. RDAP Domain Expiration & Registrar Module (`modules/DomainExpiration`)
-- **Full Specification**: [`plans/rdap-domain-expiration.md`](./rdap-domain-expiration.md)
+- **Full Specification**: [`plans/archive/rdap-domain-expiration.md`](./archive/rdap-domain-expiration.md) (superseded by [`domain-expiration-tracking.md`](./domain-expiration-tracking.md))
 - **Summary**: Queries free ICANN RDAP bootstrap endpoint (`rdap.org`) to continuously monitor domain expiration dates and registrar information across all client sites.
 - **Key Advantage**: 100% free, zero API keys, eliminates registrar scraping, catches domain lapses before sites go dark.
 - **Alert Tiers**: Yellow at 30 days, Orange at 14 days, Red at 7 days or redemption period.
 
 ### 2. Accidental `noindex` & Pre-Flight Launch Watchdog (`modules/LaunchWatchdog`)
-- **Full Specification**: [`plans/accidental-noindex-watchdog.md`](./accidental-noindex-watchdog.md)
+- **Full Specification**: [`plans/archive/accidental-noindex-watchdog.md`](./archive/accidental-noindex-watchdog.md) (superseded by [`seo-indexability-watchdog.md`](./seo-indexability-watchdog.md))
 - **Summary**: Automated sentinel that probes production sites for search engine blockers (`<meta name="robots" content="noindex">`, `X-Robots-Tag: noindex`, or `Disallow: /` in `/robots.txt`).
 - **Key Advantage**: Solves the single most expensive post-launch mistake agencies make (leaving staging `noindex` enabled on production).
 - **Severity**: Immediate Critical P0 alert on `/issues` and chat channels.

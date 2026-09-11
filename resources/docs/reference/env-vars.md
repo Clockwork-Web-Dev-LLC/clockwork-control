@@ -178,7 +178,7 @@ Server management panel running on real VPS servers — see [Integrations → Gr
 | Variable | Default | Notes |
 |---|---|---|
 | `CLOCKWORK_CLOUDFLARE_API_TOKEN` | unset | Read scopes only. See `integrations/cloudflare` for the per-phase scope list. |
-| `CLOCKWORK_CLOUDFLARE_WRITE_TOKEN` | unset | Zone.DNS:Edit. Used only by the migration cutover. Kept distinct so the read token can leak without granting writes. |
+| `CLOCKWORK_CLOUDFLARE_WRITE_TOKEN` | unset | Zone.DNS:Edit plus Cache Purge. Used for DNS cutover writes and homepage URL cache purge after update batches. Never reuse the read-only token. |
 | `CLOCKWORK_CLOUDFLARE_BASE_URL` | `https://api.cloudflare.com/client/v4` | |
 
 ## Backup relay

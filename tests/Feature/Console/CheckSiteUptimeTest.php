@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Http;
 
 describe('clockwork:check-site-uptime', function () {
     it('--site limits the run to a single site, leaving every other enabled site untouched', function () {
-        Http::fake(['*' => Http::response('ok', 200)]);
+        Http::fake(['*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200)]);
 
         $target = Site::factory()->create([
             'domain' => 'only-me.example.test',
@@ -46,7 +46,7 @@ describe('clockwork:check-site-uptime', function () {
     });
 
     it('excludes sites on ignored/staging servers via the hostMonitored scope', function () {
-        Http::fake(['*' => Http::response('ok', 200)]);
+        Http::fake(['*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200)]);
 
         $ignoredServer = Server::factory()->ignored()->create();
         Site::factory()->create([
@@ -83,7 +83,7 @@ describe('clockwork:check-site-uptime', function () {
 
         Http::fake([
             'dns-fail.example.test/*' => fn () => throw new ConnectionException('Could not resolve host: dns-fail.example.test'),
-            '*' => Http::response('ok', 200),
+            '*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200),
         ]);
 
         // The command's own handle() must not let the probe exception escape

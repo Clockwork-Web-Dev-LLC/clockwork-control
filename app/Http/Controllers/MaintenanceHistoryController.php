@@ -53,6 +53,7 @@ class MaintenanceHistoryController extends Controller
         ActionLog::TYPE_USER_ADDED => 'User added',
         ActionLog::TYPE_USER_REVOKED => 'User revoked',
         ActionLog::TYPE_USER_RESTORED => 'User restored',
+        ActionLog::TYPE_CACHE_PURGED => 'Cache purged',
     ];
 
     /**

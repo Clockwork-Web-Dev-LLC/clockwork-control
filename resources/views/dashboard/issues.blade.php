@@ -29,6 +29,7 @@
             ['key' => 'stuck_maintenance', 'label' => 'Stuck maint', 'class' => 'status-yellow'],
             ['key' => 'orphans', 'label' => 'Orphans', 'class' => 'status-yellow'],
             ['key' => 'no_db', 'label' => 'DB creds', 'class' => 'status-yellow'],
+            ['key' => 'wp_admins', 'label' => 'WP admins', 'class' => 'status-yellow'],
         ];
     @endphp
 
@@ -359,6 +360,63 @@
                     @endforeach
                 </tbody>
             </table>
+        </section>
+    @endif
+
+    @if ($flaggedAdminSites->isNotEmpty() || $ignoredAdminIssues->isNotEmpty())
+        <section id="section-wp_admins" class="card overflow-hidden mb-6">
+            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-user-shield text-amber-600 mr-2"></i>
+                        Flagged WordPress administrators
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Default <code>admin</code> logins, or emails outside the approved allowlist.
+                        <a href="{{ route('security.admins') }}" class="text-[var(--color-primary-600)] hover:underline">Open fleet directory</a>
+                    </p>
+                </div>
+            </div>
+            @if ($flaggedAdminSites->isNotEmpty())
+                <table class="w-full text-sm">
+                    <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                        <tr>
+                            <th class="px-5 py-2 text-left">Site</th>
+                            <th class="px-5 py-2 text-left">Server</th>
+                            <th class="px-5 py-2 text-right"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--color-border-light)]">
+                        @foreach ($flaggedAdminSites as $site)
+                            <tr>
+                                <td class="px-5 py-2">
+                                    <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
+                                </td>
+                                <td class="px-5 py-2 text-[var(--color-ink-muted)]">{{ $site->server?->name ?? '—' }}</td>
+                                <td class="px-5 py-2 text-right">
+                                    <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="issue_type" value="wp_admin_flagged">
+                                        <input type="hidden" name="site_id" value="{{ $site->id }}">
+                                        <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:underline">Ignore site</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+            @if ($ignoredAdminIssues->isNotEmpty())
+                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)]">
+                    {{ $ignoredAdminIssues->count() }} site(s) acknowledged.
+                    @foreach ($ignoredAdminIssues as $ignored)
+                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline ml-2">
+                            @csrf
+                            <button type="submit" class="hover:underline">Restore {{ $ignored->site?->domain }}</button>
+                        </form>
+                    @endforeach
+                </div>
+            @endif
         </section>
     @endif
 

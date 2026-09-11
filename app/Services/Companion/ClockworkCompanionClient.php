@@ -198,6 +198,16 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Flush object / page caches on the origin (Companion cache-flush capability).
+     *
+     * @return array<string, mixed>
+     */
+    public function flushCache(): array
+    {
+        return $this->postJson('/cache/flush', []);
+    }
+
+    /**
      * Installed plugin inventory. See PluginsRoute for shape.
      *
      * @return array<string, mixed>

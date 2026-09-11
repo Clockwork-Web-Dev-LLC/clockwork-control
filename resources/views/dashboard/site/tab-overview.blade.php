@@ -101,13 +101,22 @@
             </div>
         </template>
     </div>
-    <button type="button"
-            class="btn-pill-nav text-xs shrink-0"
-            :disabled="running"
-            @click="refresh()">
-        <i class="fa-solid" :class="running ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
-        <span x-text="running ? 'Refreshing…' : 'Refresh Snapshot'"></span>
-    </button>
+    <div class="flex items-center gap-2 shrink-0">
+        <form method="POST" action="{{ route('sites.cache.purge', $site) }}">
+            @csrf
+            <button type="submit" class="btn-pill-nav text-xs" title="Flush origin, host, and Cloudflare caches">
+                <i class="fa-solid fa-broom"></i>
+                Purge cache
+            </button>
+        </form>
+        <button type="button"
+                class="btn-pill-nav text-xs"
+                :disabled="running"
+                @click="refresh()">
+            <i class="fa-solid" :class="running ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
+            <span x-text="running ? 'Refreshing…' : 'Refresh Snapshot'"></span>
+        </button>
+    </div>
 </div>
 
 {{-- 3-Column Command Center Widget Grid with Drag & Drop Reordering --}}

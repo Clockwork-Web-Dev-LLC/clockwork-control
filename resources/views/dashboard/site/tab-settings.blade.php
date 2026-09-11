@@ -638,6 +638,19 @@
                     @endif
                 </form>
             </div>
+
+            <form method="POST" action="{{ route('sites.uptime-keyword.update', $site) }}" class="mt-3 space-y-1.5">
+                @csrf
+                @method('PATCH')
+                <label class="block text-[11px] font-medium text-[var(--color-ink-strong)]">Required homepage keyword</label>
+                <p class="text-[10px] text-[var(--color-ink-muted)]">Optional. A 200 OK that does not contain this string is treated as down.</p>
+                <div class="flex items-center gap-1.5">
+                    <input type="text" name="uptime_require_keyword" maxlength="120" value="{{ $site->uptime_require_keyword }}"
+                           placeholder="e.g. Acme Corp"
+                           class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 bg-[var(--color-surface)]">
+                    <button type="submit" class="btn-pill-nav text-xs shrink-0">Save</button>
+                </div>
+            </form>
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">

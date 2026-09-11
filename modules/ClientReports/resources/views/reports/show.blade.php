@@ -34,6 +34,7 @@
     $forms = $data['forms'] ?? [];
     $traffic = $data['traffic'] ?? [];
     $backups = $data['backups'] ?? [];
+    $workLog = $data['work_log'] ?? [];
     // Brand Palette & Accents (Settings > White Labeling > Client Reports).
     // Same fields/defaults as compileBranding()'s fallback — mirrors the
     // accent-strip pattern already used in the vulnerability report email.
@@ -326,6 +327,44 @@
                         <div class="text-[11px] text-slate-500">Bandwidth Served</div>
                     </div>
                 </div>
+            </div>
+        @endif
+
+        @if (isset($data['work_log']))
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-clock text-slate-700"></i> Work log
+                    </h2>
+                    <span class="text-xs font-semibold text-slate-500">{{ number_format($workLog['total_hours'] ?? 0, 2) }} hours</span>
+                </div>
+                @if (empty($workLog['entries']))
+                    <p class="text-xs text-slate-500">No manual work was logged during this period.</p>
+                @else
+                    <table class="w-full text-sm">
+                        <thead class="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                            <tr>
+                                <th class="pb-2">Date</th>
+                                <th class="pb-2">Hours</th>
+                                <th class="pb-2">Work</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach ($workLog['entries'] as $entry)
+                                <tr>
+                                    <td class="py-2 text-slate-600 whitespace-nowrap">{{ $entry['worked_on'] }}</td>
+                                    <td class="py-2 text-slate-900 font-semibold">{{ number_format($entry['hours'], 2) }}</td>
+                                    <td class="py-2 text-slate-700">
+                                        {{ $entry['description'] }}
+                                        @if (!empty($entry['user']))
+                                            <span class="block text-[11px] text-slate-400">{{ $entry['user'] }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
             </div>
         @endif
 

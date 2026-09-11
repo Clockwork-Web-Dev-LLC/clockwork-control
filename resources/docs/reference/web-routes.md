@@ -87,6 +87,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/search/sites` | JSON site search (focused with `/`). |
 | PATCH | `/sites/{site}/cert` · POST `/cert/recheck` | SSL source + recheck. |
 | POST | `/sites/{site}/uptime/recheck` | On-demand uptime probe for one site. |
+| PATCH | `/sites/{site}/uptime-keyword` | Optional homepage keyword the 5-minute probe must find. |
+| POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
+| POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
@@ -130,6 +133,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/monitoring` | Fleet uptime status board. |
 | POST | `/monitoring/refresh` | On-demand fleet uptime re-check (background `clockwork:check-site-uptime`). |
 | GET/PATCH | `/monitoring/settings` | Probe interval + failure threshold. |
+| GET | `/security/admins` | Fleet WordPress administrator directory and allowlist. |
+| PATCH | `/security/admins/allowlist` | Save approved admin email domains/emails. |
+| POST | `/security/admins/{site}/ignore` · DELETE `/ignore/{ignoredWpAdmin}` | Acknowledge or restore a flagged WP admin. |
 | GET | `/security/scans` | Per-site security scan inventory. |
 | POST | `/security/scans/{site}/run` | Manual scan trigger. |
 | GET | `/security/scans/{site}/file` | View a flagged core-checksum file's contents (SSH read, path-validated against the latest scan). |

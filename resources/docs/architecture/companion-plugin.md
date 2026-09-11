@@ -108,7 +108,7 @@ comments-summary, snapshot, backups-report, admin-ui, sso, updates,
 action-log, security-scans, malware-scan, secret-rotate, auth-audit,
 traffic-report, resource-sampler, resource-sampler-toggle,
 form-subscriptions, lockouts-unlock, post-update-verify, two-factor,
-white-label
+white-label, comments-moderation, maintenance-mode, code-snippets, cache-flush
 ```
 
 Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin.
@@ -132,6 +132,7 @@ Mutating POSTs (HMAC-signed):
 - `/backups-report` — Clockwork pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork's own (LAN-only) login screen
 - `/action-log/append` — Clockwork mirrors every meaningful action so wp-admin can show it
 - `/sso/magic-link` — mint a one-time URL the operator clicks to land in wp-admin as the named admin
+- `/cache/flush` — object/page cache flush (`cache-flush` capability). Companion 1.35.0+. Clockwork also applies Pressable and Cloudflare layers from Control.
 - `/plugins/update` — single-slug WP plugin upgrade via `Plugin_Upgrader`
 - `/secret/rotate` — rotate the per-site HMAC secret
 - `/malware-scan` — run the in-WP malware probe (PHP-in-uploads, obfuscated-eval signatures, recently-touched wp-config). Returns findings as `{findings: [{kind, path, evidence}], scanned_at, scanned_files_count}`. Called nightly by `clockwork:run-companion-malware-scans`. Bypasses Cloudflare entirely — replaces SiteCheck's role on CF-fronted sites where Sucuri's external scanner gets 403'd at the edge. SSH wp-cli fallback exists for sites without the Companion installed.

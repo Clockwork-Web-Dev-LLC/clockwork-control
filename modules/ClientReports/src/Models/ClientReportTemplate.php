@@ -72,6 +72,11 @@ class ClientReportTemplate extends Model
             'description' => 'Completed backup runs, cloud storage locations, and restore readiness.',
             'icon' => 'fa-box-archive',
         ],
+        'work_log' => [
+            'label' => 'Work log',
+            'description' => 'Manual hours logged by the team during the report period.',
+            'icon' => 'fa-clock',
+        ],
     ];
 
     public function reports(): HasMany

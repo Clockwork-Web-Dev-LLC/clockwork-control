@@ -10,6 +10,7 @@ use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
+use App\Models\SiteWorkLog;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
@@ -77,6 +78,9 @@ class ClientReportCompiler
         }
         if ($shouldInclude('backups')) {
             $data['backups'] = $this->compileBackups($site, $start, $end);
+        }
+        if ($shouldInclude('work_log')) {
+            $data['work_log'] = $this->compileWorkLog($site, $start, $end);
         }
 
         return $data;
@@ -291,6 +295,26 @@ class ClientReportCompiler
             'enabled' => $hasBackupRelay || $site->care_plan_enabled,
             'last_backup_at' => $lastArchived?->toDateString(),
             'destination' => $hasBackupRelay ? 'Independent AWS S3 / Glacier' : 'Host Automated Snapshots',
+        ];
+    }
+
+    protected function compileWorkLog(Site $site, Carbon $start, Carbon $end): array
+    {
+        $entries = SiteWorkLog::query()
+            ->with('user:id,name')
+            ->where('site_id', $site->id)
+            ->whereBetween('worked_on', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('worked_on')
+            ->get();
+
+        return [
+            'total_hours' => round((float) $entries->sum('hours'), 2),
+            'entries' => $entries->map(fn (SiteWorkLog $log) => [
+                'worked_on' => $log->worked_on?->toDateString(),
+                'hours' => (float) $log->hours,
+                'description' => $log->description,
+                'user' => $log->user?->name,
+            ])->all(),
         ];
     }
 }

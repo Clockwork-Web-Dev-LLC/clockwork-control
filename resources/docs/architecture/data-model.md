@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-09
+updated: 2026-09-10
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -42,7 +42,9 @@ One row per WordPress (or non-WP) site. Natural key: `domain` (unique). Notable 
 - Backup relay: `backup_relay_enabled` (boolean, default `false`) marks whether the site is enrolled in scheduled off-host backup archiving to S3 Glacier Instant Retrieval. `backup_relay_last_archived_at` (nullable timestamp) tracks when an archive run was most recently completed for the site.
 - Bill.com: `bill_com_customer_id`, `bill_com_customer_name`, `bill_com_linked_via_invoice`, `bill_com_linked_at`.
 - Companion: `companion_installed`, `companion_version`, `companion_capabilities`, `companion_secret` (encrypted), `companion_last_seen_at`, `companion_snapshot` (JSON), `companion_snapshot_at`, `companion_stuck_since` + `companion_stuck_reason` (both nullable). Set by `clockwork:detect-stuck-companion-state` (daily sweep) when a site transitions into a stuck state — a failed install never retried past 24h, or an installed Companion gone silent past the snapshot-staleness threshold (3 days). Cleared back to null on recovery. The pair exists purely to make that transition detectable for alerting. Companion traffic visibility can also be conditionally gated via `canViewCompanionTraffic()`.
-- Uptime: `uptime_monitoring_enabled`, `uptime_state`, `uptime_last_checked_at`, `uptime_last_up_at`, `uptime_last_status_code`, `uptime_consecutive_failures`, `uptime_down_since`.
+- Uptime: `uptime_monitoring_enabled`, `uptime_state`, `uptime_last_checked_at`, `uptime_last_up_at`, `uptime_last_status_code`, `uptime_consecutive_failures`, `uptime_down_since`, `uptime_require_keyword` (optional homepage string the 5-minute probe must find).
+- Work logs: `site_work_logs` (`worked_on`, `hours`, `description`, `user_id`) feed the Client Reports `work_log` section.
+- Flagged WP admins: `ignored_wp_admins` acknowledges a specific snapshot admin (`site_id` + `subject`). Site-level `/issues` mute uses `ignored_issues.issue_type = wp_admin_flagged`.
 - Performance: `performance_scan_region` (GTmetrix location ID override; NULL = global default), `psi_unavailable_at` + `psi_unavailable_reason` (circuit-breaker after 3 consecutive failed scans — name is historical, applies to any engine; auto-cleared on the next successful scan).
 
 `Site::query()` excludes archived rows by the `notArchived` global scope. Bypass with `Site::withoutGlobalScopes()` in import / migration paths — see [Concepts → Server, Site, Care plan, Hosting tier](/docs/concepts/server-site-care-plan).

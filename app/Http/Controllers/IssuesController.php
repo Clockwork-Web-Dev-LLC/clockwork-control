@@ -11,6 +11,7 @@ use App\Models\SiteSecurityScan;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Security\CoreChecksumAllowlist;
+use App\Services\Security\FleetAdminAuditor;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -287,6 +288,13 @@ class IssuesController extends Controller
 
         $schedulerHeartbeat = app(SchedulerHeartbeat::class)->status();
 
+        $flaggedAdminSites = app(FleetAdminAuditor::class)->flaggedSites();
+        $ignoredAdminIssues = IgnoredIssue::query()
+            ->where('issue_type', IgnoredIssue::TYPE_WP_ADMIN_FLAGGED)
+            ->with(['site.server', 'user'])
+            ->latest()
+            ->get();
+
         $totals = [
             'ssl' => $sslIssues->count(),
             'domain_expiration' => $domainExpirationIssues->count(),
@@ -309,6 +317,7 @@ class IssuesController extends Controller
             'down_sites' => $downSites->count(),
             'stuck_maintenance' => $stuckMaintenanceSites->count(),
             'scheduler_stale' => $schedulerHeartbeat->isStale() ? 1 : 0,
+            'wp_admins' => $flaggedAdminSites->count(),
         ];
         $totals['all'] = array_sum($totals);
         $totals['domain-expiration'] = $totals['domain_expiration'];
@@ -339,6 +348,8 @@ class IssuesController extends Controller
             'downSites',
             'stuckMaintenanceSites',
             'schedulerHeartbeat',
+            'flaggedAdminSites',
+            'ignoredAdminIssues',
             'totals',
         ));
     }
@@ -410,7 +421,7 @@ class IssuesController extends Controller
     public function ignore(Request $request): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
-            'issue_type' => ['required', 'string', 'in:seo_indexability'],
+            'issue_type' => ['required', 'string', 'in:seo_indexability,wp_admin_flagged'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'server_id' => ['nullable', 'integer', 'exists:servers,id'],
             'reason' => ['nullable', 'string', 'max:255'],

@@ -103,6 +103,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $uptime_ignore_reason
  * @property bool $uptime_sla_exempt
  * @property ?string $uptime_exemption_reason
+ * @property ?string $uptime_require_keyword
  * @property ?Carbon $sucuri_unavailable_at
  * @property ?string $sucuri_unavailable_reason
  * @property ?Carbon $psi_unavailable_at
@@ -303,6 +304,7 @@ class Site extends Model
         'uptime_ignore_reason',
         'uptime_sla_exempt',
         'uptime_exemption_reason',
+        'uptime_require_keyword',
         'sucuri_unavailable_at',
         'sucuri_unavailable_reason',
         'psi_unavailable_at',
@@ -531,6 +533,11 @@ class Site extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function workLogs(): HasMany
+    {
+        return $this->hasMany(SiteWorkLog::class);
     }
 
     public function ignoredIssues(): HasMany
@@ -936,6 +943,7 @@ class Site extends Model
         'backups',
         'traffic',
         'notes',
+        'work_logs',
         'security',
         'seo',
         'forms',

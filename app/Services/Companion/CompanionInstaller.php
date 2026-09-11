@@ -378,6 +378,27 @@ BASH;
      *
      * @return array{output: string, exit: int}
      */
+    /**
+     * SSH `wp cache flush` for Spinup sites whose Companion is too old to
+     * advertise cache-flush. Best-effort; callers treat a non-zero exit as skip.
+     *
+     * @return array{output: string, exit: int}
+     */
+    public function flushWpCache(Site $site): array
+    {
+        $wpPath = (string) $site->wp_path;
+        if ($wpPath === '' || ! $site->site_user || ! $site->server) {
+            return ['output' => 'missing SSH path or site user', 'exit' => 1];
+        }
+
+        $script = sprintf(
+            '/usr/local/bin/wp --path=%s cache flush',
+            escapeshellarg($wpPath),
+        );
+
+        return $this->runAsSiteUser($site, $script);
+    }
+
     private function runAsSiteUser(Site $site, string $script): array
     {
         $sentinel = '__CLOCKWORK_COMPANION_EXIT__';

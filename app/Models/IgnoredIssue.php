@@ -28,6 +28,8 @@ class IgnoredIssue extends Model
 
     public const TYPE_SEO_INDEXABILITY = 'seo_indexability';
 
+    public const TYPE_WP_ADMIN_FLAGGED = 'wp_admin_flagged';
+
     protected $fillable = [
         'issue_type',
         'site_id',

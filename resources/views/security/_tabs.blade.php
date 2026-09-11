@@ -4,6 +4,7 @@
     // sets $activeTab to one of: 'scans', 'queue', 'active', 'history'.
     $tabs = [
         ['key' => 'scans',   'label' => 'Scans',   'route' => 'security.scans', 'badge' => null],
+        ['key' => 'admins',  'label' => 'WP Admins', 'route' => 'security.admins', 'badge' => $flaggedWpAdminCount ?? null],
         ['key' => 'queue',   'label' => 'Bans',    'route' => 'bans.queue',     'badge' => $reviewQueueCount ?? 0],
         ['key' => 'active',  'label' => 'Active',  'route' => 'bans.active',    'badge' => $activeBansCount ?? 0],
         ['key' => 'history', 'label' => 'History', 'route' => 'bans.history',   'badge' => null],

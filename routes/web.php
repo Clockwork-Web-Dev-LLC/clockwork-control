@@ -21,6 +21,7 @@ use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\OperationsUpdatesController;
 use App\Http\Controllers\ReviewQueueController;
+use App\Http\Controllers\SecurityAdminsController;
 use App\Http\Controllers\SecurityScansController;
 use App\Http\Controllers\SecurityScansSettingsController;
 use App\Http\Controllers\ServerCredentialsController;
@@ -34,6 +35,7 @@ use App\Http\Controllers\SetupController;
 use App\Http\Controllers\Sites\DomainExpirationController;
 use App\Http\Controllers\Sites\SeoPreflightController;
 use App\Http\Controllers\SitesController;
+use App\Http\Controllers\SiteWorkLogsController;
 use App\Http\Controllers\SystemUpdatesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UpdatesController;
@@ -205,6 +207,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     // verify-checksums per site. Replaces the security feature of ManageWP.
     Route::prefix('security')->name('security.')->group(function () {
         Route::get('/scans', [SecurityScansController::class, 'index'])->name('scans');
+        Route::get('/admins', [SecurityAdminsController::class, 'index'])->name('admins');
+        Route::patch('/admins/allowlist', [SecurityAdminsController::class, 'updateAllowlist'])->name('admins.allowlist');
+        Route::post('/admins/{site}/ignore', [SecurityAdminsController::class, 'ignore'])->name('admins.ignore');
+        Route::delete('/admins/{site}/ignore/{ignoredWpAdmin}', [SecurityAdminsController::class, 'unignore'])->name('admins.unignore');
         Route::post('/scans/{site}/run', [SecurityScansController::class, 'runForSite'])->name('scans.run');
 
         // File-contents view + per-site allowlist for core_checksums findings.
@@ -267,6 +273,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('sites.show');
     Route::patch('/sites/{site}/cert', [SitesController::class, 'updateCert'])->name('sites.cert.update');
     Route::patch('/sites/{site}/notes', [SitesController::class, 'updateNotes'])->name('sites.notes.update');
+    Route::post('/sites/{site}/work-logs', [SiteWorkLogsController::class, 'store'])->name('sites.work-logs.store');
+    Route::patch('/sites/{site}/work-logs/{workLog}', [SiteWorkLogsController::class, 'update'])->name('sites.work-logs.update');
+    Route::delete('/sites/{site}/work-logs/{workLog}', [SiteWorkLogsController::class, 'destroy'])->name('sites.work-logs.destroy');
+    Route::patch('/sites/{site}/uptime-keyword', [SitesController::class, 'updateUptimeKeyword'])->name('sites.uptime-keyword.update');
+    Route::post('/sites/{site}/cache/purge', [SitesController::class, 'purgeCache'])->name('sites.cache.purge');
     Route::patch('/sites/{site}/layout', [SitesController::class, 'updateLayout'])->name('sites.layout.update');
     Route::post('/sites/{site}/cert/recheck', [SitesController::class, 'recheckCert'])->name('sites.cert.recheck');
     Route::post('/sites/{site}/uptime/recheck', [SitesController::class, 'recheckUptime'])->name('sites.uptime.recheck');
