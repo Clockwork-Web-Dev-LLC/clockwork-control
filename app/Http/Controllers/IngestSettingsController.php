@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Services\Ingest\IngestScheduleGate;
+use App\Services\Logs\ThreatLogPartitionedTable;
+use App\Services\Logs\ThreatLogRetention;
 use App\Services\Process\BackgroundArtisan;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
@@ -11,12 +13,14 @@ use Illuminate\View\View;
 
 class IngestSettingsController extends Controller
 {
-    public function index(IngestScheduleGate $gate): View
+    public function index(IngestScheduleGate $gate, ThreatLogRetention $retention, ThreatLogPartitionedTable $partitions): View
     {
         $config = $gate->currentConfig();
         $timezones = $this->commonTimezones();
+        $retentionState = $retention->viewState();
+        $partitionStatus = $partitions->status();
 
-        return view('settings.ingest', compact('config', 'timezones'));
+        return view('settings.ingest', compact('config', 'timezones', 'retentionState', 'partitionStatus'));
     }
 
     public function update(Request $request, Settings $settings, IngestScheduleGate $gate): RedirectResponse
@@ -47,6 +51,76 @@ class IngestSettingsController extends Controller
         $settings->putMany($payload);
 
         return redirect()->route('settings.ingest.index')->with('status', 'Scheduling saved.');
+    }
+
+    public function updateRetention(Request $request, ThreatLogRetention $retention): RedirectResponse
+    {
+        $validated = $request->validate([
+            'retention_amount' => ['required', 'integer', 'min:1', 'max:365'],
+            'retention_unit' => ['required', 'in:days,weeks'],
+        ]);
+
+        $days = ThreatLogRetention::daysFrom(
+            (int) $validated['retention_amount'],
+            (string) $validated['retention_unit'],
+        );
+
+        if ($days < ThreatLogRetention::MIN_DAYS || $days > ThreatLogRetention::MAX_DAYS) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'retention_amount' => 'Keep between '.ThreatLogRetention::MIN_DAYS.' and '.ThreatLogRetention::MAX_DAYS.' days (weird-stats still reads a 7-day window).',
+                ]);
+        }
+
+        $retention->save((int) $validated['retention_amount'], (string) $validated['retention_unit']);
+
+        return redirect()->route('settings.ingest.index')
+            ->with('status', "Raw nginx log retention set to {$days} days. Nightly prune will use this window.");
+    }
+
+    public function pruneNow(): RedirectResponse
+    {
+        $result = app(BackgroundArtisan::class)->start(
+            'logs.prune-threat-logs',
+            ['clockwork:prune-threat-logs'],
+            14400,
+            'prune-threat-logs-bg',
+        );
+
+        if ($result->alreadyRunning()) {
+            return back()->with('status', 'A threat log prune is already running.');
+        }
+
+        if ($result->failed()) {
+            return back()->with('queue_error', $result->error ?? 'Could not start the threat log prune.');
+        }
+
+        return back()->with('status', 'Threat log prune started in the background. Old raw rows delete in chunks; rollups are kept.');
+    }
+
+    public function rebuildPartitions(ThreatLogPartitionedTable $partitions): RedirectResponse
+    {
+        if (! $partitions->supportsPartitioning()) {
+            return back()->with('queue_error', 'Table partitioning requires a MySQL database connection.');
+        }
+
+        $result = app(BackgroundArtisan::class)->start(
+            'logs.rebuild-threat-logs-partitions',
+            ['clockwork:rebuild-threat-logs-partitions'],
+            14400,
+            'rebuild-threat-logs-partitions-bg',
+        );
+
+        if ($result->alreadyRunning()) {
+            return back()->with('status', 'A partition rebuild is already running in the background.');
+        }
+
+        if ($result->failed()) {
+            return back()->with('queue_error', $result->error ?? 'Could not start the partition rebuild.');
+        }
+
+        return back()->with('status', 'Partition rebuild started in the background. Check storage/logs/rebuild-threat-logs-partitions-bg.log for progress.');
     }
 
     /**

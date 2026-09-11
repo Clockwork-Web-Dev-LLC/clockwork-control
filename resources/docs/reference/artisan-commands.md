@@ -47,6 +47,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 |---|---|---|
 | `clockwork:poll-servers` | Pull cloud-provider metrics (DO, Hetzner, Azure, Vultr, Linode) → `server_metrics`. Branches per row on `servers.provider`. | `php artisan clockwork:poll-servers` |
 | `clockwork:prune-server-metrics` | Drop rows older than 90 days. | `php artisan clockwork:prune-server-metrics` |
+| `clockwork:prune-threat-logs` | Chunked delete of `threat_logs` older than the saved retention window (default 30 days), or `DROP PARTITION` when the MySQL table is monthly-partitioned. `--days=` overrides. `--dry-run` counts only. | `php artisan clockwork:prune-threat-logs --dry-run` |
+| `clockwork:rebuild-threat-logs-partitions` | MySQL only. Copy the retention window into a new monthly-partitioned table, swap, drop the old `.ibd` so disk shrinks. | `php artisan clockwork:rebuild-threat-logs-partitions` |
 | `clockwork:check-ssl-certs` | Per-site SSL state + Mattermost transitions. | `php artisan clockwork:check-ssl-certs` |
 | `clockwork:check-cloudflare` | Per-site CF detection. | `php artisan clockwork:check-cloudflare` |
 | `clockwork:check-site-uptime` | HTTP probe each monitored site. | `php artisan clockwork:check-site-uptime` |

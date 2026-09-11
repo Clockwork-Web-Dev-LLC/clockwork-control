@@ -3,6 +3,8 @@
 use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\Ingest\IngestScheduleGate;
+use App\Services\Logs\ThreatLogPartitionedTable;
+use App\Services\Logs\ThreatLogRetention;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
 use Illuminate\Support\Facades\Artisan;
@@ -48,7 +50,11 @@ describe('IngestSettingsController', function () {
                 ->assertSee('Scheduling')
                 ->assertSee('Limit Login Attempts Reloaded')
                 ->assertSee('Wordfence')
-                ->assertSee('America/New_York');
+                ->assertSee('America/New_York')
+                ->assertSee('Raw nginx log retention')
+                ->assertSee('Days')
+                ->assertSee('Weeks')
+                ->assertSee('Prune now');
         });
     });
 
@@ -161,6 +167,93 @@ describe('IngestSettingsController', function () {
             $response->assertRedirect();
             $response->assertSessionHas('queue_error', "Unknown source 'bogus-source'.");
             $response->assertSessionMissing('status');
+        });
+    });
+
+    describe('updateRetention', function () {
+        it('saves a days window and redirects with a status flash', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->patch(route('settings.ingest.retention'), [
+                    'retention_amount' => '45',
+                    'retention_unit' => 'days',
+                ]);
+
+            $response->assertRedirect(route('settings.ingest.index'));
+            $response->assertSessionHas('status');
+
+            expect(settingValue(ThreatLogRetention::SETTING_AMOUNT))->toBe(45)
+                ->and(settingValue(ThreatLogRetention::SETTING_UNIT))->toBe('days');
+        });
+
+        it('accepts weeks and stores the unit so the form can show weeks again', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->patch(route('settings.ingest.retention'), [
+                    'retention_amount' => '4',
+                    'retention_unit' => 'weeks',
+                ]);
+
+            $response->assertRedirect(route('settings.ingest.index'));
+            expect(settingValue(ThreatLogRetention::SETTING_AMOUNT))->toBe(4)
+                ->and(settingValue(ThreatLogRetention::SETTING_UNIT))->toBe('weeks');
+        });
+
+        it('rejects a window shorter than 7 days', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->patch(route('settings.ingest.retention'), [
+                    'retention_amount' => '3',
+                    'retention_unit' => 'days',
+                ]);
+
+            $response->assertSessionHasErrors('retention_amount');
+            expect(settingValue(ThreatLogRetention::SETTING_AMOUNT))->toBeNull();
+        });
+    });
+
+    describe('pruneNow', function () {
+        it('starts the prune command in the background', function () {
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'logs.prune-threat-logs'
+                        && $cmds === ['clockwork:prune-threat-logs'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.ingest.pruneNow'));
+
+            $response->assertRedirect();
+            $response->assertSessionHas('status', 'Threat log prune started in the background. Old raw rows delete in chunks; rollups are kept.');
+        });
+    });
+
+    describe('rebuildPartitions', function () {
+        it('rejects on non-MySQL connections with an error', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.ingest.rebuildPartitions'));
+
+            $response->assertRedirect();
+            $response->assertSessionHas('queue_error', 'Table partitioning requires a MySQL database connection.');
+        });
+
+        it('dispatches the rebuild command in the background when MySQL is supported', function () {
+            $mockPartitions = Mockery::mock(ThreatLogPartitionedTable::class);
+            $mockPartitions->shouldReceive('supportsPartitioning')->once()->andReturnTrue();
+            $this->app->instance(ThreatLogPartitionedTable::class, $mockPartitions);
+
+            $this->mock(BackgroundArtisan::class, function ($mock) {
+                $mock->shouldReceive('start')
+                    ->once()
+                    ->withArgs(fn (string $key, array $cmds) => $key === 'logs.rebuild-threat-logs-partitions'
+                        && $cmds === ['clockwork:rebuild-threat-logs-partitions'])
+                    ->andReturn(BackgroundArtisanResult::ok());
+            });
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.ingest.rebuildPartitions'));
+
+            $response->assertRedirect();
+            $response->assertSessionHas('status', 'Partition rebuild started in the background. Check storage/logs/rebuild-threat-logs-partitions-bg.log for progress.');
         });
     });
 });

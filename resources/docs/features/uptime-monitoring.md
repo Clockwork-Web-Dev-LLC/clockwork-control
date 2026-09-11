@@ -2,10 +2,10 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack]
-tracks: [app/Services/Uptime/**, app/Http/Controllers/MonitoringController.php, app/Console/Commands/CheckSiteUptime.php]
+tracks: [app/Services/Uptime/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php]
 ---
 
 Every site we host gets probed every 5 minutes — SpinupWP or Pressable, doesn't matter, it's a plain HTTP probe against the public URL either way (`Site::hostMonitored()` is the scope covering both). If a site stops answering for two probes in a row, you get a chat alert. When it recovers, you get another alert. That's the whole feature in one sentence — the rest is detail.
@@ -27,7 +27,7 @@ A site is **up** if it responds with HTTP 2xx or 3xx within 10 seconds — or if
 - HTTP 4xx other than 401 (with `WWW-Authenticate`) and 403
 - Connection refused, DNS failure, TLS handshake failure
 - Request timeout
-- HTTP 200/3xx whose body is a white screen (under ~200 visible characters) or contains WordPress/PHP fatal signatures (`There has been a critical error`, `Fatal error`, etc.). Optional per-site `uptime_require_keyword` on the site Settings tab also fails a 200 that does not contain that string. The probe does not issue a second HTTP request — it inspects the body already fetched.
+- HTTP 200/3xx whose body is a white screen (under 50 visible characters after tag-stripping) or contains WordPress/PHP fatal signatures (`There has been a critical error`, `Fatal error`, etc.). Optional per-site `uptime_require_keyword` on the site Settings tab also fails a 200 that does not contain that string. Sites that are *legitimately* near-empty on a logged-out GET (parked static HTML, a JS-rendered SPA shell, a gated/private homepage) can skip only the length check via `uptime_skip_body_check` on the same Settings tab — signatures and the required keyword still apply. The probe does not issue a second HTTP request — it inspects the body already fetched.
 
 A site has to fail **two probes in a row** (about 10 minutes at the default cadence) before it transitions to `down` and fires the Mattermost alert. Recovery is instant — the moment the next probe succeeds, we transition back to `up` and fire the recovery alert.
 

@@ -151,6 +151,16 @@ Schedule::command('clockwork:prune-server-metrics')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Chunked delete of raw nginx rows older than the saved retention window
+// (default 30 days). site_traffic_daily rollups stay. First catch-up can
+// run for hours on a bloated table — background + long mutex so it cannot
+// stack, and it never OPTIMIZE TABLEs.
+Schedule::command('clockwork:prune-threat-logs')
+    ->dailyAt('04:32')
+    ->withoutOverlapping(240)
+    ->runInBackground()
+    ->onOneServer();
+
 // Probe each WP site over SSH for active security plugins. SpinupWP's API doesn't
 // expose plugin inventory, so this is the only way to keep llar_enabled /
 // wordfence_enabled honest on the inventory page.

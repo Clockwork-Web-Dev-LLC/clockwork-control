@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.7] - 2026-09-10
+## [1.6.7] - 2026-09-11
 
 ### Added
-- **Client report work logs**: operators can log billable hours on a site (`site_work_logs`). Hours in the report window appear as a Work log section on branded client reports.
-- **Uptime white-screen / fatal detection**: the existing 5-minute homepage probe now fails on blank bodies and common WordPress/PHP error signatures that still return HTTP 200. Optional per-site `uptime_require_keyword`.
+- **threat_logs retention & monthly partitions**: Nightly prune (`clockwork:prune-threat-logs`, default 30 days, configurable on `/settings/ingest`) drops old raw nginx logs while preserving `site_traffic_daily` rollups. On MySQL, monthly RANGE partitions (`clockwork:rebuild-threat-logs-partitions` and background trigger on `/settings/ingest`) allow `DROP PARTITION` to instantaneously reclaim InnoDB disk space without downtime. Includes a safe database migration that automatically partitions fresh and small instances.
+- **Per-site skip of the uptime body-length check** (`sites.uptime_skip_body_check`): Parked pages, JS-only SPA shells, and gated/private homepages that are legitimately near-empty on a logged-out GET can skip the tag-stripped length check. Critical error/fatal signatures and `uptime_require_keyword` still apply. Configured on the site Settings tab.
+- **Client report work logs**: Operators can log billable hours on a site (`site_work_logs`). Hours in the report window appear as a Work log section on branded client reports.
+- **Uptime white-screen / fatal detection**: The 5-minute homepage probe fails on blank bodies (< 50 visible chars) and common WordPress/PHP error signatures that still return HTTP 200. Optional per-site `uptime_require_keyword`.
 - **Fleet WordPress admin audit**: `/security/admins` lists administrator-role users from Companion snapshots. Default `admin` logins are always flagged; other emails are flagged only after an approved-domain/email allowlist is saved. `/issues` chips sites that still have unacknowledged flags.
 - **Cache purge**: Companion `POST /cache/flush` (capability `cache-flush`), plus Pressable edge/object cache and Cloudflare URL purge. Runs once per site when that site's update batch finishes, and from a Purge cache button on the site overview.
 

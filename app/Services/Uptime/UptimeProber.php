@@ -40,7 +40,7 @@ class UptimeProber
         return 'Clockwork-Uptime/1.0'.($contactEmail ? " (+{$contactEmail})" : '');
     }
 
-    public function probe(string $url, int $timeoutSec = 10, ?string $requireKeyword = null): UptimeProbeResult
+    public function probe(string $url, int $timeoutSec = 10, ?string $requireKeyword = null, bool $skipBodyLengthCheck = false): UptimeProbeResult
     {
         $started = microtime(true);
 
@@ -70,7 +70,7 @@ class UptimeProber
 
         // 2xx → up (subject to body check for WSOD, fatal errors, and required keyword).
         if ($status >= 200 && $status < 300) {
-            $bodyFailure = app(HomepageBodyCheck::class)->evaluate($body, $requireKeyword);
+            $bodyFailure = app(HomepageBodyCheck::class)->evaluate($body, $requireKeyword, $skipBodyLengthCheck);
             if ($bodyFailure !== null) {
                 return UptimeProbeResult::badStatus($status, $elapsed, $bodyFailure, $body, $xRobotsTag);
             }

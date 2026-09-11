@@ -104,13 +104,13 @@
                     </a>
 
                     <a href="{{ route('settings.ingest.index') }}"
-                       x-show="matches('ingest scheduling cron llar pulls cadence background')"
+                       x-show="matches('ingest scheduling cron llar pulls cadence background threat logs retention prune nginx')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
                         <div class="flex items-start gap-3 min-w-0">
                             <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
                             <div class="min-w-0">
                                 <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Ingest &amp; Scheduling</div>
-                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Automated LLAR security log pulls, uptime checks, and background tasks</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">LLAR/Wordfence pulls and raw nginx log retention</div>
                             </div>
                         </div>
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>

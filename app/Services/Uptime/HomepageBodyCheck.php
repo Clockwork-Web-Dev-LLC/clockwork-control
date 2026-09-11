@@ -26,13 +26,13 @@ class HomepageBodyCheck
     /**
      * @return string|null Failure reason, or null when the body looks fine.
      */
-    public function evaluate(?string $body, ?string $requireKeyword = null): ?string
+    public function evaluate(?string $body, ?string $requireKeyword = null, bool $skipVisibleLengthCheck = false): ?string
     {
         $raw = (string) $body;
         $sample = mb_substr($raw, 0, self::BODY_SAMPLE_BYTES);
         $visible = trim(html_entity_decode(strip_tags($sample), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 
-        if ($visible === '' || mb_strlen($visible) < self::MIN_VISIBLE_CHARS) {
+        if (! $skipVisibleLengthCheck && ($visible === '' || mb_strlen($visible) < self::MIN_VISIBLE_CHARS)) {
             return 'Homepage body too short (possible white screen)';
         }
 

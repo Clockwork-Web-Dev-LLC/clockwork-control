@@ -88,6 +88,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | PATCH | `/sites/{site}/cert` · POST `/cert/recheck` | SSL source + recheck. |
 | POST | `/sites/{site}/uptime/recheck` | On-demand uptime probe for one site. |
 | PATCH | `/sites/{site}/uptime-keyword` | Optional homepage keyword the 5-minute probe must find. |
+| POST | `/sites/{site}/uptime-body-check` | Per-site skip of the white-screen body-length check (parked / SPA / gated homepages). |
 | POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
@@ -157,6 +158,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/settings` | Settings & Operations Hub — 4-quadrant operations command center with real-time tool search. See [Features → Settings Hub](/docs/features/settings-hub). |
 | GET/POST/PATCH | `/settings/users[/{user}/{revoke,restore}]` | Allowlist management. |
 | GET/PATCH/POST | `/settings/ingest[/run-now]` | LLAR/Wordfence pull cadence + manual run. |
+| PATCH | `/settings/ingest/retention` | Days/weeks window for raw `threat_logs` (default 30 days). |
+| POST | `/settings/ingest/prune-now` | Start `clockwork:prune-threat-logs` in the background. |
+| POST | `/settings/ingest/rebuild-partitions` | Start `clockwork:rebuild-threat-logs-partitions` in the background. |
 | GET | `/settings/wordpress-plugins` | Fleet WP plugin inventory. |
 | GET/PATCH/POST | `/settings/security-scans[/run-now]` | Scan toggles + manual run. |
 | GET/PATCH/POST | `/settings/backup-relay[/run-now]` | Backup Relay (S3 Glacier IR) settings + on-demand execution. |

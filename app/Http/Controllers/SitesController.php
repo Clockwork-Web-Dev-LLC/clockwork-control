@@ -583,7 +583,7 @@ class SitesController extends Controller
         }
 
         try {
-            $probe = $prober->probe('https://'.$site->domain.'/', requireKeyword: $site->uptime_require_keyword);
+            $probe = $prober->probe('https://'.$site->domain.'/', requireKeyword: $site->uptime_require_keyword, skipBodyLengthCheck: $site->uptime_skip_body_check);
             $updater->update($site, $probe);
             $site->refresh();
 
@@ -1441,6 +1441,27 @@ class SitesController extends Controller
             $keyword !== ''
                 ? "Uptime keyword set for {$site->domain}."
                 : "Uptime keyword cleared for {$site->domain}."
+        );
+    }
+
+    /**
+     * Toggle whether the uptime prober's "homepage body too short (possible
+     * white screen)" heuristic applies to this site. For sites where a
+     * legitimately near-empty logged-out response is expected — a static
+     * parked page, a JS-rendered SPA shell, a gated/private homepage — the
+     * heuristic can't distinguish that from a real white-screen and needs
+     * to be skipped per-site rather than tuned globally.
+     */
+    public function toggleUptimeBodyCheck(Site $site, Request $request): RedirectResponse
+    {
+        $skip = $request->boolean('skip');
+        $site->forceFill(['uptime_skip_body_check' => $skip])->save();
+
+        return back()->with(
+            'status',
+            $skip
+                ? "Uptime body-length check disabled for {$site->domain}."
+                : "Uptime body-length check re-enabled for {$site->domain}."
         );
     }
 

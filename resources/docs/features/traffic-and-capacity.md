@@ -75,7 +75,7 @@ The rollup is idempotent on `(site_id, date)` — re-running for a day overwrite
 ## Retention
 
 - `site_traffic_daily` — durable. Keep forever. It's small.
-- `threat_logs` (the raw nginx data the rollup is built from) — pruned to ~30 days. Once rolled up, the raw data is the prune candidate.
+- `threat_logs` (the raw nginx data the rollup is built from) — pruned nightly by `clockwork:prune-threat-logs` to the window set at `/settings/ingest` (default 30 days). On MySQL the table is rebuilt as monthly partitions (`clockwork:rebuild-threat-logs-partitions`) so `DROP PARTITION` reclaims disk. Once rolled up, the raw data is the prune candidate.
 
 So if you need to backfill rollups for a date older than 30 days, the data isn't there — the rollup row is the only memory.
 

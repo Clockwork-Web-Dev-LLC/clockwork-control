@@ -103,4 +103,28 @@ describe('clockwork:check-site-uptime', function () {
             ->and($reachable->uptime_state)->toBe('up')
             ->and($reachable->uptime_last_checked_at)->not->toBeNull();
     });
+
+    it('recovers a skipped near-empty homepage that the body-length check would still flag as down', function () {
+        Http::fake(['*' => Http::response('<html><body><div id="root"></div></body></html>', 200)]);
+
+        $skipped = Site::factory()->create([
+            'domain' => 'spa-shell.example.test',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_consecutive_failures' => 2,
+            'uptime_skip_body_check' => true,
+        ]);
+        $flagged = Site::factory()->create([
+            'domain' => 'wsod.example.test',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'up',
+            'uptime_consecutive_failures' => 1,
+            'uptime_skip_body_check' => false,
+        ]);
+
+        $this->artisan('clockwork:check-site-uptime')->assertSuccessful();
+
+        expect($skipped->refresh()->uptime_state)->toBe('up')
+            ->and($flagged->refresh()->uptime_state)->toBe('down');
+    });
 });

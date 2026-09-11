@@ -42,7 +42,7 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
 
 - Inode + offset state lives in `nginx_log_cursors`. This is what survives `logrotate`. Lose the cursor and you re-ingest from byte 0.
 - Caps each pass at 2 MB and trims to the last newline. Without that ceiling, a long quiet period followed by a 50 MB log file would OOM the PHP process.
-- Parsed lines land in `threat_logs` (append-only, ~30-day retention).
+- Parsed lines land in `threat_logs` (append-only). Nightly `clockwork:prune-threat-logs` drops rows older than the window set at `/settings/ingest` (default 30 days, minimum 7). On MySQL that is `DROP PARTITION` after `clockwork:rebuild-threat-logs-partitions`; otherwise chunked DELETE. Daily rollups in `site_traffic_daily` are kept.
 - Per-site try/catch: one unreachable server does not fail the whole run. Errors are isolated per site so a temporary connectivity issue on one host does not block log processing for the rest of the fleet. Per-site failures log `tail_nginx_logs.site_failed` at warning level, and the command only reports overall failure when every site in the fleet fails.
 
 ### LLAR + Wordfence direct-DB pulls
@@ -59,6 +59,8 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
 
 - **`index`** renders the current config (night window, timezone, frequency, per-source enable) from `IngestScheduleGate::currentConfig()`.
 - **`update`** (`PATCH /settings/ingest`) writes the shared night window (`start_time`/`end_time`, `HH:MM`), an `always_on` override (bypasses the window entirely while still storing the start/end so toggling back off restores them), `timezone`, a shared `frequency_minutes` (5–1440, default 60 — this is the per-source *cadence* inside the window, separate from the 15-minute scheduler tick that just checks whether it's time yet), and each source's `sources.{llar,wordfence}.enabled` checkbox.
+- **`updateRetention`** (`PATCH /settings/ingest/retention`) configures the retention window for raw `threat_logs` (default 30 days, min 7, max 365).
+- **`rebuildPartitions`** (`POST /settings/ingest/rebuild-partitions`) and `clockwork:rebuild-threat-logs-partitions` copy the keep window into monthly partitions on MySQL, swap the table, and drop the unpartitioned table so InnoDB disk space is reclaimed. A database migration automatically partitions fresh and small instances, while larger instances can trigger the background rebuild with zero downtime.
 - **`runNow`** (`POST /settings/ingest/run-now`) launches `clockwork:pull-llar-lockouts` or `clockwork:pull-wordfence-blocks` immediately via `BackgroundArtisan` (detached, because `Artisan::queue()` still runs in-process under `QUEUE_CONNECTION=sync`), ignoring both the window and the cadence gate — the escape hatch for "I need this data now, not at the next scheduled tick."
 
 The window/cadence/enable state all lives in `app_settings` under `ingest.schedule.*` keys (see [Architecture → Data model](/docs/architecture/data-model)).

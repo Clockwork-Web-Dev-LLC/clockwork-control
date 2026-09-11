@@ -209,7 +209,7 @@ class BackupRelayCommandsTest extends TestCase
         $report = [
             'schema_version' => 2,
             'sites_total' => 3, 'sites_archived' => 3, 'sites_skipped' => 0, 'sites_failed' => 0,
-            'failures' => [], 'started_at' => '2026-09-01T05:00:00+00:00', 'finished_at' => '2026-09-01T05:10:00+00:00',
+            'failures' => [], 'started_at' => now()->subHours(2)->toIso8601String(), 'finished_at' => now()->subHours(1)->toIso8601String(),
         ];
         Storage::disk('s3')->put($this->s3Prefix().'/last-report.json', json_encode($report));
 

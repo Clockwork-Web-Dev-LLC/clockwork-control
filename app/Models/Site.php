@@ -104,6 +104,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property bool $uptime_sla_exempt
  * @property ?string $uptime_exemption_reason
  * @property ?string $uptime_require_keyword
+ * @property bool $uptime_skip_body_check
  * @property ?Carbon $sucuri_unavailable_at
  * @property ?string $sucuri_unavailable_reason
  * @property ?Carbon $psi_unavailable_at
@@ -305,6 +306,7 @@ class Site extends Model
         'uptime_sla_exempt',
         'uptime_exemption_reason',
         'uptime_require_keyword',
+        'uptime_skip_body_check',
         'sucuri_unavailable_at',
         'sucuri_unavailable_reason',
         'psi_unavailable_at',
@@ -396,6 +398,7 @@ class Site extends Model
             'uptime_maintenance_since' => 'datetime',
             'uptime_ignored_at' => 'datetime',
             'uptime_sla_exempt' => 'boolean',
+            'uptime_skip_body_check' => 'boolean',
             'sucuri_unavailable_at' => 'datetime',
             'psi_unavailable_at' => 'datetime',
             'resource_metrics_cursor_at' => 'datetime',

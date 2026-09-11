@@ -41,6 +41,18 @@ describe('HomepageBodyCheck', function () {
         expect((new HomepageBodyCheck)->evaluate($body))->toBeNull();
     });
 
+    it('skips the visible-length check but still flags fatals and missing keywords', function () {
+        $spaShell = '<html><body><div id="root"></div><script src="/app.js"></script></body></html>';
+        $fatalShell = '<html><body><div id="root"></div>Fatal error: Uncaught Error in index.php</body></html>';
+        $keywordBody = str_repeat('Welcome to this site. ', 20);
+
+        $check = new HomepageBodyCheck;
+
+        expect($check->evaluate($spaShell, skipVisibleLengthCheck: true))->toBeNull()
+            ->and($check->evaluate($fatalShell, skipVisibleLengthCheck: true))->toContain('Fatal error:')
+            ->and($check->evaluate($keywordBody, 'Acme Corp', skipVisibleLengthCheck: true))->toContain('required keyword');
+    });
+
     it('anchors fatal error signatures to prevent false positives on plain text', function () {
         // Plain English text discussing fatal errors without PHP colon syntax should not trip
         $article = str_repeat('Padding content for article. ', 10).'How a fatal error was avoided during our launch.';
@@ -94,5 +106,18 @@ describe('UptimeProber homepage body check', function () {
 
         expect($result->succeeded)->toBeTrue()
             ->and($result->statusCode)->toBe(302);
+    });
+
+    it('treats a near-empty 200 as up when skipBodyLengthCheck is set', function () {
+        Http::fake([
+            'https://wsod.example/' => Http::response('<html><body><div id="root"></div></body></html>', 200),
+        ]);
+
+        $skipped = (new UptimeProber)->probe('https://wsod.example/', skipBodyLengthCheck: true);
+        $flagged = (new UptimeProber)->probe('https://wsod.example/');
+
+        expect($skipped->succeeded)->toBeTrue()
+            ->and($flagged->succeeded)->toBeFalse()
+            ->and($flagged->error)->toContain('too short');
     });
 });

@@ -651,6 +651,24 @@
                     <button type="submit" class="btn-pill-nav text-xs shrink-0">Save</button>
                 </div>
             </form>
+
+            <form method="POST" action="{{ route('sites.uptime-body-check.toggle', $site) }}" class="mt-3 space-y-1.5">
+                @csrf
+                <input type="hidden" name="skip" value="{{ $site->uptime_skip_body_check ? '0' : '1' }}">
+                <label class="block text-[11px] font-medium text-[var(--color-ink-strong)]">White-screen body check</label>
+                <p class="text-[10px] text-[var(--color-ink-muted)]">
+                    A 200 OK with near-empty visible text is normally treated as down. Disable this for sites that are
+                    legitimately near-blank on a logged-out request — a static parked page, a JS-rendered SPA shell, a
+                    gated/private homepage.
+                </p>
+                <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
+                    @if ($site->uptime_skip_body_check)
+                        <i class="fa-solid fa-toggle-on text-amber-600"></i> Body check skipped &mdash; re-enable
+                    @else
+                        <i class="fa-solid fa-toggle-off text-gray-400"></i> Skip body check for this site
+                    @endif
+                </button>
+            </form>
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">

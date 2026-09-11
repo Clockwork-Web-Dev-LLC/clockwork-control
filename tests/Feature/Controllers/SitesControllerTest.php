@@ -832,6 +832,7 @@ describe('toggle actions', function () {
         'care-plan' => ['route' => 'sites.care-plan', 'param' => 'enabled', 'column' => 'care_plan_enabled', 'json' => true],
         'auto-updates' => ['route' => 'sites.auto-updates.toggle', 'param' => 'paused', 'column' => 'auto_updates_paused', 'json' => true],
         'uptime-monitoring' => ['route' => 'sites.uptime-monitoring.toggle', 'param' => 'enabled', 'column' => 'uptime_monitoring_enabled', 'json' => false],
+        'uptime-body-check' => ['route' => 'sites.uptime-body-check.toggle', 'param' => 'skip', 'column' => 'uptime_skip_body_check', 'json' => false],
         'uptime-ignore' => ['route' => 'sites.uptime-ignore.toggle', 'param' => 'ignore', 'column' => 'uptime_ignored_at', 'nonBoolColumn' => true, 'json' => false],
         'inactive' => ['route' => 'sites.inactive.toggle', 'param' => 'inactive', 'column' => 'is_inactive', 'json' => false],
     ];

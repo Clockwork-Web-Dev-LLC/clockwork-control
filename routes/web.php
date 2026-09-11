@@ -277,6 +277,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::patch('/sites/{site}/work-logs/{workLog}', [SiteWorkLogsController::class, 'update'])->name('sites.work-logs.update');
     Route::delete('/sites/{site}/work-logs/{workLog}', [SiteWorkLogsController::class, 'destroy'])->name('sites.work-logs.destroy');
     Route::patch('/sites/{site}/uptime-keyword', [SitesController::class, 'updateUptimeKeyword'])->name('sites.uptime-keyword.update');
+    Route::post('/sites/{site}/uptime-body-check', [SitesController::class, 'toggleUptimeBodyCheck'])->name('sites.uptime-body-check.toggle');
     Route::post('/sites/{site}/cache/purge', [SitesController::class, 'purgeCache'])->name('sites.cache.purge');
     Route::patch('/sites/{site}/layout', [SitesController::class, 'updateLayout'])->name('sites.layout.update');
     Route::post('/sites/{site}/cert/recheck', [SitesController::class, 'recheckCert'])->name('sites.cert.recheck');
@@ -326,6 +327,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Settings — ingest schedule (LLAR pull + future ingest sources)
     Route::get('/settings/ingest', [IngestSettingsController::class, 'index'])->name('settings.ingest.index');
     Route::patch('/settings/ingest', [IngestSettingsController::class, 'update'])->name('settings.ingest.update');
+    Route::patch('/settings/ingest/retention', [IngestSettingsController::class, 'updateRetention'])->name('settings.ingest.retention');
+    Route::post('/settings/ingest/prune-now', [IngestSettingsController::class, 'pruneNow'])->name('settings.ingest.pruneNow');
+    Route::post('/settings/ingest/rebuild-partitions', [IngestSettingsController::class, 'rebuildPartitions'])->name('settings.ingest.rebuildPartitions');
     Route::post('/settings/ingest/run-now', [IngestSettingsController::class, 'runNow'])->name('settings.ingest.runNow');
     Route::get('/settings/wordpress-plugins', [WordPressPluginsController::class, 'index'])->name('settings.wordpress-plugins.index');
 
