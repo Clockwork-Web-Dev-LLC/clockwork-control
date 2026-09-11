@@ -24,7 +24,11 @@
         <ini name="memory_limit" value="1G"/>
         <env name="APP_KEY" value="base64:PpV0sYePBa5SQ0yDw4SESwHn7nFlNfq4gKXdFjj5CjE="/>
         <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <!-- cache + array store = per-process maintenance flag. The file driver
+             writes a shared storage/framework/down that 503s every OTHER parallel
+             test worker whenever SystemUpdateService tests call Artisan::call('down'). -->
+        <env name="APP_MAINTENANCE_DRIVER" value="cache"/>
+        <env name="APP_MAINTENANCE_STORE" value="array"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
