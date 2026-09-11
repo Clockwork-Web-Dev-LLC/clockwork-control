@@ -236,9 +236,10 @@ describe('IngestSettingsController', function () {
             $response->assertSessionHas('queue_error', 'Table partitioning requires a MySQL database connection.');
         });
 
-        it('dispatches the rebuild command in the background when MySQL is supported', function () {
+        it('dispatches the rebuild command in the background when MySQL is supported and unpartitioned', function () {
             $mockPartitions = Mockery::mock(ThreatLogPartitionedTable::class);
             $mockPartitions->shouldReceive('supportsPartitioning')->once()->andReturnTrue();
+            $mockPartitions->shouldReceive('isPartitioned')->once()->andReturnFalse();
             $this->app->instance(ThreatLogPartitionedTable::class, $mockPartitions);
 
             $this->mock(BackgroundArtisan::class, function ($mock) {
@@ -254,6 +255,19 @@ describe('IngestSettingsController', function () {
 
             $response->assertRedirect();
             $response->assertSessionHas('status', 'Partition rebuild started in the background. Check storage/logs/rebuild-threat-logs-partitions-bg.log for progress.');
+        });
+
+        it('returns early with a status message if threat_logs is already partitioned', function () {
+            $mockPartitions = Mockery::mock(ThreatLogPartitionedTable::class);
+            $mockPartitions->shouldReceive('supportsPartitioning')->once()->andReturnTrue();
+            $mockPartitions->shouldReceive('isPartitioned')->once()->andReturnTrue();
+            $this->app->instance(ThreatLogPartitionedTable::class, $mockPartitions);
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.ingest.rebuildPartitions'));
+
+            $response->assertRedirect();
+            $response->assertSessionHas('status', 'threat_logs is already partitioned into monthly tables; no rebuild needed.');
         });
     });
 });

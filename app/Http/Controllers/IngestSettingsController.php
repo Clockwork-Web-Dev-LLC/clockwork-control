@@ -105,6 +105,10 @@ class IngestSettingsController extends Controller
             return back()->with('queue_error', 'Table partitioning requires a MySQL database connection.');
         }
 
+        if ($partitions->isPartitioned()) {
+            return back()->with('status', 'threat_logs is already partitioned into monthly tables; no rebuild needed.');
+        }
+
         $result = app(BackgroundArtisan::class)->start(
             'logs.rebuild-threat-logs-partitions',
             ['clockwork:rebuild-threat-logs-partitions'],
