@@ -159,6 +159,23 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Trigger a backup generation on the remote WordPress site.
+     * When upload_url is provided (e.g. S3 presigned PUT URL with GLACIER_IR),
+     * the Companion plugin streams the archive directly to S3 and cleans up
+     * the temporary local archive.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createBackup(array $payload = []): array
+    {
+        return $this->postJson('/backup/create', $payload, [
+            'timeout' => 300,
+            'retries' => 0,
+        ]);
+    }
+
+    /**
      * Push a 30-day traffic rollup to the site's Companion. Stored in
      * wp_options['clockwork_companion_traffic_report']; rendered by the
      * Traffic admin page (1.16.0+). Last-write-wins.
@@ -880,12 +897,17 @@ class ClockworkCompanionClient
             );
         }
 
+        $sign = function (int $timestamp) use ($method, $route, $body, $secret): string {
+            $payload = strtoupper($method)
+                ."\n".'/wp-json/'.self::ROUTE_NAMESPACE.$route
+                ."\n".$timestamp
+                ."\n".$body;
+
+            return hash_hmac('sha256', $payload, $secret);
+        };
+
         $timestamp = time();
-        $payload = strtoupper($method)
-            ."\n".'/wp-json/'.self::ROUTE_NAMESPACE.$route
-            ."\n".$timestamp
-            ."\n".$body;
-        $signature = hash_hmac('sha256', $payload, $secret);
+        $signature = $sign($timestamp);
 
         // Http::retry($n, ...) treats $n as total attempts (1 = no retries,
         // 2 = one retry after first failure). Default 2 = single retry.
@@ -921,7 +943,24 @@ class ClockworkCompanionClient
                     'on_redirect' => SsrfGuard::onRedirect(),
                 ],
             ])
-            ->retry($retries, 500);
+            // Each retry attempt MUST be re-signed with a fresh timestamp.
+            // The HmacVerifier on the WP side consumes a mutating request's
+            // signature the moment it verifies — before the route handler
+            // runs — so replaying the identical signature is guaranteed a
+            // 401 replayed_request, which then MASKS whatever actually
+            // failed on the first attempt (found live 2026-09-11: a plain
+            // 400 missing_config surfaced as replayed_request). time() can
+            // return the same second on a fast retry, so bump past the last
+            // used timestamp to force a distinct signature.
+            ->retry($retries, 500, function ($exception, $request) use ($sign, &$timestamp) {
+                $timestamp = max(time(), $timestamp + 1);
+                $request->withHeaders([
+                    'X-Clockwork-Signature' => $sign($timestamp),
+                    'X-Clockwork-Timestamp' => (string) $timestamp,
+                ]);
+
+                return true;
+            });
     }
 
     protected function buildUrl(string $route): string

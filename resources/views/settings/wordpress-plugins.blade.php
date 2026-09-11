@@ -337,6 +337,7 @@
                                             <button type="button"
                                                     class="companion-install-btn btn-pill-nav text-xs font-semibold text-[var(--color-primary-600)] border-[var(--color-primary-200)] hover:bg-[var(--color-primary-500)]/10"
                                                     data-url="{{ route('sites.companion.install', $site) }}"
+                                                    data-status-url="{{ route('sites.companion.install-status', $site) }}"
                                                     data-site-domain="{{ $site->domain }}"
                                                     title="Install Clockwork Companion mu-plugin. Provides the Backups admin page, security headers, and REST monitoring.">
                                                 <i class="fa-solid fa-download"></i> Install Companion
@@ -422,6 +423,67 @@
             };
 
             // Companion Installer
+            const renderCompanionOutcome = (row, btn, domain, original, data) => {
+                if (data.ok) {
+                    const cls = (data.result === 'installed' || data.result === 'updated') ? 'status-green' : 'status-yellow';
+                    const icon = (data.result === 'installed' || data.result === 'updated') ? 'fa-circle-check' : 'fa-circle-info';
+                    showRowResult(row, cls, icon,
+                        '<strong>' + escapeHtml(domain) + '</strong> — ' + escapeHtml(data.message),
+                        data.output || null, cls === 'status-green');
+
+                    if (['installed', 'updated', 'already-current'].includes(data.result)) {
+                        const compCell = row.querySelector('[data-col="companion"]');
+                        if (compCell) {
+                            compCell.innerHTML = '<span class="status-pill status-green text-xs inline-flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i> Installed' + (data.version ? ' v' + escapeHtml(data.version) : '') + '</span>';
+                        }
+                        row.dataset.companion = '1';
+                        row.dataset.sortCompanion = '1';
+                        btn.remove();
+                    }
+                } else {
+                    showRowResult(row, 'status-red', 'fa-circle-xmark',
+                        '<strong>' + escapeHtml(domain) + '</strong> — ' + escapeHtml(data.message || 'Failed.'),
+                        data.output || null);
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                }
+            };
+
+            // Pressable installs run off-request (see InstallCompanionJob) —
+            // the install response comes back 202 'queued' immediately, and
+            // this polls installCompanionStatus until a terminal result
+            // lands. 5s interval matches PressableCommandRunner's own poll
+            // cadence; 90 attempts (~7.5min) covers a slow install with
+            // margin, since a full install chains several of its 120s-capped
+            // calls.
+            const pollCompanionStatus = (row, btn, domain, original, statusUrl, sinceIso) => {
+                let attempts = 0;
+                const tick = async () => {
+                    attempts++;
+                    try {
+                        const r = await fetch(statusUrl + '?since=' + encodeURIComponent(sinceIso), {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.done) {
+                            renderCompanionOutcome(row, btn, domain, original, data);
+                            return;
+                        }
+                    } catch (e) {
+                        // Transient — keep polling until attempts run out.
+                    }
+                    if (attempts >= 90) {
+                        showRowResult(row, 'status-yellow', 'fa-circle-info',
+                            '<strong>' + escapeHtml(domain) + '</strong> — Still running on Pressable. Refresh this page in a bit to see the result.');
+                        btn.disabled = false;
+                        btn.innerHTML = original;
+                        return;
+                    }
+                    setTimeout(tick, 5000);
+                };
+                setTimeout(tick, 5000);
+            };
+
             document.querySelectorAll('.companion-install-btn').forEach((btn) => {
                 btn.addEventListener('click', async () => {
                     const domain = btn.dataset.siteDomain;
@@ -441,29 +503,13 @@
                             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
                         });
                         const data = await r.json();
-                        if (data.ok) {
-                            const cls = (data.result === 'installed' || data.result === 'updated') ? 'status-green' : 'status-yellow';
-                            const icon = (data.result === 'installed' || data.result === 'updated') ? 'fa-circle-check' : 'fa-circle-info';
-                            showRowResult(row, cls, icon,
-                                '<strong>' + escapeHtml(domain) + '</strong> — ' + escapeHtml(data.message),
-                                data.output || null, cls === 'status-green');
-
-                            if (['installed', 'updated', 'already-current'].includes(data.result)) {
-                                const compCell = row.querySelector('[data-col="companion"]');
-                                if (compCell) {
-                                    compCell.innerHTML = '<span class="status-pill status-green text-xs inline-flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i> Installed' + (data.version ? ' v' + escapeHtml(data.version) : '') + '</span>';
-                                }
-                                row.dataset.companion = '1';
-                                row.dataset.sortCompanion = '1';
-                                btn.remove();
-                            }
-                        } else {
-                            showRowResult(row, 'status-red', 'fa-circle-xmark',
-                                '<strong>' + escapeHtml(domain) + '</strong> — ' + escapeHtml(data.message || 'Failed.'),
-                                data.output || null);
-                            btn.disabled = false;
-                            btn.innerHTML = original;
+                        if (data.result === 'queued') {
+                            showRowResult(row, 'status-yellow', 'fa-spinner fa-spin',
+                                '<strong>' + escapeHtml(domain) + '</strong> — ' + escapeHtml(data.message));
+                            pollCompanionStatus(row, btn, domain, original, btn.dataset.statusUrl, data.queued_at);
+                            return;
                         }
+                        renderCompanionOutcome(row, btn, domain, original, data);
                     } catch (e) {
                         showRowResult(row, 'status-red', 'fa-circle-xmark',
                             '<strong>' + escapeHtml(domain) + '</strong> — Network error: ' + escapeHtml(e.message));

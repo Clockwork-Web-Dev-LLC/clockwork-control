@@ -1,12 +1,15 @@
 @php
     $isPressable = $site->isPressable();
     $isSpinupWp = $site->isSpinupWp();
+    $isCustom = $site->isCustom();
     $spacesConfigured = app(\App\Services\DigitalOcean\SpacesClient::class)->isConfigured();
     $relayEnabled = (bool) $site->backup_relay_enabled;
     $lastArchived = $site->backup_relay_last_archived_at;
+    $relayFrequency = $site->backupRelayFrequency();
+    $nextScheduled = $site->backupRelayNextScheduledAt();
     $hasRelayOrPressable = $isPressable || $relayEnabled || $lastArchived !== null;
     $spacesEligible = $isSpinupWp && $spacesConfigured;
-    $showSnapshots = $hasRelayOrPressable || $spacesEligible;
+    $showSnapshots = $hasRelayOrPressable || $spacesEligible || $isCustom;
 @endphp
 
 <div class="card p-5 flex flex-col justify-between h-full"
@@ -18,8 +21,20 @@
          error: null,
          spacesEligible: {{ $spacesEligible ? 'true' : 'false' }},
          hasRelayOrPressable: {{ $hasRelayOrPressable ? 'true' : 'false' }},
+         isCustom: {{ $isCustom ? 'true' : 'false' }},
          spacesRunCount: 0,
          latestSpacesDate: null,
+         enabled: {{ $relayEnabled ? 'true' : 'false' }},
+         frequency: @js($relayFrequency),
+         lastAt: @js($lastArchived?->toIso8601String()),
+         nextAt: @js($nextScheduled?->toIso8601String()),
+         saving: false,
+         runningNow: false,
+         runMessage: null,
+         calYear: {{ (int) now()->year }},
+         calMonth: {{ (int) now()->month - 1 }},
+         selectedDate: @js(now()->toDateString()),
+         csrf: @js(csrf_token()),
          formatBytes(bytes) {
              if (!bytes || bytes <= 0) return '—';
              const k = 1024;
@@ -32,12 +47,24 @@
              const d = new Date(dateStr);
              return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
          },
+         formatStamp(dateStr) {
+             if (!dateStr) return '—';
+             const d = new Date(dateStr);
+             const pad = (n) => String(n).padStart(2, '0');
+             return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+         },
          applyHistory(json) {
              this.data = json;
              this.loaded = true;
              const rows = json.spaces_history || [];
              this.spacesRunCount = rows.length;
              this.latestSpacesDate = rows[0] ? rows[0].date : null;
+             if (json.schedule) {
+                 this.enabled = !!json.schedule.enabled;
+                 if (json.schedule.frequency) this.frequency = json.schedule.frequency;
+                 this.lastAt = json.schedule.last_archived_at || this.lastAt;
+                 this.nextAt = json.schedule.next_scheduled_at || this.nextAt;
+             }
          },
          fetchHistory() {
              return fetch('{{ route('sites.backups.history', $site) }}', {
@@ -48,7 +75,7 @@
              }).then(json => this.applyHistory(json));
          },
          prefetch() {
-             if (!this.spacesEligible || this.loaded) return;
+             if ((!this.spacesEligible && !this.isCustom) || this.loaded) return;
              this.fetchHistory().catch(() => {});
          },
          loadSnapshots() {
@@ -60,8 +87,104 @@
                  .catch(err => { this.error = err.message || 'Failed to load backup snapshots'; })
                  .finally(() => { this.loading = false; });
          },
+         async saveSchedule() {
+             if (this.saving) return;
+             this.saving = true;
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.update', $site) }}', {
+                     method: 'PATCH',
+                     headers: {
+                         'X-CSRF-TOKEN': this.csrf,
+                         'Accept': 'application/json',
+                         'Content-Type': 'application/json',
+                     },
+                     body: JSON.stringify({ enabled: this.enabled, frequency: this.frequency }),
+                 });
+                 const data = await res.json();
+                 if (data.ok) {
+                     this.nextAt = data.next_scheduled_at;
+                 }
+             } catch (e) { /* keep previous UI */ }
+             finally { this.saving = false; }
+         },
+         async runNow() {
+             if (this.runningNow || !this.enabled) return;
+             this.runningNow = true;
+             this.runMessage = null;
+             const started = this.lastAt;
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.run-now', $site) }}', {
+                     method: 'POST',
+                     headers: {
+                         'X-CSRF-TOKEN': this.csrf,
+                         'Accept': 'application/json',
+                     },
+                 });
+                 const data = await res.json();
+                 this.runMessage = data.message || (res.ok ? 'Backup started.' : 'Could not start backup.');
+                 if (!res.ok) {
+                     this.runningNow = false;
+                     return;
+                 }
+                 for (let i = 0; i < 90; i++) {
+                     await new Promise(r => setTimeout(r, 5000));
+                     await this.fetchHistory().catch(() => {});
+                     if (this.lastAt && this.lastAt !== started) {
+                         this.runMessage = 'Backup completed.';
+                         this.runningNow = false;
+                         return;
+                     }
+                 }
+                 this.runMessage = 'Backup is still running. Refresh in a few minutes.';
+             } catch (e) {
+                 this.runMessage = e.message || 'Request failed.';
+             }
+             this.runningNow = false;
+         },
+         monthLabel() {
+             return new Date(this.calYear, this.calMonth, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+         },
+         shiftMonth(delta) {
+             const d = new Date(this.calYear, this.calMonth + delta, 1);
+             this.calYear = d.getFullYear();
+             this.calMonth = d.getMonth();
+         },
+         isoDate(y, m, day) {
+             const pad = (n) => String(n).padStart(2, '0');
+             return y + '-' + pad(m + 1) + '-' + pad(day);
+         },
+         calendarCells() {
+             const first = new Date(this.calYear, this.calMonth, 1);
+             const startPad = (first.getDay() + 6) % 7;
+             const days = new Date(this.calYear, this.calMonth + 1, 0).getDate();
+             const cells = [];
+             for (let i = 0; i < startPad; i++) cells.push(null);
+             for (let d = 1; d <= days; d++) cells.push(d);
+             return cells;
+         },
+         archivesByDay() {
+             const map = {};
+             const rows = (this.data && this.data.relay_archives) ? this.data.relay_archives : [];
+             rows.forEach(a => {
+                 const raw = a.archived_at || '';
+                 const day = raw.slice(0, 10);
+                 if (!day) return;
+                 (map[day] = map[day] || []).push(a);
+             });
+             return map;
+         },
+         dayArchives() {
+             return this.archivesByDay()[this.selectedDate] || [];
+         },
+         backupKind(archive) {
+             return /^\d{4}-\d{2}-\d{2}\.zip$/.test(archive.filename || '') ? 'Scheduled backup' : 'Manual backup';
+         },
+         isToday(day) {
+             const t = new Date();
+             return day && this.calYear === t.getFullYear() && this.calMonth === t.getMonth() && day === t.getDate();
+         },
          get spacesProtected() { return this.spacesRunCount > 0; },
-         get showProtected() { return this.hasRelayOrPressable || this.spacesProtected; }
+         get showProtected() { return this.hasRelayOrPressable || this.spacesProtected || (this.isCustom && this.enabled); }
      }"
      x-init="prefetch()">
     <div>
@@ -70,7 +193,18 @@
                 <i class="fa-solid fa-box-archive text-emerald-600"></i>
                 Backups
             </h3>
-            @if ($hasRelayOrPressable)
+            @if ($isCustom)
+                <button type="button"
+                        role="switch"
+                        :aria-checked="enabled ? 'true' : 'false'"
+                        aria-label="Toggle Glacier backups for {{ $site->domain }}"
+                        @click="enabled = !enabled; saveSchedule()"
+                        :disabled="saving"
+                        class="cw-switch"
+                        :class="{ 'cw-switch--on': enabled, 'cw-switch--busy': saving }">
+                    <span class="cw-switch__knob"></span>
+                </button>
+            @elseif ($hasRelayOrPressable)
                 <span class="status-pill status-green text-[10px]">
                     <span class="status-dot"></span> Protected
                 </span>
@@ -85,7 +219,100 @@
             @endif
         </div>
 
-        @if ($hasRelayOrPressable)
+        @if ($isCustom)
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <button type="button" class="w-7 h-7 rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer" @click="shiftMonth(-1)" aria-label="Previous month">
+                            <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                        </button>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-strong)]" x-text="monthLabel()"></div>
+                        <button type="button" class="w-7 h-7 rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer" @click="shiftMonth(1)" aria-label="Next month">
+                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-7 gap-px text-[10px] text-center text-[var(--color-ink-muted)] mb-1">
+                        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                    </div>
+                    <div class="grid grid-cols-7 gap-px">
+                        <template x-for="(day, idx) in calendarCells()" :key="idx">
+                            <button type="button"
+                                    class="relative h-8 rounded-md text-xs cursor-pointer"
+                                    :class="{
+                                        'invisible': !day,
+                                        'bg-emerald-50 text-emerald-800 font-semibold': day && isToday(day),
+                                        'text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]': day && !isToday(day),
+                                        'ring-1 ring-emerald-500': day && selectedDate === isoDate(calYear, calMonth, day),
+                                    }"
+                                    @click="if (day) selectedDate = isoDate(calYear, calMonth, day)"
+                                    x-show="true">
+                                <span x-text="day || ''"></span>
+                                <span class="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500"
+                                      x-show="day && archivesByDay()[isoDate(calYear, calMonth, day)]"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <label class="text-[11px] text-[var(--color-ink-muted)]">
+                        Schedule
+                        <select x-model="frequency"
+                                @change="saveSchedule()"
+                                :disabled="saving || !enabled"
+                                class="mt-1 w-full text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[var(--color-ink-strong)]">
+                            <option value="daily">Daily</option>
+                            <option value="twice_weekly">Twice weekly</option>
+                            <option value="weekly">Weekly</option>
+                        </select>
+                    </label>
+                    <div class="text-xs space-y-1">
+                        <div>
+                            <span class="text-[var(--color-ink-muted)]">Latest backup:</span>
+                            <span class="font-medium text-[var(--color-ink-strong)]" x-text="lastAt ? formatStamp(lastAt) : 'None yet'"></span>
+                        </div>
+                        <div>
+                            <span class="text-[var(--color-ink-muted)]">Next backup:</span>
+                            <span class="font-medium text-[var(--color-ink-strong)]" x-text="enabled && nextAt ? formatStamp(nextAt) : '—'"></span>
+                        </div>
+                    </div>
+                    <button type="button"
+                            @click="runNow()"
+                            :disabled="runningNow || !enabled"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 cursor-pointer">
+                        <i class="fa-solid" :class="runningNow ? 'fa-circle-notch fa-spin' : 'fa-cloud-arrow-up'"></i>
+                        <span x-text="runningNow ? 'Backing up…' : 'Backup Now'"></span>
+                    </button>
+                    <p class="text-[11px] text-[var(--color-ink-muted)]" x-show="runMessage" x-text="runMessage" x-cloak></p>
+                    <p class="text-[10px] text-[var(--color-ink-muted)]">
+                        Off-site zip to S3 Glacier Instant Retrieval. Use this for sites we do not host; SpinupWP and Pressable keep their own backups.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="text-xs font-medium text-[var(--color-ink-muted)] mb-2">
+                    Backups for <span class="text-[var(--color-ink-strong)]" x-text="selectedDate"></span>
+                </div>
+                <div class="border border-[var(--color-border-light)] rounded-xl divide-y divide-[var(--color-border-light)] min-h-[2.5rem]">
+                    <template x-for="archive in dayArchives()" :key="archive.id || archive.key">
+                        <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <div class="font-medium text-[var(--color-ink-strong)]" x-text="(archive.archived_at || '').slice(11, 19) || archive.filename"></div>
+                                <div class="text-[10px] text-[var(--color-ink-muted)]" x-text="backupKind(archive)"></div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="font-data text-[var(--color-ink-muted)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes)"></span>
+                                <a :href="archive.download_url" class="text-emerald-700 hover:underline" x-show="archive.download_url">Download</a>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="px-3 py-2 text-[11px] text-[var(--color-ink-muted)]" x-show="dayArchives().length === 0">
+                        No backups on this day.
+                    </div>
+                </div>
+            </div>
+        @elseif ($hasRelayOrPressable)
             <div class="py-2">
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 text-base">
@@ -168,7 +395,7 @@
                 </div>
                 <div class="font-semibold text-sm text-[var(--color-ink-strong)]">No automated backup relay</div>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-1 max-w-xs mx-auto">
-                    Enable S3 Glacier backup relay in site settings to archive this site off-site daily.
+                    Host backups (SpinupWP or Pressable) cover this site. Glacier relay is for unhosted WordPress sites.
                 </p>
             </div>
         @endif
@@ -186,10 +413,6 @@
                     <i class="fa-solid fa-clock-rotate-left mr-1"></i> Snapshots
                 </button>
             @endif
-            <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'settings']) }}#backup-relay-card"
-               class="btn-pill-nav text-xs font-medium text-emerald-700 hover:underline">
-                Settings <i class="fa-solid fa-chevron-right text-[10px] ml-0.5"></i>
-            </a>
         </div>
     </div>
 
@@ -228,21 +451,17 @@
                         </button>
                     </div>
 
-                    <!-- Loading State -->
                     <div x-show="loading" class="py-12 text-center text-sm text-[var(--color-ink-muted)]">
                         <i class="fa-solid fa-circle-notch fa-spin text-lg text-emerald-600 mb-2"></i>
                         <p>Querying backup storage for snapshots…</p>
                     </div>
 
-                    <!-- Error State -->
                     <div x-show="error" class="p-4 rounded-xl bg-rose-50 text-rose-700 text-xs border border-rose-200 mb-4">
                         <i class="fa-solid fa-circle-exclamation mr-1.5"></i>
                         <span x-text="error"></span>
                     </div>
 
-                    <!-- Content State -->
                     <div x-show="!loading && !error && data">
-                        {{-- Spaces Runs --}}
                         <template x-if="data && data.spaces_history && data.spaces_history.length > 0">
                             <div>
                                 <div class="flex items-center justify-between mb-2">
@@ -279,7 +498,6 @@
                             </div>
                         </template>
 
-                        {{-- Relay S3 Glacier Archives --}}
                         <template x-if="data && data.relay_archives && data.relay_archives.length > 0">
                             <div :class="{'mt-4': data.spaces_history && data.spaces_history.length > 0}">
                                 <div class="flex items-center justify-between mb-2">
@@ -293,10 +511,10 @@
                                         <div class="p-3 hover:bg-[var(--color-surface-alt)]/50 transition-colors flex items-center justify-between text-xs">
                                             <div>
                                                 <div class="font-medium text-[var(--color-ink-strong)]" x-text="archive.filename || archive.key"></div>
-                                                <div class="text-[10px] text-[var(--color-ink-muted)]" x-text="archive.last_modified_formatted || archive.date"></div>
+                                                <div class="text-[10px] text-[var(--color-ink-muted)]" x-text="archive.archived_at_formatted || archive.last_modified_formatted || archive.date"></div>
                                             </div>
                                             <div class="text-right">
-                                                <div class="font-data font-semibold text-[var(--color-ink-strong)]" x-text="archive.size_formatted || formatBytes(archive.size)"></div>
+                                                <div class="font-data font-semibold text-[var(--color-ink-strong)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes || archive.size)"></div>
                                                 <div class="text-[10px] text-emerald-600">Glacier IR</div>
                                             </div>
                                         </div>
@@ -305,7 +523,6 @@
                             </div>
                         </template>
 
-                        {{-- Empty State --}}
                         <template x-if="data && (!data.spaces_history || data.spaces_history.length === 0) && (!data.relay_archives || data.relay_archives.length === 0)">
                             <div class="py-8 text-center text-xs text-[var(--color-ink-muted)]">
                                 <i class="fa-solid fa-box-open text-2xl text-[var(--color-ink-muted)]/50 mb-2"></i>

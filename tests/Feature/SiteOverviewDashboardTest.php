@@ -252,4 +252,25 @@ describe('Site Overview Command Center Dashboard', function () {
             ->assertJsonPath('spaces_history.0.date', '2026-09-01T07:00:00+00:00')
             ->assertJsonPath('spaces_history.0.database_bytes', 4256);
     });
+
+    it('renders schedule controls and Backup Now on custom unhosted sites', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'unhosted-client.example.com',
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+            'backup_relay_last_archived_at' => now()->subHours(3),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('sites.show', $site));
+
+        $response->assertOk()
+            ->assertSee('Backups')
+            ->assertSee('Backup Now')
+            ->assertSee('Latest backup')
+            ->assertSee('Next backup')
+            ->assertSee('unhosted-client.example.com');
+    });
 });

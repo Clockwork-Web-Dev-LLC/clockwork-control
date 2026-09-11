@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\DigitalOceanFixtures;
 use Tests\Fixtures\SpinupWpFixtures;
@@ -351,5 +352,85 @@ describe('clockwork:import-spinupwp', function () {
 
         expect(Server::count())->toBe(0);
         expect(Site::count())->toBe(0);
+    });
+
+    it('skips a dropped site and does not restore spinupwp_id on the archived row', function () {
+        spinupwpConfig();
+
+        $server = Server::factory()->create(['spinupwp_id' => '12345']);
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'spinupwp_id' => '67890',
+            'domain' => 'dropped.example',
+        ]);
+        SiteIngestExclusion::recordFromSite($site, 'client left');
+        $site->forceFill(['archived_at' => now(), 'spinupwp_id' => null])->save();
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server(['id' => 12345, 'ip_address' => '203.0.113.10', 'provider_name' => 'DigitalOcean']),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::site([
+                        'id' => 67890,
+                        'server_id' => 12345,
+                        'domain' => 'dropped.example',
+                        'is_wordpress' => true,
+                    ]),
+                ]),
+                200
+            ),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')
+            ->assertSuccessful()
+            ->expectsOutputToContain('dropped from Clockwork ingest')
+            ->expectsOutputToContain('"skipped_excluded":1');
+
+        expect(Site::count())->toBe(0);
+        $fresh = Site::withoutGlobalScopes()->findOrFail($site->id);
+        expect($fresh->spinupwp_id)->toBeNull()
+            ->and($fresh->archived_at)->not->toBeNull();
+    });
+
+    it('skips a dropped host site id even when the domain was renamed at SpinupWP', function () {
+        spinupwpConfig();
+
+        Server::factory()->create(['spinupwp_id' => '12345']);
+        SiteIngestExclusion::factory()->create([
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'provider_site_id' => '67890',
+            'domain' => 'old-dropped.example',
+        ]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server(['id' => 12345, 'ip_address' => '203.0.113.10', 'provider_name' => 'DigitalOcean']),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::site([
+                        'id' => 67890,
+                        'server_id' => 12345,
+                        'domain' => 'renamed-dropped.example',
+                        'is_wordpress' => true,
+                    ]),
+                ]),
+                200
+            ),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')
+            ->assertSuccessful()
+            ->expectsOutputToContain('"skipped_excluded":1');
+
+        expect(Site::query()->where('domain', 'renamed-dropped.example')->exists())->toBeFalse();
     });
 });

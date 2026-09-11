@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Standalone Companion enroll**: `POST /sites` pairs via Connection Key or domain+secret, always as `custom` (no host API/SSH). Turns on uptime, live TLS, and daily Glacier backups (`backup_relay_enabled` + `backup_relay_frequency = daily`). Direct-to-S3 Glacier IR uses a stable daily key `archives/{domain}/{Y-m-d}.zip`; Backup Now writes `archives/{domain}/{Y-m-d_H-i-s}.zip`. Existing daily objects count as success (HMAC timeout after PUT). Last archive size and SHA-256 are stored on the site.
+- **Per-site Glacier backups for unhosted sites**: Custom/standalone sites get a ManageWP-style Backups card (on/off, daily / twice-weekly / weekly, last/next, calendar, Backup Now). SpinupWP and Pressable keep host-native backups; this is only for sites we do not host.
+- **Drop SpinupWP / Pressable sites from Clockwork**: Remove from monitoring archives the row and writes `site_ingest_exclusions` so `clockwork:import-spinupwp` / `clockwork:import-pressable` skip that domain (and host site id) instead of resurrecting it. Does not delete WordPress on the host or uninstall Companion.
+
 ## [1.6.7] - 2026-09-11
 
 ### Added

@@ -123,6 +123,8 @@ Handles Pressable's 30-second no-output kill. Live-tested both the success path 
 
 If you see a site skipped this way and it's genuinely mid-migration to Pressable, that's a manual call today — the guard is a safe default, not a migration-aware state machine.
 
+**Dropped sites.** `ImportPressable::upsertSite()` also skips (`skipped_excluded`) when a `site_ingest_exclusions` row matches the domain (any provider) or this Pressable site id. Remove from monitoring on a Pressable (or SpinupWP) site writes that row so a later import does not refill `pressable_site_id` onto the archived record, and so a dropped SpinupWP domain is not converted into a Pressable row. See [Features → Inactive sites](/docs/features/inactive-sites).
+
 **New sites start with `auto_updates_paused = false`** (creation-only — never overrides an existing manual pause), matching the SpinupWP importer behavior. See [Integrations → SpinupWP](/docs/integrations/spinupwp) and [Features → Updates](/docs/features/updates).
 
 ## Provider-agnostic querying with hostMonitored()

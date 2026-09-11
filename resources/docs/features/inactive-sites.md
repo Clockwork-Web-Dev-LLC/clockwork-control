@@ -5,7 +5,7 @@ order: 32
 author: Aaron Reimann
 updated: 2026-09-09
 tags: [sites, issues, alerting, care-plan]
-tracks: [app/Models/Site.php, app/Support/IssueCounter.php, app/Http/Controllers/IssuesController.php, app/Http/Controllers/SitesController.php, app/Services/Chat/ChatNotifierDispatcher.php, database/migrations/*add_is_inactive_to_sites*]
+tracks: [app/Models/Site.php, app/Models/SiteIngestExclusion.php, app/Support/IssueCounter.php, app/Http/Controllers/IssuesController.php, app/Http/Controllers/SitesController.php, app/Services/Chat/ChatNotifierDispatcher.php, database/migrations/*add_is_inactive_to_sites*, database/migrations/*site_ingest_exclusions*]
 ---
 
 `sites.is_inactive` — a fleet-wide "stop nagging me about this one" flag, distinct from both Archive and the per-site uptime-ignore toggle.
@@ -18,12 +18,20 @@ A client migrates away but asks to keep their old site reachable a while longer.
 
 | | Visible in Sites list / search? | What's suppressed |
 |---|---|---|
-| **Archive** (`archived_at`) | No — hidden from every listing entirely | Everything, because the row is effectively gone from the live app |
+| **Archive** (`archived_at`) | No — hidden from every listing entirely | Everything, because the row is effectively gone from the live app. For SpinupWP / Pressable this also writes `site_ingest_exclusions` so the host import will not bring the site back. |
 | **Uptime ignore** (`uptime_ignored_at`) | Yes | Only uptime alerts/Issues entries for that one site — probe keeps running |
 | **Inactive** (`is_inactive`) | Yes | Every routine-maintenance signal at once (see below) — not just one |
 | **Issue-specific ignore** (`ignored_issues`) | Yes | Just the one ignored issue type (e.g. an intentional `noindex`) on an otherwise fully-monitored site, with an operator-recorded reason — see [Architecture → Data model](/docs/architecture/data-model) |
 
-Use Archive when a site is truly gone (decommissioned, DNS pointed elsewhere, no reason to ever look at it again). Use Inactive when it's still around and still worth glancing at, just not worth the nagging. Use the issue-specific ignore when everything about the site is fine except one known, intentional condition that would otherwise keep alerting.
+Use Archive when a site should leave Clockwork — decommissioned, DNS pointed elsewhere, or still live on SpinupWP/Pressable but no longer something this fleet should track. Use Inactive when it's still around and still worth glancing at, just not worth the nagging. Use the issue-specific ignore when everything about the site is fine except one known, intentional condition that would otherwise keep alerting.
+
+## Dropping a SpinupWP or Pressable site
+
+Site → Settings tab → "Remove from monitoring". Confirm by typing the domain.
+
+That path archives the row **and** records a `site_ingest_exclusions` entry for the host provider + domain + host site id. `clockwork:import-spinupwp` / `clockwork:import-pressable` then skip the listing (`skipped_excluded`) instead of updating the archived row in place (which used to refill `spinupwp_id` / `pressable_site_id`). It does **not** delete WordPress on the host and it does **not** uninstall Companion.
+
+Unarchive (today: the orphan-review restore path) clears `archived_at` and deletes the matching exclusion, so the next import can re-attach the site.
 
 ## What's suppressed vs. what still fires
 

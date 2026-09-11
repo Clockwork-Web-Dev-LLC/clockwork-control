@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BansController;
 use App\Http\Controllers\BlockedIpsController;
 use App\Http\Controllers\CapacityController;
+use App\Http\Controllers\CompanionDownloadController;
 use App\Http\Controllers\CompanionSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiagnosticsController;
@@ -263,6 +264,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/operations/system-updates/refresh', [OperationsUpdatesController::class, 'refreshRedirect']);
 
     Route::get('/sites', [SitesController::class, 'index'])->name('sites.index');
+    Route::get('/sites/create', [SitesController::class, 'create'])->name('sites.create');
+    Route::post('/sites', [SitesController::class, 'store'])->name('sites.store');
+    Route::get('/companion/download', [CompanionDownloadController::class, 'downloadZip'])->name('companion.download');
     Route::get('/search/sites', [SitesController::class, 'search'])->name('sites.search');
 
     // Tab-aware site detail. The {tab?} segment is constrained to known tab names so other
@@ -291,6 +295,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     // contact-form-named route below, but reachable from any page that needs it
     // (e.g. the WordPress plugins fleet inventory).
     Route::post('/sites/{site}/install-companion', [SitesController::class, 'installCompanion'])->name('sites.companion.install');
+    // Polled by the frontend after a 202 'queued' response (Pressable installs
+    // run off-request — see SitesController::installCompanion).
+    Route::get('/sites/{site}/install-companion/status', [SitesController::class, 'installCompanionStatus'])->name('sites.companion.install-status');
     Route::post('/sites/{site}/companion/push-update', [SitesController::class, 'pushCompanionData'])->name('sites.companion.push-update');
     Route::post('/sites/{site}/companion/refresh-snapshot', [SitesController::class, 'refreshCompanionSnapshot'])->name('sites.companion.refresh-snapshot');
     Route::post('/sites/{site}/companion/sso', [SitesController::class, 'ssoLaunch'])->name('sites.companion.sso');
@@ -298,6 +305,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/pressable/flush-object-cache', [SitesController::class, 'flushPressableObjectCache'])->name('sites.pressable.flush-object-cache');
     Route::get('/sites/{site}/pressable/resource-metrics', [SitesController::class, 'pressableResourceMetrics'])->name('sites.pressable.resource-metrics');
     Route::get('/sites/{site}/backups-history', [SitesController::class, 'backupsHistory'])->name('sites.backups.history');
+    Route::patch('/sites/{site}/backup-relay', [SitesController::class, 'updateBackupRelay'])->name('sites.backup-relay.update');
+    Route::post('/sites/{site}/backup-relay/run-now', [SitesController::class, 'runBackupNow'])->name('sites.backup-relay.run-now');
     Route::post('/sites/{site}/care-plan', [SitesController::class, 'toggleCarePlan'])->name('sites.care-plan');
     Route::post('/sites/{site}/care-plan/clear-override', [SitesController::class, 'clearCarePlanOverride'])->name('sites.care-plan.clear-override');
     Route::post('/sites/{site}/auto-updates/toggle', [SitesController::class, 'togglePauseAutoUpdates'])->name('sites.auto-updates.toggle');

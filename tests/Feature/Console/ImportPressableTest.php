@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\PressableFixtures;
@@ -228,5 +229,67 @@ describe('clockwork:import-pressable', function () {
             ->assertSuccessful();
 
         expect(Site::count())->toBe(0);
+    });
+
+    it('skips a dropped Pressable site and does not restore pressable_site_id on the archived row', function () {
+        pressableConfig();
+
+        $site = Site::factory()->pressable()->create([
+            'domain' => 'dropped-pressable.com',
+            'pressable_site_id' => '999000',
+        ]);
+        SiteIngestExclusion::recordFromSite($site, 'drop it');
+        $site->forceFill(['archived_at' => now(), 'pressable_site_id' => null])->save();
+
+        Http::fake(array_merge(fakePressableAuth(), [
+            'my.pressable.com/v1/sites*' => Http::response(
+                PressableFixtures::listResponse([
+                    PressableFixtures::site(['id' => '999000', 'url' => 'dropped-pressable.com', 'state' => 'live']),
+                ]),
+                200
+            ),
+        ]));
+
+        $this->artisan('clockwork:import-pressable')
+            ->assertSuccessful()
+            ->expectsOutputToContain('dropped from Clockwork ingest')
+            ->expectsOutputToContain('"skipped_excluded":1');
+
+        expect(Site::count())->toBe(0);
+        $fresh = Site::withoutGlobalScopes()->findOrFail($site->id);
+        expect($fresh->pressable_site_id)->toBeNull()
+            ->and($fresh->archived_at)->not->toBeNull();
+    });
+
+    it('skips a domain dropped from SpinupWP rather than converting the archived row to Pressable', function () {
+        pressableConfig();
+
+        $site = Site::factory()->spinupwp()->archived()->create([
+            'domain' => 'shared-drop.example',
+            'spinupwp_id' => null,
+        ]);
+        SiteIngestExclusion::factory()->create([
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'domain' => 'shared-drop.example',
+            'site_id' => $site->id,
+            'provider_site_id' => '5150',
+        ]);
+
+        Http::fake(array_merge(fakePressableAuth(), [
+            'my.pressable.com/v1/sites*' => Http::response(
+                PressableFixtures::listResponse([
+                    PressableFixtures::site(['id' => '444555', 'url' => 'shared-drop.example', 'state' => 'live']),
+                ]),
+                200
+            ),
+        ]));
+
+        $this->artisan('clockwork:import-pressable')
+            ->assertSuccessful()
+            ->expectsOutputToContain('"skipped_excluded":1');
+
+        $fresh = Site::withoutGlobalScopes()->findOrFail($site->id);
+        expect($fresh->hosting_provider)->toBe(Site::HOSTING_PROVIDER_SPINUPWP)
+            ->and($fresh->pressable_site_id)->toBeNull();
     });
 });

@@ -15,6 +15,7 @@ class RunBackupRelayNow extends Command
 {
     protected $signature = 'clockwork:backup-relay-run
         {--site= : Limit to a single site (id or domain)}
+        {--force : Ignore cadence / last-archive skips (Backup Now)}
         {--queue : Queue the backup jobs asynchronously}';
 
     protected $description = 'Run in-repo backup relay archiving for enabled sites to S3 Glacier.';
@@ -48,9 +49,11 @@ class RunBackupRelayNow extends Command
             return self::SUCCESS;
         }
 
+        $force = (bool) $this->option('force');
+
         if ($this->option('queue')) {
             foreach ($sites as $site) {
-                ArchiveSiteBackupJob::dispatch($site);
+                ArchiveSiteBackupJob::dispatch($site, $force);
                 $this->line("  [queued] {$site->domain}");
             }
             $this->info("Dispatched {$sites->count()} backup relay job(s) to the queue.");
@@ -66,7 +69,7 @@ class RunBackupRelayNow extends Command
 
         foreach ($sites as $site) {
             try {
-                $job = new ArchiveSiteBackupJob($site);
+                $job = new ArchiveSiteBackupJob($site, $force);
                 $result = $job->handle($uploader);
 
                 if ($result === 'archived') {

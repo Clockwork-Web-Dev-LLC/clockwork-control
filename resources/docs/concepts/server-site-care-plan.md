@@ -97,5 +97,5 @@ Every SpinupWP or Cloudways site lives on exactly one server, regardless of whic
 A few edge cases worth knowing:
 
 - **Ignored servers** — `is_ignored = true` on a server means we don't poll it, don't show it in headline counts, don't run plugin inventory on it. Useful for hand-managed boxes or hosts behind firewalls we can't reach. It still shows on the dashboard in a muted section so you remember it exists.
-- **Archived sites** — sites that we used to host but don't anymore. Hidden by a global Eloquent scope so they don't pollute dashboards. Bypass the scope when you need to look one up: `Site::withoutGlobalScopes()->where(...)`.
+- **Archived sites** — sites Clockwork should no longer track. Hidden by a global Eloquent scope so they don't pollute dashboards. Bypass the scope when you need to look one up: `Site::withoutGlobalScopes()->where(...)`. For SpinupWP / Pressable, archive also writes `site_ingest_exclusions` so the host import cannot resurrect the row; see [Features → Inactive sites](/docs/features/inactive-sites).
 - **Care plan override** — if `care_plan_override IS NOT NULL`, the daily Bill.com sync stops touching `care_plan_enabled` for that site. Useful when a customer pays out-of-band or when Bill.com's data is wrong. Clear the override (the "Let Bill.com decide" button on the site Settings tab) to re-engage automatic sync.

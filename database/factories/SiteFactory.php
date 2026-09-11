@@ -116,6 +116,17 @@ class SiteFactory extends Factory
         ]);
     }
 
+    public function custom(): static
+    {
+        return $this->state(fn () => [
+            'server_id' => null,
+            'spinupwp_id' => null,
+            'pressable_site_id' => null,
+            'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
+            'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
+        ]);
+    }
+
     public function carePlan(): static
     {
         return $this->state(fn () => ['care_plan_enabled' => true]);

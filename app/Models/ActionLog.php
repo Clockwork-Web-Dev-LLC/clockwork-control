@@ -103,6 +103,10 @@ class ActionLog extends Model
 
     public const TYPE_BACKUP_RELAY_DOWNLOADED = 'backup_relay_downloaded';
 
+    public const TYPE_BACKUP_RELAY_TOGGLED = 'backup_relay_toggled';
+
+    public const TYPE_BACKUP_RELAY_RUN_NOW = 'backup_relay_run_now';
+
     public const TYPE_INSTALLER_REOPENED = 'installer_reopened';
 
     // ManageWP parity features (Comment Moderation, Code Snippets, Site Maintenance)

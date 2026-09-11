@@ -847,7 +847,11 @@
                 Remove from monitoring
             </h3>
             <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
-                Use this when the site has been deleted from the host, moved away, or should no longer appear in dashboards. The row is hidden from every listing (Sites, monitoring, issues), while historical scans and logs are retained for audit trail.
+                @if ($site->isSpinupWp() || $site->isPressable())
+                    Removes this site from Clockwork. It will disappear from every listing, and SpinupWP / Pressable import will not bring it back. This does not delete the WordPress site on the host, and it does not uninstall Companion.
+                @else
+                    Use this when the site has been deleted from the host, moved away, or should no longer appear in dashboards. The row is hidden from every listing (Sites, monitoring, issues), while historical scans and logs are retained for audit trail.
+                @endif
             </p>
         </div>
         <button type="button" id="archive-site-toggle" class="btn-pill-nav text-xs text-[var(--color-status-red)] border-[var(--color-status-red)]/40 hover:bg-rose-50 flex items-center gap-1.5">
