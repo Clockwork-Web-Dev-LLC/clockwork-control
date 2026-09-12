@@ -621,7 +621,9 @@
                                         <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                                     </td>
                                     <td class="px-5 py-2 text-xs font-data">
-                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                        @if ($s->server)
+                                            <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                        @endif
                                     </td>
                                     <td class="px-5 py-2 cell-status">
                                         <span class="status-pill {{ $pillClass }} text-[10px]">{{ $statusLabel }}</span>
@@ -1071,7 +1073,9 @@
                                 <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                             </td>
                             <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
                             </td>
                             <td class="px-5 py-2 cell-state">
                                 <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
@@ -1187,7 +1191,9 @@
                                 <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                             </td>
                             <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
                             </td>
                             <td class="px-5 py-2 cell-state">
                                 <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
@@ -1299,7 +1305,9 @@
                                 <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                             </td>
                             <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
                             </td>
                             <td class="px-5 py-2 text-xs font-data text-[var(--color-ink-soft)]">{{ $s->resolved_a_record ?? '—' }}</td>
                             <td class="px-5 py-2 text-xs font-data text-[var(--color-ink-soft)]">{{ $s->resolved_ns_record ?? '—' }}</td>
@@ -1659,7 +1667,9 @@
                                 <span class="text-[10px] text-[var(--color-ink-soft)] ml-1">{{ $cft->form_id }}</span>
                             </td>
                             <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
                             </td>
                             <td class="px-5 py-2 text-xs">{{ $cft->form_plugin }}</td>
                             <td class="px-5 py-2 text-right text-xs font-data">{{ $cft->failure_streak }}</td>
@@ -1707,7 +1717,9 @@
                                 <a href="{{ route('sites.show', ['site' => $s, 'tab' => 'forms']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                             </td>
                             <td class="px-5 py-2 text-xs font-data">
-                                <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
                             </td>
                             <td class="px-5 py-2 text-xs">{{ $s->companion_installed ? 'yes' : 'no' }}</td>
                             <td class="px-5 py-2 text-xs font-data text-[var(--color-ink-soft)]">{{ $s->companion_version ?: '—' }}</td>
@@ -1839,7 +1851,9 @@
                                     <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                                 </td>
                                 <td class="px-5 py-2 text-xs font-data">
-                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]" title="{{ $s->server?->name }}">{{ $serverShortName }}</a>
+                                    @if ($s->server)
+                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]" title="{{ $s->server->name }}">{{ $serverShortName }}</a>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-2 text-center text-xs">
                                     @if ($onCarePlan)
@@ -2156,7 +2170,9 @@
                                     <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
                                 </td>
                                 <td class="px-5 py-2 text-xs font-data">
-                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server?->name }}</a>
+                                    @if ($s->server)
+                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-2 text-right">
                                     <form method="POST" action="{{ route('sites.fetch-db-creds', $s) }}">

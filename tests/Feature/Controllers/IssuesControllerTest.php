@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ContactFormTest;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
@@ -26,6 +27,20 @@ describe('IssuesController', function () {
             ->get(route('issues.index'));
 
         $response->assertOk()->assertSee('Issues');
+    });
+
+    it('renders the failing-forms section for a server-less (Pressable/standalone) site without crashing', function () {
+        // Regression: the "Contact form failing" section's route('servers.show', $s->server)
+        // was unguarded, and $failedFormTests has no whereHas('server') restriction (unlike
+        // most other issue sections) — contact-form testing runs via Companion regardless of
+        // hosting type, so a server-less site failing its form test crashed the whole page.
+        $site = Site::factory()->pressable()->carePlan()->create(['is_inactive' => false]);
+        ContactFormTest::factory()->failing()->create(['site_id' => $site->id, 'enabled' => true]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('issues.index'));
+
+        $response->assertOk()->assertSee($site->domain);
     });
 
     it('poll-servers starts clockwork:poll-servers in the background and reports unhealthy count', function () {
