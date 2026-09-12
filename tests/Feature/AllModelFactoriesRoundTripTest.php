@@ -5,6 +5,7 @@ use App\Models\AllowedBot;
 use App\Models\AppSetting;
 use App\Models\BackupRelayRun;
 use App\Models\BlockedIp;
+use App\Models\CisaKevEntry;
 use App\Models\ContactFormTest;
 use App\Models\ContactFormTestRun;
 use App\Models\IntegrationCredential;
@@ -46,6 +47,7 @@ describe('every model factory round-trips a persisted row', function () {
     it('AppSetting', fn () => expect(AppSetting::factory()->create())->id->not->toBeNull());
     it('BackupRelayRun', fn () => expect(BackupRelayRun::factory()->create())->id->not->toBeNull());
     it('BlockedIp', fn () => expect(BlockedIp::factory()->create())->id->not->toBeNull());
+    it('CisaKevEntry', fn () => expect(CisaKevEntry::factory()->create())->id->not->toBeNull());
     it('ContactFormTest', fn () => expect(ContactFormTest::factory()->create())->id->not->toBeNull());
     it('ContactFormTestRun', fn () => expect(ContactFormTestRun::factory()->create())->id->not->toBeNull());
     it('IntegrationCredential', fn () => expect(IntegrationCredential::factory()->create())->id->not->toBeNull());

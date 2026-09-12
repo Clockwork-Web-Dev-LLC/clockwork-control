@@ -1897,11 +1897,18 @@
                                                                     <span class="text-xs text-[var(--color-ink-muted)] font-data">({{ $v['plugin_slug'] }})</span>
                                                                 </div>
                                                                 @if ($vuln->cve)
-                                                                    <a href="https://www.cve.org/CVERecord?id={{ urlencode($vuln->cve) }}"
-                                                                       target="_blank" rel="noopener"
-                                                                       class="text-xs font-data text-[var(--color-primary-600)] hover:underline">
-                                                                        {{ $vuln->cve }} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                                                                    </a>
+                                                                    <div class="flex items-center gap-2">
+                                                                        <a href="https://www.cve.org/CVERecord?id={{ urlencode($vuln->cve) }}"
+                                                                           target="_blank" rel="noopener"
+                                                                           class="text-xs font-data text-[var(--color-primary-600)] hover:underline">
+                                                                            {{ $vuln->cve }} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                                                        </a>
+                                                                        @if (in_array($vuln->cve, $cisaKevCves ?? [], true))
+                                                                            <span class="status-pill status-red text-[10px] font-semibold" title="Listed in CISA's Known Exploited Vulnerabilities catalog (actively exploited in the wild)">
+                                                                                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Actively exploited (CISA KEV)
+                                                                            </span>
+                                                                        @endif
+                                                                    </div>
                                                                 @endif
                                                             </div>
                                                             <div class="text-xs text-[var(--color-ink-muted)] mt-1">{{ $vuln->title }}</div>

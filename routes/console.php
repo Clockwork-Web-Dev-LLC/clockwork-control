@@ -462,6 +462,16 @@ Schedule::command('clockwork:refresh-plugin-vulnerabilities')
     ->onOneServer()
     ->runInBackground();
 
+// Sync CISA Known Exploited Vulnerabilities (KEV) catalog.
+// Downloads the official CISA JSON feed daily to detect active in-the-wild
+// exploitation of CVEs present in installed plugins, enriching vulnerability
+// modals and alert emails with an 'Actively exploited (CISA KEV)' badge.
+Schedule::command('clockwork:refresh-cisa-kev')
+    ->dailyAt('03:20')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
 // Check WordPress.org plugin directory status for closed/zombieware plugins.
 // Queries the public official plugin information API once per unique slug
 // fleet-wide. Closed plugins receive zero security patches and are surfaced

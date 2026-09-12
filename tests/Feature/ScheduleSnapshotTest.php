@@ -61,6 +61,8 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:reap-stale-server-updates',
         'clockwork:reap-stale-update-jobs',
         'clockwork:reconcile-provider',
+        'clockwork:refresh-cisa-kev',
+        'clockwork:refresh-closed-plugins',
         'clockwork:refresh-cloudflare-real-ip',
         'clockwork:refresh-companion-capabilities',
         'clockwork:refresh-companion-snapshot',

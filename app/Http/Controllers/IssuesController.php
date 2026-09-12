@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CisaKevEntry;
 use App\Models\ContactFormTest;
 use App\Models\IgnoredIssue;
 use App\Models\Server;
@@ -200,6 +201,19 @@ class IssuesController extends Controller
         $matcher = app(PluginVulnerabilityMatcher::class);
         $vulnsBySiteId = $matcher->forSites($pluginsOutdated);
 
+        $matchedCves = [];
+        foreach ($vulnsBySiteId as $siteVulns) {
+            foreach ($siteVulns as $vulnFinding) {
+                $cve = $vulnFinding['vulnerability']->cve ?? null;
+                if ($cve) {
+                    $matchedCves[] = $cve;
+                }
+            }
+        }
+        $cisaKevCves = ! empty($matchedCves)
+            ? CisaKevEntry::whereIn('cve', array_unique($matchedCves))->pluck('cve')->all()
+            : [];
+
         // Orphaned sites — local Site rows whose SpinupWP linkage was lost.
         // Source: clockwork:find-orphan-sites populates consolidated_into_site_id
         // when a parent is detected. Both kinds (consolidated + unknown) flag here.
@@ -355,6 +369,7 @@ class IssuesController extends Controller
             'failedFormTests',
             'pluginsOutdated',
             'vulnsBySiteId',
+            'cisaKevCves',
             'closedPluginSites',
             'closedPluginFindingsBySiteId',
             'ignoredClosedPluginIssues',

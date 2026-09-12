@@ -151,6 +151,10 @@ Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/
 
 `app/Services/Security/PluginDirectoryClient.php` · No auth, keyless. `GET ?action=plugin_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+plugin-directory-check)`. 100ms delay between requests. Queries unique plugin slugs across the fleet to detect closed/abandoned zombieware plugins (`plugin_directory_statuses`). Tolerates partial failures; non-closed/not_found responses for premium plugins never alert. Weekly on Mondays at 03:30 UTC (`clockwork:refresh-closed-plugins`).
 
+## CISA Known Exploited Vulnerabilities (KEV) — `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`
+
+`app/Services/Security/CisaKevClient.php` · No auth, keyless official JSON feed (~1.7k active in-the-wild exploitation entries). Single daily download at 03:20 UTC (`clockwork:refresh-cisa-kev`), atomic swap (`cisa_kev_entries`) via database transaction and chunked insert. Used at query-time to badge CVEs detected in installed plugins as `Actively exploited (CISA KEV)`.
+
 ## Sucuri SiteCheck — `https://sitecheck.sucuri.net/api/v3/?scan=<url>`
 
 No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms between sites. Same engine ManageWP resold. Weekly Monday 02:00.

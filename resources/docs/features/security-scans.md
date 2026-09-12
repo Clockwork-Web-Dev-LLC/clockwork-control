@@ -4,8 +4,8 @@ section: Features
 order: 40
 updated: 2026-09-12
 author: Aaron Reimann
-tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins]
-tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,AuditFleetAdmins,RefreshClosedPlugins}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
+tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
+tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,AuditFleetAdmins,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
 ---
 
 Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran. In addition, fleet-wide WordPress administrator auditing runs across all sites via `/security/admins`.
@@ -19,9 +19,10 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | **WP core checksums** | daily 02:30 | care-plan | `wp core verify-checksums` — catches base64 / shell backdoors dropped into wp-includes / wp-admin that Sucuri can't see (because they're not in the public HTML). |
 | **Companion malware** | daily 02:45 | care-plan | In-WP probe (Companion endpoint preferred, SSH fallback). PHP files >30 bytes under `wp-content/uploads/` (skipping the standard 0-byte and "Silence is golden" stubs that legit plugins drop), obfuscation signatures (`eval(base64_decode(`, `eval(gzinflate(`, `c99shell`, `r57shell`, `WSOsetcookie`, `FilesMan`), and recently-modified `wp-config.php`. Bypasses Cloudflare so CF-fronted sites get real signal. |
 | **Fleet admin audit** | daily 03:15 | all sites | Audits all WordPress users with the `administrator` role. Flags unexpected admins against an agency-approved email/domain allowlist. |
+| **CISA KEV catalog sync** | daily 03:20 | all sites | Syncs CISA's Known Exploited Vulnerabilities catalog (JSON feed) to flag active in-the-wild exploitation of CVEs affecting installed plugins. |
 | **Closed plugins** | weekly Mon 03:30 | all sites | Audits active plugins against WordPress.org's directory status (`plugin_directory_statuses`). Flags abandoned / closed zombieware plugins that receive no security patches. |
 
-Sucuri + checksums + companion-malware are care-plan-only. Blacklist, fleet admin, and closed plugin auditing run against every site.
+Sucuri + checksums + companion-malware are care-plan-only. Blacklist, fleet admin, CISA KEV, and closed plugin auditing run against every site.
 
 ## Where to look
 
@@ -42,6 +43,12 @@ When a plugin is closed or removed from the official WordPress.org plugin direct
   - `not_found`: Premium, private, custom, or self-hosted plugins not hosted on WordPress.org. These are **never** flagged.
   - `open`: Plugin is healthy and active in the directory.
 - **Issues Dashboard & Scoping**: `ClosedPluginAuditor` (`app/Services/Security/ClosedPluginAuditor.php`) audits active plugins (`active === true` in the companion snapshot) across monitored fleet sites. Sites with active closed plugins are surfaced on `/issues` under **Plugins closed on WordPress.org** and counted in the navigation badge. Operators can acknowledge and suppress known site warnings using **Ignore site** (`IgnoredIssue::TYPE_PLUGIN_CLOSED`).
+
+## CISA Known Exploited Vulnerabilities (KEV) Detection
+
+To prioritize urgent patching, Clockwork correlates CVEs detected in installed plugins with the Cybersecurity and Infrastructure Security Agency's (CISA) official Known Exploited Vulnerabilities catalog:
+- **Daily Catalog Sync**: `clockwork:refresh-cisa-kev` runs daily at 03:20 UTC, syncing `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` into the `cisa_kev_entries` table (`app/Services/Security/CisaKevClient.php`).
+- **Active Exploitation Badges**: In the `/issues` vulnerability modal and operator vulnerability email reports (`SiteVulnerabilityReportMail`), any vulnerability whose CVE is present in the CISA KEV catalog is prominently tagged with a red `Actively exploited (CISA KEV)` badge.
 
 ## `/security/admins` — fleet administrator auditing (`SecurityAdminsController`)
 

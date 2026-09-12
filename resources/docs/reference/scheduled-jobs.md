@@ -95,6 +95,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 |---|---|---|
 | 03:00 | `clockwork:sync-allowed-bots` | Refresh the Arcjet bot allowlist into `allowed_bots`. |
 | 03:15 | `clockwork:refresh-plugin-vulnerabilities` | Refresh the wpvulnerability.net CVE mirror for every installed plugin slug. Feeds the Issues page's vulnerable-plugin flags. |
+| 03:20 | `clockwork:refresh-cisa-kev` | Sync the CISA Known Exploited Vulnerabilities catalog (JSON feed) into `cisa_kev_entries` for actively exploited CVE badging. |
 | 03:30 | `clockwork:import-spinupwp` | Idempotent server + site import. Refreshes cert dates. |
 | 03:35 | `clockwork:find-orphan-sites` | Reclassify sites whose SpinupWP linkage was lost. |
 | 03:45 | `clockwork:reconcile-provider` | Link servers import-spinupwp couldn't IP-cross-reference (manual adds, unknown-to-SpinupWP boxes). |
