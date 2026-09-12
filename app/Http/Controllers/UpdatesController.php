@@ -47,7 +47,7 @@ class UpdatesController extends Controller
     public function carePlan(Request $request): View
     {
         $sites = Site::query()
-            ->where('care_plan_enabled', true)
+            ->carePlanEligible()
             ->with('server:id,name')
             ->orderByRaw('auto_updates_paused asc') // active sites first
             ->orderBy('domain')

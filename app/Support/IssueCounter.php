@@ -139,7 +139,7 @@ class IssueCounter
             ->where('state', ContactFormTest::STATE_FAILED)
             ->where('failure_streak', '>=', ContactFormTest::ALERT_STREAK_THRESHOLD)
             ->whereHas('site', function ($q) {
-                $q->where('care_plan_enabled', true)
+                $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true))
                     ->where('is_inactive', false)
                     ->whereHas('server', fn ($q) => $q->where('is_ignored', false));
             })
@@ -180,14 +180,14 @@ class IssueCounter
         $malware = SiteSecurityScan::query()
             ->whereIn('id', $latestSitecheckIds)
             ->where(fn ($q) => $q->where('has_malware_hit', true)->orWhere('blacklist_hit', true))
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->count();
 
         $tamperingScans = SiteSecurityScan::query()
             ->whereIn('id', $latestChecksumIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
         $suppressedSiteIds = app(CoreChecksumAllowlist::class)
@@ -203,7 +203,7 @@ class IssueCounter
         $companionMalware = SiteSecurityScan::query()
             ->whereIn('id', $latestCompanionMalwareIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->count();
 

@@ -173,6 +173,18 @@
         </div>
     </div>
 
+    <!-- Care Plans Policy Card -->
+    <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/30 text-xs text-[var(--color-ink-muted)] mb-4">
+        <label class="flex items-start gap-2.5 cursor-pointer">
+            <input type="hidden" name="care_plans_enabled" value="0" form="install-review-form">
+            <input type="checkbox" name="care_plans_enabled" value="1" checked form="install-review-form"
+                   class="mt-0.5 rounded border-[var(--color-border-light)]">
+            <span>
+                <strong class="text-[var(--color-ink-strong)]">Enable Care Plans Tiering</strong> — track which sites are on client care plans and gate automated maintenance, routine plugin updates, and scans to enrolled sites. If unchecked, all sites are treated as covered for maintenance and care plan labels are hidden across the platform. Change this anytime in Settings &rarr; Care Plans.
+            </span>
+        </label>
+    </div>
+
     <!-- Anonymous Telemetry Opt-in Card -->
     <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/30 text-xs text-[var(--color-ink-muted)] mb-4">
         <label class="flex items-start gap-2.5 cursor-pointer">

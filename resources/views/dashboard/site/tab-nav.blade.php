@@ -14,9 +14,9 @@
         'traffic' => ['label' => 'Traffic', 'icon' => 'fa-chart-line', 'when' => $sshCapable],
         'bans' => ['label' => 'Bans', 'icon' => 'fa-ban', 'when' => $sshCapable],
         'security' => ['label' => 'Security', 'icon' => 'fa-shield-halved'],
-        'performance' => ['label' => 'Performance', 'icon' => 'fa-bolt', 'when' => (bool) $site->care_plan_enabled],
+        'performance' => ['label' => 'Performance', 'icon' => 'fa-bolt', 'when' => $site->isCarePlanActive()],
         'updates' => ['label' => 'Updates', 'icon' => 'fa-arrow-up-from-bracket', 'when' => $updatesCapable],
-        'forms' => ['label' => 'Forms', 'icon' => 'fa-envelope-circle-check', 'when' => (bool) $site->care_plan_enabled && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms')],
+        'forms' => ['label' => 'Forms', 'icon' => 'fa-envelope-circle-check', 'when' => $site->isCarePlanActive() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms')],
         'settings' => ['label' => 'Settings', 'icon' => 'fa-gear'],
     ];
 @endphp

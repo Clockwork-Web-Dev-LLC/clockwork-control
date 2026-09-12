@@ -55,8 +55,8 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         ->assertSee('WordPress security')
         ->assertSee('Hardened')
         ->assertSee('id="llar-state"', false)
-        // Billing & care plan card
-        ->assertSee('Billing & care plan')
+        // Care plan card
+        ->assertSee('Care plan')
         ->assertSee('On care plan')
         ->assertSee('Mark NOT on care plan')
         // Uptime monitoring card

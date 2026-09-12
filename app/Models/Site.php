@@ -575,6 +575,52 @@ class Site extends Model
     }
 
     /**
+     * Whether care plan policies are globally active across the fleet.
+     * When false, all sites are treated as covered for maintenance,
+     * scans, and automated workflows, and care plan badges are suppressed.
+     */
+    public static function areCarePlansEnabled(): bool
+    {
+        try {
+            return (bool) app(Settings::class)->get(
+                'care_plans.enabled',
+                config('clockwork.care_plans.enabled', true),
+            );
+        } catch (\Throwable) {
+            return (bool) config('clockwork.care_plans.enabled', true);
+        }
+    }
+
+    /**
+     * Whether care plan features/benefits are active for this specific site.
+     * When care plans are globally disabled, all sites return true.
+     */
+    public function isCarePlanActive(): bool
+    {
+        if (! static::areCarePlansEnabled()) {
+            return true;
+        }
+
+        return (bool) $this->care_plan_enabled;
+    }
+
+    /**
+     * Scope a query to only include sites eligible for care plan maintenance / scans.
+     * When care plans are globally disabled, this scope includes all sites (no-op).
+     *
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
+     */
+    public function scopeCarePlanEligible(Builder $query): Builder
+    {
+        if (! static::areCarePlansEnabled()) {
+            return $query;
+        }
+
+        return $query->where('care_plan_enabled', true);
+    }
+
+    /**
      * "Is this site's hosting eligible for monitoring/scan loops at all."
      * SpinupWP sites: gated on their server not being ignored/staging
      * (Server::scopeMonitored). Pressable sites: always eligible — Pressable

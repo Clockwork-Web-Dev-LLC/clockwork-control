@@ -246,7 +246,7 @@ class RunPerformanceScans extends Command
             return $q->get();
         }
 
-        $q->where('care_plan_enabled', true);
+        $q->carePlanEligible();
         if (! $this->option('include-unavailable')) {
             $q->whereNull('psi_unavailable_at');
         }

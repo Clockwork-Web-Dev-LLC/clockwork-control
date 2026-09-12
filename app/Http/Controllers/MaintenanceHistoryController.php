@@ -128,10 +128,14 @@ class MaintenanceHistoryController extends Controller
 
         $serverOnly = $entries->whereNull('site_id');
 
-        // Grand totals split by care plan, so the page header can say "you
-        // did X covered actions and Y billable actions this month."
-        $coveredCount = $bySite->where('care_plan_enabled', true)->sum('total');
-        $billableCount = $bySite->where('care_plan_enabled', false)->sum('total');
+        // Grand totals split by care plan (or unified if care plans disabled fleet-wide).
+        if (Site::areCarePlansEnabled()) {
+            $coveredCount = $bySite->where('care_plan_enabled', true)->sum('total');
+            $billableCount = $bySite->where('care_plan_enabled', false)->sum('total');
+        } else {
+            $coveredCount = $bySite->sum('total');
+            $billableCount = 0;
+        }
 
         // Dropdown sources.
         $allSites = Site::query()

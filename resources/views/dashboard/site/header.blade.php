@@ -85,16 +85,18 @@
             <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
             {{ $sslMeta['label'] }}
         </span>
-        @if ($site->care_plan_enabled)
-            <span class="status-pill status-green" title="Updates and routine maintenance are included in this site's care plan.">
-                <i class="fa-solid fa-shield-heart"></i>
-                Care plan
-            </span>
-        @else
-            <span class="status-pill status-unknown" title="Not on a care plan. Routine updates and maintenance are inactive for this site.">
-                <i class="fa-regular fa-circle"></i>
-                No care plan
-            </span>
+        @if (\App\Models\Site::areCarePlansEnabled())
+            @if ($site->care_plan_enabled)
+                <span class="status-pill status-green" title="Updates and routine maintenance are included in this site's care plan.">
+                    <i class="fa-solid fa-shield-heart"></i>
+                    Care plan
+                </span>
+            @else
+                <span class="status-pill status-unknown" title="Not on a care plan. Routine updates and maintenance are inactive for this site.">
+                    <i class="fa-regular fa-circle"></i>
+                    No care plan
+                </span>
+            @endif
         @endif
 
         @if ($ssoCapable && count($ssoAdmins) > 0)

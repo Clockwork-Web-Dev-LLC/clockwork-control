@@ -126,7 +126,7 @@ class ScanSiteCheck extends Command
                     ->orWhere('domain', $siteOpt);
             });
         } else {
-            $q->where('care_plan_enabled', true);
+            $q->carePlanEligible();
             if (! $this->option('include-unavailable')) {
                 $q->whereNull('sucuri_unavailable_at');
             }

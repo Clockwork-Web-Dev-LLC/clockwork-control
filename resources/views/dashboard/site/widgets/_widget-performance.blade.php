@@ -20,7 +20,7 @@
                 <i class="fa-solid fa-gauge-high text-amber-500"></i>
                 Performance &amp; Speed
             </h3>
-            @if (! $site->care_plan_enabled)
+            @if (! $site->isCarePlanActive())
                 <span class="status-pill status-unknown text-[10px]">No Care Plan</span>
             @elseif (! $hasScans)
                 <span class="status-pill status-unknown text-[10px]">Awaiting Scan</span>
@@ -42,7 +42,7 @@
                 </div>
                 <div class="font-semibold text-sm text-[var(--color-ink-strong)]">No performance scans recorded</div>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-1 max-w-xs mx-auto">
-                    Weekly Lighthouse audit rotates nightly for care-plan managed sites.
+                    Weekly Lighthouse audit rotates nightly across managed sites.
                 </p>
             </div>
         @else

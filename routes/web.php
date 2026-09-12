@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BansController;
 use App\Http\Controllers\BlockedIpsController;
 use App\Http\Controllers\CapacityController;
+use App\Http\Controllers\CarePlanSettingsController;
 use App\Http\Controllers\CompanionDownloadController;
 use App\Http\Controllers\CompanionSettingsController;
 use App\Http\Controllers\DashboardController;
@@ -369,6 +370,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/settings/backup-relay/run-now', [BackupRelaySettingsController::class, 'runNow'])->name('settings.backup-relay.runNow');
     Route::get('/settings/backup-relay/sites/{site}/archives', [BackupRelaySettingsController::class, 'archives'])->name('settings.backup-relay.archives');
     Route::get('/settings/backup-relay/sites/{site}/download', [BackupRelaySettingsController::class, 'download'])->name('settings.backup-relay.download');
+
+    // Care Plans fleet policy settings
+    Route::get('/settings/care-plans', [CarePlanSettingsController::class, 'index'])->name('settings.care-plans.index');
+    Route::patch('/settings/care-plans', [CarePlanSettingsController::class, 'update'])->name('settings.care-plans.update');
 
     // Mattermost and Slack per-event opt-out routes moved to
     // modules/Mattermost/routes/web.php and modules/Slack/routes/web.php.

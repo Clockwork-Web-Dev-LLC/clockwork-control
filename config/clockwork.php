@@ -475,6 +475,15 @@ return [
         'robots_txt_timeout' => (int) env('CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT', 10),
     ],
 
+    // Fleet-wide care plans policy.
+    // When enabled (default): sites can be enrolled in care plans individually,
+    // gating automated maintenance, update loops, and routine scans.
+    // When disabled: all sites are treated as covered for maintenance,
+    // and care plan badges/banners/cards are suppressed across the platform.
+    'care_plans' => [
+        'enabled' => (bool) env('CLOCKWORK_CARE_PLANS_ENABLED', true),
+    ],
+
     // Anonymous usage telemetry — enabled by default, easily disabled anytime.
     // Sends only a bucketed site count and list of enabled module IDs.
     // Never domains, IPs, emails, database contents, or any identifying data.

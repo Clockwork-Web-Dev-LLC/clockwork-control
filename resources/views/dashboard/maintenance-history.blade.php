@@ -2,33 +2,51 @@
 
 @section('title', 'Maintenance history · Clockwork')
 
+@php
+    $carePlansEnabled = \App\Models\Site::areCarePlansEnabled();
+@endphp
+
 @section('content')
-    @include('operations._tabs')
-
     <x-page-header title="Maintenance history"
-        subtitle="Cross-site action log for the selected month — track automated updates, routine maintenance, and care-plan events." />
+        subtitle="Audit log of plugin updates, cache purges, security scans, and system maintenance across the fleet.">
+        <x-slot:actions>
+            <a href="{{ route('updates.index') }}" class="btn-pill-nav text-xs">
+                <i class="fa-solid fa-arrow-left"></i> Updates
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
-    {{-- Stats strip — covered vs non-care-plan vs server-only. --}}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    {{-- Metric summary tiles. --}}
+    <div class="grid grid-cols-2 md:grid-cols-{{ $carePlansEnabled ? '4' : '3' }} gap-3 mb-6">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Total actions</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ number_format($totalCount) }}</div>
             <div class="text-xs text-[var(--color-ink-soft)] mt-1 font-data">{{ $month->format('F Y') }}</div>
         </div>
-        <div class="card px-4 py-3">
-            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
-                <i class="fa-solid fa-shield-heart text-[var(--color-status-green)]"></i> Covered
+        @if ($carePlansEnabled)
+            <div class="card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
+                    <i class="fa-solid fa-shield-heart text-[var(--color-status-green)]"></i> Covered
+                </div>
+                <div class="text-2xl font-display text-[var(--color-status-green)] font-data">{{ number_format($coveredCount) }}</div>
+                <div class="text-xs text-[var(--color-ink-soft)] mt-1">actions on care-plan sites</div>
             </div>
-            <div class="text-2xl font-display text-[var(--color-status-green)] font-data">{{ number_format($coveredCount) }}</div>
-            <div class="text-xs text-[var(--color-ink-soft)] mt-1">actions on care-plan sites</div>
-        </div>
-        <div class="card px-4 py-3">
-            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
-                <i class="fa-regular fa-circle"></i> Non-care-plan
+            <div class="card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
+                    <i class="fa-regular fa-circle"></i> Non-care-plan
+                </div>
+                <div class="text-2xl font-display {{ $billableCount > 0 ? 'text-[var(--color-status-yellow)]' : 'text-[var(--color-ink-strong)]' }} font-data">{{ number_format($billableCount) }}</div>
+                <div class="text-xs text-[var(--color-ink-soft)] mt-1">actions on non-care-plan sites</div>
             </div>
-            <div class="text-2xl font-display {{ $billableCount > 0 ? 'text-[var(--color-status-yellow)]' : 'text-[var(--color-ink-strong)]' }} font-data">{{ number_format($billableCount) }}</div>
-            <div class="text-xs text-[var(--color-ink-soft)] mt-1">actions on non-care-plan sites</div>
-        </div>
+        @else
+            <div class="card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
+                    <i class="fa-solid fa-circle-check text-[var(--color-status-green)]"></i> Succeeded
+                </div>
+                <div class="text-2xl font-display text-[var(--color-status-green)] font-data">{{ number_format(max(0, $totalCount - $failedCount)) }}</div>
+                <div class="text-xs text-[var(--color-ink-soft)] mt-1">successful actions</div>
+            </div>
+        @endif
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Failed</div>
             <div class="text-2xl font-display {{ $failedCount > 0 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-ink-strong)]' }} font-data">{{ number_format($failedCount) }}</div>
@@ -56,7 +74,7 @@
                 <option value="">All sites</option>
                 @foreach ($allSites as $s)
                     <option value="{{ $s->id }}" @selected((string) $siteFilter === (string) $s->id)>
-                        {{ $s->domain }}{{ $s->care_plan_enabled ? ' ★' : '' }}
+                        {{ $s->domain }}{{ ($carePlansEnabled && $s->care_plan_enabled) ? ' ★' : '' }}
                     </option>
                 @endforeach
             </select>
@@ -70,14 +88,16 @@
                 @endforeach
             </select>
         </label>
-        <label class="block">
-            <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan</span>
-            <select name="care_plan" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
-                <option value="">All</option>
-                <option value="1" @selected($carePlanFilter === '1')>Covered</option>
-                <option value="0" @selected($carePlanFilter === '0')>Billable</option>
-            </select>
-        </label>
+        @if ($carePlansEnabled)
+            <label class="block">
+                <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan</span>
+                <select name="care_plan" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
+                    <option value="">All</option>
+                    <option value="1" @selected($carePlanFilter === '1')>Covered</option>
+                    <option value="0" @selected($carePlanFilter === '0')>Billable</option>
+                </select>
+            </label>
+        @endif
         <label class="block">
             <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Outcome</span>
             <select name="outcome" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
@@ -117,7 +137,9 @@
                 <thead>
                     <tr class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] border-b border-[var(--color-border-light)]">
                         <th class="text-left py-2 px-5">Site</th>
-                        <th class="text-left py-2">Care plan</th>
+                        @if ($carePlansEnabled)
+                            <th class="text-left py-2">Care plan</th>
+                        @endif
                         <th class="text-right py-2 pr-5">Actions</th>
                         <th class="text-left py-2 pr-5">Breakdown</th>
                     </tr>
@@ -130,17 +152,19 @@
                                     {{ $row['domain'] }}
                                 </a>
                             </td>
-                            <td class="py-2">
-                                @if ($row['care_plan_enabled'])
-                                    <span class="status-pill status-green text-[10px]">
-                                        <i class="fa-solid fa-shield-heart"></i> Covered
-                                    </span>
-                                @else
-                                    <span class="status-pill status-yellow text-[10px]">
-                                        <i class="fa-regular fa-circle"></i> Billable
-                                    </span>
-                                @endif
-                            </td>
+                            @if ($carePlansEnabled)
+                                <td class="py-2">
+                                    @if ($row['care_plan_enabled'])
+                                        <span class="status-pill status-green text-[10px]">
+                                            <i class="fa-solid fa-shield-heart"></i> Covered
+                                        </span>
+                                    @else
+                                        <span class="status-pill status-yellow text-[10px]">
+                                            <i class="fa-regular fa-circle"></i> Non-care-plan
+                                        </span>
+                                    @endif
+                                </td>
+                            @endif
                             <td class="py-2 pr-5 text-right font-data tabular-nums text-[var(--color-ink-strong)]">
                                 {{ number_format($row['total']) }}
                                 @if ($row['failed'] > 0)
@@ -215,7 +239,7 @@
                                     <a href="{{ route('sites.show', ['site' => $row->site]) }}" class="text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] font-data">
                                         {{ $row->site->domain }}
                                     </a>
-                                    @if ($row->site->care_plan_enabled)
+                                    @if ($carePlansEnabled && $row->site->care_plan_enabled)
                                         <i class="fa-solid fa-shield-heart text-[var(--color-status-green)] text-[10px] ml-1" title="On care plan"></i>
                                     @endif
                                 @elseif ($row->server)

@@ -104,7 +104,7 @@ class VerifyWpCoreChecksums extends Command
                     ->orWhere('domain', $siteOpt);
             });
         } else {
-            $q->where('care_plan_enabled', true);
+            $q->carePlanEligible();
         }
 
         return $q->get();

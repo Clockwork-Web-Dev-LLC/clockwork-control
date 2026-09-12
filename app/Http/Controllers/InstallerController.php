@@ -925,6 +925,10 @@ class InstallerController extends Controller
         ]);
 
         app(Settings::class)->put('telemetry.enabled', $request->boolean('telemetry_opt_in'));
+        app(Settings::class)->put(
+            'care_plans.enabled',
+            $request->has('care_plans_enabled') ? $request->boolean('care_plans_enabled') : true
+        );
 
         // 6. Write storage/installed sentinel
         $hostingIntent = $wizard['hosting']['providers'] ?? [$wizard['hosting']['provider'] ?? 'skip'];

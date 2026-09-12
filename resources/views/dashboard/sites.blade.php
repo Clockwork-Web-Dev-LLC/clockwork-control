@@ -190,7 +190,7 @@
                                     </span>
                                 @endif
 
-                                @if ($site->care_plan_enabled)
+                                @if (\App\Models\Site::areCarePlansEnabled() && $site->care_plan_enabled)
                                     <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
                                         <i class="fa-solid fa-shield-heart"></i>
                                     </span>

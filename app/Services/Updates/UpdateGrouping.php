@@ -157,11 +157,13 @@ class UpdateGrouping
      */
     private function applyFilters(Collection $sites, array $filters): Collection
     {
-        $carePlan = (string) ($filters['care_plan'] ?? 'on');
-        if ($carePlan === 'on') {
-            $sites = $sites->where('care_plan_enabled', true);
-        } elseif ($carePlan === 'off') {
-            $sites = $sites->where('care_plan_enabled', false);
+        if (Site::areCarePlansEnabled()) {
+            $carePlan = (string) ($filters['care_plan'] ?? 'on');
+            if ($carePlan === 'on') {
+                $sites = $sites->where('care_plan_enabled', true);
+            } elseif ($carePlan === 'off') {
+                $sites = $sites->where('care_plan_enabled', false);
+            }
         }
         // 'all' = no filter
 

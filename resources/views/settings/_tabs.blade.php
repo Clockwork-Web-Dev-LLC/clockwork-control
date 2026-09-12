@@ -21,7 +21,7 @@
             'label' => 'Fleet Policies',
             'icon' => 'fa-sliders',
             'route' => 'settings.wordpress-plugins.index',
-            'active' => request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*') || request()->routeIs('settings.tags.*'),
+            'active' => request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*') || request()->routeIs('settings.care-plans.*') || request()->routeIs('settings.tags.*'),
         ],
         [
             'key' => 'integrations',
@@ -50,6 +50,7 @@
             ['label' => 'Scheduling & Ingest', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'settings.ingest.index', 'active' => request()->routeIs('settings.ingest.*')],
             ['label' => 'Security Scans', 'icon' => 'fa-solid fa-shield-halved', 'route' => 'settings.security-scans.index', 'active' => request()->routeIs('settings.security-scans.*')],
             ['label' => 'Backup Relay', 'icon' => 'fa-solid fa-cloud-arrow-up', 'route' => 'settings.backup-relay.index', 'active' => request()->routeIs('settings.backup-relay.*')],
+            ['label' => 'Care Plans', 'icon' => 'fa-solid fa-shield-heart', 'route' => 'settings.care-plans.index', 'active' => request()->routeIs('settings.care-plans.*')],
         ],
         'integrations' => [
             ['label' => 'API Credentials', 'icon' => 'fa-solid fa-key', 'route' => 'settings.integrations.index', 'active' => request()->routeIs('settings.integrations.*')],

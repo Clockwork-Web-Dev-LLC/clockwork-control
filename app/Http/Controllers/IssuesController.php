@@ -166,7 +166,7 @@ class IssuesController extends Controller
         $companionStaleAfter = now()->subDays(2);
         $sitesWithEnabledFormTests = ContactFormTest::query()
             ->where('enabled', true)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true)->where('is_inactive', false))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true))->where('is_inactive', false))
             ->pluck('site_id')
             ->unique();
         $companionMissing = $sites
@@ -180,7 +180,7 @@ class IssuesController extends Controller
             ->where('enabled', true)
             ->where('state', ContactFormTest::STATE_FAILED)
             ->where('failure_streak', '>=', ContactFormTest::ALERT_STREAK_THRESHOLD)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true)->where('is_inactive', false))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true))->where('is_inactive', false))
             ->get();
 
         // Outdated WP plugins — derived from the cached Companion snapshot. Only sites
@@ -247,7 +247,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestSiteCheckIds)
             ->where(fn ($q) => $q->where('has_malware_hit', true)->orWhere('blacklist_hit', true))
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
@@ -255,7 +255,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestChecksumIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
@@ -278,7 +278,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestCompanionMalwareIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
