@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\BackupRestoreCommand;
 use App\Console\Commands\PushCompanionTraffic;
 use App\Jobs\InstallCompanionJob;
 use App\Jobs\PurgeSiteCacheJob;
@@ -2148,6 +2149,22 @@ class SitesController extends Controller
             return back()->with('warning', $msg);
         }
 
+        // Cross-lock against restore: never run a backup while a restore is
+        // in flight (BackgroundArtisan lock held, or cached state mid-flight).
+        $restoreState = Cache::get("backup_restore.site.{$site->id}.state");
+        $restoreInFlight = Cache::has('backup_restore.site.'.$site->id)
+            || in_array($restoreState['status'] ?? '', BackupRestoreCommand::IN_FLIGHT_STATUSES, true);
+
+        if ($restoreInFlight) {
+            $msg = "A restore for {$site->domain} is in progress — Backup Now is unavailable until it finishes.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
         $result = $background->start(
             'backup_relay.run.site.'.$site->id,
             ['clockwork:backup-relay-run --site='.(int) $site->id.' --force'],
@@ -2259,6 +2276,18 @@ class SitesController extends Controller
             return back()->with('status_error', $msg);
         }
 
+        // Cross-lock against Backup Now: never stage a restore while a backup
+        // run holds its BackgroundArtisan lock for this site.
+        if (Cache::has('backup_relay.run.site.'.$site->id)) {
+            $msg = "A backup for {$site->domain} is currently running. Wait for it to finish before staging a restore.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
         $actor = (string) (Auth::user()->email ?? 'system');
 
         $result = $background->start(
@@ -2307,6 +2336,10 @@ class SitesController extends Controller
     ): RedirectResponse|JsonResponse {
         abort_unless($site->isCustom(), 403);
 
+        $validated = $request->validate([
+            'archive_key' => ['required', 'string'],
+        ]);
+
         $cacheKey = "backup_restore.site.{$site->id}.state";
         $cached = Cache::get($cacheKey);
 
@@ -2324,7 +2357,7 @@ class SitesController extends Controller
 
         $result = $background->start(
             'backup_restore.site.'.$site->id,
-            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=apply --actor='.escapeshellarg($actor)],
+            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=apply --key='.escapeshellarg($validated['archive_key']).' --actor='.escapeshellarg($actor)],
             3600,
             'backup-restore-site-'.$site->id,
         );
@@ -2372,5 +2405,46 @@ class SitesController extends Controller
         ];
 
         return response()->json($state);
+    }
+
+    /**
+     * Lightweight precheck: does this archive have a SHA-256 hash on record?
+     * Lets the widget show "restore unavailable" up front instead of making
+     * the operator type the domain only to hit a 422.
+     */
+    public function backupRelayRestorePrecheck(Request $request, Site $site, BackupArchiveEnumerator $enumerator): JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'key' => ['required', 'string'],
+        ]);
+
+        try {
+            $sha256 = $enumerator->resolveArchiveSha256($site, $validated['key']);
+        } catch (Throwable) {
+            $sha256 = null;
+        }
+
+        return response()->json(['sha256_available' => ! empty($sha256)]);
+    }
+
+    /**
+     * Discard any staged/failed restore state for the site so a stale staged
+     * archive can never be applied later by accident.
+     */
+    public function backupRelayRestoreDiscard(Request $request, Site $site): RedirectResponse|JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        Cache::forget("backup_restore.site.{$site->id}.state");
+
+        $msg = "Cleared staged restore state for {$site->domain}.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
     }
 }

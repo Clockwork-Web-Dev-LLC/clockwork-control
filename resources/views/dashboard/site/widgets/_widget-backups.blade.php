@@ -31,9 +31,7 @@
          saving: false,
          runningNow: false,
          runMessage: null,
-         calYear: {{ (int) now()->year }},
-         calMonth: {{ (int) now()->month - 1 }},
-         selectedDate: @js(now()->toDateString()),
+         latestArchive: null,
          csrf: @js(csrf_token()),
          restoreModalOpen: false,
          restoreArchive: null,
@@ -43,6 +41,8 @@
          restoreMessage: null,
          restoreError: null,
          restoreState: { status: 'idle' },
+         shaAvailable: null,
+         precheckLoading: false,
          siteDomain: @js($site->domain),
          hasRestoreCapability: {{ in_array('backup-restore', $site->companion_capabilities ?? [], true) ? 'true' : 'false' }},
          openRestore(archive) {
@@ -52,8 +52,29 @@
              this.restoreMessage = null;
              this.restoreError = null;
              this.restoreState = { status: 'idle' };
+             this.shaAvailable = null;
              this.restoreModalOpen = true;
              this.checkRestoreStatus();
+             this.precheckRestore(archive);
+         },
+         async precheckRestore(archive) {
+             this.precheckLoading = true;
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.restore.precheck', $site) }}?key=' + encodeURIComponent(archive.key), {
+                     headers: { 'Accept': 'application/json' }
+                 });
+                 if (res.ok) {
+                     const data = await res.json();
+                     this.shaAvailable = !!data.sha256_available;
+                 } else {
+                     this.shaAvailable = false;
+                 }
+             } catch (e) {
+                 // Network hiccup: leave unknown; the server-side stage guard still refuses hashless archives.
+                 this.shaAvailable = null;
+             } finally {
+                 this.precheckLoading = false;
+             }
          },
          async checkRestoreStatus() {
              try {
@@ -115,6 +136,9 @@
                          'Accept': 'application/json',
                          'Content-Type': 'application/json',
                      },
+                     body: JSON.stringify({
+                         archive_key: (this.restoreState && this.restoreState.archive_key) || (this.restoreArchive && this.restoreArchive.key) || '',
+                     }),
                  });
                  const data = await res.json();
                  if (!res.ok) {
@@ -131,8 +155,10 @@
              }
          },
          async pollRestoreUntil(targetStatuses) {
-             for (let i = 0; i < 120; i++) {
-                 await new Promise(r => setTimeout(r, 4000));
+             // 160 x 5s = 800s, comfortably past the command's 600s poll cap so
+             // the widget never gives up before the server has decided.
+             for (let i = 0; i < 160; i++) {
+                 await new Promise(r => setTimeout(r, 5000));
                  await this.checkRestoreStatus();
                  const status = this.restoreState ? this.restoreState.status : null;
                  if (targetStatuses.includes(status)) {
@@ -142,7 +168,21 @@
                      return;
                  }
              }
-             this.restoreMessage = 'Operation is taking longer than expected. Status will update automatically.';
+             this.restoreMessage = 'Still running — reopen this panel to refresh.';
+         },
+         async discardRestore() {
+             if (this.restoring) return;
+             try {
+                 await fetch('{{ route('sites.backup-relay.restore.discard', $site) }}', {
+                     method: 'POST',
+                     headers: {
+                         'X-CSRF-TOKEN': this.csrf,
+                         'Accept': 'application/json',
+                     },
+                 });
+             } catch (e) {}
+             this.restoreState = { status: 'idle' };
+             this.restoreModalOpen = false;
          },
          formatBytes(bytes) {
              if (!bytes || bytes <= 0) return '—';
@@ -168,6 +208,8 @@
              const rows = json.spaces_history || [];
              this.spacesRunCount = rows.length;
              this.latestSpacesDate = rows[0] ? rows[0].date : null;
+             const archives = json.relay_archives || [];
+             this.latestArchive = archives.length > 0 ? archives[0] : null;
              if (json.schedule) {
                  this.enabled = !!json.schedule.enabled;
                  if (json.schedule.frequency) this.frequency = json.schedule.frequency;
@@ -250,52 +292,14 @@
              }
              this.runningNow = false;
          },
-         monthLabel() {
-             return new Date(this.calYear, this.calMonth, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-         },
-         shiftMonth(delta) {
-             const d = new Date(this.calYear, this.calMonth + delta, 1);
-             this.calYear = d.getFullYear();
-             this.calMonth = d.getMonth();
-         },
-         isoDate(y, m, day) {
-             const pad = (n) => String(n).padStart(2, '0');
-             return y + '-' + pad(m + 1) + '-' + pad(day);
-         },
-         calendarCells() {
-             const first = new Date(this.calYear, this.calMonth, 1);
-             const startPad = (first.getDay() + 6) % 7;
-             const days = new Date(this.calYear, this.calMonth + 1, 0).getDate();
-             const cells = [];
-             for (let i = 0; i < startPad; i++) cells.push(null);
-             for (let d = 1; d <= days; d++) cells.push(d);
-             return cells;
-         },
-         archivesByDay() {
-             const map = {};
-             const rows = (this.data && this.data.relay_archives) ? this.data.relay_archives : [];
-             rows.forEach(a => {
-                 const raw = a.archived_at || '';
-                 const day = raw.slice(0, 10);
-                 if (!day) return;
-                 (map[day] = map[day] || []).push(a);
-             });
-             return map;
-         },
-         dayArchives() {
-             return this.archivesByDay()[this.selectedDate] || [];
-         },
          backupKind(archive) {
+             if (!archive) return 'Backup';
              return /^\d{4}-\d{2}-\d{2}\.zip$/.test(archive.filename || '') ? 'Scheduled backup' : 'Manual backup';
-         },
-         isToday(day) {
-             const t = new Date();
-             return day && this.calYear === t.getFullYear() && this.calMonth === t.getMonth() && day === t.getDate();
          },
          get spacesProtected() { return this.spacesRunCount > 0; },
          get showProtected() { return this.hasRelayOrPressable || this.spacesProtected || (this.isCustom && this.enabled); }
      }"
-     x-init="prefetch()">
+     x-init="prefetch(); if (isCustom) checkRestoreStatus()">
     <div>
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -329,7 +333,8 @@
         </div>
 
         @if ($isCustom)
-            <div class="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 p-3 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300"
+            {{-- Alert: Fail-closed maintenance banner --}}
+            <div class="mb-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 p-3 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300"
                  x-show="restoreState && restoreState.maintenance_left_on"
                  x-cloak>
                 <i class="fa-solid fa-triangle-exclamation text-sm shrink-0 mt-0.5 text-red-600"></i>
@@ -339,103 +344,108 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <button type="button" class="w-7 h-7 rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer" @click="shiftMonth(-1)" aria-label="Previous month">
-                            <i class="fa-solid fa-chevron-left text-[10px]"></i>
-                        </button>
-                        <div class="text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-strong)]" x-text="monthLabel()"></div>
-                        <button type="button" class="w-7 h-7 rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer" @click="shiftMonth(1)" aria-label="Next month">
-                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
-                        </button>
+            <div class="py-1">
+                {{-- Status Hero Row --}}
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-base"
+                         :class="enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'">
+                        <i class="fa-solid" :class="enabled ? 'fa-cloud-arrow-up' : 'fa-box-archive'"></i>
                     </div>
-                    <div class="grid grid-cols-7 gap-px text-[10px] text-center text-[var(--color-ink-muted)] mb-1">
-                        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-                    </div>
-                    <div class="grid grid-cols-7 gap-px">
-                        <template x-for="(day, idx) in calendarCells()" :key="idx">
-                            <button type="button"
-                                    class="relative h-8 rounded-md text-xs cursor-pointer"
-                                    :class="{
-                                        'invisible': !day,
-                                        'bg-emerald-50 text-emerald-800 font-semibold': day && isToday(day),
-                                        'text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]': day && !isToday(day),
-                                        'ring-1 ring-emerald-500': day && selectedDate === isoDate(calYear, calMonth, day),
-                                    }"
-                                    @click="if (day) selectedDate = isoDate(calYear, calMonth, day)"
-                                    x-show="true">
-                                <span x-text="day || ''"></span>
-                                <span class="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500"
-                                      x-show="day && archivesByDay()[isoDate(calYear, calMonth, day)]"></span>
-                            </button>
-                        </template>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-xs" x-show="enabled && lastAt"></i>
+                            <span x-text="enabled ? (lastAt ? 'Backups are successful' : 'Glacier relay active') : 'Backups disabled'">
+                                {{ $relayEnabled && $lastArchived ? 'Backups are successful' : ($relayEnabled ? 'Glacier relay active' : 'Backups disabled') }}
+                            </span>
+                        </div>
+                        <div class="text-xs text-[var(--color-ink-muted)] mt-1">
+                            @if ($lastArchived)
+                                Latest backup: <span class="font-medium text-[var(--color-ink-strong)]">{{ $lastArchived->diffForHumans() }}</span>
+                                <div class="text-[10px] text-[var(--color-ink-muted)] font-mono mt-0.5">({{ $lastArchived->format('Y-m-d H:i:s') }})</div>
+                            @else
+                                <span x-show="lastAt" x-cloak>
+                                    Latest backup: <span class="font-medium text-[var(--color-ink-strong)]" x-text="formatStamp(lastAt)"></span>
+                                </span>
+                                <span x-show="!lastAt">
+                                    Latest backup: Awaiting initial scheduled run.
+                                </span>
+                            @endif
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex flex-col gap-3">
-                    <label class="text-[11px] text-[var(--color-ink-muted)]">
-                        Schedule
+                {{-- Configuration / Cadence metadata box --}}
+                <div class="mt-3.5 p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 border border-[var(--color-border-light)]/40">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Destination:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                            <i class="fa-brands fa-aws text-amber-600"></i> AWS S3 Glacier IR
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Cadence:</span>
                         <select x-model="frequency"
                                 @change="saveSchedule()"
                                 :disabled="saving || !enabled"
-                                class="mt-1 w-full text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-[var(--color-ink-strong)]">
+                                class="text-[11px] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[var(--color-ink-strong)] cursor-pointer disabled:opacity-50">
                             <option value="daily">Daily</option>
                             <option value="twice_weekly">Twice weekly</option>
                             <option value="weekly">Weekly</option>
                         </select>
-                    </label>
-                    <div class="text-xs space-y-1">
-                        <div>
-                            <span class="text-[var(--color-ink-muted)]">Latest backup:</span>
-                            <span class="font-medium text-[var(--color-ink-strong)]" x-text="lastAt ? formatStamp(lastAt) : 'None yet'"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Next backup:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]" x-text="enabled && nextAt ? formatStamp(nextAt) : '—'">
+                            {{ $relayEnabled && $nextScheduled ? $nextScheduled->format('Y-m-d, H:i') : '—' }}
+                        </span>
+                    </div>
+                </div>
+
+                {{-- Latest Snapshot Quick Access --}}
+                <div class="mt-3 p-2.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]"
+                     x-show="latestArchive"
+                     x-cloak>
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="min-w-0 pr-2">
+                            <div class="font-medium text-[var(--color-ink-strong)] truncate flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-zipper text-emerald-600 text-[11px]"></i>
+                                <span x-text="latestArchive?.filename || 'Latest archive'"></span>
+                            </div>
+                            <div class="text-[10px] text-[var(--color-ink-muted)] flex items-center gap-2 mt-0.5">
+                                <span x-text="latestArchive?.archived_at_formatted || latestArchive?.last_modified_formatted || (lastAt ? formatStamp(lastAt) : '')"></span>
+                                <span>·</span>
+                                <span class="font-data" x-text="latestArchive?.size_formatted || formatBytes(latestArchive?.size_bytes)"></span>
+                            </div>
                         </div>
-                        <div>
-                            <span class="text-[var(--color-ink-muted)]">Next backup:</span>
-                            <span class="font-medium text-[var(--color-ink-strong)]" x-text="enabled && nextAt ? formatStamp(nextAt) : '—'"></span>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <a :href="latestArchive?.download_url"
+                               class="text-xs text-emerald-700 hover:underline flex items-center gap-1"
+                               x-show="latestArchive?.download_url"
+                               title="Download archive from S3">
+                                <i class="fa-solid fa-download text-[10px]"></i> Download
+                            </a>
+                            <button type="button"
+                                    @click="openRestore(latestArchive)"
+                                    :disabled="!hasRestoreCapability || restoring || runningNow"
+                                    class="text-xs text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline font-medium flex items-center gap-1"
+                                    :title="!hasRestoreCapability ? 'Companion backup-restore capability required' : 'Restore this archive to the site'">
+                                <i class="fa-solid fa-clock-rotate-left text-[10px]"></i> Restore…
+                            </button>
                         </div>
                     </div>
+                </div>
+
+
+                {{-- Backup Now Action Button --}}
+                <div class="mt-3">
                     <button type="button"
                             @click="runNow()"
                             :disabled="runningNow || !enabled"
-                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 cursor-pointer">
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-3 py-2 cursor-pointer transition-colors shadow-xs">
                         <i class="fa-solid" :class="runningNow ? 'fa-circle-notch fa-spin' : 'fa-cloud-arrow-up'"></i>
-                        <span x-text="runningNow ? 'Backing up…' : 'Backup Now'"></span>
+                        <span x-text="runningNow ? 'Backing up to Glacier…' : 'Backup Now'">Backup Now</span>
                     </button>
-                    <p class="text-[11px] text-[var(--color-ink-muted)]" x-show="runMessage" x-text="runMessage" x-cloak></p>
-                    <p class="text-[10px] text-[var(--color-ink-muted)]">
-                        Off-site zip to S3 Glacier Instant Retrieval. Use this for sites we do not host; SpinupWP and Pressable keep their own backups.
-                    </p>
-                </div>
-            </div>
-
-            <div class="mt-4">
-                <div class="text-xs font-medium text-[var(--color-ink-muted)] mb-2">
-                    Backups for <span class="text-[var(--color-ink-strong)]" x-text="selectedDate"></span>
-                </div>
-                <div class="border border-[var(--color-border-light)] rounded-xl divide-y divide-[var(--color-border-light)] min-h-[2.5rem]">
-                    <template x-for="archive in dayArchives()" :key="archive.id || archive.key">
-                        <div class="px-3 py-2 flex items-center justify-between gap-2 text-xs">
-                            <div class="min-w-0">
-                                <div class="font-medium text-[var(--color-ink-strong)]" x-text="(archive.archived_at || '').slice(11, 19) || archive.filename"></div>
-                                <div class="text-[10px] text-[var(--color-ink-muted)]" x-text="backupKind(archive)"></div>
-                            </div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <span class="font-data text-[var(--color-ink-muted)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes)"></span>
-                                <a :href="archive.download_url" class="text-emerald-700 hover:underline" x-show="archive.download_url">Download</a>
-                                <button type="button"
-                                        @click="openRestore(archive)"
-                                        :disabled="!hasRestoreCapability || restoring || runningNow"
-                                        class="text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline font-medium"
-                                        :title="!hasRestoreCapability ? 'Companion backup-restore capability required' : 'Restore this archive to the site'">
-                                    Restore…
-                                </button>
-                            </div>
-                        </div>
-                    </template>
-                    <div class="px-3 py-2 text-[11px] text-[var(--color-ink-muted)]" x-show="dayArchives().length === 0">
-                        No backups on this day.
-                    </div>
+                    <p class="text-[11px] text-center text-[var(--color-ink-muted)] mt-1.5" x-show="runMessage" x-text="runMessage" x-cloak></p>
                 </div>
             </div>
         @elseif ($hasRelayOrPressable)
@@ -634,14 +644,33 @@
                                 </div>
                                 <div class="max-h-80 overflow-y-auto border border-[var(--color-border-light)] rounded-xl divide-y divide-[var(--color-border-light)]">
                                     <template x-for="(archive, idx) in data.relay_archives" :key="idx">
-                                        <div class="p-3 hover:bg-[var(--color-surface-alt)]/50 transition-colors flex items-center justify-between text-xs">
-                                            <div>
-                                                <div class="font-medium text-[var(--color-ink-strong)]" x-text="archive.filename || archive.key"></div>
+                                        <div class="p-3 hover:bg-[var(--color-surface-alt)]/50 transition-colors flex items-center justify-between text-xs gap-3">
+                                            <div class="min-w-0">
+                                                <div class="font-medium text-[var(--color-ink-strong)] truncate" x-text="archive.filename || archive.key"></div>
                                                 <div class="text-[10px] text-[var(--color-ink-muted)]" x-text="archive.archived_at_formatted || archive.last_modified_formatted || archive.date"></div>
                                             </div>
-                                            <div class="text-right">
-                                                <div class="font-data font-semibold text-[var(--color-ink-strong)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes || archive.size)"></div>
-                                                <div class="text-[10px] text-emerald-600">Glacier IR</div>
+                                            <div class="flex items-center gap-3 shrink-0">
+                                                <div class="text-right">
+                                                    <div class="font-data font-semibold text-[var(--color-ink-strong)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes || archive.size)"></div>
+                                                    <div class="text-[10px] text-emerald-600">Glacier IR</div>
+                                                </div>
+                                                @if ($isCustom)
+                                                    <div class="flex items-center gap-2">
+                                                        <a :href="archive.download_url"
+                                                           class="text-xs text-emerald-700 hover:underline"
+                                                           x-show="archive.download_url"
+                                                           title="Download archive from S3">
+                                                            Download
+                                                        </a>
+                                                        <button type="button"
+                                                                @click="modalOpen = false; openRestore(archive)"
+                                                                :disabled="!hasRestoreCapability || restoring || runningNow"
+                                                                class="text-xs text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline font-medium"
+                                                                :title="!hasRestoreCapability ? 'Companion backup-restore capability required' : 'Restore this archive to the site'">
+                                                            Restore…
+                                                        </button>
+                                                    </div>
+                                                @endif
                                             </div>
                                         </div>
                                     </template>
@@ -722,8 +751,16 @@
                             <span x-text="restoreError"></span>
                         </div>
 
+                        {{-- Precheck: no integrity hash on record --}}
+                        <div x-show="shaAvailable === false && (!restoreState || restoreState.status === 'idle' || restoreState.status === 'failed')"
+                             class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2"
+                             x-cloak>
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5 shrink-0 text-amber-600"></i>
+                            <span>No integrity hash on record for this archive — restore unavailable.</span>
+                        </div>
+
                         {{-- Step 1: Confirmation & Stage --}}
-                        <div x-show="!restoreState || restoreState.status === 'idle' || restoreState.status === 'failed'">
+                        <div x-show="shaAvailable !== false && (!restoreState || restoreState.status === 'idle' || restoreState.status === 'failed')">
                             <p class="text-[var(--color-ink-muted)] mb-3 leading-relaxed">
                                 Restoring will download the archive from S3 Glacier to the site, verify its cryptographic hash, unpack database tables and files, and require your final confirmation before applying.
                             </p>
@@ -755,7 +792,7 @@
                                 </button>
                                 <button type="button"
                                         @click="stageRestore()"
-                                        :disabled="restoring || restoreConfirmDomain !== siteDomain"
+                                        :disabled="restoring || precheckLoading || restoreConfirmDomain !== siteDomain"
                                         class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2">
                                     <i class="fa-solid" :class="restoring ? 'fa-circle-notch fa-spin' : 'fa-download'"></i>
                                     <span x-text="restoring ? 'Staging…' : 'Stage Restore'"></span>
@@ -784,6 +821,10 @@
                                 </div>
                             </div>
                             <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 border border-[var(--color-border-light)]">
+                                <div class="flex justify-between gap-3">
+                                    <span class="text-[var(--color-ink-muted)] shrink-0">Staged archive:</span>
+                                    <span class="font-medium font-mono text-[11px] truncate" x-text="restoreState.filename || restoreState.archive_key || '—'"></span>
+                                </div>
                                 <div class="flex justify-between">
                                     <span class="text-[var(--color-ink-muted)]">Database dump:</span>
                                     <span class="font-medium" x-text="restoreState.has_sql ? 'Present (prefix: ' + (restoreState.table_prefix || 'standard') + ')' : 'None'"></span>
@@ -803,9 +844,10 @@
                             </div>
                             <div class="mt-5 flex items-center justify-between">
                                 <button type="button"
-                                        @click="restoreModalOpen = false"
-                                        class="text-xs text-[var(--color-ink-muted)] hover:text-red-600 cursor-pointer">
-                                    Discard / Close
+                                        @click="discardRestore()"
+                                        :disabled="restoring"
+                                        class="text-xs text-[var(--color-ink-muted)] hover:text-red-600 cursor-pointer disabled:opacity-50">
+                                    Discard staged restore
                                 </button>
                                 <button type="button"
                                         @click="applyRestore()"
@@ -837,7 +879,7 @@
                             </p>
                             <div class="pt-2">
                                 <button type="button"
-                                        @click="restoreModalOpen = false; fetchHistory()"
+                                        @click="discardRestore(); fetchHistory()"
                                         class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">
                                     Done
                                 </button>

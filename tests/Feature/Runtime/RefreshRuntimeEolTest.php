@@ -59,6 +59,27 @@ describe('clockwork:refresh-runtime-eol', function () {
             ->and($fetchedAt)->not->toBeNull();
     });
 
+    it('stores the successful product but does not bump fetched_at when the other product fails', function () {
+        $settings = app(Settings::class);
+        $settings->put('runtime_eol.php_cycles', ['8.2' => ['name' => '8.2']]);
+        $settings->put('runtime_eol.wordpress_cycles', ['6.5' => ['name' => '6.5']]);
+        $settings->put('runtime_eol.fetched_at', '2026-01-01T00:00:00Z');
+
+        Http::fake([
+            EndOfLifeClient::PHP_URL => Http::response(endOfLifeProductPayload([
+                releaseCycle('8.4'),
+            ]), 200),
+            EndOfLifeClient::WORDPRESS_URL => Http::response('Gateway Timeout', 504),
+        ]);
+
+        $this->artisan('clockwork:refresh-runtime-eol')
+            ->assertSuccessful();
+
+        expect(array_keys($settings->get('runtime_eol.php_cycles')))->toEqualCanonicalizing(['8.4'])
+            ->and($settings->get('runtime_eol.wordpress_cycles'))->toHaveKey('6.5')
+            ->and($settings->get('runtime_eol.fetched_at'))->toBe('2026-01-01T00:00:00Z');
+    });
+
     it('preserves existing settings if HTTP requests fail', function () {
         $settings = app(Settings::class);
         $settings->put('runtime_eol.php_cycles', ['8.2' => ['name' => '8.2']]);

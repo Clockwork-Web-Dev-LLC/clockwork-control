@@ -22,7 +22,7 @@ The app sits **next to** SpinupWP, Pressable, WP Engine, Kinsta, and custom prov
 | Layer | Choice |
 |---|---|
 | Platform / OS | **Linux** (Debian, Ubuntu, Fedora, Rocky, Arch) & **macOS**. A Mac is not required. |
-| Language | PHP 8.4 (PHP 8.3 supported) |
+| Language | PHP 8.4 or newer (composer.json requires `^8.4`) |
 | Framework | Laravel 13 (server-rendered Blade) |
 | Database | MySQL 9.6 / 8.0+ or MariaDB 10.11+ (SQLite supported for dev/tests) |
 | Frontend | Tailwind 4, Alpine.js 3, ECharts 6, Font Awesome 7 |

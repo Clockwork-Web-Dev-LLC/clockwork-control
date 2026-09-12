@@ -594,12 +594,20 @@
                                         'active_support' => 'Supported',
                                         default => 'Unknown',
                                     };
+                                    // Numeric severity so the default sort puts the worst rows first
+                                    // (asc: eol → security_only → active_support → unknown).
+                                    $statusSeverity = match ($row['status']) {
+                                        'eol' => 0,
+                                        'security_only' => 1,
+                                        'active_support' => 2,
+                                        default => 3,
+                                    };
                                 @endphp
                                 <tr
                                     data-sort-site="{{ $row['site']->domain }}"
                                     data-sort-server="{{ $row['site']->server?->name ?? 'Standalone' }}"
                                     data-sort-version="{{ $row['php_version'] }}"
-                                    data-sort-status="{{ $row['status'] }}"
+                                    data-sort-status="{{ $statusSeverity }}"
                                     data-sort-detail="{{ $row['detail'] }}"
                                     class="hover:bg-[var(--color-surface-hover)] transition-colors">
                                     <td class="px-5 py-2.5 font-data">

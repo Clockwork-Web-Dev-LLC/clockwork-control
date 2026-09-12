@@ -5,10 +5,10 @@ order: 40
 updated: 2026-09-12
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
-tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,AuditFleetAdmins,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
+tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
 ---
 
-Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran. In addition, fleet-wide WordPress administrator auditing runs across all sites via `/security/admins`.
+Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran. In addition, fleet-wide WordPress administrator auditing is available at `/security/admins` — computed on page load from Companion snapshots, not by a scheduled scan.
 
 ## What we run
 
@@ -18,11 +18,11 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | **Domain blacklists** | daily 02:15 | hosting | Spamhaus DBL + URLhaus + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Recovers the blacklist signal Sucuri loses when CF 403's its scanner. |
 | **WP core checksums** | daily 02:30 | care-plan | `wp core verify-checksums` — catches base64 / shell backdoors dropped into wp-includes / wp-admin that Sucuri can't see (because they're not in the public HTML). |
 | **Companion malware** | daily 02:45 | care-plan | In-WP probe (Companion endpoint preferred, SSH fallback). PHP files >30 bytes under `wp-content/uploads/` (skipping the standard 0-byte and "Silence is golden" stubs that legit plugins drop), obfuscation signatures (`eval(base64_decode(`, `eval(gzinflate(`, `c99shell`, `r57shell`, `WSOsetcookie`, `FilesMan`), and recently-modified `wp-config.php`. Bypasses Cloudflare so CF-fronted sites get real signal. |
-| **Fleet admin audit** | daily 03:15 | all sites | Audits all WordPress users with the `administrator` role. Flags unexpected admins against an agency-approved email/domain allowlist. |
+| **Fleet admin audit** | query-time (page load) | companion sites | Audits WordPress `administrator` accounts from each site's Companion snapshot. Flags unexpected admins against an agency-approved email/domain allowlist. No scheduled command — `/security/admins` computes it on demand. |
 | **CISA KEV catalog sync** | daily 03:20 | all sites | Syncs CISA's Known Exploited Vulnerabilities catalog (JSON feed) to flag active in-the-wild exploitation of CVEs affecting installed plugins. |
 | **Closed plugins** | weekly Mon 03:30 | all sites | Audits active plugins against WordPress.org's directory status (`plugin_directory_statuses`). Flags abandoned / closed zombieware plugins that receive no security patches. |
 
-Sucuri + checksums + companion-malware are care-plan-only. Blacklist, fleet admin, CISA KEV, and closed plugin auditing run against every site.
+Sucuri + checksums + companion-malware are care-plan-only. Blacklist, CISA KEV, and closed plugin auditing run against every site; the fleet admin audit covers every monitored site with a Companion snapshot.
 
 ## Where to look
 
@@ -53,7 +53,7 @@ To prioritize urgent patching, Clockwork correlates CVEs detected in installed p
 ## `/security/admins` — fleet administrator auditing (`SecurityAdminsController`)
 
 Clockwork audits WordPress administrator accounts across the entire fleet to detect unexpected, orphaned, or rogue administrative users:
-- **Scan Mechanism**: Runs daily via `clockwork:audit-fleet-admins` (or on-demand). Inspects WP admin accounts via the Companion's `/admins` endpoint or SSH fallback.
+- **Scan Mechanism**: Computed at query time — there is no artisan command and no scheduled job. `FleetAdminAuditor::inventory()` (`app/Services/Security/FleetAdminAuditor.php`) reads the admin list already present in each site's Companion snapshot (`companion_snapshot['admins']`) whenever `/security/admins` is loaded, so freshness tracks the regular Companion snapshot refresh.
 - **Approved Agency Allowlist**: Operators configure approved email addresses and domains (e.g. `@youragency.com`). Any administrator account with an email outside approved domains is flagged for operator review.
 - **Ignore / Acknowledge List**: Legitimate client-side administrators (e.g. client project leads) can be acknowledged with an operator reason (`IgnoredWpAdmin`), preventing recurring false-alarm flags while maintaining an audit trail.
 

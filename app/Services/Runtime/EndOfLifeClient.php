@@ -93,7 +93,11 @@ class EndOfLifeClient
             $settings->put('runtime_eol.wordpress_cycles', $wp);
         }
 
-        $settings->put('runtime_eol.fetched_at', now()->toIso8601String());
+        // Only bump the freshness marker when every product fetched successfully;
+        // a partial refresh must not mask staleness of the product that failed.
+        if ($php !== null && $wp !== null) {
+            $settings->put('runtime_eol.fetched_at', now()->toIso8601String());
+        }
 
         return [
             'ok' => true,

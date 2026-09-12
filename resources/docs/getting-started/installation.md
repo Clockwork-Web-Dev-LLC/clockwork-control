@@ -16,7 +16,7 @@ Clockwork Control provides a web-based installation wizard (`/install`) that str
 > **A Mac is NOT required.** While some agency operators run Clockwork Control locally on an Apple Silicon machine (such as a Mac Mini or MacBook), Clockwork Control is built on standard PHP 8.4 and MySQL. It runs natively and identically on **Linux** (Ubuntu 22.04/24.04 LTS, Debian 12, Fedora, Rocky/AlmaLinux, or Arch Linux) on dedicated hardware, an Intel NUC / mini-PC, a Proxmox/KVM virtual machine, or a Raspberry Pi 5 on your office network.
 
 Clockwork Control has zero proprietary Apple or macOS-specific dependencies:
-- **Runtime**: PHP 8.3 or 8.4 (`cli`, `fpm`, `pdo_mysql`, `openssl`, `mbstring`, `curl`, `xml`, `zip`, `bcmath`, `intl`)
+- **Runtime**: PHP 8.4 or newer (`cli`, `fpm`, `pdo_mysql`, `openssl`, `mbstring`, `curl`, `xml`, `zip`, `bcmath`, `intl`) — composer.json requires `"php": "^8.4"`, so PHP 8.3 will not install
 - **Database**: MySQL 8.0+ / 9.x or MariaDB 10.11+
 - **Frontend Build**: Node 20+ and NPM
 - **Background Engine**: Systemd timer or crontab executing `php artisan schedule:run` every minute

@@ -92,7 +92,7 @@ class ArchiveSiteBackupJob implements ShouldQueue
             if ($adapter instanceof DirectS3BackupRelayAdapter) {
                 $this->markArchived($site, [
                     'size_bytes' => $this->objectSize($disk, $destinationKey),
-                ]);
+                ], $disk, $destinationKey);
                 Log::info("BackupRelay: {$destinationKey} already in S3 for {$site->domain}; treating as archived.");
 
                 return 'archived';
@@ -125,7 +125,7 @@ class ArchiveSiteBackupJob implements ShouldQueue
                     $this->markArchived($site, [
                         'size_bytes' => $this->objectSize($disk, $destinationKey),
                         'sha256' => $directResult['sha256'] ?? null,
-                    ]);
+                    ], $disk, $destinationKey);
                     Log::warning("BackupRelay: Companion reported failure for {$site->domain} but {$destinationKey} exists; treating as archived.");
 
                     return 'archived';
@@ -138,11 +138,7 @@ class ArchiveSiteBackupJob implements ShouldQueue
             $this->markArchived($site, [
                 'size_bytes' => $directResult['size_bytes'] ?? null,
                 'sha256' => $directResult['sha256'] ?? null,
-            ]);
-
-            if (! empty($directResult['sha256'])) {
-                $this->writeSha256Sidecar($disk, $destinationKey, (string) $directResult['sha256'], (int) ($directResult['size_bytes'] ?? 0));
-            }
+            ], $disk, $destinationKey);
         } else {
             $stream = $adapter->openBackupStream($site, $ref);
             if ($stream === null) {
@@ -197,9 +193,15 @@ class ArchiveSiteBackupJob implements ShouldQueue
     }
 
     /**
+     * When $disk and $destinationKey are given and a sha256 is present, also
+     * writes the {key}.sha256.json sidecar (non-fatal) — every archived
+     * outcome that records a hash must leave a sidecar, including the
+     * "object already exists" and "Companion reported failure but object
+     * landed" recovery paths, or restores of those archives get refused.
+     *
      * @param  array{size_bytes?: int|null, sha256?: string|null}  $meta
      */
-    private function markArchived(Site $site, array $meta = []): void
+    private function markArchived(Site $site, array $meta = [], mixed $disk = null, ?string $destinationKey = null): void
     {
         $updates = [
             'backup_relay_last_archived_at' => now(),
@@ -215,6 +217,10 @@ class ArchiveSiteBackupJob implements ShouldQueue
         }
 
         $site->update($updates);
+
+        if ($sha !== '' && $disk !== null && $destinationKey !== null) {
+            $this->writeSha256Sidecar($disk, $destinationKey, $sha, (int) ($meta['size_bytes'] ?? 0));
+        }
     }
 
     /**

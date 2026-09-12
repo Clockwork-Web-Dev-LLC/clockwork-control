@@ -310,6 +310,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/backup-relay/restore/stage', [SitesController::class, 'backupRelayRestoreStage'])->name('sites.backup-relay.restore.stage');
     Route::post('/sites/{site}/backup-relay/restore/apply', [SitesController::class, 'backupRelayRestoreApply'])->name('sites.backup-relay.restore.apply');
     Route::get('/sites/{site}/backup-relay/restore/status', [SitesController::class, 'backupRelayRestoreStatus'])->name('sites.backup-relay.restore.status');
+    Route::get('/sites/{site}/backup-relay/restore/precheck', [SitesController::class, 'backupRelayRestorePrecheck'])->name('sites.backup-relay.restore.precheck');
+    Route::post('/sites/{site}/backup-relay/restore/discard', [SitesController::class, 'backupRelayRestoreDiscard'])->name('sites.backup-relay.restore.discard');
     Route::post('/sites/{site}/care-plan', [SitesController::class, 'toggleCarePlan'])->name('sites.care-plan');
     Route::post('/sites/{site}/care-plan/clear-override', [SitesController::class, 'clearCarePlanOverride'])->name('sites.care-plan.clear-override');
     Route::post('/sites/{site}/auto-updates/toggle', [SitesController::class, 'togglePauseAutoUpdates'])->name('sites.auto-updates.toggle');

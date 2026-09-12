@@ -188,7 +188,7 @@ For WordPress sites we **do not host** (WP Engine, Kinsta, a client box, any `cu
 For custom unhosted sites, Clockwork provides a safe two-step restore flow directly from the site's Backups widget (`/sites/{id}`):
 
 1. **Two-Step Architecture**:
-   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 120-minute presigned S3 GET URL and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
+   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 24-hour presigned S3 GET URL (`BackupArchiveEnumerator::getDownloadUrl()`, `DOWNLOAD_URL_TTL_HOURS = 24`) and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
    - **Step 2 (Apply)**: Once staged, the operator reviews the detected staging details (database dump presence, table prefix, files archive) in the modal and clicks **Apply Restore**. Companion places WordPress into maintenance mode (`.maintenance`), imports the SQL dump using gzip streaming scoped strictly to `$wpdb->prefix` (failing closed with `prefix_mismatch` if 0 tables match), and copies the restored `wp-content/` files over the active filesystem.
 
 2. **Fail-Closed Maintenance Mode**:
@@ -201,6 +201,26 @@ For custom unhosted sites, Clockwork provides a safe two-step restore flow direc
 4. **Audit Logging & Orchestration**:
    - Control runs the restore via `BackgroundArtisan` running `clockwork:backup-restore {--site=} {--phase=} {--key=} {--actor=}`.
    - Every stage, apply, and failure records an `ActionLog` entry (`backup_restore_staged`, `backup_restore_applied`, `backup_restore_failed`) visible in the site's Activity history.
+
+#### IAM requirements for restore
+
+The backup upload path only needs `s3:PutObject` (plus `s3:ListBucket` for the archive listings), but **restore additionally needs `s3:GetObject` on the archive prefix** — twice over:
+
+- The presigned GET URL that Control mints for Companion to download the archive is signed with Control's own IAM credentials, so those credentials must be allowed to read the object.
+- Control reads the `{key}.sha256.json` integrity sidecars directly to resolve the expected hash before staging.
+
+Without `s3:GetObject`, every restore fails at the download step with `AccessDenied`. Example policy statement (adjust the bucket name and prefix to your setup — production uses the `_control/backup-relay/archives/*` style prefix):
+
+```json
+{
+  "Sid": "ClockworkBackupRelayRestore",
+  "Effect": "Allow",
+  "Action": ["s3:GetObject"],
+  "Resource": "arn:aws:s3:::your-agency-backups-bucket/_control/backup-relay/archives/*"
+}
+```
+
+This is in addition to the existing `s3:PutObject` (uploads) and `s3:ListBucket` (archive enumeration) grants.
 
 `sites.backup_relay_frequency` is nullable. Hosted sites leave it null and inherit `/settings/backup-relay`. Custom sites set their own.
 

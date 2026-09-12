@@ -157,7 +157,7 @@
 
     <div id="site-dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
         @foreach ($dashboardLayout as $widget)
-            <div class="dashboard-widget-card group transition-all duration-200 cursor-default{{ $widget === 'backups' && $site->isCustom() ? ' md:col-span-2' : '' }}"
+            <div class="dashboard-widget-card group transition-all duration-200 cursor-default"
                  data-widget="{{ $widget }}"
                  draggable="true"
                  @dragstart="onDragStart($event, '{{ $widget }}')"

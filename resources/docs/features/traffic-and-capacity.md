@@ -56,8 +56,8 @@ Accessible via the "Capacity settings" button on `/capacity` and under Tools in 
 ### Runtime EOL & Lifecycle
 
 Clockwork tracks software runtime lifecycle support across the fleet to provide early visibility into unsupported PHP versions:
-- **Feed Sync**: `clockwork:refresh-runtime-eol` runs daily at 05:10 UTC (`app/Services/Runtime/EndOfLifeClient.php`), querying `https://endoflife.date/api/v1/products/php` and `/wordpress` and caching cycle definitions into `app_settings`.
-- **Classification**: `RuntimeEolEvaluator` classifies installed versions into `EOL` (no security updates), `Security only` (active feature support ended; receiving security patches only), or `Supported` (active maintenance).
+- **Feed Sync**: `clockwork:refresh-runtime-eol` runs daily at 05:10 UTC (`app/Services/Runtime/EndOfLifeClient.php`), querying `https://endoflife.date/api/v1/products/php` and `/wordpress` and caching cycle definitions into `app_settings`. WordPress cycle data is cached for a future core-EOL view but not yet displayed anywhere.
+- **Classification**: `RuntimeEolEvaluator` classifies installed PHP versions into `EOL` (no security updates), `Security only` (active feature support ended; receiving security patches only), or `Supported` (active maintenance).
 - **Capacity Dashboard**: `/capacity` displays the fleet-wide breakdown with live counts and a sortable domain table displaying versions and exact support end dates. When lifecycle data is stale or missing, the page degrades gracefully with a warning notice without blocking or failing.
 - **Site Overview Widget**: Individual site tech stack widgets display quiet amber (`Security only`) or red (`EOL`) pills next to the PHP version for quick operator reference.
 

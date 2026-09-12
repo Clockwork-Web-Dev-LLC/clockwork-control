@@ -223,7 +223,16 @@ class BackupArchiveEnumerator
      */
     public function resolveArchiveSha256(Site $site, string $key): ?string
     {
-        $disk = $this->disk();
+        // A misconfigured disk must read as "no hash on record" (422/false in
+        // the callers), never bubble up as a 500.
+        try {
+            $disk = $this->disk();
+        } catch (Throwable $e) {
+            Log::warning("BackupRelay: resolveArchiveSha256 could not resolve disk {$this->diskName}: {$e->getMessage()}");
+
+            return null;
+        }
+
         $sidecarKey = "{$key}.sha256.json";
 
         try {

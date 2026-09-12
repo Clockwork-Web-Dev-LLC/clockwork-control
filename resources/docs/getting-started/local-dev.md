@@ -10,7 +10,7 @@ tags: [getting-started, dev, setup, herd, mysql, linux]
 How to get Clockwork running on a fresh Linux or macOS machine. Pretty much one-time — the toolchain is local and intentionally lean. Steps below are split by OS where they differ; everything else (Composer/npm/artisan commands, `.env`, the allowlist step) is identical on both.
 
 > [!NOTE]
-> **A Mac is NOT required**: Clockwork Control runs natively on any standard Linux distribution (Debian/Ubuntu, Fedora/RHEL, Arch) as well as macOS. The backend is 100% standard Laravel 11 + PHP 8.4 + MySQL. Linux users do not need Laravel Herd, special shims, or Apple hardware.
+> **A Mac is NOT required**: Clockwork Control runs natively on any standard Linux distribution (Debian/Ubuntu, Fedora/RHEL, Arch) as well as macOS. The backend is 100% standard Laravel 13 + PHP 8.4 + MySQL. Linux users do not need Laravel Herd, special shims, or Apple hardware.
 
 ## Prerequisites
 

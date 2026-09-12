@@ -24,6 +24,11 @@ class BackupRestoreCommand extends Command
 
     public const MAX_POLL_SECONDS = 600;
 
+    public static int $maxPollSeconds = self::MAX_POLL_SECONDS;
+
+    /** Cache-state statuses that mean a restore is actively in flight. */
+    public const IN_FLIGHT_STATUSES = ['downloading', 'verifying', 'extracting', 'scanning', 'applying_sql', 'applying_files', 'finalizing'];
+
     public function handle(ActionLogger $logger, BackupArchiveEnumerator $enumerator): int
     {
         $siteId = $this->option('site');
@@ -101,6 +106,7 @@ class BackupRestoreCommand extends Command
                 'phase' => 'stage',
                 'status' => 'failed',
                 'archive_key' => $key,
+                'filename' => basename($key),
                 'error' => 'no_hash',
                 'error_detail' => $errMsg,
             ], now()->addHours(2));
@@ -130,6 +136,7 @@ class BackupRestoreCommand extends Command
             'phase' => 'stage',
             'status' => 'downloading',
             'archive_key' => $key,
+            'filename' => basename($key),
             'expected_sha256' => $sha256,
         ], now()->addHours(2));
 
@@ -195,6 +202,33 @@ class BackupRestoreCommand extends Command
         }
 
         $archiveKey = (string) ($cachedState['archive_key'] ?? '');
+        $requestedKey = trim((string) $this->option('key'));
+
+        // The staged state is the source of truth for WHAT gets restored; the
+        // apply request must name the same archive so a stale staged state can
+        // never silently restore something the operator did not just confirm.
+        if ($requestedKey === '' || ! hash_equals($archiveKey, $requestedKey)) {
+            $errMsg = "Archive key mismatch: staged restore is for '{$archiveKey}' but apply requested '{$requestedKey}'. Discard and re-stage the restore.";
+            $this->error($errMsg);
+
+            Cache::put($cacheKey, array_merge($cachedState, [
+                'status' => 'failed',
+                'error' => 'archive_key_mismatch',
+                'error_detail' => $errMsg,
+            ]), now()->addHours(2));
+
+            $logger->record(
+                actionType: ActionLog::TYPE_BACKUP_RESTORE_FAILED,
+                summary: "Backup restore apply rejected for {$site->domain}: archive key mismatch",
+                site: $site,
+                target: $archiveKey,
+                details: ['error' => 'archive_key_mismatch', 'archive_key' => $archiveKey, 'requested_key' => $requestedKey],
+                actor: $actor
+            );
+
+            return self::FAILURE;
+        }
+
         $client = new ClockworkCompanionClient($site);
 
         Cache::put($cacheKey, array_merge($cachedState, [
@@ -203,7 +237,7 @@ class BackupRestoreCommand extends Command
         ]), now()->addHours(2));
 
         try {
-            $client->applyBackupRestore($stagedId);
+            $client->applyBackupRestore($stagedId, $archiveKey);
         } catch (Throwable $e) {
             Log::info("BackupRestore: applyBackupRestore request returned/timed out for {$site->domain}: {$e->getMessage()}");
         }
@@ -228,10 +262,12 @@ class BackupRestoreCommand extends Command
             return self::SUCCESS;
         }
 
-        // Check if failure happened after maintenance mode was turned on
-        $failCode = (string) ($finalState['error'] ?? '');
-        $maintenanceLeftOn = in_array($failCode, ['sql_failed', 'prefix_mismatch', 'files_failed'], true);
-        if ($maintenanceLeftOn) {
+        // Fail closed: the apply POST was dispatched, so Companion may have
+        // engaged maintenance mode before things went sideways (sql_failed,
+        // prefix_mismatch, files_failed, poll timeout, unreachable Companion).
+        // Unless the last observed Companion status affirmatively reports
+        // maintenance disabled, assume the site was left in maintenance mode.
+        if (($finalState['maintenance'] ?? null) !== false) {
             $finalState['maintenance_left_on'] = true;
             Cache::put($cacheKey, $finalState, now()->addHours(2));
         }
@@ -260,7 +296,7 @@ class BackupRestoreCommand extends Command
         $startTime = time();
         $latest = (array) Cache::get($cacheKey, []);
 
-        while (time() - $startTime < self::MAX_POLL_SECONDS) {
+        while (time() - $startTime < static::$maxPollSeconds) {
             try {
                 $statusRes = $client->backupRestoreStatus();
                 if ($statusRes !== []) {

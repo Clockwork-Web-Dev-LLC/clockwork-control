@@ -131,7 +131,6 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:process-pending-bans` | Drain `queued_for_ban` → fail2ban over SSH. | `php artisan clockwork:process-pending-bans` |
 | `clockwork:composer-audit` | Composer dependency CVE scan. | `php artisan clockwork:composer-audit` |
 | `clockwork:security-check` | System-wide audit (`--ssh` runs SSH-side checks). | `php artisan clockwork:security-check --ssh --quiet-ok` |
-| `clockwork:audit-fleet-admins` | Audit WP administrator accounts across fleet sites via Companion or SSH, reporting unknown or unexpected admins. | `php artisan clockwork:audit-fleet-admins` |
 | `clockwork:run-performance-scans` | Lighthouse run per care-plan site — GTmetrix primary, PSI fallback. `--engine=` forces one engine; `--weekly-rotation` (what the scheduler passes) scans only tonight's 1/7th fleet slice to fit the GTmetrix credit budget. | `php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix` |
 
 ## Server ops

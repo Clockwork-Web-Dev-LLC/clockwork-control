@@ -201,13 +201,20 @@ class ClockworkCompanionClient
     }
 
     /**
-     * Apply a staged backup restore on the site.
+     * Apply a staged backup restore on the site. Companion cross-checks
+     * archive_key against its staged state and 409s on mismatch, so a stale
+     * staged restore can never be applied under the wrong archive.
      *
      * @return array<string, mixed>
      */
-    public function applyBackupRestore(string $stagedId): array
+    public function applyBackupRestore(string $stagedId, ?string $archiveKey = null): array
     {
-        return $this->postJson('/backup/restore/apply', ['staged_id' => $stagedId], [
+        $payload = ['staged_id' => $stagedId];
+        if ($archiveKey !== null && $archiveKey !== '') {
+            $payload['archive_key'] = $archiveKey;
+        }
+
+        return $this->postJson('/backup/restore/apply', $payload, [
             'timeout' => 55,
             'retries' => 0,
         ]);

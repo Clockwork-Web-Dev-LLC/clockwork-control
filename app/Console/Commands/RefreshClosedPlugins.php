@@ -45,6 +45,19 @@ class RefreshClosedPlugins extends Command
             $result['errors'],
         ));
 
+        if ($result['errors'] > 0) {
+            $this->warn(sprintf(
+                '%d slug(s) could not be checked (transient errors); previously recorded statuses were preserved.',
+                $result['errors'],
+            ));
+        }
+
+        if ($result['total'] > 0 && $result['errors'] === $result['total']) {
+            $this->error('Every slug check failed — WordPress.org API may be unreachable.');
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }
