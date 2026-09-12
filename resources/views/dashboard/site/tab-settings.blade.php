@@ -421,13 +421,13 @@
         </script>
     @endif
 
-    {{-- Card 5: Billing & Care Plan --}}
+    {{-- Card 5: Care Plan --}}
     <div class="card p-5 flex flex-col justify-between h-full">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-file-invoice-dollar text-emerald-600"></i>
-                    Billing &amp; care plan
+                    <i class="fa-solid fa-shield-heart text-emerald-600"></i>
+                    Care plan
                 </h3>
                 @if ($site->care_plan_enabled)
                     <span class="status-pill status-green text-[10px]">
@@ -447,7 +447,7 @@
                         @if ($site->care_plan_enabled)
                             <i class="fa-solid fa-shield-heart text-emerald-600"></i> Maintenance included
                         @else
-                            <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i> Bill separately
+                            <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i> Not enrolled
                         @endif
                     </span>
                 </div>
@@ -458,7 +458,7 @@
                         @if ($site->care_plan_override !== null)
                             <i class="fa-solid fa-hand text-amber-500"></i> Manual override
                         @else
-                            <i class="fa-solid fa-rotate text-gray-400"></i> Bill.com auto
+                            <i class="fa-solid fa-rotate text-gray-400"></i> Automated sync
                         @endif
                     </span>
                 </div>
@@ -490,7 +490,7 @@
                     @if ($site->care_plan_override !== null)
                         <form method="POST" action="{{ route('sites.care-plan.clear-override', $site) }}">
                             @csrf
-                            <button type="submit" class="btn-pill-nav text-xs" title="Clear manual override and let Bill.com decide">
+                            <button type="submit" class="btn-pill-nav text-xs" title="Clear manual override and restore automated sync">
                                 <i class="fa-solid fa-rotate"></i>
                             </button>
                         </form>

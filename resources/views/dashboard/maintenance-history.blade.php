@@ -6,9 +6,9 @@
     @include('operations._tabs')
 
     <x-page-header title="Maintenance history"
-        subtitle="Cross-site action log for the selected month — track billable work, automated updates, and covered care-plan events." />
+        subtitle="Cross-site action log for the selected month — track automated updates, routine maintenance, and care-plan events." />
 
-    {{-- Stats strip — covered vs billable vs server-only. --}}
+    {{-- Stats strip — covered vs non-care-plan vs server-only. --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Total actions</div>
@@ -24,7 +24,7 @@
         </div>
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">
-                <i class="fa-regular fa-circle"></i> Billable
+                <i class="fa-regular fa-circle"></i> Non-care-plan
             </div>
             <div class="text-2xl font-display {{ $billableCount > 0 ? 'text-[var(--color-status-yellow)]' : 'text-[var(--color-ink-strong)]' }} font-data">{{ number_format($billableCount) }}</div>
             <div class="text-xs text-[var(--color-ink-soft)] mt-1">actions on non-care-plan sites</div>

@@ -91,7 +91,7 @@
                 Care plan
             </span>
         @else
-            <span class="status-pill status-unknown" title="Not on a care plan. Plugin updates and maintenance are billable as ad-hoc work.">
+            <span class="status-pill status-unknown" title="Not on a care plan. Routine updates and maintenance are inactive for this site.">
                 <i class="fa-regular fa-circle"></i>
                 No care plan
             </span>

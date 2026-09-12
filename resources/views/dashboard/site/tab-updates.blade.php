@@ -44,8 +44,8 @@
     @else
         <div class="rounded-md p-3 mb-4 status-yellow text-sm">
             <i class="fa-solid fa-circle-exclamation"></i>
-            <strong>Not on a care plan</strong> — bill these updates separately. Toggle the flag in
-            <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'settings']) }}" class="underline">Settings → Billing</a>
+            <strong>Not on a care plan</strong> — routine updates are not included for this site. Toggle in
+            <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'settings']) }}" class="underline">Settings</a>
             if that's wrong.
         </div>
     @endif
