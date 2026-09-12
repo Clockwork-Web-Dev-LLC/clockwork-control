@@ -2,7 +2,7 @@
 title: Fleet Integrations Setup
 section: Features
 order: 5
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [setup, onboarding, first-run, modularization, env, credentials, rate-limits]
 tracks: [app/Http/Controllers/SetupController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, resources/views/setup/**]
@@ -25,6 +25,7 @@ This app has no self-provisioning: a row in the `users` table *is* the OAuth all
 Unlike traditional multi-step setup wizards that force operators through mandatory secondary screens, `/setup` operates in a streamlined, single-step workflow:
 - Toggle on whichever integrations your agency uses.
 - Optionally configure credentials or tunables directly in-place via the cog icon on each card.
+- Run live connection tests from within the credential modal — connection failures and error diagnostics are reflected directly in the UI.
 - Click **"Finish Setup & Go to Dashboard"** to save selections and immediately enter the control panel.
 
 ## Service Card Visual States

@@ -2,48 +2,76 @@
 title: Local dev setup
 section: Getting Started
 order: 20
-updated: 2026-05-04
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [getting-started, dev, setup, herd, mysql]
+tags: [getting-started, dev, setup, herd, mysql, linux]
 ---
 
-How to get Clockwork running on a fresh Mac. Pretty much one-time — the toolchain is local and intentionally lean.
+How to get Clockwork running on a fresh Linux or macOS machine. Pretty much one-time — the toolchain is local and intentionally lean. Steps below are split by OS where they differ; everything else (Composer/npm/artisan commands, `.env`, the allowlist step) is identical on both.
+
+> [!NOTE]
+> **A Mac is NOT required**: Clockwork Control runs natively on any standard Linux distribution (Debian/Ubuntu, Fedora/RHEL, Arch) as well as macOS. The backend is 100% standard Laravel 13 + PHP 8.4 + MySQL. Linux users do not need Laravel Herd, special shims, or Apple hardware.
 
 ## Prerequisites
 
-- macOS (Apple Silicon or Intel — both work).
-- Homebrew.
+- **Linux** (Debian/Ubuntu, Fedora/RHEL, Arch — anything with standard packages) or **macOS** (Apple Silicon or Intel).
 - Git access to this repo.
+- Package manager: `apt` / `dnf` / `pacman` on Linux, Homebrew or Laravel Herd on macOS.
 
 ## 1. Install the toolchain
 
-### Laravel Herd (PHP + Composer)
+### PHP 8.4 + Composer
 
-PHP 8.4 + Composer 2.9 ship with the free tier of [Laravel Herd](https://herd.laravel.com).
+**Linux (Debian/Ubuntu):**
+```bash
+sudo add-apt-repository ppa:ondrej/php && sudo apt update
+sudo apt install php8.4 php8.4-cli php8.4-mysql php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath php8.4-intl
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+```
+*Note for Linux: `php` and `composer` land directly on standard system PATH (`/usr/bin` / `/usr/local/bin`), so no PATH exports are required.*
 
-After install, the binaries land at `~/Library/Application Support/Herd/bin/` — and **they are NOT in the PATH** of Bash shells inherited by Claude Code or most terminals at launch. Every shell command that runs `php`, `composer`, or `artisan` must prepend:
+**Linux (Fedora/RHEL):**
+```bash
+sudo dnf install php php-cli php-mysqlnd php-mbstring php-xml php-curl php-zip php-bcmath php-intl
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+```
 
+**macOS:** ships via the free tier of [Laravel Herd](https://herd.laravel.com) (PHP 8.4 + Composer 2.9 together) or Homebrew (`brew install php`).
+
+*Note for macOS Herd users only:* After install, the binaries land at `~/Library/Application Support/Herd/bin/` — which is not in the default shell PATH of external terminals. macOS Herd users should add:
 ```bash
 export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 ```
-
-Easiest fix: add that line to your `~/.zshrc` (or `~/.bashrc`) so it's always available. The official Herd installer does this for the GUI shell launchers but not for new tabs spawned by other tools.
+*(Linux users can ignore this entirely).*
 
 ### MySQL
+
+**macOS:**
 
 ```bash
 brew install mysql
 brew services start mysql
 ```
 
+**Linux:**
+
+```bash
+sudo apt install mysql-server        # Debian/Ubuntu
+# or: sudo dnf install mysql-server  # Fedora/RHEL
+sudo systemctl enable --now mysqld   # some distros use `mysql` as the unit name
+```
+
 Defaults:
 
 - Listens on `127.0.0.1` only (good — don't open it).
-- Root has **no password** (acceptable for local dev — don't replicate this on a server).
+- macOS Homebrew MySQL: root has **no password**. Linux distro MySQL: root normally auths via the `auth_socket`/`unix_socket` plugin instead, so `mysql -uroot` from your own user will fail — run the command below with `sudo mysql` instead (or set a root password with `sudo mysql_secure_installation` and use that in `.env`).
 - Create the DB:
 
   ```bash
-  mysql -uroot -e "CREATE DATABASE clockwork CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  mysql -uroot -e "CREATE DATABASE clockwork CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"   # macOS
+  sudo mysql -e "CREATE DATABASE clockwork CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"      # Linux
   ```
 
 ### Node + npm
@@ -64,6 +92,7 @@ Only needed if you're working on the nginx-log threat analyzer. Install from [lm
 git clone <repo-url> clockwork-control
 cd clockwork-control
 
+# macOS/Herd only — skip this line on Linux, php/composer are already on PATH:
 export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 
 # Composer setup script: install + key generation + migrate + npm install
@@ -112,11 +141,11 @@ You need **two terminals** (or two tmux panes):
 
 ```bash
 # Terminal 1 — HTTP server:
-export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
+export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"   # macOS/Herd only
 php artisan serve   # http://127.0.0.1:8000
 
 # Terminal 2 — scheduler (the load-bearing one!):
-export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
+export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"   # macOS/Herd only
 php artisan schedule:work
 ```
 
@@ -141,7 +170,7 @@ Empty database? Of course — Clockwork has no inventory yet. Two options:
 ## Common shell incantations
 
 ```bash
-export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
+export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"   # macOS/Herd only — not needed on Linux
 
 php artisan migrate              # apply migrations
 php artisan migrate:fresh        # drop + recreate (DESTROYS DATA — confirm)
@@ -192,8 +221,9 @@ Test DB is configured to use SQLite in-memory by default — no separate setup n
 
 ## Gotchas worth knowing up front
 
-- **Herd PATH** — covered above. If a command says "command not found: php," you forgot the export.
-- **`env('HOME')` is null under Herd's php-fpm.** No shell env. Use `posix_getpwuid(posix_getuid())['dir']` and fall back to `env('HOME')`. Bit Companion's installer once.
+- **Herd PATH (macOS only)** — covered above. If a command says "command not found: php," you forgot the export.
+- **`env('HOME')` is null under Herd's php-fpm (macOS).** No shell env. Use `posix_getpwuid(posix_getuid())['dir']` and fall back to `env('HOME')`. Bit Companion's installer once. Linux php-fpm pools set `HOME` explicitly by default, so this hasn't been seen there — but the same fallback is safe on any OS.
+- **Linux root MySQL auth** — covered above under MySQL: `mysql -uroot` fails on a fresh distro install (`auth_socket`); use `sudo mysql` or set a root password first.
 - **`schedule:work` is mandatory for most features.** The dashboard renders without it but nothing actually polls / drains / runs.
 - **bun/bunx — not in this project.** PHP-only. Don't reach for npm install of PHP-equivalent packages.
 - **Don't run `migrate:fresh` against a real DB.** Always confirm before using.

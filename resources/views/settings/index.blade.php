@@ -142,6 +142,19 @@
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
                     </a>
 
+                    <a href="{{ route('settings.care-plans.index') }}"
+                       x-show="matches('care plans policy tiered maintenance updates scans')"
+                       class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <i class="fa-solid fa-shield-heart text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Care Plans Policy</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Tiered care plan enrollment or fleet-wide automated maintenance</div>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
+                    </a>
+
                     <a href="{{ route('settings.tags.index') }}"
                        x-show="matches('server tags labels production staging environment')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">

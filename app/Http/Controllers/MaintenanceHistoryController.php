@@ -54,6 +54,9 @@ class MaintenanceHistoryController extends Controller
         ActionLog::TYPE_USER_REVOKED => 'User revoked',
         ActionLog::TYPE_USER_RESTORED => 'User restored',
         ActionLog::TYPE_CACHE_PURGED => 'Cache purged',
+        ActionLog::TYPE_BACKUP_RESTORE_STAGED => 'Backup restore staged',
+        ActionLog::TYPE_BACKUP_RESTORE_APPLIED => 'Backup restore applied',
+        ActionLog::TYPE_BACKUP_RESTORE_FAILED => 'Backup restore failed',
     ];
 
     /**
@@ -125,10 +128,14 @@ class MaintenanceHistoryController extends Controller
 
         $serverOnly = $entries->whereNull('site_id');
 
-        // Grand totals split by care plan, so the page header can say "you
-        // did X covered actions and Y billable actions this month."
-        $coveredCount = $bySite->where('care_plan_enabled', true)->sum('total');
-        $billableCount = $bySite->where('care_plan_enabled', false)->sum('total');
+        // Grand totals split by care plan (or unified if care plans disabled fleet-wide).
+        if (Site::areCarePlansEnabled()) {
+            $coveredCount = $bySite->where('care_plan_enabled', true)->sum('total');
+            $billableCount = $bySite->where('care_plan_enabled', false)->sum('total');
+        } else {
+            $coveredCount = $bySite->sum('total');
+            $billableCount = 0;
+        }
 
         // Dropdown sources.
         $allSites = Site::query()

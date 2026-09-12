@@ -2,6 +2,7 @@
 
 namespace App\Services\HostingProvider;
 
+use App\Models\Site;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleRegistry;
 
@@ -28,6 +29,10 @@ class HostingProviderRegistry
 
     public function resolve(string $hostingProvider): HostingProvider
     {
+        if ($hostingProvider === Site::HOSTING_PROVIDER_CUSTOM) {
+            return app(CustomHostingProvider::class);
+        }
+
         foreach ($this->modules->hostingProviders() as $provider) {
             if ($provider->id() === $hostingProvider) {
                 return $provider;
@@ -42,6 +47,9 @@ class HostingProviderRegistry
      */
     public function all(): array
     {
-        return $this->modules->hostingProviders();
+        $providers = $this->modules->hostingProviders();
+        $providers[] = app(CustomHostingProvider::class);
+
+        return $providers;
     }
 }

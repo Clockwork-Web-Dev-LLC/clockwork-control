@@ -5,6 +5,7 @@ use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
 use App\Models\SiteUptimeEvent;
 use App\Models\User;
 use App\Services\Companion\CompanionInstaller;
@@ -955,8 +956,8 @@ describe('archive', function () {
         $response->assertSessionHasErrors('confirm_domain');
     });
 
-    it('archives the site, clears spinupwp_id, and redirects to the server page', function () {
-        [$server, $site] = spinupSite(['domain' => 'to-archive.test']);
+    it('archives the site, clears spinupwp_id, records an ingest exclusion, and redirects to the server page', function () {
+        [$server, $site] = spinupSite(['domain' => 'to-archive.test', 'spinupwp_id' => 5150]);
 
         $response = $this->actingAs(User::factory()->create())->post(route('sites.archive', $site), [
             'confirm_domain' => 'to-archive.test',
@@ -964,20 +965,48 @@ describe('archive', function () {
         ]);
 
         $response->assertRedirect(route('servers.show', $server));
+        $response->assertSessionHas('status', 'Archived to-archive.test. It is hidden from Clockwork and will not be re-imported. The WordPress site on the host was not deleted.');
         $fresh = $site->fresh();
         expect($fresh->archived_at)->not->toBeNull();
         expect($fresh->spinupwp_id)->toBeNull();
         expect(ActionLog::query()->where('site_id', $site->id)->where('action_type', 'site.archive')->exists())->toBeTrue();
+
+        $exclusion = SiteIngestExclusion::query()->where('site_id', $site->id)->first();
+        expect($exclusion)->not->toBeNull()
+            ->and($exclusion->hosting_provider)->toBe(Site::HOSTING_PROVIDER_SPINUPWP)
+            ->and($exclusion->domain)->toBe('to-archive.test')
+            ->and($exclusion->provider_site_id)->toBe('5150')
+            ->and($exclusion->reason)->toBe('client cancelled');
     });
 
-    it('redirects to sites.index when the site has no server (e.g. Pressable)', function () {
-        $site = Site::factory()->pressable()->create(['domain' => 'to-archive-pressable.test']);
+    it('redirects to sites.index when the site has no server (e.g. Pressable) and clears pressable_site_id', function () {
+        $site = Site::factory()->pressable()->create([
+            'domain' => 'to-archive-pressable.test',
+            'pressable_site_id' => '999000',
+        ]);
 
         $response = $this->actingAs(User::factory()->create())->post(route('sites.archive', $site), [
             'confirm_domain' => 'to-archive-pressable.test',
         ]);
 
         $response->assertRedirect(route('sites.index'));
+        $fresh = $site->fresh();
+        expect($fresh->archived_at)->not->toBeNull()
+            ->and($fresh->pressable_site_id)->toBeNull();
+        expect(SiteIngestExclusion::query()->where('domain', 'to-archive-pressable.test')->exists())->toBeTrue();
+    });
+
+    it('archives a custom site without writing an ingest exclusion', function () {
+        $site = Site::factory()->custom()->create(['domain' => 'to-archive-custom.test']);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.archive', $site), [
+            'confirm_domain' => 'to-archive-custom.test',
+        ]);
+
+        $response->assertRedirect(route('sites.index'));
+        $response->assertSessionHas('status', 'Archived to-archive-custom.test. The row is hidden from all listings; historical data is retained.');
+        expect($site->fresh()->archived_at)->not->toBeNull();
+        expect(SiteIngestExclusion::query()->count())->toBe(0);
     });
 
     it('404s for an already-archived site — the notArchived global scope hides it from route-model binding before the controller\'s own already-archived check can run', function () {
@@ -992,13 +1021,20 @@ describe('archive', function () {
 });
 
 describe('unarchive', function () {
-    it('restores an archived site and redirects to its show page', function () {
-        [, $site] = spinupSite(['archived_at' => now()]);
+    it('restores an archived site, clears its ingest exclusion, and redirects to its show page', function () {
+        [, $site] = spinupSite(['archived_at' => now(), 'spinupwp_id' => null]);
+        SiteIngestExclusion::factory()->create([
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'domain' => $site->domain,
+            'site_id' => $site->id,
+            'provider_site_id' => '5150',
+        ]);
 
         $response = $this->actingAs(User::factory()->create())->post(route('sites.unarchive', ['siteId' => $site->id]));
 
         $response->assertRedirect(route('sites.show', $site->id));
         expect($site->fresh()->archived_at)->toBeNull();
+        expect(SiteIngestExclusion::query()->where('site_id', $site->id)->exists())->toBeFalse();
         expect(ActionLog::query()->where('site_id', $site->id)->where('action_type', 'site.unarchive')->exists())->toBeTrue();
     });
 

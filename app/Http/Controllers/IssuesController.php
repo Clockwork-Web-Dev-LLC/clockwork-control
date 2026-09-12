@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CisaKevEntry;
 use App\Models\ContactFormTest;
 use App\Models\IgnoredIssue;
 use App\Models\Server;
@@ -10,6 +11,7 @@ use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
+use App\Services\Security\ClosedPluginAuditor;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\FleetAdminAuditor;
 use App\Services\Security\PluginVulnerabilityMatcher;
@@ -164,7 +166,7 @@ class IssuesController extends Controller
         $companionStaleAfter = now()->subDays(2);
         $sitesWithEnabledFormTests = ContactFormTest::query()
             ->where('enabled', true)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true)->where('is_inactive', false))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true))->where('is_inactive', false))
             ->pluck('site_id')
             ->unique();
         $companionMissing = $sites
@@ -178,7 +180,7 @@ class IssuesController extends Controller
             ->where('enabled', true)
             ->where('state', ContactFormTest::STATE_FAILED)
             ->where('failure_streak', '>=', ContactFormTest::ALERT_STREAK_THRESHOLD)
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true)->where('is_inactive', false))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true))->where('is_inactive', false))
             ->get();
 
         // Outdated WP plugins — derived from the cached Companion snapshot. Only sites
@@ -198,6 +200,19 @@ class IssuesController extends Controller
         // counts and tooltips per row.
         $matcher = app(PluginVulnerabilityMatcher::class);
         $vulnsBySiteId = $matcher->forSites($pluginsOutdated);
+
+        $matchedCves = [];
+        foreach ($vulnsBySiteId as $siteVulns) {
+            foreach ($siteVulns as $vulnFinding) {
+                $cve = $vulnFinding['vulnerability']->cve ?? null;
+                if ($cve) {
+                    $matchedCves[] = $cve;
+                }
+            }
+        }
+        $cisaKevCves = ! empty($matchedCves)
+            ? CisaKevEntry::whereIn('cve', array_unique($matchedCves))->pluck('cve')->all()
+            : [];
 
         // Orphaned sites — local Site rows whose SpinupWP linkage was lost.
         // Source: clockwork:find-orphan-sites populates consolidated_into_site_id
@@ -232,7 +247,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestSiteCheckIds)
             ->where(fn ($q) => $q->where('has_malware_hit', true)->orWhere('blacklist_hit', true))
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
@@ -240,7 +255,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestChecksumIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
@@ -263,7 +278,7 @@ class IssuesController extends Controller
             ->whereIn('id', $latestCompanionMalwareIds)
             ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
             ->with(['site:id,domain,server_id,care_plan_enabled', 'site.server:id,name,is_ignored'])
-            ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+            ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
             ->whereHas('site.server', fn ($q) => $q->where('is_ignored', false))
             ->get();
 
@@ -295,6 +310,18 @@ class IssuesController extends Controller
             ->latest()
             ->get();
 
+        // Closed / zombieware plugins detected on WordPress.org.
+        // Gated on is_inactive = false; ignored sites are explicitly suppressed by operators.
+        // KEEP IN SYNC with App\Support\IssueCounter::total().
+        $closedPluginFindings = app(ClosedPluginAuditor::class)->findingsForMonitoredSites();
+        $closedPluginSites = $closedPluginFindings['sites'];
+        $closedPluginFindingsBySiteId = $closedPluginFindings['findings_by_site'];
+        $ignoredClosedPluginIssues = IgnoredIssue::query()
+            ->where('issue_type', IgnoredIssue::TYPE_PLUGIN_CLOSED)
+            ->with(['site.server', 'user'])
+            ->latest()
+            ->get();
+
         $totals = [
             'ssl' => $sslIssues->count(),
             'domain_expiration' => $domainExpirationIssues->count(),
@@ -310,6 +337,7 @@ class IssuesController extends Controller
             'no_companion' => $companionMissing->count(),
             'forms_failing' => $failedFormTests->count(),
             'plugins_outdated' => $pluginsOutdated->count(),
+            'plugins_closed' => $closedPluginSites->count(),
             'orphans' => $orphanSites->count(),
             'malware' => $malwareHits->count(),
             'tampering' => $checksumTampering->count(),
@@ -322,6 +350,7 @@ class IssuesController extends Controller
         $totals['all'] = array_sum($totals);
         $totals['domain-expiration'] = $totals['domain_expiration'];
         $totals['seo-indexability'] = $totals['seo_blocked'];
+        $totals['plugins-closed'] = $totals['plugins_closed'];
 
         return view('dashboard.issues', compact(
             'sslIssues',
@@ -340,6 +369,10 @@ class IssuesController extends Controller
             'failedFormTests',
             'pluginsOutdated',
             'vulnsBySiteId',
+            'cisaKevCves',
+            'closedPluginSites',
+            'closedPluginFindingsBySiteId',
+            'ignoredClosedPluginIssues',
             'orphanSites',
             'orphanParents',
             'malwareHits',
@@ -421,7 +454,7 @@ class IssuesController extends Controller
     public function ignore(Request $request): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
-            'issue_type' => ['required', 'string', 'in:seo_indexability,wp_admin_flagged'],
+            'issue_type' => ['required', 'string', 'in:seo_indexability,wp_admin_flagged,plugin_closed'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'server_id' => ['nullable', 'integer', 'exists:servers,id'],
             'reason' => ['nullable', 'string', 'max:255'],

@@ -2,7 +2,7 @@
 title: Cloudways
 section: Integrations
 order: 24
-updated: 2026-09-06
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, cloudways, hosting, cloud-provider, wordpress]
 tracks: [modules/Cloudways/src/**, app/Console/Commands/CloudwaysTest.php]

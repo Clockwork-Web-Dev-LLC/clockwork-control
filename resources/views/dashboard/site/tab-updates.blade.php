@@ -36,18 +36,20 @@
     </div>
 
     {{-- Care plan banner — informational, doesn't gate the action. --}}
-    @if ($site->care_plan_enabled)
-        <div class="rounded-md p-3 mb-4 status-green text-sm">
-            <i class="fa-solid fa-shield-heart"></i>
-            <strong>Care plan</strong> — these updates are included.
-        </div>
-    @else
-        <div class="rounded-md p-3 mb-4 status-yellow text-sm">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            <strong>Not on a care plan</strong> — bill these updates separately. Toggle the flag in
-            <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'settings']) }}" class="underline">Settings → Billing</a>
-            if that's wrong.
-        </div>
+    @if (\App\Models\Site::areCarePlansEnabled())
+        @if ($site->care_plan_enabled)
+            <div class="rounded-md p-3 mb-4 status-green text-sm">
+                <i class="fa-solid fa-shield-heart"></i>
+                <strong>Care plan</strong> — these updates are included.
+            </div>
+        @else
+            <div class="rounded-md p-3 mb-4 status-yellow text-sm">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <strong>Not on a care plan</strong> — routine updates are not included for this site. Toggle in
+                <a href="{{ route('sites.show', ['site' => $site, 'tab' => 'settings']) }}" class="underline">Settings</a>
+                if that's wrong.
+            </div>
+        @endif
     @endif
 
     @if ($snapshotStale)

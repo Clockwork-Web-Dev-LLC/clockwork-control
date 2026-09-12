@@ -8,10 +8,12 @@ use App\Models\Site;
 use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
 use App\Services\Process\BackgroundArtisan;
+use App\Services\Runtime\RuntimeEolEvaluator;
 use App\Support\Settings;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -81,6 +83,7 @@ class CapacityController extends Controller
 
     public function index(): View
     {
+        $runtimeEol = $this->runtimeEolData();
         $sharedTagId = Tag::where('name', 'Shared')->value('id');
 
         if ($sharedTagId === null) {
@@ -93,6 +96,7 @@ class CapacityController extends Controller
                 'monthLabel' => CarbonImmutable::now()->format('F Y'),
                 'rollingDays' => $this->rollingDays(),
                 'trendingWindow' => $this->trendingWindow(),
+                'runtimeEol' => $runtimeEol,
             ]);
         }
 
@@ -371,6 +375,7 @@ class CapacityController extends Controller
             'monthLabel' => $monthStart->format('F Y'),
             'rollingDays' => $rollingDays,
             'pressureThresholds' => $thresholds,
+            'runtimeEol' => $runtimeEol,
         ]);
     }
 
@@ -464,5 +469,65 @@ class CapacityController extends Controller
         return redirect()
             ->route('capacity.settings')
             ->with('status', 'Capacity settings saved. Threshold updates take effect immediately across the Capacity dashboard and issue counting.');
+    }
+
+    /**
+     * @return array{
+     *   fetchedAt: ?string,
+     *   isStale: bool,
+     *   counts: array{eol: int, security_only: int, active_support: int, unknown: int},
+     *   rows: list<array{site: Site, php_version: string, cycle: ?string, status: string, detail: string, date: ?string}>
+     * }
+     */
+    private function runtimeEolData(): array
+    {
+        $settings = app(Settings::class);
+        $phpCycles = (array) $settings->get('runtime_eol.php_cycles', []);
+        $fetchedAt = $settings->get('runtime_eol.fetched_at');
+
+        $isStale = empty($fetchedAt)
+            || Carbon::parse((string) $fetchedAt)->diffInHours(now()) > 48;
+
+        $evaluator = new RuntimeEolEvaluator;
+        $sites = Site::query()
+            ->where('is_inactive', false)
+            ->with('server')
+            ->orderBy('domain')
+            ->get();
+
+        $rows = [];
+        $counts = [
+            'eol' => 0,
+            'security_only' => 0,
+            'active_support' => 0,
+            'unknown' => 0,
+        ];
+
+        foreach ($sites as $site) {
+            $version = $site->companion_snapshot['environment']['php_version'] ?? null;
+            if (! is_string($version) || trim($version) === '') {
+                continue;
+            }
+
+            $classification = $evaluator->evaluate($phpCycles, $version);
+            $status = $classification['status'];
+            $counts[$status] = ($counts[$status] ?? 0) + 1;
+
+            $rows[] = [
+                'site' => $site,
+                'php_version' => $version,
+                'cycle' => $classification['cycle'],
+                'status' => $status,
+                'detail' => $classification['detail'],
+                'date' => $classification['date'],
+            ];
+        }
+
+        return [
+            'fetchedAt' => is_string($fetchedAt) ? $fetchedAt : null,
+            'isStale' => $isStale,
+            'counts' => $counts,
+            'rows' => $rows,
+        ];
     }
 }

@@ -1,5 +1,5 @@
 @php
-    $onCarePlan = (bool) $site->care_plan_enabled;
+    $onCarePlan = $site->isCarePlanActive();
 
     $scoreColorClass = function (?int $score): string {
         if ($score === null) {

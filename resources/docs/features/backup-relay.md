@@ -2,10 +2,10 @@
 title: Backup relay (Multi-Provider → S3 Glacier)
 section: Features
 order: 130
-updated: 2026-09-09
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
-tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php]
+tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
 ---
 
 Archives off-host snapshots across supported hosting providers (Pressable, SpinupWP, and any provider implementing `HostingProvider::CAP_BACKUP_RELAY`) directly to S3 Glacier Instant Retrieval. Provides long-term off-host disaster recovery beyond host-limited retention windows.
@@ -22,8 +22,8 @@ Backup Relay operates in one of two modes, configured via `CLOCKWORK_BACKUP_RELA
 In-repo mode runs natively within Clockwork Control with zero external server dependencies:
 - **Scheduler**: `clockwork:backup-relay-run` executes daily at 04:58 UTC.
 - **Provider Adapters**: Queries each provider adapter (`BackupRelayAdapter`) for `latestBackupRef()`.
-- **Deduplication**: Verifies that the backup hasn't already been uploaded to S3 or already recorded in `sites.backup_relay_last_archived_at`.
-- **Direct Streaming**: Streams the backup payload directly into S3 using `Modules\BackupRelay\Services\GlacierUploader` with the `GLACIER_IR` storage class.
+- **Deduplication**: Verifies that the backup hasn't already been uploaded to S3 or already recorded in `sites.backup_relay_last_archived_at`. Companion/direct-to-S3 archives use a stable daily key (`archives/{domain}/{Y-m-d}.zip`); if the object already exists (HMAC timed out after the PUT), the job treats that as success and records `backup_relay_last_archived_at` rather than minting a second key.
+- **Direct Streaming**: Streams the backup payload directly into S3 using `Modules\BackupRelay\Services\GlacierUploader` with the `GLACIER_IR` storage class. Standalone Companion sites mint a presigned PUT URL and never buffer the zip on Clockwork; Companion must send the signed `x-amz-storage-class: GLACIER_IR` header.
 - **Run Tracking**: Writes execution summaries directly to the `backup_relay_runs` table.
 
 ### 2. External Agent Mode (`external_agent`)
@@ -172,6 +172,58 @@ Site selection uses the dedicated boolean column `sites.backup_relay_enabled`.
 - Migrations automatically backfilled existing Pressable care-plan sites to `backup_relay_enabled = true`.
 - Operators can toggle backup relay on or off per site or in bulk from the `/settings/backup-relay` dashboard.
 
+## Unhosted / standalone sites (ManageWP replacement)
+
+SpinupWP and Pressable already take their own backups. Glacier relay on those hosts is optional off-site copy, not the primary schedule.
+
+For WordPress sites we **do not host** (WP Engine, Kinsta, a client box, any `custom` enroll), Companion dumps files + database and PUTs a zip straight to agency S3 Glacier Instant Retrieval. That is the backup.
+
+- Connecting a site at `/sites/create` turns relay **on** and sets `backup_relay_frequency = daily`.
+- The site Overview **Backups** card is the per-site control: on/off, Daily / Twice weekly / Weekly, last/next, a month calendar of archives, and **Backup Now**.
+- Nightly `clockwork:backup-relay-run` (04:58) respects that per-site cadence. Daily uses calendar day so a 15:00 Backup Now does not skip tomorrow morning.
+- **Backup Now** runs `clockwork:backup-relay-run --site={id} --force` in the background and writes `archives/{domain}/{Y-m-d_H-i-s}.zip` so it never collides with the scheduled daily key.
+
+### Restore for Custom Sites (Two-Step Stage & Apply)
+
+For custom unhosted sites, Clockwork provides a safe two-step restore flow directly from the site's Backups widget (`/sites/{id}`):
+
+1. **Two-Step Architecture**:
+   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 24-hour presigned S3 GET URL (`BackupArchiveEnumerator::getDownloadUrl()`, `DOWNLOAD_URL_TTL_HOURS = 24`) and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
+   - **Step 2 (Apply)**: Once staged, the operator reviews the detected staging details (database dump presence, table prefix, files archive) in the modal and clicks **Apply Restore**. Companion places WordPress into maintenance mode (`.maintenance`), imports the SQL dump using gzip streaming scoped strictly to `$wpdb->prefix` (failing closed with `prefix_mismatch` if 0 tables match), and copies the restored `wp-content/` files over the active filesystem.
+
+2. **Fail-Closed Maintenance Mode**:
+   - If SQL import fails or file copy fails after maintenance mode has been engaged, Companion **intentionally leaves maintenance mode enabled** to prevent visitors from hitting a partially applied database or missing assets.
+   - Control flags `maintenance_left_on` in the restore state cache and renders a prominent red alert banner on the Backups widget alerting the operator to SSH in and inspect the host.
+
+3. **Additive Copy-Over Limitation**:
+   - Restoring files is an additive copy-over operation: archive files overwrite active files, but files added on the site *after* the backup was created (e.g. newly uploaded media or newly installed plugins) are not deleted. A full disk wipe is intentionally avoided over REST for safety.
+
+4. **Audit Logging & Orchestration**:
+   - Control runs the restore via `BackgroundArtisan` running `clockwork:backup-restore {--site=} {--phase=} {--key=} {--actor=}`.
+   - Every stage, apply, and failure records an `ActionLog` entry (`backup_restore_staged`, `backup_restore_applied`, `backup_restore_failed`) visible in the site's Activity history.
+
+#### IAM requirements for restore
+
+The backup upload path only needs `s3:PutObject` (plus `s3:ListBucket` for the archive listings), but **restore additionally needs `s3:GetObject` on the archive prefix** — twice over:
+
+- The presigned GET URL that Control mints for Companion to download the archive is signed with Control's own IAM credentials, so those credentials must be allowed to read the object.
+- Control reads the `{key}.sha256.json` integrity sidecars directly to resolve the expected hash before staging.
+
+Without `s3:GetObject`, every restore fails at the download step with `AccessDenied`. Example policy statement (adjust the bucket name and prefix to your setup — production uses the `_control/backup-relay/archives/*` style prefix):
+
+```json
+{
+  "Sid": "ClockworkBackupRelayRestore",
+  "Effect": "Allow",
+  "Action": ["s3:GetObject"],
+  "Resource": "arn:aws:s3:::your-agency-backups-bucket/_control/backup-relay/archives/*"
+}
+```
+
+This is in addition to the existing `s3:PutObject` (uploads) and `s3:ListBucket` (archive enumeration) grants.
+
+`sites.backup_relay_frequency` is nullable. Hosted sites leave it null and inherit `/settings/backup-relay`. Custom sites set their own.
+
 ## S3 Destination Configuration
 
 Backup relay uses the dedicated `s3-backup-relay` filesystem disk (`config/filesystems.php`). You can configure dedicated AWS credentials separate from general storage:
@@ -185,6 +237,14 @@ S3_BACKUP_RELAY_BUCKET=your-agency-backups-bucket
 
 # Operational Mode ('in_repo' or 'external_agent')
 CLOCKWORK_BACKUP_RELAY_MODE=in_repo
+
+# Storage disk, cadence, retention, and archive path prefix
+CLOCKWORK_BACKUP_RELAY_DISK=s3-backup-relay
+CLOCKWORK_BACKUP_RELAY_FREQUENCY=weekly
+CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS=90
+# Production uses '_control/backup-relay/archives' because Control's scoped IAM
+# policy only permits PutObject operations under '_control/backup-relay/'
+CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX=archives
 ```
 
 ## Settings Dashboard (`/settings/backup-relay`)
@@ -221,18 +281,22 @@ Each row in the **Site Relay Targets** table is expandable: clicking it lazy-loa
 
 This enrichment is gated on `BackupArchiveEnumerator::supportsPresignedUrls()`: without a real presigned S3 URL, `getDownloadUrl()` would fall back to an operator-authenticated Clockwork Control route — which, handed to a client on the Companion wp-admin page, would just bounce them to the Clockwork Control login screen. Rather than hand a client a dead-end link, both commands omit `offsite_archive` entirely when presigned URLs aren't available.
 
+`PushCompanionBackupsReport` also covers **custom/unhosted sites** (`hosting_provider=custom`, `backup_relay_enabled`) in a dedicated pass that runs even when no SpinupWP token is configured. There's no host backup API for these sites, so the pushed report is built purely from the Glacier archive store: `source=clockwork-companion`, `history_scope=combined`, an empty `config` (the plugin 400s on a missing/non-array `config`), and history rows (`date`/`type=full`/`size_bytes`) enumerated from `BackupArchiveEnumerator`. Without this pass, a custom site's client-facing Backups page stays permanently empty even though archives exist — the scheduled push previously only ever looked at `spinupwp_id` sites.
+
 ## Cadence and Retention Policy
 
 Backup Relay supports configurable snapshot frequency and retention policies managed directly in `/settings/backup-relay` or via environment variables:
 
 - **Frequency / Cadence**:
-  - `weekly` (`1 a week` — Default): Runs once per week off-peak (Sundays at 04:58 UTC). Perfect balance of snapshot protection and host API budget.
-  - `twice_weekly` (`2 a week`): Runs Sundays and Wednesdays.
-  - `daily` (`Daily`): Runs every morning at 04:58 UTC.
+  - Fleet default on `/settings/backup-relay`: `weekly`, `twice_weekly`, or `daily`.
+  - Per-site override on custom/unhosted sites (`sites.backup_relay_frequency`). Daily skips when an archive already exists for **today**; weekly / twice-weekly still use the hour floor (144h / 72h).
+  - `weekly` (`1 a week` — Default for hosted relay): Runs once per week off-peak.
+  - `twice_weekly` (`2 a week`): About every three days.
+  - `daily` (`Daily`): Every morning at 04:58, and the default for newly enrolled standalone sites.
 - **Retention Period**:
   - Default: `90 days`. Configurable to `30`, `60`, `90`, `180`, or `365` days.
   - In external agent mode, `targets.json` includes `frequency` and `retention_days` in the manifest schema v2 so the remote droplet enforces the retention lifecycle.
-  - In in-repo mode, `ArchiveSiteBackupJob` respects the interval before initiating new snapshot downloads.
+  - In in-repo mode, `ArchiveSiteBackupJob` respects the site's effective frequency (per-site or fleet) unless `--force` / Backup Now is set.
 
 ```dotenv
 # Cadence & Retention settings (can also be changed in /settings/backup-relay)

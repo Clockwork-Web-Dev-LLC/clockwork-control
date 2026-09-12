@@ -2,7 +2,7 @@
 title: Cloudflare
 section: Integrations
 order: 30
-updated: 2026-09-07
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, cloudflare, dns, waf, security]
 tracks: [app/Services/Cloudflare/**, app/Console/Commands/CheckCloudflare.php, app/Console/Commands/CloudflareRules.php, app/Console/Commands/RefreshCloudflareRealIp.php, app/Console/Commands/SweepCfBans.php, app/Console/Commands/AddCloudflareRateLimit.php]

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Uptime\UptimeStatsCalculator;
+use App\Support\Settings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -82,7 +83,10 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?int $client_id
  * @property bool $care_plan_enabled
  * @property bool $backup_relay_enabled
+ * @property ?string $backup_relay_frequency daily|twice_weekly|weekly; null inherits the global setting
  * @property ?Carbon $backup_relay_last_archived_at
+ * @property ?int $backup_relay_last_size_bytes
+ * @property ?string $backup_relay_last_sha256
  * @property ?string $bill_com_customer_id
  * @property ?string $bill_com_customer_name
  * @property ?string $bill_com_linked_via_invoice
@@ -128,6 +132,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property-read Collection<int, SiteSecurityScan> $securityScans
  * @property-read ?SiteSecurityScan $latestSiteCheckScan
  * @property-read ?SiteSecurityScan $latestChecksumScan
+ * @property-read Collection<int, SiteIngestExclusion> $ingestExclusions
  */
 class Site extends Model
 {
@@ -145,6 +150,8 @@ class Site extends Model
 
     public const HOSTING_PROVIDER_GRIDPANE = 'gridpane';
 
+    public const HOSTING_PROVIDER_CUSTOM = 'custom';
+
     /**
      * Hosting providers with no server concept at all — server_id is
      * always null, so any host-agnostic query gating on "is this site's
@@ -156,7 +163,16 @@ class Site extends Model
         self::HOSTING_PROVIDER_PRESSABLE,
         self::HOSTING_PROVIDER_WPENGINE,
         self::HOSTING_PROVIDER_KINSTA,
+        self::HOSTING_PROVIDER_CUSTOM,
     ];
+
+    /** Daily scheduler slot for `clockwork:backup-relay-run` (app timezone). */
+    public const BACKUP_RELAY_SCHEDULE_HOUR = 4;
+
+    public const BACKUP_RELAY_SCHEDULE_MINUTE = 58;
+
+    /** @var list<string> */
+    public const BACKUP_RELAY_FREQUENCIES = ['daily', 'twice_weekly', 'weekly'];
 
     public const CERT_SOURCE_NONE = 'none';
 
@@ -284,7 +300,10 @@ class Site extends Model
         'client_email',
         'care_plan_enabled',
         'backup_relay_enabled',
+        'backup_relay_frequency',
         'backup_relay_last_archived_at',
+        'backup_relay_last_size_bytes',
+        'backup_relay_last_sha256',
         'bill_com_customer_id',
         'bill_com_customer_name',
         'bill_com_linked_via_invoice',
@@ -385,6 +404,7 @@ class Site extends Model
             'care_plan_enabled' => 'boolean',
             'backup_relay_enabled' => 'boolean',
             'backup_relay_last_archived_at' => 'datetime',
+            'backup_relay_last_size_bytes' => 'integer',
             'bill_com_linked_at' => 'datetime',
             'care_plan_override' => 'boolean',
             'auto_updates_paused' => 'boolean',
@@ -489,6 +509,118 @@ class Site extends Model
     }
 
     /**
+     * Effective backup-relay cadence. A per-site value (standalone / unhosted
+     * sites) wins; otherwise inherit the fleet setting from /settings/backup-relay.
+     */
+    public function backupRelayFrequency(): string
+    {
+        $own = (string) ($this->backup_relay_frequency ?? '');
+        if (in_array($own, self::BACKUP_RELAY_FREQUENCIES, true)) {
+            return $own;
+        }
+
+        try {
+            $global = (string) app(Settings::class)->get(
+                'backup_relay.frequency',
+                config('clockwork.backup_relay.frequency', 'weekly'),
+            );
+        } catch (\Throwable) {
+            $global = (string) config('clockwork.backup_relay.frequency', 'weekly');
+        }
+
+        return in_array($global, self::BACKUP_RELAY_FREQUENCIES, true) ? $global : 'weekly';
+    }
+
+    public function backupRelayMinIntervalHours(): int
+    {
+        return match ($this->backupRelayFrequency()) {
+            'daily' => 20,
+            'twice_weekly' => 72,
+            default => 144,
+        };
+    }
+
+    /**
+     * Next 04:58 slot that the scheduler would consider this site due, based
+     * on last archive + cadence. Daily uses calendar day (not the 20h floor)
+     * so a 15:00 Backup Now does not skip tomorrow morning's run.
+     */
+    public function backupRelayNextScheduledAt(): ?Carbon
+    {
+        if (! $this->backup_relay_enabled) {
+            return null;
+        }
+
+        $slot = now()->copy()->setTime(self::BACKUP_RELAY_SCHEDULE_HOUR, self::BACKUP_RELAY_SCHEDULE_MINUTE, 0);
+        $last = $this->backup_relay_last_archived_at;
+        $frequency = $this->backupRelayFrequency();
+
+        if ($frequency === 'daily') {
+            if ($last !== null && $last->isSameDay(now())) {
+                return $slot->addDay();
+            }
+
+            return $slot->isPast() ? $slot->addDay() : $slot;
+        }
+
+        $earliest = $last !== null
+            ? $last->copy()->addHours($this->backupRelayMinIntervalHours())
+            : now();
+
+        while ($slot->lt($earliest) || $slot->isPast()) {
+            $slot->addDay();
+        }
+
+        return $slot;
+    }
+
+    /**
+     * Whether care plan policies are globally active across the fleet.
+     * When false, all sites are treated as covered for maintenance,
+     * scans, and automated workflows, and care plan badges are suppressed.
+     */
+    public static function areCarePlansEnabled(): bool
+    {
+        try {
+            return (bool) app(Settings::class)->get(
+                'care_plans.enabled',
+                config('clockwork.care_plans.enabled', true),
+            );
+        } catch (\Throwable) {
+            return (bool) config('clockwork.care_plans.enabled', true);
+        }
+    }
+
+    /**
+     * Whether care plan features/benefits are active for this specific site.
+     * When care plans are globally disabled, all sites return true.
+     */
+    public function isCarePlanActive(): bool
+    {
+        if (! static::areCarePlansEnabled()) {
+            return true;
+        }
+
+        return (bool) $this->care_plan_enabled;
+    }
+
+    /**
+     * Scope a query to only include sites eligible for care plan maintenance / scans.
+     * When care plans are globally disabled, this scope includes all sites (no-op).
+     *
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
+     */
+    public function scopeCarePlanEligible(Builder $query): Builder
+    {
+        if (! static::areCarePlansEnabled()) {
+            return $query;
+        }
+
+        return $query->where('care_plan_enabled', true);
+    }
+
+    /**
      * "Is this site's hosting eligible for monitoring/scan loops at all."
      * SpinupWP sites: gated on their server not being ignored/staging
      * (Server::scopeMonitored). Pressable sites: always eligible — Pressable
@@ -548,6 +680,11 @@ class Site extends Model
         return $this->hasMany(IgnoredIssue::class);
     }
 
+    public function ingestExclusions(): HasMany
+    {
+        return $this->hasMany(SiteIngestExclusion::class);
+    }
+
     public function isIssueIgnored(string $issueType): bool
     {
         return $this->relationLoaded('ignoredIssues')
@@ -589,6 +726,12 @@ class Site extends Model
     public function isCloudways(): bool
     {
         return $this->hosting_provider === self::HOSTING_PROVIDER_CLOUDWAYS;
+    }
+
+    /** Identity check — see isPressable() docblock. */
+    public function isCustom(): bool
+    {
+        return $this->hosting_provider === self::HOSTING_PROVIDER_CUSTOM;
     }
 
     public function host(): HostingProvider

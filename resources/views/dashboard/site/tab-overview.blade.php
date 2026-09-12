@@ -185,7 +185,7 @@
 @include('dashboard.site._recent-activity')
 
 {{-- Server Threat Telemetry (SSH-enabled servers only) --}}
-@unless ($site->isPressable())
+@if ($site->server && $site->host()->supports(\Modules\Core\Contracts\HostingProvider::CAP_SSH))
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-10 mt-8">
     <div class="card overflow-hidden">
         <div class="px-5 py-4 border-b border-[var(--color-border-light)]">
@@ -248,4 +248,4 @@
         @endif
     </div>
 </div>
-@endunless
+@endif

@@ -215,6 +215,50 @@ class BackupArchiveEnumerator
     }
 
     /**
+     * Resolve the expected SHA-256 hash for a given archive key.
+     * Order of resolution per Decision D1:
+     * 1. Read the {key}.sha256.json sidecar object from S3.
+     * 2. If {key} matches the site's newest archive and backup_relay_last_sha256 is set, use it.
+     * 3. Return null (no hash on record -> refuse restore).
+     */
+    public function resolveArchiveSha256(Site $site, string $key): ?string
+    {
+        // A misconfigured disk must read as "no hash on record" (422/false in
+        // the callers), never bubble up as a 500.
+        try {
+            $disk = $this->disk();
+        } catch (Throwable $e) {
+            Log::warning("BackupRelay: resolveArchiveSha256 could not resolve disk {$this->diskName}: {$e->getMessage()}");
+
+            return null;
+        }
+
+        $sidecarKey = "{$key}.sha256.json";
+
+        try {
+            if ($disk->exists($sidecarKey)) {
+                $raw = (string) $disk->get($sidecarKey);
+                $data = json_decode($raw, true);
+                if (is_array($data) && ! empty($data['sha256'])) {
+                    return trim((string) $data['sha256']);
+                }
+            }
+        } catch (Throwable $e) {
+            Log::debug("BackupRelay: Sidecar lookup failed for {$sidecarKey}: {$e->getMessage()}");
+        }
+
+        if (! empty($site->backup_relay_last_sha256)) {
+            $summary = $this->forSite($site);
+            $archives = $summary['archives'] ?? [];
+            if (! empty($archives) && ($archives[0]['key'] ?? '') === $key) {
+                return trim((string) $site->backup_relay_last_sha256);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Load presigned download links from the external-agent manifest in S3 if available.
      *
      * @return ?array{fs_download_url: ?string, db_download_url: ?string, last_archived_at: ?string, expires_at: ?string}

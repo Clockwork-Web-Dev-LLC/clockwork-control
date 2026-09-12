@@ -421,110 +421,151 @@
         </script>
     @endif
 
-    {{-- Card 5: Billing & Care Plan --}}
-    <div class="card p-5 flex flex-col justify-between h-full">
-        <div>
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-file-invoice-dollar text-emerald-600"></i>
-                    Billing &amp; care plan
-                </h3>
-                @if ($site->care_plan_enabled)
-                    <span class="status-pill status-green text-[10px]">
-                        <span class="status-dot"></span> On care plan
-                    </span>
-                @else
-                    <span class="status-pill status-unknown text-[10px]">
-                        <span class="status-dot"></span> No care plan
-                    </span>
-                @endif
-            </div>
-
-            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
-                <div class="flex items-center justify-between text-[11px]">
-                    <span class="text-[var(--color-ink-muted)]">Plan status:</span>
-                    <span class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
-                        @if ($site->care_plan_enabled)
-                            <i class="fa-solid fa-shield-heart text-emerald-600"></i> Maintenance included
-                        @else
-                            <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i> Bill separately
-                        @endif
-                    </span>
-                </div>
-
-                <div class="flex items-center justify-between text-[11px]">
-                    <span class="text-[var(--color-ink-muted)]">Sync source:</span>
-                    <span class="text-[var(--color-ink-soft)] flex items-center gap-1">
-                        @if ($site->care_plan_override !== null)
-                            <i class="fa-solid fa-hand text-amber-500"></i> Manual override
-                        @else
-                            <i class="fa-solid fa-rotate text-gray-400"></i> Bill.com auto
-                        @endif
-                    </span>
-                </div>
-
-                @if ($site->bill_com_customer_id)
-                    <div class="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--color-border-light)]">
-                        <span class="text-[var(--color-ink-muted)]">Customer:</span>
-                        <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[130px]" title="{{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}">
-                            {{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}
+    @if (\App\Models\Site::areCarePlansEnabled())
+        {{-- Card 5: Care Plan --}}
+        <div class="card p-5 flex flex-col justify-between h-full">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-shield-heart text-emerald-600"></i>
+                        Care plan
+                    </h3>
+                    @if ($site->care_plan_enabled)
+                        <span class="status-pill status-green text-[10px]">
+                            <span class="status-dot"></span> On care plan
                         </span>
-                    </div>
-                @endif
-            </div>
-
-            <div class="space-y-2">
-                <div class="flex items-center gap-2">
-                    <form method="POST" action="{{ route('sites.care-plan', $site) }}" class="flex-1">
-                        @csrf
-                        <input type="hidden" name="enabled" value="{{ $site->care_plan_enabled ? '0' : '1' }}">
-                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center">
-                            @if ($site->care_plan_enabled)
-                                <i class="fa-solid fa-toggle-on text-emerald-600"></i> Mark NOT on care plan
-                            @else
-                                <i class="fa-solid fa-toggle-off text-gray-400"></i> Mark on care plan
-                            @endif
-                        </button>
-                    </form>
-
-                    @if ($site->care_plan_override !== null)
-                        <form method="POST" action="{{ route('sites.care-plan.clear-override', $site) }}">
-                            @csrf
-                            <button type="submit" class="btn-pill-nav text-xs" title="Clear manual override and let Bill.com decide">
-                                <i class="fa-solid fa-rotate"></i>
-                            </button>
-                        </form>
+                    @else
+                        <span class="status-pill status-unknown text-[10px]">
+                            <span class="status-dot"></span> No care plan
+                        </span>
                     @endif
                 </div>
 
-                @if ($site->care_plan_enabled)
-                    @php $autoOn = ! $site->auto_updates_paused; @endphp
-                    <div class="p-2 rounded bg-[var(--color-surface-alt)]/40 flex items-center justify-between gap-2 text-xs">
-                        <div>
-                            <div class="text-[11px] font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
-                                <i class="fa-solid fa-moon text-indigo-500 text-[10px]"></i> Auto-updates
-                            </div>
-                            <div class="text-[10px] text-[var(--color-ink-soft)]">
-                                {{ $autoOn ? 'Nightly (2–6 AM)' : 'Paused' }}
-                            </div>
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Plan status:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
+                            @if ($site->care_plan_enabled)
+                                <i class="fa-solid fa-shield-heart text-emerald-600"></i> Maintenance included
+                            @else
+                                <i class="fa-regular fa-circle text-[var(--color-ink-soft)]"></i> Not enrolled
+                            @endif
+                        </span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Sync source:</span>
+                        <span class="text-[var(--color-ink-soft)] flex items-center gap-1">
+                            @if ($site->care_plan_override !== null)
+                                <i class="fa-solid fa-hand text-amber-500"></i> Manual override
+                            @else
+                                <i class="fa-solid fa-rotate text-gray-400"></i> Automated sync
+                            @endif
+                        </span>
+                    </div>
+
+                    @if ($site->bill_com_customer_id)
+                        <div class="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--color-border-light)]">
+                            <span class="text-[var(--color-ink-muted)]">Customer:</span>
+                            <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[130px]" title="{{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}">
+                                {{ $site->bill_com_customer_name ?: $site->bill_com_customer_id }}
+                            </span>
                         </div>
-                        <form method="POST" action="{{ route('sites.auto-updates.toggle', $site) }}">
+                    @endif
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <form method="POST" action="{{ route('sites.care-plan', $site) }}" class="flex-1">
                             @csrf
-                            <input type="hidden" name="paused" value="{{ $autoOn ? '1' : '0' }}">
-                            <button type="submit" class="btn-pill-nav text-[10px] py-1 px-2">
-                                {{ $autoOn ? 'Pause' : 'Enable' }}
+                            <input type="hidden" name="enabled" value="{{ $site->care_plan_enabled ? '0' : '1' }}">
+                            <button type="submit" class="btn-pill-nav text-xs w-full justify-center">
+                                @if ($site->care_plan_enabled)
+                                    <i class="fa-solid fa-toggle-on text-emerald-600"></i> Mark NOT on care plan
+                                @else
+                                    <i class="fa-solid fa-toggle-off text-gray-400"></i> Mark on care plan
+                                @endif
                             </button>
                         </form>
+
+                        @if ($site->care_plan_override !== null)
+                            <form method="POST" action="{{ route('sites.care-plan.clear-override', $site) }}">
+                                @csrf
+                                <button type="submit" class="btn-pill-nav text-xs" title="Clear manual override and restore automated sync">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                            </form>
+                        @endif
                     </div>
-                @endif
+
+                    @if ($site->care_plan_enabled)
+                        @php $autoOn = ! $site->auto_updates_paused; @endphp
+                        <div class="p-2 rounded bg-[var(--color-surface-alt)]/40 flex items-center justify-between gap-2 text-xs">
+                            <div>
+                                <div class="text-[11px] font-medium text-[var(--color-ink-strong)] flex items-center gap-1">
+                                    <i class="fa-solid fa-moon text-indigo-500 text-[10px]"></i> Auto-updates
+                                </div>
+                                <div class="text-[10px] text-[var(--color-ink-soft)]">
+                                    {{ $autoOn ? 'Nightly (2–6 AM)' : 'Paused' }}
+                                </div>
+                            </div>
+                            <form method="POST" action="{{ route('sites.auto-updates.toggle', $site) }}">
+                                @csrf
+                                <input type="hidden" name="paused" value="{{ $autoOn ? '1' : '0' }}">
+                                <button type="submit" class="btn-pill-nav text-[10px] py-1 px-2">
+                                    {{ $autoOn ? 'Pause' : 'Enable' }}
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+                <span class="text-[var(--color-ink-muted)]">Care Plan Contract</span>
+                <span class="text-[10px] text-[var(--color-ink-soft)]">Bill.com</span>
             </div>
         </div>
+    @else
+        {{-- Card 5: Nightly Auto-Updates (when Care Plans are disabled globally) --}}
+        <div class="card p-5 flex flex-col justify-between h-full">
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-moon text-indigo-500"></i>
+                        Nightly auto-updates
+                    </h3>
+                    @php $autoOn = ! $site->auto_updates_paused; @endphp
+                    <span class="status-pill {{ $autoOn ? 'status-green' : 'status-yellow' }} text-[10px]">
+                        <span class="status-dot"></span> {{ $autoOn ? 'Active' : 'Paused' }}
+                    </span>
+                </div>
 
-        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
-            <span class="text-[var(--color-ink-muted)]">Care Plan Contract</span>
-            <span class="text-[10px] text-[var(--color-ink-soft)]">Bill.com</span>
+                <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                    Automated plugin updates run nightly across the fleet. You can pause updates for this site below.
+                </p>
+
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs flex items-center justify-between mb-3">
+                    <div>
+                        <div class="text-[11px] font-medium text-[var(--color-ink-strong)]">Update schedule:</div>
+                        <div class="text-[10px] text-[var(--color-ink-soft)]">{{ $autoOn ? 'Nightly (2–6 AM)' : 'Paused for this site' }}</div>
+                    </div>
+                    <form method="POST" action="{{ route('sites.auto-updates.toggle', $site) }}">
+                        @csrf
+                        <input type="hidden" name="paused" value="{{ $autoOn ? '1' : '0' }}">
+                        <button type="submit" class="btn-pill-nav text-[10px] py-1 px-2.5">
+                            {{ $autoOn ? 'Pause auto-updates' : 'Enable auto-updates' }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
+                <span class="text-[var(--color-ink-muted)]">Routine Maintenance</span>
+                <span class="text-[10px] text-[var(--color-ink-soft)] font-mono">2:00–6:00 AM</span>
+            </div>
         </div>
-    </div>
+    @endif
 
     {{-- Card 6: Uptime Monitoring & Alerts --}}
     <div class="card p-5 flex flex-col justify-between h-full">
@@ -803,8 +844,8 @@
         </div>
     </div>
 
-    {{-- Card 9: Contact Form Testing (if Care Plan Enabled) --}}
-    @if ($site->care_plan_enabled)
+    {{-- Card 9: Contact Form Testing --}}
+    @if ($site->isCarePlanActive() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms'))
         <div class="card p-5 flex flex-col justify-between h-full">
             <div>
                 <div class="flex items-center justify-between mb-3">
@@ -847,7 +888,11 @@
                 Remove from monitoring
             </h3>
             <p class="text-xs text-[var(--color-ink-muted)] leading-relaxed">
-                Use this when the site has been deleted from the host, moved away, or should no longer appear in dashboards. The row is hidden from every listing (Sites, monitoring, issues), while historical scans and logs are retained for audit trail.
+                @if ($site->isSpinupWp() || $site->isPressable())
+                    Removes this site from Clockwork. It will disappear from every listing, and SpinupWP / Pressable import will not bring it back. This does not delete the WordPress site on the host, and it does not uninstall Companion.
+                @else
+                    Use this when the site has been deleted from the host, moved away, or should no longer appear in dashboards. The row is hidden from every listing (Sites, monitoring, issues), while historical scans and logs are retained for audit trail.
+                @endif
             </p>
         </div>
         <button type="button" id="archive-site-toggle" class="btn-pill-nav text-xs text-[var(--color-status-red)] border-[var(--color-status-red)]/40 hover:bg-rose-50 flex items-center gap-1.5">

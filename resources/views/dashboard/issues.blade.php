@@ -30,6 +30,7 @@
             ['key' => 'orphans', 'label' => 'Orphans', 'class' => 'status-yellow'],
             ['key' => 'no_db', 'label' => 'DB creds', 'class' => 'status-yellow'],
             ['key' => 'wp_admins', 'label' => 'WP admins', 'class' => 'status-yellow'],
+            ['key' => 'plugins_closed', 'label' => 'Closed plugins', 'class' => 'status-yellow'],
         ];
     @endphp
 
@@ -413,6 +414,107 @@
                         <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline ml-2">
                             @csrf
                             <button type="submit" class="hover:underline">Restore {{ $ignored->site?->domain }}</button>
+                        </form>
+                    @endforeach
+                </div>
+            @endif
+        </section>
+    @endif
+
+    {{-- CLOSED PLUGINS ON WORDPRESS.ORG --}}
+    @if ($closedPluginSites->isNotEmpty() || $ignoredClosedPluginIssues->isNotEmpty())
+        <section id="section-plugins_closed" class="card overflow-hidden mb-6">
+            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-box-archive text-amber-600 mr-2"></i>
+                        Plugins closed on WordPress.org
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Active plugins removed or closed in the official WordPress plugin directory. Closed plugins receive no updates or security patches.
+                    </p>
+                </div>
+            </div>
+            @if ($closedPluginSites->isNotEmpty())
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2.5 text-left">Site</th>
+                                <th class="px-5 py-2.5 text-left">Server</th>
+                                <th class="px-5 py-2.5 text-left">Closed Plugin</th>
+                                <th class="px-5 py-2.5 text-left">Closure Detail</th>
+                                <th class="px-5 py-2.5 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($closedPluginSites as $site)
+                                @php
+                                    $siteFindings = $closedPluginFindingsBySiteId[$site->id] ?? [];
+                                @endphp
+                                @foreach ($siteFindings as $finding)
+                                    <tr class="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                        <td class="px-5 py-3 font-medium">
+                                            <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-[var(--color-ink-muted)]"></i>
+                                                {{ $site->domain }}
+                                            </a>
+                                        </td>
+                                        <td class="px-5 py-3 text-[var(--color-ink-muted)]">
+                                            {{ $site->server?->name ?? 'Standalone' }}
+                                        </td>
+                                        <td class="px-5 py-3">
+                                            <div class="font-medium text-[var(--color-ink-strong)]">
+                                                {{ $finding['name'] }}
+                                            </div>
+                                            <div class="text-xs text-[var(--color-ink-muted)] flex items-center gap-2 mt-0.5">
+                                                <code>{{ $finding['slug'] }}</code>
+                                                @if (! empty($finding['version']))
+                                                    <span>v{{ $finding['version'] }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3 text-xs max-w-md">
+                                            @if (! empty($finding['reason']))
+                                                <div class="text-[var(--color-ink-soft)] line-clamp-2" title="{{ $finding['reason'] }}">
+                                                    {{ $finding['reason'] }}
+                                                </div>
+                                            @else
+                                                <span class="text-[var(--color-ink-muted)] italic">No closure reason provided by WordPress.org</span>
+                                            @endif
+                                            @if (! empty($finding['closed_date']))
+                                                <div class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">
+                                                    Closed: {{ $finding['closed_date'] }}
+                                                </div>
+                                            @endif
+                                        </td>
+                                        <td class="px-5 py-3 text-right">
+                                            <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
+                                                @csrf
+                                                <input type="hidden" name="issue_type" value="plugin_closed">
+                                                <input type="hidden" name="site_id" value="{{ $site->id }}">
+                                                <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:underline" title="Suppress closed plugin warning for {{ $site->domain }}">
+                                                    Ignore site
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+            @if ($ignoredClosedPluginIssues->isNotEmpty())
+                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] bg-[var(--color-surface-alt)] flex items-center flex-wrap gap-2">
+                    <span class="font-medium">{{ $ignoredClosedPluginIssues->count() }} site(s) ignored:</span>
+                    @foreach ($ignoredClosedPluginIssues as $ignored)
+                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-border-strong)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors">
+                                <span>{{ $ignored->site?->domain ?? 'Site #' . $ignored->site_id }}</span>
+                                <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                            </button>
                         </form>
                     @endforeach
                 </div>
@@ -1795,11 +1897,18 @@
                                                                     <span class="text-xs text-[var(--color-ink-muted)] font-data">({{ $v['plugin_slug'] }})</span>
                                                                 </div>
                                                                 @if ($vuln->cve)
-                                                                    <a href="https://www.cve.org/CVERecord?id={{ urlencode($vuln->cve) }}"
-                                                                       target="_blank" rel="noopener"
-                                                                       class="text-xs font-data text-[var(--color-primary-600)] hover:underline">
-                                                                        {{ $vuln->cve }} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                                                                    </a>
+                                                                    <div class="flex items-center gap-2">
+                                                                        <a href="https://www.cve.org/CVERecord?id={{ urlencode($vuln->cve) }}"
+                                                                           target="_blank" rel="noopener"
+                                                                           class="text-xs font-data text-[var(--color-primary-600)] hover:underline">
+                                                                            {{ $vuln->cve }} <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                                                        </a>
+                                                                        @if (in_array($vuln->cve, $cisaKevCves ?? [], true))
+                                                                            <span class="status-pill status-red text-[10px] font-semibold" title="Listed in CISA's Known Exploited Vulnerabilities catalog (actively exploited in the wild)">
+                                                                                <i class="fa-solid fa-triangle-exclamation mr-1"></i>Actively exploited (CISA KEV)
+                                                                            </span>
+                                                                        @endif
+                                                                    </div>
                                                                 @endif
                                                             </div>
                                                             <div class="text-xs text-[var(--color-ink-muted)] mt-1">{{ $vuln->title }}</div>

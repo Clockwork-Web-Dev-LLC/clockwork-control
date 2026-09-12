@@ -1,7 +1,7 @@
 @php
     $hasCompanion = $site->companion_snapshot !== null;
 
-    $corePending = $site->isPressable()
+    $corePending = ($site->isPressable() || $site->isCustom())
         ? ($hasCompanion ? $site->core_update_available : null)
         : $site->wp_core_update;
 

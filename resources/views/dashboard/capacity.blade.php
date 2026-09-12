@@ -521,4 +521,121 @@
             </section>
         </div>
     @endif
+
+    {{-- Runtime EOL: Fleet PHP Lifecycle & End of Life --}}
+    <section id="runtime-eol" class="mb-10">
+        <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
+            <div>
+                <h2 class="font-display text-xl text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-[var(--color-primary-600)]"></i>
+                    Runtime EOL & Lifecycle
+                </h2>
+                <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                    Fleet PHP version classification against official endoflife.date lifecycle definitions.
+                </p>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+                <span class="status-pill status-red font-medium">
+                    {{ $runtimeEol['counts']['eol'] }} EOL
+                </span>
+                <span class="status-pill status-yellow font-medium">
+                    {{ $runtimeEol['counts']['security_only'] }} Security only
+                </span>
+                <span class="status-pill status-green font-medium">
+                    {{ $runtimeEol['counts']['active_support'] }} Supported
+                </span>
+                @if ($runtimeEol['counts']['unknown'] > 0)
+                    <span class="status-pill status-unknown font-medium">
+                        {{ $runtimeEol['counts']['unknown'] }} Unknown
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        <div class="card overflow-hidden">
+            @if ($runtimeEol['isStale'])
+                <div class="px-5 py-3 bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                        <span>EOL data is stale or unavailable. Last synchronized: {{ $runtimeEol['fetchedAt'] ? \Illuminate\Support\Carbon::parse($runtimeEol['fetchedAt'])->diffForHumans() : 'never' }}.</span>
+                    </div>
+                    <code class="text-[11px] text-[var(--color-ink-soft)]">clockwork:refresh-runtime-eol</code>
+                </div>
+            @endif
+
+            @if (empty($runtimeEol['rows']))
+                <div class="p-6 text-center text-sm text-[var(--color-ink-soft)]">
+                    No monitored sites currently have PHP version data in their Companion snapshots.
+                </div>
+            @else
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'status', defaultDir: 'asc' })">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <x-sort-th key="site">Site</x-sort-th>
+                                <x-sort-th key="server">Server</x-sort-th>
+                                <x-sort-th key="version">PHP Version</x-sort-th>
+                                <x-sort-th key="status">Status</x-sort-th>
+                                <x-sort-th key="detail">Lifecycle Support Window</x-sort-th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($runtimeEol['rows'] as $row)
+                                @php
+                                    $pillClass = match ($row['status']) {
+                                        'eol' => 'status-red',
+                                        'security_only' => 'status-yellow',
+                                        'active_support' => 'status-green',
+                                        default => 'status-unknown',
+                                    };
+                                    $statusLabel = match ($row['status']) {
+                                        'eol' => 'EOL',
+                                        'security_only' => 'Security only',
+                                        'active_support' => 'Supported',
+                                        default => 'Unknown',
+                                    };
+                                    // Numeric severity so the default sort puts the worst rows first
+                                    // (asc: eol → security_only → active_support → unknown).
+                                    $statusSeverity = match ($row['status']) {
+                                        'eol' => 0,
+                                        'security_only' => 1,
+                                        'active_support' => 2,
+                                        default => 3,
+                                    };
+                                @endphp
+                                <tr
+                                    data-sort-site="{{ $row['site']->domain }}"
+                                    data-sort-server="{{ $row['site']->server?->name ?? 'Standalone' }}"
+                                    data-sort-version="{{ $row['php_version'] }}"
+                                    data-sort-status="{{ $statusSeverity }}"
+                                    data-sort-detail="{{ $row['detail'] }}"
+                                    class="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                    <td class="px-5 py-2.5 font-data">
+                                        <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-[var(--color-ink-muted)]"></i>
+                                            {{ $row['site']->domain }}
+                                        </a>
+                                    </td>
+                                    <td class="px-5 py-2.5 text-xs text-[var(--color-ink-muted)]">
+                                        {{ $row['site']->server?->name ?? 'Standalone' }}
+                                    </td>
+                                    <td class="px-5 py-2.5 font-mono text-xs font-medium text-[var(--color-ink-strong)]">
+                                        {{ $row['php_version'] }}
+                                    </td>
+                                    <td class="px-5 py-2.5 text-xs">
+                                        <span class="status-pill {{ $pillClass }} font-semibold text-[10px]">
+                                            {{ $statusLabel }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-2.5 text-xs text-[var(--color-ink-soft)]">
+                                        {{ $row['detail'] }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+    </section>
 @endsection

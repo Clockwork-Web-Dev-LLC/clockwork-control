@@ -2,7 +2,7 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
 tracks: [app/Services/Updates/UpdateGrouping.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, database/migrations/**add_state_to_plugin_update_jobs*]

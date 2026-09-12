@@ -2,7 +2,7 @@
 title: Integrations settings
 section: Features
 order: 89
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, credentials, settings, modularization, rate-limits, env]
 tracks: [app/Http/Controllers/IntegrationCredentialsController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, app/Support/CredentialResolver.php, app/Models/IntegrationCredential.php, modules/*/src/*ServiceProvider.php]

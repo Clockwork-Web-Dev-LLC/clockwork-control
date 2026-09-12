@@ -46,19 +46,23 @@
         };
     @endphp
 
+    @php $carePlansEnabled = \App\Models\Site::areCarePlansEnabled(); @endphp
+
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div class="card px-4 py-3">
-            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan sites</div>
+            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">{{ $carePlansEnabled ? 'Care plan sites' : 'Monitored sites' }}</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)]">
-                {{ number_format($totals['care_plan_sites']) }}
-                <span class="text-sm text-[var(--color-ink-soft)]">/ {{ number_format($totals['sites']) }}</span>
+                {{ $carePlansEnabled ? number_format($totals['care_plan_sites']) : number_format($totals['sites']) }}
+                @if ($carePlansEnabled)
+                    <span class="text-sm text-[var(--color-ink-soft)]">/ {{ number_format($totals['sites']) }}</span>
+                @endif
             </div>
             <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">Scanned daily/weekly</div>
         </div>
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Never scanned</div>
             <div class="text-2xl font-display {{ $totals['never_scanned'] > 0 ? 'text-[var(--color-status-yellow)]' : 'text-[var(--color-status-green)]' }}">{{ number_format($totals['never_scanned']) }}</div>
-            <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">Of care plan sites</div>
+            <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">{{ $carePlansEnabled ? 'Of care plan sites' : 'Awaiting first run' }}</div>
         </div>
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Malware / blacklist</div>
@@ -113,7 +117,9 @@
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="careplan" class="px-5 py-2" title="Sort desc to surface care plan sites first">Care plan</x-sort-th>
+                        @if ($carePlansEnabled)
+                            <x-sort-th key="careplan" class="px-5 py-2" title="Sort desc to surface care plan sites first">Care plan</x-sort-th>
+                        @endif
                         <x-sort-th key="sitecheck" class="px-5 py-2" title="Sort asc to surface failures + issues">SiteCheck</x-sort-th>
                         <x-sort-th key="checksums" class="px-5 py-2" title="Sort asc to surface failures + issues">Checksums</x-sort-th>
                         <x-sort-th key="last" class="px-5 py-2">Last scanned</x-sort-th>
@@ -123,7 +129,7 @@
                 <tbody class="divide-y divide-[var(--color-border-light)]">
                     @foreach ($sites as $site)
                         @php
-                            $onCarePlan = (bool) $site->care_plan_enabled;
+                            $onCarePlan = $site->isCarePlanActive();
                             $sc = $site->latestSiteCheckScan;
                             $cc = $site->latestChecksumScan;
                             $scPill = $statusPill($sc, disabledByCarePlan: ! $onCarePlan);
@@ -152,25 +158,27 @@
                                     <span class="text-[var(--color-ink-soft)]">—</span>
                                 @endif
                             </td>
-                            <td class="px-5 py-2">
-                                {{-- Inline toggle — clicking flips care_plan_enabled in place via
-                                     fetch (no page reload, so the row doesn't reorder). The handler
-                                     at the bottom of the page intercepts via the data-care-plan-toggle
-                                     attribute and swaps the button class/icon/title on success. --}}
-                                <button type="button"
-                                        data-care-plan-toggle
-                                        data-url="{{ route('sites.care-plan', $site) }}"
-                                        data-on="{{ $onCarePlan ? '1' : '0' }}"
-                                        data-domain="{{ $site->domain }}"
-                                        class="care-plan-pill text-[10px] px-2 py-0.5 rounded-full font-medium cursor-pointer transition-colors {{ $onCarePlan
-                                            ? 'bg-[var(--color-status-green)]/15 text-[var(--color-status-green)] hover:bg-[var(--color-status-green)]/25'
-                                            : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] hover:bg-[var(--color-status-green)]/15 hover:text-[var(--color-status-green)]' }}"
-                                        title="{{ $onCarePlan
-                                            ? 'Click to mark as NOT on a care plan (manual override).'
-                                            : 'Click to mark as on a care plan (manual override).' }}">
-                                    <i class="fa-{{ $onCarePlan ? 'solid fa-shield-heart' : 'regular fa-circle' }} text-[9px] mr-0.5"></i><span class="care-plan-label">{{ $onCarePlan ? 'on' : 'off' }}</span>
-                                </button>
-                            </td>
+                            @if ($carePlansEnabled)
+                                <td class="px-5 py-2">
+                                    {{-- Inline toggle — clicking flips care_plan_enabled in place via
+                                         fetch (no page reload, so the row doesn't reorder). The handler
+                                         at the bottom of the page intercepts via the data-care-plan-toggle
+                                         attribute and swaps the button class/icon/title on success. --}}
+                                    <button type="button"
+                                            data-care-plan-toggle
+                                            data-url="{{ route('sites.care-plan', $site) }}"
+                                            data-on="{{ $site->care_plan_enabled ? '1' : '0' }}"
+                                            data-domain="{{ $site->domain }}"
+                                            class="care-plan-pill text-[10px] px-2 py-0.5 rounded-full font-medium cursor-pointer transition-colors {{ $site->care_plan_enabled
+                                                ? 'bg-[var(--color-status-green)]/15 text-[var(--color-status-green)] hover:bg-[var(--color-status-green)]/25'
+                                                : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] hover:bg-[var(--color-status-green)]/15 hover:text-[var(--color-status-green)]' }}"
+                                            title="{{ $site->care_plan_enabled
+                                                ? 'Click to mark as NOT on a care plan (manual override).'
+                                                : 'Click to mark as on a care plan (manual override).' }}">
+                                        <i class="fa-{{ $site->care_plan_enabled ? 'solid fa-shield-heart' : 'regular fa-circle' }} text-[9px] mr-0.5"></i><span class="care-plan-label">{{ $site->care_plan_enabled ? 'on' : 'off' }}</span>
+                                    </button>
+                                </td>
+                            @endif
                             <td class="px-5 py-2"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $scPill['class'] }}">{{ $scPill['label'] }}</span></td>
                             <td class="px-5 py-2"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $ccPill['class'] }}">{{ $ccPill['label'] }}</span></td>
                             <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]" title="{{ $lastScannedAt }}">{{ $lastScannedAt?->diffForHumans() ?? '—' }}</td>

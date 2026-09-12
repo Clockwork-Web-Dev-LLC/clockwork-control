@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
+use App\Support\SiteIngestExclusionSet;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -47,10 +49,11 @@ class ImportSpinupWp extends Command
         $vultrByIp = $this->fetchVultrByIp($vultr);
 
         $serverStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'spinupwp_id_nulled' => 0];
-        $siteStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'wordpress' => 0, 'non_wordpress' => 0, 'skipped_no_server' => 0, 'spinupwp_id_nulled' => 0];
+        $siteStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'wordpress' => 0, 'non_wordpress' => 0, 'skipped_no_server' => 0, 'skipped_excluded' => 0, 'spinupwp_id_nulled' => 0];
 
         try {
             DB::transaction(function () use ($spServers, $spSites, $dropletsByIp, $hetznerByIp, $vultrByIp, &$serverStats, &$siteStats, $dryRun) {
+                $exclusions = SiteIngestExclusion::compile();
                 foreach ($spServers as $row) {
                     $this->upsertServer($row, $dropletsByIp, $hetznerByIp, $vultrByIp, $serverStats);
                 }
@@ -58,7 +61,7 @@ class ImportSpinupWp extends Command
                 $serverIdBySpinupId = Server::whereNotNull('spinupwp_id')->pluck('id', 'spinupwp_id');
 
                 foreach ($spSites as $row) {
-                    $this->upsertSite($row, $serverIdBySpinupId, $siteStats);
+                    $this->upsertSite($row, $serverIdBySpinupId, $siteStats, $exclusions);
                 }
 
                 // Sweep: any local row whose spinupwp_id is NOT in the API's response
@@ -327,7 +330,7 @@ class ImportSpinupWp extends Command
         return false;
     }
 
-    protected function upsertSite(array $row, $serverIdBySpinupId, array &$stats): void
+    protected function upsertSite(array $row, $serverIdBySpinupId, array &$stats, SiteIngestExclusionSet $exclusions): void
     {
         $serverSpinupId = (string) ($row['server_id'] ?? '');
         $serverId = $serverIdBySpinupId->get($serverSpinupId);
@@ -344,6 +347,14 @@ class ImportSpinupWp extends Command
             return;
         }
 
+        $spinupId = isset($row['id']) ? (string) $row['id'] : null;
+        if ($exclusions->blocks(Site::HOSTING_PROVIDER_SPINUPWP, $spinupId, (string) $domain)) {
+            $this->warn("  Skipping {$domain}: dropped from Clockwork ingest — not re-importing.");
+            $stats['skipped_excluded']++;
+
+            return;
+        }
+
         $isWordpress = ($row['is_wordpress'] ?? false) === true;
         $stats[$isWordpress ? 'wordpress' : 'non_wordpress']++;
 
@@ -353,7 +364,7 @@ class ImportSpinupWp extends Command
 
         $attributes = [
             'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
-            'spinupwp_id' => isset($row['id']) ? (string) $row['id'] : null,
+            'spinupwp_id' => $spinupId,
             'server_id' => $serverId,
             'site_user' => $row['site_user'] ?? null,
             'is_wordpress' => $isWordpress,

@@ -39,7 +39,7 @@
             default => ['class' => 'bg-[var(--color-status-yellow)]/15 text-[var(--color-status-yellow)]', 'label' => 'Failed'],
         };
     };
-    $onCarePlan = (bool) $site->care_plan_enabled;
+    $onCarePlan = $site->isCarePlanActive();
 @endphp
 
 @if (session('flash'))

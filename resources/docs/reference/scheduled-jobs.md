@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-10
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
@@ -13,6 +13,10 @@ Every artisan command the scheduler runs, in chronological order through a UTC d
 Run the scheduler in foreground for development:
 
 ```bash
+# On Linux, run directly:
+php artisan schedule:work
+
+# On macOS with Laravel Herd:
 export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 php artisan schedule:work
 ```
@@ -90,6 +94,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 |---|---|---|
 | 03:00 | `clockwork:sync-allowed-bots` | Refresh the Arcjet bot allowlist into `allowed_bots`. |
 | 03:15 | `clockwork:refresh-plugin-vulnerabilities` | Refresh the wpvulnerability.net CVE mirror for every installed plugin slug. Feeds the Issues page's vulnerable-plugin flags. |
+| 03:20 | `clockwork:refresh-cisa-kev` | Sync the CISA Known Exploited Vulnerabilities catalog (JSON feed) into `cisa_kev_entries` for actively exploited CVE badging. |
 | 03:30 | `clockwork:import-spinupwp` | Idempotent server + site import. Refreshes cert dates. |
 | 03:35 | `clockwork:find-orphan-sites` | Reclassify sites whose SpinupWP linkage was lost. |
 | 03:45 | `clockwork:reconcile-provider` | Link servers import-spinupwp couldn't IP-cross-reference (manual adds, unknown-to-SpinupWP boxes). |
@@ -103,8 +108,9 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 04:45 | `clockwork:detect-wp-plugins` | SSH wp-cli probe for active LLAR/Wordfence per WP site. |
 | 04:50 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. |
 | 04:55 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-picked form-test subscriptions (Companion wp-admin Forms tab) into `contact_form_tests`. Slots between detect (04:50) and test (06:00). |
-| 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Executes off-host backup archival to S3 Glacier Instant Retrieval across supported providers (`in_repo` mode). In `external_agent` mode, writes `targets.json` to S3 for the standalone droplet. See [Features → Backup relay](/docs/features/backup-relay). |
+| 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Off-host archival to S3 Glacier IR. Per-site cadence (`sites.backup_relay_frequency`) is honoured in in-repo mode; custom/unhosted sites default to daily. `--force` / Backup Now skips the interval. External-agent mode still writes `targets.json`. See [Features → Backup relay](/docs/features/backup-relay). |
 | 05:00 | `clockwork:check-cloudflare` | Per-site CF detection. (Promoted from weekly to daily — CF state changes too often to wait a week.) |
+| 05:10 | `clockwork:refresh-runtime-eol` | Pull PHP and WordPress release lifecycle tables from endoflife.date into `app_settings` for the Capacity dashboard and site widgets. |
 
 ## Daily — Companion + form-tests (06:00 UTC)
 
@@ -126,6 +132,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 
 | Day / time | Command | What it does |
 |---|---|---|
+| Mon 03:30 | `clockwork:refresh-closed-plugins` | Check WordPress.org plugin directory status for closed/zombieware plugins across unique fleet slugs. Surfaced on `/issues`. |
 | Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's `upgrade_required` gate entirely. Now a safety net for SpinupWP servers whose mirrored flag is stale or wrong — the daily job above already polls non-SpinupWP-managed servers unconditionally, so this sweep is no longer their only path to being polled. |
 | Sun 05:15 | `clockwork:cleanup-spam-comments` | Purge stale spam and trash comments across Companion-equipped sites, via `CommentModerationServiceProvider::scheduledTasks()`. |
 | Sun 05:30 | `clockwork:refresh-fail2ban-ignoreip` | Refresh CF ranges + fleet IPs in every server's jail. |

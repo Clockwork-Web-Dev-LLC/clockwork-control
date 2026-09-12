@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -10,10 +10,8 @@ tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
 
 Every `clockwork:*` command, alphabetical, with a one-line summary and an example invocation. Commands provided by modules (`modules/*/src/Commands`) are registered automatically when their respective module is enabled. Most are also wired into the scheduler — see [Scheduled jobs](/docs/reference/scheduled-jobs) for cadence.
 
-```bash
-# Always export Herd's PATH first in a fresh shell:
-export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
-```
+> [!NOTE]
+> **Environment & PATH**: On Linux, `php` and `composer` are installed in standard system paths (`/usr/bin/php`), so commands can be executed directly. On macOS using Laravel Herd, remember to export Herd's binary directory (`export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"`).
 
 ## Inventory + bootstrap
 
@@ -34,8 +32,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:bill-com-test` | Verify Bill.com auth + count customers. | `php artisan clockwork:bill-com-test` |
 | `clockwork:mattermost-test` | Post a test message to the configured channel. | `php artisan clockwork:mattermost-test` |
 | `clockwork:azure-test` | Verify Azure creds by listing VMs + public IPs in the subscription. | `php artisan clockwork:azure-test` |
-| `clockwork:import-spinupwp` | Idempotent server + site import + cert refresh. Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-spinupwp --dry-run` |
-| `clockwork:import-pressable` | Idempotent Pressable site import (no `Server` rows — Pressable has no server concept). Skips domains still actively hosted on SpinupWP if the same domain appears in both platforms. Accepts `--dry-run`. Not scheduled — run manually. | `php artisan clockwork:import-pressable --dry-run` |
+| `clockwork:import-spinupwp` | Idempotent server + site import + cert refresh. Skips domains / SpinupWP site ids listed in `site_ingest_exclusions` (`skipped_excluded`). Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-spinupwp --dry-run` |
+| `clockwork:import-pressable` | Idempotent Pressable site import (no `Server` rows — Pressable has no server concept). Skips domains still actively hosted on SpinupWP if the same domain appears in both platforms, and skips `site_ingest_exclusions` matches. Accepts `--dry-run`. Not scheduled — run manually. | `php artisan clockwork:import-pressable --dry-run` |
 | `clockwork:import-gridpane` | Idempotent GridPane server + site import, linking WordPress sites to their parent servers. Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-gridpane --dry-run` |
 | `clockwork:reconcile-provider` | Match `provider_id`-less servers against DO/Hetzner/Azure/Vultr/Linode inventory and fill provider + size columns. Idempotent. | `php artisan clockwork:reconcile-provider` |
 | `clockwork:find-orphan-sites` | Detect sites whose SpinupWP linkage was lost. | `php artisan clockwork:find-orphan-sites` |
@@ -104,7 +102,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:pressable-security-summary-report` | Pushes Pressable's own plugin/theme CVE feed + Defensive Mode status to Companion's Security page. Pressable-only capability, no SpinupWP equivalent. | `php artisan clockwork:pressable-security-summary-report` |
 | `clockwork:push-backup-relay-targets` | Writes the Pressable + care-plan site list to S3 (`{S3_BUCKET}/{prefix}/targets.json`) for the standalone backup-relay droplet to read — no direct connection to that droplet. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:push-backup-relay-targets` |
 | `clockwork:pull-backup-relay-report` | Reads the backup-relay droplet's last run summary back from S3 and records it to `backup_relay_runs` + `Settings`, deduped by `finished_at`. Also checks staleness every run (6+ days since the last recorded run → `backup_relay_stale` alert once; a fresh run after → `backup_relay_recovered` once). | `php artisan clockwork:pull-backup-relay-report` |
-| `clockwork:backup-relay-run` | In-repo backup relay mode's own runner — archives enabled sites' backups to S3 Glacier natively via `ArchiveSiteBackupJob`, no external droplet involved. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:backup-relay-run` |
+| `clockwork:backup-relay-run` | In-repo backup relay mode's own runner — archives enabled sites' backups to S3 Glacier natively via `ArchiveSiteBackupJob`, no external droplet involved. `--site=` limits to one site; `--force` ignores cadence (Backup Now). See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:backup-relay-run --site=42 --force` |
 | `clockwork:rotate-companion-secret` | Rotate per-site HMAC secret. | `php artisan clockwork:rotate-companion-secret --all` |
 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. | `php artisan clockwork:detect-contact-forms` |
 | `clockwork:test-contact-forms` | Run the due contact-form tests across the fleet (care-plan only). `--site=X` bypasses the care-plan filter; `--form=ID` targets a single contact_form_tests row; `--force` bypasses the frequency-due check. | `php artisan clockwork:test-contact-forms --force --site=example.com` |
@@ -162,6 +160,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 
 | Command | Purpose | Example |
 |---|---|---|
+| `clockwork:rebuild-threat-logs-partitions` | Rebuild threat_logs as monthly partitions and copy only the retention window. Reclaims InnoDB disk space. MySQL only. | `php artisan clockwork:rebuild-threat-logs-partitions --days=90` |
+| `clockwork:prune-threat-logs` | Prune threat_logs older than configured retention, dropping obsolete monthly partitions or deleting rows. | `php artisan clockwork:prune-threat-logs` |
 | `clockwork:reencrypt-secrets` | Re-encrypts every `'encrypted'`-cast column (SSH keys, DB passwords, Companion secrets, integration credentials) under the current `APP_KEY`. Run once, immediately after rotating `APP_KEY`, while the old key is still in `APP_PREVIOUS_KEYS` — bypasses Eloquent's dirty-tracking (which no-ops `save()` for unchanged plaintext) via a direct `Crypt::encryptString()` + raw `DB::table()->update()` per row. | `php artisan clockwork:reencrypt-secrets` |
 | `clockwork:check-updates` | Check the GitHub Releases API for a newer Clockwork Control Core version, and print the Companion fleet rollout breakdown. Same data `/settings/updates` shows. `--force` bypasses the 12h cache. See [Features → System updates](/docs/features/system-updates). | `php artisan clockwork:check-updates --force` |
 | `clockwork:self-update` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. Prompts for confirmation unless `--force`. | `php artisan clockwork:self-update --force` |

@@ -85,3 +85,10 @@ sync contract) rather than the module structure Gemini's original drafts propose
   (verified to correctly implement Allow/Disallow precedence) instead of hand-rolled parsing; a real DOM
   parser (`DOMDocument`/`DOMXPath`) instead of regex for the meta-tag check.
 
+---
+
+## Next cycle (2026-09-11)
+
+- [`next-cycle-restore-closed-plugins-eol.md`](./next-cycle-restore-closed-plugins-eol.md) — operator-confirm Glacier restore for custom sites (two-step stage/apply, fail-closed), then WP.org closed-plugin audit + CISA KEV badges, then PHP EOL on `/capacity`. Implementation brief for Claude. Board items like DNSBL, Green Web, Safe Updates, and new host modules are explicitly out of scope.
+- [`gemini-implementation-restore-closed-plugins-eol.md`](./gemini-implementation-restore-closed-plugins-eol.md) — the Gemini-ready build plan for the file above, written after verifying both repos' actual state (2026-09-11): most of Workstream 1A is already committed; locks the open design decisions (per-archive sha256 sidecars, ignore-user-abort + polled status instead of WP-cron, current-prefix-only SQL import, copy-over file apply, `BackgroundArtisan`-driven Control flow) and maps every step to real files, conventions, schedule slots, and tests.
+

@@ -2,7 +2,7 @@
 title: Theme System
 section: Reference
 order: 25
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, frontend, css, themes, ui]
 tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php]

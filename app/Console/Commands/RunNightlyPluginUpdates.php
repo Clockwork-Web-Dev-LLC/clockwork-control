@@ -222,7 +222,7 @@ class RunNightlyPluginUpdates extends Command
     private function loadCandidateSites(?string $siteFilter): Collection
     {
         $q = Site::query()
-            ->where('care_plan_enabled', true)
+            ->carePlanEligible()
             ->where('auto_updates_paused', false)
             ->where('companion_installed', true)
             ->whereNotNull('companion_snapshot')
@@ -335,7 +335,7 @@ class RunNightlyPluginUpdates extends Command
     private function stampEligibleSites(?string $siteFilter): void
     {
         $q = Site::query()
-            ->where('care_plan_enabled', true)
+            ->carePlanEligible()
             ->where('auto_updates_paused', false)
             ->where('companion_installed', true);
 

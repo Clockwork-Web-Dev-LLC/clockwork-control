@@ -252,4 +252,54 @@ describe('Site Overview Command Center Dashboard', function () {
             ->assertJsonPath('spaces_history.0.date', '2026-09-01T07:00:00+00:00')
             ->assertJsonPath('spaces_history.0.database_bytes', 4256);
     });
+
+    it('renders schedule controls and Backup Now on custom unhosted sites', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'unhosted-client.example.com',
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+            'backup_relay_last_archived_at' => now()->subHours(3),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('sites.show', $site));
+
+        $response->assertOk()
+            ->assertSee('Backups')
+            ->assertSee('Backup Now')
+            ->assertSee('Latest backup')
+            ->assertSee('Next backup')
+            ->assertSee('unhosted-client.example.com');
+    });
+
+    it('renders companion only badge and disables server telemetry for custom standalone sites', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'companion-only.example.com',
+            'companion_installed' => true,
+            'companion_capabilities' => ['updates', 'backup-restore'],
+            'companion_snapshot' => [
+                'plugins' => ['counts' => ['updates_available' => 1]],
+                'themes' => ['counts' => ['updates_available' => 0]],
+                'wp_core' => ['update_available' => false],
+                'environment' => ['php_version' => '8.3.6', 'wp_version' => '6.7.1'],
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('sites.show', ['site' => $site, 'tab' => 'overview']));
+
+        $response->assertOk()
+            ->assertSee('companion-only.example.com')
+            ->assertSee('Companion Only')
+            ->assertDontSee('title="Hosted on Pressable', false)
+            ->assertSee('Traffic telemetry unavailable')
+            ->assertSee('Unavailable')
+            ->assertDontSee('Top Threat IPs (24h)')
+            ->assertDontSee('nginx tailer has not ingested rows')
+            ->assertSee('Current');
+    });
 });

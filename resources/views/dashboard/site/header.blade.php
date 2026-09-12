@@ -18,9 +18,15 @@
         <a href="{{ route('sites.index') }}" class="text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">
             <i class="fa-solid fa-arrow-left"></i> Sites
         </a>
-        <span class="status-pill status-unknown ml-2" title="Hosted on Pressable — no server-level access (SSH, credentials) applies to this site.">
-            <i class="fa-solid fa-cloud"></i> Pressable
-        </span>
+        @if ($site->isPressable())
+            <span class="status-pill status-unknown ml-2" title="Hosted on Pressable — no server-level access (SSH, credentials) applies to this site.">
+                <i class="fa-solid fa-cloud"></i> Pressable
+            </span>
+        @elseif ($site->isCustom())
+            <span class="status-pill status-unknown ml-2" title="Custom hosting — standalone WordPress site managed purely via Clockwork Companion plugin.">
+                <i class="fa-solid fa-plug"></i> Companion Only
+            </span>
+        @endif
     @endif
 </div>
 
@@ -79,16 +85,18 @@
             <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
             {{ $sslMeta['label'] }}
         </span>
-        @if ($site->care_plan_enabled)
-            <span class="status-pill status-green" title="Updates and routine maintenance are included in this site's care plan.">
-                <i class="fa-solid fa-shield-heart"></i>
-                Care plan
-            </span>
-        @else
-            <span class="status-pill status-unknown" title="Not on a care plan. Plugin updates and maintenance are billable as ad-hoc work.">
-                <i class="fa-regular fa-circle"></i>
-                No care plan
-            </span>
+        @if (\App\Models\Site::areCarePlansEnabled())
+            @if ($site->care_plan_enabled)
+                <span class="status-pill status-green" title="Updates and routine maintenance are included in this site's care plan.">
+                    <i class="fa-solid fa-shield-heart"></i>
+                    Care plan
+                </span>
+            @else
+                <span class="status-pill status-unknown" title="Not on a care plan. Routine updates and maintenance are inactive for this site.">
+                    <i class="fa-regular fa-circle"></i>
+                    No care plan
+                </span>
+            @endif
         @endif
 
         @if ($ssoCapable && count($ssoAdmins) > 0)

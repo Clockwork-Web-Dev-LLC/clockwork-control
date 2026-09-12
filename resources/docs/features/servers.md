@@ -3,7 +3,7 @@ title: Servers (inventory + credentials)
 section: Features
 order: 12
 author: Aaron Reimann
-updated: 2026-09-09
+updated: 2026-09-11
 tags: [servers, ssh, credentials, inventory, fleet]
 tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---

@@ -56,8 +56,8 @@
             </a>
             <a href="{{ route('updates.carePlan') }}"
                class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] ml-3"
-               title="Manage which care-plan sites are on the nightly auto-update path">
-                <i class="fa-solid fa-moon"></i> Care-plan auto-updates
+               title="{{ \App\Models\Site::areCarePlansEnabled() ? 'Manage which care-plan sites are on the nightly auto-update path' : 'Manage which sites are on the nightly auto-update path' }}">
+                <i class="fa-solid fa-moon"></i> {{ \App\Models\Site::areCarePlansEnabled() ? 'Care-plan auto-updates' : 'Nightly auto-updates' }}
             </a>
             <a href="{{ route('settings.updates.index') }}"
                class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] ml-3"
@@ -322,31 +322,35 @@
 
         {{-- Inline filter chip strip --}}
         <div class="px-5 py-2 border-b border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 flex items-center gap-2 flex-wrap text-xs">
-            <span class="uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan</span>
-            @php
-                // Same chip pattern as tags: colored dot when inactive, solid fill when active.
-                // 'On plan' = green (covered customers), 'Not on plan' = amber (the risk pool),
-                // 'All' = neutral gray (no filter — the catch-all).
-                $carePlanChips = [
-                    'on' => ['label' => 'On plan', 'color' => '#10b981'],
-                    'off' => ['label' => 'Not on plan', 'color' => '#d97706'],
-                    'all' => ['label' => 'All', 'color' => '#9ca3af'],
-                ];
-            @endphp
-            @foreach ($carePlanChips as $val => $chip)
-                @php $active = ($filters['care_plan'] ?? 'on') === $val; @endphp
-                <a href="{{ $filterUrl(['care_plan' => $val]) }}"
-                   class="px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1.5 text-xs font-medium transition-colors {{ $active ? 'text-white' : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-ink-strong)] hover:border-[var(--color-ink-soft)]' }}"
-                   @if ($active) style="background-color: {{ $chip['color'] }}; border-color: {{ $chip['color'] }};" @endif>
-                    @if (! $active)
-                        <span class="inline-block w-2 h-2 rounded-full" style="background-color: {{ $chip['color'] }};"></span>
-                    @endif
-                    {{ $chip['label'] }}
-                </a>
-            @endforeach
+            @if (\App\Models\Site::areCarePlansEnabled())
+                <span class="uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan</span>
+                @php
+                    // Same chip pattern as tags: colored dot when inactive, solid fill when active.
+                    // 'On plan' = green (covered customers), 'Not on plan' = amber (the risk pool),
+                    // 'All' = neutral gray (no filter — the catch-all).
+                    $carePlanChips = [
+                        'on' => ['label' => 'On plan', 'color' => '#10b981'],
+                        'off' => ['label' => 'Not on plan', 'color' => '#d97706'],
+                        'all' => ['label' => 'All', 'color' => '#9ca3af'],
+                    ];
+                @endphp
+                @foreach ($carePlanChips as $val => $chip)
+                    @php $active = ($filters['care_plan'] ?? 'on') === $val; @endphp
+                    <a href="{{ $filterUrl(['care_plan' => $val]) }}"
+                       class="px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1.5 text-xs font-medium transition-colors {{ $active ? 'text-white' : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-ink-strong)] hover:border-[var(--color-ink-soft)]' }}"
+                       @if ($active) style="background-color: {{ $chip['color'] }}; border-color: {{ $chip['color'] }};" @endif>
+                        @if (! $active)
+                            <span class="inline-block w-2 h-2 rounded-full" style="background-color: {{ $chip['color'] }};"></span>
+                        @endif
+                        {{ $chip['label'] }}
+                    </a>
+                @endforeach
+            @endif
 
             @if ($availableTags->isNotEmpty())
-                <span class="border-l border-[var(--color-border-light)] h-4 mx-1"></span>
+                @if (\App\Models\Site::areCarePlansEnabled())
+                    <span class="border-l border-[var(--color-border-light)] h-4 mx-1"></span>
+                @endif
                 <span class="uppercase tracking-wide text-[var(--color-ink-soft)]">Tags</span>
                 @foreach ($availableTags as $tag)
                     @php

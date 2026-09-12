@@ -2,9 +2,9 @@
 title: Ingest pipeline
 section: Architecture
 order: 30
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [architecture, ingest, fail2ban, security]
+tags: [architecture, ingest, fail2ban, security, exclusions]
 tracks: [app/Services/Llar/**, app/Services/Wordfence/**, app/Services/Logs/**, app/Services/Fail2ban/**, app/Console/Commands/Pull*.php, app/Console/Commands/AutoApproveRepeats.php, app/Console/Commands/ProcessPendingBans.php, app/Http/Controllers/IngestSettingsController.php]
 ---
 
@@ -42,6 +42,7 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
 
 - Inode + offset state lives in `nginx_log_cursors`. This is what survives `logrotate`. Lose the cursor and you re-ingest from byte 0.
 - Caps each pass at 2 MB and trims to the last newline. Without that ceiling, a long quiet period followed by a 50 MB log file would OOM the PHP process.
+- Sites in `site_ingest_exclusions` or marked inactive are bypassed, avoiding wasted SSH cycles on decommissioned or unmonitored sites.
 - Parsed lines land in `threat_logs` (append-only). Nightly `clockwork:prune-threat-logs` drops rows older than the window set at `/settings/ingest` (default 30 days, minimum 7). On MySQL that is `DROP PARTITION` after `clockwork:rebuild-threat-logs-partitions`; otherwise chunked DELETE. Daily rollups in `site_traffic_daily` are kept.
 - Per-site try/catch: one unreachable server does not fail the whole run. Errors are isolated per site so a temporary connectivity issue on one host does not block log processing for the rest of the fleet. Per-site failures log `tail_nginx_logs.site_failed` at warning level, and the command only reports overall failure when every site in the fleet fails.
 

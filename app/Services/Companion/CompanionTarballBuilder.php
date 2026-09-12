@@ -207,4 +207,65 @@ class CompanionTarballBuilder
         }
         @rmdir($path);
     }
+
+    /**
+     * Build a standard WordPress plugin .zip package (clockwork-companion/...)
+     * suitable for direct upload via wp-admin -> Plugins -> Add New -> Upload Plugin.
+     */
+    public function buildPluginZipBytes(?string $localPath = null): string
+    {
+        $localPath = $localPath ?: (string) config('clockwork.companion.local_path');
+        if ($localPath === '' || ! is_dir($localPath)) {
+            throw new RuntimeException("Local plugin source not found at {$localPath}. Set CLOCKWORK_COMPANION_LOCAL_PATH.");
+        }
+
+        $loader = $localPath.'/clockwork-companion.php';
+        if (! is_file($loader)) {
+            throw new RuntimeException("Loader not found at {$loader}.");
+        }
+
+        $zipFile = sys_get_temp_dir().'/clockwork-companion-'.Str::random(8).'.zip';
+        $zip = new \ZipArchive;
+        if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException("Could not create zip file at {$zipFile}.");
+        }
+
+        // Add main loader as clockwork-companion/clockwork-companion.php
+        $zip->addFile($loader, 'clockwork-companion/clockwork-companion.php');
+
+        $iter = new \RecursiveIteratorIterator(
+            new \RecursiveCallbackFilterIterator(
+                new \RecursiveDirectoryIterator($localPath, \FilesystemIterator::SKIP_DOTS),
+                function ($current) use ($localPath) {
+                    $name = $current->getFilename();
+                    if ($current->isDir() && in_array($name, ['.git', 'vendor', 'node_modules', '.idea', '.vscode'], true)) {
+                        return false;
+                    }
+                    if (str_starts_with($name, '._') || $name === '.DS_Store') {
+                        return false;
+                    }
+
+                    return $name !== 'clockwork-companion.php' || $current->getPath() !== rtrim($localPath, '/');
+                }
+            )
+        );
+
+        foreach ($iter as $item) {
+            /** @var \SplFileInfo $item */
+            if (! $item->isDir()) {
+                $relative = substr($item->getPathname(), strlen($localPath) + 1);
+                $zip->addFile($item->getPathname(), 'clockwork-companion/'.$relative);
+            }
+        }
+
+        $zip->close();
+        $bytes = file_get_contents($zipFile);
+        @unlink($zipFile);
+
+        if ($bytes === false) {
+            throw new RuntimeException("Failed to read generated zip file from {$zipFile}.");
+        }
+
+        return $bytes;
+    }
 }

@@ -1,10 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Care-plan auto-updates · Clockwork')
+@php $carePlansEnabled = \App\Models\Site::areCarePlansEnabled(); @endphp
+
+@section('title', ($carePlansEnabled ? 'Care-plan auto-updates' : 'Nightly auto-updates') . ' · Clockwork')
 
 @section('content')
-    <x-page-header title="Care-plan auto-updates"
-        subtitle="Off by default. Enable individual sites here to put them on the nightly auto-update path (plugins only, 2:00–6:00 AM Eastern). Disable to take a site back off without dropping the care plan.">
+    <x-page-header title="{{ $carePlansEnabled ? 'Care-plan auto-updates' : 'Nightly auto-updates' }}"
+        subtitle="{{ $carePlansEnabled ? 'Off by default. Enable individual sites here to put them on the nightly auto-update path (plugins only, 2:00–6:00 AM Eastern). Disable to take a site back off without dropping the care plan.' : 'Manage which fleet sites are on the nightly auto-update path (plugins only, 2:00–6:00 AM Eastern). Active sites update automatically unless paused.' }}">
         <x-slot:actions>
             <a href="{{ route('updates.index') }}" class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]">
                 <i class="fa-solid fa-arrow-left"></i> Back to updates
@@ -32,7 +34,7 @@
         {{-- Counter strip — at-a-glance summary of the curation state --}}
         <div class="grid grid-cols-3 gap-3 mb-4">
             <div class="card p-4">
-                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Care-plan sites</div>
+                <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">{{ $carePlansEnabled ? 'Care-plan sites' : 'Fleet sites' }}</div>
                 <div class="font-display text-2xl text-[var(--color-ink-strong)]">{{ $totals['total'] }}</div>
             </div>
             <div class="card p-4">
@@ -47,7 +49,7 @@
 
     @if ($sites->isEmpty())
         <div class="card p-6 text-sm text-[var(--color-ink-muted)] text-center">
-            No sites are currently on a care plan. Toggle a site's care-plan flag from its Settings tab to add it here.
+            {{ $carePlansEnabled ? "No sites are currently on a care plan. Toggle a site's care-plan flag from its Settings tab to add it here." : "No eligible sites found in the fleet." }}
         </div>
     @else
         <div class="card overflow-hidden">

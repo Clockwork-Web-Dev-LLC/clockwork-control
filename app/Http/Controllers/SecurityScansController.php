@@ -35,7 +35,7 @@ class SecurityScansController extends Controller
             ->orderBy('domain')
             ->get();
 
-        $carePlanSites = $sites->where('care_plan_enabled', true);
+        $carePlanSites = Site::areCarePlansEnabled() ? $sites->where('care_plan_enabled', true) : $sites;
 
         // The "issues" tiles are scoped to care-plan sites — that's the
         // population we actually scan on a recurring basis. Stale rows on

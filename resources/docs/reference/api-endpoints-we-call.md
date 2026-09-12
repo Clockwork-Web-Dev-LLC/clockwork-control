@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-10
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -141,11 +141,23 @@ Daily at 01:00 + 01:30, gated on `CLOCKWORK_BILL_COM_ENABLED`.
 
 `app/Services/Companion/ClockworkCompanionClient.php` · HMAC-SHA256 with per-site secret (`X-Clockwork-Signature` + `X-Clockwork-Timestamp`, 5-min replay window).
 
-Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`, `/test-contact-form`, `POST /backups-report`, `POST /sso/magic-link`, `POST /plugins/update`, `POST /action-log/append`, `POST /secret/rotate`, `POST /malware-scan` (in-WP malware probe — bypasses Cloudflare; SSH wp-cli fallback exists for sites without the plugin). Full details on the `architecture/companion-plugin` page.
+Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`, `/test-contact-form`, `POST /backups-report`, `POST /backup/create` (direct-to-S3 Glacier streaming backup), `POST /backup/restore/stage`, `GET /backup/restore/status`, `POST /backup/restore/apply` (two-step off-site Glacier restore), `POST /sso/magic-link`, `POST /plugins/update`, `POST /action-log/append`, `POST /secret/rotate`, `POST /malware-scan` (in-WP malware probe — bypasses Cloudflare; SSH wp-cli fallback exists for sites without the plugin). Full details on the `architecture/companion-plugin` page.
 
 ## wpvulnerability.net — `https://www.wpvulnerability.net/plugin/{slug}`
 
 `app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both.
+
+## WordPress.org Plugin Information — `https://api.wordpress.org/plugins/info/1.2/`
+
+`app/Services/Security/PluginDirectoryClient.php` · No auth, keyless. `GET ?action=plugin_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+plugin-directory-check)`. 100ms delay between requests. Queries unique plugin slugs across the fleet to detect closed/abandoned zombieware plugins (`plugin_directory_statuses`). Tolerates partial failures; non-closed/not_found responses for premium plugins never alert. Weekly on Mondays at 03:30 UTC (`clockwork:refresh-closed-plugins`).
+
+## CISA Known Exploited Vulnerabilities (KEV) — `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`
+
+`app/Services/Security/CisaKevClient.php` · No auth, keyless official JSON feed (~1.7k active in-the-wild exploitation entries). Single daily download at 03:20 UTC (`clockwork:refresh-cisa-kev`), atomic swap (`cisa_kev_entries`) via database transaction and chunked insert. Used at query-time to badge CVEs detected in installed plugins as `Actively exploited (CISA KEV)`.
+
+## endoflife.date — `https://endoflife.date/api/v1/products/{product}`
+
+`app/Services/Runtime/EndOfLifeClient.php` · No auth, keyless v1 JSON API. Daily sync at 05:10 UTC (`clockwork:refresh-runtime-eol`) for products `/php` and `/wordpress`. Stores parsed release cycles in `app_settings` for the Capacity dashboard (`/capacity`) and per-site tech stack widgets without blocking on HTTP at request time.
 
 ## Sucuri SiteCheck — `https://sitecheck.sucuri.net/api/v3/?scan=<url>`
 

@@ -90,7 +90,7 @@ class AppServiceProvider extends ServiceProvider
                         ->where('enabled', true)
                         ->where('state', ContactFormTest::STATE_FAILED)
                         ->where('failure_streak', '>=', ContactFormTest::ALERT_STREAK_THRESHOLD)
-                        ->whereHas('site', fn ($q) => $q->where('care_plan_enabled', true))
+                        ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
                         ->count()
                     : 0;
             } catch (Throwable) {

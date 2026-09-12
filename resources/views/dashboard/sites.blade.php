@@ -3,17 +3,62 @@
 @section('title', 'Sites · Clockwork')
 
 @section('content')
-    <x-page-header title="Sites"
-        :subtitle="$counts['all'] . ' sites across all hosting providers'">
-    </x-page-header>
-
     <div x-data="{
         view: localStorage.getItem('clockwork_sites_view') || 'list',
         setView(v) {
             this.view = v;
             localStorage.setItem('clockwork_sites_view', v);
+        },
+        showAddModal: false,
+        addMode: 'key',
+        addKey: '',
+        addDomain: '',
+        addSecret: '',
+        addSubmitting: false,
+
+        parseAddKey() {
+            let raw = this.addKey.trim();
+            if (!raw) return;
+            if (raw.startsWith('{')) {
+                try {
+                    let parsed = JSON.parse(raw);
+                    if (parsed.url || parsed.domain) this.addDomain = (parsed.url || parsed.domain).replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+                    if (parsed.secret) this.addSecret = parsed.secret;
+                    return;
+                } catch (e) {}
+            }
+            let b64 = raw.replace(/^cw_/, '');
+            try {
+                let decoded = atob(b64);
+                let parsed = JSON.parse(decoded);
+                if (parsed.url || parsed.domain) this.addDomain = (parsed.url || parsed.domain).replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+                if (parsed.secret) this.addSecret = parsed.secret;
+                return;
+            } catch (e) {}
+            if (raw.length === 64 && /^[0-9a-fA-F]+$/.test(raw)) {
+                this.addSecret = raw;
+            }
+        },
+
+        generateSecret() {
+            let array = new Uint8Array(32);
+            window.crypto.getRandomValues(array);
+            this.addSecret = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
         }
     }">
+        <x-page-header title="Sites"
+            :subtitle="$counts['all'] . ' sites across all hosting providers'">
+            <x-slot:actions>
+                <a href="{{ route('companion.download') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors" title="Download WordPress Companion Plugin (.zip)">
+                    <i class="fa-solid fa-download text-[11px] text-[var(--color-brand)]"></i>
+                    <span>Plugin (.zip)</span>
+                </a>
+                <button type="button" @click="showAddModal = true" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] shadow-xs transition-colors cursor-pointer">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Add Site</span>
+                </button>
+            </x-slot:actions>
+        </x-page-header>
         {{-- Search bar --}}
         <div class="mb-6">
             <form method="GET" action="{{ route('sites.index') }}" id="sites-search-form" class="relative">
@@ -119,9 +164,13 @@
                                 @endif
                                 @if ($site->isPressable())
                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
-                                        <i class="fa-solid fa-cloud"></i> Pressable
-                                    </span>
-                                @elseif ($site->server)
+                                         <i class="fa-solid fa-cloud"></i> Pressable
+                                     </span>
+                                 @elseif ($site->isCustom())
+                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Custom / Companion Only">
+                                         <i class="fa-solid fa-plug"></i> Companion Only
+                                     </span>
+                                 @elseif ($site->server)
                                     <span class="text-xs font-data text-[var(--color-ink-muted)] truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
                                         <i class="fa-solid fa-server text-[var(--color-ink-soft)]"></i> {{ $site->server->display_name ?? $site->server->name }}
                                     </span>
@@ -141,7 +190,7 @@
                                     </span>
                                 @endif
 
-                                @if ($site->care_plan_enabled)
+                                @if (\App\Models\Site::areCarePlansEnabled() && $site->care_plan_enabled)
                                     <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
                                         <i class="fa-solid fa-shield-heart"></i>
                                     </span>
@@ -235,6 +284,150 @@
 
         <div class="mt-6" id="sites-pagination">
             {{ $sites->links() }}
+        </div>
+
+        {{-- Add Site Modal --}}
+        <div x-show="showAddModal"
+             x-cloak
+             @keydown.escape.window="showAddModal = false"
+             class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 bg-black/50 backdrop-blur-xs overflow-y-auto"
+             @click.self="showAddModal = false"
+             role="dialog"
+             aria-modal="true">
+            <div class="bg-[var(--color-surface)] rounded-[var(--radius-card)] shadow-2xl max-w-xl w-full my-auto border border-[var(--color-border)]"
+                 @click.stop>
+                <div class="px-6 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-4 sticky top-0 bg-[var(--color-surface)] z-10">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-[var(--color-brand)]/10 text-[var(--color-brand)] flex items-center justify-center font-bold text-base">
+                            <i class="fa-solid fa-plus"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base text-[var(--color-ink-strong)]">
+                                Connect WordPress Site
+                            </h3>
+                            <p class="text-xs text-[var(--color-ink-muted)]">Pair via Companion plugin (WP Engine, Kinsta, or standalone)</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="showAddModal = false" class="text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] text-2xl leading-none p-1 cursor-pointer" aria-label="Close">×</button>
+                </div>
+
+                <div class="p-6 space-y-5">
+                    {{-- Quick Download Box --}}
+                    <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)]">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="font-bold text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
+                                <span>Need the Companion plugin?</span>
+                            </span>
+                            <a href="{{ route('companion.download') }}" class="text-[var(--color-brand)] font-semibold hover:underline flex items-center gap-1">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download .zip</span>
+                            </a>
+                        </div>
+                        <p class="leading-relaxed">
+                            Upload <code>clockwork-companion.zip</code> in wp-admin (<strong>Plugins → Add New → Upload Plugin</strong>), activate it, and copy the <strong>Connection Key</strong> from <strong>Tools → Clockwork</strong>.
+                        </p>
+                    </div>
+
+                    <form method="POST" action="{{ route('sites.store') }}" @submit="addSubmitting = true" class="space-y-4">
+                        @csrf
+
+                        {{-- Mode Selector --}}
+                        <div class="flex items-center justify-between pb-1">
+                            <span class="text-xs font-bold text-[var(--color-ink-strong)] uppercase tracking-wider">Pairing Method</span>
+                            <div class="inline-flex items-center bg-[var(--color-surface-alt)] p-1 rounded-lg border border-[var(--color-border-light)] text-xs">
+                                <button type="button" @click="addMode = 'key'"
+                                        :class="addMode === 'key' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)]'"
+                                        class="px-2.5 py-0.5 rounded-md transition-all cursor-pointer">
+                                    Connection Key
+                                </button>
+                                <button type="button" @click="addMode = 'manual'"
+                                        :class="addMode === 'manual' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)]'"
+                                        class="px-2.5 py-0.5 rounded-md transition-all cursor-pointer">
+                                    Manual
+                                </button>
+                            </div>
+                        </div>
+
+                        {{-- Connection Key Input --}}
+                        <div x-show="addMode === 'key'">
+                            <label for="modal_connection_key" class="block text-xs font-bold text-[var(--color-ink-strong)] uppercase tracking-wider mb-1.5">
+                                Connection Key
+                            </label>
+                            <textarea
+                                name="connection_key"
+                                id="modal_connection_key"
+                                rows="3"
+                                x-model="addKey"
+                                @input="parseAddKey()"
+                                placeholder="Paste the Connection Key from wp-admin → Tools → Clockwork…"
+                                class="w-full font-mono text-xs p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] focus:bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-brand)] text-[var(--color-ink-strong)]"
+                            ></textarea>
+                        </div>
+
+                        {{-- Domain field --}}
+                        <div>
+                            <label for="modal_domain" class="block text-xs font-bold text-[var(--color-ink-strong)] uppercase tracking-wider mb-1.5">
+                                Site Domain
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ink-soft)] font-mono">https://</span>
+                                <input
+                                    type="text"
+                                    name="domain"
+                                    id="modal_domain"
+                                    x-model="addDomain"
+                                    required
+                                    placeholder="client-site.com"
+                                    class="w-full pl-20 pr-4 py-2.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] focus:bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-brand)] text-sm font-mono text-[var(--color-ink-strong)]"
+                                >
+                            </div>
+                        </div>
+
+                        {{-- Companion Secret --}}
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label for="modal_secret" class="block text-xs font-bold text-[var(--color-ink-strong)] uppercase tracking-wider">
+                                    Companion Secret
+                                </label>
+                                <button type="button" @click="generateSecret()" class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer">
+                                    Generate Secret
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                name="companion_secret"
+                                id="modal_secret"
+                                x-model="addSecret"
+                                required
+                                placeholder="32-byte hex secret"
+                                class="w-full px-4 py-2.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] focus:bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-brand)] text-xs font-mono text-[var(--color-ink-strong)]"
+                            >
+                        </div>
+
+                        <input type="hidden" name="hosting_provider" value="custom">
+                        <p class="text-[11px] text-[var(--color-ink-soft)]">
+                            Enrolled as Custom / Standalone — Companion REST, live TLS, and direct-to-S3 Glacier backups. No host API required.
+                        </p>
+
+                        {{-- Buttons --}}
+                        <div class="pt-4 flex items-center justify-end gap-3 border-t border-[var(--color-border-light)]">
+                            <button type="button" @click="showAddModal = false" class="px-4 py-2 rounded-xl text-sm font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors cursor-pointer">
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="addSubmitting"
+                                class="inline-flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                <i class="fa-solid fa-link" x-show="!addSubmitting"></i>
+                                <i class="fa-solid fa-spinner fa-spin" x-show="addSubmitting" style="display: none;"></i>
+                                <span x-text="addSubmitting ? 'Verifying…' : 'Verify & Connect'">Verify & Connect</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 

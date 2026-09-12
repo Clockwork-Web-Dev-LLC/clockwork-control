@@ -2,7 +2,7 @@
 title: SpinupWP
 section: Integrations
 order: 20
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, spinupwp, inventory, wordpress, backups]
 tracks: [modules/SpinupWp/src/**, app/Console/Commands/ImportSpinupWp.php, app/Console/Commands/SpinupWpTest.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
@@ -101,7 +101,7 @@ Base URL `https://api.spinupwp.app/v1`.
 - `servers.spinupwp_id` is the natural key for re-import.
 - **Manual-add reconciliation**: a server added via `/servers/new` has no `spinupwp_id`. When the SpinupWP record for the same box later imports, `upsertServer` falls back to matching by `(hostname, ssh_port)` against rows where `spinupwp_id IS NULL`, adopts the SpinupWP id onto the manual row, and merges the SpinupWP-sourced fields. Without this, the import would collide on the `servers_hostname_ssh_port_unique` index.
 - **Deletion sweep**: at the end of every import, any local Site or Server row whose `spinupwp_id` is *not* in the API response has its `spinupwp_id` nulled. This is what surfaces SpinupWP-side deletes to `clockwork:find-orphan-sites` (the import itself never deletes rows — it only severs the linkage so the orphan-finder can classify on the next tick). Counts surface in the `spinupwp_id_nulled` field of the `Servers:` and `Sites:` summary lines.
-- `sites.domain` is the unique natural key. Always **bypass the `notArchived` global scope** when looking up sites by domain in import paths: `Site::withoutGlobalScopes()->firstOrNew(...)`. Without that bypass, a same-domain archived row collides at `save()`-time on the unique index.
+- `sites.domain` is the unique natural key. Always **bypass the `notArchived` global scope** when looking up sites by domain in import paths: `Site::withoutGlobalScopes()->firstOrNew(...)`. Without that bypass, a same-domain archived row collides at `save()`-time on the unique index. If a `site_ingest_exclusions` row matches the domain (any provider) or this SpinupWP site id, the import **skips** (`skipped_excluded`) instead of updating that archived row — that's what makes Remove from monitoring stick while the site is still live in SpinupWP.
 - All sites are imported, not just WordPress sites. Non-WP sites get `is_wordpress=false` and skip WP-specific data sources but still participate in nginx log tailing and IP banning.
 - **New staging/dev domains get uptime monitoring auto-disabled on creation.** `isStagingDomain()` matches `staging.*`, `dev.*`, `*.staging.*`, and anything matching `/-dev\./i` — these should never fire a down alert. Only applies on first creation, never overrides a manual re-enable on an existing site. See [Features → Uptime monitoring](/docs/features/uptime-monitoring).
 - **New sites start with `auto_updates_paused = false`** (creation-only, never overriding an existing manual setting). This ensures newly-imported sites participate in updates immediately unless intentionally paused. See [Features → Updates](/docs/features/updates).

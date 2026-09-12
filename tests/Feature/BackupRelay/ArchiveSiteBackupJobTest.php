@@ -158,4 +158,57 @@ class ArchiveSiteBackupJobTest extends TestCase
         $run = BackupRelayRun::query()->first();
         $this->assertSame(1, $run->sites_total);
     }
+
+    public function test_archive_job_skips_same_calendar_day_for_daily_sites(): void
+    {
+        Storage::fake('s3-backup-relay');
+        Carbon::setTestNow(Carbon::parse('2026-09-11 15:00:00'));
+
+        $site = Site::query()->create([
+            'domain' => 'daily-skip.example.com',
+            'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE,
+            'pressable_site_id' => '777',
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+            'backup_relay_last_archived_at' => Carbon::parse('2026-09-11 04:58:00'),
+            'is_wordpress' => true,
+        ]);
+
+        $fakeRef = new BackupRef(
+            provider: Site::HOSTING_PROVIDER_PRESSABLE,
+            externalId: 'backup_today',
+            createdAt: Carbon::parse('2026-09-11 12:00:00'),
+            sizeBytes: 1024,
+        );
+
+        $fakeAdapter = new class($fakeRef) implements BackupRelayAdapter
+        {
+            public function __construct(private readonly BackupRef $ref) {}
+
+            public function latestBackupRef(Site $site): ?BackupRef
+            {
+                return $this->ref;
+            }
+
+            public function openBackupStream(Site $site, BackupRef $ref)
+            {
+                return fopen('data://text/plain,should-not-upload', 'r');
+            }
+        };
+
+        $mockHost = \Mockery::mock(HostingProvider::class);
+        $mockHost->shouldReceive('id')->andReturn('pressable');
+        $mockHost->shouldReceive('supports')->with(HostingProvider::CAP_BACKUP_RELAY)->andReturn(true);
+        $mockHost->shouldReceive('backupRelayAdapter')->andReturn($fakeAdapter);
+
+        $site = \Mockery::mock($site)->makePartial();
+        $site->shouldReceive('host')->andReturn($mockHost);
+
+        $uploader = new GlacierUploader('s3-backup-relay');
+        $job = new ArchiveSiteBackupJob($site);
+
+        $this->assertSame('skipped', $job->handle($uploader));
+
+        Carbon::setTestNow();
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
+use App\Support\SiteIngestExclusionSet;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -34,12 +36,13 @@ class ImportPressable extends Command
         $psSites = $pressable->sites();
         $this->line('  '.count($psSites).' sites');
 
-        $stats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped_no_domain' => 0, 'skipped_active_spinupwp' => 0, 'pressable_id_nulled' => 0];
+        $stats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped_no_domain' => 0, 'skipped_active_spinupwp' => 0, 'skipped_excluded' => 0, 'pressable_id_nulled' => 0];
 
         try {
             DB::transaction(function () use ($psSites, &$stats, $dryRun) {
+                $exclusions = SiteIngestExclusion::compile();
                 foreach ($psSites as $row) {
-                    $this->upsertSite($row, $stats);
+                    $this->upsertSite($row, $stats, $exclusions);
                 }
 
                 // Sweep: any local Pressable row whose pressable_site_id is NOT in
@@ -74,7 +77,7 @@ class ImportPressable extends Command
      * @param  array<string, mixed>  $row
      * @param  array<string, int>  $stats
      */
-    protected function upsertSite(array $row, array &$stats): void
+    protected function upsertSite(array $row, array &$stats, SiteIngestExclusionSet $exclusions): void
     {
         $domain = $row['url'] ?? null;
         if (! $domain) {
@@ -83,10 +86,18 @@ class ImportPressable extends Command
             return;
         }
 
+        $pressableId = isset($row['id']) ? (string) $row['id'] : null;
+        if ($exclusions->blocks(Site::HOSTING_PROVIDER_PRESSABLE, $pressableId, (string) $domain)) {
+            $this->warn("  Skipping {$domain}: dropped from Clockwork ingest — not re-importing.");
+            $stats['skipped_excluded']++;
+
+            return;
+        }
+
         $isLive = ($row['state'] ?? null) === 'live';
 
         $attributes = [
-            'pressable_site_id' => isset($row['id']) ? (string) $row['id'] : null,
+            'pressable_site_id' => $pressableId,
             'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE,
             'server_id' => null,
             'is_wordpress' => true,

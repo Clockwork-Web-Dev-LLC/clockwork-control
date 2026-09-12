@@ -1,5 +1,5 @@
 @php
-    $onCarePlan = (bool) $site->care_plan_enabled;
+    $onCarePlan = $site->isCarePlanActive();
     $atCap = $formTests->count() >= \App\Models\ContactFormTest::MAX_PER_SITE;
 
     $statePill = fn (?string $state) => match ($state) {

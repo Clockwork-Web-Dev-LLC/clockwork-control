@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.6.8',
+    'version' => '1.7.0',
 
     'arcjet' => [
         'bots_url' => env(
@@ -300,7 +300,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.34.0'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.37.0'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
@@ -473,6 +473,15 @@ return [
     'seo' => [
         'monitoring_enabled' => (bool) env('CLOCKWORK_SEO_MONITORING_ENABLED', true),
         'robots_txt_timeout' => (int) env('CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT', 10),
+    ],
+
+    // Fleet-wide care plans policy.
+    // When enabled (default): sites can be enrolled in care plans individually,
+    // gating automated maintenance, update loops, and routine scans.
+    // When disabled: all sites are treated as covered for maintenance,
+    // and care plan badges/banners/cards are suppressed across the platform.
+    'care_plans' => [
+        'enabled' => (bool) env('CLOCKWORK_CARE_PLANS_ENABLED', true),
     ],
 
     // Anonymous usage telemetry — enabled by default, easily disabled anytime.

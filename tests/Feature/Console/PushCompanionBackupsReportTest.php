@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Modules\BackupRelay\Services\BackupArchiveEnumerator;
 use Modules\SpinupWp\SpinupWpClient;
 
 /*
@@ -224,7 +225,12 @@ describe('clockwork:push-companion-backups — offsite S3 archive enrichment', f
 });
 
 describe('clockwork:push-companion-backups — skip and failure handling', function () {
-    it('exits FAILURE immediately when SpinupWP is not configured, without touching any site', function () {
+    it('skips SpinupWP-backed sites but still succeeds when SpinupWP is not configured', function () {
+        // Used to be a hard FAILURE, but custom/unhosted sites' reports are
+        // built purely from the Glacier archive store — a missing SpinupWP
+        // token must not block them (their Backups page stays empty
+        // otherwise). No custom sites exist here, so nothing is pushed;
+        // the SpinupWP-backed site is skipped without any HTTP traffic.
         pcbrSite();
 
         $this->mock(SpinupWpClient::class, function ($mock) {
@@ -233,9 +239,50 @@ describe('clockwork:push-companion-backups — skip and failure handling', funct
 
         Http::fake();
 
-        $this->artisan('clockwork:push-companion-backups')->assertFailed();
+        $this->artisan('clockwork:push-companion-backups')
+            ->expectsOutputToContain('SpinupWP token not configured')
+            ->assertSuccessful();
 
         Http::assertNothingSent();
+    });
+
+    it('pushes a combined Glacier report to a custom/unhosted site even without SpinupWP', function () {
+        $site = Site::factory()->custom()->withCompanionInstalled()->create([
+            'companion_capabilities' => ['backups-report'],
+            'backup_relay_enabled' => true,
+        ]);
+
+        $this->mock(SpinupWpClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(false);
+        });
+
+        $this->mock(BackupArchiveEnumerator::class, function ($mock) use ($site) {
+            $mock->shouldReceive('forSite')->with(\Mockery::on(fn ($s) => $s->is($site)))->andReturn([
+                'archives' => [[
+                    'type' => 'full',
+                    'size_bytes' => 85_128_567,
+                    'archived_at' => now()->subDay()->toIso8601String(),
+                    'download_url' => 'https://s3.example/presigned.zip',
+                ]],
+                'last_archived_at' => now()->subDay()->toIso8601String(),
+            ]);
+            $mock->shouldReceive('supportsPresignedUrls')->andReturn(true);
+        });
+
+        Http::fake(["https://{$site->domain}/*" => Http::response(['ok' => true])]);
+
+        $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return str_contains($request->url(), 'backups-report')
+                && ($body['source'] ?? null) === 'clockwork-companion'
+                && ($body['history_scope'] ?? null) === 'combined'
+                && is_array($body['config'] ?? null) // plugin 400s on a missing/non-array config
+                && ($body['history'][0]['type'] ?? null) === 'full'
+                && ($body['history'][0]['size_bytes'] ?? null) === 85_128_567;
+        });
     });
 
     it('skips a site whose Companion does not advertise the backups-report capability', function () {

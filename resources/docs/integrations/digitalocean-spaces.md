@@ -2,7 +2,7 @@
 title: DigitalOcean Spaces
 section: Integrations
 order: 15
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, digitalocean, spaces, backups]
 tracks: [app/Services/DigitalOcean/SpacesClient.php, app/Console/Commands/DoSpacesTest.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php, app/Http/Controllers/SitesController.php]

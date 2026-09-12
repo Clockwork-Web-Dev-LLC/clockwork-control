@@ -2,23 +2,23 @@
 title: Request lifecycle
 section: Architecture
 order: 40
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [architecture, http, auth, middleware]
+tags: [architecture, http, auth, middleware, linux]
 tracks: [routes/web.php, app/Http/Controllers/Auth/**, app/Http/Middleware/**]
 ---
 
-What happens between a click in the browser and a Blade response. Mostly stock Laravel — the noteworthy bits are the auth gate and the docs path-traversal guard.
+What happens between a click in the browser and a Blade response. Mostly stock Laravel — the noteworthy bits are the auth gate, maintenance mode handling, and the docs path-traversal guard.
 
 ## The path
 
 ```
 Browser
   ↓
-Herd nginx → php-fpm
+Web server (Nginx / Apache / Herd) → php-fpm
   ↓
 Laravel HttpKernel
-  ↓ (default middleware: cookies, session, CSRF, etc.)
+  ↓ (default middleware: cookies, session, CSRF, maintenance mode)
 RouteServiceProvider
   ↓
 Route group: middleware(['auth'])  ← single chokepoint

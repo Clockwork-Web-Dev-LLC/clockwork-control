@@ -87,6 +87,8 @@
                             Modified files detected
                         </span>
                     @endif
+                @elseif (! $site->host()->supports(\Modules\Core\Contracts\HostingProvider::CAP_SSH) && ! $site->isPressable())
+                    <span class="text-[10px] text-[var(--color-ink-muted)]" title="wp-cli core verify-checksums requires server SSH access">N/A (requires SSH)</span>
                 @else
                     <span class="text-[10px] text-[var(--color-ink-muted)]">No check yet</span>
                 @endif
@@ -96,7 +98,9 @@
                 <span class="flex items-center gap-2 text-[var(--color-ink-strong)]">
                     <i class="fa-solid fa-ban text-rose-600"></i> Active IP Bans
                 </span>
-                @if ($bansCount > 0)
+                @if (! $site->host()->supports(\Modules\Core\Contracts\HostingProvider::CAP_SSH))
+                    <span class="text-[10px] text-[var(--color-ink-muted)]" title="Server-level fail2ban IP bans require SSH access">N/A (requires SSH)</span>
+                @elseif ($bansCount > 0)
                     <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800">
                         {{ $bansCount }} active ban{{ $bansCount === 1 ? '' : 's' }}
                     </span>

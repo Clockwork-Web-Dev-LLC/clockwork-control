@@ -55,8 +55,8 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         ->assertSee('WordPress security')
         ->assertSee('Hardened')
         ->assertSee('id="llar-state"', false)
-        // Billing & care plan card
-        ->assertSee('Billing & care plan')
+        // Care plan card
+        ->assertSee('Care plan')
         ->assertSee('On care plan')
         ->assertSee('Mark NOT on care plan')
         // Uptime monitoring card
@@ -72,6 +72,7 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         ->assertSee('Contact forms')
         // Danger zone
         ->assertSee('Remove from monitoring')
+        ->assertSee('does not delete the WordPress site on the host')
         ->assertSee('id="archive-site-toggle"', false);
 });
 
@@ -87,4 +88,23 @@ it('renders pressable tools card for Pressable sites', function () {
         ->assertSee('Pressable tools')
         ->assertSee('Flush object cache')
         ->assertSee('Load resource metrics');
+});
+
+it('does not put a backups card on the settings tab', function () {
+    $spinup = Site::factory()->spinupwp()->create();
+    $custom = Site::factory()->custom()->create([
+        'backup_relay_enabled' => true,
+        'backup_relay_frequency' => 'daily',
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('sites.show', ['site' => $spinup, 'tab' => 'settings']))
+        ->assertOk()
+        ->assertDontSee('id="backup-relay-card"', false);
+
+    $this->actingAs($this->user)
+        ->get(route('sites.show', ['site' => $custom, 'tab' => 'settings']))
+        ->assertOk()
+        ->assertDontSee('Save backup schedule')
+        ->assertDontSee('id="backup-relay-card"', false);
 });

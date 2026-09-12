@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\BackupRestoreCommand;
 use App\Console\Commands\PushCompanionTraffic;
+use App\Jobs\InstallCompanionJob;
 use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\Site;
+use App\Models\SiteIngestExclusion;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
@@ -18,6 +21,7 @@ use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
 use App\Services\HostingProvider\HostingProviderRegistry;
+use App\Services\Process\BackgroundArtisan;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
@@ -26,6 +30,7 @@ use App\Services\Ssl\LiveCertProbe;
 use App\Services\Ssl\SiteCertRefresher;
 use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeStateUpdater;
+use App\Support\CompanionExclusion;
 use App\Support\FleetSelfIps;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +40,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -92,6 +98,7 @@ class SitesController extends Controller
             // (or zero) enabled hosting-provider module means "All" and the
             // single provider are the same set.
             'providerTabs' => count($enabledProviders) > 1 ? $providerTabs : [],
+            'providers' => $enabledProviders,
             'activeProvider' => $provider ?? 'all',
             'q' => $q,
         ]);
@@ -1109,6 +1116,19 @@ class SitesController extends Controller
         Site $site,
         ActionLogger $logger,
     ): JsonResponse {
+        // Policy denylist (companion.excluded_domain_suffixes). Every CLI
+        // deploy path checks this; the web button must too, or the UI is a
+        // silent bypass — which is exactly how two policy-excluded domains
+        // got Companion installed on 2026-09-11. No --force equivalent here:
+        // deliberate exceptions go through install-companion --site=X --force.
+        if (app(CompanionExclusion::class)->isExcluded($site->domain)) {
+            return response()->json([
+                'ok' => false,
+                'result' => CompanionInstaller::RESULT_FAILED,
+                'message' => "{$site->domain} is excluded by policy (companion.excluded_domain_suffixes). Use the CLI with --force for a deliberate exception.",
+            ], 422);
+        }
+
         // Same result shape from both installers by design — only the
         // transport differs (SSH vs. Pressable's async command API). Which
         // one is which is the hosting provider's business, not this
@@ -1126,6 +1146,28 @@ class SitesController extends Controller
                 'message' => "{$site->host()->label()} is in View-Only mode, so Companion can't be installed. Confirm live write access on this provider in /settings/integrations first.",
             ], 422);
         }
+
+        // Pressable's async command API polls in 5s increments with a 120s
+        // per-call timeout, and a full install issues several such calls
+        // (upload, assemble, extract, activate) — routinely well past a
+        // reverse-proxy's fastcgi/read timeout in front of PHP, which
+        // set_time_limit() can't do anything about (confirmed live
+        // 2026-09-11: still timed out with set_time_limit(300) in place).
+        // Run it off-request and let the frontend poll instead.
+        if ($site->isPressable()) {
+            InstallCompanionJob::dispatch($site->id);
+
+            return response()->json([
+                'ok' => true,
+                'result' => 'queued',
+                'message' => 'Install queued — Pressable installs can take a couple of minutes.',
+                'queued_at' => now()->toIso8601String(),
+            ], 202);
+        }
+
+        // SSH installs are normally seconds, but give a same margin as the
+        // Pressable job's timeout for an unusually slow/loaded server.
+        set_time_limit(300);
 
         $result = $installer->installOrUpdate($site);
         $ok = in_array($result['result'], [
@@ -1152,6 +1194,39 @@ class SitesController extends Controller
             // need the noise.
             'output' => $ok ? null : ($result['output'] ?? null),
         ], $ok ? 200 : 422);
+    }
+
+    /**
+     * Poll target for the queued path above. `since` is the `queued_at` the
+     * install response handed back — the first companion_install/update
+     * ActionLog row created at or after it is this install's outcome.
+     * Returns done=false (still running) until one shows up.
+     */
+    public function installCompanionStatus(Site $site, Request $request): JsonResponse
+    {
+        $since = CarbonImmutable::parse((string) $request->query('since'));
+
+        $log = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', [ActionLog::TYPE_COMPANION_INSTALL, ActionLog::TYPE_COMPANION_UPDATE])
+            ->where('ran_at', '>=', $since)
+            ->orderBy('ran_at')
+            ->first();
+
+        if ($log === null) {
+            return response()->json(['done' => false]);
+        }
+
+        $result = is_array($log->details) ? ($log->details['result'] ?? null) : null;
+
+        return response()->json([
+            'done' => true,
+            'ok' => (bool) $log->ok,
+            'result' => $result,
+            'message' => $log->ok ? $log->summary : $log->error,
+            'version' => $log->target,
+            'output' => $log->ok ? null : (is_array($log->details) ? ($log->details['output'] ?? null) : null),
+        ]);
     }
 
     /**
@@ -1630,8 +1705,12 @@ class SitesController extends Controller
      * scans, bans, and traffic data survive — only the live surfaces hide it.
      *
      * Operator confirms by typing the site domain (matches the destroy-server
-     * pattern). The SpinupWP linkage is also cleared so a future re-import
-     * doesn't resurrect the row from a stale spinupwp_id match.
+     * pattern). Host linkage (`spinupwp_id` / `pressable_site_id`) is cleared
+     * so a future re-import cannot resurrect the row by id. For SpinupWP and
+     * Pressable, a `site_ingest_exclusions` row is also written so the daily
+     * / manual importer skips the domain (and the host site id) instead of
+     * filling those ids back onto the archived row. This does not delete
+     * WordPress on the host, and it does not uninstall Companion.
      */
     public function archive(Request $request, Site $site, ActionLogger $logger): RedirectResponse
     {
@@ -1648,9 +1727,17 @@ class SitesController extends Controller
             return back()->with('status', "{$site->domain} is already archived.");
         }
 
+        $reason = $validated['reason'] ?? null;
+        $excluded = SiteIngestExclusion::recordFromSite(
+            $site,
+            is_string($reason) ? $reason : null,
+            Auth::user()?->email,
+        );
+
         $site->forceFill([
             'archived_at' => now(),
             'spinupwp_id' => null,
+            'pressable_site_id' => null,
         ])->save();
 
         $logger->record(
@@ -1658,9 +1745,17 @@ class SitesController extends Controller
             summary: 'Site archived (removed from monitoring)',
             site: $site,
             target: $site->domain,
-            details: ['reason' => $validated['reason'] ?? null, 'archived_by' => Auth::user()?->email],
+            details: [
+                'reason' => $reason,
+                'archived_by' => Auth::user()?->email,
+                'ingest_excluded' => $excluded !== null,
+            ],
             actor: Auth::user()?->email ?? 'manual',
         );
+
+        $status = $excluded !== null
+            ? "Archived {$site->domain}. It is hidden from Clockwork and will not be re-imported. The WordPress site on the host was not deleted."
+            : "Archived {$site->domain}. The row is hidden from all listings; historical data is retained.";
 
         // No `server` to redirect to for a Pressable site, or a SpinupWP
         // site whose server_id was already nulled before archiving (e.g. a
@@ -1670,7 +1765,7 @@ class SitesController extends Controller
         // list, same as any other server-less redirect in this app.
         return redirect()
             ->to($site->server ? route('servers.show', $site->server) : route('sites.index'))
-            ->with('status', "Archived {$site->domain}. The row is hidden from all listings; historical data is retained.");
+            ->with('status', $status);
     }
 
     /**
@@ -1687,6 +1782,8 @@ class SitesController extends Controller
         }
 
         $site->forceFill(['archived_at' => null])->save();
+
+        SiteIngestExclusion::clearForSite($site);
 
         $logger->record(
             actionType: 'site.unarchive',
@@ -1770,7 +1867,7 @@ class SitesController extends Controller
     public function backupsHistory(Site $site, SpacesClient $spaces): JsonResponse
     {
         $relayArchives = [];
-        if ($site->backup_relay_enabled || $site->backup_relay_last_archived_at !== null) {
+        if ($site->backup_relay_enabled || $site->backup_relay_last_archived_at !== null || $site->isCustom()) {
             try {
                 if (class_exists(BackupArchiveEnumerator::class)) {
                     $enumerator = app(BackupArchiveEnumerator::class);
@@ -1801,6 +1898,553 @@ class SitesController extends Controller
             'spaces_configured' => $spacesConfigured,
             'spaces_history' => $spacesHistory,
             'relay_archives' => $relayArchives,
+            'schedule' => [
+                'enabled' => (bool) $site->backup_relay_enabled,
+                'frequency' => $site->backupRelayFrequency(),
+                'last_archived_at' => $site->backup_relay_last_archived_at?->toIso8601String(),
+                'last_size_bytes' => $site->backup_relay_last_size_bytes,
+                'next_scheduled_at' => $site->backupRelayNextScheduledAt()?->toIso8601String(),
+            ],
         ]);
+    }
+
+    /**
+     * Display the form to connect / enroll a standalone WordPress site.
+     */
+    public function create(): View
+    {
+        return view('sites.create');
+    }
+
+    /**
+     * Verify and enroll a standalone WordPress site via Companion REST handshake.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $connectionKey = trim((string) $request->input('connection_key', ''));
+        $domain = trim((string) $request->input('domain', ''));
+        $secret = trim((string) $request->input('companion_secret', ''));
+        // Standalone enroll has no host API/SSH. Always `custom` so
+        // CAP_BACKUP_RELAY and live TLS apply. Posted hosting_provider is ignored
+        // (WP Engine without API keys is not WPEngineHostingProvider).
+        $hostingProvider = Site::HOSTING_PROVIDER_CUSTOM;
+
+        // Parse Connection Key if provided
+        if ($connectionKey !== '') {
+            $decoded = null;
+            if (str_starts_with($connectionKey, '{')) {
+                $decoded = json_decode($connectionKey, true);
+            } else {
+                $b64 = preg_replace('/^cw_/', '', $connectionKey);
+                $json = base64_decode($b64, true);
+                if ($json !== false) {
+                    $decoded = json_decode($json, true);
+                }
+            }
+
+            if (is_array($decoded)) {
+                $domain = $decoded['url'] ?? $decoded['domain'] ?? $domain;
+                $secret = $decoded['secret'] ?? $secret;
+            } elseif (strlen($connectionKey) === 64 && ctype_xdigit($connectionKey) && empty($secret)) {
+                $secret = $connectionKey;
+            }
+        }
+
+        // Normalize domain
+        $domain = preg_replace('#^https?://#i', '', $domain);
+        $domain = explode('/', $domain)[0];
+        $domain = explode(':', $domain)[0];
+        $domain = strtolower(trim($domain));
+
+        if ($domain === '' || ! str_contains($domain, '.')) {
+            return back()->withInput()->withErrors([
+                'domain' => 'Please enter a valid domain name (e.g. example.com).',
+            ]);
+        }
+
+        if (Site::where('domain', $domain)->exists()) {
+            return back()->withInput()->withErrors([
+                'domain' => "The site {$domain} is already registered in Clockwork Control.",
+            ]);
+        }
+
+        if ($secret === '') {
+            return back()->withInput()->withErrors([
+                'companion_secret' => 'The Companion shared secret or Connection Key is required.',
+            ]);
+        }
+
+        // Live handshake via HMAC /health probe
+        $tempSite = new Site([
+            'domain' => $domain,
+            'companion_secret' => $secret,
+            'is_multisite' => false,
+        ]);
+
+        $client = new ClockworkCompanionClient($tempSite, timeout: 10);
+        try {
+            $health = $client->health();
+        } catch (Throwable $e) {
+            $msg = $e->getMessage();
+            if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
+                return back()->withInput()->withErrors([
+                    'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
+                ]);
+            }
+            if (str_contains($msg, '404')) {
+                return back()->withInput()->withErrors([
+                    'domain' => "The Clockwork Companion REST API (/wp-json/clockwork/v1/health) was not found on {$domain} (HTTP 404). Ensure the Companion plugin is installed and activated.",
+                ]);
+            }
+
+            return back()->withInput()->withErrors([
+                'domain' => "Could not connect to {$domain}: {$msg}. Verify the site is publicly accessible over HTTPS.",
+            ]);
+        }
+
+        if (! ($health['ok'] ?? false)) {
+            return back()->withInput()->withErrors([
+                'domain' => "Received an invalid health response from {$domain}.",
+            ]);
+        }
+
+        $version = (string) ($health['version'] ?? config('clockwork.companion.version', '1.35.0'));
+        $caps = (array) ($health['capabilities'] ?? []);
+        $isMultisite = (bool) ($health['is_multisite'] ?? false);
+
+        $site = Site::create([
+            'domain' => $domain,
+            'hosting_provider' => $hostingProvider,
+            'server_id' => null,
+            'companion_installed' => true,
+            'companion_version' => $version,
+            'companion_capabilities' => $caps,
+            'companion_secret' => $secret,
+            'companion_last_seen_at' => now(),
+            'is_multisite' => $isMultisite,
+            'uptime_monitoring_enabled' => true,
+            'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+        ]);
+
+        // Immediate baseline probes
+        try {
+            $expiresAt = app(LiveCertProbe::class)->expiryFor($site->domain);
+            if ($expiresAt !== null) {
+                $site->cert_expires_at = Carbon::instance($expiresAt);
+                $site->cert_state = $expiresAt->diffInDays(now()) > 30 ? Site::SSL_STATE_GREEN : Site::SSL_STATE_YELLOW;
+                $site->save();
+            }
+        } catch (Throwable) {
+            // non-fatal
+        }
+
+        try {
+            $prober = app(UptimeProber::class);
+            $updater = app(UptimeStateUpdater::class);
+            $result = $prober->probe(
+                'https://'.$site->domain.'/',
+                requireKeyword: $site->uptime_require_keyword,
+                skipBodyLengthCheck: (bool) $site->uptime_skip_body_check,
+            );
+            $updater->update($site, $result);
+        } catch (Throwable) {
+            // non-fatal
+        }
+
+        if (in_array('snapshot', $caps, true)) {
+            try {
+                $snapshot = (new ClockworkCompanionClient($site))->snapshot();
+                $site->forceFill([
+                    'companion_snapshot' => $snapshot,
+                    'companion_snapshot_at' => now(),
+                ])->save();
+            } catch (Throwable) {
+                // non-fatal
+            }
+        }
+
+        app(ActionLogger::class)->record(
+            actionType: 'site.enrolled',
+            summary: "Enrolled standalone site {$site->domain} via Companion ({$hostingProvider}).",
+            site: $site,
+        );
+
+        return redirect()->route('sites.show', $site)->with('flash', "Site {$site->domain} successfully connected and enrolled!");
+    }
+
+    /**
+     * Per-site backup-relay toggle + cadence for unhosted (custom) sites.
+     * SpinupWP / Pressable keep host-native backups; this is the ManageWP
+     * replacement for sites we don't host.
+     */
+    public function updateBackupRelay(Site $site, Request $request, ActionLogger $logger): RedirectResponse|JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'frequency' => ['required', Rule::in(Site::BACKUP_RELAY_FREQUENCIES)],
+        ]);
+
+        $previousEnabled = (bool) $site->backup_relay_enabled;
+        $previousFrequency = $site->backup_relay_frequency;
+
+        $site->forceFill([
+            'backup_relay_enabled' => (bool) $validated['enabled'],
+            'backup_relay_frequency' => $validated['frequency'],
+        ])->save();
+
+        $logger->record(
+            actionType: ActionLog::TYPE_BACKUP_RELAY_TOGGLED,
+            summary: sprintf(
+                '%s Glacier backups on %s (%s).',
+                $site->backup_relay_enabled ? 'Enabled' : 'Disabled',
+                $site->domain,
+                $site->backupRelayFrequency(),
+            ),
+            site: $site,
+            target: $site->backup_relay_enabled ? 'on' : 'off',
+            details: [
+                'previous_enabled' => $previousEnabled,
+                'now_enabled' => (bool) $site->backup_relay_enabled,
+                'previous_frequency' => $previousFrequency,
+                'now_frequency' => $site->backup_relay_frequency,
+            ],
+        );
+
+        $payload = [
+            'ok' => true,
+            'enabled' => (bool) $site->backup_relay_enabled,
+            'frequency' => $site->backupRelayFrequency(),
+            'next_scheduled_at' => $site->backupRelayNextScheduledAt()?->toIso8601String(),
+            'domain' => $site->domain,
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json($payload);
+        }
+
+        return back()->with('status', $site->backup_relay_enabled
+            ? "Glacier backups for {$site->domain} are on ({$site->backupRelayFrequency()})."
+            : "Glacier backups for {$site->domain} are off.");
+    }
+
+    /**
+     * Kick a single-site backup now (ignores cadence). Companion streams
+     * the zip to S3 Glacier IR; this request only starts the artisan job.
+     */
+    public function runBackupNow(Site $site, Request $request, BackgroundArtisan $background, ActionLogger $logger): RedirectResponse|JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        if (! $site->backup_relay_enabled) {
+            $msg = "Turn backups on for {$site->domain} before running Backup Now.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        // Cross-lock against restore: never run a backup while a restore is
+        // in flight (BackgroundArtisan lock held, or cached state mid-flight).
+        $restoreState = Cache::get("backup_restore.site.{$site->id}.state");
+        $restoreInFlight = Cache::has('backup_restore.site.'.$site->id)
+            || in_array($restoreState['status'] ?? '', BackupRestoreCommand::IN_FLIGHT_STATUSES, true);
+
+        if ($restoreInFlight) {
+            $msg = "A restore for {$site->domain} is in progress — Backup Now is unavailable until it finishes.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        $result = $background->start(
+            'backup_relay.run.site.'.$site->id,
+            ['clockwork:backup-relay-run --site='.(int) $site->id.' --force'],
+            3600,
+            'backup-relay-site-'.$site->id,
+        );
+
+        if ($result->alreadyRunning()) {
+            $msg = "A backup for {$site->domain} is already in progress.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
+            $msg = $result->error ?? 'Could not start the backup.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $logger->record(
+            actionType: ActionLog::TYPE_BACKUP_RELAY_RUN_NOW,
+            summary: "Started Backup Now for {$site->domain}.",
+            site: $site,
+        );
+
+        $msg = "Backup started for {$site->domain}. Companion is dumping the site to Glacier — this can take several minutes.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
+    }
+
+    /**
+     * Stage an off-site backup restore for a custom/standalone site.
+     */
+    public function backupRelayRestoreStage(
+        Request $request,
+        Site $site,
+        BackgroundArtisan $background,
+        BackupArchiveEnumerator $enumerator
+    ): RedirectResponse|JsonResponse {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'archive_key' => ['required', 'string'],
+            'confirm_domain' => ['required', 'string'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (! hash_equals($site->domain, $validated['confirm_domain'])) {
+            $msg = 'Confirmation text did not match the site domain.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! $site->backup_relay_enabled) {
+            $msg = "Backup relay is not enabled for {$site->domain}.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! in_array('backup-restore', $site->companion_capabilities ?? [], true)) {
+            $msg = "Site {$site->domain} lacks backup-restore companion capability. Update Companion to v1.37.0+.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! $enumerator->supportsPresignedUrls()) {
+            $msg = 'Backup relay storage disk does not support presigned URLs.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        $archiveKey = $validated['archive_key'];
+        $sha256 = $enumerator->resolveArchiveSha256($site, $archiveKey);
+        if (empty($sha256)) {
+            $msg = "No integrity hash on record for archive {$archiveKey}. Restore refused.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        // Cross-lock against Backup Now: never stage a restore while a backup
+        // run holds its BackgroundArtisan lock for this site.
+        if (Cache::has('backup_relay.run.site.'.$site->id)) {
+            $msg = "A backup for {$site->domain} is currently running. Wait for it to finish before staging a restore.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        $actor = (string) (Auth::user()->email ?? 'system');
+
+        $result = $background->start(
+            'backup_restore.site.'.$site->id,
+            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=stage --key='.escapeshellarg($archiveKey).' --actor='.escapeshellarg($actor)],
+            3600,
+            'backup-restore-site-'.$site->id,
+        );
+
+        if ($result->alreadyRunning()) {
+            $msg = "A restore operation for {$site->domain} is already in progress.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
+            $msg = $result->error ?? 'Could not start the restore operation.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $msg = "Restore stage started for {$site->domain}. Downloading and verifying archive.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
+    }
+
+    /**
+     * Apply a previously staged backup restore for a custom site.
+     */
+    public function backupRelayRestoreApply(
+        Request $request,
+        Site $site,
+        BackgroundArtisan $background
+    ): RedirectResponse|JsonResponse {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'archive_key' => ['required', 'string'],
+        ]);
+
+        $cacheKey = "backup_restore.site.{$site->id}.state";
+        $cached = Cache::get($cacheKey);
+
+        if (empty($cached['staged_id']) || ($cached['status'] ?? '') !== 'staged') {
+            $msg = "No staged restore ready to apply for {$site->domain}.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        $actor = (string) (Auth::user()->email ?? 'system');
+
+        $result = $background->start(
+            'backup_restore.site.'.$site->id,
+            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=apply --key='.escapeshellarg($validated['archive_key']).' --actor='.escapeshellarg($actor)],
+            3600,
+            'backup-restore-site-'.$site->id,
+        );
+
+        if ($result->alreadyRunning()) {
+            $msg = "A restore operation for {$site->domain} is already in progress.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
+            $msg = $result->error ?? 'Could not start applying the restore.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $msg = "Applying restore for {$site->domain}. Files and database are being restored.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
+    }
+
+    /**
+     * Poll live state of the backup restore for a site.
+     */
+    public function backupRelayRestoreStatus(Site $site): JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        $state = Cache::get("backup_restore.site.{$site->id}.state") ?? [
+            'status' => 'idle',
+            'phase' => null,
+            'staged_id' => null,
+        ];
+
+        return response()->json($state);
+    }
+
+    /**
+     * Lightweight precheck: does this archive have a SHA-256 hash on record?
+     * Lets the widget show "restore unavailable" up front instead of making
+     * the operator type the domain only to hit a 422.
+     */
+    public function backupRelayRestorePrecheck(Request $request, Site $site, BackupArchiveEnumerator $enumerator): JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'key' => ['required', 'string'],
+        ]);
+
+        try {
+            $sha256 = $enumerator->resolveArchiveSha256($site, $validated['key']);
+        } catch (Throwable) {
+            $sha256 = null;
+        }
+
+        return response()->json(['sha256_available' => ! empty($sha256)]);
+    }
+
+    /**
+     * Discard any staged/failed restore state for the site so a stale staged
+     * archive can never be applied later by accident.
+     */
+    public function backupRelayRestoreDiscard(Request $request, Site $site): RedirectResponse|JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        Cache::forget("backup_restore.site.{$site->id}.state");
+
+        $msg = "Cleared staged restore state for {$site->domain}.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
     }
 }

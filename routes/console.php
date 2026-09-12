@@ -462,6 +462,26 @@ Schedule::command('clockwork:refresh-plugin-vulnerabilities')
     ->onOneServer()
     ->runInBackground();
 
+// Sync CISA Known Exploited Vulnerabilities (KEV) catalog.
+// Downloads the official CISA JSON feed daily to detect active in-the-wild
+// exploitation of CVEs present in installed plugins, enriching vulnerability
+// modals and alert emails with an 'Actively exploited (CISA KEV)' badge.
+Schedule::command('clockwork:refresh-cisa-kev')
+    ->dailyAt('03:20')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
+// Check WordPress.org plugin directory status for closed/zombieware plugins.
+// Queries the public official plugin information API once per unique slug
+// fleet-wide. Closed plugins receive zero security patches and are surfaced
+// on the Issues page. Runs weekly on Mondays at 03:30 UTC.
+Schedule::command('clockwork:refresh-closed-plugins')
+    ->weeklyOn(1, '03:30')
+    ->withoutOverlapping(60)
+    ->onOneServer()
+    ->runInBackground();
+
 // Lighthouse / PageSpeed scan, weekly per site via nightly rotation. Replaces
 // the ManageWP "Performance Check" feature with a modern Lighthouse score
 // (Google's authoritative SEO ranking surface) plus Core Web Vitals. The
@@ -491,6 +511,15 @@ Schedule::command('clockwork:run-performance-scans --strategy=mobile --weekly-ro
     ->dailyAt('04:45')
     ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
     ->withoutOverlapping(60)
+    ->onOneServer()
+    ->runInBackground();
+
+// Fetch software runtime lifecycle data from endoflife.date for PHP and WordPress.
+// Caches cycle tables in app_settings so the Capacity dashboard and site tech
+// stack widgets can track EOL / security-only versions without blocking on HTTP.
+Schedule::command('clockwork:refresh-runtime-eol')
+    ->dailyAt('05:10')
+    ->withoutOverlapping(30)
     ->onOneServer()
     ->runInBackground();
 

@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -83,7 +83,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/sites/{site}/{tab?}` | Site detail. `tab` ∈ `overview|traffic|bans|security|performance|settings|forms|updates`. For a Pressable site, `traffic`/`bans` fall back to `overview` (no SSH/server access to source either from). |
-| GET | `/sites/{site}/backups-history` | JSON backup history. Returns DigitalOcean Spaces backup runs and S3 Glacier Relay long-term archives for the Backups widget snapshots modal. |
+| GET | `/sites/{site}/backups-history` | JSON backup history. Returns DigitalOcean Spaces backup runs, S3 Glacier Relay archives, and a `schedule` block (enabled / frequency / last / next) for the Backups widget. |
+| PATCH | `/sites/{site}/backup-relay` | Per-site Glacier backup toggle + cadence (`daily` / `twice_weekly` / `weekly`). Custom/standalone sites only. |
+| POST | `/sites/{site}/backup-relay/run-now` | Backup Now for one custom site (`clockwork:backup-relay-run --site={id} --force` in the background). |
 | GET | `/search/sites` | JSON site search (focused with `/`). |
 | PATCH | `/sites/{site}/cert` · POST `/cert/recheck` | SSL source + recheck. |
 | POST | `/sites/{site}/uptime/recheck` | On-demand uptime probe for one site. |
@@ -91,6 +93,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/uptime-body-check` | Per-site skip of the white-screen body-length check (parked / SPA / gated homepages). |
 | POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
+| GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
@@ -101,7 +104,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/fetch-db-creds` | Fetch WP DB credentials over SSH for a single site. |
 | POST | `/sites/{site}/refresh-wp-plugins` | Re-probe via SSH. |
 | POST | `/sites/{site}/email-vuln-report` | Email a plugin-vulnerability summary for one site. |
-| POST | `/sites/{site}/archive` · POST `/sites/{siteId}/unarchive` | Soft-remove / restore. Unarchive uses `{siteId}` (not the `{site}` route-model binder) because the binder 404s on archived rows. |
+| POST | `/sites/{site}/archive` · POST `/sites/{siteId}/unarchive` | Soft-remove / restore. Archive on SpinupWP / Pressable also writes `site_ingest_exclusions` so host import will not resurrect the row; unarchive clears that exclusion. Unarchive uses `{siteId}` (not the `{site}` route-model binder) because the binder 404s on archived rows. |
 | GET | `/forms` | Fleet-wide contact-form-test inventory. Provided by `Modules\ContactForms` (self-registered via its `ServiceProvider::boot()`), not core `routes/web.php`. The `forms` site-detail tab only appears when the module is enabled. |
 | POST | `/sites/{site}/form-tests` · PATCH/DELETE `/form-tests/{cft}` · POST `/form-tests/{cft}/test-now` | Per-site form-test CRUD + on-demand run. Deliberately under `/form-tests/`, not `/forms/`, so it doesn't collide with the `?tab=forms` site-detail URL. Also module-provided now — see above. |
 | POST | `/sites/{site}/contact-form/install-companion` · `/contact-form/rotate-secret` | Contact-form add-on's own Companion install/secret-rotate entry points (same controller methods as the generic ones above, reachable from the Forms page). |
