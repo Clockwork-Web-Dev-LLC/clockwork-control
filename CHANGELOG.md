@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-site Glacier backups for unhosted sites**: Custom/standalone sites get a ManageWP-style Backups card (on/off, daily / twice-weekly / weekly, last/next, calendar, Backup Now). SpinupWP and Pressable keep host-native backups; this is only for sites we do not host.
 - **Drop SpinupWP / Pressable sites from Clockwork**: Remove from monitoring archives the row and writes `site_ingest_exclusions` so `clockwork:import-spinupwp` / `clockwork:import-pressable` skip that domain (and host site id) instead of resurrecting it. Does not delete WordPress on the host or uninstall Companion.
 
+### Documentation
+- Documented `CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX`, `CLOCKWORK_BACKUP_RELAY_DISK`, `CLOCKWORK_BACKUP_RELAY_FREQUENCY`, and `CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS` in the Backup Relay feature guide and Environment Variables reference.
+
 ## [1.6.7] - 2026-09-11
 
 ### Added

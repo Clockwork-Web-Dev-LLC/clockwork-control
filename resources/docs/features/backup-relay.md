@@ -199,6 +199,14 @@ S3_BACKUP_RELAY_BUCKET=your-agency-backups-bucket
 
 # Operational Mode ('in_repo' or 'external_agent')
 CLOCKWORK_BACKUP_RELAY_MODE=in_repo
+
+# Storage disk, cadence, retention, and archive path prefix
+CLOCKWORK_BACKUP_RELAY_DISK=s3-backup-relay
+CLOCKWORK_BACKUP_RELAY_FREQUENCY=weekly
+CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS=90
+# Production uses '_control/backup-relay/archives' because Control's scoped IAM
+# policy only permits PutObject operations under '_control/backup-relay/'
+CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX=archives
 ```
 
 ## Settings Dashboard (`/settings/backup-relay`)

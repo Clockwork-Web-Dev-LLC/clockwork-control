@@ -196,7 +196,10 @@ standard Laravel `s3` disk vars plus one prefix override. See
 | `S3_BACKUP_RELAY_SECRET` | `AWS_SECRET_ACCESS_KEY` | Dedicated S3 secret key for backup relay uploads. Falls back to `AWS_SECRET_ACCESS_KEY` if unset. |
 | `S3_BACKUP_RELAY_REGION` | `us-east-1` | S3 region where backup archives are uploaded. |
 | `S3_BACKUP_RELAY_BUCKET` | `AWS_BUCKET` | Destination S3 bucket name. |
-| `CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX` | `archives` | Destination folder prefix inside the bucket where site backups land (e.g. `archives/{domain}/...`). |
+| `CLOCKWORK_BACKUP_RELAY_DISK` | `s3-backup-relay` | Dedicated filesystem disk configured in `config/filesystems.php` used for backup relay operations. |
+| `CLOCKWORK_BACKUP_RELAY_FREQUENCY` | `weekly` | Default fleet-wide backup relay schedule frequency (`daily`, `twice_weekly`, `weekly`). Overridden per-site by `sites.backup_relay_frequency`. |
+| `CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS` | `90` | Default retention period in days for off-site backup archives. |
+| `CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX` | `archives` | Destination folder prefix inside the bucket where site backups land (e.g. `archives/{domain}/...`). Production uses `_control/backup-relay/archives` due to scoped IAM permissions. |
 | `CLOCKWORK_BACKUP_RELAY_S3_PREFIX` | `_control/backup-relay` | Key prefix for the two control files (`targets.json`, `last-report.json`). Used in `external_agent` mode only. Must match the external droplet's `S3_CONTROL_PREFIX`. |
 | `AWS_ACCESS_KEY_ID` | unset | IAM access key used as general fallback. |
 | `AWS_SECRET_ACCESS_KEY` | unset | Matching fallback secret key. |
