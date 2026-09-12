@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **GridPane `site_user` always resolved to the literal placeholder `'gridpane'` instead of the site's real system username**, breaking Companion installs and any other SSH-as-site-user operation (`mkdir: Permission denied` on the site's own directory) for effectively every GridPane-imported site. Root cause: `/site` rows only expose `system_user_id`, a foreign key into `/system-user` — never a literal `system_user`/`user` string — so the importer's fallback chain always bottomed out at the placeholder. `clockwork:import-gridpane` now fetches the fleet's system users once per run and resolves `site_user` by id; a site whose id can't be resolved (e.g. the owning user was deleted from GridPane) keeps its existing `site_user` on re-import instead of being clobbered back to the placeholder.
+- `GridPaneClient::systemUsers()` didn't paginate, unlike `servers()`/`sites()` — silently returned only the first page (e.g. 10 of 151 users across 16 pages on a real fleet), which would have caused the id-lookup above to fail for most sites even after the resolution fix.
+
 ## [1.6.7] - 2026-09-11
 
 ### Added

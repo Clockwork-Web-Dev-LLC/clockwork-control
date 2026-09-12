@@ -40,6 +40,7 @@ describe('GridPane Integration & Commands', function () {
                     ['id' => 5001, 'url' => 'example.com', 'server_id' => 1001],
                 ],
             ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response(['data' => []], 200),
         ]);
 
         $this->artisan('clockwork:import-gridpane --dry-run')
@@ -72,6 +73,7 @@ describe('GridPane Integration & Commands', function () {
                     ],
                 ],
             ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response(['data' => []], 200),
         ]);
 
         $this->artisan('clockwork:import-gridpane')
@@ -92,6 +94,73 @@ describe('GridPane Integration & Commands', function () {
             ->and($site->server_id)->toBe($server->id)
             ->and($site->site_user)->toBe('clientuser')
             ->and($site->wp_path)->toBe('/var/www/example-client.com/htdocs');
+    });
+
+    it('resolves site_user from system_user_id when the site row has no literal system_user field', function () {
+        // Real GridPane /site rows never carry system_user/user directly —
+        // only system_user_id, a foreign key into /system-user. This is the
+        // actual shape GridPane returns (confirmed against a live account),
+        // unlike the other tests here which pass a literal system_user for
+        // simplicity.
+        Http::fake([
+            'my.gridpane.com/oauth/api/v1/server' => Http::response([
+                'data' => [
+                    ['id' => 1001, 'label' => 'gp-node', 'ip' => '198.51.100.25'],
+                ],
+            ], 200),
+            'my.gridpane.com/oauth/api/v1/site' => Http::response([
+                'data' => [
+                    [
+                        'id' => 5001,
+                        'url' => 'example-client.com',
+                        'server_id' => 1001,
+                        'system_user_id' => 150741,
+                    ],
+                ],
+            ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response([
+                'data' => [
+                    ['id' => 150741, 'username' => 'realsiteuser10870'],
+                ],
+            ], 200),
+        ]);
+
+        $this->artisan('clockwork:import-gridpane')->assertSuccessful();
+
+        $site = Site::withoutGlobalScopes()->where('domain', 'example-client.com')->first();
+        expect($site->site_user)->toBe('realsiteuser10870');
+    });
+
+    it('does not clobber an existing site_user when a later import cannot resolve system_user_id', function () {
+        $server = Server::factory()->gridpane()->create(['provider_id' => '1001', 'hostname' => '198.51.100.25']);
+        $site = Site::factory()->gridpane()->create([
+            'server_id' => $server->id,
+            'gridpane_site_id' => '5001',
+            'domain' => 'example-client.com',
+            'site_user' => 'realsiteuser10870',
+        ]);
+
+        Http::fake([
+            'my.gridpane.com/oauth/api/v1/server' => Http::response([
+                'data' => [
+                    ['id' => 1001, 'label' => 'gp-node', 'ip' => '198.51.100.25'],
+                ],
+            ], 200),
+            'my.gridpane.com/oauth/api/v1/site' => Http::response([
+                'data' => [
+                    // system_user_id present but absent from the /system-user
+                    // response below (e.g. the owning user was since deleted
+                    // from GridPane) — resolution fails for this site.
+                    ['id' => 5001, 'url' => 'example-client.com', 'server_id' => 1001, 'system_user_id' => 999999],
+                ],
+            ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response(['data' => []], 200),
+        ]);
+
+        $this->artisan('clockwork:import-gridpane')->assertSuccessful();
+
+        $site->refresh();
+        expect($site->site_user)->toBe('realsiteuser10870');
     });
 
     it('updates existing servers and sites idempotently', function () {
@@ -128,6 +197,7 @@ describe('GridPane Integration & Commands', function () {
                     ],
                 ],
             ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response(['data' => []], 200),
         ]);
 
         $this->artisan('clockwork:import-gridpane')

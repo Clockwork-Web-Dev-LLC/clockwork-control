@@ -135,25 +135,17 @@ class GridPaneClient
     /**
      * Fetch all system users.
      *
+     * Auto-paginates like servers()/sites() — a fleet of any real size has
+     * far more than one page of system users (e.g. 151 users across 16
+     * pages on a 132-site account), and a single un-paginated get() here
+     * silently returned only the first 10, causing id lookups (e.g. for
+     * site_user resolution) to fail for most of the fleet.
+     *
      * @return list<array<string, mixed>>
      */
     public function systemUsers(): array
     {
-        $data = $this->get('/system-user')->json();
-
-        if (is_array($data)) {
-            if (isset($data['system_users']) && is_array($data['system_users'])) {
-                return $data['system_users'];
-            }
-            if (isset($data['data']) && is_array($data['data'])) {
-                return $data['data'];
-            }
-            if (array_is_list($data)) {
-                return $data;
-            }
-        }
-
-        return [];
+        return $this->paginate('/system-user');
     }
 
     /**

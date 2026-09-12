@@ -57,11 +57,34 @@ class ImportGridPane extends Command
             $this->warn('  Site list may be incomplete: GridPane stopped responding partway through pagination. Re-run this command shortly to pick up the rest.');
         }
 
+        // Site rows never carry a system_user/user string directly — only
+        // system_user_id, a foreign key into /system-user. Fetch the fleet's
+        // system users once up front and resolve site_user by id below,
+        // rather than per-site API calls.
+        $this->info('Fetching GridPane system users…');
+        try {
+            $gpSystemUsers = $gridpane->systemUsers();
+        } catch (\Throwable $e) {
+            $this->error('Failed fetching system users from GridPane: '.$e->getMessage());
+
+            return self::FAILURE;
+        }
+        $this->line('  '.count($gpSystemUsers).' system users found');
+        if ($gridpane->wasPartial()) {
+            $this->warn('  System user list may be incomplete: GridPane stopped responding partway through pagination. Re-run this command shortly to pick up the rest.');
+        }
+        $systemUsernameById = [];
+        foreach ($gpSystemUsers as $u) {
+            if (isset($u['id'], $u['username']) && is_string($u['username']) && $u['username'] !== '') {
+                $systemUsernameById[(string) $u['id']] = $u['username'];
+            }
+        }
+
         $serverStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0];
         $siteStats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'skipped_no_domain' => 0];
 
         try {
-            DB::transaction(function () use ($gpServers, $gpSites, &$serverStats, &$siteStats, $dryRun) {
+            DB::transaction(function () use ($gpServers, $gpSites, $systemUsernameById, &$serverStats, &$siteStats, $dryRun) {
                 $serverIdByGpId = [];
 
                 foreach ($gpServers as $row) {
@@ -72,7 +95,7 @@ class ImportGridPane extends Command
                 }
 
                 foreach ($gpSites as $row) {
-                    $this->upsertSite($row, $serverIdByGpId, $siteStats);
+                    $this->upsertSite($row, $serverIdByGpId, $systemUsernameById, $siteStats);
                 }
 
                 if ($dryRun) {
@@ -150,9 +173,10 @@ class ImportGridPane extends Command
     /**
      * @param  array<string, mixed>  $row
      * @param  array<string, int>  $serverIdByGpId
+     * @param  array<string, string>  $systemUsernameById
      * @param  array<string, int>  $stats
      */
-    protected function upsertSite(array $row, array $serverIdByGpId, array &$stats): ?Site
+    protected function upsertSite(array $row, array $serverIdByGpId, array $systemUsernameById, array &$stats): ?Site
     {
         $domain = $row['url'] ?? $row['domain'] ?? $row['primary_domain'] ?? null;
         if (! $domain) {
@@ -178,13 +202,25 @@ class ImportGridPane extends Command
             $site = Site::withoutGlobalScopes()->where('domain', $domain)->first();
         }
 
-        $systemUser = $row['system_user'] ?? $row['user'] ?? 'gridpane';
+        // GridPane's site payloads never carry a literal system_user/user
+        // string (kept here only in case a future API version adds one) —
+        // in practice this always resolves via system_user_id against the
+        // system-users map built in handle(). A site whose id can't be
+        // resolved (e.g. the owning user was deleted from GridPane) falls
+        // back to the 'gridpane' placeholder only when creating a brand-new
+        // site record; an existing site keeps whatever site_user it already
+        // has rather than being clobbered back to the placeholder on every
+        // re-import.
+        $gpSystemUserId = isset($row['system_user_id']) ? (string) $row['system_user_id'] : null;
+        $systemUser = $row['system_user'] ?? $row['user'] ?? ($gpSystemUserId !== null ? ($systemUsernameById[$gpSystemUserId] ?? null) : null);
+        if ($systemUser === null && ! $site) {
+            $systemUser = 'gridpane';
+        }
 
         $attributes = [
             'domain' => $domain,
             'hosting_provider' => Site::HOSTING_PROVIDER_GRIDPANE,
             'gridpane_site_id' => $gpSiteId,
-            'site_user' => $systemUser,
             'wp_path' => "/var/www/{$domain}/htdocs",
             'is_wordpress' => true,
             'cert_source' => Site::CERT_SOURCE_EXTERNAL,
@@ -192,6 +228,10 @@ class ImportGridPane extends Command
 
         if ($serverId) {
             $attributes['server_id'] = $serverId;
+        }
+
+        if ($systemUser !== null) {
+            $attributes['site_user'] = $systemUser;
         }
 
         if (! $site) {

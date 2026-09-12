@@ -202,6 +202,32 @@ describe('GridPane module unit tests', function () {
             ->and($users[0]['username'])->toBe('gridpane');
     });
 
+    it('GridPaneClient auto-paginates system users across multiple pages', function () {
+        Http::fake([
+            'my.gridpane.com/oauth/api/v1/system-user' => Http::response([
+                'data' => [
+                    ['id' => 1, 'username' => 'siteuser1'],
+                ],
+                'links' => ['next' => 'https://my.gridpane.com/oauth/api/v1/system-user?page=2'],
+                'meta' => ['current_page' => 1, 'last_page' => 2, 'total' => 2],
+            ], 200),
+            'my.gridpane.com/oauth/api/v1/system-user?page=2' => Http::response([
+                'data' => [
+                    ['id' => 2, 'username' => 'siteuser2'],
+                ],
+                'links' => ['next' => null],
+                'meta' => ['current_page' => 2, 'last_page' => 2, 'total' => 2],
+            ], 200),
+        ]);
+
+        $client = new GridPaneClient('test-key');
+        $users = $client->systemUsers();
+
+        expect($users)->toHaveCount(2)
+            ->and($users[0]['username'])->toBe('siteuser1')
+            ->and($users[1]['username'])->toBe('siteuser2');
+    });
+
     it('GridPaneClient fetches backup schedules for a site', function () {
         Http::fake([
             'my.gridpane.com/oauth/api/v1/backups/schedules/site/501' => Http::response([
