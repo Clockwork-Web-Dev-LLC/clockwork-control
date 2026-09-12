@@ -92,6 +92,11 @@ describe('Companion Backup Relay (S3 Glacier Instant Retrieval)', function () {
                 && str_contains((string) ($data['destination_key'] ?? ''), 'archives/wpengine-client.com/2026-09-11.zip');
         });
 
+        Storage::disk('s3-backup-relay')->assertExists('archives/wpengine-client.com/2026-09-11.zip.sha256.json');
+        $sidecar = json_decode((string) Storage::disk('s3-backup-relay')->get('archives/wpengine-client.com/2026-09-11.zip.sha256.json'), true);
+        expect($sidecar['sha256'])->toBe('abc123def456')
+            ->and($sidecar['size_bytes'])->toBe(52428800);
+
         $secondResult = $job->handle($uploader);
         expect($secondResult)->toBe('skipped');
     });

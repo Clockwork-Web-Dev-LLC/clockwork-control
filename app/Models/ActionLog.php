@@ -107,6 +107,12 @@ class ActionLog extends Model
 
     public const TYPE_BACKUP_RELAY_RUN_NOW = 'backup_relay_run_now';
 
+    public const TYPE_BACKUP_RESTORE_STAGED = 'backup_restore_staged';
+
+    public const TYPE_BACKUP_RESTORE_APPLIED = 'backup_restore_applied';
+
+    public const TYPE_BACKUP_RESTORE_FAILED = 'backup_restore_failed';
+
     public const TYPE_INSTALLER_REOPENED = 'installer_reopened';
 
     // ManageWP parity features (Comment Moderation, Code Snippets, Site Maintenance)

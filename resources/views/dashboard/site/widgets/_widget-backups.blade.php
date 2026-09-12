@@ -35,6 +35,115 @@
          calMonth: {{ (int) now()->month - 1 }},
          selectedDate: @js(now()->toDateString()),
          csrf: @js(csrf_token()),
+         restoreModalOpen: false,
+         restoreArchive: null,
+         restoreConfirmDomain: '',
+         restoreNote: '',
+         restoring: false,
+         restoreMessage: null,
+         restoreError: null,
+         restoreState: { status: 'idle' },
+         siteDomain: @js($site->domain),
+         hasRestoreCapability: {{ in_array('backup-restore', $site->companion_capabilities ?? [], true) ? 'true' : 'false' }},
+         openRestore(archive) {
+             this.restoreArchive = archive;
+             this.restoreConfirmDomain = '';
+             this.restoreNote = '';
+             this.restoreMessage = null;
+             this.restoreError = null;
+             this.restoreState = { status: 'idle' };
+             this.restoreModalOpen = true;
+             this.checkRestoreStatus();
+         },
+         async checkRestoreStatus() {
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.restore.status', $site) }}', {
+                     headers: { 'Accept': 'application/json' }
+                 });
+                 if (res.ok) {
+                     this.restoreState = await res.json();
+                 }
+             } catch (e) {}
+         },
+         async stageRestore() {
+             if (this.restoring || !this.restoreArchive) return;
+             if (this.restoreConfirmDomain !== this.siteDomain) {
+                 this.restoreError = 'Confirmation text does not match site domain.';
+                 return;
+             }
+             this.restoring = true;
+             this.restoreError = null;
+             this.restoreMessage = 'Submitting stage request…';
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.restore.stage', $site) }}', {
+                     method: 'POST',
+                     headers: {
+                         'X-CSRF-TOKEN': this.csrf,
+                         'Accept': 'application/json',
+                         'Content-Type': 'application/json',
+                     },
+                     body: JSON.stringify({
+                         archive_key: this.restoreArchive.key,
+                         confirm_domain: this.restoreConfirmDomain,
+                         note: this.restoreNote,
+                     }),
+                 });
+                 const data = await res.json();
+                 if (!res.ok) {
+                     this.restoreError = data.message || 'Failed to start restore staging.';
+                     this.restoring = false;
+                     return;
+                 }
+                 this.restoreMessage = data.message;
+                 await this.pollRestoreUntil(['staged', 'failed']);
+             } catch (e) {
+                 this.restoreError = e.message || 'Request failed';
+             } finally {
+                 this.restoring = false;
+             }
+         },
+         async applyRestore() {
+             if (this.restoring) return;
+             this.restoring = true;
+             this.restoreError = null;
+             this.restoreMessage = 'Applying restore…';
+             try {
+                 const res = await fetch('{{ route('sites.backup-relay.restore.apply', $site) }}', {
+                     method: 'POST',
+                     headers: {
+                         'X-CSRF-TOKEN': this.csrf,
+                         'Accept': 'application/json',
+                         'Content-Type': 'application/json',
+                     },
+                 });
+                 const data = await res.json();
+                 if (!res.ok) {
+                     this.restoreError = data.message || 'Failed to start applying restore.';
+                     this.restoring = false;
+                     return;
+                 }
+                 this.restoreMessage = data.message;
+                 await this.pollRestoreUntil(['applied', 'failed']);
+             } catch (e) {
+                 this.restoreError = e.message || 'Request failed';
+             } finally {
+                 this.restoring = false;
+             }
+         },
+         async pollRestoreUntil(targetStatuses) {
+             for (let i = 0; i < 120; i++) {
+                 await new Promise(r => setTimeout(r, 4000));
+                 await this.checkRestoreStatus();
+                 const status = this.restoreState ? this.restoreState.status : null;
+                 if (targetStatuses.includes(status)) {
+                     if (status === 'failed') {
+                         this.restoreError = this.restoreState.error_detail || this.restoreState.error || 'Restore failed';
+                     }
+                     return;
+                 }
+             }
+             this.restoreMessage = 'Operation is taking longer than expected. Status will update automatically.';
+         },
          formatBytes(bytes) {
              if (!bytes || bytes <= 0) return '—';
              const k = 1024;
@@ -220,6 +329,16 @@
         </div>
 
         @if ($isCustom)
+            <div class="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 p-3 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300"
+                 x-show="restoreState && restoreState.maintenance_left_on"
+                 x-cloak>
+                <i class="fa-solid fa-triangle-exclamation text-sm shrink-0 mt-0.5 text-red-600"></i>
+                <div>
+                    <div class="font-semibold">Restore failed after import began</div>
+                    <p class="mt-0.5 text-[11px] opacity-90">The site was left in maintenance mode to prevent database inconsistencies. Investigate before manually lifting maintenance.</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <div class="flex items-center justify-between mb-2">
@@ -304,6 +423,13 @@
                             <div class="flex items-center gap-2 shrink-0">
                                 <span class="font-data text-[var(--color-ink-muted)]" x-text="archive.size_formatted || formatBytes(archive.size_bytes)"></span>
                                 <a :href="archive.download_url" class="text-emerald-700 hover:underline" x-show="archive.download_url">Download</a>
+                                <button type="button"
+                                        @click="openRestore(archive)"
+                                        :disabled="!hasRestoreCapability || restoring || runningNow"
+                                        class="text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline font-medium"
+                                        :title="!hasRestoreCapability ? 'Companion backup-restore capability required' : 'Restore this archive to the site'">
+                                    Restore…
+                                </button>
                             </div>
                         </div>
                     </template>
@@ -538,6 +664,185 @@
                                 class="btn-pill text-xs py-1.5 px-4 cursor-pointer">
                             Close
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    {{-- Restore Modal --}}
+    <template x-teleport="body">
+        <div x-show="restoreModalOpen"
+             x-cloak
+             @keydown.escape.window="if (!restoring) restoreModalOpen = false"
+             class="fixed inset-0 z-50 overflow-y-auto"
+             role="dialog"
+             aria-modal="true">
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+                 @click="if (!restoring) restoreModalOpen = false"></div>
+
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="relative w-full max-w-xl rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl p-6 transition-all"
+                     @click.stop>
+                    <div class="flex items-center justify-between pb-4 border-b border-[var(--color-border-light)] mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-display font-semibold text-base text-[var(--color-ink-strong)]">
+                                    Restore Backup — {{ $site->domain }}
+                                </h3>
+                                <p class="text-xs text-[var(--color-ink-muted)]">
+                                    Operator-confirmed Glacier restore via Clockwork Companion.
+                                </p>
+                            </div>
+                        </div>
+                        <button type="button"
+                                :disabled="restoring"
+                                @click="restoreModalOpen = false"
+                                class="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] cursor-pointer disabled:opacity-50">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4 text-xs">
+                        <template x-if="restoreArchive">
+                            <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)] flex items-center justify-between text-xs">
+                                <div>
+                                    <div class="font-medium text-[var(--color-ink-strong)]" x-text="restoreArchive.filename || restoreArchive.key"></div>
+                                    <div class="text-[11px] text-[var(--color-ink-muted)]" x-text="restoreArchive.archived_at_formatted || restoreArchive.archived_at"></div>
+                                </div>
+                                <span class="font-data text-[var(--color-ink-muted)]" x-text="restoreArchive.size_formatted || formatBytes(restoreArchive.size_bytes)"></span>
+                            </div>
+                        </template>
+
+                        <div x-show="restoreError" class="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2" x-cloak>
+                            <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i>
+                            <span x-text="restoreError"></span>
+                        </div>
+
+                        {{-- Step 1: Confirmation & Stage --}}
+                        <div x-show="!restoreState || restoreState.status === 'idle' || restoreState.status === 'failed'">
+                            <p class="text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                                Restoring will download the archive from S3 Glacier to the site, verify its cryptographic hash, unpack database tables and files, and require your final confirmation before applying.
+                            </p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block font-medium text-[var(--color-ink-strong)] mb-1">
+                                        Type the site domain <span class="font-mono text-indigo-600 select-all">{{ $site->domain }}</span> to confirm:
+                                    </label>
+                                    <input type="text"
+                                           x-model="restoreConfirmDomain"
+                                           placeholder="{{ $site->domain }}"
+                                           class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:ring-2 focus:ring-indigo-500 font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block font-medium text-[var(--color-ink-strong)] mb-1">
+                                        Reason / Note (optional):
+                                    </label>
+                                    <input type="text"
+                                           x-model="restoreNote"
+                                           placeholder="e.g. Rolling back after plugin conflict"
+                                           class="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:ring-2 focus:ring-indigo-500 text-xs">
+                                </div>
+                            </div>
+                            <div class="mt-5 flex items-center justify-end gap-2">
+                                <button type="button"
+                                        @click="restoreModalOpen = false"
+                                        class="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] font-medium cursor-pointer">
+                                    Cancel
+                                </button>
+                                <button type="button"
+                                        @click="stageRestore()"
+                                        :disabled="restoring || restoreConfirmDomain !== siteDomain"
+                                        class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2">
+                                    <i class="fa-solid" :class="restoring ? 'fa-circle-notch fa-spin' : 'fa-download'"></i>
+                                    <span x-text="restoring ? 'Staging…' : 'Stage Restore'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {{-- Step 2: Staging in progress --}}
+                        <div x-show="restoring && restoreState && ['downloading', 'verifying', 'extracting', 'scanning'].includes(restoreState.status)" class="text-center py-6 space-y-3" x-cloak>
+                            <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-lg">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            </div>
+                            <div class="font-medium text-[var(--color-ink-strong)] capitalize" x-text="(restoreState.status || '') + ' archive…'"></div>
+                            <p class="text-[11px] text-[var(--color-ink-muted)] max-w-sm mx-auto" x-text="restoreMessage || 'Downloading from Glacier and verifying integrity hash.'"></p>
+                        </div>
+
+                        {{-- Step 3: Staged — ready to apply --}}
+                        <div x-show="restoreState && restoreState.status === 'staged'" class="space-y-4" x-cloak>
+                            <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5 text-sm"></i>
+                                <div>
+                                    <div class="font-semibold">Archive staged & verified</div>
+                                    <div class="text-[11px] text-emerald-700 mt-0.5">
+                                        SHA-256 hash verified. Database dump and files are unpacked on the server.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 border border-[var(--color-border-light)]">
+                                <div class="flex justify-between">
+                                    <span class="text-[var(--color-ink-muted)]">Database dump:</span>
+                                    <span class="font-medium" x-text="restoreState.has_sql ? 'Present (prefix: ' + (restoreState.table_prefix || 'standard') + ')' : 'None'"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-[var(--color-ink-muted)]">Files (wp-content):</span>
+                                    <span class="font-medium" x-text="restoreState.has_files ? 'Present' : 'None'"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-[var(--color-ink-muted)]">Verified hash:</span>
+                                    <span class="font-mono text-[10px] text-[var(--color-ink-strong)]" x-text="(restoreState.actual_sha256 || '').slice(0, 16) + '…'"></span>
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-start gap-2">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 shrink-0 text-amber-600"></i>
+                                <span>Applying will place the site in maintenance mode, import matching database tables, and overwrite modified wp-content files. Maintenance mode is automatically lifted on success.</span>
+                            </div>
+                            <div class="mt-5 flex items-center justify-between">
+                                <button type="button"
+                                        @click="restoreModalOpen = false"
+                                        class="text-xs text-[var(--color-ink-muted)] hover:text-red-600 cursor-pointer">
+                                    Discard / Close
+                                </button>
+                                <button type="button"
+                                        @click="applyRestore()"
+                                        :disabled="restoring"
+                                        class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2 text-xs">
+                                    <i class="fa-solid" :class="restoring ? 'fa-circle-notch fa-spin' : 'fa-bolt'"></i>
+                                    <span x-text="restoring ? 'Applying…' : 'Apply Restore Now'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {{-- Step 4: Applying in progress --}}
+                        <div x-show="restoring && restoreState && ['applying_sql', 'applying_files', 'finalizing'].includes(restoreState.status)" class="text-center py-6 space-y-3" x-cloak>
+                            <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto text-lg">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            </div>
+                            <div class="font-medium text-[var(--color-ink-strong)] capitalize" x-text="(restoreState.status || '').replace('_', ' ') + '…'"></div>
+                            <p class="text-[11px] text-[var(--color-ink-muted)] max-w-sm mx-auto">Maintenance mode is active. Restoring database tables and files.</p>
+                        </div>
+
+                        {{-- Step 5: Applied successfully --}}
+                        <div x-show="restoreState && restoreState.status === 'applied'" class="text-center py-6 space-y-3" x-cloak>
+                            <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto text-xl">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                            <div class="font-semibold text-sm text-[var(--color-ink-strong)]">Restore completed successfully!</div>
+                            <p class="text-xs text-[var(--color-ink-muted)] max-w-xs mx-auto">
+                                The site has been restored to the selected archive state. Maintenance mode has been lifted.
+                            </p>
+                            <div class="pt-2">
+                                <button type="button"
+                                        @click="restoreModalOpen = false; fetchHistory()"
+                                        class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

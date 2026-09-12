@@ -2,10 +2,10 @@
 title: Backup relay (Multi-Provider → S3 Glacier)
 section: Features
 order: 130
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
-tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
+tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
 ---
 
 Archives off-host snapshots across supported hosting providers (Pressable, SpinupWP, and any provider implementing `HostingProvider::CAP_BACKUP_RELAY`) directly to S3 Glacier Instant Retrieval. Provides long-term off-host disaster recovery beyond host-limited retention windows.
@@ -182,7 +182,25 @@ For WordPress sites we **do not host** (WP Engine, Kinsta, a client box, any `cu
 - The site Overview **Backups** card is the per-site control: on/off, Daily / Twice weekly / Weekly, last/next, a month calendar of archives, and **Backup Now**.
 - Nightly `clockwork:backup-relay-run` (04:58) respects that per-site cadence. Daily uses calendar day so a 15:00 Backup Now does not skip tomorrow morning.
 - **Backup Now** runs `clockwork:backup-relay-run --site={id} --force` in the background and writes `archives/{domain}/{Y-m-d_H-i-s}.zip` so it never collides with the scheduled daily key.
-- There is no clone / Away / template flow — restore is download from Glacier when you need it.
+
+### Restore for Custom Sites (Two-Step Stage & Apply)
+
+For custom unhosted sites, Clockwork provides a safe two-step restore flow directly from the site's Backups widget (`/sites/{id}`):
+
+1. **Two-Step Architecture**:
+   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 120-minute presigned S3 GET URL and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
+   - **Step 2 (Apply)**: Once staged, the operator reviews the detected staging details (database dump presence, table prefix, files archive) in the modal and clicks **Apply Restore**. Companion places WordPress into maintenance mode (`.maintenance`), imports the SQL dump using gzip streaming scoped strictly to `$wpdb->prefix` (failing closed with `prefix_mismatch` if 0 tables match), and copies the restored `wp-content/` files over the active filesystem.
+
+2. **Fail-Closed Maintenance Mode**:
+   - If SQL import fails or file copy fails after maintenance mode has been engaged, Companion **intentionally leaves maintenance mode enabled** to prevent visitors from hitting a partially applied database or missing assets.
+   - Control flags `maintenance_left_on` in the restore state cache and renders a prominent red alert banner on the Backups widget alerting the operator to SSH in and inspect the host.
+
+3. **Additive Copy-Over Limitation**:
+   - Restoring files is an additive copy-over operation: archive files overwrite active files, but files added on the site *after* the backup was created (e.g. newly uploaded media or newly installed plugins) are not deleted. A full disk wipe is intentionally avoided over REST for safety.
+
+4. **Audit Logging & Orchestration**:
+   - Control runs the restore via `BackgroundArtisan` running `clockwork:backup-restore {--site=} {--phase=} {--key=} {--actor=}`.
+   - Every stage, apply, and failure records an `ActionLog` entry (`backup_restore_staged`, `backup_restore_applied`, `backup_restore_failed`) visible in the site's Activity history.
 
 `sites.backup_relay_frequency` is nullable. Hosted sites leave it null and inherit `/settings/backup-relay`. Custom sites set their own.
 

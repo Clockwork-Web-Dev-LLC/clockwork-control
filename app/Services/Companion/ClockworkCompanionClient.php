@@ -176,6 +176,44 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Stage an off-site archive restore on the site.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function stageBackupRestore(array $payload): array
+    {
+        return $this->postJson('/backup/restore/stage', $payload, [
+            'timeout' => 55,
+            'retries' => 0,
+        ]);
+    }
+
+    /**
+     * Poll live status of an in-flight or completed backup restore.
+     * Uses GET so the HMAC signature is not consumed by the replay guard.
+     *
+     * @return array<string, mixed>
+     */
+    public function backupRestoreStatus(): array
+    {
+        return $this->getJson('/backup/restore/status');
+    }
+
+    /**
+     * Apply a staged backup restore on the site.
+     *
+     * @return array<string, mixed>
+     */
+    public function applyBackupRestore(string $stagedId): array
+    {
+        return $this->postJson('/backup/restore/apply', ['staged_id' => $stagedId], [
+            'timeout' => 55,
+            'retries' => 0,
+        ]);
+    }
+
+    /**
      * Push a 30-day traffic rollup to the site's Companion. Stored in
      * wp_options['clockwork_companion_traffic_report']; rendered by the
      * Traffic admin page (1.16.0+). Last-write-wins.

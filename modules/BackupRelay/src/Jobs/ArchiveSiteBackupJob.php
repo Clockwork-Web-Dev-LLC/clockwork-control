@@ -139,6 +139,10 @@ class ArchiveSiteBackupJob implements ShouldQueue
                 'size_bytes' => $directResult['size_bytes'] ?? null,
                 'sha256' => $directResult['sha256'] ?? null,
             ]);
+
+            if (! empty($directResult['sha256'])) {
+                $this->writeSha256Sidecar($disk, $destinationKey, (string) $directResult['sha256'], (int) ($directResult['size_bytes'] ?? 0));
+            }
         } else {
             $stream = $adapter->openBackupStream($site, $ref);
             if ($stream === null) {
@@ -234,6 +238,21 @@ class ArchiveSiteBackupJob implements ShouldQueue
             return $disk->size($destinationKey);
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    private function writeSha256Sidecar(mixed $disk, string $destinationKey, string $sha256, int $sizeBytes): void
+    {
+        try {
+            $sidecarKey = "{$destinationKey}.sha256.json";
+            $payload = json_encode([
+                'sha256' => $sha256,
+                'size_bytes' => $sizeBytes,
+                'created_at' => now()->toIso8601String(),
+            ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+            $disk->put($sidecarKey, $payload);
+        } catch (Throwable $e) {
+            Log::warning("BackupRelay: Failed writing sha256 sidecar for {$destinationKey}: {$e->getMessage()}");
         }
     }
 }

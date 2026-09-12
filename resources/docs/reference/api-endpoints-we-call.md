@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -141,7 +141,7 @@ Daily at 01:00 + 01:30, gated on `CLOCKWORK_BILL_COM_ENABLED`.
 
 `app/Services/Companion/ClockworkCompanionClient.php` · HMAC-SHA256 with per-site secret (`X-Clockwork-Signature` + `X-Clockwork-Timestamp`, 5-min replay window).
 
-Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`, `/test-contact-form`, `POST /backups-report`, `POST /backup/create` (direct-to-S3 Glacier streaming backup), `POST /sso/magic-link`, `POST /plugins/update`, `POST /action-log/append`, `POST /secret/rotate`, `POST /malware-scan` (in-WP malware probe — bypasses Cloudflare; SSH wp-cli fallback exists for sites without the plugin). Full details on the `architecture/companion-plugin` page.
+Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`, `/test-contact-form`, `POST /backups-report`, `POST /backup/create` (direct-to-S3 Glacier streaming backup), `POST /backup/restore/stage`, `GET /backup/restore/status`, `POST /backup/restore/apply` (two-step off-site Glacier restore), `POST /sso/magic-link`, `POST /plugins/update`, `POST /action-log/append`, `POST /secret/rotate`, `POST /malware-scan` (in-WP malware probe — bypasses Cloudflare; SSH wp-cli fallback exists for sites without the plugin). Full details on the `architecture/companion-plugin` page.
 
 ## wpvulnerability.net — `https://www.wpvulnerability.net/plugin/{slug}`
 

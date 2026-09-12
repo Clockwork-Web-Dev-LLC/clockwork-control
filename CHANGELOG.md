@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Glacier backup restore for custom / unhosted sites**: Operators can restore historical off-site archives directly to standalone WordPress sites via Companion (v1.37.0+). Safe two-step stage and apply flow with strict domain confirmation, SHA-256 integrity verification against `.sha256.json` S3 sidecars or newest archive records, fail-closed maintenance mode, and prefix-scoped SQL import (`$wpdb->prefix`). Background orchestration via `clockwork:backup-restore` with full `action_logs` auditing.
 - **Standalone Companion enroll**: `POST /sites` pairs via Connection Key or domain+secret, always as `custom` (no host API/SSH). Turns on uptime, live TLS, and daily Glacier backups (`backup_relay_enabled` + `backup_relay_frequency = daily`). Direct-to-S3 Glacier IR uses a stable daily key `archives/{domain}/{Y-m-d}.zip`; Backup Now writes `archives/{domain}/{Y-m-d_H-i-s}.zip`. Existing daily objects count as success (HMAC timeout after PUT). Last archive size and SHA-256 are stored on the site.
 - **Per-site Glacier backups for unhosted sites**: Custom/standalone sites get a ManageWP-style Backups card (on/off, daily / twice-weekly / weekly, last/next, calendar, Backup Now). SpinupWP and Pressable keep host-native backups; this is only for sites we do not host.
 - **Drop SpinupWP / Pressable sites from Clockwork**: Remove from monitoring archives the row and writes `site_ingest_exclusions` so `clockwork:import-spinupwp` / `clockwork:import-pressable` skip that domain (and host site id) instead of resurrecting it. Does not delete WordPress on the host or uninstall Companion.
 
 ### Documentation
+- Documented custom site Glacier backup restore architecture (two-step stage/apply, fail-closed maintenance mode, copy-over limitation, sidecar verification) and REST API endpoints in the Backup Relay feature guide and API reference.
 - Documented `CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX`, `CLOCKWORK_BACKUP_RELAY_DISK`, `CLOCKWORK_BACKUP_RELAY_FREQUENCY`, and `CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS` in the Backup Relay feature guide and Environment Variables reference.
 
 ## [1.6.7] - 2026-09-11

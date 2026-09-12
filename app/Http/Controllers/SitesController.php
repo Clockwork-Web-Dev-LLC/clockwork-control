@@ -39,6 +39,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -2187,5 +2188,189 @@ class SitesController extends Controller
         }
 
         return back()->with('status', $msg);
+    }
+
+    /**
+     * Stage an off-site backup restore for a custom/standalone site.
+     */
+    public function backupRelayRestoreStage(
+        Request $request,
+        Site $site,
+        BackgroundArtisan $background,
+        BackupArchiveEnumerator $enumerator
+    ): RedirectResponse|JsonResponse {
+        abort_unless($site->isCustom(), 403);
+
+        $validated = $request->validate([
+            'archive_key' => ['required', 'string'],
+            'confirm_domain' => ['required', 'string'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (! hash_equals($site->domain, $validated['confirm_domain'])) {
+            $msg = 'Confirmation text did not match the site domain.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! $site->backup_relay_enabled) {
+            $msg = "Backup relay is not enabled for {$site->domain}.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! in_array('backup-restore', $site->companion_capabilities ?? [], true)) {
+            $msg = "Site {$site->domain} lacks backup-restore companion capability. Update Companion to v1.37.0+.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        if (! $enumerator->supportsPresignedUrls()) {
+            $msg = 'Backup relay storage disk does not support presigned URLs.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        $archiveKey = $validated['archive_key'];
+        $sha256 = $enumerator->resolveArchiveSha256($site, $archiveKey);
+        if (empty($sha256)) {
+            $msg = "No integrity hash on record for archive {$archiveKey}. Restore refused.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        $actor = (string) (Auth::user()->email ?? 'system');
+
+        $result = $background->start(
+            'backup_restore.site.'.$site->id,
+            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=stage --key='.escapeshellarg($archiveKey).' --actor='.escapeshellarg($actor)],
+            3600,
+            'backup-restore-site-'.$site->id,
+        );
+
+        if ($result->alreadyRunning()) {
+            $msg = "A restore operation for {$site->domain} is already in progress.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
+            $msg = $result->error ?? 'Could not start the restore operation.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $msg = "Restore stage started for {$site->domain}. Downloading and verifying archive.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
+    }
+
+    /**
+     * Apply a previously staged backup restore for a custom site.
+     */
+    public function backupRelayRestoreApply(
+        Request $request,
+        Site $site,
+        BackgroundArtisan $background
+    ): RedirectResponse|JsonResponse {
+        abort_unless($site->isCustom(), 403);
+
+        $cacheKey = "backup_restore.site.{$site->id}.state";
+        $cached = Cache::get($cacheKey);
+
+        if (empty($cached['staged_id']) || ($cached['status'] ?? '') !== 'staged') {
+            $msg = "No staged restore ready to apply for {$site->domain}.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
+        $actor = (string) (Auth::user()->email ?? 'system');
+
+        $result = $background->start(
+            'backup_restore.site.'.$site->id,
+            ['clockwork:backup-restore --site='.(int) $site->id.' --phase=apply --actor='.escapeshellarg($actor)],
+            3600,
+            'backup-restore-site-'.$site->id,
+        );
+
+        if ($result->alreadyRunning()) {
+            $msg = "A restore operation for {$site->domain} is already in progress.";
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 409);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($result->failed()) {
+            $msg = $result->error ?? 'Could not start applying the restore.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $msg = "Applying restore for {$site->domain}. Files and database are being restored.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => $msg]);
+        }
+
+        return back()->with('status', $msg);
+    }
+
+    /**
+     * Poll live state of the backup restore for a site.
+     */
+    public function backupRelayRestoreStatus(Site $site): JsonResponse
+    {
+        abort_unless($site->isCustom(), 403);
+
+        $state = Cache::get("backup_restore.site.{$site->id}.state") ?? [
+            'status' => 'idle',
+            'phase' => null,
+            'staged_id' => null,
+        ];
+
+        return response()->json($state);
     }
 }
