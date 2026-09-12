@@ -164,9 +164,13 @@
                                 @endif
                                 @if ($site->isPressable())
                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
-                                        <i class="fa-solid fa-cloud"></i> Pressable
-                                    </span>
-                                @elseif ($site->server)
+                                         <i class="fa-solid fa-cloud"></i> Pressable
+                                     </span>
+                                 @elseif ($site->isCustom())
+                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Custom / Companion Only">
+                                         <i class="fa-solid fa-plug"></i> Companion Only
+                                     </span>
+                                 @elseif ($site->server)
                                     <span class="text-xs font-data text-[var(--color-ink-muted)] truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
                                         <i class="fa-solid fa-server text-[var(--color-ink-soft)]"></i> {{ $site->server->display_name ?? $site->server->name }}
                                     </span>

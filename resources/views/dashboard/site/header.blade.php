@@ -18,9 +18,15 @@
         <a href="{{ route('sites.index') }}" class="text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">
             <i class="fa-solid fa-arrow-left"></i> Sites
         </a>
-        <span class="status-pill status-unknown ml-2" title="Hosted on Pressable — no server-level access (SSH, credentials) applies to this site.">
-            <i class="fa-solid fa-cloud"></i> Pressable
-        </span>
+        @if ($site->isPressable())
+            <span class="status-pill status-unknown ml-2" title="Hosted on Pressable — no server-level access (SSH, credentials) applies to this site.">
+                <i class="fa-solid fa-cloud"></i> Pressable
+            </span>
+        @elseif ($site->isCustom())
+            <span class="status-pill status-unknown ml-2" title="Custom hosting — standalone WordPress site managed purely via Clockwork Companion plugin.">
+                <i class="fa-solid fa-plug"></i> Companion Only
+            </span>
+        @endif
     @endif
 </div>
 
