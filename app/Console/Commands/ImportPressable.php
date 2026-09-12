@@ -97,17 +97,34 @@ class ImportPressable extends Command
         $isLive = ($row['state'] ?? null) === 'live';
 
         $attributes = [
+            // Keeps an existing row (matched below by pressable_site_id) in
+            // sync when Pressable's reported url/domain changes — a no-op
+            // when matched by domain, since $domain already equals it.
+            'domain' => $domain,
             'pressable_site_id' => $pressableId,
             'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE,
             'server_id' => null,
             'is_wordpress' => true,
         ];
 
+        // Match by pressable_site_id FIRST, not just domain. Pressable's own
+        // `url` field can change on an already-tracked site (e.g. the client
+        // adds/renames the primary domain to www.example.com) while `id`
+        // stays stable — a domain-only lookup would miss that existing row
+        // and then crash on the pressable_site_id unique constraint trying
+        // to insert a "new" one. Found live 2026-09-12: tlolawfirm.com's
+        // Pressable id started reporting url=www.tlolawfirm.com, which blew
+        // up the entire fleet-wide import (one bad row rolls back the whole
+        // transaction) until this lookup order was fixed.
+        $site = $pressableId !== null
+            ? Site::withoutGlobalScopes()->firstWhere('pressable_site_id', $pressableId)
+            : null;
+
         // Bypass the notArchived global scope — if the operator archived a
         // domain and Pressable still reports it, update the archived row in
         // place rather than fail the unique-domain constraint by inserting
         // a duplicate. Matches clockwork:import-spinupwp's precedent.
-        $site = Site::withoutGlobalScopes()->firstWhere('domain', $domain);
+        $site ??= Site::withoutGlobalScopes()->firstWhere('domain', $domain);
 
         // A domain can legitimately appear in both platforms' listings at
         // once (mid-migration, a staging clone, client experimentation).
@@ -117,8 +134,9 @@ class ImportPressable extends Command
         // that's still really hosted there. Skip and flag for manual review
         // instead. (Found the hard way: siteclient.example, still live on
         // web51, got its server_id wiped by an earlier, unguarded version
-        // of this import.)
-        if ($site && $site->isSpinupWp() && $site->spinupwp_id !== null && $site->archived_at === null) {
+        // of this import.) Only applies when we matched by domain — a row
+        // already linked by pressable_site_id is unambiguously this site.
+        if ($site && $site->pressable_site_id !== $pressableId && $site->isSpinupWp() && $site->spinupwp_id !== null && $site->archived_at === null) {
             $this->warn("  Skipping {$domain}: still an active SpinupWP site (spinupwp_id={$site->spinupwp_id}) — not overwriting.");
             $stats['skipped_active_spinupwp']++;
 
