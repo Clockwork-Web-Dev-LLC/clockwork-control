@@ -301,22 +301,16 @@
      }"
      x-init="prefetch(); if (isCustom) checkRestoreStatus()">
     <div>
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-4 pr-6">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                 <i class="fa-solid fa-box-archive text-emerald-600"></i>
                 Backups
             </h3>
             @if ($isCustom)
-                <button type="button"
-                        role="switch"
-                        :aria-checked="enabled ? 'true' : 'false'"
-                        aria-label="Toggle Glacier backups for {{ $site->domain }}"
-                        @click="enabled = !enabled; saveSchedule()"
-                        :disabled="saving"
-                        class="cw-switch"
-                        :class="{ 'cw-switch--on': enabled, 'cw-switch--busy': saving }">
-                    <span class="cw-switch__knob"></span>
-                </button>
+                <span class="status-pill text-[10px]" :class="enabled ? 'status-green' : 'status-unknown'">
+                    <span class="status-dot"></span>
+                    <span x-text="enabled ? 'Protected' : 'Disabled'">{{ $relayEnabled ? 'Protected' : 'Disabled' }}</span>
+                </span>
             @elseif ($hasRelayOrPressable)
                 <span class="status-pill status-green text-[10px]">
                     <span class="status-dot"></span> Protected
@@ -381,6 +375,26 @@
                         <span class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
                             <i class="fa-brands fa-aws text-amber-600"></i> AWS S3 Glacier IR
                         </span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Automated backups:</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    role="switch"
+                                    :aria-checked="enabled ? 'true' : 'false'"
+                                    aria-label="Toggle Glacier backups for {{ $site->domain }}"
+                                    @click="enabled = !enabled; saveSchedule()"
+                                    :disabled="saving"
+                                    class="cw-switch"
+                                    :class="{ 'cw-switch--on': enabled, 'cw-switch--busy': saving }">
+                                <span class="cw-switch__knob"></span>
+                            </button>
+                            <span class="text-[11px] font-medium"
+                                  :class="enabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-[var(--color-ink-muted)]'"
+                                  x-text="enabled ? 'Active' : 'Paused'">
+                                {{ $relayEnabled ? 'Active' : 'Paused' }}
+                            </span>
+                        </div>
                     </div>
                     <div class="flex items-center justify-between text-[11px]">
                         <span class="text-[var(--color-ink-muted)]">Cadence:</span>
