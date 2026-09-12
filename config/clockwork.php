@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.6.8',
+    'version' => '1.7.0',
 
     'arcjet' => [
         'bots_url' => env(
@@ -300,7 +300,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.34.0'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.37.0'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.

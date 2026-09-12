@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-12
+
 ### Added
 - **PHP & WordPress runtime EOL tracking on Capacity**: Daily sync from endoflife.date (`clockwork:refresh-runtime-eol` at 05:10 UTC via `EndOfLifeClient`) caches lifecycle cycle definitions in `app_settings`. `RuntimeEolEvaluator` normalizes version strings and classifies site environments into `EOL`, `Security only`, or `Supported`. The Capacity page (`/capacity`) features a dedicated "Runtime EOL & Lifecycle" card with count pills, sortable domain breakdown, and support end-date visibility, with graceful stale-data fallback. Per-site tech stack widgets display quiet amber/red status pills.
 - **CISA KEV (Known Exploited Vulnerabilities) active exploitation badge**: Synchronizes CISA's official catalog (`https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`) daily at 03:20 UTC via `clockwork:refresh-cisa-kev` into `cisa_kev_entries`. Query-time match against installed plugin CVEs surfaces a prominent red `Actively exploited (CISA KEV)` badge in the `/issues` vulnerability modal and in operator vulnerability email reports (`SiteVulnerabilityReportMail`), highlighting in-the-wild exploitation risks.
