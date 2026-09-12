@@ -2,7 +2,7 @@
 title: Scheduler stuck
 section: Runbooks
 order: 50
-updated: 2026-09-09
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [runbook, scheduler, ops, incident]
 ---
@@ -12,6 +12,8 @@ The scheduler not running is a load-bearing failure mode. Without it, almost eve
 You should not have to notice this from second-order drift. `clockwork:scheduler-heartbeat` writes a timestamp every minute; any authenticated page older than 5 minutes since that tick shows a red banner, `/issues` counts it, and Mattermost/Slack fire `scheduler_stale` once. A brand-new install that has never ticked is a yellow banner only — no chat, not an Issue.
 
 There is exactly one permanent mechanism: crontab — see below for why a long-running daemon should not be used.
+
+This page is about cron itself being alive. Once you've confirmed that, [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) (`/settings/scheduled-jobs`) shows whether each *individual* job is actually succeeding — the heartbeat can be green for months while one specific job (a missing migration, a revoked API key) errors on every tick.
 
 ## The permanent mechanism: crontab, not a long-running process
 

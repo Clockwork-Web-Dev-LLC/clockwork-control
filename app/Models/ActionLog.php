@@ -130,6 +130,8 @@ class ActionLog extends Model
 
     public const TYPE_CACHE_PURGED = 'cache_purged';
 
+    public const TYPE_SCHEDULED_JOB_RUN_NOW = 'scheduled_job_run_now';
+
     /**
      * The four update-job kinds, grouped for the maintenance-history
      * "All updates" quick filter — kept here so any future caller that

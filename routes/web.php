@@ -23,6 +23,7 @@ use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\OperationsUpdatesController;
 use App\Http\Controllers\ReviewQueueController;
+use App\Http\Controllers\ScheduledJobsController;
 use App\Http\Controllers\SecurityAdminsController;
 use App\Http\Controllers\SecurityScansController;
 use App\Http\Controllers\SecurityScansSettingsController;
@@ -374,6 +375,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Care Plans fleet policy settings
     Route::get('/settings/care-plans', [CarePlanSettingsController::class, 'index'])->name('settings.care-plans.index');
     Route::patch('/settings/care-plans', [CarePlanSettingsController::class, 'update'])->name('settings.care-plans.update');
+
+    // Scheduled jobs dashboard — view every cron entry's last outcome, run one on demand.
+    Route::get('/settings/scheduled-jobs', [ScheduledJobsController::class, 'index'])->name('settings.scheduled-jobs.index');
+    Route::post('/settings/scheduled-jobs/run', [ScheduledJobsController::class, 'run'])->name('settings.scheduled-jobs.run');
 
     // Mattermost and Slack per-event opt-out routes moved to
     // modules/Mattermost/routes/web.php and modules/Slack/routes/web.php.

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Listeners\Scheduling\RecordScheduledTaskResult;
 use App\Models\BlockedIp;
 use App\Models\ContactFormTest;
 use App\Models\ReviewQueueEntry;
@@ -12,6 +13,10 @@ use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Updates\UpdateGrouping;
 use App\Support\IssueCounter;
 use App\Support\Settings;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskSkipped;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -106,5 +111,12 @@ class AppServiceProvider extends ServiceProvider
                 // Settings / chat must not take the layout down.
             }
         });
+
+        // Powers /settings/scheduled-jobs. These fire for every entry in the
+        // schedule (routes/console.php plus module-registered tasks) with no
+        // per-command wiring needed — see RecordScheduledTaskResult.
+        Event::listen(ScheduledTaskFinished::class, [RecordScheduledTaskResult::class, 'handleFinished']);
+        Event::listen(ScheduledTaskFailed::class, [RecordScheduledTaskResult::class, 'handleFailed']);
+        Event::listen(ScheduledTaskSkipped::class, [RecordScheduledTaskResult::class, 'handleSkipped']);
     }
 }

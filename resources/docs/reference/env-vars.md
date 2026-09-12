@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -274,6 +274,7 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 | `CLOCKWORK_SSH_CONNECT_TIMEOUT` | `10` | |
 | `CLOCKWORK_SSH_EXEC_TIMEOUT` | `30` | Per-command override available in the client call. |
 | `CLOCKWORK_SSH_PREFLIGHT_TIMEOUT` | `2` | Short `fsockopen` probe before the real SSH handshake, so a deleted/firewalled server fails fast instead of hanging past `max_execution_time`. |
+| `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS` | `30` | How long [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) keeps run history before `clockwork:prune-scheduled-job-runs` deletes it. |
 
 ## Monitoring thresholds
 

@@ -51,6 +51,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:pressable-traffic-report',
         'clockwork:process-pending-bans',
         'clockwork:process-server-updates',
+        'clockwork:prune-scheduled-job-runs',
         'clockwork:prune-server-metrics',
         'clockwork:prune-threat-logs',
         'clockwork:pull-llar-lockouts',

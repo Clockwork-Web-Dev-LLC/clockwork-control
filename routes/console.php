@@ -151,6 +151,12 @@ Schedule::command('clockwork:prune-server-metrics')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Keeps /settings/scheduled-jobs history bounded — see RecordScheduledTaskResult.
+Schedule::command('clockwork:prune-scheduled-job-runs')
+    ->dailyAt('04:31')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Chunked delete of raw nginx rows older than the saved retention window
 // (default 30 days). site_traffic_daily rollups stay. First catch-up can
 // run for hours on a bloated table — background + long mutex so it cannot
