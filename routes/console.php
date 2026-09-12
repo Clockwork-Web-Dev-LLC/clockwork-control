@@ -514,6 +514,15 @@ Schedule::command('clockwork:run-performance-scans --strategy=mobile --weekly-ro
     ->onOneServer()
     ->runInBackground();
 
+// Fetch software runtime lifecycle data from endoflife.date for PHP and WordPress.
+// Caches cycle tables in app_settings so the Capacity dashboard and site tech
+// stack widgets can track EOL / security-only versions without blocking on HTTP.
+Schedule::command('clockwork:refresh-runtime-eol')
+    ->dailyAt('05:10')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
 // clockwork:sync-bill-customers (01:00) and clockwork:sync-bill-care-plans
 // (01:30) moved to Modules\BillCom\BillComServiceProvider::scheduledTasks()
 // (Phase 8 followup).

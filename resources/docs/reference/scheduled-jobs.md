@@ -111,6 +111,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 04:55 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-picked form-test subscriptions (Companion wp-admin Forms tab) into `contact_form_tests`. Slots between detect (04:50) and test (06:00). |
 | 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Off-host archival to S3 Glacier IR. Per-site cadence (`sites.backup_relay_frequency`) is honoured in in-repo mode; custom/unhosted sites default to daily. `--force` / Backup Now skips the interval. External-agent mode still writes `targets.json`. See [Features → Backup relay](/docs/features/backup-relay). |
 | 05:00 | `clockwork:check-cloudflare` | Per-site CF detection. (Promoted from weekly to daily — CF state changes too often to wait a week.) |
+| 05:10 | `clockwork:refresh-runtime-eol` | Pull PHP and WordPress release lifecycle tables from endoflife.date into `app_settings` for the Capacity dashboard and site widgets. |
 
 ## Daily — Companion + form-tests (06:00 UTC)
 

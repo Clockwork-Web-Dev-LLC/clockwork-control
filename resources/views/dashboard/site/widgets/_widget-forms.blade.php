@@ -60,11 +60,24 @@
             </div>
         @else
             {{-- Fallback: Environment & Tech Stack card matching ManageWP subtext --}}
+            @php
+                $rawPhpVersion = $site->companion_snapshot['environment']['php_version'] ?? null;
+                $phpEolInfo = null;
+                if ($rawPhpVersion) {
+                    $phpCycles = (array) app(\App\Support\Settings::class)->get('runtime_eol.php_cycles', []);
+                    $phpEolInfo = app(\App\Services\Runtime\RuntimeEolEvaluator::class)->evaluate($phpCycles, $rawPhpVersion);
+                }
+            @endphp
             <div class="space-y-2.5 py-1">
                 <div class="flex items-center justify-between text-xs p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60">
                     <span class="text-[var(--color-ink-muted)]">PHP Version:</span>
-                    <span class="font-mono font-medium text-[var(--color-ink-strong)]">
-                        {{ $site->companion_snapshot['environment']['php_version'] ?? 'Standard' }}
+                    <span class="font-mono font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                        {{ $rawPhpVersion ?? 'Standard' }}
+                        @if ($phpEolInfo && $phpEolInfo['status'] === 'eol')
+                            <span class="status-pill status-red text-[10px]" title="{{ $phpEolInfo['detail'] }}">EOL</span>
+                        @elseif ($phpEolInfo && $phpEolInfo['status'] === 'security_only')
+                            <span class="status-pill status-yellow text-[10px]" title="{{ $phpEolInfo['detail'] }}">Security only</span>
+                        @endif
                     </span>
                 </div>
                 <div class="flex items-center justify-between text-xs p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60">

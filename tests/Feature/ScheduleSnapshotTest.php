@@ -69,6 +69,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:refresh-companion-snapshot --pending-updates-only',
         'clockwork:refresh-fail2ban-ignoreip',
         'clockwork:refresh-plugin-vulnerabilities',
+        'clockwork:refresh-runtime-eol',
         'clockwork:rollup-traffic --backfill=2',
         'clockwork:run-companion-malware-scans',
         // clockwork:run-nightly-plugin-updates intentionally absent — it's no

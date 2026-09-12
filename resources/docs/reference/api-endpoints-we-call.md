@@ -155,6 +155,10 @@ Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/
 
 `app/Services/Security/CisaKevClient.php` · No auth, keyless official JSON feed (~1.7k active in-the-wild exploitation entries). Single daily download at 03:20 UTC (`clockwork:refresh-cisa-kev`), atomic swap (`cisa_kev_entries`) via database transaction and chunked insert. Used at query-time to badge CVEs detected in installed plugins as `Actively exploited (CISA KEV)`.
 
+## endoflife.date — `https://endoflife.date/api/v1/products/{product}`
+
+`app/Services/Runtime/EndOfLifeClient.php` · No auth, keyless v1 JSON API. Daily sync at 05:10 UTC (`clockwork:refresh-runtime-eol`) for products `/php` and `/wordpress`. Stores parsed release cycles in `app_settings` for the Capacity dashboard (`/capacity`) and per-site tech stack widgets without blocking on HTTP at request time.
+
 ## Sucuri SiteCheck — `https://sitecheck.sucuri.net/api/v3/?scan=<url>`
 
 No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms between sites. Same engine ManageWP resold. Weekly Monday 02:00.

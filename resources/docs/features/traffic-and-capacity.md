@@ -2,10 +2,10 @@
 title: Traffic + capacity
 section: Features
 order: 120
-updated: 2026-09-09
+updated: 2026-09-12
 author: Aaron Reimann
-tags: [traffic, capacity, visits, analytics, pressable]
-tracks: [app/Console/Commands/RollupTraffic.php, app/Http/Controllers/CapacityController.php, app/Console/Commands/PressableTrafficReport.php, modules/Pressable/src/PressableClient.php]
+tags: [traffic, capacity, visits, analytics, pressable, eol, php]
+tracks: [app/Console/Commands/RollupTraffic.php, app/Http/Controllers/CapacityController.php, app/Services/Runtime/**, app/Console/Commands/RefreshRuntimeEol.php, app/Console/Commands/PressableTrafficReport.php, modules/Pressable/src/PressableClient.php]
 ---
 
 Per-site daily traffic rollups (visits, unique IPs, requests, status codes) plus a fleet-wide Capacity dashboard for shared servers. Built from the nginx tail data — no external analytics provider.
@@ -52,6 +52,14 @@ Accessible via the "Capacity settings" button on `/capacity` and under Tools in 
 - **Visit quota threshold**: The rolling-window visit threshold (default 30,000 visits, with quick presets for 10k, 25k, 30k, 50k, 100k). Sites exceeding this threshold populate the over-quota table and increment the navigation issues badge.
 - **Lookback & trending windows**: Rolling lookback days (default 30d) and trending projection window (default 7d).
 - **Shared server pressure thresholds**: 24-hour average percentage limits for CPU (default 70%), memory (default 80%), and disk (default 85%) that classify a shared server into "Pressure" vs "Headroom".
+
+### Runtime EOL & Lifecycle
+
+Clockwork tracks software runtime lifecycle support across the fleet to provide early visibility into unsupported PHP versions:
+- **Feed Sync**: `clockwork:refresh-runtime-eol` runs daily at 05:10 UTC (`app/Services/Runtime/EndOfLifeClient.php`), querying `https://endoflife.date/api/v1/products/php` and `/wordpress` and caching cycle definitions into `app_settings`.
+- **Classification**: `RuntimeEolEvaluator` classifies installed versions into `EOL` (no security updates), `Security only` (active feature support ended; receiving security patches only), or `Supported` (active maintenance).
+- **Capacity Dashboard**: `/capacity` displays the fleet-wide breakdown with live counts and a sortable domain table displaying versions and exact support end dates. When lifecycle data is stale or missing, the page degrades gracefully with a warning notice without blocking or failing.
+- **Site Overview Widget**: Individual site tech stack widgets display quiet amber (`Security only`) or red (`EOL`) pills next to the PHP version for quick operator reference.
 
 ## Two windows for visit thresholds
 
