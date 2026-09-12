@@ -147,6 +147,10 @@ Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/
 
 `app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both.
 
+## WordPress.org Plugin Information — `https://api.wordpress.org/plugins/info/1.2/`
+
+`app/Services/Security/PluginDirectoryClient.php` · No auth, keyless. `GET ?action=plugin_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+plugin-directory-check)`. 100ms delay between requests. Queries unique plugin slugs across the fleet to detect closed/abandoned zombieware plugins (`plugin_directory_statuses`). Tolerates partial failures; non-closed/not_found responses for premium plugins never alert. Weekly on Mondays at 03:30 UTC (`clockwork:refresh-closed-plugins`).
+
 ## Sucuri SiteCheck — `https://sitecheck.sucuri.net/api/v3/?scan=<url>`
 
 No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms between sites. Same engine ManageWP resold. Weekly Monday 02:00.

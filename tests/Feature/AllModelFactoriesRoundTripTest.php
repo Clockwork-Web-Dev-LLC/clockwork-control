@@ -12,6 +12,7 @@ use App\Models\NginxLogCursor;
 use App\Models\NotificationLog;
 use App\Models\NotificationOffWindow;
 use App\Models\NotificationRecipient;
+use App\Models\PluginDirectoryStatus;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\PluginVulnerability;
@@ -52,6 +53,7 @@ describe('every model factory round-trips a persisted row', function () {
     it('NotificationLog', fn () => expect(NotificationLog::factory()->create())->id->not->toBeNull());
     it('NotificationRecipient', fn () => expect(NotificationRecipient::factory()->create())->id->not->toBeNull());
     it('NotificationOffWindow', fn () => expect(NotificationOffWindow::factory()->create())->id->not->toBeNull());
+    it('PluginDirectoryStatus', fn () => expect(PluginDirectoryStatus::factory()->create())->id->not->toBeNull());
     it('PluginUpdateIgnore', fn () => expect(PluginUpdateIgnore::factory()->create())->id->not->toBeNull());
     it('PluginUpdateJob', fn () => expect(PluginUpdateJob::factory()->create())->id->not->toBeNull());
     it('PluginVulnerability', fn () => expect(PluginVulnerability::factory()->create())->id->not->toBeNull());

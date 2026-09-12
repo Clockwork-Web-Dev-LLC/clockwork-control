@@ -11,6 +11,7 @@ use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\Tag;
 use App\Services\Scheduler\SchedulerHeartbeat;
+use App\Services\Security\ClosedPluginAuditor;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\FleetAdminAuditor;
 use Carbon\CarbonImmutable;
@@ -240,7 +241,16 @@ class IssueCounter
             Log::warning('issue_counter.flagged_admins_failed', ['error' => $e->getMessage()]);
         }
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale + $flaggedAdmins;
+        // Active plugins closed or removed on WordPress.org.
+        // KEEP IN SYNC with App\Http\Controllers\IssuesController::index().
+        $closedPlugins = 0;
+        try {
+            $closedPlugins = app(ClosedPluginAuditor::class)->flaggedSiteCount();
+        } catch (Throwable $e) {
+            Log::warning('issue_counter.closed_plugins_failed', ['error' => $e->getMessage()]);
+        }
+
+        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale + $flaggedAdmins + $closedPlugins;
     }
 
     /**

@@ -462,6 +462,16 @@ Schedule::command('clockwork:refresh-plugin-vulnerabilities')
     ->onOneServer()
     ->runInBackground();
 
+// Check WordPress.org plugin directory status for closed/zombieware plugins.
+// Queries the public official plugin information API once per unique slug
+// fleet-wide. Closed plugins receive zero security patches and are surfaced
+// on the Issues page. Runs weekly on Mondays at 03:30 UTC.
+Schedule::command('clockwork:refresh-closed-plugins')
+    ->weeklyOn(1, '03:30')
+    ->withoutOverlapping(60)
+    ->onOneServer()
+    ->runInBackground();
+
 // Lighthouse / PageSpeed scan, weekly per site via nightly rotation. Replaces
 // the ManageWP "Performance Check" feature with a modern Lighthouse score
 // (Google's authoritative SEO ranking surface) plus Core Web Vitals. The

@@ -30,6 +30,8 @@ class IgnoredIssue extends Model
 
     public const TYPE_WP_ADMIN_FLAGGED = 'wp_admin_flagged';
 
+    public const TYPE_PLUGIN_CLOSED = 'plugin_closed';
+
     protected $fillable = [
         'issue_type',
         'site_id',

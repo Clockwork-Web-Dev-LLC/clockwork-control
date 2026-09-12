@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
+use App\Services\Security\ClosedPluginAuditor;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\FleetAdminAuditor;
 use App\Services\Security\PluginVulnerabilityMatcher;
@@ -295,6 +296,18 @@ class IssuesController extends Controller
             ->latest()
             ->get();
 
+        // Closed / zombieware plugins detected on WordPress.org.
+        // Gated on is_inactive = false; ignored sites are explicitly suppressed by operators.
+        // KEEP IN SYNC with App\Support\IssueCounter::total().
+        $closedPluginFindings = app(ClosedPluginAuditor::class)->findingsForMonitoredSites();
+        $closedPluginSites = $closedPluginFindings['sites'];
+        $closedPluginFindingsBySiteId = $closedPluginFindings['findings_by_site'];
+        $ignoredClosedPluginIssues = IgnoredIssue::query()
+            ->where('issue_type', IgnoredIssue::TYPE_PLUGIN_CLOSED)
+            ->with(['site.server', 'user'])
+            ->latest()
+            ->get();
+
         $totals = [
             'ssl' => $sslIssues->count(),
             'domain_expiration' => $domainExpirationIssues->count(),
@@ -310,6 +323,7 @@ class IssuesController extends Controller
             'no_companion' => $companionMissing->count(),
             'forms_failing' => $failedFormTests->count(),
             'plugins_outdated' => $pluginsOutdated->count(),
+            'plugins_closed' => $closedPluginSites->count(),
             'orphans' => $orphanSites->count(),
             'malware' => $malwareHits->count(),
             'tampering' => $checksumTampering->count(),
@@ -322,6 +336,7 @@ class IssuesController extends Controller
         $totals['all'] = array_sum($totals);
         $totals['domain-expiration'] = $totals['domain_expiration'];
         $totals['seo-indexability'] = $totals['seo_blocked'];
+        $totals['plugins-closed'] = $totals['plugins_closed'];
 
         return view('dashboard.issues', compact(
             'sslIssues',
@@ -340,6 +355,9 @@ class IssuesController extends Controller
             'failedFormTests',
             'pluginsOutdated',
             'vulnsBySiteId',
+            'closedPluginSites',
+            'closedPluginFindingsBySiteId',
+            'ignoredClosedPluginIssues',
             'orphanSites',
             'orphanParents',
             'malwareHits',
@@ -421,7 +439,7 @@ class IssuesController extends Controller
     public function ignore(Request $request): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
-            'issue_type' => ['required', 'string', 'in:seo_indexability,wp_admin_flagged'],
+            'issue_type' => ['required', 'string', 'in:seo_indexability,wp_admin_flagged,plugin_closed'],
             'site_id' => ['nullable', 'integer', 'exists:sites,id'],
             'server_id' => ['nullable', 'integer', 'exists:servers,id'],
             'reason' => ['nullable', 'string', 'max:255'],
