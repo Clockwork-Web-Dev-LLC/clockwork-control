@@ -2,9 +2,9 @@
 title: Welcome to Clockwork Control
 section: Getting Started
 order: 10
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [overview, onboarding, control-panel]
+tags: [overview, onboarding, control-panel, linux, self-hosted]
 ---
 
 **Clockwork Control** is the self-hosted fleet control panel and monitoring brain for our agency's WordPress fleet. It watches every server we host, every site we run, and every signal that tells us something is about to break — so we get a heads-up before clients do.
@@ -21,7 +21,7 @@ A few things, all at once:
 
 ## What it isn't
 
-Clockwork Control is not a SaaS product. It runs on the operator's own hardware (a laptop today, a dedicated machine later) on their home network. There's no public URL, no client login here. Every account on Clockwork Control is an agency account.
+Clockwork Control is not a SaaS product. It runs on your own infrastructure (a local workstation, a dedicated Linux server / mini-PC, or a home lab VM on your office network). **A Mac is NOT required** — Clockwork Control runs natively and identically on Linux (Ubuntu, Debian, Fedora, Arch) and macOS. There's no public URL, no client login here. Every account on Clockwork Control is an agency account.
 
 It's also not a replacement for your hosting providers or server control panels — it sits side-by-side with them. Whether your fleet is on SpinupWP, Cloudways, Pressable, WP Engine, Kinsta, or custom cloud servers, those platforms provision and run the infrastructure; Clockwork Control watches over them, catches issues early, and serves as your agency's unified monitoring brain.
 

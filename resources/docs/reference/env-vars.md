@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]

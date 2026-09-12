@@ -2,13 +2,13 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [architecture, companion, wordpress, plugin, pressable]
-tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**]
+tags: [architecture, companion, wordpress, plugin, pressable, standalone, backups]
+tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**, app/Http/Controllers/CompanionDownloadController.php]
 ---
 
-Clockwork Companion is a WordPress mu-plugin that lives inside every monitored WP site. It does two jobs: it gives Clockwork signed REST endpoints to call (faster and cleaner than SSH+SQL), and it gives the *client* a wp-admin window into what Clockwork sees on their behalf.
+Clockwork Companion is a WordPress plugin (supporting both mu-plugin and standard plugin modes) that lives inside every monitored WP site. It does two jobs: it gives Clockwork signed REST endpoints to call (faster and cleaner than SSH+SQL), and it gives the *client* a wp-admin window into what Clockwork sees on their behalf.
 
 The plugin source is its own repo at `~/Projects/clockwork-companion`. This page covers what it is, why it exists, and how it talks to Clockwork.
 
@@ -23,13 +23,13 @@ The two paths coexist. Where Companion is installed, we prefer signed REST. Wher
 
 ## Where it lives
 
-Mu-plugins are loaded automatically by WordPress on every request — there's no Activate/Deactivate UI for them. They appear under the **Must-Use** filter on `/wp-admin/plugins.php`, NOT the default Installed Plugins view. Don't expect to find Companion under "All / Active / Inactive."
+When pushed via SSH (SpinupWP) or command runner (Pressable), Companion lives as a **Must-Use plugin** under `wp-content/mu-plugins/` and is loaded automatically. When uploaded manually to standalone sites (WP Engine, Kinsta, custom hosting), it operates as a standard active plugin under `wp-content/plugins/clockwork-companion/`.
 
 Files on the WP server:
 
 ```
-wp-content/mu-plugins/
-  clockwork-companion.php       ← loader
+wp-content/mu-plugins/ (or wp-content/plugins/)
+  clockwork-companion.php       ← dual loader
   clockwork-companion/           ← source tree
     src/
     assets/
@@ -37,9 +37,17 @@ wp-content/mu-plugins/
 
 ## Install path
 
-Two installers share one tarball-acquisition step (`App\Services\Companion\CompanionTarballBuilder`) and converge on the same end state (`companion_installed`, `companion_version`, `companion_last_seen_at`), but the transport differs by hosting provider.
+Three installation paths share common tarball and secret management:
 
-### SpinupWP — SSH
+### 1. Standalone / Unmanaged Hosts (WP Engine, Kinsta, Custom) — Direct ZIP Upload
+
+For sites hosted on platforms where Clockwork does not have server-level API keys or SSH access:
+1. **Download Compiled ZIP Package**: Operators download the pre-packaged plugin directly from Clockwork Control via `/companion/download` (`CompanionDownloadController::downloadZip()`).
+2. **Standard WordPress Install**: Upload and activate `clockwork-companion.zip` via standard WP Admin (`Plugins -> Add New -> Upload Plugin`).
+3. **One-Click Connection Key Pairing**: Navigate to **Tools → Clockwork** in WP Admin and click **Copy Connection Key**.
+4. **Enroll in Clockwork Control**: On Clockwork Control's **Sites** page, click **+ Add Site**, paste the base64 Connection Key, and confirm. Clockwork decodes the URL and HMAC secret, verifies `/health` connectivity, and enrolls the site under the `custom` provider.
+
+### 2. SpinupWP — SSH
 
 `App\Services\Companion\CompanionInstaller::installOrUpdate($site)`:
 
@@ -49,7 +57,7 @@ Two installers share one tarball-acquisition step (`App\Services\Companion\Compa
 4. Push the per-site HMAC secret via `wp option update` (with a Redis-aware fallback that does a direct `INSERT ... ON DUPLICATE KEY UPDATE` against `{prefix}options` then `wp cache flush` — the alloptions cache can stall normal `wp option update` calls on SpinupWP boxes).
 5. Probe `/health` to confirm the plugin loaded; record `companion_installed`, `companion_version`, `companion_last_seen_at`.
 
-### Pressable — async command API
+### 3. Pressable — async command API
 
 Pressable has no SSH. `Modules\Pressable\PressableCompanionInstaller` reaches the same end state over `PressableCommandRunner` (see [Integrations → Pressable](/docs/integrations/pressable) for how that turns Pressable's fire-and-forget command API into something synchronous):
 
@@ -142,6 +150,7 @@ Mutating POSTs (HMAC-signed):
 - `/comments/cleanup` — purge spam and trash comments older than N days (`cleanupComments()`); called weekly by `clockwork:cleanup-spam-comments`
 - `/maintenance-mode` — enable/disable maintenance mode with an optional custom title, message, and bypass secret key (`setMaintenanceMode()`)
 - `/code-snippet` — execute a snippet of PHP in a sandboxed, output-buffered context and return its output, return value, and timing (`executeCodeSnippet()`); powers the Code Snippets workbench
+- `/backup/create` — create full off-site backup streaming directly to AWS S3 Glacier Instant Retrieval. Receives presigned S3 PUT URL + headers, dumps DB via `$wpdb` to gzipped SQL, compresses `wp-content/`, streams to S3 via curl, cleans up temporary files, and returns `{ok, size_bytes, sha256, duration_ms}`. Powers standalone and direct off-site site backups.
 
 ## Snapshot cache
 

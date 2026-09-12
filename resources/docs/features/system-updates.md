@@ -2,7 +2,7 @@
 title: System updates
 section: Features
 order: 92
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [system-updates, self-update, core, companion, releases]
 tracks: [app/Services/Updates/**, app/Http/Controllers/SystemUpdatesController.php, app/Console/Commands/CheckSystemUpdates.php, app/Console/Commands/ApplySystemUpdate.php, resources/views/settings/updates.blade.php, routes/web.php]
@@ -24,13 +24,14 @@ Three sections, one page:
 
 ## Applying an update
 
-**Update Now** (or `php artisan clockwork:self-update`) runs a fixed pipeline, aborting and reporting exactly which step failed if anything goes wrong:
+**Update Now** (or `php artisan clockwork:self-update`) runs a fixed pipeline under maintenance mode, aborting and reporting exactly which step failed if anything goes wrong:
 
 1. **Preflight**: `git status --porcelain` must be clean. Any uncommitted change in your working copy — even one you made by hand for local testing — blocks the whole update rather than risk clobbering it. This is the single most important safety property here: a self-hosted instance is somebody's real production checkout, and this pipeline runs unattended shell commands against it.
 2. `git pull origin <current-branch>`
 3. `composer install --no-dev --optimize-autoloader`
 4. `php artisan migrate --force`
-5. `php artisan optimize:clear`
+5. `npm run build` (rebuilds production assets atomically)
+6. `php artisan optimize:clear`
 
 Each step's output is captured and shown back to the operator, success or failure, so a broken update isn't a silent black box — you can see exactly which of the five steps it got through.
 

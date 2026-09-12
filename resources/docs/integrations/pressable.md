@@ -2,7 +2,7 @@
 title: Pressable
 section: Integrations
 order: 21
-updated: 2026-09-08
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [integrations, pressable, hosting, wordpress]
 tracks: [modules/Pressable/src/**, app/Console/Commands/{ImportPressable,PressableTest,InstallCompanionPressable,PressableBackupsReport,PressableTrafficReport,PressableSecuritySummaryReport}.php]

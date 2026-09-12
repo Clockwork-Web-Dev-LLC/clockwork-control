@@ -2,7 +2,7 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Services/Companion/**, modules/Pressable/src/**, config/clockwork.php]
@@ -107,6 +107,19 @@ The signature is computed over the *logical* route string (`/wp-json/clockwork/v
 - **HMAC failure audit log** — `wp_clockwork_auth_failures` table, lazy-pruned to 1000 rows. Surfaces in Tools → Clockwork → Security → Authentication audit.
 - **SSO nonce ceiling** — `/sso/magic-link` refuses to mint past 100 active. Prevents `wp_options` bloat under abuse.
 - **Plugin-side admin pages** — Tools → Clockwork is gated to authorized agency emails. REST endpoints remain HMAC-gated regardless.
+
+### Standalone Companion Pairing & Base64 Connection Key
+
+For sites without cloud hosting API access or SSH (e.g. WP Engine, Kinsta, or client-managed VPS):
+- When the companion plugin is activated on the site, it generates a fresh 32-byte cryptographically secure secret and renders a base64-encoded Connection Key in **Tools → Clockwork**.
+- When pasted into Clockwork Control, Clockwork decodes the key, performs an immediate HMAC `/health` handshake to verify mutual possession of the secret, and persists the secret encrypted at rest (`sites.companion_secret`).
+
+### Direct S3 Glacier Backup Upload Security
+
+When streaming backups directly from WordPress to AWS S3 Glacier Instant Retrieval (`POST /wp-json/clockwork/v1/backup/create`):
+- **IAM Credentials Never Touch WordPress**: The AWS IAM access key and secret live solely on Clockwork Control.
+- **Time-Limited Presigned PUT URLs**: Clockwork signs an S3 PUT URL valid for only 2 hours.
+- **Strict Scope & Storage Class**: The presigned URL is locked to a specific object key (`archives/{domain}/{timestamp}_{id}.zip`) and enforces `x-amz-storage-class: GLACIER_IR`. The WordPress site cannot read, delete, or list other objects in the bucket.
 
 See [Architecture → Companion plugin](/docs/architecture/companion-plugin) for the full picture.
 

@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -10,10 +10,8 @@ tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
 
 Every `clockwork:*` command, alphabetical, with a one-line summary and an example invocation. Commands provided by modules (`modules/*/src/Commands`) are registered automatically when their respective module is enabled. Most are also wired into the scheduler — see [Scheduled jobs](/docs/reference/scheduled-jobs) for cadence.
 
-```bash
-# Always export Herd's PATH first in a fresh shell:
-export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
-```
+> [!NOTE]
+> **Environment & PATH**: On Linux, `php` and `composer` are installed in standard system paths (`/usr/bin/php`), so commands can be executed directly. On macOS using Laravel Herd, remember to export Herd's binary directory (`export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"`).
 
 ## Inventory + bootstrap
 
@@ -133,6 +131,7 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 | `clockwork:process-pending-bans` | Drain `queued_for_ban` → fail2ban over SSH. | `php artisan clockwork:process-pending-bans` |
 | `clockwork:composer-audit` | Composer dependency CVE scan. | `php artisan clockwork:composer-audit` |
 | `clockwork:security-check` | System-wide audit (`--ssh` runs SSH-side checks). | `php artisan clockwork:security-check --ssh --quiet-ok` |
+| `clockwork:audit-fleet-admins` | Audit WP administrator accounts across fleet sites via Companion or SSH, reporting unknown or unexpected admins. | `php artisan clockwork:audit-fleet-admins` |
 | `clockwork:run-performance-scans` | Lighthouse run per care-plan site — GTmetrix primary, PSI fallback. `--engine=` forces one engine; `--weekly-rotation` (what the scheduler passes) scans only tonight's 1/7th fleet slice to fit the GTmetrix credit budget. | `php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix` |
 
 ## Server ops
@@ -162,6 +161,8 @@ export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 
 | Command | Purpose | Example |
 |---|---|---|
+| `clockwork:rebuild-threat-logs-partitions` | Rebuild threat_logs as monthly partitions and copy only the retention window. Reclaims InnoDB disk space. MySQL only. | `php artisan clockwork:rebuild-threat-logs-partitions --days=90` |
+| `clockwork:prune-threat-logs` | Prune threat_logs older than configured retention, dropping obsolete monthly partitions or deleting rows. | `php artisan clockwork:prune-threat-logs` |
 | `clockwork:reencrypt-secrets` | Re-encrypts every `'encrypted'`-cast column (SSH keys, DB passwords, Companion secrets, integration credentials) under the current `APP_KEY`. Run once, immediately after rotating `APP_KEY`, while the old key is still in `APP_PREVIOUS_KEYS` — bypasses Eloquent's dirty-tracking (which no-ops `save()` for unchanged plaintext) via a direct `Crypt::encryptString()` + raw `DB::table()->update()` per row. | `php artisan clockwork:reencrypt-secrets` |
 | `clockwork:check-updates` | Check the GitHub Releases API for a newer Clockwork Control Core version, and print the Companion fleet rollout breakdown. Same data `/settings/updates` shows. `--force` bypasses the 12h cache. See [Features → System updates](/docs/features/system-updates). | `php artisan clockwork:check-updates --force` |
 | `clockwork:self-update` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. Prompts for confirmation unless `--force`. | `php artisan clockwork:self-update --force` |

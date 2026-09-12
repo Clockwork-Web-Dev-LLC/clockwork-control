@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
@@ -13,6 +13,10 @@ Every artisan command the scheduler runs, in chronological order through a UTC d
 Run the scheduler in foreground for development:
 
 ```bash
+# On Linux, run directly:
+php artisan schedule:work
+
+# On macOS with Laravel Herd:
 export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"
 php artisan schedule:work
 ```
@@ -83,6 +87,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 02:15 | `clockwork:check-blacklists` | URLhaus + Spamhaus DBL + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Hosting-tier (every site). |
 | 02:30 | `clockwork:verify-wp-core-checksums` | `wp core verify-checksums` per site — SSH for SpinupWP, Pressable's async command API for Pressable. Care-plan only. |
 | 02:45 | `clockwork:run-companion-malware-scans` | In-WP malware probe (Companion plugin endpoint, SSH wp-cli fallback). Bypasses Cloudflare. Care-plan only. |
+| 02:50 | `clockwork:audit-fleet-admins` | Audit WordPress administrator accounts across all fleet sites, reporting unknown or unexpected admins against the approved allowlist. |
 
 ## Daily — morning ingest + inventory (03:00 UTC)
 

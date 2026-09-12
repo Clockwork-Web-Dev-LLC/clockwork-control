@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -93,6 +93,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/uptime-body-check` | Per-site skip of the white-screen body-length check (parked / SPA / gated homepages). |
 | POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
+| GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |

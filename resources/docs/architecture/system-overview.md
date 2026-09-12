@@ -2,31 +2,34 @@
 title: System overview
 section: Architecture
 order: 10
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [architecture, overview, stack, pressable]
+tags: [architecture, overview, stack, pressable, linux, self-hosted]
 ---
 
 A high-level map of how the app is built and where data flows. If you're new to the codebase, read this once and the other architecture pages will slot into place.
 
 ## What it is
 
-Clockwork is a Laravel 13 web app on PHP 8.4. It runs locally on the agency's home network — laptop today, Mac Studio later — against a fleet of ~50 SpinupWP-managed servers (DigitalOcean, Hetzner Cloud, and Azure VMs) that host ~150 WordPress sites, plus ~90 more sites hosted on Pressable with no server layer at all. There is no public URL and no client login. Every account on Clockwork is an agency account.
+Clockwork is a Laravel 13 web app on PHP 8.4. It runs locally on the agency's private network — a local workstation today, a dedicated Linux server / mini-PC, or a Mac Studio later — against a fleet of ~50 SpinupWP-managed servers (DigitalOcean, Hetzner Cloud, and Azure VMs) that host ~150 WordPress sites, ~90 more sites hosted on Pressable with no server layer at all, and standalone Companion sites on WP Engine, Kinsta, or custom hosts. There is no public URL and no client login. Every account on Clockwork is an agency account.
 
-The app sits **next to** SpinupWP and Pressable, not on top of either. They run the actual hosting; Clockwork watches it, reaches into it when it needs to (SSH for SpinupWP, an API + async-command transport for Pressable), and surfaces what needs human attention. See [Concepts → Server, Site, Care plan, Hosting tier](/docs/concepts/server-site-care-plan) for how the two hosting models differ under one `Site` row.
+**A Mac is NOT required:** The entire backend runs on standard POSIX PHP and MySQL. Linux (Ubuntu, Debian, Fedora, Arch) is a first-class production target alongside macOS.
+
+The app sits **next to** SpinupWP, Pressable, WP Engine, Kinsta, and custom providers, not on top of them. They run the actual hosting; Clockwork watches it, reaches into it when it needs to (SSH for SpinupWP, an API + async-command transport for Pressable, and signed REST for Companion-managed sites), and surfaces what needs human attention. See [Concepts → Server, Site, Care plan, Hosting tier](/docs/concepts/server-site-care-plan) for how the hosting models differ under one `Site` row.
 
 ## The stack
 
 | Layer | Choice |
 |---|---|
-| Language | PHP 8.4 |
+| Platform / OS | **Linux** (Debian, Ubuntu, Fedora, Rocky, Arch) & **macOS**. A Mac is not required. |
+| Language | PHP 8.4 (PHP 8.3 supported) |
 | Framework | Laravel 13 (server-rendered Blade) |
-| Database | MySQL 9.6 (SQLite supported for dev quirks) |
+| Database | MySQL 9.6 / 8.0+ or MariaDB 10.11+ (SQLite supported for dev/tests) |
 | Frontend | Tailwind 4, Alpine.js 3, ECharts 6, Font Awesome 7 |
 | Build | Vite 8 + `laravel/vite-plugin` |
 | SSH library | `phpseclib/phpseclib` v3 |
 | S3 client | `league/flysystem-aws-s3-v3` |
-| Auth | `laravel/socialite` (Google) |
+| Auth | `laravel/socialite` (Google) + local password fallback |
 | Queue / cache / sessions | Database driver (no Redis required for v1) |
 | Local LLM | LM Studio over loopback OpenAI-compatible API |
 

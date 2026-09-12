@@ -2,13 +2,13 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
-tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules]
-tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport}.php, app/Models/SiteCoreChecksumAllowlist.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php]
+tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins]
+tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,AuditFleetAdmins}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
 ---
 
-Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran.
+Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran. In addition, fleet-wide WordPress administrator auditing runs across all sites via `/security/admins`.
 
 ## What we run
 
@@ -18,15 +18,24 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | **Domain blacklists** | daily 02:15 | hosting | Spamhaus DBL + URLhaus + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Recovers the blacklist signal Sucuri loses when CF 403's its scanner. |
 | **WP core checksums** | daily 02:30 | care-plan | `wp core verify-checksums` — catches base64 / shell backdoors dropped into wp-includes / wp-admin that Sucuri can't see (because they're not in the public HTML). |
 | **Companion malware** | daily 02:45 | care-plan | In-WP probe (Companion endpoint preferred, SSH fallback). PHP files >30 bytes under `wp-content/uploads/` (skipping the standard 0-byte and "Silence is golden" stubs that legit plugins drop), obfuscation signatures (`eval(base64_decode(`, `eval(gzinflate(`, `c99shell`, `r57shell`, `WSOsetcookie`, `FilesMan`), and recently-modified `wp-config.php`. Bypasses Cloudflare so CF-fronted sites get real signal. |
+| **Fleet admin audit** | daily 03:15 | all sites | Audits all WordPress users with the `administrator` role. Flags unexpected admins against an agency-approved email/domain allowlist. |
 
-Sucuri + checksums + companion-malware are care-plan-only. Blacklist runs against every site (it's the highest-leverage scan we have, and the API costs are zero).
+Sucuri + checksums + companion-malware are care-plan-only. Blacklist and fleet admin auditing run against every site.
 
 ## Where to look
 
 - **`/security/scans`** — fleet inventory of latest scan per site.
+- **`/security/admins`** — fleet administrator audit inventory (`SecurityAdminsController`). Lists every WP admin across all sites, flags unexpected domains/emails, and allows ignoring acknowledged client admins.
 - **`/sites/{id}/security`** — per-site security tab. Latest scan per type plus a **Recent scans** history table at the bottom. History rows are expandable — clicking the chevron shows the structured findings (malware: kind/path/evidence; checksums: Modified / Missing / Unexpected file lists).
 - **Issues page** — sites with `status=issues_found` surface here. The **Core file tampering** card links directly to `/sites/{id}/security#core-integrity` so clicking a site name lands exactly at the Core file integrity card. There is also a **Companion malware findings** section (latest scan per site, care-plan gated, counted in the nav badge) ensuring operators are alerted proactively on the dashboard whenever malware findings are detected.
 - **Companion → Tools → Clockwork → Security** — what the client sees in their wp-admin. Same data, friendlier copy.
+
+## `/security/admins` — fleet administrator auditing (`SecurityAdminsController`)
+
+Clockwork audits WordPress administrator accounts across the entire fleet to detect unexpected, orphaned, or rogue administrative users:
+- **Scan Mechanism**: Runs daily via `clockwork:audit-fleet-admins` (or on-demand). Inspects WP admin accounts via the Companion's `/admins` endpoint or SSH fallback.
+- **Approved Agency Allowlist**: Operators configure approved email addresses and domains (e.g. `@youragency.com`). Any administrator account with an email outside approved domains is flagged for operator review.
+- **Ignore / Acknowledge List**: Legitimate client-side administrators (e.g. client project leads) can be acknowledged with an operator reason (`IgnoredWpAdmin`), preventing recurring false-alarm flags while maintaining an audit trail.
 
 ## `/security/scans` — fleet inventory (`SecurityScansController`)
 

@@ -2,7 +2,7 @@
 title: Tooltip System
 section: Reference
 order: 26
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [reference, frontend, ui, components, tooltips, uswds]
 tracks: [resources/js/tooltip.js, resources/js/app.js, resources/css/app.css, resources/views/dashboard/sites.blade.php]

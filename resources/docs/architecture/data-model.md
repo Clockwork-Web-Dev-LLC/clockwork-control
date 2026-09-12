@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-10
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]

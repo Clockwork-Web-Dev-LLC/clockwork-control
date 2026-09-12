@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-09
+updated: 2026-09-11
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]
@@ -16,7 +16,7 @@ This page is server-centric, so **Pressable sites don't appear here at all** —
 
 Clockwork Control provides two complementary layout philosophies selectable on the fly via the layout switcher in the top navigation bar:
 
-1. **Command Center (`command-center`)**: A dense, high-information density layout tailored for mission control operations. Features a persistent left-hand navigation and operations rail, compact telemetry readouts, quick SSH diagnostic actions, and dense status indicators.
+1. **Command Center (`command-center`)**: A dense, high-information density layout tailored for mission control operations. Features a persistent left-hand navigation and operations rail, compact telemetry readouts, user profile & settings popover in the rail footer, quick SSH diagnostic actions, and dense status indicators.
 2. **Modern Studio (`modern`)**: A spacious, card-forward, human-centric interface with floating filter chips, integrated fleet-wide search, expandable quick drawers, and modern whitespace.
 
 Layout preferences are saved locally in the browser (`localStorage.getItem('cw_layout_style')`) and initialized before document render via `data-layout-style` on `<html>` to ensure zero flash of unstyled content (FOUC). Both layouts operate on top of a unified Alpine.js `appChrome` store and share underlying live telemetric models.
