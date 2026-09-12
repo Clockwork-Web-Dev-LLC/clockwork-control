@@ -129,6 +129,12 @@ return [
         'default_key_passphrase' => env('CLOCKWORK_SSH_KEY_PASSPHRASE'),
     ],
 
+    // /settings/scheduled-jobs history retention. Rows are written by
+    // RecordScheduledTaskResult for every tick of every scheduled job.
+    'scheduled_jobs' => [
+        'retention_days' => env('CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS', 30),
+    ],
+
     // Where ops-side alert emails (nightly auto-update summary, future
     // fleet-wide health alerts) land. Distinct from per-customer mail —
     // contact-form failures, monthly summaries, etc. still go to the

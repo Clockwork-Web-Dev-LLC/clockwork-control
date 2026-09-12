@@ -35,7 +35,7 @@
             'label' => 'System & Workspace',
             'icon' => 'fa-server',
             'route' => $isAdmin ? 'settings.users.index' : 'settings.maintenance.index',
-            'active' => request()->routeIs('settings.users.*') || request()->routeIs('settings.updates.*') || request()->routeIs('settings.maintenance.*') || request()->routeIs('settings.diagnostics.*') || request()->routeIs('settings.weird-stats.*') || request()->routeIs('setup.*') || request()->routeIs('docs.*'),
+            'active' => request()->routeIs('settings.users.*') || request()->routeIs('settings.updates.*') || request()->routeIs('settings.maintenance.*') || request()->routeIs('settings.diagnostics.*') || request()->routeIs('settings.weird-stats.*') || request()->routeIs('settings.scheduled-jobs.*') || request()->routeIs('setup.*') || request()->routeIs('docs.*'),
         ],
     ];
 
@@ -65,6 +65,7 @@
             ['label' => 'System Updates', 'icon' => 'fa-solid fa-arrows-rotate', 'route' => 'settings.updates.index', 'active' => request()->routeIs('settings.updates.*')],
             ['label' => 'Database Maintenance', 'icon' => 'fa-solid fa-database', 'route' => 'settings.maintenance.index', 'active' => request()->routeIs('settings.maintenance.*')],
             ['label' => 'Diagnostics & Health', 'icon' => 'fa-solid fa-stethoscope', 'route' => 'settings.diagnostics.index', 'active' => request()->routeIs('settings.diagnostics.*')],
+            ['label' => 'Scheduled Jobs', 'icon' => 'fa-solid fa-clock', 'route' => 'settings.scheduled-jobs.index', 'active' => request()->routeIs('settings.scheduled-jobs.*')],
             ['label' => 'Weird Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
         ])),
     ];

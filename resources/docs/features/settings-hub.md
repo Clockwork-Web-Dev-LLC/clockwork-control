@@ -2,7 +2,7 @@
 title: Settings & Operations Hub
 section: Features
 order: 90
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [settings, operations, fleet, hub, navigation]
 tracks: [app/Http/Controllers/SettingsController.php, resources/views/settings/index.blade.php, resources/views/settings/_tabs.blade.php]
@@ -47,6 +47,7 @@ Application governance, health diagnostics, and platform maintenance:
 * **Core Updates** (`/settings/updates`) — Clockwork Control self-updater and Companion mu-plugin fleet deployment breakdown.
 * **Database Maintenance** (`/settings/maintenance`) — Database table statistics, cache clearing, and on-demand encrypted database exports.
 * **Diagnostics & Health** (`/settings/diagnostics`) — Live health probes across redis, database, scheduler, queues, and outbound APIs.
+* **Scheduled Jobs** (`/settings/scheduled-jobs`) — Every entry in the live cron schedule with its last outcome, duration, and a manual Run now trigger — see [Scheduled Jobs Dashboard](/docs/features/scheduled-jobs-dashboard).
 * **Threat Intelligence** (`/settings/weird-stats`) — Pre-warmed analytics on blocked attacks, top attacker ASNs, and botnets.
 * **Setup Checklist** (`/setup`) — First-run installation wizard and initial provider onboarding checklist.
 * **Documentation** (`/docs`) — In-app team handbook, architecture docs, runbooks, and API catalogs.

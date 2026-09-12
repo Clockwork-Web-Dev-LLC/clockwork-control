@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -162,6 +162,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 |---|---|---|
 | `clockwork:rebuild-threat-logs-partitions` | Rebuild threat_logs as monthly partitions and copy only the retention window. Reclaims InnoDB disk space. MySQL only. | `php artisan clockwork:rebuild-threat-logs-partitions --days=90` |
 | `clockwork:prune-threat-logs` | Prune threat_logs older than configured retention, dropping obsolete monthly partitions or deleting rows. | `php artisan clockwork:prune-threat-logs` |
+| `clockwork:prune-scheduled-job-runs` | Delete `scheduled_job_runs` rows older than the retention window (default 30 days, `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS`), keeping [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) history bounded. `--days=` overrides. | `php artisan clockwork:prune-scheduled-job-runs` |
 | `clockwork:reencrypt-secrets` | Re-encrypts every `'encrypted'`-cast column (SSH keys, DB passwords, Companion secrets, integration credentials) under the current `APP_KEY`. Run once, immediately after rotating `APP_KEY`, while the old key is still in `APP_PREVIOUS_KEYS` — bypasses Eloquent's dirty-tracking (which no-ops `save()` for unchanged plaintext) via a direct `Crypt::encryptString()` + raw `DB::table()->update()` per row. | `php artisan clockwork:reencrypt-secrets` |
 | `clockwork:check-updates` | Check the GitHub Releases API for a newer Clockwork Control Core version, and print the Companion fleet rollout breakdown. Same data `/settings/updates` shows. `--force` bypasses the 12h cache. See [Features → System updates](/docs/features/system-updates). | `php artisan clockwork:check-updates --force` |
 | `clockwork:self-update` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. Prompts for confirmation unless `--force`. | `php artisan clockwork:self-update --force` |
