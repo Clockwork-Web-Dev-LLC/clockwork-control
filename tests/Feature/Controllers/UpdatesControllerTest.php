@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\RunPluginUpdate;
+use App\Jobs\RunTranslationsUpdate;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\Site;
@@ -206,5 +207,67 @@ describe('UpdatesController', function () {
         $response = $this->actingAs(User::factory()->create())->get($url);
 
         $response->assertNotFound();
+    });
+
+    it('renders the translations tab with pending translations from snapshot', function () {
+        $snapshot = pluginSnapshot();
+        $snapshot['plugins']['plugins'][0]['update_available'] = false;
+        $snapshot['plugins']['counts']['updates_available'] = 0;
+        $snapshot['translations'] = [
+            'count' => 2,
+            'items' => [
+                ['slug' => 'core', 'language' => 'es_ES'],
+                ['slug' => 'akismet', 'language' => 'es_ES'],
+            ],
+        ];
+
+        $site = Site::factory()->carePlan()->withCompanionInstalled()->create([
+            'domain' => 'translations-pending.example.com',
+            'companion_snapshot' => $snapshot,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('updates.index', ['tab' => 'translations']));
+
+        $response->assertOk()
+            ->assertSee($site->domain)
+            ->assertSee('translation:'.$site->id.':');
+    });
+
+    it('bulk-queues a translation update and dispatches RunTranslationsUpdate', function () {
+        Queue::fake();
+
+        $snapshot = pluginSnapshot();
+        $snapshot['translations'] = [
+            'count' => 1,
+            'items' => [
+                ['slug' => 'core', 'language' => 'es_ES'],
+            ],
+        ];
+
+        $site = Site::factory()->withCompanionInstalled()->create([
+            'companion_snapshot' => $snapshot,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('updates.bulkUpdate'), [
+                'targets' => ["translation:{$site->id}:"],
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('flash', function ($flash) {
+            return str_contains($flash, 'Queued 1 update');
+        });
+
+        $row = PluginUpdateJob::query()
+            ->where('site_id', $site->id)
+            ->where('target_kind', PluginUpdateJob::KIND_TRANSLATION)
+            ->first();
+
+        expect($row)->not->toBeNull();
+        expect($row->status)->toBe(PluginUpdateJob::STATUS_PENDING);
+        expect($row->target_slug)->toBeNull();
+
+        Queue::assertPushed(RunTranslationsUpdate::class, fn ($job) => $job->jobRowId === $row->id);
     });
 });
