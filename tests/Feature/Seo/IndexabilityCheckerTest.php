@@ -11,6 +11,7 @@ use App\Services\Seo\IndexabilityChecker;
 use App\Services\Uptime\UptimeProbeResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
@@ -251,6 +252,39 @@ class IndexabilityCheckerTest extends TestCase
         $this->assertSame('robots_disallow_all', $site->seo_blocked_reason);
         $this->assertNull($site->seo_meta_snippet);
         $this->assertSame('Disallow: /', $site->seo_robots_snippet);
+    }
+
+    public function test_uptime_command_surfaces_seo_piggyback_failures_instead_of_swallowing_them(): void
+    {
+        // Regression: a schema drift once made every IndexabilityChecker
+        // save() throw, and the uptime command's bare catch hid it for a
+        // week — 230 sites, zero log lines. The command must keep probing
+        // (exit 0, uptime unaffected) but has to report the failure count.
+        Site::factory()->spinupwp()->create([
+            'server_id' => $this->prodServer->id,
+            'domain' => 'piggyback-fail.com',
+            'uptime_monitoring_enabled' => true,
+            'seo_monitoring_enabled' => true,
+        ]);
+
+        Http::fake(['*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200)]);
+
+        $checker = Mockery::mock(IndexabilityChecker::class);
+        $checker->shouldReceive('checkFromProbeResult')
+            ->andThrow(new \RuntimeException("Unknown column 'seo_meta_snippet' in 'field list'"));
+        $this->app->instance(IndexabilityChecker::class, $checker);
+
+        Log::spy();
+
+        $this->artisan('clockwork:check-site-uptime')
+            ->expectsOutputToContain('SEO indexability piggyback failed on 1 of')
+            ->assertExitCode(0);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn (string $message, array $context = []) => $message === 'check_site_uptime.seo_piggyback_failures'
+                && $context['failed'] === 1
+                && str_contains((string) $context['last_error'], 'seo_meta_snippet'));
     }
 
     public function test_preflight_endpoint_runs_synchronously_and_returns_summary(): void

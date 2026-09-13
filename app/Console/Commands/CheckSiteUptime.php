@@ -8,6 +8,7 @@ use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeProbeResult;
 use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -44,6 +45,8 @@ class CheckSiteUptime extends Command
 
         $up = 0;
         $down = 0;
+        $seoFailures = 0;
+        $seoLastError = null;
         $start = microtime(true);
 
         foreach ($sites as $site) {
@@ -53,8 +56,13 @@ class CheckSiteUptime extends Command
                 $updater->update($site, $probe);
                 try {
                     $seoChecker->checkFromProbeResult($site, $probe);
-                } catch (Throwable) {
-                    // SEO check failure must not fail the uptime monitoring pass
+                } catch (Throwable $seoError) {
+                    // SEO check failure must not fail the uptime monitoring
+                    // pass — but it must not be invisible either. A schema
+                    // drift here once killed the whole watchdog for a week
+                    // with zero log lines; count and report below.
+                    $seoFailures++;
+                    $seoLastError = $seoError->getMessage();
                 }
                 $probe->succeeded ? $up++ : $down++;
             } catch (Throwable $e) {
@@ -79,6 +87,15 @@ class CheckSiteUptime extends Command
 
         $elapsed = (int) round(microtime(true) - $start);
         $this->info("Done. up={$up} down={$down} elapsed={$elapsed}s");
+
+        if ($seoFailures > 0) {
+            $this->warn("SEO indexability piggyback failed on {$seoFailures} of {$sites->count()} sites. Last error: {$seoLastError}");
+            Log::warning('check_site_uptime.seo_piggyback_failures', [
+                'failed' => $seoFailures,
+                'total' => $sites->count(),
+                'last_error' => $seoLastError,
+            ]);
+        }
 
         return self::SUCCESS;
     }
