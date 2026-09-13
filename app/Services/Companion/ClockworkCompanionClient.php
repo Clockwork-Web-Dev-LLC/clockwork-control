@@ -320,6 +320,104 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Database bloat summary (revisions, drafts, spam comments, expired transients, table overhead).
+     *
+     * @return array<string, mixed>
+     */
+    public function getDatabaseSummary(): array
+    {
+        return $this->getJson('/database/summary');
+    }
+
+    /**
+     * Run selective or full database cleanup and table optimization.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    public function optimizeDatabase(array $options = []): array
+    {
+        return $this->postJson('/database/optimize', $options, [
+            'timeout' => 60,
+        ]);
+    }
+
+    /**
+     * Activate or deactivate a plugin remotely.
+     *
+     * @return array<string, mixed>
+     */
+    public function togglePlugin(string $slug, string $action, bool $networkWide = false): array
+    {
+        return $this->postJson('/plugins/toggle', [
+            'slug'         => $slug,
+            'action'       => $action,
+            'network_wide' => $networkWide,
+        ]);
+    }
+
+    /**
+     * Safely delete an uninstalled or inactive plugin remotely.
+     *
+     * @return array<string, mixed>
+     */
+    public function deletePlugin(string $slug, bool $networkWide = false): array
+    {
+        return $this->postJson('/plugins/delete', [
+            'slug'         => $slug,
+            'network_wide' => $networkWide,
+        ]);
+    }
+
+    /**
+     * Install a plugin remotely from WordPress.org directory.
+     *
+     * @return array<string, mixed>
+     */
+    public function installPlugin(string $slug, bool $activate = false, bool $networkWide = false): array
+    {
+        return $this->postJson('/plugins/install', [
+            'slug'         => $slug,
+            'activate'     => $activate,
+            'network_wide' => $networkWide,
+        ], [
+            'timeout' => 120,
+        ]);
+    }
+
+    /**
+     * Inspect recent entries from the remote WordPress debug log with path masking.
+     *
+     * @return array<string, mixed>
+     */
+    public function getDebugLog(int $lines = 100): array
+    {
+        return $this->getJson('/debug-log', [
+            'lines' => $lines,
+        ]);
+    }
+
+    /**
+     * Truncate/clear the remote WordPress debug log file.
+     *
+     * @return array<string, mixed>
+     */
+    public function clearDebugLog(): array
+    {
+        return $this->deleteJson('/debug-log');
+    }
+
+    /**
+     * Telemetry on server environment, PHP, database, and object cache.
+     *
+     * @return array<string, mixed>
+     */
+    public function getEnvironment(): array
+    {
+        return $this->getJson('/environment');
+    }
+
+    /**
      * Fetch paginated, filtered comments for the moderation UI.
      *
      * @param  array<string, mixed>  $filters
@@ -814,6 +912,42 @@ class ClockworkCompanionClient
     protected function postJson(string $route, array $body, array $options = []): array
     {
         return $this->decodeJsonBody($this->post($route, $body, $options), 'POST', $route);
+    }
+
+    /**
+     * @param  array<string, scalar>  $query
+     * @param  array{timeout?: int, retries?: int}  $options
+     * @return array<string, mixed>
+     */
+    protected function deleteJson(string $route, array $query = [], array $options = []): array
+    {
+        return $this->decodeJsonBody($this->delete($route, $query, $options), 'DELETE', $route);
+    }
+
+    /**
+     * @param  array<string, scalar>  $query
+     * @param  array{timeout?: int, retries?: int}  $options
+     */
+    protected function delete(string $route, array $query = [], array $options = []): Response
+    {
+        $body = '';
+        $request = $this->signedRequest('DELETE', $route, $body, $options);
+        $url = $this->buildUrl($route);
+        if ($query !== []) {
+            $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
+        }
+        $response = $request->delete($url);
+
+        if ($this->isNonJsonResponse($response)) {
+            $retryRequest = $this->signedRequest('DELETE', $route, $body, $options);
+            $retryUrl = $this->buildQueryRouteUrl($route);
+            if ($query !== []) {
+                $retryUrl .= '&'.http_build_query($query);
+            }
+            $response = $retryRequest->delete($retryUrl);
+        }
+
+        return $this->guard($response, 'DELETE', $route);
     }
 
     /**
