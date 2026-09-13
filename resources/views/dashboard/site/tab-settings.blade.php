@@ -779,7 +779,7 @@
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                     <i class="fa-solid fa-puzzle-piece text-violet-600"></i>
-                    Companion mu-plugin
+                    {{ $site->isRenegade() ? 'Clockwork Renegade' : 'Companion mu-plugin' }}
                 </h3>
                 @if ($site->companion_installed)
                     <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> v{{ $site->companion_version }}</span>
@@ -789,6 +789,12 @@
             </div>
 
             <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 mb-3">
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Edition:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)]">
+                        {{ $site->isRenegade() ? 'Renegade (WordPress.org)' : 'Companion (Private mu-plugin)' }}
+                    </span>
+                </div>
                 <div class="flex items-center justify-between text-[11px]">
                     <span class="text-[var(--color-ink-muted)]">Status:</span>
                     <span class="font-medium text-[var(--color-ink-strong)]">

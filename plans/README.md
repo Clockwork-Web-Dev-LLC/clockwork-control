@@ -92,3 +92,18 @@ sync contract) rather than the module structure Gemini's original drafts propose
 - [`next-cycle-restore-closed-plugins-eol.md`](./next-cycle-restore-closed-plugins-eol.md) — operator-confirm Glacier restore for custom sites (two-step stage/apply, fail-closed), then WP.org closed-plugin audit + CISA KEV badges, then PHP EOL on `/capacity`. Implementation brief for Claude. Board items like DNSBL, Green Web, Safe Updates, and new host modules are explicitly out of scope.
 - [`gemini-implementation-restore-closed-plugins-eol.md`](./gemini-implementation-restore-closed-plugins-eol.md) — the Gemini-ready build plan for the file above, written after verifying both repos' actual state (2026-09-11): most of Workstream 1A is already committed; locks the open design decisions (per-archive sha256 sidecars, ignore-user-abort + polled status instead of WP-cron, current-prefix-only SQL import, copy-over file apply, `BackgroundArtisan`-driven Control flow) and maps every step to real files, conventions, schedule slots, and tests.
 
+## Clockwork Renegade (2026-09-12)
+
+- [`clockwork-renegade.md`](./clockwork-renegade.md) — supersedes
+  [`archive/companion-self-update.md`](./archive/companion-self-update.md) (see that file's header for
+  why). A genuinely new, GPL-2.0-or-later plugin — **Clockwork Renegade** — built for actual submission
+  to the wordpress.org plugin directory, targeting standalone/unmanaged sites (custom hosting, WP
+  Engine, Kinsta). Scoped to what a ManageWP-Worker-style "connects to a central dashboard" plugin can
+  contain under wordpress.org's guidelines: a full route-by-route keep/cut table against Companion's
+  current REST surface, with exactly one hard cut (`CodeSnippetRoute` — confirmed unrestricted remote
+  `eval()`, not carried over at all). No self-hosted update mechanism — wordpress.org's own updater is
+  the whole story once listed. Covers the clean (non-fork-looking) repo setup, the activation/uninstall/
+  i18n/nonce/escaping work Companion never needed as a private mu-plugin, `readme.txt` + disclosure
+  requirements, the SVN release pipeline, and the much smaller Control-side change (pairing/variant
+  detection only). The private, MIT, SSH-managed-fleet Clockwork Companion is untouched.
+

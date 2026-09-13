@@ -334,6 +334,19 @@ return [
         'timeout_multisite' => env('CLOCKWORK_COMPANION_TIMEOUT_MULTISITE', 60),
     ],
 
+    'renegade' => [
+        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.0.0'),
+
+        // Local path to the source repo for development. Defaults to
+        // ~/Projects/clockwork-renegade.
+        'local_path' => env('CLOCKWORK_RENEGADE_LOCAL_PATH', (function () {
+            $home = function_exists('posix_getpwuid') ? (posix_getpwuid(posix_getuid())['dir'] ?? null) : null;
+            $home = $home ?: env('HOME');
+
+            return ($home ? rtrim($home, '/') : '').'/Projects/clockwork-renegade';
+        })()),
+    ],
+
     'sucuri' => [
         // Public, free SiteCheck v3 API. No auth — Sucuri exposes the same
         // scanner ManageWP and others resell. Rate-limited around 30 req/min,

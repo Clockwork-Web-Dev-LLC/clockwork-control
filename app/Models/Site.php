@@ -67,6 +67,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property bool $is_inactive
  * @property ?string $inactive_reason
  * @property bool $companion_installed
+ * @property ?string $companion_variant companion|renegade
  * @property ?string $companion_version
  * @property ?array $companion_capabilities
  * @property ?string $companion_secret encrypted at rest
@@ -283,6 +284,7 @@ class Site extends Model
         'is_inactive',
         'inactive_reason',
         'companion_installed',
+        'companion_variant',
         'companion_version',
         'companion_capabilities',
         'companion_secret',
@@ -732,6 +734,18 @@ class Site extends Model
     public function isCustom(): bool
     {
         return $this->hosting_provider === self::HOSTING_PROVIDER_CUSTOM;
+    }
+
+    /** True when this site runs the open-source WordPress.org Clockwork Renegade plugin. */
+    public function isRenegade(): bool
+    {
+        return $this->companion_variant === 'renegade';
+    }
+
+    /** True when this site runs the classic private Clockwork Companion mu-plugin. */
+    public function isClassicCompanion(): bool
+    {
+        return $this->companion_variant !== 'renegade';
     }
 
     public function host(): HostingProvider

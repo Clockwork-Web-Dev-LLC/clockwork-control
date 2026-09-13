@@ -27,6 +27,15 @@ class ClockworkCompanionClient
 {
     public const ROUTE_NAMESPACE = 'clockwork/v1';
 
+    public const RENEGADE_ROUTE_NAMESPACE = 'clockwork-renegade/v1';
+
+    public function routeNamespace(): string
+    {
+        return ($this->site->companion_variant === 'renegade')
+            ? self::RENEGADE_ROUTE_NAMESPACE
+            : self::ROUTE_NAMESPACE;
+    }
+
     /**
      * Identifies our HMAC-signed REST calls in nginx logs and gives operators
      * a single string to allowlist in Cloudflare WAF rules when a site's
@@ -927,7 +936,7 @@ class ClockworkCompanionClient
 
     private function buildQueryRouteUrl(string $route): string
     {
-        return 'https://'.$this->site->domain.'/?rest_route='.rawurlencode('/'.self::ROUTE_NAMESPACE.$route);
+        return 'https://'.$this->site->domain.'/?rest_route='.rawurlencode('/'.$this->routeNamespace().$route);
     }
 
     /**
@@ -942,9 +951,10 @@ class ClockworkCompanionClient
             );
         }
 
-        $sign = function (int $timestamp) use ($method, $route, $body, $secret): string {
+        $routeNamespace = $this->routeNamespace();
+        $sign = function (int $timestamp) use ($method, $route, $body, $secret, $routeNamespace): string {
             $payload = strtoupper($method)
-                ."\n".'/wp-json/'.self::ROUTE_NAMESPACE.$route
+                ."\n".'/wp-json/'.$routeNamespace.$route
                 ."\n".$timestamp
                 ."\n".$body;
 
@@ -1010,7 +1020,7 @@ class ClockworkCompanionClient
 
     protected function buildUrl(string $route): string
     {
-        return 'https://'.$this->site->domain.'/wp-json/'.self::ROUTE_NAMESPACE.$route;
+        return 'https://'.$this->site->domain.'/wp-json/'.$this->routeNamespace().$route;
     }
 
     protected function guard(Response $response, string $method, string $route): Response

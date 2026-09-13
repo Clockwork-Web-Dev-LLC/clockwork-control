@@ -289,6 +289,31 @@ describe('ClockworkCompanionClient non-JSON response handling', function () {
         expect(fn () => (new ClockworkCompanionClient($site))->health())
             ->toThrow(RuntimeException::class, "Clockwork Companion GET /health on {$site->domain} returned a non-JSON or malformed body: {$html}");
     });
+
+    it('signs requests for renegade sites using the clockwork-renegade/v1 route namespace in the payload', function () {
+        $site = companionSite(['companion_variant' => 'renegade']);
+        $secret = $site->companion_secret;
+
+        $capturedSig = null;
+        $capturedTs = null;
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork-renegade/v1/health" => function ($request) use (&$capturedSig, &$capturedTs) {
+                $capturedSig = $request->header('X-Clockwork-Signature')[0] ?? null;
+                $capturedTs = (int) ($request->header('X-Clockwork-Timestamp')[0] ?? 0);
+
+                return Http::response(['ok' => true, 'version' => '1.0.0'], 200);
+            },
+        ]);
+
+        $client = new ClockworkCompanionClient($site);
+        $client->health();
+
+        $expectedPayload = "GET\n/wp-json/clockwork-renegade/v1/health\n{$capturedTs}\n";
+        $expectedSignature = hash_hmac('sha256', $expectedPayload, $secret);
+
+        expect($capturedSig)->toBe($expectedSignature);
+    });
 });
 
 describe('ClockworkCompanionClient SSRF guard', function () {

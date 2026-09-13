@@ -1929,6 +1929,7 @@ class SitesController extends Controller
         // (WP Engine without API keys is not WPEngineHostingProvider).
         $hostingProvider = Site::HOSTING_PROVIDER_CUSTOM;
 
+        $suggestedVariant = null;
         // Parse Connection Key if provided
         if ($connectionKey !== '') {
             $decoded = null;
@@ -1945,6 +1946,7 @@ class SitesController extends Controller
             if (is_array($decoded)) {
                 $domain = $decoded['url'] ?? $decoded['domain'] ?? $domain;
                 $secret = $decoded['secret'] ?? $secret;
+                $suggestedVariant = $decoded['variant'] ?? null;
             } elseif (strlen($connectionKey) === 64 && ctype_xdigit($connectionKey) && empty($secret)) {
                 $secret = $connectionKey;
             }
@@ -1974,33 +1976,56 @@ class SitesController extends Controller
             ]);
         }
 
-        // Live handshake via HMAC /health probe
-        $tempSite = new Site([
-            'domain' => $domain,
-            'companion_secret' => $secret,
-            'is_multisite' => false,
-        ]);
+        // Live handshake via HMAC /health probe (probes Renegade or Classic Companion)
+        $variantsToTry = ($suggestedVariant === 'renegade')
+            ? ['renegade', 'companion']
+            : ['companion', 'renegade'];
 
-        $client = new ClockworkCompanionClient($tempSite, timeout: 10);
-        try {
-            $health = $client->health();
-        } catch (Throwable $e) {
-            $msg = $e->getMessage();
-            if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
-                return back()->withInput($this->enrollSafeInput($request))->withErrors([
-                    'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
-                ]);
+        $health = null;
+        $companionVariant = 'companion';
+        $lastError = null;
+
+        foreach ($variantsToTry as $variant) {
+            $tempSite = new Site([
+                'domain' => $domain,
+                'companion_secret' => $secret,
+                'is_multisite' => false,
+                'companion_variant' => $variant,
+            ]);
+
+            $client = new ClockworkCompanionClient($tempSite, timeout: 10);
+            try {
+                $health = $client->health();
+                $companionVariant = $variant;
+                $lastError = null;
+                break;
+            } catch (Throwable $e) {
+                $lastError = $e;
+                $msg = $e->getMessage();
+                if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
+                    return back()->withInput($this->enrollSafeInput($request))->withErrors([
+                        'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
+                    ]);
+                }
+                if (str_contains($msg, '404')) {
+                    continue;
+                }
+                break;
             }
+        }
+
+        if ($health === null && $lastError !== null) {
+            $msg = $lastError->getMessage();
             if (str_contains($msg, '404')) {
                 return back()->withInput($this->enrollSafeInput($request))->withErrors([
-                    'domain' => "The Clockwork Companion REST API (/wp-json/clockwork/v1/health) was not found on {$domain} (HTTP 404). Ensure the Companion plugin is installed and activated.",
+                    'domain' => "Neither Clockwork Renegade nor Clockwork Companion REST API was found on {$domain} (HTTP 404). Ensure the plugin is installed and activated.",
                 ]);
             }
 
-            report($e);
+            report($lastError);
 
             return back()->withInput($this->enrollSafeInput($request))->withErrors([
-                'domain' => "Could not connect to {$domain}. Verify the site is publicly accessible over HTTPS and Companion is reachable.",
+                'domain' => "Could not connect to {$domain}. Verify the site is publicly accessible over HTTPS and Companion/Renegade is reachable.",
             ]);
         }
 
@@ -2010,7 +2035,10 @@ class SitesController extends Controller
             ]);
         }
 
-        $version = (string) ($health['version'] ?? config('clockwork.companion.version', '1.35.0'));
+        $defaultVersion = $companionVariant === 'renegade'
+            ? config('clockwork.renegade.version', '1.0.0')
+            : config('clockwork.companion.version', '1.35.0');
+        $version = (string) ($health['version'] ?? $defaultVersion);
         $caps = (array) ($health['capabilities'] ?? []);
         $isMultisite = (bool) ($health['is_multisite'] ?? false);
 
@@ -2019,6 +2047,7 @@ class SitesController extends Controller
             'hosting_provider' => $hostingProvider,
             'server_id' => null,
             'companion_installed' => true,
+            'companion_variant' => $companionVariant,
             'companion_version' => $version,
             'companion_capabilities' => $caps,
             'companion_secret' => $secret,

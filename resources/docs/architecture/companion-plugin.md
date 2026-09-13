@@ -35,9 +35,15 @@ wp-content/mu-plugins/ (or wp-content/plugins/)
     assets/
 ```
 
+### Variants: Companion vs Renegade
+
+Clockwork Control supports two distinct plugin variants (tracked per-site in `sites.companion_variant`):
+- **`companion` (Private Mu-Plugin / Active Plugin)**: Private distribution (`~/Projects/clockwork-companion`), REST route `/wp-json/clockwork/v1/`, supports internal operations including arbitrary code execution for recovery (`CodeSnippetRoute`).
+- **`renegade` (WordPress.org Plugin Directory)**: Public open-source distribution (`~/Projects/clockwork-renegade`), GPL-2.0-or-later, REST route `/wp-json/clockwork-renegade/v1/`. Strictly compliant with WordPress.org guidelines: no arbitrary code execution / remote `eval()`, updates via WordPress.org SVN, full affirmative consent pairing screen, and complete cleanup on uninstall. See [Clockwork Renegade](/docs/features/clockwork-renegade) for full details.
+
 ## Install path
 
-Three installation paths share common tarball and secret management:
+Four installation paths share common secret management:
 
 ### 1. Standalone / Unmanaged Hosts (WP Engine, Kinsta, Custom) — Direct ZIP Upload
 
