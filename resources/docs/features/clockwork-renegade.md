@@ -24,7 +24,7 @@ While private Clockwork Companion is distributed via SSH tarball push or direct 
 | **Route Prefix & Nonce** | `clockwork_` | `clockwork_renegade_` |
 | **Arbitrary Remote Code (`eval`)** | Supported (`CodeSnippetRoute.php` for internal rescue operations) | **Completely Removed** (Strict WordPress.org Guideline compliance; zero `eval()` on remote payloads) |
 | **Plugin Updates** | Self-hosted release tarballs / SSH push | WordPress Core official updater via WordPress.org SVN repository |
-| **Pairing UI** | Tools → Clockwork | Dedicated Admin Screen with affirmative consent banner & base64 Connection Key |
+| **Pairing UI** | Tools → Clockwork Control (mu-plugin) | Clockwork → Connection (`admin.php?page=clockwork-connection`) |
 
 ---
 
@@ -44,6 +44,25 @@ Clockwork Renegade adheres to all WordPress.org plugin review requirements:
    - Includes a comprehensive `uninstall.php` script that deletes all `clockwork_renegade_*` options, transients, and any custom action log or security sample tables upon deletion.
 5. **Core Privacy Policy Guide**:
    - Integrates with WordPress core's `wp_add_privacy_policy_content()` to provide suggested privacy policy text for site administrators.
+
+---
+
+## 256-Bit Cryptographic Connection Key & Pairing
+
+Communication between Clockwork Control and a WordPress site requires explicit administrator enrollment via a **256-bit cryptographic Connection Key**:
+
+- **Entropy & Generation**: Generated via PHP's cryptographically secure pseudo-random number generator (`random_bytes(32)`), producing a 256-bit (32-byte) secret encoded as a 64-character hex string.
+- **Connection Key Format**: A base64-encoded JSON envelope containing the site URL, the 256-bit shared secret, and the variant tag:
+  ```json
+  {
+    "url": "https://client-site.com",
+    "secret": "d4f3a8b2... (256-bit hex secret)",
+    "variant": "renegade"
+  }
+  ```
+- **Admin Location**: Displayed in WordPress under **Clockwork → Connection** (`admin.php?page=clockwork-connection`), featuring a 1-click clipboard copy button, connection status badge (`Active & Monitored` vs `Unlinked`), and manual credential reveals.
+- **Affirmative Consent (WordPress.org Guideline 7)**: Zero network calls, background pings, or data transmissions occur upon plugin activation. Communication begins solely when an authorized site administrator copies the Connection Key and submits it in Clockwork Control's **Sites → + Add Site** modal.
+- **Optional Constant Pinning**: For hardened production sites, operators can define `CLOCKWORK_RENEGADE_SECRET` in `wp-config.php`, isolating the 256-bit secret from `wp_options` and database backups.
 
 ---
 

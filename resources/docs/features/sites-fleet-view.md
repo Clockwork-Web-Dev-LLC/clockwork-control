@@ -14,7 +14,7 @@ tracks: [app/Http/Controllers/SitesController.php, resources/views/sites/create.
 
 A **+ Add Site** button in the header toolbar opens the onboarding modal:
 - Supports standalone WordPress sites on WP Engine, Kinsta, or any unmanaged host where you do not have server/API access.
-- Operators download the companion plugin (`/companion/download`), activate it in WordPress, and copy the base64 **Connection Key** from **Tools → Clockwork**.
+- Operators download the companion plugin (`/companion/download`) or install Clockwork Renegade from WordPress.org, activate it in WordPress, and copy the base64 **256-bit Connection Key** (from **Clockwork → Connection** for Renegade or **Tools → Clockwork Control** for Companion).
 - Pasting the key into the modal verifies the HMAC handshake and enrolls the site under the `custom` provider. A failed handshake never writes the secret or Connection Key back into session old-input or the Alpine form — only the domain (via `@js()`) is safe to echo.
 
 ## What you see

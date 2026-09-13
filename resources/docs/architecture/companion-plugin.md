@@ -50,8 +50,8 @@ Four installation paths share common secret management:
 For sites hosted on platforms where Clockwork does not have server-level API keys or SSH access:
 1. **Download Compiled ZIP Package**: Operators download the pre-packaged plugin directly from Clockwork Control via `/companion/download` (`CompanionDownloadController::downloadZip()`).
 2. **Standard WordPress Install**: Upload and activate `clockwork-companion.zip` via standard WP Admin (`Plugins -> Add New -> Upload Plugin`).
-3. **One-Click Connection Key Pairing**: Navigate to **Tools → Clockwork** in WP Admin and click **Copy Connection Key**.
-4. **Enroll in Clockwork Control**: On Clockwork Control's **Sites** page, click **+ Add Site**, paste the base64 Connection Key, and confirm. Clockwork decodes the URL and HMAC secret, verifies `/health` connectivity, and enrolls the site under the `custom` provider. Validation errors never flash the secret or Connection Key back into the session or the form. Zip generation failures on `/companion/download` return a generic 500 — the builder exception stays in logs.
+3. **One-Click 256-Bit Connection Key Pairing**: Navigate to **Clockwork → Connection** (`admin.php?page=clockwork-connection`) for Renegade, or **Tools → Clockwork Control** for Companion in WP Admin, and click **Copy Connection Key**. This key encodes the site URL and a 256-bit cryptographically secure secret (`random_bytes(32)`).
+4. **Enroll in Clockwork Control**: On Clockwork Control's **Sites** page, click **+ Add Site**, paste the base64 Connection Key, and confirm. Clockwork Control decodes the URL, variant, and 256-bit HMAC secret, verifies `/health` connectivity, and enrolls the site under the `custom` provider. Validation errors never flash the secret or Connection Key back into the session or the form. Zip generation failures on `/companion/download` return a generic 500 — the builder exception stays in logs.
 
 ### 2. SpinupWP — SSH
 

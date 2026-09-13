@@ -109,10 +109,13 @@ The signature is computed over the *logical* route string (`/wp-json/clockwork/v
 - **SSO nonce ceiling** — `/sso/magic-link` refuses to mint past 100 active. Prevents `wp_options` bloat under abuse.
 - **Plugin-side admin pages** — Tools → Clockwork is gated to authorized agency emails. REST endpoints remain HMAC-gated regardless.
 
-### Standalone Companion Pairing & Base64 Connection Key
+### Standalone Pairing & 256-Bit Cryptographic Connection Key
 
 For sites without cloud hosting API access or SSH (e.g. WP Engine, Kinsta, or client-managed VPS):
-- When the companion plugin is activated on the site, it generates a fresh 32-byte cryptographically secure secret and renders a base64-encoded Connection Key in **Tools → Clockwork**.
+- **256-Bit Cryptographic Secret**: When either plugin variant is activated, it initializes a fresh 256-bit cryptographically secure secret using PHP's `random_bytes(32)` (encoded as a 64-character hex string).
+- **Base64 Connection Key Envelope**: The site packages the target URL, the 256-bit secret, and the plugin variant (`renegade` or `companion`) into a base64-encoded JSON payload:
+  - **Clockwork Renegade (WordPress.org)**: Located under **Clockwork → Connection** (`admin.php?page=clockwork-connection`).
+  - **Clockwork Companion (Private mu-plugin)**: Located under **Tools → Clockwork Control** (or white-labeled custom menu).
 - When pasted into Clockwork Control, Clockwork decodes the key, performs an immediate HMAC `/health` handshake to verify mutual possession of the secret, and persists the secret encrypted at rest (`sites.companion_secret`).
 - **Never flash the secret back.** `SitesController::enrollSafeInput()` strips `companion_secret` and `connection_key` from old input on every validation error. The create-site form does not repopulate those fields, and the domain goes through `@js()` so a crafted domain cannot break out of Alpine state. Handshake failures other than 401/404 are reported server-side; the form only shows a generic “could not connect” message.
 

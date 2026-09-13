@@ -233,6 +233,36 @@ describe('CompanionBrandingManager', function () {
             $result = $manager->syncSite($site);
 
             expect($result)->toBeTrue();
+            Http::assertSent(fn ($request) => str_contains($request->url(), '/wp-json/clockwork/v1/branding'));
+        });
+
+        it('pushes branding to the Renegade REST namespace for renegade sites', function () {
+            $site = Site::factory()->withCompanionInstalled()->create([
+                'companion_variant' => 'renegade',
+            ]);
+            $manager = app(CompanionBrandingManager::class);
+            $manager->save([
+                'enabled' => true,
+                'company_name' => 'Renegade Agency',
+            ]);
+
+            Http::fake([
+                "https://{$site->domain}/wp-json/clockwork-renegade/v1/branding" => function ($request) {
+                    $hasSig = $request->hasHeader('X-Clockwork-Signature');
+                    $hasTime = $request->hasHeader('X-Clockwork-Timestamp');
+                    $data = $request->data();
+
+                    return ($hasSig && $hasTime && ($data['company_name'] ?? '') === 'Renegade Agency')
+                        ? Http::response(['ok' => true, 'updated' => true], 200)
+                        : Http::response(['ok' => false, 'error' => 'invalid_signature'], 401);
+                },
+                "https://{$site->domain}/wp-json/clockwork/v1/branding" => Http::response(['ok' => false, 'error' => 'wrong_namespace'], 404),
+            ]);
+
+            expect($manager->syncSite($site))->toBeTrue();
+
+            Http::assertSent(fn ($request) => str_contains($request->url(), '/wp-json/clockwork-renegade/v1/branding'));
+            Http::assertNotSent(fn ($request) => str_contains($request->url(), '/wp-json/clockwork/v1/branding'));
         });
 
         it('handles connection failures gracefully and logs warning', function () {
@@ -275,6 +305,37 @@ describe('CompanionBrandingManager', function () {
                 ->and($results['successful'])->toBe(1)
                 ->and($results['failed'])->toBe(1)
                 ->and($results['errors'])->toHaveKey('beta.com');
+        });
+
+        it('syncs branding to renegade sites on the renegade namespace', function () {
+            Site::factory()->withCompanionInstalled()->create([
+                'domain' => 'classic.com',
+                'is_inactive' => false,
+                'companion_variant' => 'companion',
+            ]);
+            Site::factory()->withCompanionInstalled()->create([
+                'domain' => 'renegade.com',
+                'is_inactive' => false,
+                'companion_variant' => 'renegade',
+            ]);
+
+            Http::fake([
+                'https://classic.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => true], 200),
+                'https://renegade.com/wp-json/clockwork-renegade/v1/branding' => Http::response(['ok' => true], 200),
+                'https://classic.com/wp-json/clockwork-renegade/v1/branding' => Http::response(['ok' => false], 404),
+                'https://renegade.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => false], 404),
+            ]);
+
+            $results = app(CompanionBrandingManager::class)->syncFleet();
+
+            expect($results['total'])->toBe(2)
+                ->and($results['successful'])->toBe(2)
+                ->and($results['failed'])->toBe(0);
+
+            Http::assertSent(fn ($request) => $request->url() === 'https://classic.com/wp-json/clockwork/v1/branding');
+            Http::assertSent(fn ($request) => $request->url() === 'https://renegade.com/wp-json/clockwork-renegade/v1/branding');
+            Http::assertNotSent(fn ($request) => $request->url() === 'https://classic.com/wp-json/clockwork-renegade/v1/branding');
+            Http::assertNotSent(fn ($request) => $request->url() === 'https://renegade.com/wp-json/clockwork/v1/branding');
         });
     });
 
