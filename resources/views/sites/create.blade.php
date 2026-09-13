@@ -74,7 +74,7 @@
             }
         }" class="space-y-6">
 
-            {{-- Card 1: Companion Plugin Download & Instructions --}}
+            {{-- Card 1: Plugin Installation & Instructions --}}
             <div class="p-6 rounded-[var(--radius-card)] bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs">
                 <div class="flex items-start justify-between flex-wrap gap-4 mb-4">
                     <div class="flex items-center gap-3">
@@ -82,24 +82,30 @@
                             <i class="fa-solid fa-puzzle-piece"></i>
                         </div>
                         <div>
-                            <h2 class="text-base font-bold text-[var(--color-ink-strong)]">Step 1: Install Clockwork Companion</h2>
-                            <p class="text-xs text-[var(--color-ink-muted)]">Upload the plugin to your WordPress site if not already installed</p>
+                            <h2 class="text-base font-bold text-[var(--color-ink-strong)]">Step 1: Install Clockwork Plugin</h2>
+                            <p class="text-xs text-[var(--color-ink-muted)]">Install Clockwork Renegade from WordPress.org, or upload Companion</p>
                         </div>
                     </div>
-                    <a href="{{ route('companion.download') }}" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-strong)] transition-colors">
-                        <i class="fa-solid fa-download text-xs text-[var(--color-brand)]"></i>
-                        <span>Download Plugin (.zip)</span>
-                    </a>
+                    <div class="flex items-center gap-2">
+                        <a href="https://wordpress.org/plugins/clockwork-renegade/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-brand)] text-white hover:opacity-95 transition-opacity">
+                            <i class="fa-brands fa-wordpress text-xs"></i>
+                            <span>WordPress.org Directory</span>
+                        </a>
+                        <a href="{{ route('companion.download') }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-strong)] transition-colors" title="Download private companion zip">
+                            <i class="fa-solid fa-download text-xs text-[var(--color-brand)]"></i>
+                            <span>Download Plugin (.zip)</span>
+                        </a>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-[var(--color-ink-muted)]">
                     <div class="p-3 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
-                        <span class="font-bold text-[var(--color-ink-strong)] block mb-1">1. Upload & Activate</span>
-                        In wp-admin, go to <strong>Plugins → Add New → Upload Plugin</strong> and activate <code>clockwork-companion.zip</code>.
+                        <span class="font-bold text-[var(--color-ink-strong)] block mb-1">1. Install & Activate</span>
+                        Search for <strong>Clockwork Renegade</strong> in wp-admin under <strong>Plugins → Add New</strong>, or upload <code>clockwork-companion.zip</code>.
                     </div>
                     <div class="p-3 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
                         <span class="font-bold text-[var(--color-ink-strong)] block mb-1">2. Copy Connection Key</span>
-                        Navigate to <strong>Tools → Clockwork</strong> and copy the generated <strong>Connection Key</strong>.
+                        Navigate to <strong>Clockwork</strong> in wp-admin and copy the generated <strong>Connection Key</strong>.
                     </div>
                     <div class="p-3 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
                         <span class="font-bold text-[var(--color-ink-strong)] block mb-1">3. Pair with Clockwork</span>
@@ -113,7 +119,7 @@
                 <div class="flex items-center justify-between border-b border-[var(--color-border-light)] pb-4 mb-6">
                     <div>
                         <h2 class="text-base font-bold text-[var(--color-ink-strong)]">Step 2: Connect & Verify</h2>
-                        <p class="text-xs text-[var(--color-ink-muted)]">Authenticate Clockwork Control with the site's Companion plugin</p>
+                        <p class="text-xs text-[var(--color-ink-muted)]">Authenticate Clockwork Control with the site's Companion or Renegade plugin</p>
                     </div>
                     <div class="inline-flex items-center bg-[var(--color-surface-alt)] p-1 rounded-lg border border-[var(--color-border-light)] text-xs">
                         <button type="button" @click="mode = 'key'"
@@ -144,7 +150,7 @@
                                 rows="3"
                                 x-model="connectionKey"
                                 @input="parseKey()"
-                                placeholder="Paste the Connection Key from wp-admin → Tools → Clockwork here…"
+                                placeholder="Paste the Connection Key from wp-admin (Clockwork or Tools → Clockwork) here…"
                                 class="w-full font-mono text-xs p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] focus:bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-brand)] text-[var(--color-ink-strong)]"
                             ></textarea>
                             <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">

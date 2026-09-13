@@ -18,6 +18,8 @@ describe('Add Standalone Site', function () {
 
         $response->assertOk();
         $response->assertSee('Connect WordPress Site');
+        $response->assertSee('WordPress.org Directory');
+        $response->assertSee('Clockwork Renegade');
         $response->assertSee('Download Plugin (.zip)');
     });
 
