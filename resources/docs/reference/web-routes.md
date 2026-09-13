@@ -25,6 +25,7 @@ php artisan route:list
 | GET | `/login` | Landing page with the Google sign-in button. |
 | GET | `/auth/google/redirect` | Kicks off the Socialite flow. |
 | GET | `/auth/google/callback` | Where Google sends the user back. Allowlist check happens here. |
+| GET | `/dev-login` | Passwordless login of the first active user. **404 unless `APP_ENV=local` and the request is un-proxied loopback.** Optional `?redirect=` is a same-origin path starting with `/` only (no `https://`, `//host`, or encoded protocol-relative). |
 
 If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT NULL`), the callback bounces back to `/login` with a denial banner. No auto-provisioning.
 

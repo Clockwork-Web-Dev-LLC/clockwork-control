@@ -2,7 +2,7 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable, standalone, backups]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**, app/Http/Controllers/CompanionDownloadController.php]
@@ -45,7 +45,7 @@ For sites hosted on platforms where Clockwork does not have server-level API key
 1. **Download Compiled ZIP Package**: Operators download the pre-packaged plugin directly from Clockwork Control via `/companion/download` (`CompanionDownloadController::downloadZip()`).
 2. **Standard WordPress Install**: Upload and activate `clockwork-companion.zip` via standard WP Admin (`Plugins -> Add New -> Upload Plugin`).
 3. **One-Click Connection Key Pairing**: Navigate to **Tools → Clockwork** in WP Admin and click **Copy Connection Key**.
-4. **Enroll in Clockwork Control**: On Clockwork Control's **Sites** page, click **+ Add Site**, paste the base64 Connection Key, and confirm. Clockwork decodes the URL and HMAC secret, verifies `/health` connectivity, and enrolls the site under the `custom` provider.
+4. **Enroll in Clockwork Control**: On Clockwork Control's **Sites** page, click **+ Add Site**, paste the base64 Connection Key, and confirm. Clockwork decodes the URL and HMAC secret, verifies `/health` connectivity, and enrolls the site under the `custom` provider. Validation errors never flash the secret or Connection Key back into the session or the form. Zip generation failures on `/companion/download` return a generic 500 — the builder exception stays in logs.
 
 ### 2. SpinupWP — SSH
 
@@ -108,7 +108,7 @@ During installation, `CompanionInstaller` pushes the secret via `wp db query` an
 
 ## Capabilities — per-site feature gates
 
-`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.34.0, the version bundled via `config('clockwork.companion.version')`):
+`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.37.0+, the version bundled via `config('clockwork.companion.version')`):
 
 ```
 contact-form-test, lockouts, wordfence-blocks, plugins, admins, wp-cron,
@@ -116,12 +116,11 @@ comments-summary, snapshot, backups-report, admin-ui, sso, updates,
 action-log, security-scans, malware-scan, secret-rotate, auth-audit,
 traffic-report, resource-sampler, resource-sampler-toggle,
 form-subscriptions, lockouts-unlock, post-update-verify, two-factor,
-white-label, comments-moderation, maintenance-mode, code-snippets, cache-flush
+white-label, comments-moderation, maintenance-mode, code-snippets, cache-flush,
+backup-create, backup-restore
 ```
 
-Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin.
-
-Three of the newer app-side modules gate on capability strings the companion plugin repo has added on top of `code-snippets`, `comments-moderation`, and `maintenance-mode` — but that work hasn't been version-bumped/released past v1.34.0 yet, so it isn't in the list above. `code-snippets` (Code Snippets execution) and `comments-moderation` (Comment Moderation, checked by the weekly cleanup command) are checked app-side; `maintenance-mode` exists plugin-side but Site Maintenance doesn't check it — it gates only on `companion_installed`. Don't fleet-deploy Companion expecting these until a release picks them up.
+Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin. Site Maintenance still gates only on `companion_installed`, not the `maintenance-mode` capability.
 
 ## Routes
 
@@ -150,7 +149,10 @@ Mutating POSTs (HMAC-signed):
 - `/comments/cleanup` — purge spam and trash comments older than N days (`cleanupComments()`); called weekly by `clockwork:cleanup-spam-comments`
 - `/maintenance-mode` — enable/disable maintenance mode with an optional custom title, message, and bypass secret key (`setMaintenanceMode()`)
 - `/code-snippet` — execute a snippet of PHP in a sandboxed, output-buffered context and return its output, return value, and timing (`executeCodeSnippet()`); powers the Code Snippets workbench
-- `/backup/create` — create full off-site backup streaming directly to AWS S3 Glacier Instant Retrieval. Receives presigned S3 PUT URL + headers, dumps DB via `$wpdb` to gzipped SQL, compresses `wp-content/`, streams to S3 via curl, cleans up temporary files, and returns `{ok, size_bytes, sha256, duration_ms}`. Powers standalone and direct off-site site backups.
+- `/backup/create` — create full off-site backup streaming directly to AWS S3 Glacier Instant Retrieval. Receives presigned S3 PUT URL + headers. Companion validates the URL is public HTTPS (no private/reserved IPs, no redirects) **before** dumping, then dumps DB via `$wpdb` to gzipped SQL, compresses `wp-content/`, streams to S3 via curl (TLS host verified, CR/LF headers refused), cleans up temporary files, and returns `{ok, size_bytes, sha256, duration_ms}`. Powers standalone and direct off-site site backups.
+- `/backup/restore/stage` — download a presigned archive GET, verify SHA-256, unpack. Same public-HTTPS URL rule as create; zip-slip entries abort.
+- `/backup/restore/status` — GET poll of staged restore (does not consume the HMAC replay guard).
+- `/backup/restore/apply` — maintenance on, prefix-scoped SQL import, file copy-over, caches flushed. Confirm domain + matching `archive_key`; fail-closed if anything breaks after maintenance is on.
 
 ## Snapshot cache
 

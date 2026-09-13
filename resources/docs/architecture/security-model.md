@@ -2,10 +2,10 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
-tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Services/Companion/**, modules/Pressable/src/**, config/clockwork.php]
+tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Http/Controllers/SitesController.php, app/Services/Companion/**, modules/BackupRelay/src/Services/BackupArchiveEnumerator.php, modules/Pressable/src/**, config/clockwork.php]
 ---
 
 How we protect a database that holds the SSH and WP-DB credentials for ~150 SpinupWP sites, plus the OAuth2 credentials reaching ~90 more on Pressable (no SSH — see [Integrations → Pressable](/docs/integrations/pressable) for that provider's different trust model). The short version: defense in depth — local-LAN-only network posture, OAuth + allowlist for humans, HMAC for plugin calls, dual-scoped CF tokens, encrypted-at-rest credentials.
@@ -40,6 +40,7 @@ The network posture above assumes the machine itself is safe. It might not be �
 - **Optional Workspace pin** — `GOOGLE_HD=your-agency.com` restricts the Google account picker to that domain *and* is re-checked on the OAuth callback (`hd` claim). Off by default so personal accounts work for testing.
 - **Revoke and password change kill live sessions.** `User::invalidateSessions()` cycles `remember_token` and deletes `sessions` rows for that user. `EnsureUserIsActive` middleware re-checks `revoked_at` on every web request and logs the operator out immediately. Login + add/revoke/restore/password-change all land in `action_logs`.
 - **Roles.** `users.role` is `admin` (default for existing rows, the installer, and `clockwork:add-user`) or `operator`. Operators can run the fleet; only admins can manage the allowlist, download the Clockwork DB backup, apply in-app system updates, or execute Code Snippets. New teammates added from `/settings/users` default to operator.
+- **`/dev-login` is local-loopback only.** `DevLoginController` 404s unless `APP_ENV=local` **and** the request is un-proxied loopback (`127.0.0.1` / `::1` / `localhost`, no `X-Forwarded-*`). The optional `?redirect=` query is same-origin paths starting with `/` only — absolute URLs, `//host`, encoded `/%2f%2f…`, and backslash variants fall back to Companion settings. Never treat this as a production login.
 
 ### Users settings page (`/settings/users`)
 
@@ -113,6 +114,7 @@ The signature is computed over the *logical* route string (`/wp-json/clockwork/v
 For sites without cloud hosting API access or SSH (e.g. WP Engine, Kinsta, or client-managed VPS):
 - When the companion plugin is activated on the site, it generates a fresh 32-byte cryptographically secure secret and renders a base64-encoded Connection Key in **Tools → Clockwork**.
 - When pasted into Clockwork Control, Clockwork decodes the key, performs an immediate HMAC `/health` handshake to verify mutual possession of the secret, and persists the secret encrypted at rest (`sites.companion_secret`).
+- **Never flash the secret back.** `SitesController::enrollSafeInput()` strips `companion_secret` and `connection_key` from old input on every validation error. The create-site form does not repopulate those fields, and the domain goes through `@js()` so a crafted domain cannot break out of Alpine state. Handshake failures other than 401/404 are reported server-side; the form only shows a generic “could not connect” message.
 
 ### Direct S3 Glacier Backup Upload Security
 
@@ -120,6 +122,13 @@ When streaming backups directly from WordPress to AWS S3 Glacier Instant Retriev
 - **IAM Credentials Never Touch WordPress**: The AWS IAM access key and secret live solely on Clockwork Control.
 - **Time-Limited Presigned PUT URLs**: Clockwork signs an S3 PUT URL valid for only 2 hours.
 - **Strict Scope & Storage Class**: The presigned URL is locked to a specific object key (`archives/{domain}/{timestamp}_{id}.zip`) and enforces `x-amz-storage-class: GLACIER_IR`. The WordPress site cannot read, delete, or list other objects in the bucket.
+- **Companion refuses non-public upload URLs** before it dumps the site. HTTPS only, no private/reserved IPs, no redirects, TLS hostname verified. Header names/values with CR/LF are rejected so a stolen HMAC cannot inject extra headers.
+
+### Archive-key ownership (restore / download)
+
+A stolen or guessed S3 object key must not let an authenticated operator pull another tenant’s archive. `BackupArchiveEnumerator::belongsToSite()` is the single gate: the key must sit under `{archive_prefix}/{domain}/` or `{domain}/`, and `..` plus sibling-domain prefixes (`example.com.evil/…`) are refused. That check runs on presigned GET minting, SHA-256 sidecar lookup, the settings download proxy, UI restore stage, and `clockwork:backup-restore --phase=stage`.
+
+Companion’s restore download is the same public-HTTPS rule as upload: HMAC already gates the route; the URL check stops a stolen secret from turning Companion into a metadata/SSRF client. Redirects are refused (presigned S3 GETs are direct). Zip extraction already rejects `../` and absolute paths; file apply skips those names again.
 
 See [Architecture → Companion plugin](/docs/architecture/companion-plugin) for the full picture.
 
@@ -153,3 +162,5 @@ This is the highest-value single file an attacker could get: it contains every e
 - Do not run `php artisan migrate:fresh` against a real DB. Confirm before using.
 - Do not commit `.env`. The `.gitignore` covers it; don't override.
 - Do not push a long-lived Companion secret through Pressable's command API — it's logged verbatim for ~30 days. Use the bootstrap-then-rotate pattern (see above).
+- Do not flash `companion_secret` or a Connection Key into session old-input, Blade, or Alpine state.
+- Do not mint a Glacier download URL or stage a restore for an S3 key that is not that site's own prefix.

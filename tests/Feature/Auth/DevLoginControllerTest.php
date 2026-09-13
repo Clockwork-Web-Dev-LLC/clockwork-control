@@ -50,6 +50,38 @@ describe('DevLoginController', function () {
         $this->app['env'] = 'testing';
     });
 
+    it('ignores an external redirect query on loopback local login', function () {
+        EnforceInstallerGate::fake(true);
+        $this->app['env'] = 'local';
+        $this->mockIssueCounterZero();
+        User::factory()->create();
+
+        $response = $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login', ['redirect' => 'https://evil.example/phish']));
+
+        $response->assertRedirect(route('settings.companion.index'));
+
+        $this->app['env'] = 'testing';
+    });
+
+    it('ignores an encoded protocol-relative redirect on loopback local login', function () {
+        EnforceInstallerGate::fake(true);
+        $this->app['env'] = 'local';
+        $this->mockIssueCounterZero();
+        User::factory()->create();
+
+        $response = $this->withServerVariables([
+            'REMOTE_ADDR' => '127.0.0.1',
+            'HTTP_HOST' => 'localhost',
+        ])->get(route('dev-login', ['redirect' => '/%2f%2fevil.example/phish']));
+
+        $response->assertRedirect(route('settings.companion.index'));
+
+        $this->app['env'] = 'testing';
+    });
+
     it('does not treat a public host as loopback', function () {
         $request = Request::create('http://clockwork.example/dev-login', 'GET', server: [
             'REMOTE_ADDR' => '203.0.113.10',

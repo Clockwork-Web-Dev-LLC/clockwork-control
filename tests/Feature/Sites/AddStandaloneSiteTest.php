@@ -51,6 +51,21 @@ describe('Add Standalone Site', function () {
         $response->assertSessionHasErrors('companion_secret');
     });
 
+    it('does not flash the companion secret or connection key back into the session', function () {
+        $secret = bin2hex(random_bytes(32));
+
+        $response = $this->post(route('sites.store'), [
+            'domain' => 'not-a-valid-domain',
+            'companion_secret' => $secret,
+            'connection_key' => 'cw_'.base64_encode(json_encode(['secret' => $secret])),
+        ]);
+
+        $response->assertSessionHasErrors('domain');
+        $old = session()->get('_old_input', []);
+        expect($old)->not->toHaveKey('companion_secret')
+            ->and($old)->not->toHaveKey('connection_key');
+    });
+
     it('handles companion 401 signature mismatch gracefully', function () {
         Http::fake([
             'https://wpengine-client.com/wp-json/clockwork/v1/health*' => Http::response([
@@ -66,6 +81,23 @@ describe('Add Standalone Site', function () {
 
         $response->assertSessionHasErrors('companion_secret');
         expect(Site::where('domain', 'wpengine-client.com')->exists())->toBeFalse();
+    });
+
+    it('does not leak transport exception details on enroll failure', function () {
+        Http::fake([
+            'https://wpengine-client.com/wp-json/clockwork/v1/health*' => Http::response('upstream exploded: secret=should-not-echo', 502),
+        ]);
+
+        $response = $this->post(route('sites.store'), [
+            'domain' => 'wpengine-client.com',
+            'companion_secret' => bin2hex(random_bytes(32)),
+        ]);
+
+        $response->assertSessionHasErrors('domain');
+        $message = session('errors')->first('domain');
+        expect($message)->toContain('Could not connect to wpengine-client.com')
+            ->and($message)->not->toContain('upstream exploded')
+            ->and($message)->not->toContain('secret=');
     });
 
     it('handles companion 404 route not found gracefully', function () {

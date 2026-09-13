@@ -431,6 +431,29 @@ class BackupRelayRestoreTest extends TestCase
         $this->assertNull($enumerator->resolveArchiveSha256($site, $middleKey));
     }
 
+    public function test_archive_key_must_belong_to_the_site(): void
+    {
+        $site = $this->createCustomSite();
+        $other = $this->createCustomSite(['domain' => 'other-client.example']);
+        $enumerator = app(BackupArchiveEnumerator::class);
+
+        $own = "archives/{$site->domain}/2026-09-11.zip";
+        $foreign = "archives/{$other->domain}/2026-09-11.zip";
+        $traversal = "archives/{$site->domain}/../{$other->domain}/2026-09-11.zip";
+        $sibling = "archives/{$site->domain}.evil/2026-09-11.zip";
+
+        expect($enumerator->belongsToSite($site, $own))->toBeTrue()
+            ->and($enumerator->belongsToSite($site, $foreign))->toBeFalse()
+            ->and($enumerator->belongsToSite($site, $traversal))->toBeFalse()
+            ->and($enumerator->belongsToSite($site, $sibling))->toBeFalse();
+
+        Storage::disk('s3-backup-relay')->put($foreign, 'stolen');
+        Storage::disk('s3-backup-relay')->put("{$foreign}.sha256.json", json_encode(['sha256' => 'sidecar_for_other_site']));
+
+        expect($enumerator->resolveArchiveSha256($site, $foreign))->toBeNull()
+            ->and($enumerator->getDownloadUrl($site, $foreign))->toBe('');
+    }
+
     public function test_backup_restore_command_stage_success(): void
     {
         $site = $this->createCustomSite();

@@ -195,10 +195,33 @@ class BackupArchiveEnumerator
     }
 
     /**
+     * True when $key is under this site's archive prefixes
+     * (`{archive_prefix}/{domain}/` or `{domain}/`). Rejects `..` and
+     * sibling domains (`archives/example.com.evil/...`).
+     */
+    public function belongsToSite(Site $site, string $key): bool
+    {
+        $key = ltrim(str_replace('\\', '/', $key), '/');
+        if ($key === '' || str_contains($key, '..')) {
+            return false;
+        }
+
+        $archivePrefix = rtrim((string) config('clockwork.backup_relay.archive_prefix', 'archives'), '/');
+        $domain = $site->domain;
+
+        return str_starts_with($key, "{$archivePrefix}/{$domain}/")
+            || str_starts_with($key, "{$domain}/");
+    }
+
+    /**
      * Generate a presigned S3 URL or fallback download route for an object.
      */
     public function getDownloadUrl(Site $site, string $key): string
     {
+        if (! $this->belongsToSite($site, $key)) {
+            return '';
+        }
+
         try {
             $disk = $this->disk();
             if (method_exists($disk, 'temporaryUrl')) {
@@ -223,6 +246,10 @@ class BackupArchiveEnumerator
      */
     public function resolveArchiveSha256(Site $site, string $key): ?string
     {
+        if (! $this->belongsToSite($site, $key)) {
+            return null;
+        }
+
         // A misconfigured disk must read as "no hash on record" (422/false in
         // the callers), never bubble up as a 500.
         try {

@@ -26,7 +26,8 @@ class CompanionDownloadController extends Controller
                 'Cache-Control' => 'no-cache, no-store, must-revalidate',
             ]);
         } catch (Throwable $e) {
-            abort(500, 'Could not generate companion package: '.$e->getMessage());
+            report($e);
+            abort(500, 'Could not generate companion package.');
         }
     }
 }

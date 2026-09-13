@@ -2,10 +2,10 @@
 title: Sites (fleet view)
 section: Features
 order: 15
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [sites, fleet, pressable, spinupwp, hosting, standalone, companion]
-tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
+tracks: [app/Http/Controllers/SitesController.php, resources/views/sites/create.blade.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
 ---
 
 `/sites` is the fleet-wide site list that works across every hosting provider you have enabled. It exists because [the main dashboard](/docs/features/dashboard) is server-first — every card is a server — and Pressable or standalone custom sites have no server to hang a card off of.
@@ -15,7 +15,7 @@ tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/sit
 A **+ Add Site** button in the header toolbar opens the onboarding modal:
 - Supports standalone WordPress sites on WP Engine, Kinsta, or any unmanaged host where you do not have server/API access.
 - Operators download the companion plugin (`/companion/download`), activate it in WordPress, and copy the base64 **Connection Key** from **Tools → Clockwork**.
-- Pasting the key into the modal verifies the HMAC handshake and enrolls the site under the `custom` provider.
+- Pasting the key into the modal verifies the HMAC handshake and enrolls the site under the `custom` provider. A failed handshake never writes the secret or Connection Key back into session old-input or the Alpine form — only the domain (via `@js()`) is safe to echo.
 
 ## What you see
 

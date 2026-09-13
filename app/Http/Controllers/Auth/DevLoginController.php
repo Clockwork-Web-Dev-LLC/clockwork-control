@@ -25,9 +25,30 @@ class DevLoginController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        $target = $request->query('redirect');
+        return redirect($this->safeRedirectTarget($request));
+    }
 
-        return redirect($target ?: route('settings.companion.index'));
+    /**
+     * Loopback-only, but still refuse an open redirect off the box
+     * (`/dev-login?redirect=https://evil.example`).
+     */
+    private function safeRedirectTarget(Request $request): string
+    {
+        $target = $request->query('redirect');
+        if (! is_string($target) || $target === '') {
+            return route('settings.companion.index');
+        }
+
+        if (! str_starts_with($target, '/') || str_starts_with($target, '//')) {
+            return route('settings.companion.index');
+        }
+
+        $decoded = rawurldecode($target);
+        if (str_starts_with($decoded, '//') || str_contains($decoded, '://') || str_contains($decoded, '\\')) {
+            return route('settings.companion.index');
+        }
+
+        return $target;
     }
 
     public static function isLoopbackRequest(Request $request): bool

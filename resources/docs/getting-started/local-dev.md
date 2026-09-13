@@ -2,7 +2,7 @@
 title: Local dev setup
 section: Getting Started
 order: 20
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [getting-started, dev, setup, herd, mysql, linux]
 ---
@@ -161,6 +161,8 @@ npm run dev
 ## 6. Visit the app
 
 `http://127.0.0.1:8000` → click **Sign in with Google** → land on the dashboard.
+
+When `APP_ENV=local` and you hit the app on loopback, `http://127.0.0.1:8000/dev-login` signs in the first active allowlist user without a password. It 404s on any non-loopback host or if a reverse-proxy `X-Forwarded-*` header is present. Do not bookmark an off-box `?redirect=` — only same-origin paths starting with `/` are honoured.
 
 Empty database? Of course — Clockwork has no inventory yet. Two options:
 

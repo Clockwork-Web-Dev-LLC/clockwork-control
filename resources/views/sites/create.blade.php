@@ -32,9 +32,9 @@
 
         <div x-data="{
             mode: 'key', // 'key' or 'manual'
-            connectionKey: '{{ old('connection_key', '') }}',
-            domain: '{{ old('domain', '') }}',
-            secret: '{{ old('companion_secret', '') }}',
+            connectionKey: '',
+            domain: @js(old('domain', '')),
+            secret: '',
             submitting: false,
 
             parseKey() {

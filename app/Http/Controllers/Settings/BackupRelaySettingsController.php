@@ -269,12 +269,7 @@ class BackupRelaySettingsController extends Controller
             abort(400, 'Invalid key encoding.');
         }
 
-        // Security check: ensure object key belongs to this site
-        $archivePrefix = rtrim((string) config('clockwork.backup_relay.archive_prefix', 'archives'), '/');
-        $validPrefix1 = "{$archivePrefix}/{$site->domain}/";
-        $validPrefix2 = "{$site->domain}/";
-
-        if (! str_starts_with($key, $validPrefix1) && ! str_starts_with($key, $validPrefix2)) {
+        if (! $enumerator->belongsToSite($site, $key)) {
             abort(403, 'Unauthorized access to archive object.');
         }
 

@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Scheduled Jobs dashboard**: `/settings/scheduled-jobs` lists every entry in the live cron schedule (`routes/console.php` plus module-registered tasks) with its last outcome, duration, and a manual **Run now** button. `RecordScheduledTaskResult` subscribes to Laravel's built-in scheduler events, so a new job is covered automatically with no per-command wiring. "Currently skipped" detection evaluates each job's own `->when()`/`->skip()` gate live rather than hardcoding which setting controls which job. Closes the blind spot where the scheduler heartbeat stays green while one specific job silently fails every tick (e.g. a pending migration).
 
+## [1.7.1] - 2026-09-12
+
+### Security
+- **Standalone enroll no longer flashes Companion secrets** into old input or Alpine state; the create-site form also stops interpolating `old()` into JS quotes (`@js()` for domain).
+- **Archive keys must belong to the site** before Control will mint a download URL, resolve a SHA-256 sidecar, proxy a download, or stage a restore (blocks cross-site Glacier IDOR).
+- **DevLogin open redirect closed**: only same-origin paths starting with `/` are honoured; absolute URLs, `//host`, encoded `/%2f%2f…`, and backslash variants fall back to Companion settings.
+- **Companion zip generation** returns a generic 500 instead of leaking builder exception text.
+
+### Documentation
+- Security model, Backup relay, Companion plugin, Sites fleet view, web routes, request lifecycle, local-dev, and APIs-we-call now document enroll secret handling, archive-key ownership, DevLogin redirect rules, and Companion public-HTTPS backup URL checks.
+
 ## [1.7.0] - 2026-09-12
 
 ### Added

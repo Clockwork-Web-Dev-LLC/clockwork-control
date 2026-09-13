@@ -1957,19 +1957,19 @@ class SitesController extends Controller
         $domain = strtolower(trim($domain));
 
         if ($domain === '' || ! str_contains($domain, '.')) {
-            return back()->withInput()->withErrors([
+            return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'domain' => 'Please enter a valid domain name (e.g. example.com).',
             ]);
         }
 
         if (Site::where('domain', $domain)->exists()) {
-            return back()->withInput()->withErrors([
+            return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'domain' => "The site {$domain} is already registered in Clockwork Control.",
             ]);
         }
 
         if ($secret === '') {
-            return back()->withInput()->withErrors([
+            return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'companion_secret' => 'The Companion shared secret or Connection Key is required.',
             ]);
         }
@@ -1987,23 +1987,25 @@ class SitesController extends Controller
         } catch (Throwable $e) {
             $msg = $e->getMessage();
             if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
-                return back()->withInput()->withErrors([
+                return back()->withInput($this->enrollSafeInput($request))->withErrors([
                     'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
                 ]);
             }
             if (str_contains($msg, '404')) {
-                return back()->withInput()->withErrors([
+                return back()->withInput($this->enrollSafeInput($request))->withErrors([
                     'domain' => "The Clockwork Companion REST API (/wp-json/clockwork/v1/health) was not found on {$domain} (HTTP 404). Ensure the Companion plugin is installed and activated.",
                 ]);
             }
 
-            return back()->withInput()->withErrors([
-                'domain' => "Could not connect to {$domain}: {$msg}. Verify the site is publicly accessible over HTTPS.",
+            report($e);
+
+            return back()->withInput($this->enrollSafeInput($request))->withErrors([
+                'domain' => "Could not connect to {$domain}. Verify the site is publicly accessible over HTTPS and Companion is reachable.",
             ]);
         }
 
         if (! ($health['ok'] ?? false)) {
-            return back()->withInput()->withErrors([
+            return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'domain' => "Received an invalid health response from {$domain}.",
             ]);
         }
@@ -2072,6 +2074,18 @@ class SitesController extends Controller
         );
 
         return redirect()->route('sites.show', $site)->with('flash', "Site {$site->domain} successfully connected and enrolled!");
+    }
+
+    /**
+     * Old input for the enroll form — never flash the HMAC secret or Connection
+     * Key back into the session / HTML. Those values are enough to take over
+     * the WordPress site.
+     *
+     * @return array<string, mixed>
+     */
+    private function enrollSafeInput(Request $request): array
+    {
+        return $request->except(['companion_secret', 'connection_key']);
     }
 
     /**
@@ -2265,6 +2279,16 @@ class SitesController extends Controller
         }
 
         $archiveKey = $validated['archive_key'];
+        if (! $enumerator->belongsToSite($site, $archiveKey)) {
+            $msg = 'That archive does not belong to this site.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 403);
+            }
+
+            return back()->with('status_error', $msg);
+        }
+
         $sha256 = $enumerator->resolveArchiveSha256($site, $archiveKey);
         if (empty($sha256)) {
             $msg = "No integrity hash on record for archive {$archiveKey}. Restore refused.";

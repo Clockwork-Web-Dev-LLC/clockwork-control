@@ -2,7 +2,7 @@
 title: Request lifecycle
 section: Architecture
 order: 40
-updated: 2026-09-11
+updated: 2026-09-12
 author: Aaron Reimann
 tags: [architecture, http, auth, middleware, linux]
 tracks: [routes/web.php, app/Http/Controllers/Auth/**, app/Http/Middleware/**]
@@ -41,6 +41,7 @@ Every core-app route except the auth flow sits inside one `Route::middleware(['a
 Route::get('/login', ...);                     // public
 Route::get('/auth/google/redirect', ...);      // public
 Route::get('/auth/google/callback', ...);      // public
+Route::get('/dev-login', ...);                 // public, but 404 unless local + loopback
 
 Route::middleware(['auth'])->group(function () {
     // every other core route
@@ -77,6 +78,10 @@ The login page only renders an OAuth provider's button when its credentials are 
 Optional Workspace pinning: setting `GOOGLE_HD=your-agency.com` causes Google to limit the account picker to that domain. Off by default so personal accounts work for testing.
 
 Login + add/revoke/restore/password-change events all land in `action_logs` (`TYPE_LOGIN`, `TYPE_USER_ADDED`, `TYPE_USER_REVOKED`, `TYPE_USER_RESTORED`, `TYPE_USER_PASSWORD_CHANGED`).
+
+### Local-only `/dev-login`
+
+`GET /dev-login` sits outside the auth group so you can skip the password form on a laptop. It still 404s unless `APP_ENV=local` **and** the request is un-proxied loopback (`DevLoginController::isLoopbackRequest()`). After login it honours `?redirect=` only when that value is a same-origin path starting with `/` — `https://…`, `//host`, encoded `/%2f%2f…`, and backslash variants are ignored and you land on Companion settings. See [Architecture → Security model](/docs/architecture/security-model).
 
 `/install/*` (the pre-auth setup wizard) sits outside this auth gate entirely — it's guarded instead by `EnforceInstallerGate` middleware, which blocks access once installation is complete (a `storage/installed` sentinel file) so the wizard can't be re-run against a live instance without deliberately reopening it via `clockwork:installer:reopen`.
 

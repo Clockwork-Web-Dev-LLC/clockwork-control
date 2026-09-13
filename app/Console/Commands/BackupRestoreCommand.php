@@ -96,6 +96,12 @@ class BackupRestoreCommand extends Command
             return self::FAILURE;
         }
 
+        if (! $enumerator->belongsToSite($site, $key)) {
+            $this->error("Archive key is not under this site's prefix: {$key}");
+
+            return self::FAILURE;
+        }
+
         // Decision D1: hash resolution (sidecar -> newest archive last_sha256 -> refuse)
         $sha256 = $enumerator->resolveArchiveSha256($site, $key);
         if (empty($sha256)) {

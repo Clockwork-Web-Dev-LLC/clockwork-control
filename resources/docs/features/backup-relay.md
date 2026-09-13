@@ -5,7 +5,7 @@ order: 130
 updated: 2026-09-12
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
-tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
+tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
 ---
 
 Archives off-host snapshots across supported hosting providers (Pressable, SpinupWP, and any provider implementing `HostingProvider::CAP_BACKUP_RELAY`) directly to S3 Glacier Instant Retrieval. Provides long-term off-host disaster recovery beyond host-limited retention windows.
@@ -188,7 +188,7 @@ For WordPress sites we **do not host** (WP Engine, Kinsta, a client box, any `cu
 For custom unhosted sites, Clockwork provides a safe two-step restore flow directly from the site's Backups widget (`/sites/{id}`):
 
 1. **Two-Step Architecture**:
-   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 24-hour presigned S3 GET URL (`BackupArchiveEnumerator::getDownloadUrl()`, `DOWNLOAD_URL_TTL_HOURS = 24`) and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
+   - **Step 1 (Stage)**: The operator selects an archive from the historical archives table and confirms the exact domain name. Control first checks `BackupArchiveEnumerator::belongsToSite()` — the object key must sit under `{archive_prefix}/{domain}/` or `{domain}/` (no `..`, no sibling domains). Then it verifies the SHA-256 integrity hash for the archive (from the `{key}.sha256.json` sidecar created during backup, or from `sites.backup_relay_last_sha256` for the newest archive). If no hash is on record, restore is strictly refused. Control generates a 24-hour presigned S3 GET URL (`BackupArchiveEnumerator::getDownloadUrl()`, `DOWNLOAD_URL_TTL_HOURS = 24`) and triggers `POST /wp-json/clockwork/v1/backup/restore/stage` on Companion. Companion refuses the download unless the URL is public HTTPS (no private/reserved IPs, no redirects), streams the zip into `wp-content/clockwork-backups/restore-staging/`, validates the SHA-256 checksum, and unpacks the archive via `ZipArchive` (or one-shot `PclZip` fallback on hosts lacking `ext-zip`). Unsafe zip entries (`../`, absolute paths) abort extract and are skipped again on file apply. Control polls `GET /wp-json/clockwork/v1/backup/restore/status` (a GET request that does not burn the HMAC replay window) until staging finishes.
    - **Step 2 (Apply)**: Once staged, the operator reviews the detected staging details (database dump presence, table prefix, files archive) in the modal and clicks **Apply Restore**. Companion places WordPress into maintenance mode (`.maintenance`), imports the SQL dump using gzip streaming scoped strictly to `$wpdb->prefix` (failing closed with `prefix_mismatch` if 0 tables match), and copies the restored `wp-content/` files over the active filesystem.
 
 2. **Fail-Closed Maintenance Mode**:
@@ -273,7 +273,7 @@ Each row in the **Site Relay Targets** table is expandable: clicking it lazy-loa
 
 ### Download route
 
-`GET /settings/backup-relay/sites/{site}/download` (`settings.backup-relay.download`) takes a base64-encoded `key` query parameter, validates it belongs to that site's own domain prefix (`archives/{domain}/` or `{domain}/` — 403s otherwise, so one site's row can't be used to fetch another site's backup), confirms the object still exists in S3 (404s otherwise), and either redirects to a freshly-minted 1-hour presigned URL or streams the file directly if the disk doesn't support presigned URLs.
+`GET /settings/backup-relay/sites/{site}/download` (`settings.backup-relay.download`) takes a base64-encoded `key` query parameter and runs the same `belongsToSite()` check used for restore stage, presigned GET minting, and SHA-256 sidecar lookup (`{archive_prefix}/{domain}/` or `{domain}/` — 403s otherwise, so one site's row can't be used to fetch another site's backup). It then confirms the object still exists in S3 (404s otherwise), and either redirects to a freshly-minted 1-hour presigned URL or streams the file directly if the disk doesn't support presigned URLs.
 
 ### Pushing offsite archive links to the Companion plugin
 
