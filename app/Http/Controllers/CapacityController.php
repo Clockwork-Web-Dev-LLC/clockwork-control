@@ -694,15 +694,26 @@ class CapacityController extends Controller
         $capacitySites = $accountSummary['capacity']['sites'] ?? [];
         $pageViews = $accountSummary['pageViews'] ?? [];
 
+        $billableSites = (int) ($capacitySites['billable'] ?? ($accountSummary['sitesCount'] ?? 0));
+        $maxBillable = (int) ($capacitySites['maxBillable'] ?? 0);
+        if ($maxBillable <= 0) {
+            $maxBillable = (int) ($accountSummary['maxSites'] ?? 0);
+        }
+        if ($maxBillable <= 0 && ! empty($accountSummary['productName'])) {
+            if (preg_match('/Agency\s*(\d+)/i', (string) $accountSummary['productName'], $m)) {
+                $maxBillable = (int) $m[1] * 100;
+            }
+        }
+
         return [
             'isConfigured' => $isConfigured,
             'planName' => $accountSummary['productName'] ?? null,
             'organization' => $accountSummary['organization'] ?? null,
             'email' => $accountSummary['email'] ?? null,
-            'billableSites' => (int) ($capacitySites['billable'] ?? ($accountSummary['sitesCount'] ?? 0)),
+            'billableSites' => $billableSites,
             'stagingSites' => (int) ($capacitySites['staging'] ?? 0),
             'totalSites' => (int) ($capacitySites['total'] ?? 0),
-            'maxBillable' => (int) ($capacitySites['maxBillable'] ?? ($accountSummary['sitesCount'] ?? 0)),
+            'maxBillable' => $maxBillable,
             'maxStaging' => (int) ($capacitySites['maxStaging'] ?? 0),
             'pageViews' => [
                 'currentMonth' => [
