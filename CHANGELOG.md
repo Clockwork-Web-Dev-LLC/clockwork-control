@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-09-14
+
 ### Added
-- **Scheduled Jobs dashboard**: `/settings/scheduled-jobs` lists every entry in the live cron schedule (`routes/console.php` plus module-registered tasks) with its last outcome, duration, and a manual **Run now** button. `RecordScheduledTaskResult` subscribes to Laravel's built-in scheduler events, so a new job is covered automatically with no per-command wiring. "Currently skipped" detection evaluates each job's own `->when()`/`->skip()` gate live rather than hardcoding which setting controls which job. Closes the blind spot where the scheduler heartbeat stays green while one specific job silently fails every tick (e.g. a pending migration).
+- **Fleet-wide domain ignore list for uptime probes**: Operators can configure wildcard patterns on Monitoring → Settings (e.g. `*.mystagingwebsite.com`) to skip matching sites from the probe runner, monitoring board, and issues down list so staging clones stop showing as DOWN. Matching sites drop off `/monitoring` KPIs and `/issues` nav badge counts while staying fully managed everywhere else.
 
 ## [1.7.1] - 2026-09-12
 

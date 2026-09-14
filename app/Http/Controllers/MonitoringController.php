@@ -10,6 +10,7 @@ use App\Services\Process\BackgroundArtisan;
 use App\Services\Scheduler\SchedulerHeartbeat;
 use App\Services\Uptime\UptimeStateUpdater;
 use App\Services\Uptime\UptimeStatsCalculator;
+use App\Support\Monitoring\DomainIgnoreList;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,8 @@ use Illuminate\View\View;
  *
  *   - **Uptime Activity** — fleet-wide status board. Currently-down banner,
  *     24h/7d/30d uptime % per site, recent transition events.
- *   - **Settings** — global probe interval + failure threshold + per-site
+ *   - **Settings** — global probe interval + failure threshold + domain
+ *     ignore list (wildcard patterns, e.g. *.mystagingwebsite.com) + per-site
  *     override hints. Per-site `uptime_monitoring_enabled` is the existing
  *     kill switch already wired into Site::query() filters in the runner.
  *
@@ -52,6 +54,7 @@ class MonitoringController extends Controller
             ->with('server')
             ->where('uptime_monitoring_enabled', true)
             ->hostMonitored()
+            ->notDomainIgnored()
             ->orderBy('domain')
             ->get();
 
@@ -129,7 +132,7 @@ class MonitoringController extends Controller
         ));
     }
 
-    public function settings(Settings $settings): View
+    public function settings(Settings $settings, DomainIgnoreList $ignoreList): View
     {
         $intervalMin = (int) $settings->get(self::SETTING_INTERVAL_MIN, self::DEFAULT_INTERVAL_MIN);
         $failureThreshold = (int) $settings->get(self::SETTING_FAILURE_THRESHOLD, self::DEFAULT_FAILURE_THRESHOLD);
@@ -143,9 +146,29 @@ class MonitoringController extends Controller
             ->orderBy('domain')
             ->get();
 
+        // Domain ignore list + the sites it currently suppresses, so the
+        // operator sees the blast radius of a pattern right after saving it.
+        $ignoredPatterns = $ignoreList->patterns();
+        $ignoredMatchedSites = $ignoredPatterns === []
+            ? collect()
+            : Site::query()
+                ->where('uptime_monitoring_enabled', true)
+                ->hostMonitored()
+                ->orderBy('domain')
+                ->get()
+                ->filter(fn (Site $site) => $ignoreList->matches($site->domain))
+                ->values();
+
         $schedulerHeartbeat = app(SchedulerHeartbeat::class)->status();
 
-        return view('monitoring.settings', compact('intervalMin', 'failureThreshold', 'disabledSites', 'schedulerHeartbeat'));
+        return view('monitoring.settings', compact(
+            'intervalMin',
+            'failureThreshold',
+            'disabledSites',
+            'schedulerHeartbeat',
+            'ignoredPatterns',
+            'ignoredMatchedSites',
+        ));
     }
 
     /**
@@ -180,16 +203,29 @@ class MonitoringController extends Controller
         $validated = $request->validate([
             'interval_minutes' => 'required|integer|in:1,5,10,15',
             'failure_threshold' => 'required|integer|min:1|max:6',
+            'ignored_domains' => 'nullable|string|max:10000',
         ]);
+
+        $parsed = DomainIgnoreList::parseInput($validated['ignored_domains'] ?? null);
+        if ($parsed['invalid'] !== []) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'ignored_domains' => 'Invalid pattern'.(count($parsed['invalid']) === 1 ? '' : 's').': '
+                        .implode(', ', array_slice($parsed['invalid'], 0, 5))
+                        .'. Use hostnames with optional * wildcards, e.g. *.mystagingwebsite.com',
+                ]);
+        }
 
         $settings->putMany([
             self::SETTING_INTERVAL_MIN => $validated['interval_minutes'],
             self::SETTING_FAILURE_THRESHOLD => $validated['failure_threshold'],
+            DomainIgnoreList::SETTING_KEY => $parsed['patterns'],
         ]);
 
         return redirect()
             ->route('monitoring.settings')
-            ->with('status', 'Monitoring settings saved. The new probe interval applies on the next scheduler restart; the failure threshold takes effect immediately on the next probe.');
+            ->with('status', 'Monitoring settings saved. The new probe interval applies on the next scheduler restart; the failure threshold and domain ignore list take effect immediately on the next probe.');
     }
 
     /**

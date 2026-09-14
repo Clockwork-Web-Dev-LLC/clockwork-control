@@ -67,6 +67,38 @@
             </p>
         </div>
 
+        {{-- Domain ignore list --}}
+        <div class="mb-6">
+            <label for="ignored_domains" class="block text-sm font-medium text-[var(--color-ink-strong)] mb-2">Ignored domains</label>
+            <textarea id="ignored_domains" name="ignored_domains" rows="4"
+                      class="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-data text-[var(--color-ink-strong)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-600)]"
+                      placeholder="*.mystagingwebsite.com&#10;*.builtlikeclockwork.com&#10;staging.example.com">{{ old('ignored_domains', implode("\n", $ignoredPatterns)) }}</textarea>
+            @error('ignored_domains')
+                <p class="text-xs text-[var(--color-status-red)] mt-2">{{ $message }}</p>
+            @enderror
+            <p class="text-xs text-[var(--color-ink-muted)] mt-2">
+                One pattern per line. <code class="font-data">*</code> matches anything, so
+                <code class="font-data">*.mystagingwebsite.com</code> covers every staging clone at once.
+                Matching sites are skipped by the probe runner — no checks, no alerts — and hidden from the
+                monitoring board and the Issues down list. They stay fully managed everywhere else
+                (updates, scans, backups). Takes effect on the next probe.
+            </p>
+            @if ($ignoredMatchedSites->isNotEmpty())
+                <div class="mt-3 rounded-md border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] p-3">
+                    <p class="text-xs font-medium text-[var(--color-ink-strong)] mb-2">
+                        Currently ignoring {{ $ignoredMatchedSites->count() }} {{ Str::plural('site', $ignoredMatchedSites->count()) }}:
+                    </p>
+                    <ul class="space-y-1">
+                        @foreach ($ignoredMatchedSites as $site)
+                            <li>
+                                <a href="{{ route('sites.show', $site) }}" class="text-xs text-[var(--color-primary-600)] hover:underline font-data">{{ $site->domain }}</a>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+        </div>
+
         <div class="flex justify-end pt-2 border-t border-[var(--color-border-light)]">
             <button type="submit" class="px-4 py-2 rounded-md bg-[var(--color-primary-600)] text-white text-sm font-medium hover:bg-[var(--color-primary-700)]">
                 Save settings

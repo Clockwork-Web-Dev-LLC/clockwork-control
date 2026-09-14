@@ -4,6 +4,8 @@ namespace Tests\Feature\Console;
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Support\Monitoring\DomainIgnoreList;
+use App\Support\Settings;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
@@ -66,6 +68,30 @@ describe('clockwork:check-site-uptime', function () {
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'staging-host.example.test'));
         Http::assertSent(fn ($request) => str_contains($request->url(), 'prod-host.example.test'));
         expect($monitored->refresh()->uptime_last_checked_at)->not->toBeNull();
+    });
+
+    it('skips sites matching the Monitoring → Settings domain ignore list', function () {
+        Http::fake(['*' => Http::response(str_repeat('Welcome to this monitored homepage. ', 20), 200)]);
+
+        app(Settings::class)->put(DomainIgnoreList::SETTING_KEY, ['*.mystagingwebsite.com']);
+
+        $staging = Site::factory()->create([
+            'domain' => 'michelli.mystagingwebsite.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'unknown',
+        ]);
+        $prod = Site::factory()->create([
+            'domain' => 'prod.example.test',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'unknown',
+        ]);
+
+        $this->artisan('clockwork:check-site-uptime')->assertSuccessful();
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'michelli.mystagingwebsite.com'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'prod.example.test'));
+        expect($staging->refresh()->uptime_last_checked_at)->toBeNull()
+            ->and($prod->refresh()->uptime_last_checked_at)->not->toBeNull();
     });
 
     it('catches a probe exception (DNS/socket failure), records it as transport-failed, and keeps going instead of crashing', function () {

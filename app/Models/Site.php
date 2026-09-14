@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Uptime\UptimeStatsCalculator;
+use App\Support\Monitoring\DomainIgnoreList;
 use App\Support\Settings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -640,6 +641,25 @@ class Site extends Model
             $q->whereHas('server', fn (Builder $sq) => $sq->monitored())
                 ->orWhereIn('hosting_provider', self::HOSTING_PROVIDERS_WITHOUT_SERVER);
         });
+    }
+
+    /**
+     * Exclude sites whose domain matches the Monitoring → Settings ignore
+     * list (e.g. `*.mystagingwebsite.com` staging clones). Uptime-monitoring
+     * surfaces only — probe runner, monitoring board, /issues down list. The
+     * try/catch mirrors areCarePlansEnabled(): a missing settings table on a
+     * half-installed box must not take the query down.
+     *
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
+     */
+    public function scopeNotDomainIgnored(Builder $query): Builder
+    {
+        try {
+            return app(DomainIgnoreList::class)->applyExclusion($query);
+        } catch (\Throwable) {
+            return $query;
+        }
     }
 
     /**

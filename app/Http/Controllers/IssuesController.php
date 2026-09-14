@@ -289,6 +289,7 @@ class IssuesController extends Controller
             ->where('uptime_state', 'down')
             ->where('uptime_monitoring_enabled', true)
             ->whereNull('uptime_ignored_at')
+            ->notDomainIgnored()
             ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
             ->with('server:id,name')
             ->orderBy('uptime_down_since')

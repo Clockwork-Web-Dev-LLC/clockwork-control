@@ -21,7 +21,8 @@ use Throwable;
  * with a small concurrency cap (~10).
  *
  * Skips: archived sites (default Site scope), sites on ignored servers,
- * sites with uptime_monitoring_enabled=false.
+ * sites with uptime_monitoring_enabled=false, and sites matching the
+ * Monitoring → Settings domain ignore list (e.g. *.mystagingwebsite.com).
  */
 class CheckSiteUptime extends Command
 {
@@ -34,7 +35,8 @@ class CheckSiteUptime extends Command
     {
         $query = Site::query()
             ->where('uptime_monitoring_enabled', true)
-            ->hostMonitored();
+            ->hostMonitored()
+            ->notDomainIgnored();
 
         if ($siteId = $this->option('site')) {
             $query->where('id', (int) $siteId);

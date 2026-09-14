@@ -2,10 +2,10 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack]
-tracks: [app/Services/Uptime/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php]
+tracks: [app/Services/Uptime/**, app/Support/Monitoring/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php]
 ---
 
 Every site we host gets probed every 5 minutes — SpinupWP or Pressable, doesn't matter, it's a plain HTTP probe against the public URL either way (`Site::hostMonitored()` is the scope covering both). If a site stops answering for two probes in a row, you get a chat alert. When it recovers, you get another alert. That's the whole feature in one sentence — the rest is detail.
@@ -15,7 +15,7 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 ## Where to look
 
 - **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" / "X EXCUSED" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed. **Re-probe all sites** (`POST /monitoring/refresh`) launches `clockwork:check-site-uptime` in the background (~2–3 min for ~150 sites) — it does not run inside the HTTP request.
-- **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min) and failure threshold (1–6 failures). Changes here apply to every monitored site.
+- **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min), failure threshold (1–6 failures), and the domain ignore list (wildcard patterns like `*.mystagingwebsite.com`). Changes here apply to every monitored site.
 - **`/sites/<id>/overview`** — the Status card on the per-site Overview tab. Shows current state plus how long it's been that way.
 - **Companion → `Tools → Clockwork → Uptime`** — the client-visible version. Same data, friendlier copy. Clients see this in their wp-admin.
 
@@ -87,6 +87,18 @@ When a site is in maintenance mode:
 
 Staging-pattern domains (`staging.*`, `dev.*`, `*.staging.*`, `*-dev.*`) get auto-disabled on first import. Manual toggle for everything else.
 
+## Domain ignore list (fleet-wide staging suppression)
+
+The per-site toggle doesn't scale when a whole staging TLD keeps re-appearing — every fresh Pressable clone lands as `something.mystagingwebsite.com` and starts getting probed (and alerting) until someone flips it off. The **Ignored domains** list on `/monitoring/settings` fixes that class of problem once:
+
+- One pattern per line; `*` matches anything, so `*.mystagingwebsite.com` covers every staging clone, present and future. Exact hostnames (no wildcard) work too. Patterns are validated on save — hostname characters plus `*` only, at least one dot (a bare `*` is rejected, since it would silently ignore the entire fleet).
+- Matching sites are excluded at the query level (`Site::notDomainIgnored()`, backed by `App\Support\Monitoring\DomainIgnoreList` reading `monitoring.ignored_domain_patterns` from Settings): the probe runner skips them entirely — no checks, no alerts, no state churn — and they disappear from the `/monitoring` board and the Issues down list.
+- A `*.example.com` pattern covers subdomains only, **not** the bare apex `example.com` — add a second line if you want both.
+- The settings page shows exactly which sites the list currently matches, so you can see a pattern's blast radius right after saving it.
+- Scope is uptime monitoring only. Ignored sites stay fully managed everywhere else — updates, security scans, backups, capacity — unlike the server-level ignore flag.
+
+Takes effect on the next probe; no scheduler restart needed.
+
 ## Ignoring alerts (when a site is down indefinitely)
 
 Different from disabling. **Ignore** keeps the probe running, keeps the state column updating, keeps the event log honest — it just suppresses the noise. No Mattermost alert, no Issues entry, no nav badge contribution.
@@ -97,10 +109,11 @@ How: per-site **Settings** tab → "Ignore uptime alerts" section. There's a rea
 
 ## Tuning the global settings
 
-`/monitoring/settings` exposes two knobs. Change them carefully — they affect every site.
+`/monitoring/settings` exposes three knobs. Change them carefully — they affect every site.
 
 - **Probe interval** — how often we hit each site. Default 5 minutes. The minimum is 1 minute (gives ManageWP-tier sensitivity), max is 15 minutes (gentlest, lowest log noise). Changes only apply on the next `schedule:work` restart.
 - **Failure threshold** — how many failures in a row trigger the down transition. Default 2. Lower values = more sensitive (1 = alert on first miss, you'll get noise). Higher values = fewer alerts (6 = ~30 minutes at default cadence before you hear about it). Threshold changes apply on the next probe — no restart needed.
+- **Ignored domains** — wildcard patterns that remove matching sites from uptime monitoring entirely (see the section above). Applies on the next probe — no restart needed.
 
 ## Mattermost / Slack / client alerts
 

@@ -8,6 +8,7 @@ use App\Services\Chat\ChatNotifier;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
 use App\Services\Scheduler\SchedulerHeartbeat;
+use App\Support\Monitoring\DomainIgnoreList;
 use App\Support\Settings;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -346,6 +347,97 @@ describe('MonitoringController', function () {
             ->assertSee('classify-outage-form')
             ->assertSee('monitoringOpenClassify('.$site->id, false)
             ->assertSee('openModal('.$site->id, false);
+    });
+
+    it('saves the domain ignore list from the settings form', function () {
+        $response = $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+                'ignored_domains' => "*.MyStagingWebsite.com\n*.builtlikeclockwork.com\n",
+            ]);
+
+        $response->assertRedirect(route('monitoring.settings'))
+            ->assertSessionHas('status');
+
+        expect(app(Settings::class)->get(DomainIgnoreList::SETTING_KEY))->toBe([
+            '*.mystagingwebsite.com',
+            '*.builtlikeclockwork.com',
+        ]);
+    });
+
+    it('clears the domain ignore list when the textarea is emptied', function () {
+        app(Settings::class)->put(DomainIgnoreList::SETTING_KEY, ['*.mystagingwebsite.com']);
+
+        $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+                'ignored_domains' => '',
+            ])
+            ->assertRedirect(route('monitoring.settings'));
+
+        expect(app(Settings::class)->get(DomainIgnoreList::SETTING_KEY))->toBe([]);
+    });
+
+    it('rejects invalid ignore patterns without saving anything', function () {
+        $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+                'ignored_domains' => "*.mystagingwebsite.com\nnot a valid pattern!",
+            ])
+            ->assertSessionHasErrors('ignored_domains');
+
+        expect(app(Settings::class)->get(DomainIgnoreList::SETTING_KEY))->toBeNull();
+    });
+
+    it('hides ignore-listed sites from the monitoring index and its counters', function () {
+        app(Settings::class)->put(DomainIgnoreList::SETTING_KEY, ['*.mystagingwebsite.com']);
+
+        $server = Server::factory()->create();
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'michelli.mystagingwebsite.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+            'uptime_down_since' => now()->subHours(2),
+        ]);
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'prod.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'up',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('prod.example.com')
+            ->assertDontSee('michelli.mystagingwebsite.com')
+            ->assertViewHas('currentlyDown', 0)
+            ->assertViewHas('currentlyUp', 1);
+    });
+
+    it('lists the sites currently matched by the ignore list on the settings page', function () {
+        app(Settings::class)->put(DomainIgnoreList::SETTING_KEY, ['*.mystagingwebsite.com']);
+
+        $server = Server::factory()->create();
+        Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'michelli.mystagingwebsite.com',
+            'uptime_monitoring_enabled' => true,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.settings'));
+
+        $response->assertOk()
+            ->assertSee('Ignored domains')
+            ->assertSee('*.mystagingwebsite.com')
+            ->assertSee('Currently ignoring 1 site')
+            ->assertSee('michelli.mystagingwebsite.com');
     });
 
     it('classifies individual historical uptime event', function () {
