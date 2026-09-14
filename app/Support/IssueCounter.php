@@ -254,14 +254,13 @@ class IssueCounter
     }
 
     /**
-     * Sites on Shared servers exceeding visit threshold over the rolling window — capacity threshold,
-     * not a security issue, but it deserves the same "needs eyes" surface.
+     * Sites on Shared servers exceeding the calendar-month visit threshold —
+     * the invoice number, not a security issue, but it deserves the same surface.
      */
     private function countOverQuotaSites(?int $threshold = null): int
     {
         $settings = app(Settings::class);
         $threshold ??= (int) $settings->get('capacity.visit_threshold', 30_000);
-        $rollingDays = (int) $settings->get('capacity.rolling_days', 30);
 
         $sharedTagId = Tag::where('name', 'Shared')->value('id');
         if ($sharedTagId === null) {
@@ -277,13 +276,13 @@ class IssueCounter
             return 0;
         }
 
-        $rollingStart = CarbonImmutable::now()->startOfDay()->subDays($rollingDays - 1)->toDateString();
+        $monthStart = CarbonImmutable::now()->startOfMonth()->toDateString();
 
         return SiteTrafficDaily::query()
             ->join('sites', 'sites.id', '=', 'site_traffic_daily.site_id')
             ->whereIn('sites.server_id', $sharedServerIds)
             ->where('sites.is_inactive', false)
-            ->where('site_traffic_daily.date', '>=', $rollingStart)
+            ->where('site_traffic_daily.date', '>=', $monthStart)
             ->groupBy('site_traffic_daily.site_id')
             ->havingRaw('SUM(site_traffic_daily.visits) > ?', [$threshold])
             ->select('site_traffic_daily.site_id')

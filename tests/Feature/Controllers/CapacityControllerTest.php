@@ -159,6 +159,7 @@ describe('CapacityController', function () {
 
     it('renders the Pressable Fleet Capacity section when Pressable is configured', function () {
         Cache::forget('pressable.capacity.account_summary');
+        Cache::forget('pressable.capacity.account_summary.negative');
 
         $this->mock(PressableClient::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
@@ -210,6 +211,8 @@ describe('CapacityController', function () {
 
     it('identifies over-quota and trending Pressable sites without per-site API calls', function () {
         Cache::forget('pressable.capacity.account_summary');
+        Cache::forget('pressable.capacity.account_summary.negative');
+        Carbon::setTestNow('2026-09-13 12:00:00');
 
         $this->mock(PressableClient::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
@@ -240,7 +243,7 @@ describe('CapacityController', function () {
         SiteTrafficDaily::factory()->create([
             'site_id' => $trendingSite->id,
             'date' => now()->toDateString(),
-            'visits' => 8_000, // in last 7 days; 8,000 * 30 / 7 = 34,286 > 30,000
+            'visits' => 20_000, // 20k MTD on day 13 → 20k * 30/13 ≈ 46k month-end
             'requests' => 50_000,
         ]);
 
@@ -252,10 +255,55 @@ describe('CapacityController', function () {
             ->assertSee('Pressable Sites Exceeding Quota')
             ->assertSee('trending-up-pressable.com')
             ->assertSee('Pressable Sites Trending Toward Overage');
+
+        Carbon::setTestNow();
+    });
+
+    it('does not trip Pressable over-quota on rolling 30d when calendar MTD is under threshold', function () {
+        Cache::forget('pressable.capacity.account_summary');
+        Cache::forget('pressable.capacity.account_summary.negative');
+        Carbon::setTestNow('2026-09-13 12:00:00');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->andReturn([
+                'productName' => 'Agency 1',
+                'capacity' => [
+                    'sites' => ['billable' => 1, 'staging' => 0, 'total' => 1, 'maxBillable' => 10],
+                ],
+            ]);
+        });
+
+        $site = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'rolling-only-pressable.com',
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => now()->subDays(20)->toDateString(),
+            'visits' => 40_000,
+            'requests' => 80_000,
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => now()->toDateString(),
+            'visits' => 500,
+            'requests' => 2_000,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertDontSee('Pressable Sites Exceeding Quota')
+            ->assertDontSee('Pressable Sites Trending Toward Overage');
+
+        Carbon::setTestNow();
     });
 
     it('handles Pressable API exceptions gracefully and continues rendering capacity', function () {
         Cache::forget('pressable.capacity.account_summary');
+        Cache::forget('pressable.capacity.account_summary.negative');
 
         $this->mock(PressableClient::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
@@ -309,5 +357,35 @@ describe('CapacityController', function () {
         $response->assertOk()
             ->assertSee('pressable-cpu-hog.com')
             ->assertSee('Pressable');
+    });
+
+    it('renders quick jump buttons and fleet filter toolbar when Pressable is present', function () {
+        Cache::forget('pressable.capacity.account_summary');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->andReturn([
+                'productName' => 'Agency 1',
+                'organization' => 'ClockworkWP',
+                'capacity' => [
+                    'sites' => ['billable' => 100, 'staging' => 4, 'total' => 105],
+                ],
+            ]);
+        });
+
+        Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'pressable-jump-site.com',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertSee('Pressable (1)')
+            ->assertSee('Shared VPS')
+            ->assertSee('All Fleets')
+            ->assertSee('Pressable Cloud')
+            ->assertSee('Back to top');
     });
 });

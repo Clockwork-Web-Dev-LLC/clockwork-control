@@ -92,6 +92,22 @@
         </div>
     </div>
 
+    <div class="card p-5 mb-6">
+        <h2 class="font-display text-lg text-[var(--color-ink-strong)] mb-1">Protected plugins</h2>
+        <p class="text-xs text-[var(--color-ink-soft)] mb-3">
+            Control will refuse to deactivate or delete these slugs from the fleet. Companion and Renegade stay protected even if you omit them.
+        </p>
+        <form method="POST" action="{{ route('settings.wordpress-plugins.protected.update') }}" class="space-y-3">
+            @csrf
+            @method('PATCH')
+            <textarea name="protected_plugins" rows="8" class="w-full font-data text-sm bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] rounded-md px-3 py-2 text-[var(--color-ink-strong)]">{{ old('protected_plugins', $protectedPlugins) }}</textarea>
+            <div class="flex items-center justify-between gap-3">
+                <p class="text-[11px] text-[var(--color-ink-muted)]">One <code>directory/file.php</code> slug per line.</p>
+                <button type="submit" class="btn-pill-nav text-sm">Save protected list</button>
+            </div>
+        </form>
+    </div>
+
     @if ($sites->isEmpty())
         <div class="card p-10 text-center text-[var(--color-ink-soft)]">
             No WordPress sites in inventory yet. Run an import for your hosting provider (<code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:import-spinupwp</code>, <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">clockwork:import-gridpane</code>, etc.).

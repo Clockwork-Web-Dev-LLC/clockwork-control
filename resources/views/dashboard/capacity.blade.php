@@ -5,9 +5,69 @@
 @section('content')
     @include('operations._tabs')
 
+    <div x-data="{
+        filter: (new URLSearchParams(window.location.search)).get('fleet') || (window.location.hash ? window.location.hash.replace('#', '') : 'all'),
+        showFloating: false,
+        setFilter(f) {
+            this.filter = f;
+            if (history.replaceState) {
+                const url = new URL(window.location);
+                if (f === 'all') {
+                    url.searchParams.delete('fleet');
+                } else {
+                    url.searchParams.set('fleet', f);
+                }
+                history.replaceState(null, '', url);
+            }
+            if (f === 'pressable') {
+                this.$nextTick(() => {
+                    document.getElementById('pressable-capacity')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            } else if (f === 'shared') {
+                this.$nextTick(() => {
+                    document.getElementById('shared-vps-sections')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            }
+        },
+        scrollTo(id) {
+            if (id === 'pressable-capacity' && this.filter === 'shared') {
+                this.filter = 'all';
+            }
+            if ((id === 'over-quota' || id === 'pressure-headroom' || id === 'shared-vps-sections') && this.filter === 'pressable') {
+                this.filter = 'all';
+            }
+            this.$nextTick(() => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+    }"
+    @scroll.window="showFloating = (window.pageYOffset > 350)"
+    class="relative">
+
     <x-page-header title="Capacity"
-        subtitle="Shared-server pressure, headroom, and visit-threshold overages. Visit count uses WP Engine's definition: DISTINCT IP per UTC day, excluding 403s, static assets, and known bots.">
+        subtitle="Fleet capacity, resource pressure, headroom, and visit-threshold overages across SpinupWP shared servers, Pressable cloud, and standalone sites.">
         <x-slot:actions>
+            @if (! empty($pressableCapacity))
+                <button type="button"
+                        @click="scrollTo('pressable-capacity')"
+                        class="btn-pill-nav text-sm font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border-light)] hover:border-[var(--color-primary-500)] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                        title="Jump directly down to Pressable Fleet Capacity">
+                    <i class="fa-solid fa-cloud text-[var(--color-primary-600)]"></i>
+                    <span>Pressable ({{ $pressableCapacity['dbSitesCount'] ?? 108 }})</span>
+                    <i class="fa-solid fa-arrow-down text-[10px] opacity-70"></i>
+                </button>
+            @endif
+            <button type="button"
+                    @click="scrollTo('shared-vps-sections')"
+                    class="btn-pill-nav text-sm font-medium text-[var(--color-ink-strong)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border-light)] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    title="Jump to SpinupWP Shared VPS servers section">
+                <i class="fa-solid fa-server text-[var(--color-brand)]"></i>
+                <span>Shared VPS</span>
+                <i class="fa-solid fa-arrow-down text-[10px] opacity-70"></i>
+            </button>
             <a href="{{ route('capacity.settings') }}" class="btn-pill-nav text-sm">
                 <i class="fa-solid fa-sliders text-[var(--color-ink-muted)]"></i>
                 <span>Capacity settings</span>
@@ -15,8 +75,83 @@
         </x-slot:actions>
     </x-page-header>
 
+    {{-- Fleet Filter & Quick Jump Bar --}}
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-8 p-3 rounded-xl bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] font-semibold mr-1">
+                <i class="fa-solid fa-filter mr-1 text-[10px]"></i> View:
+            </span>
+
+            <button type="button"
+                    @click="setFilter('all')"
+                    :class="filter === 'all' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)] border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] border-transparent hover:bg-[var(--color-surface)]/50'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border cursor-pointer">
+                <i class="fa-solid fa-layer-group text-[10px]"></i>
+                <span>All Fleets</span>
+            </button>
+
+            <button type="button"
+                    @click="setFilter('shared')"
+                    :class="filter === 'shared' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)] border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] border-transparent hover:bg-[var(--color-surface)]/50'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border cursor-pointer">
+                <i class="fa-solid fa-server text-[10px] text-[var(--color-brand)]"></i>
+                <span>SpinupWP / Shared VPS</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-border-light)] text-[var(--color-ink-soft)] font-mono">
+                    {{ $pressure->count() + $headroom->count() }} servers
+                </span>
+            </button>
+
+            @if (! empty($pressableCapacity))
+                <button type="button"
+                        @click="setFilter('pressable')"
+                        :class="filter === 'pressable' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-primary-600)] border-[var(--color-primary-300)] dark:border-[var(--color-primary-700)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] border-transparent hover:bg-[var(--color-surface)]/50'"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border cursor-pointer">
+                    <i class="fa-solid fa-cloud text-[10px] text-[var(--color-primary-600)]"></i>
+                    <span>Pressable Cloud</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-primary-50)] text-[var(--color-primary-700)] dark:bg-[var(--color-primary-950)] dark:text-[var(--color-primary-300)] font-mono">
+                        {{ $pressableCapacity['dbSitesCount'] ?? 108 }} sites
+                    </span>
+                </button>
+            @endif
+
+            <button type="button"
+                    @click="setFilter('eol')"
+                    :class="filter === 'eol' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)] border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] border-transparent hover:bg-[var(--color-surface)]/50'"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border cursor-pointer">
+                <i class="fa-solid fa-clock-rotate-left text-[10px] text-[var(--color-ink-muted)]"></i>
+                <span>Runtime EOL</span>
+            </button>
+        </div>
+
+        {{-- Jump Shortcuts when in All Fleets mode --}}
+        <div x-show="filter === 'all'" class="flex items-center gap-2 text-xs text-[var(--color-ink-soft)] ml-auto">
+            <span class="text-[11px] uppercase tracking-wider font-semibold opacity-70">Jump to:</span>
+            <button type="button" @click="scrollTo('over-quota')" class="hover:text-[var(--color-ink-strong)] hover:underline cursor-pointer">
+                Shared Overages
+            </button>
+            <span class="opacity-30">&middot;</span>
+            <button type="button" @click="scrollTo('pressure-headroom')" class="hover:text-[var(--color-ink-strong)] hover:underline cursor-pointer">
+                Pressure &amp; Headroom
+            </button>
+            @if (! empty($pressableCapacity))
+                <span class="opacity-30">&middot;</span>
+                <button type="button"
+                        @click="scrollTo('pressable-capacity')"
+                        class="px-2 py-0.5 rounded-md bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)] text-[var(--color-primary-700)] dark:text-[var(--color-primary-300)] font-medium hover:bg-[var(--color-primary-100)] transition-colors flex items-center gap-1 cursor-pointer">
+                    <i class="fa-solid fa-cloud text-[10px]"></i>
+                    <span>Pressable</span>
+                    <i class="fa-solid fa-arrow-down text-[9px] opacity-70"></i>
+                </button>
+            @endif
+            <span class="opacity-30">&middot;</span>
+            <button type="button" @click="scrollTo('runtime-eol')" class="hover:text-[var(--color-ink-strong)] hover:underline cursor-pointer">
+                Runtime EOL
+            </button>
+        </div>
+    </div>
+
     @if ($sharedTagMissing)
-        <div class="card p-6 status-yellow">
+        <div x-show="filter === 'all' || filter === 'shared'" class="card p-6 status-yellow mb-10">
             No <code>Shared</code> tag exists. Add one in
             <a href="{{ route('settings.tags.index') }}" class="hover:underline">Settings → Tags</a>
             and tag at least one server with it.
@@ -32,14 +167,26 @@
             $fmtPct = fn ($v) => $v === null ? '—' : number_format($v, 1) . '%';
         @endphp
 
-        {{-- Over-quota — surface this first; it's the action item --}}
-        <section id="over-quota" class="mb-10">
+        {{-- Shared VPS Sections Wrapper --}}
+        <div id="shared-vps-sections" x-show="filter === 'all' || filter === 'shared'">
+            <div x-show="filter === 'shared'" class="mb-6 px-4 py-2.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-xs flex items-center justify-between">
+                <span class="text-[var(--color-ink-muted)]">
+                    <i class="fa-solid fa-server text-[var(--color-brand)] mr-1.5"></i>
+                    Showing <strong>SpinupWP / Shared VPS</strong> capacity only.
+                </span>
+                <button type="button" @click="setFilter('all')" class="text-[var(--color-primary-600)] hover:underline cursor-pointer">
+                    View all fleets
+                </button>
+            </div>
+
+            {{-- Over-quota — surface this first; it's the action item --}}
+            <section id="over-quota" class="mb-10">
             <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
                 <h2 class="font-display text-xl text-[var(--color-ink-strong)]">
                     <i class="fa-solid fa-triangle-exclamation text-[var(--color-status-red)] mr-1"></i>
                     Over visit threshold
                     <span class="text-sm font-normal text-[var(--color-ink-soft)] ml-1">
-                        (rolling {{ $rollingDays }}d &gt; {{ number_format($threshold) }} visits &middot;
+                        (calendar MTD &gt; {{ number_format($threshold) }} visits &middot;
                         <a href="{{ route('capacity.settings') }}" class="text-[var(--color-primary-600)] hover:underline text-xs">edit threshold</a>, Shared servers only)
                     </span>
                 </h2>
@@ -48,7 +195,7 @@
             <div class="card overflow-hidden">
                 @if ($overQuota->isEmpty())
                     <div class="p-6 text-center text-sm text-[var(--color-ink-soft)]">
-                        No shared-server sites are over the rolling {{ $rollingDays }}-day {{ number_format($threshold) }}-visit threshold.
+                        No shared-server sites are over the {{ $monthLabel }} MTD {{ number_format($threshold) }}-visit invoice threshold.
                         <div class="mt-1.5">
                             <a href="{{ route('capacity.settings') }}" class="text-xs text-[var(--color-primary-600)] hover:underline">
                                 <i class="fa-solid fa-sliders text-[10px]"></i> Change threshold in Capacity settings
@@ -61,10 +208,10 @@
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-3">Site</x-sort-th>
                                 <x-sort-th key="server" class="px-5 py-3">Server</x-sort-th>
-                                <x-sort-th key="rolling" align="right" class="px-5 py-3">Visits 30d</x-sort-th>
+                                <x-sort-th key="mtd" align="right" class="px-5 py-3" title="Calendar-month-to-date — the invoice tripwire">MTD ({{ $monthLabel }})</x-sort-th>
                                 <x-sort-th key="overby" align="right" class="px-5 py-3">Over by</x-sort-th>
                                 <x-sort-th key="pctover" align="right" class="px-5 py-3">% over</x-sort-th>
-                                <x-sort-th key="mtd" align="right" class="px-5 py-3" title="Calendar-month-to-date — what {{ $monthLabel }} invoices on">MTD ({{ $monthLabel }})</x-sort-th>
+                                <x-sort-th key="rolling" align="right" class="px-5 py-3" title="Rolling {{ $rollingDays }}d — early-warning column, not the tripwire">Visits {{ $rollingDays }}d</x-sort-th>
                                 <x-sort-th key="last7" align="right" class="px-5 py-3">Last 7 days</x-sort-th>
                             </tr>
                         </thead>
@@ -94,10 +241,10 @@
                                             <a href="{{ route('servers.show', $row['site']->server) }}" class="hover:underline" title="{{ $row['site']->server->name }}">{{ $row['site']->server->display_name }}</a>
                                         @else — @endif
                                     </td>
-                                    <td class="px-5 py-3 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <td class="px-5 py-3 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
                                     <td class="px-5 py-3 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['over_by']) }}</td>
                                     <td class="px-5 py-3 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['pct_over'], 1) }}%</td>
-                                    <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['month_visits']) }}</td>
+                                    <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
                                     <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
                                 </tr>
                             @endforeach
@@ -107,12 +254,9 @@
             </div>
         </section>
 
-        {{-- Trending toward overage — sites NOT yet over the rolling-30d
-             threshold but whose last-7d rate, extrapolated to 30 days,
-             projects past 30,000. Linear projection: visits in last N days
-             × (30 / N). Catches ramping sites BEFORE they cross the line so
-             you can have the conversation before the overage hits the
-             invoice. Hidden when no sites match. --}}
+        {{-- Trending toward overage — sites NOT yet over calendar MTD
+             but whose current month pace projects past the invoice
+             threshold by month-end. Hidden when no sites match. --}}
         @if (! empty($trending) && $trending->isNotEmpty())
             <section id="trending-overage" class="mb-10">
                 <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
@@ -120,7 +264,7 @@
                         <i class="fa-solid fa-arrow-trend-up text-[var(--color-status-yellow)] mr-1"></i>
                         Trending toward overage
                         <span class="text-sm font-normal text-[var(--color-ink-soft)] ml-1">
-                            (last {{ $trendingWindow }}d × 30/{{ $trendingWindow }} &gt; {{ number_format($threshold) }} projected)
+                            (MTD pace projects past {{ number_format($threshold) }} by month-end)
                         </span>
                     </h2>
                     <div class="text-sm text-[var(--color-ink-soft)]">{{ $trending->count() }} site(s)</div>
@@ -131,10 +275,10 @@
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-3">Site</x-sort-th>
                                 <x-sort-th key="server" class="px-5 py-3">Server</x-sort-th>
-                                <x-sort-th key="rolling" align="right" class="px-5 py-3" title="Current rolling-30d total — not yet over the threshold">Visits 30d (now)</x-sort-th>
+                                <x-sort-th key="mtd" align="right" class="px-5 py-3" title="Calendar month-to-date">MTD</x-sort-th>
+                                <x-sort-th key="rolling" align="right" class="px-5 py-3" title="Rolling {{ $rollingDays }}d — early warning">Visits {{ $rollingDays }}d</x-sort-th>
                                 <x-sort-th key="last7" align="right" class="px-5 py-3">Last {{ $trendingWindow }}d</x-sort-th>
-                                <x-sort-th key="dailyavg" align="right" class="px-5 py-3" title="Average daily visits over the last {{ $trendingWindow }} days">Daily avg</x-sort-th>
-                                <x-sort-th key="projected" align="right" class="px-5 py-3" title="Linear extrapolation: last_{{ $trendingWindow }}d × 30/{{ $trendingWindow }}">Projected 30d</x-sort-th>
+                                <x-sort-th key="projected" align="right" class="px-5 py-3" title="If current MTD pace continues through month-end">Projected month-end</x-sort-th>
                                 <x-sort-th key="projectedover" align="right" class="px-5 py-3">Projected over by</x-sort-th>
                             </tr>
                         </thead>
@@ -143,9 +287,9 @@
                                 <tr
                                     data-sort-site="{{ $row['site']->domain }}"
                                     data-sort-server="{{ $row['site']->server?->name ?? '' }}"
+                                    data-sort-mtd="{{ $row['month_visits'] }}"
                                     data-sort-rolling="{{ $row['rolling_visits'] }}"
                                     data-sort-last7="{{ $row['last_7d_visits'] }}"
-                                    data-sort-dailyavg="{{ $row['daily_avg_7d'] }}"
                                     data-sort-projected="{{ $row['projected_30d'] }}"
                                     data-sort-projectedover="{{ $row['projected_over_by'] }}">
                                     <td class="px-5 py-3">
@@ -164,9 +308,9 @@
                                             <a href="{{ route('servers.show', $row['site']->server) }}" class="hover:underline" title="{{ $row['site']->server->name }}">{{ $row['site']->server->display_name }}</a>
                                         @else — @endif
                                     </td>
+                                    <td class="px-5 py-3 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
                                     <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
                                     <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
-                                    <td class="px-5 py-3 text-right text-[var(--color-ink-muted)]">{{ number_format($row['daily_avg_7d']) }}/d</td>
                                     <td class="px-5 py-3 text-right font-display text-[var(--color-status-yellow)]">{{ number_format($row['projected_30d']) }}</td>
                                     <td class="px-5 py-3 text-right font-display text-[var(--color-status-yellow)]">+{{ number_format($row['projected_over_by']) }} (+{{ number_format($row['projected_pct_over'], 1) }}%)</td>
                                 </tr>
@@ -425,7 +569,7 @@
             </section>
         @endif
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div id="pressure-headroom" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {{-- Pressure: who's hot? --}}
             <section>
                 <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
@@ -522,11 +666,22 @@
                 </div>
             </section>
         </div>
+        </div> {{-- End of #shared-vps-sections --}}
     @endif
 
     {{-- Pressable Fleet Capacity --}}
     @if (! empty($pressableCapacity))
-        <section id="pressable-capacity" class="mb-10">
+        <section id="pressable-capacity" class="mb-10" x-show="filter === 'all' || filter === 'pressable'">
+            <div x-show="filter === 'pressable'" class="mb-6 px-4 py-2.5 rounded-lg bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)] border border-[var(--color-primary-200)] dark:border-[var(--color-primary-800)] text-xs flex items-center justify-between text-[var(--color-primary-900)] dark:text-[var(--color-primary-200)]">
+                <span>
+                    <i class="fa-solid fa-cloud text-[var(--color-primary-600)] mr-1.5"></i>
+                    Showing <strong>Pressable Cloud</strong> fleet capacity &amp; telemetry only.
+                </span>
+                <button type="button" @click="setFilter('all')" class="text-[var(--color-primary-600)] font-medium hover:underline cursor-pointer">
+                    View all fleets
+                </button>
+            </div>
+
             <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
                 <div>
                     <h2 class="font-display text-xl text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -546,6 +701,13 @@
                     </p>
                 </div>
                 <div class="flex items-center gap-3 text-xs">
+                    <button type="button"
+                            @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                            class="btn-pill-nav text-xs flex items-center gap-1 hover:text-[var(--color-ink-strong)] cursor-pointer"
+                            title="Return to the top of the page">
+                        <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                        <span>Back to top</span>
+                    </button>
                     <a href="{{ route('sites.index', ['provider' => 'pressable']) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                         View all {{ $pressableCapacity['dbSitesCount'] }} Pressable sites
@@ -622,7 +784,7 @@
                         @endif
                     </div>
                     <div class="text-xs text-[var(--color-ink-muted)] mt-1">
-                        Quota threshold: {{ number_format($threshold) }} visits / {{ $rollingDays }}d
+                        Invoice threshold: {{ number_format($threshold) }} visits MTD
                     </div>
                 </div>
             </div>
@@ -632,16 +794,16 @@
                 <div class="card overflow-hidden mb-4 border border-[var(--color-status-red)]">
                     <div class="px-5 py-3 bg-[var(--color-status-red-soft)] text-xs font-medium text-[var(--color-status-red)] flex items-center justify-between">
                         <span><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Pressable Sites Exceeding Quota ({{ $pressableCapacity['overQuota']->count() }})</span>
-                        <span>Rolling {{ $rollingDays }}d &gt; {{ number_format($threshold) }}</span>
+                        <span>Calendar MTD &gt; {{ number_format($threshold) }}</span>
                     </div>
                     <table class="w-full text-sm">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <th class="px-5 py-2.5 text-left">Site</th>
-                                <th class="px-5 py-2.5 text-right">Visits 30d</th>
+                                <th class="px-5 py-2.5 text-right">MTD</th>
                                 <th class="px-5 py-2.5 text-right">Over By</th>
                                 <th class="px-5 py-2.5 text-right">% Over</th>
-                                <th class="px-5 py-2.5 text-right">MTD</th>
+                                <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -652,10 +814,10 @@
                                             {{ $row['site']->domain }}
                                         </a>
                                     </td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
                                     <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['over_by']) }}</td>
                                     <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['pct_over'], 1) }}%</td>
-                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['month_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -668,16 +830,16 @@
                 <div class="card overflow-hidden mb-4 border border-[var(--color-status-yellow)]">
                     <div class="px-5 py-3 bg-[var(--color-status-yellow-soft)] text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
                         <span><i class="fa-solid fa-arrow-trend-up mr-1.5"></i> Pressable Sites Trending Toward Overage ({{ $pressableCapacity['trending']->count() }})</span>
-                        <span>Projected to cross {{ number_format($threshold) }} visits based on 7-day run rate</span>
+                        <span>MTD pace projects past {{ number_format($threshold) }} by month-end</span>
                     </div>
                     <table class="w-full text-sm">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <th class="px-5 py-2.5 text-left">Site</th>
-                                <th class="px-5 py-2.5 text-right">Visits 30d</th>
+                                <th class="px-5 py-2.5 text-right">MTD</th>
+                                <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
                                 <th class="px-5 py-2.5 text-right">Last 7d</th>
-                                <th class="px-5 py-2.5 text-right">Daily Avg</th>
-                                <th class="px-5 py-2.5 text-right">Projected 30d</th>
+                                <th class="px-5 py-2.5 text-right">Projected month-end</th>
                                 <th class="px-5 py-2.5 text-right">Projected Overage</th>
                             </tr>
                         </thead>
@@ -689,9 +851,9 @@
                                             {{ $row['site']->domain }}
                                         </a>
                                     </td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
                                     <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
-                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['daily_avg_7d']) }}/day</td>
                                     <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">{{ number_format($row['projected_30d']) }}</td>
                                     <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">+{{ number_format($row['projected_over_by']) }} (+{{ $row['projected_pct_over'] }}%)</td>
                                 </tr>
@@ -767,7 +929,7 @@
     @endif
 
     {{-- Runtime EOL: Fleet PHP Lifecycle & End of Life --}}
-    <section id="runtime-eol" class="mb-10">
+    <section id="runtime-eol" class="mb-10" x-show="filter === 'all' || filter === 'eol' || filter === 'shared' || filter === 'pressable'">
         <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
             <div>
                 <h2 class="font-display text-xl text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -779,6 +941,13 @@
                 </p>
             </div>
             <div class="flex items-center gap-2 text-xs">
+                <button type="button"
+                        @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                        class="btn-pill-nav text-xs flex items-center gap-1 hover:text-[var(--color-ink-strong)] cursor-pointer mr-1"
+                        title="Return to top of page">
+                    <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                    <span>Top</span>
+                </button>
                 <span class="status-pill status-red font-medium">
                     {{ $runtimeEol['counts']['eol'] }} EOL
                 </span>
@@ -866,7 +1035,7 @@
                                         @elseif ($row['site']->isPressable())
                                             <span class="status-pill status-unknown text-[10px]"><i class="fa-solid fa-cloud"></i> Pressable</span>
                                         @else
-                                            {{ $row['site']->server?->name ?? 'Standalone' }}
+                                            <span class="status-pill status-unknown text-[10px]"><i class="fa-solid fa-globe"></i> Standalone</span>
                                         @endif
                                     </td>
                                     <td class="px-5 py-2.5 font-mono text-xs font-medium text-[var(--color-ink-strong)]">
@@ -888,4 +1057,43 @@
             @endif
         </div>
     </section>
+
+    {{-- Floating Quick-Jump Pill (visible when scrolled down) --}}
+    <div x-show="showFloating"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-3"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-3"
+         class="fixed bottom-6 right-6 z-40 flex items-center gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] p-1.5 rounded-full shadow-lg text-xs"
+         style="display: none;">
+        <button type="button"
+                @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                class="px-2.5 py-1 rounded-full text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-hover)] flex items-center gap-1 transition-colors cursor-pointer"
+                title="Scroll to top of page">
+            <i class="fa-solid fa-arrow-up text-[10px]"></i>
+            <span class="font-medium">Top</span>
+        </button>
+        <div class="h-3.5 w-px bg-[var(--color-border)]"></div>
+        <button type="button"
+                @click="scrollTo('shared-vps-sections')"
+                class="px-2.5 py-1 rounded-full text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-hover)] flex items-center gap-1 transition-colors cursor-pointer"
+                title="Jump to SpinupWP Shared VPS">
+            <i class="fa-solid fa-server text-[10px] text-[var(--color-brand)]"></i>
+            <span>Shared VPS</span>
+        </button>
+        @if (! empty($pressableCapacity))
+            <div class="h-3.5 w-px bg-[var(--color-border)]"></div>
+            <button type="button"
+                    @click="scrollTo('pressable-capacity')"
+                    class="px-2.5 py-1 rounded-full text-[var(--color-primary-600)] font-medium hover:bg-[var(--color-surface-hover)] flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Jump directly down to Pressable Fleet">
+                <i class="fa-solid fa-cloud text-[10px]"></i>
+                <span>Pressable</span>
+            </button>
+        @endif
+    </div>
+
+    </div> {{-- End outer Alpine wrapper --}}
 @endsection

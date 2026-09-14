@@ -127,6 +127,21 @@ it('omits LLAR column and install LLAR button when LLAR module is disabled', fun
         ->assertDontSee('>Install LLAR<', false);
 });
 
+it('saves the protected plugin list and uses it on the control plane', function () {
+    $this->actingAs(User::factory()->create())
+        ->patch(route('settings.wordpress-plugins.protected.update'), [
+            'protected_plugins' => "woocommerce/woocommerce.php\njetpack/jetpack.php\n",
+        ])
+        ->assertRedirect(route('settings.wordpress-plugins.index'));
+
+    expect(app(\App\Support\Settings::class)->get(\App\Services\Companion\CompanionProtectedPlugins::SETTING_KEY))
+        ->toBe(['woocommerce/woocommerce.php', 'jetpack/jetpack.php']);
+
+    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('jetpack/jetpack.php'))->toBeTrue();
+    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('hello-dolly/hello.php'))->toBeFalse();
+    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('clockwork-companion/clockwork-companion.php'))->toBeTrue();
+});
+
 it('blocks installLlar endpoint when LLAR module is disabled', function () {
     InstalledModule::create([
         'module_id' => 'llar',

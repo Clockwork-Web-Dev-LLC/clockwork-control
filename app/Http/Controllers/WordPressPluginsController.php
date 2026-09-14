@@ -3,6 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Services\Companion\CompanionProtectedPlugins;
+use App\Support\Settings;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\Core\ModuleStateResolver;
 
@@ -50,6 +54,22 @@ class WordPressPluginsController extends Controller
             'no_protection' => $noProtection,
         ];
 
-        return view('settings.wordpress-plugins', compact('sites', 'totals', 'llarEnabled'));
+        $protectedPlugins = implode("\n", CompanionProtectedPlugins::configuredOperationalSlugs());
+
+        return view('settings.wordpress-plugins', compact('sites', 'totals', 'llarEnabled', 'protectedPlugins'));
+    }
+
+    public function updateProtectedPlugins(Request $request, Settings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'protected_plugins' => ['nullable', 'string', 'max:8000'],
+        ]);
+
+        $slugs = CompanionProtectedPlugins::normalizeList((string) ($validated['protected_plugins'] ?? ''));
+        $settings->put(CompanionProtectedPlugins::SETTING_KEY, $slugs);
+
+        return redirect()
+            ->route('settings.wordpress-plugins.index')
+            ->with('status', 'Protected plugin list saved. Connector plugins stay protected even if omitted.');
     }
 }

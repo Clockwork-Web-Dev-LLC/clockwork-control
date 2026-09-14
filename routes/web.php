@@ -348,6 +348,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/settings/ingest/rebuild-partitions', [IngestSettingsController::class, 'rebuildPartitions'])->name('settings.ingest.rebuildPartitions');
     Route::post('/settings/ingest/run-now', [IngestSettingsController::class, 'runNow'])->name('settings.ingest.runNow');
     Route::get('/settings/wordpress-plugins', [WordPressPluginsController::class, 'index'])->name('settings.wordpress-plugins.index');
+    Route::patch('/settings/wordpress-plugins/protected', [WordPressPluginsController::class, 'updateProtectedPlugins'])->name('settings.wordpress-plugins.protected.update');
 
     // Companion white-label branding & customization settings
     Route::get('/settings/companion', [CompanionSettingsController::class, 'index'])->name('settings.companion.index');

@@ -173,8 +173,8 @@ class CapacityController extends Controller
             ->sortBy(fn ($r) => max($r['avg_cpu'] ?? 0, $r['avg_memory'] ?? 0, $r['avg_disk'] ?? 0))
             ->values();
 
-        // Over-quota sites: rolling-day sum > threshold (early warning), surfaced
-        // alongside the calendar-month-to-date number that drives invoicing.
+        // Over-quota sites: calendar MTD > threshold (invoice tripwire).
+        // Rolling-window visits stay on the row as an early-warning column.
         // Pull rolling, MTD, trending-window visits per site in one pass — used by
         // both the "Over visit threshold" and "Trending toward overage" tables.
         $perSiteVisits = SiteTrafficDaily::query()
@@ -191,22 +191,22 @@ class CapacityController extends Controller
             ->get();
 
         $overQuota = $perSiteVisits
-            ->filter(fn ($row) => (int) $row->rolling_visits > $threshold)
-            ->sortByDesc('rolling_visits')
+            ->filter(fn ($row) => $this->isOverInvoiceQuota((int) $row->month_visits, $threshold))
+            ->sortByDesc('month_visits')
             ->map(function ($row) use ($threshold) {
                 $site = Site::with('server')->find($row->site_id);
                 if (! $site) {
                     return null;
                 }
-                $rollingVisits = (int) $row->rolling_visits;
+                $monthVisits = (int) $row->month_visits;
 
                 return [
                     'site' => $site,
-                    'rolling_visits' => $rollingVisits,
-                    'month_visits' => (int) $row->month_visits,
-                    'over_by' => $rollingVisits - $threshold,
+                    'rolling_visits' => (int) $row->rolling_visits,
+                    'month_visits' => $monthVisits,
+                    'over_by' => $monthVisits - $threshold,
                     'pct_over' => $threshold > 0
-                        ? round(($rollingVisits - $threshold) / $threshold * 100, 1)
+                        ? round(($monthVisits - $threshold) / $threshold * 100, 1)
                         : 0.0,
                     'last_7d_visits' => (int) $row->last_7d_visits,
                 ];
@@ -214,38 +214,35 @@ class CapacityController extends Controller
             ->filter()
             ->values();
 
-        // Trending toward overage: sites NOT currently over the rolling
-        // threshold, but whose trending rate projects past it. Linear extrapolation
-        // (last_N_days × rollingDays / trendingWindow). Catches ramping sites before they cross the line so
-        // we can have the conversation BEFORE the overage hits the invoice.
+        // Trending toward overage: not yet over MTD, but current month pace
+        // projects past the invoice threshold by month-end.
         $trending = $perSiteVisits
-            ->filter(function ($row) use ($trendingWindow, $rollingDays, $threshold) {
-                $rolling = (int) $row->rolling_visits;
-                $last7 = (int) $row->last_7d_visits;
-                if ($rolling > $threshold) {
-                    return false; // already in Over-visit-threshold table
+            ->filter(function ($row) use ($threshold, $today) {
+                $monthVisits = (int) $row->month_visits;
+                if ($this->isOverInvoiceQuota($monthVisits, $threshold)) {
+                    return false;
                 }
-                if ($last7 <= 0) {
-                    return false; // no recent traffic, no projection
+                if ($monthVisits <= 0) {
+                    return false;
                 }
-                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
 
-                return $projected > $threshold;
+                return $this->projectMonthEndFromMtd($monthVisits, $today) > $threshold;
             })
-            ->map(function ($row) use ($trendingWindow, $rollingDays, $threshold) {
+            ->map(function ($row) use ($trendingWindow, $threshold, $today) {
                 $site = Site::with('server')->find($row->site_id);
                 if (! $site) {
                     return null;
                 }
+                $monthVisits = (int) $row->month_visits;
                 $last7 = (int) $row->last_7d_visits;
-                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
+                $projected = $this->projectMonthEndFromMtd($monthVisits, $today);
 
                 return [
                     'site' => $site,
                     'rolling_visits' => (int) $row->rolling_visits,
-                    'month_visits' => (int) $row->month_visits,
+                    'month_visits' => $monthVisits,
                     'last_7d_visits' => $last7,
-                    'daily_avg_7d' => (int) round($last7 / $trendingWindow),
+                    'daily_avg_7d' => (int) round($last7 / max(1, $trendingWindow)),
                     'projected_30d' => $projected,
                     'projected_over_by' => $projected - $threshold,
                     'projected_pct_over' => $threshold > 0
@@ -545,8 +542,10 @@ class CapacityController extends Controller
      * Assemble capacity and traffic metrics for the Pressable fleet.
      *
      * Performance guarantee:
-     * - The Pressable API is called at most ONCE per hour (via 3600s cache for GET /account).
-     * - Per-site metrics, over-quota detection, and trending projections are computed
+     * - Successful GET /account is cached for 1 hour.
+     * - Failed GET /account is cached for 5 minutes (negative cache) so a timeout
+     *   does not become a 1-hour plan blackout, and does not retry on every paint.
+     * - Per-site metrics, MTD over-quota, and month-end projections are computed
      *   entirely from Clockwork's local `site_traffic_daily` table with zero external HTTP calls.
      *
      * @return array<string, mixed>|null
@@ -562,18 +561,7 @@ class CapacityController extends Controller
         $pressableClient = app(PressableClient::class);
         $isConfigured = $pressableClient->isConfigured();
 
-        $accountSummary = null;
-        if ($isConfigured) {
-            $accountSummary = Cache::remember('pressable.capacity.account_summary', 3600, function () use ($pressableClient) {
-                try {
-                    return $pressableClient->account();
-                } catch (\Throwable $e) {
-                    Log::warning('Failed to fetch Pressable account capacity summary: '.$e->getMessage());
-
-                    return [];
-                }
-            });
-        }
+        $accountSummary = $isConfigured ? $this->pressableAccountSummary($pressableClient) : null;
 
         $pressableSites = Site::query()
             ->where('hosting_provider', 'pressable')
@@ -609,22 +597,22 @@ class CapacityController extends Controller
         $totalRollingRequests = (int) $perSiteVisits->sum('rolling_requests');
 
         $overQuota = $perSiteVisits
-            ->filter(fn ($row) => (int) $row->rolling_visits > $threshold)
-            ->sortByDesc('rolling_visits')
+            ->filter(fn ($row) => $this->isOverInvoiceQuota((int) $row->month_visits, $threshold))
+            ->sortByDesc('month_visits')
             ->map(function ($row) use ($pressableSitesById, $threshold) {
                 $site = $pressableSitesById->get($row->site_id);
                 if (! $site) {
                     return null;
                 }
-                $rollingVisits = (int) $row->rolling_visits;
+                $monthVisits = (int) $row->month_visits;
 
                 return [
                     'site' => $site,
-                    'rolling_visits' => $rollingVisits,
-                    'month_visits' => (int) $row->month_visits,
-                    'over_by' => $rollingVisits - $threshold,
+                    'rolling_visits' => (int) $row->rolling_visits,
+                    'month_visits' => $monthVisits,
+                    'over_by' => $monthVisits - $threshold,
                     'pct_over' => $threshold > 0
-                        ? round(($rollingVisits - $threshold) / $threshold * 100, 1)
+                        ? round(($monthVisits - $threshold) / $threshold * 100, 1)
                         : 0.0,
                     'last_7d_visits' => (int) $row->last_7d_visits,
                 ];
@@ -633,33 +621,32 @@ class CapacityController extends Controller
             ->values();
 
         $trending = $perSiteVisits
-            ->filter(function ($row) use ($trendingWindow, $rollingDays, $threshold) {
-                $rolling = (int) $row->rolling_visits;
-                $last7 = (int) $row->last_7d_visits;
-                if ($rolling > $threshold) {
+            ->filter(function ($row) use ($threshold, $today) {
+                $monthVisits = (int) $row->month_visits;
+                if ($this->isOverInvoiceQuota($monthVisits, $threshold)) {
                     return false;
                 }
-                if ($last7 <= 0) {
+                if ($monthVisits <= 0) {
                     return false;
                 }
-                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
 
-                return $projected > $threshold;
+                return $this->projectMonthEndFromMtd($monthVisits, $today) > $threshold;
             })
-            ->map(function ($row) use ($pressableSitesById, $trendingWindow, $rollingDays, $threshold) {
+            ->map(function ($row) use ($pressableSitesById, $trendingWindow, $threshold, $today) {
                 $site = $pressableSitesById->get($row->site_id);
                 if (! $site) {
                     return null;
                 }
+                $monthVisits = (int) $row->month_visits;
                 $last7 = (int) $row->last_7d_visits;
-                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
+                $projected = $this->projectMonthEndFromMtd($monthVisits, $today);
 
                 return [
                     'site' => $site,
                     'rolling_visits' => (int) $row->rolling_visits,
-                    'month_visits' => (int) $row->month_visits,
+                    'month_visits' => $monthVisits,
                     'last_7d_visits' => $last7,
-                    'daily_avg_7d' => (int) round($last7 / $trendingWindow),
+                    'daily_avg_7d' => (int) round($last7 / max(1, $trendingWindow)),
                     'projected_30d' => $projected,
                     'projected_over_by' => $projected - $threshold,
                     'projected_pct_over' => $threshold > 0
@@ -735,5 +722,57 @@ class CapacityController extends Controller
             'trending' => $trending,
             'topSites' => $topSites,
         ];
+    }
+
+    /**
+     * Invoice tripwire: calendar month-to-date visits vs the configured threshold.
+     */
+    private function isOverInvoiceQuota(int $monthVisits, int $threshold): bool
+    {
+        return $monthVisits > $threshold;
+    }
+
+    /**
+     * If the current MTD pace continues, visits expected by month-end.
+     */
+    private function projectMonthEndFromMtd(int $monthVisits, CarbonImmutable $today): int
+    {
+        $elapsedDays = max(1, (int) $today->day);
+        $daysInMonth = max($elapsedDays, (int) $today->daysInMonth);
+
+        return (int) round($monthVisits * ($daysInMonth / $elapsedDays));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function pressableAccountSummary(PressableClient $pressableClient): array
+    {
+        $cached = Cache::get('pressable.capacity.account_summary');
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        if (Cache::has('pressable.capacity.account_summary.negative')) {
+            return [];
+        }
+
+        try {
+            $account = $pressableClient->account();
+            if (! is_array($account) || $account === []) {
+                Cache::put('pressable.capacity.account_summary.negative', true, 300);
+
+                return [];
+            }
+
+            Cache::put('pressable.capacity.account_summary', $account, 3600);
+
+            return $account;
+        } catch (\Throwable $e) {
+            Log::warning('Failed to fetch Pressable account capacity summary: '.$e->getMessage());
+            Cache::put('pressable.capacity.account_summary.negative', true, 300);
+
+            return [];
+        }
     }
 }
