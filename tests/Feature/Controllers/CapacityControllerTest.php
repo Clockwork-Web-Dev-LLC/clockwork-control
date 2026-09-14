@@ -9,7 +9,9 @@ use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Modules\Pressable\PressableClient;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -153,5 +155,159 @@ describe('CapacityController', function () {
             'memory_threshold',
             'disk_threshold',
         ]);
+    });
+
+    it('renders the Pressable Fleet Capacity section when Pressable is configured', function () {
+        Cache::forget('pressable.capacity.account_summary');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->once()->andReturn([
+                'productName' => 'Agency 1',
+                'organization' => 'ClockworkWP',
+                'email' => 'systems@clockworkwp.com',
+                'capacity' => [
+                    'sites' => [
+                        'billable' => 100,
+                        'staging' => 4,
+                        'total' => 105,
+                        'maxBillable' => 100,
+                        'maxStaging' => 101,
+                    ],
+                ],
+                'pageViews' => [
+                    'currentMonth' => ['people' => 500, 'views' => 1200],
+                    'lastMonth' => ['people' => 450, 'views' => 1100],
+                ],
+            ]);
+        });
+
+        $site = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'pressable-site.example.com',
+            'companion_installed' => true,
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => now()->toDateString(),
+            'visits' => 1500,
+            'requests' => 12000,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertSee('Pressable Fleet Capacity')
+            ->assertSee('Agency 1')
+            ->assertSee('ClockworkWP')
+            ->assertSee('pressable-site.example.com')
+            ->assertSee('1,500')
+            ->assertSee('Companion Active');
+
+        expect(Cache::has('pressable.capacity.account_summary'))->toBeTrue();
+    });
+
+    it('identifies over-quota and trending Pressable sites without per-site API calls', function () {
+        Cache::forget('pressable.capacity.account_summary');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->andReturn([
+                'productName' => 'Agency 1',
+                'organization' => 'ClockworkWP',
+                'capacity' => [
+                    'sites' => ['billable' => 10, 'staging' => 0, 'total' => 10, 'maxBillable' => 10],
+                ],
+            ]);
+        });
+
+        $overQuotaSite = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'high-traffic-pressable.com',
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $overQuotaSite->id,
+            'date' => now()->toDateString(),
+            'visits' => 35_000,
+            'requests' => 150_000,
+        ]);
+
+        $trendingSite = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'trending-up-pressable.com',
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $trendingSite->id,
+            'date' => now()->toDateString(),
+            'visits' => 8_000, // in last 7 days; 8,000 * 30 / 7 = 34,286 > 30,000
+            'requests' => 50_000,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertSee('high-traffic-pressable.com')
+            ->assertSee('Pressable Sites Exceeding Quota')
+            ->assertSee('trending-up-pressable.com')
+            ->assertSee('Pressable Sites Trending Toward Overage');
+    });
+
+    it('handles Pressable API exceptions gracefully and continues rendering capacity', function () {
+        Cache::forget('pressable.capacity.account_summary');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->andThrow(new RuntimeException('Connection timeout to Pressable API'));
+        });
+
+        $site = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'surviving-site.com',
+        ]);
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => now()->toDateString(),
+            'visits' => 250,
+            'requests' => 1500,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertSee('Pressable Fleet Capacity')
+            ->assertSee('surviving-site.com');
+    });
+
+    it('displays Pressable pill in per-site CPU leaderboard when a site is hosted on Pressable', function () {
+        $tag = Tag::factory()->create(['name' => 'Shared']);
+        $server = Server::factory()->create(['name' => 'shared1.example.com']);
+        $server->tags()->attach($tag);
+
+        $site = Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'pressable-cpu-hog.com',
+            'server_id' => null,
+        ]);
+
+        DB::table('site_metrics')->insert([
+            'site_id' => $site->id,
+            'bucket_at' => now()->subHours(2),
+            'cpu_us_total' => 20_000_000,
+            'wall_us_total' => 30_000_000,
+            'mem_peak_bytes' => 128 * 1024 * 1024,
+            'requests' => 500,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk()
+            ->assertSee('pressable-cpu-hog.com')
+            ->assertSee('Pressable');
     });
 });

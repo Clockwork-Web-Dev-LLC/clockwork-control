@@ -391,6 +391,8 @@
                                             <a href="{{ route('servers.show', $row['site']->server) }}" class="text-[var(--color-ink-muted)] hover:underline text-xs">
                                                 {{ $row['site']->server->name }}
                                             </a>
+                                        @elseif ($row['site']->isPressable())
+                                            <span class="status-pill status-unknown text-[10px]"><i class="fa-solid fa-cloud"></i> Pressable</span>
                                         @else
                                             <span class="text-[var(--color-ink-soft)] text-xs">—</span>
                                         @endif
@@ -522,6 +524,248 @@
         </div>
     @endif
 
+    {{-- Pressable Fleet Capacity --}}
+    @if (! empty($pressableCapacity))
+        <section id="pressable-capacity" class="mb-10">
+            <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
+                <div>
+                    <h2 class="font-display text-xl text-[var(--color-ink-strong)] flex items-center gap-2">
+                        <i class="fa-solid fa-cloud text-[var(--color-primary-600)]"></i>
+                        Pressable Fleet Capacity
+                        @if (! empty($pressableCapacity['planName']))
+                            <span class="status-pill status-cyan font-medium text-xs">
+                                {{ $pressableCapacity['planName'] }}
+                            </span>
+                        @endif
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        @if (! empty($pressableCapacity['organization']))
+                            {{ $pressableCapacity['organization'] }} &middot;
+                        @endif
+                        Account quota pool &amp; local edge telemetry (zero excess API overhead).
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                    <a href="{{ route('sites.index', ['provider' => 'pressable']) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        View all {{ $pressableCapacity['dbSitesCount'] }} Pressable sites
+                    </a>
+                </div>
+            </div>
+
+            {{-- Summary Cards --}}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {{-- Card 1: Account Site Allocation --}}
+                <div class="card p-4">
+                    <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] mb-1">
+                        <span class="font-medium uppercase tracking-wide">Account Sites</span>
+                        <i class="fa-solid fa-server text-[var(--color-ink-muted)]"></i>
+                    </div>
+                    <div class="text-2xl font-display font-semibold text-[var(--color-ink-strong)]">
+                        {{ $pressableCapacity['billableSites'] }}
+                        @if ($pressableCapacity['maxBillable'] > 0)
+                            <span class="text-sm font-normal text-[var(--color-ink-soft)]">/ {{ $pressableCapacity['maxBillable'] }}</span>
+                        @endif
+                    </div>
+                    <div class="text-xs text-[var(--color-ink-muted)] mt-1 flex items-center gap-1.5">
+                        <span>Billable sites</span>
+                        @if ($pressableCapacity['stagingSites'] > 0)
+                            &middot; <span class="text-[var(--color-status-cyan)]">+{{ $pressableCapacity['stagingSites'] }} staging</span>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Card 2: Companion Agent Adoption --}}
+                <div class="card p-4">
+                    <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] mb-1">
+                        <span class="font-medium uppercase tracking-wide">Companion Adoption</span>
+                        <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)]"></i>
+                    </div>
+                    <div class="text-2xl font-display font-semibold text-[var(--color-ink-strong)]">
+                        {{ $pressableCapacity['companionInstalled'] }}
+                        <span class="text-sm font-normal text-[var(--color-ink-soft)]">/ {{ $pressableCapacity['dbSitesCount'] }}</span>
+                    </div>
+                    <div class="text-xs text-[var(--color-ink-muted)] mt-1">
+                        <span class="font-medium text-[var(--color-status-green)]">{{ $pressableCapacity['companionAdoptionPct'] }}%</span> telemetry coverage
+                    </div>
+                </div>
+
+                {{-- Card 3: Rolling 30d Fleet Visits --}}
+                <div class="card p-4">
+                    <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] mb-1">
+                        <span class="font-medium uppercase tracking-wide">Fleet Visits (30d)</span>
+                        <i class="fa-solid fa-chart-line text-[var(--color-ink-muted)]"></i>
+                    </div>
+                    <div class="text-2xl font-display font-semibold text-[var(--color-ink-strong)]">
+                        {{ number_format($pressableCapacity['totalRollingVisits']) }}
+                    </div>
+                    <div class="text-xs text-[var(--color-ink-muted)] mt-1">
+                        {{ number_format($pressableCapacity['totalMonthVisits']) }} MTD &middot; {{ number_format($pressableCapacity['totalRollingRequests']) }} reqs
+                    </div>
+                </div>
+
+                {{-- Card 4: Over-Quota / Health Status --}}
+                <div class="card p-4">
+                    <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] mb-1">
+                        <span class="font-medium uppercase tracking-wide">Threshold Alerts</span>
+                        <i class="fa-solid fa-triangle-exclamation text-[var(--color-ink-muted)]"></i>
+                    </div>
+                    <div class="text-2xl font-display font-semibold">
+                        @if ($pressableCapacity['overQuota']->isNotEmpty())
+                            <span class="text-[var(--color-status-red)]">{{ $pressableCapacity['overQuota']->count() }}</span>
+                            <span class="text-xs font-normal text-[var(--color-status-red)]">over quota</span>
+                        @elseif ($pressableCapacity['trending']->isNotEmpty())
+                            <span class="text-[var(--color-status-yellow)]">{{ $pressableCapacity['trending']->count() }}</span>
+                            <span class="text-xs font-normal text-[var(--color-status-yellow)]">trending</span>
+                        @else
+                            <span class="text-[var(--color-status-green)]">All OK</span>
+                        @endif
+                    </div>
+                    <div class="text-xs text-[var(--color-ink-muted)] mt-1">
+                        Quota threshold: {{ number_format($threshold) }} visits / {{ $rollingDays }}d
+                    </div>
+                </div>
+            </div>
+
+            {{-- Over-quota Pressable sites if any --}}
+            @if ($pressableCapacity['overQuota']->isNotEmpty())
+                <div class="card overflow-hidden mb-4 border border-[var(--color-status-red)]">
+                    <div class="px-5 py-3 bg-[var(--color-status-red-soft)] text-xs font-medium text-[var(--color-status-red)] flex items-center justify-between">
+                        <span><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Pressable Sites Exceeding Quota ({{ $pressableCapacity['overQuota']->count() }})</span>
+                        <span>Rolling {{ $rollingDays }}d &gt; {{ number_format($threshold) }}</span>
+                    </div>
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2.5 text-left">Site</th>
+                                <th class="px-5 py-2.5 text-right">Visits 30d</th>
+                                <th class="px-5 py-2.5 text-right">Over By</th>
+                                <th class="px-5 py-2.5 text-right">% Over</th>
+                                <th class="px-5 py-2.5 text-right">MTD</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($pressableCapacity['overQuota'] as $row)
+                                <tr>
+                                    <td class="px-5 py-2.5 font-data">
+                                        <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                            {{ $row['site']->domain }}
+                                        </a>
+                                    </td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['over_by']) }}</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['pct_over'], 1) }}%</td>
+                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['month_visits']) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            {{-- Trending Pressable sites if any --}}
+            @if ($pressableCapacity['trending']->isNotEmpty())
+                <div class="card overflow-hidden mb-4 border border-[var(--color-status-yellow)]">
+                    <div class="px-5 py-3 bg-[var(--color-status-yellow-soft)] text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                        <span><i class="fa-solid fa-arrow-trend-up mr-1.5"></i> Pressable Sites Trending Toward Overage ({{ $pressableCapacity['trending']->count() }})</span>
+                        <span>Projected to cross {{ number_format($threshold) }} visits based on 7-day run rate</span>
+                    </div>
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2.5 text-left">Site</th>
+                                <th class="px-5 py-2.5 text-right">Visits 30d</th>
+                                <th class="px-5 py-2.5 text-right">Last 7d</th>
+                                <th class="px-5 py-2.5 text-right">Daily Avg</th>
+                                <th class="px-5 py-2.5 text-right">Projected 30d</th>
+                                <th class="px-5 py-2.5 text-right">Projected Overage</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($pressableCapacity['trending'] as $row)
+                                <tr>
+                                    <td class="px-5 py-2.5 font-data">
+                                        <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                            {{ $row['site']->domain }}
+                                        </a>
+                                    </td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
+                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['daily_avg_7d']) }}/day</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">{{ number_format($row['projected_30d']) }}</td>
+                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">+{{ number_format($row['projected_over_by']) }} (+{{ $row['projected_pct_over'] }}%)</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            {{-- Top Pressable Sites by Traffic --}}
+            <div class="card overflow-hidden">
+                <div class="px-5 py-3 bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] flex items-center justify-between flex-wrap gap-2">
+                    <span class="font-medium text-[var(--color-ink-strong)]">
+                        Top Pressable Sites by Traffic (Rolling {{ $rollingDays }}d)
+                    </span>
+                    <span class="text-[var(--color-ink-soft)]">
+                        Ranked by total visits recorded in local telemetry
+                    </span>
+                </div>
+                @if ($pressableCapacity['topSites']->isEmpty())
+                    <div class="p-6 text-center text-sm text-[var(--color-ink-soft)]">
+                        No traffic data recorded for Pressable sites in the last {{ $rollingDays }} days.
+                    </div>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                                <tr>
+                                    <th class="px-5 py-2.5 text-left">Site</th>
+                                    <th class="px-5 py-2.5 text-left">Agent Status</th>
+                                    <th class="px-5 py-2.5 text-right">30d Visits</th>
+                                    <th class="px-5 py-2.5 text-right">MTD Visits</th>
+                                    <th class="px-5 py-2.5 text-right">Last 7d</th>
+                                    <th class="px-5 py-2.5 text-right">Requests (30d)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[var(--color-border-light)]">
+                                @foreach ($pressableCapacity['topSites'] as $row)
+                                    <tr class="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                        <td class="px-5 py-2.5 font-data">
+                                            <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                                <i class="fa-solid fa-cloud text-xs text-[var(--color-ink-muted)]"></i>
+                                                {{ $row['site']->domain }}
+                                            </a>
+                                        </td>
+                                        <td class="px-5 py-2.5 text-xs">
+                                            @if ($row['site']->companion_installed)
+                                                <span class="status-pill status-green text-[10px]">Companion Active</span>
+                                            @else
+                                                <span class="status-pill status-unknown text-[10px]">Unmanaged</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)] tabular-nums">
+                                            {{ number_format($row['rolling_visits']) }}
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)] tabular-nums">
+                                            {{ number_format($row['month_visits']) }}
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)] tabular-nums">
+                                            {{ number_format($row['last_7d_visits']) }}
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)] tabular-nums">
+                                            {{ number_format($row['rolling_requests']) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </section>
+    @endif
+
     {{-- Runtime EOL: Fleet PHP Lifecycle & End of Life --}}
     <section id="runtime-eol" class="mb-10">
         <div class="flex items-end justify-between mb-3 flex-wrap gap-2">
@@ -617,7 +861,13 @@
                                         </a>
                                     </td>
                                     <td class="px-5 py-2.5 text-xs text-[var(--color-ink-muted)]">
-                                        {{ $row['site']->server?->name ?? 'Standalone' }}
+                                        @if ($row['site']->server)
+                                            {{ $row['site']->server->name }}
+                                        @elseif ($row['site']->isPressable())
+                                            <span class="status-pill status-unknown text-[10px]"><i class="fa-solid fa-cloud"></i> Pressable</span>
+                                        @else
+                                            {{ $row['site']->server?->name ?? 'Standalone' }}
+                                        @endif
                                     </td>
                                     <td class="px-5 py-2.5 font-mono text-xs font-medium text-[var(--color-ink-strong)]">
                                         {{ $row['php_version'] }}

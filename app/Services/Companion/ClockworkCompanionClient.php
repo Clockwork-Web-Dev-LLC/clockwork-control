@@ -349,9 +349,11 @@ class ClockworkCompanionClient
      */
     public function togglePlugin(string $slug, string $action, bool $networkWide = false): array
     {
+        CompanionProtectedPlugins::guardDestructive($slug, $action);
+
         return $this->postJson('/plugins/toggle', [
-            'slug'         => $slug,
-            'action'       => $action,
+            'slug' => $slug,
+            'action' => $action,
             'network_wide' => $networkWide,
         ]);
     }
@@ -363,8 +365,10 @@ class ClockworkCompanionClient
      */
     public function deletePlugin(string $slug, bool $networkWide = false): array
     {
+        CompanionProtectedPlugins::guardDestructive($slug, 'delete');
+
         return $this->postJson('/plugins/delete', [
-            'slug'         => $slug,
+            'slug' => $slug,
             'network_wide' => $networkWide,
         ]);
     }
@@ -377,8 +381,8 @@ class ClockworkCompanionClient
     public function installPlugin(string $slug, bool $activate = false, bool $networkWide = false): array
     {
         return $this->postJson('/plugins/install', [
-            'slug'         => $slug,
-            'activate'     => $activate,
+            'slug' => $slug,
+            'activate' => $activate,
             'network_wide' => $networkWide,
         ], [
             'timeout' => 120,

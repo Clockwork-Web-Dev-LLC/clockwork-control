@@ -14,8 +14,11 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Modules\Pressable\PressableClient;
 
 class CapacityController extends Controller
 {
@@ -84,6 +87,22 @@ class CapacityController extends Controller
     public function index(): View
     {
         $runtimeEol = $this->runtimeEolData();
+        $today = CarbonImmutable::now()->startOfDay();
+        $monthStart = CarbonImmutable::now()->startOfMonth();
+        $rollingDays = $this->rollingDays();
+        $trendingWindow = $this->trendingWindow();
+        $threshold = $this->visitThreshold();
+        $rolling30Start = $today->subDays($rollingDays - 1);
+
+        $pressableCapacity = $this->pressableCapacityData(
+            $rolling30Start,
+            $monthStart,
+            $today,
+            $threshold,
+            $rollingDays,
+            $trendingWindow
+        );
+
         $sharedTagId = Tag::where('name', 'Shared')->value('id');
 
         if ($sharedTagId === null) {
@@ -92,11 +111,12 @@ class CapacityController extends Controller
                 'pressure' => collect(),
                 'headroom' => collect(),
                 'overQuota' => collect(),
-                'threshold' => $this->visitThreshold(),
-                'monthLabel' => CarbonImmutable::now()->format('F Y'),
-                'rollingDays' => $this->rollingDays(),
-                'trendingWindow' => $this->trendingWindow(),
+                'threshold' => $threshold,
+                'monthLabel' => $monthStart->format('F Y'),
+                'rollingDays' => $rollingDays,
+                'trendingWindow' => $trendingWindow,
                 'runtimeEol' => $runtimeEol,
+                'pressableCapacity' => $pressableCapacity,
             ]);
         }
 
@@ -115,17 +135,6 @@ class CapacityController extends Controller
             ->groupBy('server_id')
             ->get()
             ->keyBy('server_id');
-
-        // Two windows matter:
-        //   - rolling days: early-warning signal — triggers the "over quota" alert
-        //     before the calendar month closes, so the user can act in time.
-        //   - month-to-date: the calendar window the user actually invoices on.
-        $today = CarbonImmutable::now()->startOfDay();
-        $monthStart = CarbonImmutable::now()->startOfMonth();
-        $rollingDays = $this->rollingDays();
-        $trendingWindow = $this->trendingWindow();
-        $threshold = $this->visitThreshold();
-        $rolling30Start = $today->subDays($rollingDays - 1);
 
         // Headroom table shows rolling visits — more honest read of the box's load.
         $visitsByServer = SiteTrafficDaily::query()
@@ -376,6 +385,7 @@ class CapacityController extends Controller
             'rollingDays' => $rollingDays,
             'pressureThresholds' => $thresholds,
             'runtimeEol' => $runtimeEol,
+            'pressableCapacity' => $pressableCapacity,
         ]);
     }
 
@@ -528,6 +538,191 @@ class CapacityController extends Controller
             'isStale' => $isStale,
             'counts' => $counts,
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Assemble capacity and traffic metrics for the Pressable fleet.
+     *
+     * Performance guarantee:
+     * - The Pressable API is called at most ONCE per hour (via 3600s cache for GET /account).
+     * - Per-site metrics, over-quota detection, and trending projections are computed
+     *   entirely from Clockwork's local `site_traffic_daily` table with zero external HTTP calls.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function pressableCapacityData(
+        CarbonImmutable $rolling30Start,
+        CarbonImmutable $monthStart,
+        CarbonImmutable $today,
+        int $threshold,
+        int $rollingDays,
+        int $trendingWindow
+    ): ?array {
+        $pressableClient = app(PressableClient::class);
+        $isConfigured = $pressableClient->isConfigured();
+
+        $accountSummary = null;
+        if ($isConfigured) {
+            $accountSummary = Cache::remember('pressable.capacity.account_summary', 3600, function () use ($pressableClient) {
+                try {
+                    return $pressableClient->account();
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to fetch Pressable account capacity summary: '.$e->getMessage());
+
+                    return [];
+                }
+            });
+        }
+
+        $pressableSites = Site::query()
+            ->where('hosting_provider', 'pressable')
+            ->where('is_inactive', false)
+            ->get();
+
+        if (empty($accountSummary) && $pressableSites->isEmpty()) {
+            return null;
+        }
+
+        $totalDbSites = $pressableSites->count();
+        $companionInstalled = $pressableSites->where('companion_installed', true)->count();
+        $pressableSiteIds = $pressableSites->pluck('id');
+        $pressableSitesById = $pressableSites->keyBy('id');
+
+        $perSiteVisits = $pressableSiteIds->isNotEmpty()
+            ? SiteTrafficDaily::query()
+                ->whereIn('site_id', $pressableSiteIds)
+                ->where('date', '>=', $rolling30Start->toDateString())
+                ->selectRaw('
+                    site_id,
+                    SUM(visits) AS rolling_visits,
+                    SUM(CASE WHEN date >= ? THEN visits ELSE 0 END) AS month_visits,
+                    SUM(CASE WHEN date >= ? THEN visits ELSE 0 END) AS last_7d_visits,
+                    SUM(requests) AS rolling_requests
+                ', [$monthStart->toDateString(), $today->subDays($trendingWindow - 1)->toDateString()])
+                ->groupBy('site_id')
+                ->get()
+            : collect();
+
+        $totalRollingVisits = (int) $perSiteVisits->sum('rolling_visits');
+        $totalMonthVisits = (int) $perSiteVisits->sum('month_visits');
+        $totalRollingRequests = (int) $perSiteVisits->sum('rolling_requests');
+
+        $overQuota = $perSiteVisits
+            ->filter(fn ($row) => (int) $row->rolling_visits > $threshold)
+            ->sortByDesc('rolling_visits')
+            ->map(function ($row) use ($pressableSitesById, $threshold) {
+                $site = $pressableSitesById->get($row->site_id);
+                if (! $site) {
+                    return null;
+                }
+                $rollingVisits = (int) $row->rolling_visits;
+
+                return [
+                    'site' => $site,
+                    'rolling_visits' => $rollingVisits,
+                    'month_visits' => (int) $row->month_visits,
+                    'over_by' => $rollingVisits - $threshold,
+                    'pct_over' => $threshold > 0
+                        ? round(($rollingVisits - $threshold) / $threshold * 100, 1)
+                        : 0.0,
+                    'last_7d_visits' => (int) $row->last_7d_visits,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        $trending = $perSiteVisits
+            ->filter(function ($row) use ($trendingWindow, $rollingDays, $threshold) {
+                $rolling = (int) $row->rolling_visits;
+                $last7 = (int) $row->last_7d_visits;
+                if ($rolling > $threshold) {
+                    return false;
+                }
+                if ($last7 <= 0) {
+                    return false;
+                }
+                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
+
+                return $projected > $threshold;
+            })
+            ->map(function ($row) use ($pressableSitesById, $trendingWindow, $rollingDays, $threshold) {
+                $site = $pressableSitesById->get($row->site_id);
+                if (! $site) {
+                    return null;
+                }
+                $last7 = (int) $row->last_7d_visits;
+                $projected = (int) round($last7 * ($rollingDays / $trendingWindow));
+
+                return [
+                    'site' => $site,
+                    'rolling_visits' => (int) $row->rolling_visits,
+                    'month_visits' => (int) $row->month_visits,
+                    'last_7d_visits' => $last7,
+                    'daily_avg_7d' => (int) round($last7 / $trendingWindow),
+                    'projected_30d' => $projected,
+                    'projected_over_by' => $projected - $threshold,
+                    'projected_pct_over' => $threshold > 0
+                        ? round(($projected - $threshold) / $threshold * 100, 1)
+                        : 0.0,
+                ];
+            })
+            ->filter()
+            ->sortByDesc('projected_30d')
+            ->values();
+
+        $topSites = $perSiteVisits
+            ->sortByDesc('rolling_visits')
+            ->take(10)
+            ->map(function ($row) use ($pressableSitesById) {
+                $site = $pressableSitesById->get($row->site_id);
+                if (! $site) {
+                    return null;
+                }
+
+                return [
+                    'site' => $site,
+                    'rolling_visits' => (int) $row->rolling_visits,
+                    'month_visits' => (int) $row->month_visits,
+                    'last_7d_visits' => (int) $row->last_7d_visits,
+                    'rolling_requests' => (int) $row->rolling_requests,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        $capacitySites = $accountSummary['capacity']['sites'] ?? [];
+        $pageViews = $accountSummary['pageViews'] ?? [];
+
+        return [
+            'isConfigured' => $isConfigured,
+            'planName' => $accountSummary['productName'] ?? null,
+            'organization' => $accountSummary['organization'] ?? null,
+            'email' => $accountSummary['email'] ?? null,
+            'billableSites' => (int) ($capacitySites['billable'] ?? ($accountSummary['sitesCount'] ?? 0)),
+            'stagingSites' => (int) ($capacitySites['staging'] ?? 0),
+            'totalSites' => (int) ($capacitySites['total'] ?? 0),
+            'maxBillable' => (int) ($capacitySites['maxBillable'] ?? ($accountSummary['sitesCount'] ?? 0)),
+            'maxStaging' => (int) ($capacitySites['maxStaging'] ?? 0),
+            'pageViews' => [
+                'currentMonth' => [
+                    'people' => (int) ($pageViews['currentMonth']['people'] ?? 0),
+                    'views' => (int) ($pageViews['currentMonth']['views'] ?? 0),
+                ],
+                'lastMonth' => [
+                    'people' => (int) ($pageViews['lastMonth']['people'] ?? 0),
+                    'views' => (int) ($pageViews['lastMonth']['views'] ?? 0),
+                ],
+            ],
+            'dbSitesCount' => $totalDbSites,
+            'companionInstalled' => $companionInstalled,
+            'companionAdoptionPct' => $totalDbSites > 0 ? round(($companionInstalled / $totalDbSites) * 100, 1) : 0,
+            'totalRollingVisits' => $totalRollingVisits,
+            'totalMonthVisits' => $totalMonthVisits,
+            'totalRollingRequests' => $totalRollingRequests,
+            'overQuota' => $overQuota,
+            'trending' => $trending,
+            'topSites' => $topSites,
         ];
     }
 }

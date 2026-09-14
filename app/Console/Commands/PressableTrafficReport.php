@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Site;
+use App\Models\SiteTrafficDaily;
 use App\Services\Companion\ClockworkCompanionClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -111,6 +112,30 @@ class PressableTrafficReport extends Command
                 $this->warn("  [fail] {$site->domain}: push failed — {$e->getMessage()}");
 
                 continue;
+            }
+
+            if (! empty($report['daily'])) {
+                $now = now();
+                $upsertRows = array_map(fn (array $r) => [
+                    'site_id' => $site->id,
+                    'date' => $r['date'],
+                    'requests' => (int) ($r['requests'] ?? 0),
+                    'unique_ips' => (int) ($r['visits'] ?? 0),
+                    'visits' => (int) ($r['visits'] ?? 0),
+                    'bytes_sent' => 0,
+                    'status_2xx' => (int) ($r['status_2xx'] ?? 0),
+                    'status_3xx' => (int) ($r['status_3xx'] ?? 0),
+                    'status_4xx' => (int) ($r['status_4xx'] ?? 0),
+                    'status_5xx' => (int) ($r['status_5xx'] ?? 0),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $report['daily']);
+
+                SiteTrafficDaily::upsert(
+                    $upsertRows,
+                    ['site_id', 'date'],
+                    ['requests', 'unique_ips', 'visits', 'status_2xx', 'status_3xx', 'status_4xx', 'status_5xx', 'updated_at']
+                );
             }
 
             $stats['ok']++;

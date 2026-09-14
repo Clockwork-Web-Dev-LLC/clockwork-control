@@ -13,12 +13,12 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/database/summary" => Http::response([
-                'ok'                    => true,
-                'revisions'             => 15,
-                'auto_drafts'           => 3,
-                'trashed_posts'         => 2,
-                'spam_comments'         => 8,
-                'overhead_bytes'        => 40960,
+                'ok' => true,
+                'revisions' => 15,
+                'auto_drafts' => 3,
+                'trashed_posts' => 2,
+                'spam_comments' => 8,
+                'overhead_bytes' => 40960,
                 'total_cleanable_items' => 28,
             ], 200),
         ]);
@@ -44,11 +44,11 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/database/optimize" => Http::response([
-                'ok'         => true,
-                'cleaned'    => [
-                    'revisions'        => 15,
+                'ok' => true,
+                'cleaned' => [
+                    'revisions' => 15,
                     'optimized_tables' => 4,
-                    'reclaimed_bytes'  => 40960,
+                    'reclaimed_bytes' => 40960,
                 ],
                 'elapsed_ms' => 125,
             ], 200),
@@ -56,9 +56,9 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         $client = new ClockworkCompanionClient($site);
         $result = $client->optimizeDatabase([
-            'revisions'      => true,
+            'revisions' => true,
             'keep_revisions' => 5,
-            'tables'         => true,
+            'tables' => true,
         ]);
 
         expect($result)->toBeArray()
@@ -79,10 +79,10 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle" => Http::response([
-                'ok'           => true,
-                'slug'         => 'akismet/akismet.php',
-                'action'       => 'activate',
-                'active'       => true,
+                'ok' => true,
+                'slug' => 'akismet/akismet.php',
+                'action' => 'activate',
+                'active' => true,
                 'network_wide' => false,
             ], 200),
         ]);
@@ -107,8 +107,8 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/plugins/delete" => Http::response([
-                'ok'      => true,
-                'slug'    => 'hello-dolly/hello.php',
+                'ok' => true,
+                'slug' => 'hello-dolly/hello.php',
                 'deleted' => true,
             ], 200),
         ]);
@@ -126,11 +126,11 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/plugins/install" => Http::response([
-                'ok'          => true,
-                'slug'        => 'classic-editor',
+                'ok' => true,
+                'slug' => 'classic-editor',
                 'plugin_file' => 'classic-editor/classic-editor.php',
-                'version'     => '1.6.5',
-                'activated'   => true,
+                'version' => '1.6.5',
+                'activated' => true,
             ], 200),
         ]);
 
@@ -148,12 +148,12 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/debug-log*" => Http::response([
-                'ok'          => true,
-                'exists'      => true,
-                'enabled'     => true,
-                'file_size'   => 2048,
-                'line_count'  => 2,
-                'lines'       => [
+                'ok' => true,
+                'exists' => true,
+                'enabled' => true,
+                'file_size' => 2048,
+                'line_count' => 2,
+                'lines' => [
                     '[13-Sep-2026 12:00:01 UTC] PHP Notice: Test notice',
                     '[13-Sep-2026 12:00:02 UTC] PHP Warning: Test warning',
                 ],
@@ -180,7 +180,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/debug-log" => Http::response([
-                'ok'      => true,
+                'ok' => true,
                 'cleared' => true,
             ], 200),
         ]);
@@ -205,16 +205,16 @@ describe('ClockworkCompanionClient Extended Methods', function () {
 
         Http::fake([
             "https://{$site->domain}/wp-json/clockwork/v1/environment" => Http::response([
-                'ok'          => true,
-                'php'         => [
-                    'version'      => '8.3.4',
+                'ok' => true,
+                'php' => [
+                    'version' => '8.3.4',
                     'memory_limit' => '512M',
                 ],
-                'database'    => [
+                'database' => [
                     'server_version' => '8.0.36',
-                    'size_bytes'     => 10485760,
+                    'size_bytes' => 10485760,
                 ],
-                'server'      => [
+                'server' => [
                     'web_server' => 'nginx',
                 ],
             ], 200),
@@ -228,6 +228,43 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             ->and($env['php']['version'])->toBe('8.3.4')
             ->and($env['database']['server_version'])->toBe('8.0.36')
             ->and($env['server']['web_server'])->toBe('nginx');
+    });
+
+    it('refuses to deactivate or delete protected plugins before calling the site', function () {
+        $site = Site::factory()->withCompanionInstalled()->create();
+
+        Http::fake();
+
+        $client = new ClockworkCompanionClient($site);
+
+        expect(fn () => $client->togglePlugin('woocommerce/woocommerce.php', 'deactivate'))
+            ->toThrow(\RuntimeException::class, "Refusing to deactivate protected plugin 'woocommerce/woocommerce.php'.");
+
+        expect(fn () => $client->deletePlugin('clockwork-renegade/clockwork-renegade.php'))
+            ->toThrow(\RuntimeException::class, "Refusing to delete protected plugin 'clockwork-renegade/clockwork-renegade.php'.");
+
+        Http::assertNothingSent();
+    });
+
+    it('still allows activating a protected plugin', function () {
+        $site = Site::factory()->withCompanionInstalled()->create();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle" => Http::response([
+                'ok' => true,
+                'slug' => 'woocommerce/woocommerce.php',
+                'action' => 'activate',
+                'active' => true,
+            ], 200),
+        ]);
+
+        $client = new ClockworkCompanionClient($site);
+        $result = $client->togglePlugin('woocommerce/woocommerce.php', 'activate');
+
+        expect($result['ok'])->toBeTrue()
+            ->and($result['action'])->toBe('activate');
+
+        Http::assertSent(fn (Request $request) => $request['action'] === 'activate');
     });
 
     it('routes requests to clockwork-renegade/v1 when site variant is renegade', function () {

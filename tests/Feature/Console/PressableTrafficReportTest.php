@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Models\Site;
+use App\Models\SiteTrafficDaily;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -109,6 +110,8 @@ describe('clockwork:pressable-traffic-report — happy path', function () {
                 && $body['top_paths']['uploads'][0] === ['path' => '/wp-content/uploads/img.jpg', 'hits' => 5]
                 && $body['top_paths_date'] === Carbon::today()->toDateString();
         });
+
+        expect(SiteTrafficDaily::where('site_id', $site->id)->count())->toBe(30);
     });
 
     it('reports has_data=false and zeroed totals when Pressable returns no metrics at all', function () {
