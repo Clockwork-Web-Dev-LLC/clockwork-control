@@ -125,7 +125,10 @@ class InstallCompanion extends Command
     /** @return Collection<int, Site> */
     private function targetSites()
     {
-        $q = Site::query()->with('server')->where('is_wordpress', true);
+        $q = Site::query()
+            ->with('server')
+            ->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)
+            ->where('is_wordpress', true);
 
         if ($siteOpt = $this->option('site')) {
             $q->where(function ($q) use ($siteOpt) {
@@ -155,6 +158,7 @@ class InstallCompanion extends Command
     private function confirmFleetUpgrade(): bool
     {
         $count = Site::query()
+            ->where('hosting_provider', Site::HOSTING_PROVIDER_SPINUPWP)
             ->where('is_wordpress', true)
             ->where('companion_installed', true)
             ->whereNotNull('companion_secret')
