@@ -393,7 +393,7 @@ class ImportSpinupWp extends Command
             $attributes['cert_source'] = $httpsEnabled ? Site::CERT_SOURCE_SPINUPWP_LE : Site::CERT_SOURCE_NONE;
         }
 
-        $site = Site::withoutGlobalScopes()->firstOrNew(['domain' => $domain]);
+        $site = $this->resolveSite((string) $domain, $spinupId, (int) $serverId, (array) ($row['additional_domains'] ?? []));
         $existed = $site->exists;
 
         // New staging/dev sites should never fire uptime alerts.
@@ -414,12 +414,101 @@ class ImportSpinupWp extends Command
         $site->fill($attributes);
         $site->save();
 
+        $this->consolidateAliases($site, $row);
+
         if (! $existed) {
             $stats['created']++;
         } elseif ($site->wasChanged()) {
             $stats['updated']++;
         } else {
             $stats['unchanged']++;
+        }
+    }
+
+    protected function resolveSite(string $domain, ?string $spinupId, int $serverId, array $additionalDomains): Site
+    {
+        // 1. Match by spinupwp_id if present (only non-consolidated rows)
+        if ($spinupId !== null && $spinupId !== '') {
+            $site = Site::withoutGlobalScopes()
+                ->where('spinupwp_id', $spinupId)
+                ->whereNull('consolidated_into_site_id')
+                ->first();
+            if ($site) {
+                return $site;
+            }
+        }
+
+        // 2. Match by exact domain
+        $site = Site::withoutGlobalScopes()
+            ->where('domain', $domain)
+            ->whereNull('consolidated_into_site_id')
+            ->first();
+        if ($site) {
+            return $site;
+        }
+
+        // 3. Match candidate www / root variant on the same server
+        $altDomain = str_starts_with($domain, 'www.') ? substr($domain, 4) : 'www.'.$domain;
+        $site = Site::withoutGlobalScopes()
+            ->where('domain', $altDomain)
+            ->where('server_id', $serverId)
+            ->whereNull('consolidated_into_site_id')
+            ->first();
+        if ($site) {
+            return $site;
+        }
+
+        // 4. Match any additional_domains on the same server
+        $candidates = collect($additionalDomains)->pluck('domain')->filter()->map(fn ($d) => strtolower((string) $d))->all();
+        if (! empty($candidates)) {
+            $site = Site::withoutGlobalScopes()
+                ->whereIn('domain', $candidates)
+                ->where('server_id', $serverId)
+                ->whereNull('consolidated_into_site_id')
+                ->first();
+            if ($site) {
+                return $site;
+            }
+        }
+
+        // 5. Fallback: even if consolidated or archived, find by exact domain to avoid unique constraint violations
+        $site = Site::withoutGlobalScopes()
+            ->where('domain', $domain)
+            ->first();
+        if ($site) {
+            return $site;
+        }
+
+        return new Site(['domain' => $domain]);
+    }
+
+    protected function consolidateAliases(Site $site, array $row): void
+    {
+        $domain = strtolower((string) $site->domain);
+        $altDomain = str_starts_with($domain, 'www.') ? substr($domain, 4) : 'www.'.$domain;
+        $additional = collect($row['additional_domains'] ?? [])
+            ->pluck('domain')
+            ->filter()
+            ->map(fn ($d) => strtolower((string) $d))
+            ->all();
+
+        $aliasDomains = array_unique(array_filter([$altDomain, ...$additional]));
+
+        $duplicates = Site::withoutGlobalScopes()
+            ->whereIn('domain', $aliasDomains)
+            ->where('id', '!=', $site->id)
+            ->where('server_id', $site->server_id)
+            ->whereNull('consolidated_into_site_id')
+            ->get();
+
+        foreach ($duplicates as $dupe) {
+            $dupe->forceFill([
+                'spinupwp_id' => null,
+                'consolidated_into_site_id' => $site->id,
+                'archived_at' => $dupe->archived_at ?: now(),
+                'is_inactive' => true,
+                'inactive_reason' => 'Consolidated alias of '.$site->domain,
+            ])->save();
         }
     }
 

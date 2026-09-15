@@ -2,7 +2,7 @@
 title: Traffic + capacity
 section: Features
 order: 120
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [traffic, capacity, visits, analytics, pressable, eol, php]
 tracks: [app/Console/Commands/RollupTraffic.php, app/Http/Controllers/CapacityController.php, app/Services/Runtime/**, app/Console/Commands/RefreshRuntimeEol.php, app/Console/Commands/PressableTrafficReport.php, modules/Pressable/src/PressableClient.php]
@@ -42,15 +42,15 @@ Both are predictable distortions. We chose this over a slower query.
 
 - **Pressure** — servers running near or above headroom in any of CPU / memory / disk.
 - **Headroom** — servers with comfortable margin, candidates for taking on a new shared site.
-- **Per-site over-quota table** — sites exceeding the configured visit threshold (default 30k visits / 30 days, configurable via `/capacity/settings`). The threshold is the early-warning version; for invoicing we use the calendar-month-to-date number. CF-proxied sites show a Cloudflare icon (mirrors the existing indicator in the "Trending toward overage" section).
+- **Per-site over-quota table** — sites whose **calendar month-to-date** visits exceed the configured threshold (default 30k, configurable via `/capacity/settings`). That MTD number is the invoice tripwire; it also feeds the navbar issue count (it is not one of the 23 toggleable `/issues` categories). Rolling 30-day visits stay as an early-warning column on the same table. CF-proxied sites show a Cloudflare icon (mirrors the existing indicator in the "Trending toward overage" section).
 
 Dedicated and Staging servers are excluded — capacity planning only matters for the shared partition where we trade off site density vs server health.
 
 ### Capacity settings (`/capacity/settings`)
 
 Accessible via the "Capacity settings" button on `/capacity` and under Tools in the global gear menu:
-- **Visit quota threshold**: The rolling-window visit threshold (default 30,000 visits, with quick presets for 10k, 25k, 30k, 50k, 100k). Sites exceeding this threshold populate the over-quota table and increment the navigation issues badge.
-- **Lookback & trending windows**: Rolling lookback days (default 30d) and trending projection window (default 7d).
+- **Visit quota threshold**: The visit threshold (default 30,000) used as the **calendar MTD invoice tripwire**. Sites whose month-to-date visits exceed this populate the `/capacity` over-quota table and add to the navbar issue count. Rolling 30-day visits are shown as a column, not as the tripwire.
+- **Lookback & trending windows**: Rolling lookback days (default 30d, displayed as an early-warning column) and a last-N-days column (default 7d). Trending-toward-overage uses **MTD pace to month-end** (`month_visits * daysInMonth / dayOfMonth`), not `last_7d * (30/7)`.
 - **Shared server pressure thresholds**: 24-hour average percentage limits for CPU (default 70%), memory (default 80%), and disk (default 85%) that classify a shared server into "Pressure" vs "Headroom".
 
 ### Runtime EOL & Lifecycle
@@ -65,8 +65,9 @@ Clockwork tracks software runtime lifecycle support across the fleet to provide 
 
 Different windows for different decisions:
 
-- **Calendar month-to-date** — what we invoice against.
-- **Rolling days window** — early-warning over-quota alert + Issues badge (default 30 days). Catches "they're trending toward over-quota mid-month" before the invoice closes.
+- **Calendar month-to-date** — the invoice tripwire. Over-quota on `/capacity` (and the navbar issue count) uses `month_visits > threshold`. It is not a toggleable `/issues` category.
+- **Rolling days window** — early-warning **column** (default 30 days). Visible next to MTD so you can see a hot trailing month that has not yet closed the invoice. It does not trip over-quota by itself.
+- **MTD-pace projection** — trending-toward-overage sites are those still under the MTD tripwire whose `month_visits * (daysInMonth / dayOfMonth)` would exceed the threshold if the current pace continues. Failed Pressable `GET /account` is negatively cached for 5 minutes (success is cached 1 hour).
 
 ## Manual rollup
 
@@ -93,7 +94,9 @@ So if you need to backfill rollups for a date older than 30 days, the data isn't
 
 Two real Pressable API quirks the command has to work around: metrics/dimensions must come from the same "family" to combine (mixing `views` with `http_status` silently returns empty rather than erroring), and the auto-selected time resolution differs by family for the same date range (daily buckets for Uniques & Views, 8-hour buckets for Edge Logs — aggregated into calendar days here).
 
-This still doesn't feed `site_traffic_daily` or this app's own `/sites/{id}/traffic` tab, though — that tab stays hidden for Pressable sites regardless (no nginx access log to source it from). The daily rollup above is pushed straight to Companion's Traffic page in wp-admin (`/traffic-report`); Pressable clients see the same kind of daily chart as SpinupWP clients, just via a different pipeline that never touches this app's own dashboard.
+This command also upserts the same daily rows into Clockwork's `site_traffic_daily` table, which is what `/capacity` reads for Pressable MTD / rolling / trending numbers. The dashboard itself makes **one** Pressable `GET /account` per hour (5-minute negative cache on failure) and otherwise stays on local SQL.
+
+The per-site `/sites/{id}/traffic` tab still stays hidden for Pressable sites (no nginx access log to source it from). Clients see the chart in Companion wp-admin (`/traffic-report`) via this push; operators see Pressable quota on `/capacity` from the same `site_traffic_daily` rows.
 
 ## What this isn't
 

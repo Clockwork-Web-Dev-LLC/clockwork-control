@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -308,7 +308,26 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 | `CLOCKWORK_COMPANION_LOCAL_PATH` | `~/Projects/clockwork-companion` | Resolved via `posix_getpwuid` first because `env('HOME')` is null under Herd's php-fpm. |
 | `CLOCKWORK_COMPANION_TIMEOUT` | `30` | Per-call timeout for HTTP to the plugin. |
 | `CLOCKWORK_COMPANION_TIMEOUT_MULTISITE` | `60` | Longer timeout for calls that fan out across every subsite on a multisite install. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.34.0` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.37.1` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
+
+## Clockwork Renegade (WordPress.org directory variant)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_RENEGADE_VERSION` | `1.0.0` | Renegade plugin version bundled with this Core release. |
+| `CLOCKWORK_RENEGADE_LOCAL_PATH` | `~/Projects/clockwork-renegade` | Local source path for development. |
+
+## Care plans
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_CARE_PLANS_ENABLED` | `true` | Fleet-wide master switch for the Care Plan engine (`care_plans.enabled`). When false, care plan checks, scans, and maintenance gating are globally disabled. |
+
+## Scheduled jobs
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS` | `30` | Days of history to retain for task run results displayed on `/settings/scheduled-jobs`. |
 
 ## Operator identity
 

@@ -101,7 +101,7 @@ class CompanionProtectedPlugins
      */
     public static function normalizeList(array|string $input): array
     {
-        $lines = is_array($input) ? $input : preg_split('/[\r\n,]+/', $input) ?: [];
+        $lines = is_array($input) ? $input : (preg_split('/[\r\n,]+/', $input) ?: []);
         $out = [];
         foreach ($lines as $line) {
             $slug = strtolower(str_replace('\\', '/', trim((string) $line)));

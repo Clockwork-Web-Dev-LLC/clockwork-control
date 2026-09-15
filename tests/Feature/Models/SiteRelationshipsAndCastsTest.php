@@ -115,6 +115,20 @@ describe('Site::billComCustomer()', function () {
     });
 });
 
+describe('Site::pluginOnlyHostLabel()', function () {
+    it('labels renegade custom sites as Renegade Only', function () {
+        $site = Site::factory()->custom()->make(['companion_variant' => 'renegade']);
+
+        expect($site->pluginOnlyHostLabel())->toBe('Renegade Only');
+    });
+
+    it('labels classic companion custom sites as Companion Only', function () {
+        $site = Site::factory()->custom()->make(['companion_variant' => 'companion']);
+
+        expect($site->pluginOnlyHostLabel())->toBe('Companion Only');
+    });
+});
+
 describe('Site::isPressable() / Site::isSpinupWp()', function () {
     it('returns true/false correctly for a Pressable site', function () {
         $site = Site::factory()->pressable()->create();

@@ -182,6 +182,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::delete('/issues/orphans/{siteId}', [IssuesController::class, 'destroyOrphan'])->name('issues.orphans.destroy');
     Route::post('/issues/ignore', [IssuesController::class, 'ignore'])->name('issues.ignore');
     Route::post('/issues/unignore/{ignoredIssue}', [IssuesController::class, 'unignore'])->name('issues.unignore');
+    Route::post('/issues/category-level', [IssuesController::class, 'updateCategoryLevel'])->name('issues.category-level.update');
+    Route::post('/issues/category-levels', [IssuesController::class, 'updateAllCategoryLevels'])->name('issues.category-levels.update');
+    Route::post('/issues/category-levels/reset', [IssuesController::class, 'resetCategoryLevels'])->name('issues.category-levels.reset');
 
     Route::get('/capacity', [CapacityController::class, 'index'])->name('capacity.index');
     Route::get('/capacity/settings', [CapacityController::class, 'settings'])->name('capacity.settings');
@@ -270,7 +273,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/sites', [SitesController::class, 'index'])->name('sites.index');
     Route::get('/sites/create', [SitesController::class, 'create'])->name('sites.create');
     Route::post('/sites', [SitesController::class, 'store'])->name('sites.store');
+    Route::get('/downloads', [CompanionDownloadController::class, 'index'])->name('downloads.index');
     Route::get('/companion/download', [CompanionDownloadController::class, 'downloadZip'])->name('companion.download');
+    Route::get('/renegade/download', [CompanionDownloadController::class, 'downloadRenegadeZip'])->name('renegade.download');
     Route::get('/search/sites', [SitesController::class, 'search'])->name('sites.search');
 
     // Tab-aware site detail. The {tab?} segment is constrained to known tab names so other

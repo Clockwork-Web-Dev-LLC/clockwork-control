@@ -48,9 +48,13 @@
                     @endif
                 </div>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
-                    crontab should spawn <code class="font-data">php artisan schedule:run</code> every minute.
-                    A missing tick means this page’s uptime numbers will drift.
-                    <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-[var(--color-primary-600)] hover:underline">Runbook</a>
+                    @if ($schedulerHeartbeat->isOk())
+                        cron is running <code class="font-data">php artisan schedule:run</code> on schedule — uptime numbers on this page are current.
+                    @else
+                        crontab should spawn <code class="font-data">php artisan schedule:run</code> every minute.
+                        A missing tick means this page’s uptime numbers will drift.
+                        <a href="{{ route('docs.show', 'runbooks/scheduler-stuck') }}" class="text-[var(--color-primary-600)] hover:underline">Runbook</a>
+                    @endif
                 </p>
             </div>
         </div>

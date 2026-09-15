@@ -49,9 +49,9 @@
         <x-page-header title="Sites"
             :subtitle="$counts['all'] . ' sites across all hosting providers'">
             <x-slot:actions>
-                <a href="{{ route('companion.download') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors" title="Download WordPress Companion Plugin (.zip)">
+                <a href="{{ route('downloads.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors" title="Download WordPress Plugins (Companion & Renegade)">
                     <i class="fa-solid fa-download text-[11px] text-[var(--color-brand)]"></i>
-                    <span>Plugin (.zip)</span>
+                    <span>Download Plugins</span>
                 </a>
                 <button type="button" @click="showAddModal = true" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] shadow-xs transition-colors cursor-pointer">
                     <i class="fa-solid fa-plus text-xs"></i>
@@ -145,7 +145,7 @@
                             };
                         @endphp
                         <li class="site-row relative px-5 py-3 flex items-center gap-3 hover:bg-[var(--color-surface-alt)] transition-colors"
-                            data-search="{{ strtolower($site->domain . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
+                            data-search="{{ strtolower($site->domain . ' ' . implode(' ', $site->aliasDomains()) . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
                             <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
 
                             @if ($site->is_wordpress)
@@ -154,7 +154,9 @@
                                 <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none"></i>
                             @endif
 
-                            <span class="font-medium text-[var(--color-ink-strong)] truncate flex-1 relative z-10 pointer-events-none">{{ $site->domain }}</span>
+                            <span class="font-medium text-[var(--color-ink-strong)] truncate flex-1 relative z-10 pointer-events-none">
+                                {{ $site->domain }}
+                            </span>
 
                             <div class="flex items-center gap-2 relative z-10">
                                 @if ($site->is_inactive)
@@ -167,8 +169,8 @@
                                          <i class="fa-solid fa-cloud"></i> Pressable
                                      </span>
                                  @elseif ($site->isCustom())
-                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Custom / Companion Only">
-                                         <i class="fa-solid fa-plug"></i> Companion Only
+                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Custom / {{ $site->pluginOnlyHostLabel() }}">
+                                         <i class="fa-solid fa-plug"></i> {{ $site->pluginOnlyHostLabel() }}
                                      </span>
                                  @elseif ($site->server)
                                     <span class="status-pill status-unknown truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
@@ -185,7 +187,7 @@
                                 </span>
 
                                 @if ($site->companion_installed)
-                                    <span class="status-pill status-green cursor-default" data-tooltip="Companion Plugin Active">
+                                    <span class="status-pill status-green cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
                                         <i class="fa-solid fa-plug"></i>
                                     </span>
                                 @endif
@@ -319,9 +321,9 @@
                                 <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
                                 <span>Need the Companion plugin?</span>
                             </span>
-                            <a href="{{ route('companion.download') }}" class="text-[var(--color-brand)] font-semibold hover:underline flex items-center gap-1">
+                            <a href="{{ route('downloads.index') }}" class="text-[var(--color-brand)] font-semibold hover:underline flex items-center gap-1" target="_blank">
                                 <i class="fa-solid fa-download"></i>
-                                <span>Download .zip</span>
+                                <span>Download Hub</span>
                             </a>
                         </div>
                         <p class="leading-relaxed">

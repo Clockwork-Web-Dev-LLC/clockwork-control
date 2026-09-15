@@ -23,8 +23,8 @@
                 <i class="fa-solid fa-cloud"></i> Pressable
             </span>
         @elseif ($site->isCustom())
-            <span class="status-pill status-unknown ml-2" title="Custom hosting — standalone WordPress site managed purely via Clockwork Companion plugin.">
-                <i class="fa-solid fa-plug"></i> Companion Only
+            <span class="status-pill status-unknown ml-2" title="Custom hosting — standalone WordPress site managed purely via {{ $site->isRenegade() ? 'Clockwork Renegade' : 'the Clockwork Companion plugin' }}.">
+                <i class="fa-solid fa-plug"></i> {{ $site->pluginOnlyHostLabel() }}
             </span>
         @endif
     @endif

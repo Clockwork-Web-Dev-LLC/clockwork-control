@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -41,7 +41,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/issues/poll-servers` | Re-poll all servers on demand from the Issues page (background `clockwork:poll-servers`). |
 | POST | `/issues/fetch-all-db-creds` | Bulk-fetch missing WP DB credentials over SSH for all eligible sites (background `clockwork:extract-wp-configs`). |
 | DELETE | `/issues/orphans/{siteId}` | Remove an orphaned site row (archives it via `archived_at`). Confirm dialog required. |
-| GET | `/capacity` | Shared-server capacity / over-quota table. |
+| POST | `/issues/category-level` | Set an issue category's display tier (`critical`, `attention`, `low`, `hidden`). |
+| POST | `/issues/category-levels` | Bulk save all issue category display tiers. |
+| POST | `/issues/category-levels/reset` | Reset all issue category display tiers to their default configuration. |
+| GET | `/capacity` | Shared-server capacity / over-quota table with Pressable fleet metrics, filter tabs, and quick jumps. |
 | GET/PATCH | `/capacity/settings` | Configure shared-server visit quota, lookback windows, and pressure limits. |
 | GET | `/settings/capacity` | Redirects to `capacity.settings` — legacy-alias route, same shape as other `/settings/*` redirects. |
 | POST | `/capacity/site-metrics/toggle` | Pause/resume fleet-wide Companion resource-sampler collection, then push the new flag in the background. See [Features → Dashboard](/docs/features/dashboard) ("Per-site CPU collection toggle"). |
@@ -94,7 +97,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/uptime-body-check` | Per-site skip of the white-screen body-length check (parked / SPA / gated homepages). |
 | POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
+| GET | `/downloads` | WordPress Plugin Download Hub comparing Clockwork Companion and Clockwork Renegade editions. |
 | GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
+| GET | `/renegade/download` | Stream compiled `clockwork-renegade.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
@@ -137,7 +142,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 |---|---|---|
 | GET | `/monitoring` | Fleet uptime status board. |
 | POST | `/monitoring/refresh` | On-demand fleet uptime re-check (background `clockwork:check-site-uptime`). |
-| GET/PATCH | `/monitoring/settings` | Probe interval + failure threshold. |
+| GET/PATCH | `/monitoring/settings` | Probe interval, failure threshold, and fleet-wide domain ignore patterns (`monitoring.ignored_domain_patterns`). |
+| POST | `/monitoring/sites/{site}/classify-outage` | Classify an active outage reason / maintenance flag. |
+| POST | `/monitoring/events/{event}/classify` | Classify a specific historical monitoring outage event. |
 | GET | `/security/admins` | Fleet WordPress administrator directory and allowlist. |
 | PATCH | `/security/admins/allowlist` | Save approved admin email domains/emails. |
 | POST | `/security/admins/{site}/ignore` · DELETE `/ignore/{ignoredWpAdmin}` | Acknowledge or restore a flagged WP admin. |
@@ -170,6 +177,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET/PATCH/POST | `/settings/backup-relay[/run-now]` | Backup Relay (S3 Glacier IR) settings + on-demand execution. |
 | GET | `/settings/backup-relay/sites/{site}/{archives,download}` | Per-site S3 Glacier archive listing (`archives`) and streamed download of a specific archive (`download`). |
 | GET/POST | `/settings/scheduled-jobs[/run]` | [Scheduled Jobs dashboard](/docs/features/scheduled-jobs-dashboard) — every cron entry's last outcome + manual Run now. |
+| GET/PATCH | `/settings/care-plans` | Global care plan master toggle (`care_plans.enabled`) and fleet enrollment statistics. |
 | GET/POST | `/settings/bill-com[/run-{customer,care-plan}-sync]` | Sync status + manual runs. |
 | GET/POST | `/settings/mattermost` | Per-event Mattermost notification toggles (ip_blocked, ssl_state_changed, site_went_down/up, etc.). |
 | GET/POST | `/settings/slack` | Same per-event toggles, Slack channel. Independent settings key (`notifications.slack.events`) from Mattermost's. |

@@ -4,71 +4,500 @@
 
 @section('content')
     @php
+        $categoryDefinitions = [
+            // Tier 1: Critical & Security (Major Issues)
+            'down_sites' => [
+                'label' => 'Sites Down',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-circle-exclamation',
+                'html_id' => 'section-down-sites',
+                'description' => 'Sites currently reporting down or unreachable',
+            ],
+            'scheduler_stale' => [
+                'label' => 'Scheduler Stale',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-clock',
+                'html_id' => 'section-scheduler_stale',
+                'description' => 'Crontab is not spawning schedule:run',
+            ],
+            'malware' => [
+                'label' => 'Malware / Blacklist',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-bug',
+                'html_id' => 'section-malware',
+                'description' => 'Sucuri SiteCheck flagged malware or blacklist hit',
+            ],
+            'companion_malware' => [
+                'label' => 'Malware Findings',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-shield-virus',
+                'html_id' => 'section-companion_malware',
+                'description' => 'Companion PHP-in-uploads or obfuscation findings',
+            ],
+            'tampering' => [
+                'label' => 'Core Tampering',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-file-shield',
+                'html_id' => 'section-tampering',
+                'description' => 'Modified, missing, or unexpected WordPress core files',
+            ],
+            'health' => [
+                'label' => 'Server Health',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-heart-pulse',
+                'html_id' => 'section-health',
+                'description' => 'Servers with status red / offline',
+            ],
+            'forms_failing' => [
+                'label' => 'Form Tests Failing',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-envelope-circle-check',
+                'html_id' => 'section-forms_failing',
+                'description' => 'Care-plan contact form tests failing repeatedly',
+            ],
+            'stuck_maintenance' => [
+                'label' => 'Stuck in Maintenance',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-wrench',
+                'html_id' => 'section-stuck_maintenance',
+                'description' => 'Sites lingering in maintenance mode > 2 hours',
+            ],
+            'seo-indexability' => [
+                'label' => 'SEO Blocked',
+                'tier' => 'critical',
+                'class' => 'status-red',
+                'icon' => 'fa-magnifying-glass-chart',
+                'html_id' => 'section-seo-indexability',
+                'description' => 'Production sites blocking search engine indexing',
+            ],
+            'ssl' => [
+                'label' => 'SSL Certificates',
+                'tier' => 'critical',
+                'class' => 'status-yellow',
+                'icon' => 'fa-lock',
+                'html_id' => 'section-ssl',
+                'description' => 'Certificates expired or nearing expiration',
+            ],
+
+            // Tier 2: Infrastructure & Gaps
+            'hot' => [
+                'label' => 'Hot Servers',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-fire',
+                'html_id' => 'section-hot',
+                'description' => '24h average CPU, RAM, or Disk exceeding threshold',
+            ],
+            'domain-expiration' => [
+                'label' => 'Domain Expiring',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-globe',
+                'html_id' => 'section-domain-expiration',
+                'description' => 'Domains expiring within 30 days',
+            ],
+            'reboot' => [
+                'label' => 'Reboot Required',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-power-off',
+                'html_id' => 'section-reboot',
+                'description' => 'Servers requiring a reboot to apply kernel updates',
+            ],
+            'patches' => [
+                'label' => 'OS Patches',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-cube',
+                'html_id' => 'section-patches',
+                'description' => 'System packages available for upgrade',
+            ],
+            'cf' => [
+                'label' => 'Cloudflare DNS Only',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-cloud',
+                'html_id' => 'section-cf',
+                'description' => 'Proxy disabled on Cloudflare DNS records',
+            ],
+            'no_ssh' => [
+                'label' => 'SSH Access Gaps',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-key',
+                'html_id' => 'section-no_ssh',
+                'description' => 'Servers without confirmed SSH access',
+            ],
+            'no_jail' => [
+                'label' => 'Clockwork Jail Missing',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-shield-halved',
+                'html_id' => 'section-no_jail',
+                'description' => 'Servers without an isolated Clockwork chroot jail',
+            ],
+            'no_db' => [
+                'label' => 'DB Creds Missing',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-database',
+                'html_id' => 'section-no_db',
+                'description' => 'WordPress sites missing database credentials',
+            ],
+            'no_companion' => [
+                'label' => 'Companion Missing',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-plug-circle-xmark',
+                'html_id' => 'section-no_companion',
+                'description' => 'Companion plugin missing on sites with form tests',
+            ],
+            'orphans' => [
+                'label' => 'Orphaned Sites',
+                'tier' => 'infrastructure',
+                'class' => 'status-yellow',
+                'icon' => 'fa-link-slash',
+                'html_id' => 'section-orphans',
+                'description' => 'Sites disconnected from their hosting provider',
+            ],
+
+            // Tier 3: Routine Maintenance ("Not a big deal")
+            'plugins_outdated' => [
+                'label' => 'Plugins Out of Date',
+                'tier' => 'routine',
+                'class' => 'status-yellow',
+                'icon' => 'fa-cubes',
+                'html_id' => 'section-plugins_outdated',
+                'description' => 'Routine updates available for WordPress plugins',
+            ],
+            'plugins_closed' => [
+                'label' => 'Closed Plugins',
+                'tier' => 'routine',
+                'class' => 'status-yellow',
+                'icon' => 'fa-box-archive',
+                'html_id' => 'section-plugins_closed',
+                'description' => 'Installed plugins closed or unmaintained on wp.org',
+            ],
+            'wp_admins' => [
+                'label' => 'WP Admins Flagged',
+                'tier' => 'routine',
+                'class' => 'status-yellow',
+                'icon' => 'fa-user-shield',
+                'html_id' => 'section-wp_admins',
+                'description' => 'Unrecognized or non-standard administrator users',
+            ],
+        ];
+
+        $criticalKeys = ['down_sites', 'scheduler_stale', 'malware', 'companion_malware', 'tampering', 'health', 'forms_failing', 'stuck_maintenance', 'seo-indexability', 'ssl'];
+        $infraKeys = ['hot', 'domain-expiration', 'reboot', 'patches', 'cf', 'no_ssh', 'no_jail', 'no_db', 'no_companion', 'orphans'];
+        $routineKeys = ['plugins_outdated', 'plugins_closed', 'wp_admins'];
+
+        $tierTotals = [
+            'critical' => collect($criticalKeys)->sum(fn($k) => $totals[$k] ?? 0),
+            'infrastructure' => collect($infraKeys)->sum(fn($k) => $totals[$k] ?? 0),
+            'routine' => collect($routineKeys)->sum(fn($k) => $totals[$k] ?? 0),
+        ];
+
         $issuesSubtitle = $totals['all'] === 0
             ? 'All clear across the fleet.'
-            : $totals['all'] . ' ' . Str::plural('item', $totals['all']) . ' need attention.';
-
-        $chips = [
-            ['key' => 'seo-indexability', 'label' => 'SEO blocked', 'class' => 'status-red'],
-            ['key' => 'scheduler_stale', 'label' => 'Scheduler', 'class' => 'status-red'],
-            ['key' => 'malware', 'label' => 'Malware', 'class' => 'status-red'],
-            ['key' => 'companion_malware', 'label' => 'Malware findings', 'class' => 'status-red'],
-            ['key' => 'tampering', 'label' => 'Core tampering', 'class' => 'status-red'],
-            ['key' => 'health', 'label' => 'Health', 'class' => 'status-red'],
-            ['key' => 'forms_failing', 'label' => 'Form tests', 'class' => 'status-red'],
-            ['key' => 'hot', 'label' => 'Hot servers', 'class' => 'status-yellow'],
-            ['key' => 'ssl', 'label' => 'SSL', 'class' => 'status-yellow'],
-            ['key' => 'domain-expiration', 'label' => 'Domain', 'class' => 'status-yellow'],
-            ['key' => 'cf', 'label' => 'Cloudflare', 'class' => 'status-yellow'],
-            ['key' => 'patches', 'label' => 'Patches', 'class' => 'status-yellow'],
-            ['key' => 'reboot', 'label' => 'Reboot', 'class' => 'status-yellow'],
-            ['key' => 'no_ssh', 'label' => 'SSH', 'class' => 'status-yellow'],
-            ['key' => 'no_jail', 'label' => 'Jail', 'class' => 'status-yellow'],
-            ['key' => 'no_companion', 'label' => 'Companion', 'class' => 'status-yellow'],
-            ['key' => 'plugins_outdated', 'label' => 'WP plugins', 'class' => 'status-yellow'],
-            ['key' => 'stuck_maintenance', 'label' => 'Stuck maint', 'class' => 'status-yellow'],
-            ['key' => 'orphans', 'label' => 'Orphans', 'class' => 'status-yellow'],
-            ['key' => 'no_db', 'label' => 'DB creds', 'class' => 'status-yellow'],
-            ['key' => 'wp_admins', 'label' => 'WP admins', 'class' => 'status-yellow'],
-            ['key' => 'plugins_closed', 'label' => 'Closed plugins', 'class' => 'status-yellow'],
-        ];
+            : $totals['all'] . ' total ' . Str::plural('item', $totals['all']) . ' (' .
+              $tierTotals['critical'] . ' critical · ' .
+              $tierTotals['infrastructure'] . ' infrastructure · ' .
+              $tierTotals['routine'] . ' routine)';
     @endphp
 
-    <x-page-header :title="'Issues'" :subtitle="$issuesSubtitle">
-        <x-slot:actions>
-            <div class="flex items-center gap-2 flex-wrap text-sm">
-                @foreach ($chips as $chip)
-                    @if ($totals[$chip['key']] > 0)
-                        <a href="#section-{{ $chip['key'] }}" class="status-pill {{ $chip['class'] }}">
-                            <span class="status-dot"></span>
-                            {{ $chip['label'] }} {{ $totals[$chip['key']] }}
-                        </a>
-                    @endif
-                @endforeach
-                <a href="{{ route('issues.index') }}"
-                   class="btn-pill-nav inline-flex items-center gap-1.5"
-                   title="Loaded {{ now()->format('g:i:s a') }}"
-                   onclick="this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                    <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
-                </a>
+    <div x-data="issuesDashboard({
+        initialTotals: {{ \Illuminate\Support\Js::from($totals) }},
+        categories: {{ \Illuminate\Support\Js::from($categoryDefinitions) }},
+        initialLevels: {{ \Illuminate\Support\Js::from($categoryLevels) }},
+        updateLevelUrl: '{{ route('issues.category-level.update') }}',
+        updateAllLevelsUrl: '{{ route('issues.category-levels.update') }}',
+        resetLevelsUrl: '{{ route('issues.category-levels.reset') }}',
+        csrfToken: '{{ csrf_token() }}'
+    })">
+        <x-page-header :title="'Issues'">
+            <x-slot:subtitle>
+                @if ($totals['all'] === 0)
+                    <span>All clear across the fleet.</span>
+                @else
+                    <span>
+                        <span x-text="visibleItemsCount">{{ $totals['all'] }}</span> of {{ $totals['all'] }} {{ Str::plural('item', $totals['all']) }} shown
+                        <span x-show="disabledCategoriesCount > 0" class="text-slate-400 font-medium ml-1" x-cloak>
+                            (<span x-text="disabledItemsCount"></span> muted across <span x-text="disabledCategoriesCount"></span> <span x-text="disabledCategoriesCount === 1 ? 'category' : 'categories'"></span>)
+                        </span>
+                        <span x-show="hiddenItemsCount > 0" class="text-[var(--color-status-yellow)] font-medium ml-1" x-cloak>
+                            (<span x-text="hiddenItemsCount"></span> hidden)
+                        </span>
+                        <span class="text-[var(--color-ink-soft)] font-normal text-xs ml-1">
+                            · <span class="text-[var(--color-status-red)] font-semibold"><span x-text="pressingItemsCount"></span> pressing</span>
+                            · <span class="text-[var(--color-status-yellow)]"><span x-text="notPressingItemsCount"></span> routine</span>
+                        </span>
+                    </span>
+                @endif
+            </x-slot:subtitle>
+            <x-slot:actions>
+                <div class="flex items-center gap-2 flex-wrap text-sm">
+                    @foreach ($categoryDefinitions as $catKey => $cat)
+                        @if (($totals[$catKey] ?? 0) > 0)
+                            <a href="#{{ $cat['html_id'] }}"
+                               x-show="isCategoryVisible('{{ $catKey }}') && (tierTab === 'all' || tierTab === '{{ $cat['tier'] }}')"
+                               class="status-pill {{ $cat['class'] }}">
+                                <span class="status-dot"></span>
+                                {{ $cat['label'] }} {{ $totals[$catKey] }}
+                            </a>
+                        @endif
+                    @endforeach
+                    <button type="button"
+                            @click="prioritiesModalOpen = true"
+                            class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer"
+                            title="Configure alert priorities or mute categories fleet-wide">
+                        <i class="fa-solid fa-sliders text-[var(--color-brand)]"></i>
+                        <span>Priorities</span>
+                        <span x-show="disabledCategoriesCount > 0"
+                              x-cloak
+                              x-text="disabledCategoriesCount + ' off'"
+                              class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-500/20 text-[var(--color-ink-soft)] font-mono font-semibold"></span>
+                    </button>
+                    <a href="{{ route('issues.index') }}"
+                       class="btn-pill-nav inline-flex items-center gap-1.5"
+                       title="Loaded {{ now()->format('g:i:s a') }}"
+                       onclick="this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
+                    </a>
+                </div>
+            </x-slot:actions>
+        </x-page-header>
+
+        {{-- TOOLBAR: Tier Filters + Categories Visibility Dropdown + Collapse All --}}
+        <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+            {{-- Priority Filter Pills (Pressing vs Routine vs All) --}}
+            <div class="flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs md:text-sm">
+                <button type="button"
+                        @click="setPriorityFilter('all')"
+                        :class="priorityFilter === 'all' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1 cursor-pointer">
+                    <span>All Active</span>
+                </button>
+                <button type="button"
+                        @click="setPriorityFilter('pressing')"
+                        :class="priorityFilter === 'pressing' ? 'bg-[var(--color-surface)] text-[var(--color-status-red)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Show only urgent / pressing alert categories">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-red)]"></span>
+                    <span>Pressing</span>
+                    <span class="px-1.5 py-0.2 rounded-full text-xs font-mono"
+                          :class="pressingItemsCount > 0 ? 'bg-red-500/15 text-[var(--color-status-red)] font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]'"
+                          x-text="pressingItemsCount"></span>
+                </button>
+                <button type="button"
+                        @click="setPriorityFilter('not_pressing')"
+                        :class="priorityFilter === 'not_pressing' ? 'bg-[var(--color-surface)] text-[var(--color-status-yellow)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Show only routine / low priority categories">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-yellow)]"></span>
+                    <span>Not Pressing</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-xs font-mono"
+                          x-text="notPressingItemsCount"></span>
+                </button>
             </div>
-        </x-slot:actions>
-    </x-page-header>
 
-    @if ($totals['all'] === 0)
-        <div class="card p-10 text-center">
-            <i class="fa-solid fa-circle-check text-5xl text-[var(--color-status-green)] mb-3"></i>
-            <p class="text-lg font-medium text-[var(--color-ink-strong)]">All clear</p>
-            <p class="text-sm text-[var(--color-ink-muted)] mt-1">
-                No SSL issues, no unhealthy servers, no provisioning gaps, no missing DB creds.
-            </p>
+            {{-- Tier filter pills --}}
+            <div class="flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs md:text-sm">
+                <button type="button"
+                        @click="setTier('all')"
+                        :class="tierTab === 'all' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer">
+                    <span>All Issues</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-xs font-mono">{{ $totals['all'] }}</span>
+                </button>
+                <button type="button"
+                        @click="setTier('critical')"
+                        :class="tierTab === 'critical' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-red)]"></span>
+                    <span>Critical & Security</span>
+                    <span class="px-1.5 py-0.2 rounded-full {{ $tierTotals['critical'] > 0 ? 'bg-red-500/15 text-[var(--color-status-red)] font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]' }} text-xs font-mono">{{ $tierTotals['critical'] }}</span>
+                </button>
+                <button type="button"
+                        @click="setTier('infrastructure')"
+                        :class="tierTab === 'infrastructure' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-yellow)]"></span>
+                    <span>Infrastructure</span>
+                    <span class="px-1.5 py-0.2 rounded-full {{ $tierTotals['infrastructure'] > 0 ? 'bg-amber-500/15 text-[var(--color-status-yellow)] font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]' }} text-xs font-mono">{{ $tierTotals['infrastructure'] }}</span>
+                </button>
+                <button type="button"
+                        @click="setTier('routine')"
+                        :class="tierTab === 'routine' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                        class="px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Outdated plugins, closed plugins, and routine admin audits">
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span>Routine</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-xs font-mono">{{ $tierTotals['routine'] }}</span>
+                </button>
+            </div>
+
+            {{-- Right tools: Priorities Modal + Categories Filter dropdown + Collapse All toggle --}}
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        @click="prioritiesModalOpen = true"
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        :class="disabledCategoriesCount > 0 ? 'border-amber-500/50 text-amber-500 ring-1 ring-amber-500/20' : ''"
+                        title="Configure category alert priorities or mute categories fleet-wide">
+                    <i class="fa-solid fa-sliders text-[var(--color-brand)]"></i>
+                    <span>Priorities</span>
+                    <span x-show="disabledCategoriesCount > 0"
+                          x-cloak
+                          x-text="disabledCategoriesCount + ' muted'"
+                          class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-500/20 text-[var(--color-ink-soft)] font-semibold font-mono"></span>
+                </button>
+                {{-- Category Visibility Dropdown --}}
+                <div class="relative" @click.outside="categoriesOpen = false">
+                    <button type="button"
+                            @click="categoriesOpen = !categoriesOpen"
+                            class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                            :class="hiddenCategoriesCount > 0 ? 'border-[var(--color-brand)] text-[var(--color-brand)] ring-1 ring-[var(--color-brand)]/20' : ''"
+                            title="Show or hide individual categories. Preferences saved in browser.">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Categories</span>
+                        <span x-show="hiddenCategoriesCount > 0"
+                              x-cloak
+                              x-text="hiddenCategoriesCount + ' hidden'"
+                              class="px-1.5 py-0.2 text-[10px] rounded-full bg-amber-500/20 text-[var(--color-status-yellow)] font-semibold"></span>
+                        <i class="fa-solid fa-chevron-down text-[10px] ml-0.5 opacity-60"></i>
+                    </button>
+
+                    <div x-show="categoriesOpen"
+                         x-transition.opacity.duration.100ms
+                         x-cloak
+                         class="absolute right-0 mt-2 w-80 rounded-[var(--radius-card)] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-xl py-2.5 z-40 max-h-[32rem] overflow-y-auto">
+                        <div class="px-4 py-1.5 flex items-center justify-between border-b border-[var(--color-border-light)] pb-2 mb-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">Filter Categories</span>
+                            <div class="flex items-center gap-2 text-xs">
+                                <button type="button"
+                                        @click="hideRoutine()"
+                                        class="text-[var(--color-brand)] hover:underline font-medium cursor-pointer"
+                                        title="Hide outdated plugins, closed plugins, and WP admins">
+                                    Hide routine
+                                </button>
+                                <span class="text-[var(--color-border-light)]">·</span>
+                                <button type="button"
+                                        @click="showAllCategories()"
+                                        class="text-[var(--color-ink-muted)] hover:underline cursor-pointer">
+                                    Show all
+                                </button>
+                                <span class="text-[var(--color-border-light)]">·</span>
+                                <button type="button"
+                                        @click="resetCategories()"
+                                        class="text-[var(--color-ink-muted)] hover:underline cursor-pointer">
+                                    Reset
+                                </button>
+                            </div>
+                        </div>
+
+                        @foreach (['critical' => 'Critical & Security', 'infrastructure' => 'Infrastructure & Gaps', 'routine' => 'Routine Maintenance'] as $tierKey => $tierTitle)
+                            <div class="px-3 py-1 text-[10px] uppercase font-semibold tracking-wider text-[var(--color-ink-soft)] bg-[var(--color-surface-alt)]/60 mt-1.5 mb-1">
+                                {{ $tierTitle }}
+                            </div>
+                            @foreach ($categoryDefinitions as $catKey => $cat)
+                                @if ($cat['tier'] === $tierKey)
+                                    <label class="flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-[var(--color-surface-alt)] transition-colors">
+                                        <div class="flex items-center gap-2 truncate">
+                                            <input type="checkbox"
+                                                   :checked="isCategoryVisible('{{ $catKey }}')"
+                                                   @change="toggleCategory('{{ $catKey }}')"
+                                                   class="cursor-pointer accent-[var(--color-primary-600)] rounded" />
+                                            <i class="fa-solid {{ $cat['icon'] }} text-xs opacity-70 w-4 text-center"></i>
+                                            <span class="text-xs text-[var(--color-ink-strong)] truncate">{{ $cat['label'] }}</span>
+                                        </div>
+                                        @if (($totals[$catKey] ?? 0) > 0)
+                                            <span class="status-pill {{ $cat['class'] }} text-[10px] px-1.5 py-0.2">
+                                                {{ $totals[$catKey] }}
+                                            </span>
+                                        @else
+                                            <span class="text-[10px] text-[var(--color-ink-soft)]">0</span>
+                                        @endif
+                                    </label>
+                                @endif
+                            @endforeach
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- Collapse / Expand All button --}}
+                <button type="button"
+                        @click="toggleCollapseAll()"
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        :title="isAllCollapsed ? 'Expand all section cards' : 'Collapse all section cards into compact headers'">
+                    <i class="fa-solid" :class="isAllCollapsed ? 'fa-angles-down' : 'fa-angles-up'"></i>
+                    <span x-text="isAllCollapsed ? 'Expand all' : 'Collapse all'"></span>
+                </button>
+            </div>
         </div>
-    @endif
 
-    {{-- SCHEDULER HEARTBEAT — if this is stale, every other monitor is lying --}}
+        @if ($totals['all'] === 0)
+            <div class="card p-10 text-center">
+                <i class="fa-solid fa-circle-check text-5xl text-[var(--color-status-green)] mb-3"></i>
+                <p class="text-lg font-medium text-[var(--color-ink-strong)]">All clear</p>
+                <p class="text-sm text-[var(--color-ink-muted)] mt-1">
+                    No SSL issues, no unhealthy servers, no provisioning gaps, no missing DB creds.
+                </p>
+            </div>
+        @endif
+
+        {{-- Tab Empty States --}}
+        <div x-show="tierTab === 'critical' && {{ $tierTotals['critical'] }} === 0" class="card p-8 text-center mb-6" x-cloak>
+            <i class="fa-solid fa-circle-check text-4xl text-[var(--color-status-green)] mb-2"></i>
+            <p class="font-medium text-[var(--color-ink-strong)]">No critical issues</p>
+            <p class="text-xs text-[var(--color-ink-muted)] mt-1">All sites and servers are operating normally with no active emergencies.</p>
+        </div>
+        <div x-show="tierTab === 'infrastructure' && {{ $tierTotals['infrastructure'] }} === 0" class="card p-8 text-center mb-6" x-cloak>
+            <i class="fa-solid fa-circle-check text-4xl text-[var(--color-status-green)] mb-2"></i>
+            <p class="font-medium text-[var(--color-ink-strong)]">Infrastructure healthy</p>
+            <p class="text-xs text-[var(--color-ink-muted)] mt-1">No provisioning gaps, reboots, or server metric alerts.</p>
+        </div>
+        <div x-show="tierTab === 'routine' && {{ $tierTotals['routine'] }} === 0" class="card p-8 text-center mb-6" x-cloak>
+            <i class="fa-solid fa-circle-check text-4xl text-[var(--color-status-green)] mb-2"></i>
+            <p class="font-medium text-[var(--color-ink-strong)]">Up to date</p>
+            <p class="text-xs text-[var(--color-ink-muted)] mt-1">All plugins and admin accounts are up to date and clean.</p>
+        </div>
+
+        {{-- All Hidden Empty State --}}
+        <div x-show="visibleItemsCount === 0 && {{ $totals['all'] }} > 0" class="card p-8 text-center mb-6" x-cloak>
+            <i class="fa-solid fa-filter text-4xl text-[var(--color-ink-muted)] mb-2"></i>
+            <p class="font-medium text-[var(--color-ink-strong)]">All active categories are hidden</p>
+            <p class="text-xs text-[var(--color-ink-muted)] mt-1">You have hidden categories that contain all {{ $totals['all'] }} current issues.</p>
+            <button type="button" @click="showAllCategories()" class="btn-pill-nav text-xs mt-3 inline-flex items-center gap-1 cursor-pointer">
+                <i class="fa-solid fa-eye mr-1"></i> Show all categories
+            </button>
+        </div>
+
+        {{-- =========================================================================
+             TIER 1: CRITICAL & SECURITY
+             ========================================================================= --}}
+        <div x-show="(tierTab === 'all' || tierTab === 'critical') && hasVisibleCategoryInTier('critical')"
+             class="mb-3 flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] pb-2 pt-1">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-status-red)]"></span>
+                <h3 class="font-display text-xs uppercase tracking-wider font-semibold text-[var(--color-status-red)]">
+                    Critical & Security
+                </h3>
+            </div>
+            <span class="text-xs text-[var(--color-ink-muted)] font-medium font-mono">{{ $tierTotals['critical'] }} total</span>
+        </div>
+
+        {{-- SCHEDULER HEARTBEAT — if this is stale, every other monitor is lying --}}
     @if ($schedulerHeartbeat->isStale())
-        <section id="section-scheduler_stale" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div class="px-5 py-4 flex items-start justify-between gap-4">
+        <section id="section-scheduler_stale" x-show="isCategoryVisible('scheduler_stale') && matchesTier('critical')" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
+            <div @click="toggleSection('scheduler_stale')" class="px-5 py-4 flex items-start justify-between gap-4 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-clock text-[var(--color-status-red)] mr-2"></i>
@@ -86,14 +515,21 @@
                     </p>
                 </div>
                 <span class="status-pill status-red">1</span>
+                <x-issue-priority-menu :category="'scheduler_stale'"/>
+            
+                    <button type="button" @click.stop="toggleSection('scheduler_stale')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('scheduler_stale') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('scheduler_stale') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('scheduler_stale')">
+        </div>
         </section>
     @endif
 
-    {{-- MALWARE / BLACKLIST (Sucuri SiteCheck) --}}
+        {{-- MALWARE / BLACKLIST (Sucuri SiteCheck) --}}
     @if ($malwareHits->isNotEmpty())
-        <section id="section-malware" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-malware" x-show="isCategoryVisible('malware') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-bug text-[var(--color-status-red)] mr-2"></i>
@@ -102,7 +538,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest Sucuri SiteCheck flagged the site as compromised or on a public blacklist.</p>
                 </div>
                 <span class="status-pill status-red">{{ $malwareHits->count() }}</span>
+                <x-issue-priority-menu :category="'malware'"/>
+            
+                    <button type="button" @click.stop="toggleSection('malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('malware') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('malware') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('malware')">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -134,13 +576,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- COMPANION MALWARE FINDINGS (PHP-in-uploads + obfuscation signatures, scanned on-site) --}}
+        {{-- COMPANION MALWARE FINDINGS (PHP-in-uploads + obfuscation signatures, scanned on-site) --}}
     @if ($companionMalwareFindings->isNotEmpty())
-        <section id="section-companion_malware" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-companion_malware" x-show="isCategoryVisible('companion_malware') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('companion_malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-file-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
@@ -149,7 +592,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest Companion file scan flagged PHP in uploads or obfuscation/webshell signatures. Clients see the same result on their wp-admin Security page — get there first.</p>
                 </div>
                 <span class="status-pill status-red">{{ $companionMalwareFindings->count() }}</span>
+                <x-issue-priority-menu :category="'companion_malware'"/>
+            
+                    <button type="button" @click.stop="toggleSection('companion_malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('companion_malware') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('companion_malware') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('companion_malware')">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -178,13 +627,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- CORE FILE TAMPERING (wp core verify-checksums) --}}
+        {{-- CORE FILE TAMPERING (wp core verify-checksums) --}}
     @if ($checksumTampering->isNotEmpty())
-        <section id="section-tampering" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-tampering" x-show="isCategoryVisible('tampering') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('tampering')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-status-red)] mr-2"></i>
@@ -193,7 +643,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest <code class="font-data">wp core verify-checksums</code> flagged modified, missing, or unexpected core files.</p>
                 </div>
                 <span class="status-pill status-red">{{ $checksumTampering->count() }}</span>
+                <x-issue-priority-menu :category="'tampering'"/>
+            
+                    <button type="button" @click.stop="toggleSection('tampering')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('tampering') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('tampering') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('tampering')">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -222,13 +678,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- SITES CURRENTLY DOWN — real outages outrank everything below --}}
+        {{-- SITES CURRENTLY DOWN — real outages outrank everything below --}}
     @if ($downSites->isNotEmpty())
-        <section id="section-down-sites" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-down-sites" x-show="isCategoryVisible('down_sites') && matchesTier('critical')" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
+            <div @click="toggleSection('down_sites')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
@@ -237,7 +694,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">HTTP probe failed 2+ times in a row. Mattermost was alerted at the transition.</p>
                 </div>
                 <span class="status-pill status-red">{{ $downSites->count() }}</span>
+                <x-issue-priority-menu :category="'down_sites'"/>
+            
+                    <button type="button" @click.stop="toggleSection('down_sites')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('down_sites') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('down_sites') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('down_sites')">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -319,13 +782,14 @@
                     });
                 })();
             </script>
+        </div>
         </section>
     @endif
 
-    {{-- STUCK MAINTENANCE — forgotten windows, not outages --}}
+        {{-- STUCK MAINTENANCE — forgotten windows, not outages --}}
     @if ($stuckMaintenanceSites->isNotEmpty())
-        <section id="section-stuck_maintenance" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-stuck_maintenance" x-show="isCategoryVisible('stuck_maintenance') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('stuck_maintenance')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-wrench text-[var(--color-status-yellow)] mr-2"></i>
@@ -334,7 +798,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Likely a forgotten maintenance plugin or an update that never finished. Outage alerts stay suppressed until the site comes back up.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $stuckMaintenanceSites->count() }}</span>
+                <x-issue-priority-menu :category="'stuck_maintenance'"/>
+            
+                    <button type="button" @click.stop="toggleSection('stuck_maintenance')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('stuck_maintenance') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('stuck_maintenance') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('stuck_maintenance')">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -361,170 +831,308 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    @if ($flaggedAdminSites->isNotEmpty() || $ignoredAdminIssues->isNotEmpty())
-        <section id="section-wp_admins" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+        {{-- HEALTH --}}
+    @if ($unhealthyServers->isNotEmpty())
+        <section id="section-health" x-show="isCategoryVisible('health') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('health')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-user-shield text-amber-600 mr-2"></i>
-                        Flagged WordPress administrators
+                        <i class="fa-solid fa-heart-pulse text-[var(--color-status-red)] mr-2"></i>
+                        Server health
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
-                        Default <code>admin</code> logins, or emails outside the approved allowlist.
-                        <a href="{{ route('security.admins') }}" class="text-[var(--color-primary-600)] hover:underline">Open fleet directory</a>
-                    </p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Servers reporting status=red from the DigitalOcean poller.</p>
                 </div>
+                <span class="status-pill status-red">{{ $unhealthyServers->count() }}</span>
+                <x-issue-priority-menu :category="'health'"/>
+            
+                    <button type="button" @click.stop="toggleSection('health')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('health') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('health') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
-            @if ($flaggedAdminSites->isNotEmpty())
-                <table class="w-full text-sm">
-                    <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                        <tr>
-                            <th class="px-5 py-2 text-left">Site</th>
-                            <th class="px-5 py-2 text-left">Server</th>
-                            <th class="px-5 py-2 text-right"></th>
+            <div x-show="!isSectionCollapsed('health')">
+            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
+                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                    <tr>
+                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                        <x-sort-th key="polled" class="px-5 py-2">Last polled</x-sort-th>
+                        <x-sort-th key="alert" class="px-5 py-2">Last alert</x-sort-th>
+                        <th class="px-5 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--color-border-light)]">
+                    @foreach ($unhealthyServers as $s)
+                        <tr
+                            data-sort-server="{{ $s->name }}"
+                            data-sort-polled="{{ $s->last_polled_at?->getTimestamp() ?? '' }}"
+                            data-sort-alert="{{ $s->last_alert_at?->getTimestamp() ?? '' }}">
+                            <td class="px-5 py-2 font-data">
+                                <a href="{{ route('servers.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->name }}</a>
+                            </td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-polled">{{ $s->last_polled_at?->diffForHumans() ?? '—' }}</td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $s->last_alert_at?->diffForHumans() ?? '—' }}</td>
+                            <td class="px-5 py-2 text-right">
+                                @if ($s->provider_id)
+                                    <button type="button"
+                                            class="health-recheck-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50"
+                                            data-url="{{ route('servers.recheck-health', $s) }}">
+                                        <i class="fa-solid fa-rotate"></i> Recheck
+                                    </button>
+                                @endif
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[var(--color-border-light)]">
-                        @foreach ($flaggedAdminSites as $site)
-                            <tr>
-                                <td class="px-5 py-2">
-                                    <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
-                                </td>
-                                <td class="px-5 py-2 text-[var(--color-ink-muted)]">{{ $site->server?->name ?? '—' }}</td>
-                                <td class="px-5 py-2 text-right">
-                                    <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
-                                        @csrf
-                                        <input type="hidden" name="issue_type" value="wp_admin_flagged">
-                                        <input type="hidden" name="site_id" value="{{ $site->id }}">
-                                        <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:underline">Ignore site</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            @endif
-            @if ($ignoredAdminIssues->isNotEmpty())
-                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)]">
-                    {{ $ignoredAdminIssues->count() }} site(s) acknowledged.
-                    @foreach ($ignoredAdminIssues as $ignored)
-                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline ml-2">
-                            @csrf
-                            <button type="submit" class="hover:underline">Restore {{ $ignored->site?->domain }}</button>
-                        </form>
                     @endforeach
-                </div>
-            @endif
+                </tbody>
+            </table>
+
+            <script>
+                (function () {
+                    const csrf = '{{ csrf_token() }}';
+                    document.querySelectorAll('#section-health .health-recheck-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const row = btn.closest('tr');
+                            const original = btn.innerHTML;
+                            btn.disabled = true;
+                            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                            try {
+                                const r = await fetch(btn.dataset.url, {
+                                    method: 'POST',
+                                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                                });
+                                const data = await r.json();
+                                if (data.ok) {
+                                    if (data.status === 'green' || data.status === 'yellow') {
+                                        row.style.transition = 'opacity 400ms';
+                                        row.style.opacity = '0';
+                                        setTimeout(() => row.remove(), 450);
+                                    } else {
+                                        row.querySelector('.cell-polled').textContent = data.last_polled ?? 'just now';
+                                        btn.innerHTML = original;
+                                        btn.disabled = false;
+                                    }
+                                } else {
+                                    btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-[var(--color-status-red)]"></i>';
+                                    btn.title = data.error ?? 'Poll failed';
+                                    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
+                                }
+                            } catch (e) {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        });
+                    });
+                })();
+            </script>
+        </div>
         </section>
     @endif
 
-    {{-- CLOSED PLUGINS ON WORDPRESS.ORG --}}
-    @if ($closedPluginSites->isNotEmpty() || $ignoredClosedPluginIssues->isNotEmpty())
-        <section id="section-plugins_closed" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+        {{-- FORM TESTING FAILING --}}
+    @if ($failedFormTests->isNotEmpty())
+        <section id="section-forms_failing" x-show="isCategoryVisible('forms_failing') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('forms_failing')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-box-archive text-amber-600 mr-2"></i>
-                        Plugins closed on WordPress.org
+                        <i class="fa-solid fa-envelope-circle-check text-[var(--color-status-red)] mr-2"></i>
+                        Contact form failing
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
-                        Active plugins removed or closed in the official WordPress plugin directory. Closed plugins receive no updates or security patches.
-                    </p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Care-plan sites with contact-form testing on whose daily test has failed two or more runs in a row. Mattermost was pinged on the second failure.</p>
                 </div>
+                <span class="status-pill status-red">{{ $failedFormTests->count() }}</span>
+                <x-issue-priority-menu :category="'forms_failing'"/>
+            
+                    <button type="button" @click.stop="toggleSection('forms_failing')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('forms_failing') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('forms_failing') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
-            @if ($closedPluginSites->isNotEmpty())
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                            <tr>
-                                <th class="px-5 py-2.5 text-left">Site</th>
-                                <th class="px-5 py-2.5 text-left">Server</th>
-                                <th class="px-5 py-2.5 text-left">Closed Plugin</th>
-                                <th class="px-5 py-2.5 text-left">Closure Detail</th>
-                                <th class="px-5 py-2.5 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[var(--color-border-light)]">
-                            @foreach ($closedPluginSites as $site)
-                                @php
-                                    $siteFindings = $closedPluginFindingsBySiteId[$site->id] ?? [];
-                                @endphp
-                                @foreach ($siteFindings as $finding)
-                                    <tr class="hover:bg-[var(--color-surface-hover)] transition-colors">
-                                        <td class="px-5 py-3 font-medium">
-                                            <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
-                                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-[var(--color-ink-muted)]"></i>
-                                                {{ $site->domain }}
-                                            </a>
-                                        </td>
-                                        <td class="px-5 py-3 text-[var(--color-ink-muted)]">
-                                            {{ $site->server?->name ?? 'Standalone' }}
-                                        </td>
-                                        <td class="px-5 py-3">
-                                            <div class="font-medium text-[var(--color-ink-strong)]">
-                                                {{ $finding['name'] }}
-                                            </div>
-                                            <div class="text-xs text-[var(--color-ink-muted)] flex items-center gap-2 mt-0.5">
-                                                <code>{{ $finding['slug'] }}</code>
-                                                @if (! empty($finding['version']))
-                                                    <span>v{{ $finding['version'] }}</span>
-                                                @endif
-                                            </div>
-                                        </td>
-                                        <td class="px-5 py-3 text-xs max-w-md">
-                                            @if (! empty($finding['reason']))
-                                                <div class="text-[var(--color-ink-soft)] line-clamp-2" title="{{ $finding['reason'] }}">
-                                                    {{ $finding['reason'] }}
-                                                </div>
-                                            @else
-                                                <span class="text-[var(--color-ink-muted)] italic">No closure reason provided by WordPress.org</span>
-                                            @endif
-                                            @if (! empty($finding['closed_date']))
-                                                <div class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">
-                                                    Closed: {{ $finding['closed_date'] }}
-                                                </div>
-                                            @endif
-                                        </td>
-                                        <td class="px-5 py-3 text-right">
-                                            <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
-                                                @csrf
-                                                <input type="hidden" name="issue_type" value="plugin_closed">
-                                                <input type="hidden" name="site_id" value="{{ $site->id }}">
-                                                <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:underline" title="Suppress closed plugin warning for {{ $site->domain }}">
-                                                    Ignore site
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-            @if ($ignoredClosedPluginIssues->isNotEmpty())
-                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] bg-[var(--color-surface-alt)] flex items-center flex-wrap gap-2">
-                    <span class="font-medium">{{ $ignoredClosedPluginIssues->count() }} site(s) ignored:</span>
-                    @foreach ($ignoredClosedPluginIssues as $ignored)
-                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline">
-                            @csrf
-                            <button type="submit" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-border-strong)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors">
-                                <span>{{ $ignored->site?->domain ?? 'Site #' . $ignored->site_id }}</span>
-                                <i class="fa-solid fa-rotate-left text-[10px]"></i>
-                            </button>
-                        </form>
+            <div x-show="!isSectionCollapsed('forms_failing')">
+            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
+                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                    <tr>
+                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
+                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                        <x-sort-th key="plugin" class="px-5 py-2">Plugin</x-sort-th>
+                        <x-sort-th key="streak" align="right" class="px-5 py-2">Streak</x-sort-th>
+                        <x-sort-th key="last_test" class="px-5 py-2">Last test</x-sort-th>
+                        <x-sort-th key="error" class="px-5 py-2">Error</x-sort-th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--color-border-light)]">
+                    @foreach ($failedFormTests as $cft)
+                        @php $s = $cft->site; @endphp
+                        <tr
+                            data-sort-site="{{ $s->domain }}"
+                            data-sort-server="{{ $s->server?->name ?? '' }}"
+                            data-sort-plugin="{{ $cft->form_plugin }}"
+                            data-sort-streak="{{ $cft->failure_streak }}"
+                            data-sort-last_test="{{ $cft->last_test_at?->getTimestamp() ?? '' }}"
+                            data-sort-error="{{ $cft->last_test_error }}">
+                            <td class="px-5 py-2 font-data">
+                                <a href="{{ route('sites.show', ['site' => $s, 'tab' => 'forms']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                                <span class="text-[10px] text-[var(--color-ink-soft)] ml-1">{{ $cft->form_id }}</span>
+                            </td>
+                            <td class="px-5 py-2 text-xs font-data">
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
+                            </td>
+                            <td class="px-5 py-2 text-xs">{{ $cft->form_plugin }}</td>
+                            <td class="px-5 py-2 text-right text-xs font-data">{{ $cft->failure_streak }}</td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $cft->last_test_at?->diffForHumans() ?? '—' }}</td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] truncate max-w-xs" title="{{ $cft->last_test_error }}">{{ \Illuminate\Support\Str::limit($cft->last_test_error, 80) }}</td>
+                        </tr>
                     @endforeach
-                </div>
-            @endif
+                </tbody>
+            </table>
+        </div>
         </section>
     @endif
 
-    {{-- SEO INDEXABILITY --}}
+        {{-- SSL --}}
+    @if ($sslIssues->isNotEmpty())
+        @php
+            // Orange cloud = CF proxy on (origin cert may be cosmetic — visitors see CF's edge cert).
+            // Gray cloud = CF DNS only, proxy off (origin cert is what users see, matters fully).
+            // No icon = not on Cloudflare at all (origin cert matters fully).
+            $renderCfIcon = function (?string $state) {
+                return match ($state) {
+                    'proxied' => '<i class="fa-solid fa-cloud" style="color: #F38020" title="Cloudflare proxy active — visitors see CF edge cert, not origin"></i>',
+                    'dns_only' => '<i class="fa-solid fa-cloud text-[var(--color-ink-soft)]" title="On Cloudflare DNS but proxy is OFF — origin cert is user-facing"></i>',
+                    default => '',
+                };
+            };
+        @endphp
+        <section id="section-ssl" x-show="isCategoryVisible('ssl') && matchesTier('critical')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('ssl')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-lock-open text-[var(--color-ink-muted)] mr-2"></i>
+                        SSL certificates
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Yellow = renewal window passed without rollover · Red = already expired. <i class="fa-solid fa-cloud" style="color: #F38020"></i> = on Cloudflare with proxy active · <i class="fa-solid fa-cloud text-[var(--color-ink-soft)]"></i> = on Cloudflare DNS only.</p>
+                </div>
+                <span class="status-pill status-yellow">{{ $sslIssues->count() }}</span>
+                <x-issue-priority-menu :category="'ssl'"/>
+            
+                    <button type="button" @click.stop="toggleSection('ssl')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('ssl') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('ssl') ? 'rotate-180' : ''"></i>
+                    </button>
+            </div>
+            <div x-show="!isSectionCollapsed('ssl')">
+            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
+                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                    <tr>
+                        <th class="w-8 px-3 py-2"></th>
+                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
+                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                        <x-sort-th key="state" class="px-5 py-2">State</x-sort-th>
+                        <x-sort-th key="expires" class="px-5 py-2">Expires</x-sort-th>
+                        <x-sort-th key="source" class="px-5 py-2">Source</x-sort-th>
+                        <th class="px-5 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--color-border-light)]">
+                    @foreach ($sslIssues as $s)
+                        @php
+                            $state = $s->sslState();
+                            $stateClass = $state === 'red' ? 'status-red' : 'status-yellow';
+                            $stateLabel = $state === 'red' ? 'Expired' : 'Renewal needed';
+                        @endphp
+                        <tr data-site-row="{{ $s->id }}"
+                            data-sort-site="{{ $s->domain }}"
+                            data-sort-server="{{ $s->server?->name ?? '' }}"
+                            data-sort-state="{{ $state }}"
+                            data-sort-expires="{{ $s->cert_expires_at?->getTimestamp() ?? '' }}"
+                            data-sort-source="{{ $s->cert_source }}">
+                            <td class="px-3 py-2 text-center">
+                                {!! $renderCfIcon($s->cloudflare_state) !!}
+                            </td>
+                            <td class="px-5 py-2 font-data">
+                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                            </td>
+                            <td class="px-5 py-2 text-xs font-data">
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                @endif
+                            </td>
+                            <td class="px-5 py-2 cell-state">
+                                <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
+                            </td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-expires">
+                                {{ $s->cert_expires_at?->format('M j, Y') }}
+                                <span class="text-[var(--color-ink-soft)]">({{ $s->cert_expires_at?->diffForHumans() }})</span>
+                            </td>
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data">{{ $s->cert_source }}</td>
+                            <td class="px-5 py-2 text-right">
+                                <button type="button"
+                                        class="recheck-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50"
+                                        data-url="{{ route('sites.cert.recheck', $s) }}">
+                                    <i class="fa-solid fa-rotate"></i> Recheck
+                                </button>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+
+            <script>
+                (function () {
+                    const csrf = '{{ csrf_token() }}';
+                    document.querySelectorAll('#section-ssl .recheck-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const row = btn.closest('tr');
+                            const original = btn.innerHTML;
+                            btn.disabled = true;
+                            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                            try {
+                                const r = await fetch(btn.dataset.url, {
+                                    method: 'POST',
+                                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                                });
+                                const data = await r.json();
+                                if (data.ok) {
+                                    if (data.state === 'green' || data.state === 'none') {
+                                        row.style.transition = 'opacity 400ms';
+                                        row.style.opacity = '0';
+                                        setTimeout(() => row.remove(), 450);
+                                    } else {
+                                        const cls = data.state === 'red' ? 'status-red' : 'status-yellow';
+                                        const label = data.state === 'red' ? 'Expired' : 'Renewal needed';
+                                        const pill = document.createElement('span');
+                                        pill.className = `status-pill ${cls} text-[10px]`;
+                                        pill.textContent = label;
+                                        const stateCell = row.querySelector('.cell-state');
+                                        stateCell.textContent = '';
+                                        stateCell.appendChild(pill);
+                                        if (data.expires_at) {
+                                            row.querySelector('.cell-expires').textContent =
+                                                new Date(data.expires_at).toLocaleString();
+                                        }
+                                        btn.innerHTML = original;
+                                        btn.disabled = false;
+                                    }
+                                } else {
+                                    btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> ' + (data.message || 'Failed');
+                                    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
+                                }
+                            } catch (e) {
+                                btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                                setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
+                            }
+                        });
+                    });
+                })();
+            </script>
+        </div>
+        </section>
+    @endif
+
+        {{-- SEO INDEXABILITY --}}
     @if ($seoIssues->isNotEmpty() || $ignoredSeoIssues->isNotEmpty())
-        <section id="section-seo-indexability" class="card overflow-hidden mb-6" x-data="{
+        <section id="section-seo-indexability" x-show="isCategoryVisible('seo-indexability') && matchesTier('critical')" class="card overflow-hidden mb-6" x-data="{
             activeTab: 'active',
             ignoreModalOpen: false,
             targetSiteId: null,
@@ -537,7 +1145,7 @@
                 this.ignoreModalOpen = true;
             }
         }">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+            <div @click="toggleSection('seo-indexability')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-magnifying-glass text-[var(--color-status-red)] mr-2"></i>
@@ -571,7 +1179,13 @@
                         </button>
                     </div>
                 </div>
+                <x-issue-priority-menu :category="'seo-indexability'"/>
+            
+                    <button type="button" @click.stop="toggleSection('seo-indexability')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('seo-indexability') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('seo-indexability') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('seo-indexability')">
 
             {{-- ACTIVE SEO ISSUES TABLE --}}
             <div x-show="activeTab === 'active'">
@@ -873,101 +1487,28 @@
                     });
                 })();
             </script>
+        </div>
         </section>
     @endif
 
-    {{-- HEALTH --}}
-    @if ($unhealthyServers->isNotEmpty())
-        <section id="section-health" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
-                <div>
-                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-heart-pulse text-[var(--color-status-red)] mr-2"></i>
-                        Server health
-                    </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Servers reporting status=red from the DigitalOcean poller.</p>
-                </div>
-                <span class="status-pill status-red">{{ $unhealthyServers->count() }}</span>
+        {{-- =========================================================================
+             TIER 2: INFRASTRUCTURE & SERVER HEALTH
+             ========================================================================= --}}
+        <div x-show="(tierTab === 'all' || tierTab === 'infrastructure') && hasVisibleCategoryInTier('infrastructure')"
+             class="mb-3 mt-8 flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] pb-2">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-status-yellow)]"></span>
+                <h3 class="font-display text-xs uppercase tracking-wider font-semibold text-[var(--color-status-yellow)]">
+                    Infrastructure & Server Health
+                </h3>
             </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="polled" class="px-5 py-2">Last polled</x-sort-th>
-                        <x-sort-th key="alert" class="px-5 py-2">Last alert</x-sort-th>
-                        <th class="px-5 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($unhealthyServers as $s)
-                        <tr
-                            data-sort-server="{{ $s->name }}"
-                            data-sort-polled="{{ $s->last_polled_at?->getTimestamp() ?? '' }}"
-                            data-sort-alert="{{ $s->last_alert_at?->getTimestamp() ?? '' }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('servers.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->name }}</a>
-                            </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-polled">{{ $s->last_polled_at?->diffForHumans() ?? '—' }}</td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $s->last_alert_at?->diffForHumans() ?? '—' }}</td>
-                            <td class="px-5 py-2 text-right">
-                                @if ($s->provider_id)
-                                    <button type="button"
-                                            class="health-recheck-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50"
-                                            data-url="{{ route('servers.recheck-health', $s) }}">
-                                        <i class="fa-solid fa-rotate"></i> Recheck
-                                    </button>
-                                @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+            <span class="text-xs text-[var(--color-ink-muted)] font-medium font-mono">{{ $tierTotals['infrastructure'] }} total</span>
+        </div>
 
-            <script>
-                (function () {
-                    const csrf = '{{ csrf_token() }}';
-                    document.querySelectorAll('#section-health .health-recheck-btn').forEach(btn => {
-                        btn.addEventListener('click', async () => {
-                            const row = btn.closest('tr');
-                            const original = btn.innerHTML;
-                            btn.disabled = true;
-                            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                            try {
-                                const r = await fetch(btn.dataset.url, {
-                                    method: 'POST',
-                                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                                });
-                                const data = await r.json();
-                                if (data.ok) {
-                                    if (data.status === 'green' || data.status === 'yellow') {
-                                        row.style.transition = 'opacity 400ms';
-                                        row.style.opacity = '0';
-                                        setTimeout(() => row.remove(), 450);
-                                    } else {
-                                        row.querySelector('.cell-polled').textContent = data.last_polled ?? 'just now';
-                                        btn.innerHTML = original;
-                                        btn.disabled = false;
-                                    }
-                                } else {
-                                    btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-[var(--color-status-red)]"></i>';
-                                    btn.title = data.error ?? 'Poll failed';
-                                    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
-                                }
-                            } catch (e) {
-                                btn.innerHTML = original;
-                                btn.disabled = false;
-                            }
-                        });
-                    });
-                })();
-            </script>
-        </section>
-    @endif
-
-    {{-- HOT --}}
+        {{-- HOT --}}
     @if ($hotServers->isNotEmpty())
-        <section id="section-hot" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-hot" x-show="isCategoryVisible('hot') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('hot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-temperature-three-quarters text-[var(--color-status-yellow)] mr-2"></i>
@@ -976,7 +1517,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">24-hour average exceeds CPU/memory/disk yellow thresholds (sustained, not spikes).</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $hotServers->count() }}</span>
+                <x-issue-priority-menu :category="'hot'"/>
+            
+                    <button type="button" @click.stop="toggleSection('hot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('hot') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('hot') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('hot')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1013,145 +1560,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- SSL --}}
-    @if ($sslIssues->isNotEmpty())
-        @php
-            // Orange cloud = CF proxy on (origin cert may be cosmetic — visitors see CF's edge cert).
-            // Gray cloud = CF DNS only, proxy off (origin cert is what users see, matters fully).
-            // No icon = not on Cloudflare at all (origin cert matters fully).
-            $renderCfIcon = function (?string $state) {
-                return match ($state) {
-                    'proxied' => '<i class="fa-solid fa-cloud" style="color: #F38020" title="Cloudflare proxy active — visitors see CF edge cert, not origin"></i>',
-                    'dns_only' => '<i class="fa-solid fa-cloud text-[var(--color-ink-soft)]" title="On Cloudflare DNS but proxy is OFF — origin cert is user-facing"></i>',
-                    default => '',
-                };
-            };
-        @endphp
-        <section id="section-ssl" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
-                <div>
-                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-lock-open text-[var(--color-ink-muted)] mr-2"></i>
-                        SSL certificates
-                    </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Yellow = renewal window passed without rollover · Red = already expired. <i class="fa-solid fa-cloud" style="color: #F38020"></i> = on Cloudflare with proxy active · <i class="fa-solid fa-cloud text-[var(--color-ink-soft)]"></i> = on Cloudflare DNS only.</p>
-                </div>
-                <span class="status-pill status-yellow">{{ $sslIssues->count() }}</span>
-            </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <th class="w-8 px-3 py-2"></th>
-                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="state" class="px-5 py-2">State</x-sort-th>
-                        <x-sort-th key="expires" class="px-5 py-2">Expires</x-sort-th>
-                        <x-sort-th key="source" class="px-5 py-2">Source</x-sort-th>
-                        <th class="px-5 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($sslIssues as $s)
-                        @php
-                            $state = $s->sslState();
-                            $stateClass = $state === 'red' ? 'status-red' : 'status-yellow';
-                            $stateLabel = $state === 'red' ? 'Expired' : 'Renewal needed';
-                        @endphp
-                        <tr data-site-row="{{ $s->id }}"
-                            data-sort-site="{{ $s->domain }}"
-                            data-sort-server="{{ $s->server?->name ?? '' }}"
-                            data-sort-state="{{ $state }}"
-                            data-sort-expires="{{ $s->cert_expires_at?->getTimestamp() ?? '' }}"
-                            data-sort-source="{{ $s->cert_source }}">
-                            <td class="px-3 py-2 text-center">
-                                {!! $renderCfIcon($s->cloudflare_state) !!}
-                            </td>
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-data">
-                                @if ($s->server)
-                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 cell-state">
-                                <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
-                            </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-expires">
-                                {{ $s->cert_expires_at?->format('M j, Y') }}
-                                <span class="text-[var(--color-ink-soft)]">({{ $s->cert_expires_at?->diffForHumans() }})</span>
-                            </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data">{{ $s->cert_source }}</td>
-                            <td class="px-5 py-2 text-right">
-                                <button type="button"
-                                        class="recheck-btn text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] disabled:opacity-50"
-                                        data-url="{{ route('sites.cert.recheck', $s) }}">
-                                    <i class="fa-solid fa-rotate"></i> Recheck
-                                </button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
-            <script>
-                (function () {
-                    const csrf = '{{ csrf_token() }}';
-                    document.querySelectorAll('#section-ssl .recheck-btn').forEach(btn => {
-                        btn.addEventListener('click', async () => {
-                            const row = btn.closest('tr');
-                            const original = btn.innerHTML;
-                            btn.disabled = true;
-                            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                            try {
-                                const r = await fetch(btn.dataset.url, {
-                                    method: 'POST',
-                                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                                });
-                                const data = await r.json();
-                                if (data.ok) {
-                                    if (data.state === 'green' || data.state === 'none') {
-                                        row.style.transition = 'opacity 400ms';
-                                        row.style.opacity = '0';
-                                        setTimeout(() => row.remove(), 450);
-                                    } else {
-                                        const cls = data.state === 'red' ? 'status-red' : 'status-yellow';
-                                        const label = data.state === 'red' ? 'Expired' : 'Renewal needed';
-                                        const pill = document.createElement('span');
-                                        pill.className = `status-pill ${cls} text-[10px]`;
-                                        pill.textContent = label;
-                                        const stateCell = row.querySelector('.cell-state');
-                                        stateCell.textContent = '';
-                                        stateCell.appendChild(pill);
-                                        if (data.expires_at) {
-                                            row.querySelector('.cell-expires').textContent =
-                                                new Date(data.expires_at).toLocaleString();
-                                        }
-                                        btn.innerHTML = original;
-                                        btn.disabled = false;
-                                    }
-                                } else {
-                                    btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> ' + (data.message || 'Failed');
-                                    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
-                                }
-                            } catch (e) {
-                                btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
-                                setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 4000);
-                            }
-                        });
-                    });
-                })();
-            </script>
-        </section>
-    @endif
-
-    {{-- DOMAIN EXPIRATION --}}
+        {{-- DOMAIN EXPIRATION --}}
     @if ($domainExpirationIssues->isNotEmpty())
-        <section id="section-domain-expiration" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-domain-expiration" x-show="isCategoryVisible('domain-expiration') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('domain-expiration')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-globe text-[var(--color-ink-muted)] mr-2"></i>
@@ -1162,7 +1578,13 @@
                     </p>
                 </div>
                 <span class="status-pill status-yellow">{{ $domainExpirationIssues->count() }}</span>
+                <x-issue-priority-menu :category="'domain-expiration'"/>
+            
+                    <button type="button" @click.stop="toggleSection('domain-expiration')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('domain-expiration') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('domain-expiration') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('domain-expiration')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1267,13 +1689,14 @@
                     });
                 })();
             </script>
+        </div>
         </section>
     @endif
 
-    {{-- CLOUDFLARE MISCONFIG --}}
+        {{-- CLOUDFLARE MISCONFIG --}}
     @if ($cfMisconfigured->isNotEmpty())
-        <section id="section-cf" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-cf" x-show="isCategoryVisible('cf') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('cf')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cloud text-yellow-500 mr-2"></i>
@@ -1284,7 +1707,13 @@
                     </p>
                 </div>
                 <span class="status-pill status-yellow">{{ $cfMisconfigured->count() }}</span>
+                <x-issue-priority-menu :category="'cf'"/>
+            
+                    <button type="button" @click.stop="toggleSection('cf')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('cf') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('cf') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('cf')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1315,10 +1744,11 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- Shared banner for any in-page server-reboot button — sits above both
+        {{-- Shared banner for any in-page server-reboot button — sits above both
          Patches Available and Reboot Required so the JS handler below can
          flash status without depending on which card is rendered. --}}
     @if ($patchesAvailable->isNotEmpty() || $rebootRequired->isNotEmpty())
@@ -1327,8 +1757,8 @@
 
     {{-- PATCHES (Server.upgrade_required — set by SpinupWP import or the daily SSH poll) --}}
     @if ($patchesAvailable->isNotEmpty())
-        <section id="section-patches" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-patches" x-show="isCategoryVisible('patches') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('patches')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
@@ -1337,7 +1767,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Non-security apt updates are pending. Security updates auto-install via unattended-upgrades.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $patchesAvailable->count() }}</span>
+                <x-issue-priority-menu :category="'patches'"/>
+            
+                    <button type="button" @click.stop="toggleSection('patches')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('patches') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('patches') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('patches')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1371,13 +1807,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- REBOOT (Server.reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
+        {{-- REBOOT (Server.reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
     @if ($rebootRequired->isNotEmpty())
-        <section id="section-reboot" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-reboot" x-show="isCategoryVisible('reboot') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('reboot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-power-off text-[var(--color-ink-muted)] mr-2"></i>
@@ -1386,7 +1823,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">A kernel or system update has been applied; the server is running an old image until rebooted.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $rebootRequired->count() }}</span>
+                <x-issue-priority-menu :category="'reboot'"/>
+            
+                    <button type="button" @click.stop="toggleSection('reboot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('reboot') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('reboot') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('reboot')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="reboot-list">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1424,10 +1867,11 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- Reboot-button JS handler — wired for any .reboot-now / .reboot-recheck
+        {{-- Reboot-button JS handler — wired for any .reboot-now / .reboot-recheck
          button on this page. Renders whenever either the Patches Available or
          Reboot Required section is shown so the shared #reboot-action-banner
          it talks to is always in the DOM. --}}
@@ -1529,8 +1973,8 @@
 
     {{-- SSH --}}
     @if ($missingSsh->isNotEmpty())
-        <section id="section-no_ssh" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-no_ssh" x-show="isCategoryVisible('no_ssh') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('no_ssh')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-key text-[var(--color-ink-muted)] mr-2"></i>
@@ -1539,7 +1983,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Until SSH is verified, the server can't pull logs or ban IPs.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $missingSsh->count() }}</span>
+                <x-issue-priority-menu :category="'no_ssh'"/>
+            
+                    <button type="button" @click.stop="toggleSection('no_ssh')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_ssh') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_ssh') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('no_ssh')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1593,13 +2043,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- JAIL --}}
+        {{-- JAIL --}}
     @if ($missingJail->isNotEmpty())
-        <section id="section-no_jail" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-no_jail" x-show="isCategoryVisible('no_jail') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('no_jail')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)] mr-2"></i>
@@ -1608,7 +2059,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">SSH works but the clockwork jail isn't installed yet — banning IPs won't work on these.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $missingJail->count() }}</span>
+                <x-issue-priority-menu :category="'no_jail'"/>
+            
+                    <button type="button" @click.stop="toggleSection('no_jail')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_jail') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_jail') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('no_jail')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1625,67 +2082,14 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- FORM TESTING FAILING --}}
-    @if ($failedFormTests->isNotEmpty())
-        <section id="section-forms_failing" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
-                <div>
-                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-envelope-circle-check text-[var(--color-status-red)] mr-2"></i>
-                        Contact form failing
-                    </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Care-plan sites with contact-form testing on whose daily test has failed two or more runs in a row. Mattermost was pinged on the second failure.</p>
-                </div>
-                <span class="status-pill status-red">{{ $failedFormTests->count() }}</span>
-            </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                        <x-sort-th key="plugin" class="px-5 py-2">Plugin</x-sort-th>
-                        <x-sort-th key="streak" align="right" class="px-5 py-2">Streak</x-sort-th>
-                        <x-sort-th key="last_test" class="px-5 py-2">Last test</x-sort-th>
-                        <x-sort-th key="error" class="px-5 py-2">Error</x-sort-th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($failedFormTests as $cft)
-                        @php $s = $cft->site; @endphp
-                        <tr
-                            data-sort-site="{{ $s->domain }}"
-                            data-sort-server="{{ $s->server?->name ?? '' }}"
-                            data-sort-plugin="{{ $cft->form_plugin }}"
-                            data-sort-streak="{{ $cft->failure_streak }}"
-                            data-sort-last_test="{{ $cft->last_test_at?->getTimestamp() ?? '' }}"
-                            data-sort-error="{{ $cft->last_test_error }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', ['site' => $s, 'tab' => 'forms']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
-                                <span class="text-[10px] text-[var(--color-ink-soft)] ml-1">{{ $cft->form_id }}</span>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-data">
-                                @if ($s->server)
-                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-xs">{{ $cft->form_plugin }}</td>
-                            <td class="px-5 py-2 text-right text-xs font-data">{{ $cft->failure_streak }}</td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $cft->last_test_at?->diffForHumans() ?? '—' }}</td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] truncate max-w-xs" title="{{ $cft->last_test_error }}">{{ \Illuminate\Support\Str::limit($cft->last_test_error, 80) }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </section>
-    @endif
-
-    {{-- COMPANION MISSING / STALE --}}
+        {{-- COMPANION MISSING / STALE --}}
     @if ($companionMissing->isNotEmpty())
-        <section id="section-no_companion" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-no_companion" x-show="isCategoryVisible('no_companion') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('no_companion')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-plug-circle-xmark text-[var(--color-ink-muted)] mr-2"></i>
@@ -1694,7 +2098,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Form testing is enabled for these sites but the Companion mu-plugin hasn't checked in within 48h (or was never installed). Click into each site and hit <strong>Install Companion</strong> on the Settings tab.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $companionMissing->count() }}</span>
+                <x-issue-priority-menu :category="'no_companion'"/>
+            
+                    <button type="button" @click.stop="toggleSection('no_companion')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_companion') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_companion') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('no_companion')">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1728,13 +2138,177 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </section>
     @endif
 
-    {{-- WP PLUGINS OUTDATED --}}
+        {{-- ORPHAN SITES --}}
+    @if ($orphanSites->isNotEmpty())
+        <section id="section-orphans" x-show="isCategoryVisible('orphans') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('orphans')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-link-slash text-[var(--color-ink-muted)] mr-2"></i>
+                        Orphaned sites
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Local Site rows whose SpinupWP linkage is gone. Either consolidated under another site (safe to archive) or unknown (needs review). Refresh with <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:find-orphan-sites --archive-consolidated</code>.</p>
+                </div>
+                <span class="status-pill status-yellow">{{ $orphanSites->count() }}</span>
+                <x-issue-priority-menu :category="'orphans'"/>
+            
+                    <button type="button" @click.stop="toggleSection('orphans')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('orphans') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('orphans') ? 'rotate-180' : ''"></i>
+                    </button>
+            </div>
+            <div x-show="!isSectionCollapsed('orphans')">
+            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                    <tr>
+                        <x-sort-th key="site" class="px-5 py-2">Domain</x-sort-th>
+                        <x-sort-th key="server" class="px-5 py-2">Was on server</x-sort-th>
+                        <x-sort-th key="status" class="px-5 py-2">Status</x-sort-th>
+                        <x-sort-th key="parent" class="px-5 py-2">Consolidated under</x-sort-th>
+                        <th class="px-5 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--color-border-light)]">
+                    @foreach ($orphanSites as $s)
+                        @php
+                            $parent = $s->consolidated_into_site_id ? ($orphanParents[$s->consolidated_into_site_id] ?? null) : null;
+                            $statusLabel = $parent ? 'Consolidated' : 'Unknown';
+                        @endphp
+                        <tr
+                            data-sort-site="{{ $s->domain }}"
+                            data-sort-server="{{ $s->server?->name ?? '' }}"
+                            data-sort-status="{{ $statusLabel }}"
+                            data-sort-parent="{{ $parent?->domain ?? '' }}">
+                            <td class="px-5 py-2 font-data">
+                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                            </td>
+                            <td class="px-5 py-2 text-xs font-data">
+                                @if ($s->server)
+                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]" title="{{ $s->server->name }}">{{ $s->server->display_name }}</a>
+                                @else
+                                    <span class="text-[var(--color-ink-soft)]">—</span>
+                                @endif
+                            </td>
+                            <td class="px-5 py-2">
+                                @if ($parent)
+                                    <span class="status-pill status-yellow text-[10px]">Consolidated</span>
+                                @else
+                                    <span class="status-pill status-red text-[10px]">Unknown</span>
+                                @endif
+                            </td>
+                            <td class="px-5 py-2 text-xs">
+                                @if ($parent)
+                                    <a href="{{ route('sites.show', $parent) }}" class="text-[var(--color-primary-600)] hover:underline font-data">{{ $parent->domain }}</a>
+                                @else
+                                    <span class="text-[var(--color-ink-soft)]">—</span>
+                                @endif
+                            </td>
+                            <td class="px-5 py-2 text-right">
+                                <form method="POST" action="{{ route('issues.orphans.destroy', $s->id) }}"
+                                    onsubmit="return confirm('Remove {{ $s->domain }} from monitoring? This archives the site row and removes it from all listings.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                                        <i class="fa-solid fa-trash"></i> Remove
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        </section>
+    @endif
+
+        {{-- DB CREDS --}}
+    @if ($missingDbCreds->isNotEmpty())
+        <section id="section-no_db" x-show="isCategoryVisible('no_db') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('no_db')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-database text-[var(--color-ink-muted)] mr-2"></i>
+                        WordPress DB credentials missing
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Wordfence + LLAR ingest needs these. Fetched over SSH from wp-config.php.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="status-pill status-yellow">{{ $missingDbCreds->count() }}</span>
+                    <form method="POST" action="{{ route('issues.fetch-all-db-creds') }}">
+                        @csrf
+                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors">
+                            <i class="fa-solid fa-rotate"></i> Fetch all
+                        </button>
+                    </form>
+                </div>
+                <x-issue-priority-menu :category="'no_db'"/>
+            
+                    <button type="button" @click.stop="toggleSection('no_db')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_db') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_db') ? 'rotate-180' : ''"></i>
+                    </button>
+            </div>
+            <div x-show="!isSectionCollapsed('no_db')">
+            <div class="max-h-96 overflow-y-auto">
+                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                    <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                        <tr>
+                            <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
+                            <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                            <th class="px-5 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--color-border-light)]">
+                        @foreach ($missingDbCreds as $s)
+                            <tr
+                                data-sort-site="{{ $s->domain }}"
+                                data-sort-server="{{ $s->server?->name ?? '' }}">
+                                <td class="px-5 py-2 font-data">
+                                    <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                                </td>
+                                <td class="px-5 py-2 text-xs font-data">
+                                    @if ($s->server)
+                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
+                                    @endif
+                                </td>
+                                <td class="px-5 py-2 text-right">
+                                    <form method="POST" action="{{ route('sites.fetch-db-creds', $s) }}">
+                                        @csrf
+                                        <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors">
+                                            <i class="fa-solid fa-rotate"></i> Fetch
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </section>
+    @endif
+
+        {{-- =========================================================================
+             TIER 3: ROUTINE MAINTENANCE & AUDITS
+             ========================================================================= --}}
+        <div x-show="(tierTab === 'all' || tierTab === 'routine') && hasVisibleCategoryInTier('routine')"
+             class="mb-3 mt-8 flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] pb-2">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                <h3 class="font-display text-xs uppercase tracking-wider font-semibold text-[var(--color-ink-muted)]">
+                    Routine Maintenance & Audits
+                </h3>
+                <span class="text-[11px] text-[var(--color-ink-soft)] font-normal font-sans">(Lower priority upkeep)</span>
+            </div>
+            <span class="text-xs text-[var(--color-ink-muted)] font-medium font-mono">{{ $tierTotals['routine'] }} total</span>
+        </div>
+
+        {{-- WP PLUGINS OUTDATED --}}
     @if ($pluginsOutdated->isNotEmpty())
-        <section id="section-plugins_outdated" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        <section id="section-plugins_outdated" x-show="isCategoryVisible('plugins_outdated') && matchesTier('routine')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('plugins_outdated')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
@@ -1743,7 +2317,13 @@
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Pulled from each site's Companion snapshot (refreshed nightly at 03:00). Counts reflect the cached <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">update_plugins</code> transient on the site.</p>
                 </div>
                 <span class="status-pill status-yellow">{{ $pluginsOutdated->count() }}</span>
+                <x-issue-priority-menu :category="'plugins_outdated'"/>
+            
+                    <button type="button" @click.stop="toggleSection('plugins_outdated')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('plugins_outdated') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_outdated') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
+            <div x-show="!isSectionCollapsed('plugins_outdated')">
             <div class="max-h-[32rem] overflow-y-auto">
                 <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'security', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
@@ -2053,140 +2633,229 @@
                     </tbody>
                 </table>
             </div>
+        </div>
         </section>
     @endif
 
-    {{-- ORPHAN SITES --}}
-    @if ($orphanSites->isNotEmpty())
-        <section id="section-orphans" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        {{-- CLOSED PLUGINS ON WORDPRESS.ORG --}}
+    @if ($closedPluginSites->isNotEmpty() || $ignoredClosedPluginIssues->isNotEmpty())
+        <section id="section-plugins_closed" x-show="isCategoryVisible('plugins_closed') && matchesTier('routine')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('plugins_closed')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-link-slash text-[var(--color-ink-muted)] mr-2"></i>
-                        Orphaned sites
+                        <i class="fa-solid fa-box-archive text-amber-600 mr-2"></i>
+                        Plugins closed on WordPress.org
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Local Site rows whose SpinupWP linkage is gone. Either consolidated under another site (safe to archive) or unknown (needs review). Refresh with <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:find-orphan-sites --archive-consolidated</code>.</p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Active plugins removed or closed in the official WordPress plugin directory. Closed plugins receive no updates or security patches.
+                    </p>
                 </div>
-                <span class="status-pill status-yellow">{{ $orphanSites->count() }}</span>
+                <x-issue-priority-menu :category="'plugins_closed'"/>
+            
+                    <button type="button" @click.stop="toggleSection('plugins_closed')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('plugins_closed') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_closed') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                    <tr>
-                        <x-sort-th key="site" class="px-5 py-2">Domain</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Was on server</x-sort-th>
-                        <x-sort-th key="status" class="px-5 py-2">Status</x-sort-th>
-                        <x-sort-th key="parent" class="px-5 py-2">Consolidated under</x-sort-th>
-                        <th class="px-5 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @foreach ($orphanSites as $s)
-                        @php
-                            $parent = $s->consolidated_into_site_id ? ($orphanParents[$s->consolidated_into_site_id] ?? null) : null;
-                            $statusLabel = $parent ? 'Consolidated' : 'Unknown';
-                        @endphp
-                        <tr
-                            data-sort-site="{{ $s->domain }}"
-                            data-sort-server="{{ $s->server?->name ?? '' }}"
-                            data-sort-status="{{ $statusLabel }}"
-                            data-sort-parent="{{ $parent?->domain ?? '' }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
-                            </td>
-                            <td class="px-5 py-2 text-xs font-data">
-                                @if ($s->server)
-                                    <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]" title="{{ $s->server->name }}">{{ $s->server->display_name }}</a>
-                                @else
-                                    <span class="text-[var(--color-ink-soft)]">—</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2">
-                                @if ($parent)
-                                    <span class="status-pill status-yellow text-[10px]">Consolidated</span>
-                                @else
-                                    <span class="status-pill status-red text-[10px]">Unknown</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-xs">
-                                @if ($parent)
-                                    <a href="{{ route('sites.show', $parent) }}" class="text-[var(--color-primary-600)] hover:underline font-data">{{ $parent->domain }}</a>
-                                @else
-                                    <span class="text-[var(--color-ink-soft)]">—</span>
-                                @endif
-                            </td>
-                            <td class="px-5 py-2 text-right">
-                                <form method="POST" action="{{ route('issues.orphans.destroy', $s->id) }}"
-                                    onsubmit="return confirm('Remove {{ $s->domain }} from monitoring? This archives the site row and removes it from all listings.')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                                        <i class="fa-solid fa-trash"></i> Remove
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
+            <div x-show="!isSectionCollapsed('plugins_closed')">
+            @if ($closedPluginSites->isNotEmpty())
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2.5 text-left">Site</th>
+                                <th class="px-5 py-2.5 text-left">Server</th>
+                                <th class="px-5 py-2.5 text-left">Closed Plugin</th>
+                                <th class="px-5 py-2.5 text-left">Closure Detail</th>
+                                <th class="px-5 py-2.5 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($closedPluginSites as $site)
+                                @php
+                                    $siteFindings = $closedPluginFindingsBySiteId[$site->id] ?? [];
+                                @endphp
+                                @foreach ($siteFindings as $finding)
+                                    <tr class="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                        <td class="px-5 py-3 font-medium">
+                                            <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline flex items-center gap-1.5">
+                                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-[var(--color-ink-muted)]"></i>
+                                                {{ $site->domain }}
+                                            </a>
+                                        </td>
+                                        <td class="px-5 py-3 text-[var(--color-ink-muted)]">
+                                            {{ $site->server?->name ?? 'Standalone' }}
+                                        </td>
+                                        <td class="px-5 py-3">
+                                            <div class="font-medium text-[var(--color-ink-strong)]">
+                                                {{ $finding['name'] }}
+                                            </div>
+                                            <div class="text-xs text-[var(--color-ink-muted)] flex items-center gap-2 mt-0.5">
+                                                <code>{{ $finding['slug'] }}</code>
+                                                @if (! empty($finding['version']))
+                                                    <span>v{{ $finding['version'] }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3 text-xs max-w-md">
+                                            @if (! empty($finding['reason']))
+                                                <div class="text-[var(--color-ink-soft)] line-clamp-2" title="{{ $finding['reason'] }}">
+                                                    {{ $finding['reason'] }}
+                                                </div>
+                                            @else
+                                                <span class="text-[var(--color-ink-muted)] italic">No closure reason provided by WordPress.org</span>
+                                            @endif
+                                            @if (! empty($finding['closed_date']))
+                                                <div class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">
+                                                    Closed: {{ $finding['closed_date'] }}
+                                                </div>
+                                            @endif
+                                        </td>
+                                        <td class="px-5 py-3 text-right">
+                                            <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
+                                                @csrf
+                                                <input type="hidden" name="issue_type" value="plugin_closed">
+                                                <input type="hidden" name="site_id" value="{{ $site->id }}">
+                                                <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:underline" title="Suppress closed plugin warning for {{ $site->domain }}">
+                                                    Ignore site
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+            @if ($ignoredClosedPluginIssues->isNotEmpty())
+                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] bg-[var(--color-surface-alt)] flex items-center flex-wrap gap-2">
+                    <span class="font-medium">{{ $ignoredClosedPluginIssues->count() }} site(s) ignored:</span>
+                    @foreach ($ignoredClosedPluginIssues as $ignored)
+                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-border-strong)] text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors">
+                                <span>{{ $ignored->site?->domain ?? 'Site #' . $ignored->site_id }}</span>
+                                <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                            </button>
+                        </form>
                     @endforeach
-                </tbody>
-            </table>
+                </div>
+            @endif
+        </div>
         </section>
     @endif
 
-    {{-- DB CREDS --}}
-    @if ($missingDbCreds->isNotEmpty())
-        <section id="section-no_db" class="card overflow-hidden mb-6">
-            <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between">
+        @if ($flaggedAdminSites->isNotEmpty() || $ignoredAdminIssues->isNotEmpty())
+        <section id="section-wp_admins" x-show="isCategoryVisible('wp_admins') && matchesTier('routine')" class="card overflow-hidden mb-6">
+            <div @click="toggleSection('wp_admins')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                        <i class="fa-solid fa-database text-[var(--color-ink-muted)] mr-2"></i>
-                        WordPress DB credentials missing
+                        <i class="fa-solid fa-user-shield text-amber-600 mr-2"></i>
+                        Flagged WordPress administrators
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Wordfence + LLAR ingest needs these. Fetched over SSH from wp-config.php.</p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Default <code>admin</code> logins, or emails outside the approved allowlist.
+                        <a href="{{ route('security.admins') }}" class="text-[var(--color-primary-600)] hover:underline">Open fleet directory</a>
+                    </p>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="status-pill status-yellow">{{ $missingDbCreds->count() }}</span>
-                    <form method="POST" action="{{ route('issues.fetch-all-db-creds') }}">
-                        @csrf
-                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors">
-                            <i class="fa-solid fa-rotate"></i> Fetch all
-                        </button>
-                    </form>
-                </div>
+                <x-issue-priority-menu :category="'wp_admins'"/>
+            
+                    <button type="button" @click.stop="toggleSection('wp_admins')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('wp_admins') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('wp_admins') ? 'rotate-180' : ''"></i>
+                    </button>
             </div>
-            <div class="max-h-96 overflow-y-auto">
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('wp_admins')">
+            @if ($flaggedAdminSites->isNotEmpty())
+                <table class="w-full text-sm">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
-                            <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                            <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
-                            <th class="px-5 py-2"></th>
+                            <th class="px-5 py-2 text-left">Site</th>
+                            <th class="px-5 py-2 text-left">Server</th>
+                            <th class="px-5 py-2 text-right"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
-                        @foreach ($missingDbCreds as $s)
-                            <tr
-                                data-sort-site="{{ $s->domain }}"
-                                data-sort-server="{{ $s->server?->name ?? '' }}">
-                                <td class="px-5 py-2 font-data">
-                                    <a href="{{ route('sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->domain }}</a>
+                        @foreach ($flaggedAdminSites as $site)
+                            <tr>
+                                <td class="px-5 py-2">
+                                    <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
                                 </td>
-                                <td class="px-5 py-2 text-xs font-data">
-                                    @if ($s->server)
-                                        <a href="{{ route('servers.show', $s->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">{{ $s->server->name }}</a>
-                                    @endif
-                                </td>
+                                <td class="px-5 py-2 text-[var(--color-ink-muted)]">{{ $site->server?->name ?? '—' }}</td>
                                 <td class="px-5 py-2 text-right">
-                                    <form method="POST" action="{{ route('sites.fetch-db-creds', $s) }}">
+                                    <form method="POST" action="{{ route('issues.ignore') }}" class="inline">
                                         @csrf
-                                        <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:bg-gray-200 transition-colors">
-                                            <i class="fa-solid fa-rotate"></i> Fetch
-                                        </button>
+                                        <input type="hidden" name="issue_type" value="wp_admin_flagged">
+                                        <input type="hidden" name="site_id" value="{{ $site->id }}">
+                                        <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:underline">Ignore site</button>
                                     </form>
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
-            </div>
+            @endif
+            @if ($ignoredAdminIssues->isNotEmpty())
+                <div class="px-5 py-3 border-t border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)]">
+                    {{ $ignoredAdminIssues->count() }} site(s) acknowledged.
+                    @foreach ($ignoredAdminIssues as $ignored)
+                        <form method="POST" action="{{ route('issues.unignore', $ignored) }}" class="inline ml-2">
+                            @csrf
+                            <button type="submit" class="hover:underline">Restore {{ $ignored->site?->domain }}</button>
+                        </form>
+                    @endforeach
+                </div>
+            @endif
+        </div>
         </section>
     @endif
+
+
+        {{-- TURNED OFF / MUTED CATEGORIES SUMMARY TRAY --}}
+        <div x-show="disabledCategoriesCount > 0" x-cloak class="mt-8 p-4 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                    <span class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">
+                        Turned Off Categories (<span x-text="disabledCategoriesCount"></span> muted fleet-wide)
+                    </span>
+                </div>
+                <button type="button" @click="prioritiesModalOpen = true" class="text-xs text-[var(--color-brand)] hover:underline cursor-pointer flex items-center gap-1 font-medium">
+                    <i class="fa-solid fa-sliders text-[10px]"></i> Manage all priorities →
+                </button>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <template x-for="catKey in disabledCategories" :key="catKey">
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] text-xs shadow-xs">
+                        <i class="fa-solid" :class="categoryMeta[catKey]?.icon || 'fa-bell-slash'" class="opacity-60 text-xs text-[var(--color-ink-muted)]"></i>
+                        <span class="font-medium text-[var(--color-ink-strong)]" x-text="categoryMeta[catKey]?.label || catKey"></span>
+                        <span class="px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-[10px] font-mono text-[var(--color-ink-soft)]" x-text="(totals[catKey] ?? 0) + ' items'"></span>
+                        <button type="button"
+                                @click="setCategoryLevel(catKey, 'not_pressing')"
+                                class="text-[var(--color-brand)] hover:underline ml-1 font-medium cursor-pointer"
+                                title="Turn back on (as Not Pressing)">
+                            Turn On
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        {{-- Toast feedback notification --}}
+        <div x-show="feedbackToast"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-2"
+             x-cloak
+             class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-strong)] text-sm shadow-xl text-[var(--color-ink-strong)] font-medium">
+            <i class="fa-solid fa-circle-check text-[var(--color-status-green)]"></i>
+            <span x-text="feedbackToast"></span>
+        </div>
+
+        {{-- Manage priorities modal --}}
+        @include('dashboard.partials.issue-priorities-modal')
+
+    </div> {{-- End x-data="issuesDashboard" --}}
 @endsection

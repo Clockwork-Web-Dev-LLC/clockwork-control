@@ -2,7 +2,7 @@
 title: Request lifecycle
 section: Architecture
 order: 40
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [architecture, http, auth, middleware, linux]
 tracks: [routes/web.php, app/Http/Controllers/Auth/**, app/Http/Middleware/**]

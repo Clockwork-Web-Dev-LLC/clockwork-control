@@ -95,6 +95,22 @@ describe('index', function () {
         $searched->assertOk()->assertSee('alpha-site.test')->assertDontSee('beta-pressable.test');
     });
 
+    it('finds parent site when searching by consolidated alias domain', function () {
+        $parent = Site::factory()->spinupwp()->create(['domain' => 'caringworksinc.org']);
+        Site::factory()->spinupwp()->create([
+            'domain' => 'www.caringworksinc.org',
+            'consolidated_into_site_id' => $parent->id,
+            'archived_at' => now(),
+            'is_inactive' => true,
+        ]);
+
+        $searched = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['q' => 'www.caringworksinc']));
+        $searched->assertOk()
+            ->assertSee('caringworksinc.org')
+            ->assertDontSee('+ www.caringworksinc.org');
+    });
+
     it('only shows tabs/counts/filter for enabled hosting-provider modules — not every provider with data', function () {
         // Regression coverage: an operator running only GridPane + Vultr
         // must never see SpinupWP/Pressable tabs, be able to filter by
@@ -154,6 +170,20 @@ describe('index', function () {
             ->assertSee('id="sites-search"', false)
             ->assertSee('id="sites-search-clear"', false)
             ->assertSee('data-search="gamma-site.test', false);
+    });
+
+    it('labels custom renegade sites as Renegade Only on the list', function () {
+        Site::factory()->custom()->create([
+            'domain' => 'renegade-host.example.com',
+            'companion_variant' => 'renegade',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('sites.index'))
+            ->assertOk()
+            ->assertSee('renegade-host.example.com')
+            ->assertSee('Renegade Only')
+            ->assertDontSee('Companion Only');
     });
 });
 

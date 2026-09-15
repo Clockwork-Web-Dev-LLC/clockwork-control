@@ -91,9 +91,9 @@
                             <i class="fa-brands fa-wordpress text-xs"></i>
                             <span>WordPress.org Directory</span>
                         </a>
-                        <a href="{{ route('companion.download') }}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-strong)] transition-colors" title="Download private companion zip">
+                        <a href="{{ route('downloads.index') }}" target="_blank" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-strong)] transition-colors" title="Download WordPress Plugins (Companion & Renegade)">
                             <i class="fa-solid fa-download text-xs text-[var(--color-brand)]"></i>
-                            <span>Download Plugin (.zip)</span>
+                            <span>Plugin Downloads (.zip)</span>
                         </a>
                     </div>
                 </div>

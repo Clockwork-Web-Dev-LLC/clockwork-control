@@ -268,4 +268,89 @@ class CompanionTarballBuilder
 
         return $bytes;
     }
+
+    /**
+     * Build a standard WordPress plugin .zip package (clockwork-renegade/...)
+     * suitable for direct upload via wp-admin -> Plugins -> Add New -> Upload Plugin.
+     */
+    public function buildRenegadeZipBytes(?string $localPath = null): string
+    {
+        $localPath = $localPath ?: (string) config('clockwork.renegade.local_path');
+        if ($localPath === '' || ! is_dir($localPath)) {
+            throw new RuntimeException("Local Renegade plugin source not found at {$localPath}. Set CLOCKWORK_RENEGADE_LOCAL_PATH.");
+        }
+
+        $loader = $localPath.'/clockwork-renegade.php';
+        if (! is_file($loader)) {
+            throw new RuntimeException("Renegade loader not found at {$loader}.");
+        }
+
+        $zipFile = sys_get_temp_dir().'/clockwork-renegade-'.Str::random(8).'.zip';
+        $zip = new \ZipArchive;
+        if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException("Could not create zip file at {$zipFile}.");
+        }
+
+        // Add root plugin files to clockwork-renegade/
+        $zip->addFile($loader, 'clockwork-renegade/clockwork-renegade.php');
+        if (is_file($localPath.'/readme.txt')) {
+            $zip->addFile($localPath.'/readme.txt', 'clockwork-renegade/readme.txt');
+        }
+        if (is_file($localPath.'/uninstall.php')) {
+            $zip->addFile($localPath.'/uninstall.php', 'clockwork-renegade/uninstall.php');
+        }
+        if (is_file($localPath.'/LICENSE')) {
+            $zip->addFile($localPath.'/LICENSE', 'clockwork-renegade/LICENSE');
+        }
+
+        $topLevelFiles = [
+            'clockwork-renegade.php',
+            'readme.txt',
+            'uninstall.php',
+            'LICENSE',
+            'composer.json',
+            'composer.lock',
+            'phpunit.xml',
+            'README.md',
+        ];
+
+        $iter = new \RecursiveIteratorIterator(
+            new \RecursiveCallbackFilterIterator(
+                new \RecursiveDirectoryIterator($localPath, \FilesystemIterator::SKIP_DOTS),
+                function ($current) use ($localPath, $topLevelFiles) {
+                    $name = $current->getFilename();
+                    if ($current->isDir() && in_array($name, ['.git', 'vendor', 'node_modules', '.idea', '.vscode', '.github', '.githooks', '.phpunit.cache', 'bin', 'dist', 'tests'], true)) {
+                        return false;
+                    }
+                    if (str_starts_with($name, '._') || $name === '.DS_Store') {
+                        return false;
+                    }
+
+                    if ($current->getPath() === rtrim($localPath, '/') && in_array($name, $topLevelFiles, true)) {
+                        return false;
+                    }
+
+                    return true;
+                }
+            )
+        );
+
+        foreach ($iter as $item) {
+            /** @var \SplFileInfo $item */
+            if (! $item->isDir()) {
+                $relative = substr($item->getPathname(), strlen($localPath) + 1);
+                $zip->addFile($item->getPathname(), 'clockwork-renegade/'.$relative);
+            }
+        }
+
+        $zip->close();
+        $bytes = file_get_contents($zipFile);
+        @unlink($zipFile);
+
+        if ($bytes === false) {
+            throw new RuntimeException("Failed to read generated zip file from {$zipFile}.");
+        }
+
+        return $bytes;
+    }
 }

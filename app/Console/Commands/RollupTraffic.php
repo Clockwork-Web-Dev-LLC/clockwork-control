@@ -33,6 +33,7 @@ class RollupTraffic extends Command
         $start = $today->subDays($days - 1);
 
         $sites = Site::query()
+            ->whereNull('consolidated_into_site_id')
             ->when($this->option('site'), function ($q, $site) {
                 if (ctype_digit((string) $site)) {
                     $q->where('id', (int) $site);

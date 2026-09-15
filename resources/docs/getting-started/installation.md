@@ -2,7 +2,7 @@
 title: Installation & Setup
 section: Getting Started
 order: 15
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [getting-started, install, setup, wizard, self-hosted, linux]
 tracks: [app/Installer/InstallerEnvWriter.php, app/Http/Controllers/InstallerController.php, routes/install.php, app/Http/Middleware/EnforceInstallerGate.php]
@@ -112,7 +112,7 @@ server {
 4. **Outbound Mail (Optional)**: Configure SMTP for alerts and notifications, or skip to default to the log driver.
 5. **Single Sign-On / Google OAuth (Optional)**: Enter your Google Client ID, Client Secret, and optional Google Workspace hosted domain, or skip for now to use local password authentication (SSO can also be configured or changed anytime in Settings).
 6. **Administrator Account & Local Password**: Provision your first administrator email and name. If Google OAuth was skipped, set a secure local password (minimum 8 characters) to sign in immediately. If Google OAuth was configured, setting a local password is an optional emergency fallback.
-7. **Hosting Provider Quick-Connect (Optional)**: Select your primary infrastructure (SpinupWP, Forge, RunCloud, Pressable, WP Engine, Kinsta, or Custom VPS).
+7. **Hosting Provider Quick-Connect & Care Plan Policy (Optional)**: Select your primary infrastructure (SpinupWP, Forge, RunCloud, Pressable, WP Engine, Kinsta, or Custom VPS) and set the global Care Plan policy (`care_plans.enabled`).
 8. **Review & Confirm**: Review all settings with masked secrets. Clicking **Install & Complete Setup** will:
    - Generate a fresh cryptographically secure `APP_KEY`
    - Atomically write all settings to `.env` with `0600` permissions

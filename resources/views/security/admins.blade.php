@@ -53,20 +53,43 @@
     </div>
 
     <div class="card overflow-hidden">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm" x-data="sortableTable()">
             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                 <tr>
-                    <th class="px-4 py-2 text-left">Site</th>
-                    <th class="px-4 py-2 text-left">Login</th>
-                    <th class="px-4 py-2 text-left">Email</th>
-                    <th class="px-4 py-2 text-left">Last seen</th>
-                    <th class="px-4 py-2 text-left">Flags</th>
+                    <x-sort-th key="site" class="px-4 py-2">Site</x-sort-th>
+                    <x-sort-th key="login" class="px-4 py-2">Login</x-sort-th>
+                    <x-sort-th key="email" class="px-4 py-2">Email</x-sort-th>
+                    <x-sort-th key="last_seen" class="px-4 py-2">Last seen</x-sort-th>
+                    <x-sort-th key="flags" class="px-4 py-2">Flags</x-sort-th>
                     <th class="px-4 py-2"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-[var(--color-border-light)]">
                 @forelse ($rows as $row)
-                    <tr class="{{ $row['flagged'] ? 'bg-amber-500/5' : '' }}">
+                    @php
+                        $lastSeenTs = '';
+                        if (! empty($row['last_seen_at'])) {
+                            try {
+                                $lastSeenTs = \Illuminate\Support\Carbon::parse($row['last_seen_at'])->getTimestamp();
+                            } catch (\Throwable) {
+                                $lastSeenTs = '';
+                            }
+                        }
+                        $flagSort = '';
+                        if ($row['flagged']) {
+                            $flagSort = in_array('unapproved_email', $row['flags'] ?? [])
+                                ? '1_unapproved_email'
+                                : '2_default_login';
+                        } elseif ($row['ignored']) {
+                            $flagSort = '3_acknowledged';
+                        }
+                    @endphp
+                    <tr class="{{ $row['flagged'] ? 'bg-amber-500/5' : '' }}"
+                        data-sort-site="{{ strtolower($row['domain'] ?? '') }}"
+                        data-sort-login="{{ strtolower($row['login'] ?? '') }}"
+                        data-sort-email="{{ strtolower($row['email'] ?? '') }}"
+                        data-sort-last_seen="{{ $lastSeenTs }}"
+                        data-sort-flags="{{ $flagSort }}">
                         <td class="px-4 py-2">
                             <a href="{{ route('sites.show', $row['site_id']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $row['domain'] }}</a>
                         </td>

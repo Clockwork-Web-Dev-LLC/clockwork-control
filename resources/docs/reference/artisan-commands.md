@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
@@ -49,7 +49,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:rebuild-threat-logs-partitions` | MySQL only. Copy the retention window into a new monthly-partitioned table, swap, drop the old `.ibd` so disk shrinks. | `php artisan clockwork:rebuild-threat-logs-partitions` |
 | `clockwork:check-ssl-certs` | Per-site SSL state + Mattermost transitions. | `php artisan clockwork:check-ssl-certs` |
 | `clockwork:check-cloudflare` | Per-site CF detection. | `php artisan clockwork:check-cloudflare` |
-| `clockwork:check-site-uptime` | HTTP probe each monitored site. | `php artisan clockwork:check-site-uptime` |
+| `clockwork:check-site-uptime` | HTTP probe each monitored site. Respects per-site toggle, mute-alerts mode, and fleet-wide wildcard ignore patterns configured on `/monitoring/settings`. | `php artisan clockwork:check-site-uptime` |
 | `clockwork:scheduler-heartbeat` | Cheap Settings write that proves crontab spawned `schedule:run`. First among every-minute jobs. Detection of a missing tick happens on page load (a scheduled command cannot watch itself): 5+ minutes stale → layout banner + Issues + `scheduler_stale` chat once; the next tick fires `scheduler_recovered`. Never-ticked is a yellow UI warning only. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck). | `php artisan clockwork:scheduler-heartbeat` |
 | `clockwork:backfill-uptime-seed` | One-off: seed initial uptime state on first run. | `php artisan clockwork:backfill-uptime-seed` |
 | `clockwork:pull-site-metrics` | Pull per-site CPU/memory hourly rollups from Companion (`resource-sampler` cap) into `site_metrics`. | `php artisan clockwork:pull-site-metrics` |
@@ -103,6 +103,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:push-backup-relay-targets` | Writes the Pressable + care-plan site list to S3 (`{S3_BUCKET}/{prefix}/targets.json`) for the standalone backup-relay droplet to read — no direct connection to that droplet. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:push-backup-relay-targets` |
 | `clockwork:pull-backup-relay-report` | Reads the backup-relay droplet's last run summary back from S3 and records it to `backup_relay_runs` + `Settings`, deduped by `finished_at`. Also checks staleness every run (6+ days since the last recorded run → `backup_relay_stale` alert once; a fresh run after → `backup_relay_recovered` once). | `php artisan clockwork:pull-backup-relay-report` |
 | `clockwork:backup-relay-run` | In-repo backup relay mode's own runner — archives enabled sites' backups to S3 Glacier natively via `ArchiveSiteBackupJob`, no external droplet involved. `--site=` limits to one site; `--force` ignores cadence (Backup Now). See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:backup-relay-run --site=42 --force` |
+| `clockwork:backup-restore` | Orchestrate staging or applying an off-site backup restore via Companion. Polling lifecycle verifies download, extraction, DB import, and file swap. | `php artisan clockwork:backup-restore --site=42 --key="backups/site.tar.gz" --phase=stage` |
 | `clockwork:rotate-companion-secret` | Rotate per-site HMAC secret. | `php artisan clockwork:rotate-companion-secret --all` |
 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. | `php artisan clockwork:detect-contact-forms` |
 | `clockwork:test-contact-forms` | Run the due contact-form tests across the fleet (care-plan only). `--site=X` bypasses the care-plan filter; `--form=ID` targets a single contact_form_tests row; `--force` bypasses the frequency-due check. | `php artisan clockwork:test-contact-forms --force --site=example.com` |

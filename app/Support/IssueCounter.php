@@ -31,10 +31,10 @@ class IssueCounter
      * matching section on the Issues page; drift makes the badge count
      * mismatch what the user sees.
      */
-    public function total(): int
+    public function total(?string $mode = null): int
     {
         try {
-            return $this->calculateTotal();
+            return $this->calculateTotal($mode);
         } catch (Throwable $e) {
             Log::warning('issue_counter.total_failed', ['error' => $e->getMessage()]);
 
@@ -42,7 +42,17 @@ class IssueCounter
         }
     }
 
-    private function calculateTotal(): int
+    public function pressingTotal(): int
+    {
+        return $this->total('pressing');
+    }
+
+    public function allEnabledTotal(): int
+    {
+        return $this->total('all');
+    }
+
+    private function calculateTotal(?string $mode = null): int
     {
         $unhealthy = Server::query()
             ->where('is_ignored', false)
@@ -251,7 +261,46 @@ class IssueCounter
             Log::warning('issue_counter.closed_plugins_failed', ['error' => $e->getMessage()]);
         }
 
-        return $unhealthy + $missingSsh + $missingJail + $missingDb + $ssl + $domainExpiration + $seoBlocked + $hot + $cf + $patches + $reboots + $overQuota + $companionMissing + $formsFailing + $pluginsOutdated + $orphans + $malware + $tampering + $companionMalware + $downSites + $stuckMaintenanceSites + $schedulerStale + $flaggedAdmins + $closedPlugins;
+        $counts = [
+            'health' => $unhealthy,
+            'no_ssh' => $missingSsh,
+            'no_jail' => $missingJail,
+            'no_db' => $missingDb,
+            'ssl' => $ssl,
+            'domain-expiration' => $domainExpiration,
+            'seo-indexability' => $seoBlocked,
+            'hot' => $hot,
+            'cf' => $cf,
+            'patches' => $patches,
+            'reboot' => $reboots,
+            'no_companion' => $companionMissing,
+            'forms_failing' => $formsFailing,
+            'plugins_outdated' => $pluginsOutdated,
+            'orphans' => $orphans,
+            'malware' => $malware,
+            'tampering' => $tampering,
+            'companion_malware' => $companionMalware,
+            'down_sites' => $downSites,
+            'stuck_maintenance' => $stuckMaintenanceSites,
+            'scheduler_stale' => $schedulerStale,
+            'wp_admins' => $flaggedAdmins,
+            'plugins_closed' => $closedPlugins,
+        ];
+
+        $categoryConfig = app(IssueCategoryConfig::class);
+        $total = 0;
+        foreach ($counts as $key => $count) {
+            if ($categoryConfig->isOff($key)) {
+                continue;
+            }
+            if ($mode === 'all' || $categoryConfig->isPressing($key)) {
+                $total += $count;
+            }
+        }
+
+        // Over-quota is a /capacity concern, not a toggleable Issues category,
+        // but it still belongs on the navbar total (calendar MTD vs threshold).
+        return $total + $overQuota;
     }
 
     /**
@@ -283,6 +332,8 @@ class IssueCounter
             ->join('sites', 'sites.id', '=', 'site_traffic_daily.site_id')
             ->whereIn('sites.server_id', $sharedServerIds)
             ->where('sites.is_inactive', false)
+            ->whereNull('sites.archived_at')
+            ->whereNull('sites.consolidated_into_site_id')
             ->where('site_traffic_daily.date', '>=', $monthStart)
             ->groupBy('site_traffic_daily.site_id')
             ->havingRaw('SUM(site_traffic_daily.visits) > ?', [$threshold])

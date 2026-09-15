@@ -2,7 +2,7 @@
 title: Performance scans
 section: Features
 order: 50
-updated: 2026-09-06
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [performance, lighthouse, gtmetrix, psi, care-plan, pressable]
 tracks: [app/Services/Performance/**, app/Console/Commands/RunPerformanceScans.php, modules/Pressable/src/PressableLighthouseClient.php, modules/Pressable/src/PressableClient.php]

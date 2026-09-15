@@ -2,10 +2,10 @@
 title: Clockwork Renegade (WordPress.org Plugin)
 section: Features
 order: 94
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [renegade, companion, wordpress, wporg, plugins, enrollment, gpl]
-tracks: [app/Models/Site.php, app/Services/Companion/ClockworkCompanionClient.php, app/Http/Controllers/SitesController.php, tests/Feature/Sites/EnrollmentVariantDetectionTest.php]
+tracks: [app/Models/Site.php, app/Services/Companion/ClockworkCompanionClient.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/header.blade.php, resources/views/dashboard/sites.blade.php, tests/Feature/Sites/EnrollmentVariantDetectionTest.php, tests/Feature/SiteOverviewDashboardTest.php, tests/Feature/Models/SiteRelationshipsAndCastsTest.php]
 ---
 
 **Clockwork Renegade** is the official open-source, GPL-2.0-or-later edition of the Clockwork Companion plugin designed for distribution on the official [WordPress.org Plugin Directory](https://wordpress.org/plugins/).
@@ -78,6 +78,7 @@ The `sites` table includes a `companion_variant` column:
 - Model helpers on `App\Models\Site`:
   - `isRenegade(): bool`
   - `isClassicCompanion(): bool`
+  - `pluginOnlyHostLabel(): string` — **Renegade Only** or **Companion Only**, used as the host pill on `/sites` and the site header for custom (no-server) sites.
 
 ### Dynamic REST Client & HMAC Signing
 
@@ -100,3 +101,11 @@ When an operator enrolls a new site under **Sites → + Add Site** (`SitesContro
    - If the Renegade endpoint returns 200 OK, the site is created with `companion_variant = 'renegade'`.
    - If Classic Companion returns 200 OK, `companion_variant = 'companion'`.
    - If neither endpoint responds, the operator receives an informative HTTP 404 message indicating neither variant was found.
+
+### Download Hub
+
+Operators can download the latest release `.zip` packages for both editions directly from Clockwork Control at **[Plugin Downloads](/downloads)** (`route('downloads.index')`). The hub is directly linked from:
+- **Sites List** (`/sites` header button)
+- **Add Site** (`/sites/create` connection banner)
+- **Global Settings Hub** (`/settings` Fleet Policies section)
+

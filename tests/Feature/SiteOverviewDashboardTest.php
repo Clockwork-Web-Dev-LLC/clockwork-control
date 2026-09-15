@@ -281,6 +281,7 @@ describe('Site Overview Command Center Dashboard', function () {
         $site = Site::factory()->custom()->create([
             'domain' => 'companion-only.example.com',
             'companion_installed' => true,
+            'companion_variant' => 'companion',
             'companion_capabilities' => ['updates', 'backup-restore'],
             'companion_snapshot' => [
                 'plugins' => ['counts' => ['updates_available' => 1]],
@@ -295,11 +296,30 @@ describe('Site Overview Command Center Dashboard', function () {
         $response->assertOk()
             ->assertSee('companion-only.example.com')
             ->assertSee('Companion Only')
+            ->assertDontSee('Renegade Only')
             ->assertDontSee('title="Hosted on Pressable', false)
             ->assertSee('Traffic telemetry unavailable')
             ->assertSee('Unavailable')
             ->assertDontSee('Top Threat IPs (24h)')
             ->assertDontSee('nginx tailer has not ingested rows')
             ->assertSee('Current');
+    });
+
+    it('renders renegade only badge for custom sites running Clockwork Renegade', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'renegade-only.example.com',
+            'companion_installed' => true,
+            'companion_variant' => 'renegade',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('sites.show', ['site' => $site, 'tab' => 'overview']))
+            ->assertOk()
+            ->assertSee('renegade-only.example.com')
+            ->assertSee('Renegade Only')
+            ->assertDontSee('Companion Only');
     });
 });

@@ -140,6 +140,8 @@ class CapacityController extends Controller
         $visitsByServer = SiteTrafficDaily::query()
             ->join('sites', 'sites.id', '=', 'site_traffic_daily.site_id')
             ->whereIn('sites.server_id', $serverIds)
+            ->whereNull('sites.archived_at')
+            ->whereNull('sites.consolidated_into_site_id')
             ->where('site_traffic_daily.date', '>=', $rolling30Start->toDateString())
             ->selectRaw('sites.server_id, SUM(site_traffic_daily.visits) AS visits')
             ->groupBy('sites.server_id')
@@ -180,6 +182,8 @@ class CapacityController extends Controller
         $perSiteVisits = SiteTrafficDaily::query()
             ->join('sites', 'sites.id', '=', 'site_traffic_daily.site_id')
             ->whereIn('sites.server_id', $serverIds)
+            ->whereNull('sites.archived_at')
+            ->whereNull('sites.consolidated_into_site_id')
             ->where('site_traffic_daily.date', '>=', $rolling30Start->toDateString())
             ->selectRaw('
                 site_traffic_daily.site_id,
@@ -194,7 +198,7 @@ class CapacityController extends Controller
             ->filter(fn ($row) => $this->isOverInvoiceQuota((int) $row->month_visits, $threshold))
             ->sortByDesc('month_visits')
             ->map(function ($row) use ($threshold) {
-                $site = Site::with('server')->find($row->site_id);
+                $site = Site::with(['server', 'consolidatedSites:id,domain,consolidated_into_site_id'])->find($row->site_id);
                 if (! $site) {
                     return null;
                 }
@@ -229,7 +233,7 @@ class CapacityController extends Controller
                 return $this->projectMonthEndFromMtd($monthVisits, $today) > $threshold;
             })
             ->map(function ($row) use ($trendingWindow, $threshold, $today) {
-                $site = Site::with('server')->find($row->site_id);
+                $site = Site::with(['server', 'consolidatedSites:id,domain,consolidated_into_site_id'])->find($row->site_id);
                 if (! $site) {
                     return null;
                 }

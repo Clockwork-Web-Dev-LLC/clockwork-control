@@ -2,7 +2,7 @@
 title: System updates
 section: Features
 order: 92
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [system-updates, self-update, core, companion, releases]
 tracks: [app/Services/Updates/**, app/Http/Controllers/SystemUpdatesController.php, app/Console/Commands/CheckSystemUpdates.php, app/Console/Commands/ApplySystemUpdate.php, resources/views/settings/updates.blade.php, routes/web.php]
@@ -57,7 +57,7 @@ The installed version itself is deliberately **not** an env var — it's `config
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Used to build the default releases API URL. |
 | `CLOCKWORK_UPDATES_API_URL` | (derived from the repo above) | Full override. |
 | `CLOCKWORK_UPDATES_CACHE_TTL` | `43200` (12h) | Release-check cache. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.34.0` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.37.1` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
 
 See [Reference → Environment variables](/docs/reference/env-vars#system-updates).
 

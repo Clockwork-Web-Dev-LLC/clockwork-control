@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]
@@ -83,14 +83,19 @@ Press `/` from anywhere on the dashboard (or any page) to focus the site search 
 
 Several feature areas surface on the `/issues` page rather than the main dashboard:
 
+- **3-Tier Hierarchy & Category Organization**: Issues are categorized into three structured tiers: **Critical** (e.g. sites down, critical malware), **Needs Attention** (e.g. vulnerable plugins, SSL expirations), and **Low Priority** (e.g. out-of-date plugins, informational notices).
+- **Category Visibility & Priority Customization**: An operator modal allows assigning each issue category to any tier or marking it **Hidden** entirely (`POST /issues/category-level`). Hidden categories do not appear in any tier and are subtracted from the header navigation badge count.
+- **Collapsible Section Cards**: Tier sections and issue cards can be collapsed or expanded, preserving space when managing large fleets.
 - **Patches Available** rows now include a **Reboot now** button. Clicking it triggers the same confirm-then-POST reboot flow as the server detail page without needing to scroll down to the Reboot Required section. Useful when `reboot_required` hasn't flipped on the row yet but you know an apt upgrade just ran.
 - **Orphaned sites** (sites with no SpinupWP record and not archived) now have a **Remove** button with an "Are you sure" confirmation — archives the site row rather than hard-deleting it.
 - **SSH credentials** — servers missing SSH credentials surface on the Issues page. Each row has an inline action: **Test SSH** (AJAX, fires `POST /servers/{id}/test`, shows pass/fail inline without a page reload) if a password is already stored, or **Add password** (links to the credentials edit page) if none is on record yet.
 - **Ignored issues workflow** — operators can suppress a specific alert (e.g. an intentional `noindex` flagged by SEO Indexability) by clicking **Ignore** and optionally recording a reason in a modal. The card moves to an **Ignored** tab with a one-click **Resume monitoring** action, and the suppressed site is excluded from `IssueCounter`'s total so it stops inflating the header nav badge. See [Architecture → Data model](/docs/architecture/data-model) for the `ignored_issues` table this is backed by.
 
-## Per-site CPU collection toggle
+## Capacity Dashboard & Per-site CPU collection toggle
 
-The `/capacity` leaderboard section has a **Pause collection / Resume collection** button per site. When paused, `clockwork:pull-site-metrics` skips that site's Companion sampler polling. Historical rows are kept, so the 7-day leaderboard stays visible while paused. A yellow "Collection paused" banner makes the state obvious on the site's capacity row.
+The `/capacity` dashboard provides multi-host capacity management across both shared servers and Pressable plans:
+- **Navigation & Fleet Filtering**: Quick-jump anchor pills, fleet filter tabs (`All`, `Over Quota`, `Approaching`, `Healthy`), and a floating scroll pill for fast navigation through large server lists.
+- **Leaderboard CPU Collection**: The leaderboard section has a **Pause collection / Resume collection** button per site. When paused, `clockwork:pull-site-metrics` skips that site's Companion sampler polling. Historical rows are kept, so the 7-day leaderboard stays visible while paused. A yellow "Collection paused" banner makes the state obvious on the site's capacity row.
 
 Use this once you've identified the hot-CPU offenders and no longer need the overhead of per-request DB writes that Companion's sampler produces.
 

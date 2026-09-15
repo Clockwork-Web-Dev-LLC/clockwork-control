@@ -2,7 +2,7 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Http/Controllers/SitesController.php, app/Services/Companion/**, modules/BackupRelay/src/Services/BackupArchiveEnumerator.php, modules/Pressable/src/**, config/clockwork.php]

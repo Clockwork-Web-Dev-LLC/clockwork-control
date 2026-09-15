@@ -2,7 +2,7 @@
 title: WordPress plugin inventory
 section: Features
 order: 80
-updated: 2026-09-09
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [wordpress, plugins, inventory, updates, pressable]
 tracks: [app/Services/Sites/WpPluginDetector.php, app/Console/Commands/{DetectWpPlugins,RefreshCompanionSnapshot}.php, app/Http/Controllers/WordPressPluginsController.php]
@@ -39,7 +39,7 @@ Updates are **synchronous** — the user watches them happen. No background job,
 
 ## Care plan banner
 
-The Updates tab shows a banner: "Updates included" (care plan) or "Billable" (no care plan). The `care_plan_enabled` flag is purely informational here — it doesn't gate the action. Anyone on the team can update plugins on any site; the banner just reminds you who pays.
+The Updates tab shows a banner: "Care Plan Active" (care plan) or "Hosting Tier" (standard hosting). The `care_plan_enabled` flag is purely informational here — it doesn't gate manual updates. Anyone on the team can update plugins on any site; the banner simply denotes tier coverage.
 
 ## LLAR install
 

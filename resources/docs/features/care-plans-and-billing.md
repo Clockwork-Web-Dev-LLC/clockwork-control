@@ -2,10 +2,10 @@
 title: Care plans + billing
 section: Features
 order: 100
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [care-plan, billing, bill-com, pressable, work-logs, reports]
-tracks: [app/Services/BillCom/**, app/Console/Commands/SyncBill*.php, app/Http/Controllers/SiteWorkLogsController.php, app/Models/SiteWorkLog.php]
+tracks: [app/Services/BillCom/**, app/Console/Commands/SyncBill*.php, app/Http/Controllers/SiteWorkLogsController.php, app/Models/SiteWorkLog.php, app/Http/Controllers/CarePlanSettingsController.php]
 ---
 
 Care-plan sites get the premium tier of monitoring. The flag (`sites.care_plan_enabled`) drives which scans run, which Companion admin pages show real data, and how the Updates tab is labelled. Bill.com sync flips the flag automatically based on actual invoicing — with a manual override per site for edge cases. Operators can also log manual effort hours via per-site Work Logs for client reports.
@@ -56,6 +56,13 @@ The fleet-wide Bill.com control panel:
 - Manual "Run sync now" buttons for both syncs.
 
 If credentials aren't configured, the syncs no-op silently — the page shows "Bill.com integration disabled."
+
+## /settings/care-plans (Global Care Plan Policy)
+
+Managed by `CarePlanSettingsController`, this control panel provides fleet-wide governance over the care plan engine:
+
+- **Master Policy Switch (`care_plans.enabled`)**: Persisted in `app_settings` (defaults to `config('clockwork.care_plans.enabled', true)`). When toggled off, automated care-plan tasks and checks across the entire system are globally suspended.
+- **Fleet Metrics Overview**: Displays total sites in the fleet, sites actively enrolled on a care plan (`sites.care_plan_enabled = true`), and enrolled care plan sites with automated nightly updates active (`auto_updates_paused = false`).
 
 ## How linking works
 

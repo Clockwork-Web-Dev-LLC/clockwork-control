@@ -707,6 +707,33 @@ class Site extends Model
         return $this->hasMany(SiteIngestExclusion::class);
     }
 
+    public function consolidatedInto(): BelongsTo
+    {
+        return $this->belongsTo(Site::class, 'consolidated_into_site_id');
+    }
+
+    public function consolidatedSites(): HasMany
+    {
+        return $this->hasMany(Site::class, 'consolidated_into_site_id')->withoutGlobalScope('notArchived');
+    }
+
+    public function isConsolidated(): bool
+    {
+        return $this->consolidated_into_site_id !== null;
+    }
+
+    /**
+     * Domains of all sites consolidated into this parent site (e.g. www/root aliases).
+     *
+     * @return list<string>
+     */
+    public function aliasDomains(): array
+    {
+        return $this->relationLoaded('consolidatedSites')
+            ? $this->consolidatedSites->pluck('domain')->all()
+            : $this->consolidatedSites()->pluck('domain')->all();
+    }
+
     public function isIssueIgnored(string $issueType): bool
     {
         return $this->relationLoaded('ignoredIssues')
@@ -766,6 +793,15 @@ class Site extends Model
     public function isClassicCompanion(): bool
     {
         return $this->companion_variant !== 'renegade';
+    }
+
+    /**
+     * Host pill for custom (no-server) sites: which plugin is the only
+     * control channel. SpinupWP / Pressable sites never render this.
+     */
+    public function pluginOnlyHostLabel(): string
+    {
+        return $this->isRenegade() ? 'Renegade Only' : 'Companion Only';
     }
 
     public function host(): HostingProvider

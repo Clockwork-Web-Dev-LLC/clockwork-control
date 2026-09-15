@@ -433,4 +433,85 @@ describe('clockwork:import-spinupwp', function () {
 
         expect(Site::query()->where('domain', 'renamed-dropped.example')->exists())->toBeFalse();
     });
+
+    it('matches an existing site by spinupwp_id even when the primary domain differs and consolidates alias', function () {
+        spinupwpConfig();
+
+        $server = Server::factory()->create(['spinupwp_id' => '12345']);
+        $existing = Site::factory()->create([
+            'domain' => 'caringworksinc.org',
+            'server_id' => $server->id,
+            'spinupwp_id' => '67890',
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+        ]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server(['id' => 12345, 'ip_address' => '203.0.113.10', 'provider_name' => 'DigitalOcean']),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::site([
+                        'id' => 67890,
+                        'server_id' => 12345,
+                        'domain' => 'www.caringworksinc.org',
+                        'additional_domains' => [
+                            ['domain' => 'caringworksinc.org'],
+                        ],
+                        'is_wordpress' => true,
+                    ]),
+                ]),
+                200
+            ),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')->assertSuccessful();
+
+        expect(Site::withoutGlobalScopes()->where('spinupwp_id', '67890')->count())->toBe(1);
+        $site = Site::withoutGlobalScopes()->where('spinupwp_id', '67890')->first();
+        expect($site->id)->toBe($existing->id)
+            ->and($site->domain)->toBe('caringworksinc.org');
+    });
+
+    it('matches an existing site by www/root variant when spinupwp_id was null', function () {
+        spinupwpConfig();
+
+        $server = Server::factory()->create(['spinupwp_id' => '12345']);
+        $existing = Site::factory()->create([
+            'domain' => 'caringworksinc.org',
+            'server_id' => $server->id,
+            'spinupwp_id' => null,
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+        ]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server(['id' => 12345, 'ip_address' => '203.0.113.10', 'provider_name' => 'DigitalOcean']),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::site([
+                        'id' => 67890,
+                        'server_id' => 12345,
+                        'domain' => 'www.caringworksinc.org',
+                        'is_wordpress' => true,
+                    ]),
+                ]),
+                200
+            ),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')->assertSuccessful();
+
+        expect(Site::withoutGlobalScopes()->count())->toBe(1);
+        $site = Site::withoutGlobalScopes()->first();
+        expect($site->id)->toBe($existing->id)
+            ->and($site->spinupwp_id)->toBe('67890');
+    });
 });

@@ -2,7 +2,7 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable, standalone, backups]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**, app/Http/Controllers/CompanionDownloadController.php]
@@ -138,6 +138,9 @@ Read-only GETs (HMAC-signed):
 - `/lockouts`, `/wordfence-blocks` — what the SSH+SQL fallback used to read
 - `/comments` — paginated, filterable comment listing for the Comment Moderation module (`ClockworkCompanionClient::comments()`)
 - `/maintenance-mode` — current maintenance-mode status and config for the Site Maintenance module (`maintenanceMode()`)
+- `/environment` — detailed PHP, MySQL, and WordPress runtime environment telemetry (`getEnvironment()`)
+- `/debug-log` — stream tail of WordPress `wp-content/debug.log` (`getDebugLog()`)
+- `/database/summary` — MySQL table sizes, overhead, and engine statistics (`getDatabaseSummary()`)
 
 Mutating POSTs (HMAC-signed):
 
@@ -147,7 +150,11 @@ Mutating POSTs (HMAC-signed):
 - `/sso/magic-link` — mint a one-time URL the operator clicks to land in wp-admin as the named admin
 - `/cache/flush` — object/page cache flush (`cache-flush` capability). Companion 1.35.0+. Clockwork also applies Pressable and Cloudflare layers from Control.
 - `/plugins/update` — single-slug WP plugin upgrade via `Plugin_Upgrader`
+- `/plugins/toggle`, `/plugins/delete`, `/plugins/install` — full plugin lifecycle management (activate, deactivate, delete, install via WP.org slug or signed package URL)
+- `/updates/translations` — execute WordPress core, plugin, and theme translation updates
 - `/secret/rotate` — rotate the per-site HMAC secret
+- `/debug-log/clear` — truncate `debug.log` (`clearDebugLog()`)
+- `/database/optimize` — optimize tables and reclaim overhead (`optimizeDatabase()`)
 - `/malware-scan` — run the in-WP malware probe (PHP-in-uploads, obfuscated-eval signatures, recently-touched wp-config). Returns findings as `{findings: [{kind, path, evidence}], scanned_at, scanned_files_count}`. Called nightly by `clockwork:run-companion-malware-scans`. Bypasses Cloudflare entirely — replaces SiteCheck's role on CF-fronted sites where Sucuri's external scanner gets 403'd at the edge. SSH wp-cli fallback exists for sites without the Companion installed.
 - `/post-update-verify` — post-update state verification and repair (v1.21.3+). Clockwork POSTs the expected active-plugin list and active theme after every successful update. Companion compares against current WordPress state, re-activates any plugin that went inactive, restores the theme if it changed, and returns a `{ok, repairs: [{type, slug, detail}]}` payload. Gated on the `post-update-verify` capability; sites with older Companion versions skip this call silently.
 - `/security-summary-report` — Pressable-only vulnerability alerts + Defensive Mode status (v1.31.6+). Clockwork pushes known plugin/theme CVEs (Pressable's own feed) and edge-cache Defensive Mode's on/off state; Companion stores it in `wp_options['clockwork_companion_pressable_security_summary']` and renders it on the Security admin page. Defensive Mode is status-only by design — no client-facing toggle. Called daily by `clockwork:pressable-security-summary-report`.

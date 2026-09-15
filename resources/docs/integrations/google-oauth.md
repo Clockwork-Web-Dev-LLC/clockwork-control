@@ -2,7 +2,7 @@
 title: Google OAuth
 section: Integrations
 order: 50
-updated: 2026-09-09
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [integrations, auth, google, github, microsoft, oauth]
 tracks: [app/Http/Controllers/Auth/**, app/Services/Auth/**, app/Http/Controllers/LoginController.php, modules/AuthGoogle/src/**, modules/AuthGitHub/src/**, modules/AuthMicrosoft/src/**, modules/Core/src/Contracts/AuthProvider.php, config/services.php]

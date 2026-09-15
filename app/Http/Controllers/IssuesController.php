@@ -15,6 +15,7 @@ use App\Services\Security\ClosedPluginAuditor;
 use App\Services\Security\CoreChecksumAllowlist;
 use App\Services\Security\FleetAdminAuditor;
 use App\Services\Security\PluginVulnerabilityMatcher;
+use App\Support\IssueCategoryConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -353,6 +354,8 @@ class IssuesController extends Controller
         $totals['seo-indexability'] = $totals['seo_blocked'];
         $totals['plugins-closed'] = $totals['plugins_closed'];
 
+        $categoryLevels = app(IssueCategoryConfig::class)->levels();
+
         return view('dashboard.issues', compact(
             'sslIssues',
             'domainExpirationIssues',
@@ -385,6 +388,7 @@ class IssuesController extends Controller
             'flaggedAdminSites',
             'ignoredAdminIssues',
             'totals',
+            'categoryLevels',
         ));
     }
 
@@ -497,5 +501,62 @@ class IssuesController extends Controller
         }
 
         return back()->with('status', "Restored {$domain} to active monitoring.");
+    }
+
+    public function updateCategoryLevel(Request $request, IssueCategoryConfig $config): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'category' => ['required', 'string'],
+            'level' => ['required', 'string', 'in:pressing,not_pressing,off'],
+        ]);
+
+        $config->setLevel($validated['category'], $validated['level']);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'category' => $validated['category'],
+                'level' => $validated['level'],
+                'levels' => $config->levels(),
+                'message' => 'Category priority updated.',
+            ]);
+        }
+
+        return back()->with('status', 'Category priority updated.');
+    }
+
+    public function updateAllCategoryLevels(Request $request, IssueCategoryConfig $config): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'levels' => ['required', 'array'],
+            'levels.*' => ['required', 'string', 'in:pressing,not_pressing,off'],
+        ]);
+
+        $config->saveLevels($validated['levels']);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'levels' => $config->levels(),
+                'message' => 'Category priorities updated.',
+            ]);
+        }
+
+        return back()->with('status', 'Category priorities updated.');
+    }
+
+    public function resetCategoryLevels(Request $request, IssueCategoryConfig $config): JsonResponse|RedirectResponse
+    {
+        $config->resetToDefaults();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'levels' => $config->levels(),
+                'message' => 'Category priorities reset to defaults.',
+            ]);
+        }
+
+        return back()->with('status', 'Category priorities reset to defaults.');
     }
 }

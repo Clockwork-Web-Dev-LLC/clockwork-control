@@ -78,9 +78,12 @@ class SitesController extends Controller
         $q = trim((string) $request->query('q', ''));
 
         $sites = Site::query()
-            ->with('server:id,name')
+            ->with(['server:id,name', 'consolidatedSites:id,domain,consolidated_into_site_id'])
             ->when($provider, fn ($query) => $query->where('hosting_provider', $provider))
-            ->when($q !== '', fn ($query) => $query->where('domain', 'like', '%'.$q.'%'))
+            ->when($q !== '', fn ($query) => $query->where(function ($sq) use ($q) {
+                $sq->where('domain', 'like', '%'.$q.'%')
+                    ->orWhereHas('consolidatedSites', fn ($csq) => $csq->withoutGlobalScopes()->where('domain', 'like', '%'.$q.'%'));
+            }))
             ->orderBy('domain')
             ->paginate(50)
             ->withQueryString();

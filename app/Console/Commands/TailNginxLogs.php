@@ -98,6 +98,7 @@ class TailNginxLogs extends Command
     {
         $query = Site::query()
             ->with('server')
+            ->whereNull('consolidated_into_site_id')
             ->whereHas('server', fn ($q) => $q
                 ->monitored()
                 ->whereNotNull('last_ssh_ok_at'));

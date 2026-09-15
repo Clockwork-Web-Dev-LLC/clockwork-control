@@ -2,7 +2,7 @@
 title: Google PageSpeed Insights
 section: Integrations
 order: 80
-updated: 2026-09-10
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, google, care-plan, pressable, modularization]
 tracks: [modules/PageSpeedInsights/src/PageSpeedInsightsClient.php, modules/PageSpeedInsights/src/PageSpeedInsightsServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]

@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-12
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -137,11 +137,20 @@ Two scoped tokens — separated so a leak of the read token can't mutate DNS:
 
 Daily at 01:00 + 01:30, gated on `CLOCKWORK_BILL_COM_ENABLED`.
 
-## Companion mu-plugin — `https://{domain}/wp-json/clockwork/v1/*`
+## Companion mu-plugin — `https://{domain}/wp-json/clockwork/v1/*` (or `clockwork-renegade/v1/*`)
 
-`app/Services/Companion/ClockworkCompanionClient.php` · HMAC-SHA256 with per-site secret (`X-Clockwork-Signature` + `X-Clockwork-Timestamp`, 5-min replay window).
+`app/Services/Companion/ClockworkCompanionClient.php` · HMAC-SHA256 with per-site secret (`X-Clockwork-Signature` + `X-Clockwork-Timestamp`, 5-min replay window), or 256-bit cryptographic connection key for Clockwork Renegade. Dynamically selects route namespace (`clockwork/v1` vs `clockwork-renegade/v1`).
 
-Routes: `/health`, `/detect`, `/snapshot`, `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`, `/test-contact-form`, `POST /backups-report`, `POST /backup/create` (direct-to-S3 Glacier streaming backup; Companion rejects non-public `upload_url` values before dumping), `POST /backup/restore/stage`, `GET /backup/restore/status`, `POST /backup/restore/apply` (two-step off-site Glacier restore; stage download URLs must be public HTTPS with no redirects). Full details on the `architecture/companion-plugin` page. Control only mints restore/download URLs for keys that `BackupArchiveEnumerator::belongsToSite()` accepts.
+Routes:
+- Diagnostics & Discovery: `/health`, `/detect`, `/snapshot`, `/environment` (PHP, MySQL, and WP runtime telemetry), `/debug-log` (inspector, `lines` param) + `POST /debug-log/clear`.
+- Inventory & Admin: `/plugins`, `/admins`, `/wp-cron`, `/comments-summary`, `/lockouts`, `/wordfence-blocks`.
+- Plugin Lifecycle: `POST /plugins/toggle` (activate/deactivate), `POST /plugins/delete`, `POST /plugins/install` (by slug or signed package URL).
+- Updates: `POST /updates/plugin`, `POST /updates/theme`, `POST /updates/core`, `POST /updates/translations`.
+- Database Maintenance: `/database/summary`, `POST /database/optimize` (table optimization and cleanup).
+- Backups & Restores: `POST /backups-report`, `POST /backup/create` (direct-to-S3 Glacier streaming backup; Companion rejects non-public `upload_url` values before dumping), `POST /backup/restore/stage`, `GET /backup/restore/status`, `POST /backup/restore/apply` (two-step off-site Glacier restore; stage download URLs must be public HTTPS with no redirects).
+- Contact Forms & SSO: `/form-subscriptions`, `POST /test-contact-form`, `POST /sso/link`.
+
+Full details on the `architecture/companion-plugin` page. Control only mints restore/download URLs for keys that `BackupArchiveEnumerator::belongsToSite()` accepts.
 
 ## wpvulnerability.net — `https://www.wpvulnerability.net/plugin/{slug}`
 

@@ -3,7 +3,7 @@ title: Inactive sites
 section: Features
 order: 32
 author: Aaron Reimann
-updated: 2026-09-11
+updated: 2026-09-14
 tags: [sites, issues, alerting, care-plan]
 tracks: [app/Models/Site.php, app/Models/SiteIngestExclusion.php, app/Support/IssueCounter.php, app/Http/Controllers/IssuesController.php, app/Http/Controllers/SitesController.php, app/Services/Chat/ChatNotifierDispatcher.php, database/migrations/*add_is_inactive_to_sites*, database/migrations/*site_ingest_exclusions*]
 ---
@@ -19,6 +19,7 @@ A client migrates away but asks to keep their old site reachable a while longer.
 | | Visible in Sites list / search? | What's suppressed |
 |---|---|---|
 | **Archive** (`archived_at`) | No — hidden from every listing entirely | Everything, because the row is effectively gone from the live app. For SpinupWP / Pressable this also writes `site_ingest_exclusions` so the host import will not bring the site back. |
+| **Domain ignore patterns** (`monitoring.ignored_domain_patterns`) | Yes | Uptime probes completely skipped, hidden from `/monitoring` and `/issues` down list via `Site::notDomainIgnored()`. Configured fleet-wide with wildcards (e.g. `*.mystagingwebsite.com`). |
 | **Uptime ignore** (`uptime_ignored_at`) | Yes | Only uptime alerts/Issues entries for that one site — probe keeps running |
 | **Inactive** (`is_inactive`) | Yes | Every routine-maintenance signal at once (see below) — not just one |
 | **Issue-specific ignore** (`ignored_issues`) | Yes | Just the one ignored issue type (e.g. an intentional `noindex`) on an otherwise fully-monitored site, with an operator-recorded reason — see [Architecture → Data model](/docs/architecture/data-model) |

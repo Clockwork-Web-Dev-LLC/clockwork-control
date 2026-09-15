@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-11
+updated: 2026-09-14
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -29,7 +29,7 @@ One row per managed host. Natural key: `spinupwp_id`. Notable columns:
 
 One row per WordPress (or non-WP) site. Natural key: `domain` (unique). Notable columns:
 
-- Linkage: `server_id` (**nullable** — null for Pressable sites, which have no server concept), `spinupwp_id`, `hosting_provider` (`spinupwp` | `pressable` | `gridpane` | `wpengine` | `kinsta` | `cloudways`), `pressable_site_id` (nullable, unique — mirrors `spinupwp_id`), `site_user`, `wp_path`. `hosting_provider` has **no default** as of a 2026-09-08 migration — every creation path (`ImportSpinupWp`, `ImportPressable`, `ImportGridPane`, `SiteFactory`, …) now sets it explicitly, so a future path that forgets it fails loudly (NOT NULL violation) instead of silently mislabeling the site as `spinupwp` and falling into the orphan-sites query.
+- Linkage: `server_id` (**nullable** — null for Pressable sites, which have no server concept), `spinupwp_id`, `hosting_provider` (`spinupwp` | `pressable` | `gridpane` | `wpengine` | `kinsta` | `cloudways`), `pressable_site_id` (nullable, unique — mirrors `spinupwp_id`), `site_user`, `wp_path`, `consolidated_into_site_id` (nullable FK to a canonical `sites` row, used to consolidate secondary www/non-www domain aliases). `hosting_provider` has **no default** as of a 2026-09-08 migration — every creation path (`ImportSpinupWp`, `ImportPressable`, `ImportGridPane`, `SiteFactory`, …) now sets it explicitly, so a future path that forgets it fails loudly (NOT NULL violation) instead of silently mislabeling the site as `spinupwp` and falling into the orphan-sites query.
 - Database: `db_host`, `db_port`, `db_name`, `db_user`, `db_password` (encrypted), `table_prefix`.
 - Identity: `is_wordpress`, `wordfence_enabled`, `llar_enabled`, `wp_plugins_detected_at`, `wp_core_update`, `wp_theme_updates`, `wp_plugin_updates`. The `wp_core_update`/`wp_theme_updates`/`wp_plugin_updates` booleans are SpinupWP-inventory-only — always false for Pressable sites even when real pending updates exist (visible instead via `companion_snapshot`). UI hides those specific pills for Pressable rather than showing a false "up to date."
 - Cert: `cert_source`, `cert_expires_at`, `cert_renews_at`, `cert_state`, `cert_state_changed_at`, `cert_notes`.
@@ -71,7 +71,7 @@ One row per tracked module (`slug`, `is_enabled`, timestamps) via `App\Models\In
 
 ### `app_settings`
 
-Singleton key/value store via `App\Support\Settings`. Holds the ingest schedule, per-source enable + last_run_at, `logs.threat_retention_*` (raw nginx keep-window), `auto_approve_repeats_enabled`, monitoring thresholds. Driven by `/settings/ingest` and `/monitoring/settings`.
+Singleton key/value store via `App\Support\Settings`. Holds the ingest schedule, per-source enable + last_run_at, `logs.threat_retention_*` (raw nginx keep-window), `auto_approve_repeats_enabled`, monitoring thresholds, fleet-wide domain ignore wildcards (`monitoring.ignored_domain_patterns`), custom issue category priority tiers (`issues.category_levels`), and the global care plan policy toggle (`care_plans.enabled`). Driven by `/settings/ingest`, `/monitoring/settings`, `/settings/care-plans`, and the Issues category visibility modal.
 
 ### `integration_credentials`
 
