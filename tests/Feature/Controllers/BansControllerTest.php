@@ -5,6 +5,7 @@ use App\Models\ReviewQueueEntry;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Fail2ban\BanRetention;
 use Illuminate\Support\Carbon;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -219,5 +220,113 @@ describe('history() — merges decided ReviewQueueEntry rows + unbanned BlockedI
             ->assertDontSee('198.51.100.44')
             ->assertDontSee('198.51.100.45')
             ->assertSee('No history yet.');
+    });
+
+    it('falls back to site server in history when server_id is null', function () {
+        $server = Server::factory()->create(['name' => 'shared-host.clockworkwp.com']);
+        $site = Site::factory()->create([
+            'domain' => 'lockout-site.example.com',
+            'server_id' => $server->id,
+        ]);
+
+        ReviewQueueEntry::factory()->create([
+            'ip' => '203.0.113.50',
+            'server_id' => null,
+            'site_id' => $site->id,
+            'status' => ReviewQueueEntry::STATUS_FAILED,
+            'decided_at' => now(),
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get(route('bans.history'));
+
+        $response->assertOk()
+            ->assertSee('203.0.113.50')
+            ->assertSee('lockout-site.example.com')
+            ->assertSee('shared-host.clockworkwp.com');
+    });
+
+    it('updates ban retention policy via PATCH /bans/retention', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->patch(route('bans.retention.update'), [
+                'months' => 6,
+            ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('ban_status', 'Ban retention policy updated to 6 months.');
+
+        expect(app(BanRetention::class)->retentionMonths())->toBe(6);
+    });
+
+    it('prunes active bans via POST /bans/prune', function () {
+        $server = Server::factory()->create();
+        BlockedIp::factory()->create([
+            'server_id' => $server->id,
+            'ip' => '198.51.100.99',
+            'banned_at' => now()->subMonths(5),
+            'unbanned_at' => null,
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->post(route('bans.prune'), [
+                'months' => '3',
+            ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('ban_status', 'Successfully cleared 1 active ban(s) older than 3 month(s).');
+
+        expect(BlockedIp::query()->whereNull('unbanned_at')->count())->toBe(0);
+    });
+
+    it('rejects a negative prune cutoff instead of clearing every active ban', function () {
+        $server = Server::factory()->create();
+        BlockedIp::factory()->create([
+            'server_id' => $server->id,
+            'banned_at' => now()->subDays(2),
+            'unbanned_at' => null,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->from(route('bans.active'))
+            ->post(route('bans.prune'), [
+                'months' => '-1',
+            ]);
+
+        $response->assertRedirect(route('bans.active'))
+            ->assertSessionHasErrors('months');
+
+        expect(BlockedIp::query()->whereNull('unbanned_at')->count())->toBe(1);
+    });
+
+    it('renders retention-pruned bans as Expired, distinct from a manual unban', function () {
+        $server = Server::factory()->create(['name' => 'expire-server.example.com']);
+
+        BlockedIp::factory()->create([
+            'ip' => '198.51.100.80',
+            'server_id' => $server->id,
+            'unbanned_at' => now(),
+            'decided_by' => BanRetention::DECIDED_BY,
+            'llm_verdict' => 'malicious',
+        ]);
+
+        BlockedIp::factory()->create([
+            'ip' => '198.51.100.81',
+            'server_id' => $server->id,
+            'unbanned_at' => now()->subMinute(),
+            'decided_by' => 'manual',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('bans.history'));
+
+        $response->assertOk()
+            ->assertSee('198.51.100.80')
+            ->assertSee('198.51.100.81')
+            ->assertSee('Expired')
+            ->assertSee('Unbanned');
     });
 });

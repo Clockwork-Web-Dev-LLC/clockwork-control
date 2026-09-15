@@ -156,6 +156,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/bans/queue', [BansController::class, 'queue'])->name('bans.queue');
     Route::get('/bans/active', [BansController::class, 'active'])->name('bans.active');
     Route::get('/bans/history', [BansController::class, 'history'])->name('bans.history');
+    Route::patch('/bans/retention', [BansController::class, 'updateRetention'])->name('bans.retention.update');
+    Route::post('/bans/prune', [BansController::class, 'bulkClear'])->name('bans.prune');
 
     // Old GET URLs → 301 to the new tabs. Keeps bookmarks working but retrains muscle memory.
     // request()->query() returns the array of query params directly (no ->all() needed).

@@ -6,6 +6,7 @@ use App\Models\BlockedIp;
 use App\Models\ReviewQueueEntry;
 use App\Models\Server;
 use App\Models\Site;
+use App\Services\Fail2ban\BanRetention;
 use Illuminate\Support\Carbon;
 
 /**
@@ -40,7 +41,7 @@ class BanHistoryRow
                 default => 'unknown',
             },
             'ip' => (string) $entry->ip,
-            'server' => $entry->server,
+            'server' => $entry->server ?: $entry->site?->server,
             'site' => $entry->site,
             'actor' => (string) ($entry->decided_by ?: '—'),
             'source' => (string) $entry->source,
@@ -50,13 +51,16 @@ class BanHistoryRow
 
     public static function fromBlockedIp(BlockedIp $ban): self
     {
+        $isExpired = $ban->decided_by === BanRetention::DECIDED_BY
+            || $ban->llm_verdict === 'expired';
+
         return new self([
             'when' => $ban->unbanned_at,
-            'kind' => 'unbanned',
+            'kind' => $isExpired ? 'expired' : 'unbanned',
             'ip' => (string) $ban->ip,
-            'server' => $ban->server,
+            'server' => $ban->server ?: $ban->site?->server,
             'site' => $ban->site,
-            'actor' => 'manual',
+            'actor' => $isExpired ? 'auto' : 'manual',
             'source' => (string) $ban->source,
             'note' => (string) ($ban->reason ?? ''),
         ]);

@@ -36,6 +36,7 @@ class MaintenanceHistoryController extends Controller
         ActionLog::TYPE_COMPANION_UNINSTALL => 'Companion uninstall',
         ActionLog::TYPE_MANUAL_BAN => 'Manual ban',
         ActionLog::TYPE_MANUAL_UNBAN => 'Manual unban',
+        ActionLog::TYPE_BAN_EXPIRED => 'Ban expired',
         ActionLog::TYPE_REVIEW_APPROVE => 'Review approve',
         ActionLog::TYPE_REVIEW_DISMISS => 'Review dismiss',
         ActionLog::TYPE_CARE_PLAN_TOGGLED => 'Care plan toggled',

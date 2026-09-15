@@ -30,7 +30,7 @@ class ProcessPendingBans extends Command
         $limit = max(1, (int) $this->option('limit'));
 
         $entries = ReviewQueueEntry::query()
-            ->with('server')
+            ->with(['server', 'site.server'])
             ->where('status', ReviewQueueEntry::STATUS_QUEUED_FOR_BAN)
             ->orderBy('decided_at')
             ->limit($limit)
@@ -44,7 +44,8 @@ class ProcessPendingBans extends Command
         $failed = 0;
 
         foreach ($entries as $entry) {
-            if (! $entry->server) {
+            $server = $entry->server ?: $entry->site?->server;
+            if (! $server) {
                 $entry->update([
                     'status' => ReviewQueueEntry::STATUS_FAILED,
                     'reason' => ($entry->reason ? $entry->reason.' | ' : '').'server record missing at process time',
@@ -54,12 +55,16 @@ class ProcessPendingBans extends Command
                 continue;
             }
 
-            $result = $fail2ban->banIp($entry->server, $entry->ip);
+            if ($entry->server_id !== $server->id) {
+                $entry->update(['server_id' => $server->id]);
+            }
+
+            $result = $fail2ban->banIp($server, $entry->ip);
 
             Log::info('process_pending_bans.attempt', [
                 'entry_id' => $entry->id,
                 'ip' => $entry->ip,
-                'server' => $entry->server->name,
+                'server' => $server->name,
                 'ok' => $result['ok'],
                 'message' => $result['message'],
             ]);
@@ -78,7 +83,7 @@ class ProcessPendingBans extends Command
             // Avoid duplicate ban records when re-running on an IP that was already banned
             // (e.g. a previous request 500'd halfway through and we're picking up stragglers).
             $alreadyTracked = BlockedIp::query()
-                ->where('server_id', $entry->server_id)
+                ->where('server_id', $server->id)
                 ->where('ip', $entry->ip)
                 ->whereNull('unbanned_at')
                 ->where(function ($q) {
@@ -89,7 +94,7 @@ class ProcessPendingBans extends Command
             if (! $alreadyTracked) {
                 $blocked = BlockedIp::create([
                     'ip' => $entry->ip,
-                    'server_id' => $entry->server_id,
+                    'server_id' => $server->id,
                     'site_id' => $entry->site_id,
                     'source' => $entry->source ?: BlockedIp::SOURCE_MANUAL,
                     'reason' => $entry->reason ?: 'Approved from review queue',

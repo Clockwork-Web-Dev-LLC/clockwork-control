@@ -106,33 +106,38 @@ class BlockedIpsController extends Controller
 
     public function unban(BlockedIp $blockedIp, Fail2banClient $client, ActionLogger $logger): RedirectResponse
     {
-        if (! $blockedIp->server) {
-            return back()->with('status_error', 'Cannot unban — server record missing.');
+        $server = $blockedIp->server ?: $blockedIp->site?->server;
+
+        if ($server) {
+            $result = $client->unbanIp($server, $blockedIp->ip);
+
+            if (! $result['ok']) {
+                $logger->record(
+                    actionType: ActionLog::TYPE_MANUAL_UNBAN,
+                    summary: "Unban failed for {$blockedIp->ip} on {$server->name}.",
+                    site: $blockedIp->site,
+                    server: $server,
+                    target: $blockedIp->ip,
+                    ok: false,
+                    error: $result['message'].' — '.$result['output'],
+                );
+
+                return back()->with('status_error', $result['message'].' — '.$result['output']);
+            }
         }
 
-        $result = $client->unbanIp($blockedIp->server, $blockedIp->ip);
-
-        if (! $result['ok']) {
-            $logger->record(
-                actionType: ActionLog::TYPE_MANUAL_UNBAN,
-                summary: "Unban failed for {$blockedIp->ip} on {$blockedIp->server->name}.",
-                site: $blockedIp->site,
-                server: $blockedIp->server,
-                target: $blockedIp->ip,
-                ok: false,
-                error: $result['message'].' — '.$result['output'],
-            );
-
-            return back()->with('status_error', $result['message'].' — '.$result['output']);
-        }
-
-        $blockedIp->update(['unbanned_at' => Carbon::now()]);
+        $blockedIp->update([
+            'server_id' => $server?->id ?? $blockedIp->server_id,
+            'unbanned_at' => Carbon::now(),
+        ]);
 
         $logger->record(
             actionType: ActionLog::TYPE_MANUAL_UNBAN,
-            summary: "Unbanned {$blockedIp->ip} on {$blockedIp->server->name}.",
+            summary: $server
+                ? "Unbanned {$blockedIp->ip} on {$server->name}."
+                : "Unbanned {$blockedIp->ip}.",
             site: $blockedIp->site,
-            server: $blockedIp->server,
+            server: $server,
             target: $blockedIp->ip,
         );
 

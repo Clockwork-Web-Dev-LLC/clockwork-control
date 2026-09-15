@@ -40,7 +40,7 @@ class ReviewQueueController extends Controller
         // in SQL across the JSON evidence column is awkward and the volume here is bounded
         // (typically hundreds, not thousands of rows even with a dirty fleet).
         $pending = ReviewQueueEntry::query()
-            ->with(['server', 'site'])
+            ->with(['server', 'site.server'])
             ->where('status', ReviewQueueEntry::STATUS_PENDING)
             ->when($sourceFilter, fn ($q) => $q->where('source', $sourceFilter))
             ->orderBy('ip')
@@ -61,7 +61,7 @@ class ReviewQueueController extends Controller
             ->values();
 
         $recent = ReviewQueueEntry::query()
-            ->with(['server', 'site'])
+            ->with(['server', 'site.server'])
             ->whereIn('status', [
                 ReviewQueueEntry::STATUS_APPROVED,
                 ReviewQueueEntry::STATUS_DISMISSED,
@@ -164,9 +164,10 @@ class ReviewQueueController extends Controller
                         $sites[] = $entry->site->domain;
                     }
 
-                    if ($entry->server) {
-                        $key = $entry->server->id;
-                        $servers[$key] = ['id' => $key, 'name' => $entry->server->name];
+                    $server = $entry->server ?: $entry->site?->server;
+                    if ($server) {
+                        $key = $server->id;
+                        $servers[$key] = ['id' => $key, 'name' => $server->name];
                     }
 
                     $entryLatest = $entry->updated_at ?? $entry->created_at;
@@ -197,8 +198,17 @@ class ReviewQueueController extends Controller
             return back()->with('queue_error', 'Entry is not pending.');
         }
 
-        if (! $entry->server) {
+        $entry->loadMissing(['server', 'site.server']);
+        $server = $entry->server ?: $entry->site?->server;
+
+        if (! $server) {
             return back()->with('queue_error', 'Cannot approve — server record missing.');
+        }
+
+        if ($entry->server_id !== $server->id) {
+            $entry->server_id = $server->id;
+            $entry->setRelation('server', $server);
+            $entry->save();
         }
 
         $result = $this->banSingle($entry, $fail2ban, $chat);
@@ -206,9 +216,9 @@ class ReviewQueueController extends Controller
         if (! $result['ok']) {
             $logger->record(
                 actionType: ActionLog::TYPE_REVIEW_APPROVE,
-                summary: "Approve failed for {$entry->ip} on {$entry->server->name}.",
+                summary: "Approve failed for {$entry->ip} on {$server->name}.",
                 site: $entry->site,
-                server: $entry->server,
+                server: $server,
                 target: $entry->ip,
                 details: ['source' => $entry->source, 'entry_id' => $entry->id],
                 ok: false,
@@ -220,14 +230,14 @@ class ReviewQueueController extends Controller
 
         $logger->record(
             actionType: ActionLog::TYPE_REVIEW_APPROVE,
-            summary: "Approved + banned {$entry->ip} on {$entry->server->name}.",
+            summary: "Approved + banned {$entry->ip} on {$server->name}.",
             site: $entry->site,
-            server: $entry->server,
+            server: $server,
             target: $entry->ip,
             details: ['source' => $entry->source, 'entry_id' => $entry->id],
         );
 
-        return back()->with('queue_status', "Banned {$entry->ip} on {$entry->server->name}.");
+        return back()->with('queue_status', "Banned {$entry->ip} on {$server->name}.");
     }
 
     public function dismiss(ReviewQueueEntry $entry, ActionLogger $logger): RedirectResponse
@@ -363,7 +373,7 @@ class ReviewQueueController extends Controller
 
         $blocked = BlockedIp::create([
             'ip' => $entry->ip,
-            'server_id' => $entry->server_id,
+            'server_id' => $entry->server->id,
             'site_id' => $entry->site_id,
             'source' => $entry->source ?: BlockedIp::SOURCE_MANUAL,
             'reason' => $entry->reason ?: 'Approved from review queue',

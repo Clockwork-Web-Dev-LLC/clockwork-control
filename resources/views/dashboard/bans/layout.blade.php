@@ -8,7 +8,7 @@
 
     {{-- Stats strip — consistent across tabs. The auto-approve toggle from the
          queue page is hoisted up here so it's reachable from any tab. --}}
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <a href="{{ route('bans.queue') }}" class="card px-4 py-3 hover:bg-[var(--color-surface-alt)] transition-colors">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Bans pending</div>
             <div class="text-2xl font-display font-data {{ ($reviewQueueCount ?? 0) > 0 ? 'text-[var(--color-primary-600)]' : 'text-[var(--color-ink-strong)]' }}">
@@ -44,6 +44,18 @@
                 </form>
             @endisset
         </div>
+        <div class="card px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Ban retention</div>
+                <div class="text-2xl font-display font-data text-[var(--color-ink-strong)]">
+                    {{ ($retentionMonths ?? 12) > 0 ? ($retentionMonths ?? 12) . ' Mo' : 'Forever' }}
+                </div>
+            </div>
+            <button type="button" class="btn-pill-nav text-xs" @click="$dispatch('open-ban-retention-modal')">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                Policy
+            </button>
+        </div>
     </div>
 
     {{-- Shared Security tab strip — Scans / Queue / Active / History. --}}
@@ -64,4 +76,6 @@
     @endif
 
     @include($tabPartial)
+
+    @include('dashboard.bans._modal-retention')
 @endsection

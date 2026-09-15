@@ -357,10 +357,11 @@ describe('BlockedIpsController::unban()', function () {
         expect($log->error)->toContain('ERROR: connection refused');
     });
 
-    it('flashes status_error and never calls Fail2banClient when the BlockedIp has no server', function () {
+    it('marks the row unbanned without calling Fail2banClient when no server can be resolved', function () {
         $blockedIp = BlockedIp::factory()->create([
             'ip' => '198.51.100.22',
             'server_id' => null,
+            'site_id' => null,
         ]);
         $user = User::factory()->create();
 
@@ -369,10 +370,10 @@ describe('BlockedIpsController::unban()', function () {
         $response = $this->actingAs($user)->post(route('blocked-ips.unban', $blockedIp));
 
         $response->assertRedirect();
-        $response->assertSessionHas('status_error', 'Cannot unban — server record missing.');
+        $response->assertSessionHas('status', 'Unbanned 198.51.100.22.');
 
         $blockedIp->refresh();
-        expect($blockedIp->unbanned_at)->toBeNull();
+        expect($blockedIp->unbanned_at)->not->toBeNull();
     });
 
     it('requires authentication', function () {

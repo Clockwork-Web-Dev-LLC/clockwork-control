@@ -167,6 +167,13 @@ Schedule::command('clockwork:prune-threat-logs')
     ->runInBackground()
     ->onOneServer();
 
+// Prune active bans older than the retention window (default 12 months / 1 year)
+// by marking them unbanned, keeping the active firewall list clean and bounded.
+Schedule::command('clockwork:prune-expired-bans')
+    ->dailyAt('04:33')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Probe each WP site over SSH for active security plugins. SpinupWP's API doesn't
 // expose plugin inventory, so this is the only way to keep llar_enabled /
 // wordfence_enabled honest on the inventory page.

@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * @property ?string $llm_verdict malicious|suspicious|benign
  * @property ?string $llm_reasoning
  * @property ?string $decision approved|dismissed|auto
- * @property ?string $decided_by
+ * @property ?string $decided_by manual|auto|retention|…
  * @property ?Carbon $banned_at
  * @property ?Carbon $expires_at
  * @property ?Carbon $unbanned_at

@@ -5,6 +5,7 @@
             'failed'    => '<span class="status-pill status-yellow text-xs"><i class="fa-solid fa-triangle-exclamation"></i> Failed</span>',
             'dismissed' => '<span class="status-pill status-unknown text-xs"><i class="fa-solid fa-xmark"></i> Dismissed</span>',
             'unbanned'  => '<span class="status-pill status-green text-xs"><i class="fa-solid fa-rotate-left"></i> Unbanned</span>',
+            'expired'   => '<span class="status-pill status-unknown text-xs"><i class="fa-solid fa-clock-rotate-left"></i> Expired</span>',
             default     => '<span class="status-pill status-unknown text-xs">' . e($kind) . '</span>',
         };
     };

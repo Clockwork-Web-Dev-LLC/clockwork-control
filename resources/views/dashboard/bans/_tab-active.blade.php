@@ -15,7 +15,12 @@
                 <a href="{{ route('bans.active') }}" id="bans-clear-fallback" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)]">Clear</a>
             @endif
         </form>
-        <span class="text-sm text-[var(--color-ink-soft)]" id="bans-total-count">{{ number_format($active->total()) }} total</span>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-[var(--color-ink-soft)]" id="bans-total-count">{{ number_format($active->total()) }} total</span>
+            <button type="button" class="btn-pill-nav text-xs" @click="$dispatch('open-ban-retention-modal', { mode: 'bulk' })" title="Bulk clear or prune expired bans">
+                <i class="fa-solid fa-broom mr-1"></i> Bulk Clear
+            </button>
+        </div>
     </div>
 
     <div id="bans-no-match" class="p-10 text-center text-[var(--color-ink-soft)] {{ $active->isEmpty() ? '' : 'hidden' }}">

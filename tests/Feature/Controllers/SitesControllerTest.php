@@ -453,17 +453,26 @@ describe('unbanIp', function () {
         expect($blockedIp->fresh()->unbanned_at)->not->toBeNull();
     });
 
-    it('flashes an error and does not call fail2ban when the ban has no server', function () {
-        [, $site] = spinupSite();
-        $blockedIp = BlockedIp::factory()->for($site)->create(['server_id' => null]);
+    it('falls back to the site server when the ban row has no server_id', function () {
+        [$server, $site] = spinupSite();
+        $blockedIp = BlockedIp::factory()->for($site)->create([
+            'ip' => '198.51.100.11',
+            'server_id' => null,
+        ]);
 
-        $this->mock(Fail2banClient::class)->shouldNotReceive('unbanIp');
+        $this->mock(Fail2banClient::class)
+            ->shouldReceive('unbanIp')
+            ->once()
+            ->withArgs(fn (Server $s, string $ip) => $s->is($server) && $ip === '198.51.100.11')
+            ->andReturn(['ok' => true, 'output' => 'ok', 'message' => 'Unbanned']);
 
         $response = $this->actingAs(User::factory()->create())
             ->post(route('sites.bans.unban', [$site, $blockedIp]));
 
-        $response->assertSessionHas('status_error');
-        expect($blockedIp->fresh()->unbanned_at)->toBeNull();
+        $response->assertRedirect();
+        $response->assertSessionHas('status', 'Unbanned 198.51.100.11.');
+        expect($blockedIp->fresh()->unbanned_at)->not->toBeNull()
+            ->and($blockedIp->fresh()->server_id)->toBe($server->id);
     });
 });
 
@@ -497,6 +506,28 @@ describe('unbanAll', function () {
         $response->assertSessionHas('status', "Unbanned 2 of 2 for {$site->domain}.");
         expect($a->fresh()->unbanned_at)->not->toBeNull();
         expect($b->fresh()->unbanned_at)->not->toBeNull();
+    });
+
+    it('falls back to the site server for unban-all rows with a null server_id', function () {
+        [$server, $site] = spinupSite();
+        $orphan = BlockedIp::factory()->for($site)->create([
+            'ip' => '198.51.100.22',
+            'server_id' => null,
+        ]);
+
+        $this->mock(Fail2banClient::class)
+            ->shouldReceive('unbanIps')
+            ->once()
+            ->withArgs(fn (Server $s, array $ips) => $s->is($server) && $ips === ['198.51.100.22'])
+            ->andReturn(['results' => [
+                '198.51.100.22' => ['ok' => true, 'output' => 'ok'],
+            ]]);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.bans.unban-all', $site));
+
+        $response->assertSessionHas('status', "Unbanned 1 of 1 for {$site->domain}.");
+        expect($orphan->fresh()->unbanned_at)->not->toBeNull()
+            ->and($orphan->fresh()->server_id)->toBe($server->id);
     });
 });
 

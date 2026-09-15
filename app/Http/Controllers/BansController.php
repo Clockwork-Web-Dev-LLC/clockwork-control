@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\AutoApproveRepeats;
 use App\Models\BlockedIp;
 use App\Models\ReviewQueueEntry;
+use App\Services\Fail2ban\BanRetention;
 use App\Support\BanHistoryRow;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
@@ -36,39 +38,33 @@ class BansController extends Controller
         return redirect()->route('bans.queue');
     }
 
-    public function queue(Request $request, ReviewQueueController $reviewController, Settings $settings): View
+    public function queue(Request $request, ReviewQueueController $reviewController, Settings $settings, BanRetention $retention): View
     {
-        // Delegate the (already-tested) data assembly to the existing controller.
-        // assembleData() returns the array directly — no intermediate view
-        // construction, so deleting the legacy review-queue.blade.php template
-        // didn't have to break this path.
         $data = $reviewController->assembleData($request, $settings);
 
         return view('dashboard.bans.layout', array_merge($data, [
             'activeTab' => 'queue',
             'tabPartial' => 'dashboard.bans._tab-queue',
-            'activeBansCount' => $this->activeBansCount(),
-        ]));
+        ], $this->sharedStats($settings, $retention)));
     }
 
-    public function active(Request $request, BlockedIpsController $ipsController): View
+    public function active(Request $request, BlockedIpsController $ipsController, Settings $settings, BanRetention $retention): View
     {
         $data = $ipsController->assembleData($request);
 
         return view('dashboard.bans.layout', array_merge($data, [
             'activeTab' => 'active',
             'tabPartial' => 'dashboard.bans._tab-active',
-            'activeBansCount' => $this->activeBansCount(),
-        ]));
+        ], $this->sharedStats($settings, $retention)));
     }
 
-    public function history(Request $request): View
+    public function history(Request $request, Settings $settings, BanRetention $retention): View
     {
         $ipFilter = trim((string) $request->query('ip', ''));
 
         // Pull last 50 of each kind. Eager-load relations so the Blade isn't N+1.
         $decisions = ReviewQueueEntry::query()
-            ->with(['server', 'site'])
+            ->with(['server', 'site.server'])
             ->whereIn('status', [
                 ReviewQueueEntry::STATUS_APPROVED,
                 ReviewQueueEntry::STATUS_DISMISSED,
@@ -81,7 +77,7 @@ class BansController extends Controller
             ->get();
 
         $unbans = BlockedIp::query()
-            ->with(['server', 'site'])
+            ->with(['server', 'site.server'])
             ->whereNotNull('unbanned_at')
             ->when($ipFilter !== '', fn ($q) => $q->where('ip', $ipFilter))
             ->orderByDesc('unbanned_at')
@@ -96,22 +92,66 @@ class BansController extends Controller
             ->take(50)
             ->values();
 
-        return view('dashboard.bans.layout', [
+        return view('dashboard.bans.layout', array_merge([
             'activeTab' => 'history',
             'tabPartial' => 'dashboard.bans._tab-history',
             'rows' => $rows,
             'ipFilter' => $ipFilter,
-            'activeBansCount' => $this->activeBansCount(),
-        ]);
+        ], $this->sharedStats($settings, $retention)));
     }
 
     /**
-     * Cheap count for the stats strip + the Active tab pill. Excluded from the
-     * Queue and History delegations because their existing controllers don't
-     * compute it; computing it once here keeps the strip consistent across tabs.
+     * Update default ban retention months setting.
      */
-    private function activeBansCount(): int
+    public function updateRetention(Request $request, BanRetention $retention): RedirectResponse
     {
-        return BlockedIp::query()->whereNull('unbanned_at')->count();
+        $inputVal = $request->input('retention_months', $request->input('months'));
+
+        $validated = validator(['retention_months' => $inputVal], [
+            'retention_months' => ['required', 'integer', 'min:0', 'max:120'],
+        ])->validate();
+
+        $retention->setRetentionMonths((int) $validated['retention_months']);
+
+        $label = (int) $validated['retention_months'] > 0
+            ? "{$validated['retention_months']} months"
+            : 'indefinite (never expire)';
+
+        return back()->with('ban_status', "Ban retention policy updated to {$label}.");
+    }
+
+    /**
+     * Bulk clear / prune active bans on-demand by age cutoff.
+     */
+    public function bulkClear(Request $request, BanRetention $retention): RedirectResponse
+    {
+        $validated = $request->validate([
+            'months' => ['required', 'integer', 'in:'.implode(',', BanRetention::PRUNE_MONTH_OPTIONS)],
+        ]);
+
+        $months = (int) $validated['months'];
+        $pruned = $retention->prune($months, actor: 'manual');
+
+        $label = $months > 0 ? "older than {$months} month(s)" : 'across all dates';
+
+        return back()->with('ban_status', "Successfully cleared {$pruned} active ban(s) {$label}.");
+    }
+
+    /**
+     * Shared stats strip metrics across all three tabs.
+     */
+    private function sharedStats(Settings $settings, BanRetention $retention): array
+    {
+        return [
+            'activeBansCount' => BlockedIp::query()->whereNull('unbanned_at')->count(),
+            'reviewQueueCount' => ReviewQueueEntry::query()->where('status', ReviewQueueEntry::STATUS_PENDING)->count(),
+            'autoApproveEnabled' => (bool) $settings->get('auto_approve_repeats_enabled', false),
+            'autoApprovedRecently' => ReviewQueueEntry::query()
+                ->where('decided_by', AutoApproveRepeats::DECIDED_BY)
+                ->where('decided_at', '>=', now()->subDay())
+                ->count(),
+            'retentionMonths' => $retention->retentionMonths(),
+            'banBreakdown' => $retention->breakdown(),
+        ];
     }
 }

@@ -1,9 +1,13 @@
 <?php
 
 use App\Models\ActionLog;
+use App\Models\BlockedIp;
 use App\Models\ReviewQueueEntry;
 use App\Models\Server;
+use App\Models\Site;
 use App\Models\User;
+use App\Services\Chat\ChatNotifier;
+use App\Services\Fail2ban\Fail2banClient;
 use App\Support\Settings;
 
 /*
@@ -287,5 +291,45 @@ describe('dismiss()', function () {
 
         $this->actingAs($user)->post(route('review-queue.dismiss', ['entry' => 999999]))
             ->assertNotFound();
+    });
+});
+
+describe('approve() server fallback', function () {
+    it('falls back to site->server and backfills server_id when the entry has none', function () {
+        $server = Server::factory()->create(['name' => 'shared-host.clockworkwp.com']);
+        $site = Site::factory()->create([
+            'domain' => 'lockout-site.example.com',
+            'server_id' => $server->id,
+        ]);
+        $entry = ReviewQueueEntry::factory()->create([
+            'ip' => '203.0.113.50',
+            'server_id' => null,
+            'site_id' => $site->id,
+            'status' => ReviewQueueEntry::STATUS_PENDING,
+        ]);
+
+        $this->mock(Fail2banClient::class)
+            ->shouldReceive('banIp')
+            ->once()
+            ->withArgs(fn ($s, $ip) => $s->id === $server->id && $ip === '203.0.113.50')
+            ->andReturn(['ok' => true, 'output' => "1\n", 'message' => 'ok']);
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('ipBlocked')->once()->andReturn(true);
+        });
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('review-queue.approve', $entry));
+
+        $response->assertRedirect()
+            ->assertSessionHas('queue_status', 'Banned 203.0.113.50 on shared-host.clockworkwp.com.');
+
+        $entry->refresh();
+        expect($entry->status)->toBe(ReviewQueueEntry::STATUS_APPROVED)
+            ->and($entry->server_id)->toBe($server->id);
+
+        $blocked = BlockedIp::query()->where('ip', '203.0.113.50')->first();
+        expect($blocked)->not->toBeNull()
+            ->and($blocked->server_id)->toBe($server->id);
     });
 });

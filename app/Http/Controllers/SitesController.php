@@ -9,6 +9,7 @@ use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
+use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
 use App\Models\SitePerformanceScan;
@@ -718,17 +719,23 @@ class SitesController extends Controller
             abort(404);
         }
 
-        if (! $blockedIp->server) {
-            return back()->with('status_error', 'Cannot unban — server record missing.');
+        $blockedIp->loadMissing(['server', 'site.server']);
+        $site->loadMissing('server');
+        $server = $blockedIp->server ?: $blockedIp->site?->server ?: $site->server;
+
+        if ($server) {
+            $result = $client->unbanIp($server, $blockedIp->ip);
+
+            if (! $result['ok']) {
+                return back()->with('status_error', $result['message'].' — '.$result['output']);
+            }
         }
 
-        $result = $client->unbanIp($blockedIp->server, $blockedIp->ip);
-
-        if (! $result['ok']) {
-            return back()->with('status_error', $result['message'].' — '.$result['output']);
+        $update = ['unbanned_at' => Carbon::now()];
+        if ($server instanceof Server) {
+            $update['server_id'] = $server->id;
         }
-
-        $blockedIp->update(['unbanned_at' => Carbon::now()]);
+        $blockedIp->update($update);
 
         return back()->with('status', "Unbanned {$blockedIp->ip}.");
     }
@@ -737,7 +744,7 @@ class SitesController extends Controller
     {
         $bans = $site->blockedIps()
             ->whereNull('unbanned_at')
-            ->with('server')
+            ->with(['server', 'site.server'])
             ->get();
 
         if ($bans->isEmpty()) {
@@ -752,7 +759,7 @@ class SitesController extends Controller
         $now = Carbon::now();
 
         foreach ($byServer as $serverId => $group) {
-            $server = $group->first()->server;
+            $server = $group->first()->server ?: $site->server;
             if (! $server) {
                 $errors[] = "skipped {$group->count()} ban(s) — server record missing";
 
@@ -777,10 +784,13 @@ class SitesController extends Controller
             }
             if ($okIps !== []) {
                 BlockedIp::query()
-                    ->where('server_id', $serverId)
+                    ->whereIn('id', $group->pluck('id'))
                     ->whereIn('ip', $okIps)
                     ->whereNull('unbanned_at')
-                    ->update(['unbanned_at' => $now]);
+                    ->update([
+                        'unbanned_at' => $now,
+                        'server_id' => $server->id,
+                    ]);
                 $totalOk += count($okIps);
             }
         }
