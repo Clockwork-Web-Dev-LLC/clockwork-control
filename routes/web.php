@@ -16,6 +16,7 @@ use App\Http\Controllers\DocsController;
 use App\Http\Controllers\IngestSettingsController;
 use App\Http\Controllers\IntegrationCredentialsController;
 use App\Http\Controllers\IssuesController;
+use App\Http\Controllers\StyleguideController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceHistoryController;
 use App\Http\Controllers\ModuleDirectoryController;
@@ -198,6 +199,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/docs/{path}', [DocsController::class, 'show'])
         ->where('path', '[a-z0-9\-/]+')
         ->name('docs.show');
+
+    // Design System Styleguide (hidden URL, directly accessible at /styleguide)
+    Route::get('/styleguide', [StyleguideController::class, 'index'])->name('styleguide.index');
 
     // Top-level Monitoring section — fleet-wide uptime activity + global settings.
     // The probe schedule reads `monitoring.uptime_interval_minutes` from Settings;
