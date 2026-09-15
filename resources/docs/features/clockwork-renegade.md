@@ -2,7 +2,7 @@
 title: Clockwork Renegade (WordPress.org Plugin)
 section: Features
 order: 94
-updated: 2026-09-14
+updated: 2026-09-15
 author: Aaron Reimann
 tags: [renegade, companion, wordpress, wporg, plugins, enrollment, gpl]
 tracks: [app/Models/Site.php, app/Services/Companion/ClockworkCompanionClient.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/header.blade.php, resources/views/dashboard/sites.blade.php, tests/Feature/Sites/EnrollmentVariantDetectionTest.php, tests/Feature/SiteOverviewDashboardTest.php, tests/Feature/Models/SiteRelationshipsAndCastsTest.php]
@@ -101,6 +101,8 @@ When an operator enrolls a new site under **Sites → + Add Site** (`SitesContro
    - If the Renegade endpoint returns 200 OK, the site is created with `companion_variant = 'renegade'`.
    - If Classic Companion returns 200 OK, `companion_variant = 'companion'`.
    - If neither endpoint responds, the operator receives an informative HTTP 404 message indicating neither variant was found.
+
+Enrollment matches SpinupWP/Pressable imports for nightly plugin updates (`auto_updates_paused = false`) and kicks a one-shot Sucuri SiteCheck + Companion malware scan in the background so the Security tab is not empty until the next 02:00 ET cron. WP core checksums stay SSH/Pressable-only.
 
 ### Download Hub
 

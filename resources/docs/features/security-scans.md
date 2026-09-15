@@ -2,10 +2,10 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-12
+updated: 2026-09-15
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
-tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php]
+tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php, app/Http/Controllers/SitesController.php]
 ---
 
 Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` ∈ `sitecheck | core_checksums | blacklist | companion_malware`. A coarse `status` (`clean | warning | issues_found | failed`) drives every dashboard regardless of which scan ran. In addition, fleet-wide WordPress administrator auditing is available at `/security/admins` — computed on page load from Companion snapshots, not by a scheduled scan.
@@ -23,6 +23,8 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | **Closed plugins** | weekly Mon 03:30 | all sites | Audits active plugins against WordPress.org's directory status (`plugin_directory_statuses`). Flags abandoned / closed zombieware plugins that receive no security patches. |
 
 Sucuri + checksums + companion-malware are care-plan-only. Blacklist, CISA KEV, and closed plugin auditing run against every site; the fleet admin audit covers every monitored site with a Companion snapshot.
+
+Standalone / Renegade enrollment (`SitesController::store`) kicks a one-shot SiteCheck + Companion malware scan in the background (`clockwork:scan-sitecheck --site=` and `clockwork:run-companion-malware-scans --site=`), so the Security tab is not empty until the next 02:00 ET cron. WP core checksums are SSH / Pressable-only and are not run for custom hosts — the in-WP malware probe is the checksum analogue on those sites.
 
 ## Where to look
 

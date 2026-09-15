@@ -151,7 +151,8 @@ describe('Add Standalone Site', function () {
             ->and($site->uptime_monitoring_enabled)->toBeTrue()
             ->and($site->backup_relay_enabled)->toBeTrue()
             ->and($site->backup_relay_frequency)->toBe('daily')
-            ->and($site->cert_source)->toBe(Site::CERT_SOURCE_LIVE_PROBE);
+            ->and($site->cert_source)->toBe(Site::CERT_SOURCE_LIVE_PROBE)
+            ->and($site->auto_updates_paused)->toBeFalse();
 
         $response->assertRedirect(route('sites.show', $site));
         $response->assertSessionHas('flash');

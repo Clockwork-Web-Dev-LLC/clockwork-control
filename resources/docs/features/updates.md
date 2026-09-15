@@ -2,10 +2,10 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-09-14
+updated: 2026-09-15
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
-tracks: [app/Services/Updates/UpdateGrouping.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, database/migrations/**add_state_to_plugin_update_jobs*]
+tracks: [app/Services/Updates/UpdateGrouping.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, database/migrations/**add_state_to_plugin_update_jobs*]
 ---
 
 Fleet-wide page for plugin / theme / WP core / translation updates. Replaces the per-site click-through workflow with a single grouped-by-name view modeled after ManageWP Orion. Lives at **`/updates`** (top-nav between Issues and Security).
@@ -139,7 +139,7 @@ Plugins-only, opt-in per site, runs every night between 02:00 and 06:00 ET. The 
 
 ### Opt-in toggle
 
-`sites.auto_updates_paused` — newly-imported sites via `clockwork:import-spinupwp` and `clockwork:import-pressable` start with auto-updates enabled (`auto_updates_paused = false`), while never overriding an existing manual pause setting. Flip from:
+`sites.auto_updates_paused` — newly-imported sites via `clockwork:import-spinupwp` and `clockwork:import-pressable`, and newly enrolled standalone / Renegade sites via Sites → Add Site, start with auto-updates enabled (`auto_updates_paused = false`), while never overriding an existing manual pause setting. Flip from:
 
 - **`/updates/care-plan`** — fleet curation page. One iOS-style red/green toggle per care-plan site. AJAX, no page reload. Counter strip at top updates live.
 - **`/sites/{id}/settings`** — per-site Auto-updates ON/OFF toggle inside the care-plan card.
@@ -150,7 +150,7 @@ The `/updates` main page shows a small **Auto: ON / Paused** badge per plugin ro
 
 | Column | Type | Notes |
 |---|---|---|
-| `auto_updates_paused` | bool | `true` = paused. Schema default `true`, but both import commands override to `false` for newly-created sites — see above. |
+| `auto_updates_paused` | bool | `true` = paused. Schema default `true`, but both import commands and standalone enrollment override to `false` for newly-created sites — see above. |
 | `auto_updates_paused_reason` | string? | Optional note shown as tooltip in the curation UI. |
 | `auto_updates_last_run_at` | timestamp? | When the nightly loop last considered this site. Stamped on **all eligible** care-plan sites each run, even when no updates are pending — acts as a daily heartbeat. A stale or null value means the loop stopped running. |
 

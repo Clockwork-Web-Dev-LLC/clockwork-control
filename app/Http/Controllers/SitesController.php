@@ -2070,6 +2070,10 @@ class SitesController extends Controller
             'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
             'backup_relay_enabled' => true,
             'backup_relay_frequency' => 'daily',
+            // Schema default is paused (opt-in flip). SpinupWP/Pressable
+            // imports unpause on create; standalone enroll must do the same
+            // or Renegade sites sit out of nightly plugin updates forever.
+            'auto_updates_paused' => false,
         ]);
 
         // Immediate baseline probes
@@ -2115,7 +2119,40 @@ class SitesController extends Controller
             site: $site,
         );
 
+        $this->kickEnrollmentSecurityBaseline($site);
+
         return redirect()->route('sites.show', $site)->with('flash', "Site {$site->domain} successfully connected and enrolled!");
+    }
+
+    /**
+     * SiteCheck and the in-WP malware probe otherwise wait for the 02:00 ET
+     * cron. Standalone enroll already does an SSL probe and an uptime probe
+     * inline; kick the two care-plan scans in a detached artisan process so
+     * the Security tab is not "Not yet scanned" until tomorrow.
+     *
+     * `--site=` bypasses the care-plan gate (same as a manual retry). Core
+     * checksums stay off this path — they need SSH / Pressable command
+     * runner, which custom hosts do not have.
+     */
+    private function kickEnrollmentSecurityBaseline(Site $site): void
+    {
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        try {
+            app(BackgroundArtisan::class)->start(
+                lockKey: 'enroll-baseline:'.$site->id,
+                commands: [
+                    'clockwork:scan-sitecheck --site='.$site->id,
+                    'clockwork:run-companion-malware-scans --site='.$site->id,
+                ],
+                ttlSeconds: 180,
+                logBasename: 'enroll-baseline',
+            );
+        } catch (Throwable) {
+            // Enrollment already succeeded. Tonight's cron is the fallback.
+        }
     }
 
     /**

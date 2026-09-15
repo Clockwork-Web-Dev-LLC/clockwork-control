@@ -45,7 +45,8 @@ describe('Enrollment Variant Detection (Renegade vs Classic Companion)', functio
             ->and($site->companion_variant)->toBe('renegade')
             ->and($site->isRenegade())->toBeTrue()
             ->and($site->isClassicCompanion())->toBeFalse()
-            ->and($site->companion_version)->toBe('1.0.0');
+            ->and($site->companion_version)->toBe('1.0.0')
+            ->and($site->auto_updates_paused)->toBeFalse();
 
         $response->assertRedirect(route('sites.show', $site));
     });
