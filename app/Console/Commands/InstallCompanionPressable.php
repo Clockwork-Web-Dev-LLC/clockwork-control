@@ -24,6 +24,7 @@ class InstallCompanionPressable extends Command
 {
     protected $signature = 'clockwork:install-companion-pressable
         {--site=* : One or more site IDs or domains (must be Pressable-tracked)}
+        {--all : Process all eligible live Pressable sites}
         {--force : Override the policy denylist (companion.excluded_domain_suffixes). Use deliberately.}
         {--throttle-ms=2000 : Sleep between sites. Pressable queues commands per site, but spacing whole installs avoids hammering their API. 0 = no delay.}';
 
@@ -32,8 +33,8 @@ class InstallCompanionPressable extends Command
     public function handle(PressableCompanionInstaller $installer, CompanionExclusion $exclusion, ActionLogger $logger): int
     {
         $selectors = array_filter((array) $this->option('site'));
-        if ($selectors === []) {
-            $this->error('Pass at least one --site=<id|domain>.');
+        if ($selectors === [] && ! $this->option('all')) {
+            $this->error('Pass at least one --site=<id|domain> or --all.');
 
             return self::FAILURE;
         }
@@ -112,6 +113,19 @@ class InstallCompanionPressable extends Command
      */
     private function targetSites(array $selectors): Collection
     {
+        if ($this->option('all')) {
+            return Site::query()
+                ->where('hosting_provider', Site::HOSTING_PROVIDER_PRESSABLE)
+                ->where('is_wordpress', true)
+                ->where('is_inactive', false)
+                ->whereNull('consolidated_into_site_id')
+                ->where('domain', 'not like', '%.mystagingwebsite.com')
+                ->where('domain', 'not like', 'staging.%')
+                ->where('domain', 'not like', '%.staging.%')
+                ->orderBy('domain')
+                ->get();
+        }
+
         $sites = Site::query()
             ->where('hosting_provider', Site::HOSTING_PROVIDER_PRESSABLE)
             ->where(function ($q) use ($selectors) {

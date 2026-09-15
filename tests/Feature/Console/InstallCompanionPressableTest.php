@@ -22,7 +22,7 @@ use Modules\Pressable\PressableCompanionInstaller;
 */
 
 describe('clockwork:install-companion-pressable — argument validation', function () {
-    it('fails when no --site is given', function () {
+    it('fails when no --site or --all is given', function () {
         $this->artisan('clockwork:install-companion-pressable')->assertFailed();
     });
 });
@@ -130,5 +130,34 @@ describe('clockwork:install-companion-pressable — policy denylist', function (
 
         $this->artisan('clockwork:install-companion-pressable', ['--site' => [$excludedSite->domain], '--force' => true])
             ->assertSuccessful();
+    });
+});
+
+describe('clockwork:install-companion-pressable — --all', function () {
+    it('processes all live Pressable sites, skipping staging domains and inactive sites', function () {
+        $liveSiteA = Site::factory()->pressable()->create(['domain' => 'live-a.example', 'is_wordpress' => true]);
+        $liveSiteB = Site::factory()->pressable()->create(['domain' => 'live-b.example', 'is_wordpress' => true]);
+        $stagingSite = Site::factory()->pressable()->create(['domain' => 'test.mystagingwebsite.com', 'is_wordpress' => true]);
+        $stagingSub = Site::factory()->pressable()->create(['domain' => 'staging.live-c.example', 'is_wordpress' => true]);
+        $inactiveSite = Site::factory()->pressable()->create(['domain' => 'inactive.example', 'is_wordpress' => true, 'is_inactive' => true]);
+        $spinupSite = Site::factory()->spinupwp()->create(['domain' => 'spinup.example', 'is_wordpress' => true]);
+
+        $this->mock(PressableCompanionInstaller::class, function ($mock) use ($liveSiteA, $liveSiteB) {
+            $mock->shouldReceive('installOrUpdate')
+                ->twice()
+                ->withArgs(fn (Site $s) => $s->is($liveSiteA) || $s->is($liveSiteB))
+                ->andReturn(['result' => CompanionInstaller::RESULT_ALREADY_CURRENT, 'message' => 'current']);
+        });
+
+        $this->artisan('clockwork:install-companion-pressable', [
+            '--all' => true,
+            '--throttle-ms' => 0,
+        ])->assertSuccessful()
+            ->expectsOutputToContain('live-a.example')
+            ->expectsOutputToContain('live-b.example')
+            ->doesntExpectOutputToContain('test.mystagingwebsite.com')
+            ->doesntExpectOutputToContain('staging.live-c.example')
+            ->doesntExpectOutputToContain('inactive.example')
+            ->doesntExpectOutputToContain('spinup.example');
     });
 });

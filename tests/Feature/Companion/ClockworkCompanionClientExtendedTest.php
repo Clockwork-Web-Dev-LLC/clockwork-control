@@ -287,4 +287,64 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             return $request->url() === "https://{$site->domain}/wp-json/clockwork-renegade/v1/database/summary";
         });
     });
+
+    // A plugin echoing output before REST JSON (the live timezone-redirect
+    // case on an auction site, 2026-09-15) corrupts every Companion response
+    // body. rotateSecret() MUST still salvage the rotated secret out of such
+    // a response: the plugin has already swapped secrets by the time the
+    // response is built, so discarding it desyncs control from the site and
+    // silences the Companion until a manual cache-flush + DB realign.
+    it('rotateSecret salvages the new secret from a script-prefixed response body', function () {
+        $site = Site::factory()->withCompanionInstalled()->create();
+        $newSecret = str_repeat('ab', 32);
+
+        $prefix = '<script type="text/javascript">window.location = "https://'.$site->domain
+            .'/wp-json/clockwork/v1/secret/rotate?timezone="+Intl.DateTimeFormat().resolvedOptions().timeZone;</script>';
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+                $prefix.json_encode(['ok' => true, 'secret' => $newSecret, 'rotated_at' => '2026-09-15T12:00:00+00:00']),
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        $result = (new ClockworkCompanionClient($site))->rotateSecret();
+
+        expect($result['ok'])->toBeTrue()
+            ->and($result['secret'])->toBe($newSecret);
+    });
+
+    it('rotateSecret still reports failure for a genuinely non-JSON success body', function () {
+        $site = Site::factory()->withCompanionInstalled()->create();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+                '<html><body>maintenance page</body></html>',
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        $result = (new ClockworkCompanionClient($site))->rotateSecret();
+
+        expect($result['ok'])->toBeFalse();
+    });
+
+    it('malwareScan salvages findings from a script-prefixed response body', function () {
+        $site = Site::factory()->withCompanionInstalled()->create();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(
+                '<script>window.location="/?timezone=x";</script>'
+                .json_encode(['ok' => true, 'findings' => [], 'scanned_files_count' => 1234, 'scanned_at' => '2026-09-15T12:00:00+00:00', 'wall_seconds' => 2.5]),
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        $result = (new ClockworkCompanionClient($site))->malwareScan();
+
+        expect($result['ok'])->toBeTrue()
+            ->and($result['scanned_files_count'])->toBe(1234);
+    });
 });

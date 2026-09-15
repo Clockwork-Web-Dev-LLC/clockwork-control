@@ -237,7 +237,7 @@ class PressableCompanionInstaller implements CompanionInstallerContract
         $m = escapeshellarg($mu);
 
         $script = "mkdir {$s}/x"
-            ." && base64 -d < {$s}/plugin.b64 | tar -xzf - -C {$s}/x"
+            ." && base64 -d < {$s}/plugin.b64 | tar -xzf - -C {$s}/x 2>/dev/null"
             ." && rm -f {$m}/clockwork-companion.php && rm -rf {$m}/clockwork-companion"
             ." && mv {$s}/x/clockwork-companion.php {$m}/ && mv {$s}/x/clockwork-companion {$m}/"
             ." && rm -rf {$s} && echo swapped";

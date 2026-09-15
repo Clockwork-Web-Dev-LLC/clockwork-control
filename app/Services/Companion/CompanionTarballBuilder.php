@@ -170,8 +170,9 @@ class CompanionTarballBuilder
             // COPYFILE_DISABLE=1 stops macOS bsdtar from inserting AppleDouble
             // sidecar entries ('._foo') for files with extended attributes —
             // those would extract as real files on the Linux remote and pollute
-            // mu-plugins/.
-            $cmd = sprintf('COPYFILE_DISABLE=1 tar -czf %s -C %s .', escapeshellarg($tarPath), escapeshellarg($stage));
+            // mu-plugins/. --no-xattrs ensures no Apple extended attributes/pax
+            // headers are included that trigger warnings in GNU tar.
+            $cmd = sprintf('COPYFILE_DISABLE=1 tar --no-xattrs -czf %s -C %s .', escapeshellarg($tarPath), escapeshellarg($stage));
             exec($cmd, $out, $code);
             if ($code !== 0) {
                 throw new RuntimeException('Local tar failed: '.implode("\n", $out));

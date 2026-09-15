@@ -35,7 +35,7 @@ class CompanionDownloadController extends Controller
             'name' => 'Clockwork Renegade',
             'edition' => 'Official WordPress.org Directory Edition',
             'slug' => 'clockwork-renegade',
-            'version' => (string) config('clockwork.renegade.version', '1.0.0'),
+            'version' => (string) config('clockwork.renegade.version', '1.0.1'),
             'available' => is_dir($renegadePath) && is_file($renegadePath.'/clockwork-renegade.php'),
             'download_url' => route('renegade.download'),
             'tag' => 'WordPress.org Directory / Open Source',
@@ -82,7 +82,7 @@ class CompanionDownloadController extends Controller
     {
         try {
             $bytes = $builder->buildRenegadeZipBytes();
-            $version = (string) config('clockwork.renegade.version', '1.0.0');
+            $version = (string) config('clockwork.renegade.version', '1.0.1');
             $filename = "clockwork-renegade-{$version}.zip";
 
             return response($bytes, 200, [

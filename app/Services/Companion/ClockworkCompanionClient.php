@@ -753,10 +753,7 @@ class ClockworkCompanionClient
     {
         $response = $this->post('/malware-scan', [], ['timeout' => 90, 'retries' => 0]);
 
-        $body = $response->json();
-        if (! is_array($body)) {
-            $body = [];
-        }
+        $body = $this->salvageJsonBody($response) ?? [];
 
         if ($response->successful() && ($body['ok'] ?? false)) {
             return [
@@ -781,10 +778,14 @@ class ClockworkCompanionClient
     {
         $response = $this->post('/secret/rotate', [], ['retries' => 0]);
 
-        $body = $response->json();
-        if (! is_array($body)) {
-            $body = [];
-        }
+        // MUST salvage-parse, not raw ->json(): on a site that injects output
+        // before REST JSON (the timezone-redirect case), a raw parse fails,
+        // the rotation is reported as failed — but the plugin HAS already
+        // swapped to the new secret, which is then lost. That desync silenced
+        // amymartinauctioneer for 3 days (2026-09-11 → 09-15) and needs a
+        // cache-flush + DB realign to recover from. Never discard a rotate
+        // response without trying to salvage the secret out of it.
+        $body = $this->salvageJsonBody($response) ?? [];
 
         if ($response->successful() && ! empty($body['secret'])) {
             return [
@@ -974,6 +975,27 @@ class ClockworkCompanionClient
      */
     private function decodeJsonBody(Response $response, string $method, string $route): array
     {
+        $decoded = $this->salvageJsonBody($response);
+        if ($decoded !== null) {
+            return $decoded;
+        }
+
+        $excerpt = mb_strimwidth((string) $response->body(), 0, 200, '…');
+        throw new RuntimeException(
+            "Clockwork Companion {$method} {$route} on {$this->site->domain} returned a non-JSON or malformed body: {$excerpt}"
+        );
+    }
+
+    /**
+     * Best-effort decode shared by decodeJsonBody() and the raw-Response
+     * consumers (malwareScan, rotateSecret): plain ->json() first, then the
+     * corrupted-prefix salvage described on decodeJsonBody(). Returns null
+     * when nothing decodable is found so callers choose throw vs default.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function salvageJsonBody(Response $response): ?array
+    {
         $decoded = $response->json();
         if (is_array($decoded)) {
             return $decoded;
@@ -994,10 +1016,7 @@ class ClockworkCompanionClient
             }
         }
 
-        $excerpt = mb_strimwidth($body, 0, 200, '…');
-        throw new RuntimeException(
-            "Clockwork Companion {$method} {$route} on {$this->site->domain} returned a non-JSON or malformed body: {$excerpt}"
-        );
+        return null;
     }
 
     protected function get(string $route, array $query = []): Response

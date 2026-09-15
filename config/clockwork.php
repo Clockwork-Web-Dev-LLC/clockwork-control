@@ -335,7 +335,7 @@ return [
     ],
 
     'renegade' => [
-        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.0.0'),
+        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.0.1'),
 
         // Local path to the source repo for development. Defaults to
         // ~/Projects/clockwork-renegade.
