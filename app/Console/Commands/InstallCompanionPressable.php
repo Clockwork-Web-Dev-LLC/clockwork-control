@@ -118,6 +118,7 @@ class InstallCompanionPressable extends Command
                 ->where('hosting_provider', Site::HOSTING_PROVIDER_PRESSABLE)
                 ->where('is_wordpress', true)
                 ->where('is_inactive', false)
+                ->whereNotNull('pressable_site_id')
                 ->whereNull('consolidated_into_site_id')
                 ->where('domain', 'not like', '%.mystagingwebsite.com')
                 ->where('domain', 'not like', 'staging.%')

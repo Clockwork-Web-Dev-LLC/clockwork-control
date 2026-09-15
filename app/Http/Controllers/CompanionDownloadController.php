@@ -21,7 +21,7 @@ class CompanionDownloadController extends Controller
             'name' => 'Clockwork Companion',
             'edition' => 'Private Edition (Mu-Plugin / Standard Plugin)',
             'slug' => 'clockwork-companion',
-            'version' => (string) config('clockwork.companion.version', '1.37.1'),
+            'version' => (string) config('clockwork.companion.version', '1.37.2'),
             'available' => is_dir($companionPath) && is_file($companionPath.'/clockwork-companion.php'),
             'download_url' => route('companion.download'),
             'tag' => 'Agency Fleet & Managed Hosting',
@@ -59,7 +59,7 @@ class CompanionDownloadController extends Controller
     {
         try {
             $bytes = $builder->buildPluginZipBytes();
-            $version = (string) config('clockwork.companion.version', '1.37.1');
+            $version = (string) config('clockwork.companion.version', '1.37.2');
             $filename = "clockwork-companion-{$version}.zip";
 
             return response($bytes, 200, [
