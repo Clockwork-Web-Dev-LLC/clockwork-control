@@ -306,7 +306,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.37.2'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.37.3'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
@@ -335,7 +335,7 @@ return [
     ],
 
     'renegade' => [
-        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.0.1'),
+        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.0.2'),
 
         // Local path to the source repo for development. Defaults to
         // ~/Projects/clockwork-renegade.
