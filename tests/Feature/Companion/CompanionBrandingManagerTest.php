@@ -22,6 +22,7 @@ describe('CompanionBrandingManager', function () {
             ->and($branding['menu_icon'])->toBe(CompanionBrandingManager::DEFAULT_MENU_ICON)
             ->and($branding['hide_plugin_row'])->toBeFalse()
             ->and($branding['hide_help_links'])->toBeFalse()
+            ->and($branding['unlock_hub_domain'])->toBe(CompanionBrandingManager::DEFAULT_UNLOCK_HUB_DOMAIN)
             ->and($branding['is_custom'])->toBeFalse();
     });
 
@@ -42,6 +43,7 @@ describe('CompanionBrandingManager', function () {
             'hide_plugin_row' => true,
             'hide_help_links' => true,
             'footer_text' => 'Powered by Agency Pro',
+            'unlock_hub_domain' => 'https://agencyhub.com/',
         ]);
 
         $branding = $manager->get();
@@ -58,6 +60,7 @@ describe('CompanionBrandingManager', function () {
             ->and($branding['logo_url'])->toBe('https://agencypro.dev/logo.svg')
             ->and($branding['hide_plugin_row'])->toBeTrue()
             ->and($branding['footer_text'])->toBe('Powered by Agency Pro')
+            ->and($branding['unlock_hub_domain'])->toBe('agencyhub.com')
             ->and($branding['is_custom'])->toBeTrue();
     });
 
@@ -84,10 +87,12 @@ describe('CompanionBrandingManager', function () {
             'hide_plugin_row',
             'hide_help_links',
             'footer_text',
+            'unlock_hub_domain',
             'synced_at',
         ])
             ->and($payload['enabled'])->toBeTrue()
             ->and($payload['company_name'])->toBe('Partner Brand')
+            ->and($payload['unlock_hub_domain'])->toBe(CompanionBrandingManager::DEFAULT_UNLOCK_HUB_DOMAIN)
             ->and($payload['synced_at'])->toBeString();
     });
 

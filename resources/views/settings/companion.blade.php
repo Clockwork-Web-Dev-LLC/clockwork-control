@@ -23,6 +23,7 @@
         hidePluginRow: @js((bool) $branding['hide_plugin_row']),
         hideHelpLinks: @js((bool) $branding['hide_help_links']),
         footerText: @js($branding['footer_text']),
+        unlockHubDomain: @js($branding['unlock_hub_domain'] ?? 'clockworkwd.com'),
         previewTab: 'screen',
         syncing: false,
 
@@ -508,6 +509,57 @@
                                 <div class="text-[11px] text-[var(--color-ink-soft)]">Hide external Clockwork Control docs links in wp-admin, routing clients to your agency support email instead.</div>
                             </div>
                         </label>
+                    </div>
+
+                    {{-- Section 6: LLAR Unlock Hub & Emergency Security Access --}}
+                    <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">6. LLAR Unlock Hub &amp; Emergency Access</h3>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <i class="fa-solid fa-shield-halved text-[10px]"></i> Gated to Agency Staff
+                            </span>
+                        </div>
+
+                        {{-- Explanatory Documentation Box --}}
+                        <div class="rounded-lg border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-slate-50 to-purple-50/50 p-4 text-xs text-[var(--color-ink)] space-y-3">
+                            <div class="flex items-start gap-3">
+                                <div class="w-7 h-7 rounded-md bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                    <i class="fa-solid fa-key text-xs"></i>
+                                </div>
+                                <div class="space-y-1 leading-relaxed">
+                                    <p class="font-semibold text-[var(--color-ink-strong)] text-sm">How Remote LLAR Unlocking Works</p>
+                                    <p class="text-[var(--color-ink-soft)] leading-normal">
+                                        When Limit Login Attempts Reloaded (LLAR) locks an agency technician or client out of a site due to false positives or brute-force protection, you don't need SSH access or WP credentials to clear it. 
+                                        The <strong>Unlock Console</strong> (<code>Clockwork &rarr; Unlock</code>) fires an authenticated HMAC-SHA256 signed <code>DELETE /wp-json/clockwork/v1/lockouts</code> request directly to the target site's Companion plugin to immediately flush lockouts.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-indigo-100/80 pt-3 space-y-2 text-[11px] text-[var(--color-ink-soft)]">
+                                <p class="font-semibold text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                                    <i class="fa-solid fa-lock text-indigo-500"></i> How Hub Detection &amp; Isolation Works
+                                </p>
+                                <ul class="list-disc list-inside space-y-1.5 pl-1 leading-relaxed">
+                                    <li><strong>Client Isolation:</strong> Client sites will <em>never</em> see the Unlock menu item or emergency access tools.</li>
+                                    <li><strong>Domain Matching:</strong> The <strong>Unlock</strong> menu item only appears when the site's primary host matches your configured <strong>Agency Primary Hub Domain</strong> (for Clockwork, <code>clockworkwd.com</code>).</li>
+                                    <li><strong>Staff Authentication:</strong> Even on the primary domain, the tool is strictly restricted to authenticated administrators whose email ends in your agency domain (e.g. <code>*@clockworkwd.com</code>).</li>
+                                    <li><strong>Legacy Fallback:</strong> Defining <code>define('CLOCKWORK_UNLOCK_HUB', true);</code> in <code>wp-config.php</code> remains supported as an explicit manual override.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)]">Agency Primary Hub Domain (Unlock Console Host)</label>
+                                <button type="button" @click="unlockHubDomain = 'clockworkwd.com'" class="text-[11px] text-[var(--color-brand)] hover:underline cursor-pointer font-medium">
+                                    Use clockworkwd.com
+                                </button>
+                            </div>
+                            <input type="text" name="unlock_hub_domain" x-model="unlockHubDomain"
+                                class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
+                                placeholder="clockworkwd.com">
+                            <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">The primary domain where your agency staff logs in. Only on this host and for verified agency email addresses will the Unlock tool appear.</p>
+                        </div>
                     </div>
 
                     <div class="border-t border-[var(--color-border-light)] pt-5 flex items-center justify-between">

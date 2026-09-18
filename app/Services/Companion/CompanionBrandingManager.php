@@ -18,6 +18,8 @@ class CompanionBrandingManager
 
     public const DEFAULT_COMPANY_URL = 'https://clockworkcontrol.com';
 
+    public const DEFAULT_UNLOCK_HUB_DOMAIN = 'clockworkwd.com';
+
     public const DEFAULT_SUPPORT_EMAIL = 'support@clockworkcontrol.com';
 
     public const DEFAULT_SUPPORT_URL = 'https://clockworkcontrol.com/docs';
@@ -98,6 +100,7 @@ class CompanionBrandingManager
      *     hide_plugin_row: bool,
      *     hide_help_links: bool,
      *     footer_text: string,
+     *     unlock_hub_domain: string,
      *     is_custom: bool,
      * }
      */
@@ -125,6 +128,10 @@ class CompanionBrandingManager
         $hidePluginRow = (bool) $this->settings->get('companion.branding.hide_plugin_row', false);
         $hideHelpLinks = (bool) $this->settings->get('companion.branding.hide_help_links', false);
         $footerText = (string) $this->settings->get('companion.branding.footer_text', '');
+        $unlockHubDomain = (string) $this->settings->get('companion.branding.unlock_hub_domain', self::DEFAULT_UNLOCK_HUB_DOMAIN);
+        if ($unlockHubDomain === '') {
+            $unlockHubDomain = self::DEFAULT_UNLOCK_HUB_DOMAIN;
+        }
 
         $isCustom = $enabled || $this->settings->get('companion.branding.company_name') !== null;
 
@@ -145,6 +152,7 @@ class CompanionBrandingManager
             'hide_plugin_row' => $hidePluginRow,
             'hide_help_links' => $hideHelpLinks,
             'footer_text' => $footerText,
+            'unlock_hub_domain' => $unlockHubDomain,
             'is_custom' => $isCustom,
         ];
     }
@@ -173,6 +181,13 @@ class CompanionBrandingManager
 
         if (array_key_exists('brand_text', $data)) {
             $payload['companion.branding.brand_text'] = trim((string) $data['brand_text']);
+        }
+
+        if (array_key_exists('unlock_hub_domain', $data)) {
+            $rawHub = trim((string) $data['unlock_hub_domain']);
+            $cleanHub = strtolower(preg_replace('#^https?://#', '', $rawHub));
+            $cleanHub = trim($cleanHub, '/');
+            $payload['companion.branding.unlock_hub_domain'] = $cleanHub !== '' ? $cleanHub : self::DEFAULT_UNLOCK_HUB_DOMAIN;
         }
 
         if (array_key_exists('primary_color', $data)) {
@@ -263,6 +278,7 @@ class CompanionBrandingManager
             'companion.branding.hide_plugin_row' => null,
             'companion.branding.hide_help_links' => null,
             'companion.branding.footer_text' => null,
+            'companion.branding.unlock_hub_domain' => null,
             'companion.branding.primary_color' => null,
             'companion.branding.accent_color' => null,
         ]);
@@ -480,6 +496,7 @@ class CompanionBrandingManager
             'hide_plugin_row' => $data['hide_plugin_row'],
             'hide_help_links' => $data['hide_help_links'],
             'footer_text' => $data['footer_text'],
+            'unlock_hub_domain' => $data['unlock_hub_domain'],
             'primary_color' => $data['primary_color'],
             'primary_dark_color' => $data['primary_color'],
             'accent_color' => $data['accent_color'],

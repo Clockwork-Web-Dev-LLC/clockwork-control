@@ -178,6 +178,7 @@ class CompanionSettingsController extends Controller
             'hide_plugin_row' => 'nullable|boolean',
             'hide_help_links' => 'nullable|boolean',
             'footer_text' => 'nullable|string|max:255',
+            'unlock_hub_domain' => 'nullable|string|max:120',
         ]);
 
         $brandingData = [
@@ -196,6 +197,7 @@ class CompanionSettingsController extends Controller
             'hide_plugin_row' => $request->boolean('hide_plugin_row'),
             'hide_help_links' => $request->boolean('hide_help_links'),
             'footer_text' => $validated['footer_text'] ?? null,
+            'unlock_hub_domain' => $validated['unlock_hub_domain'] ?? null,
         ];
 
         if ($request->has('logo_url')) {
