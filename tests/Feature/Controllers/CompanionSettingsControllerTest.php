@@ -77,6 +77,8 @@ describe('CompanionSettingsController', function () {
                 ->assertDontSee('White Label &amp;amp;', false)
                 ->assertSee('Clockwork Web Dev')
                 ->assertSee('Clockwork Companion')
+                ->assertSee('LLAR Unlock Hub')
+                ->assertSee('Agency Primary Hub Domain')
                 ->assertSee('Monitored Sites')
                 ->assertSee('Companion Installed');
         });
@@ -147,6 +149,21 @@ describe('CompanionSettingsController', function () {
             $response->assertOk()
                 ->assertJsonPath('success', true)
                 ->assertJsonPath('branding.company_name', 'API Agency');
+        });
+
+        it('persists unlock_hub_domain through HTTP patch update and reflects in wire payload', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'companion',
+                'unlock_hub_domain' => 'https://support.customagency.com/',
+            ]);
+
+            $response->assertRedirect(route('settings.companion.index'));
+
+            $manager = app(CompanionBrandingManager::class);
+            expect($manager->get()['unlock_hub_domain'])->toBe('support.customagency.com')
+                ->and($manager->payload()['unlock_hub_domain'])->toBe('support.customagency.com');
         });
 
         it('validates email format and string lengths', function () {

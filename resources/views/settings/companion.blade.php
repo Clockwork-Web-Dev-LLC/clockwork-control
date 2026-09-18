@@ -542,7 +542,7 @@
                                 <ul class="list-disc list-inside space-y-1.5 pl-1 leading-relaxed">
                                     <li><strong>Client Isolation:</strong> Client sites will <em>never</em> see the Unlock menu item or emergency access tools.</li>
                                     <li><strong>Domain Matching:</strong> The <strong>Unlock</strong> menu item only appears when the site's primary host matches your configured <strong>Agency Primary Hub Domain</strong> (for Clockwork, <code>clockworkwd.com</code>).</li>
-                                    <li><strong>Staff Authentication:</strong> Even on the primary domain, the tool is strictly restricted to authenticated administrators whose email ends in your agency domain (e.g. <code>*@clockworkwd.com</code>).</li>
+                                    <li><strong>Staff Authentication:</strong> Even on the primary domain, the tool is strictly restricted to authenticated administrators whose email matches your agency domain (e.g. <code>*@clockworkwd.com</code>; subdomain hubs such as <code>support.customagency.com</code> also accept <code>*@customagency.com</code> staff email).</li>
                                     <li><strong>Legacy Fallback:</strong> Defining <code>define('CLOCKWORK_UNLOCK_HUB', true);</code> in <code>wp-config.php</code> remains supported as an explicit manual override.</li>
                                 </ul>
                             </div>
