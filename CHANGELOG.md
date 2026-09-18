@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **LLAR Unlock Hub Domain configuration & in-app documentation**:
+  - Added `unlock_hub_domain` setting to Companion White Labeling (defaulting to `clockworkwd.com`), allowing dynamic detection of the agency's primary hub domain in Clockwork Companion without requiring `define('CLOCKWORK_UNLOCK_HUB', true);` in `wp-config.php`.
+  - Added Section 6 (**LLAR Unlock Hub & Emergency Access**) to the `/settings/companion` settings page with detailed documentation on remote HMAC-signed lockout clearing via `DELETE /wp-json/clockwork/v1/lockouts` and client site isolation rules.
+  - Included `unlock_hub_domain` in the HMAC wire payload dispatched during fleet-wide branding sync.
+
 ## [1.7.2] - 2026-09-14
 
 ### Added
