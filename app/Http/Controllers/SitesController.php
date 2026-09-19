@@ -1016,7 +1016,10 @@ class SitesController extends Controller
         //    today. Any other host cleanly skips rather than showing an
         //    error pill for something it was never expected to have.
         if (! $site->isSpinupWp()) {
-            $results['backups'] = ['ok' => true, 'skipped' => true, 'reason' => 'Host does not use SpinupWP backup reporting.'];
+            $reason = $site->isCustom()
+                ? 'Backups managed by host'
+                : "Backups managed natively by {$site->hostLabel()}";
+            $results['backups'] = ['ok' => true, 'skipped' => true, 'reason' => $reason];
         } elseif (! $site->spinupwp_id) {
             $results['backups'] = ['ok' => false, 'error' => 'site has no SpinupWP id'];
         } elseif (! in_array('backups-report', $caps, true)) {

@@ -2,22 +2,22 @@
 title: Companion plugin
 section: Architecture
 order: 60
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [architecture, companion, wordpress, plugin, pressable, standalone, backups]
 tracks: [app/Services/Companion/**, modules/Pressable/src/**, ~/Projects/clockwork-companion/**, app/Http/Controllers/CompanionDownloadController.php]
 ---
 
-Clockwork Companion is a WordPress plugin (supporting both mu-plugin and standard plugin modes) that lives inside every monitored WP site. It does two jobs: it gives Clockwork signed REST endpoints to call (faster and cleaner than SSH+SQL), and it gives the *client* a wp-admin window into what Clockwork sees on their behalf.
+Clockwork Companion is a WordPress plugin (supporting both mu-plugin and standard plugin modes) that lives inside every monitored WP site. It does two jobs: it gives Clockwork Control signed REST endpoints to call (faster and cleaner than SSH+SQL), and it gives the *client* a wp-admin window into what Clockwork Control sees on their behalf.
 
-The plugin source is its own repo at `~/Projects/clockwork-companion`. This page covers what it is, why it exists, and how it talks to Clockwork.
+The plugin source is its own repo at `~/Projects/clockwork-companion`. This page covers what it is, why it exists, and how it talks to Clockwork Control.
 
 ## Why it exists
 
-Pre-Companion, Clockwork pulled WP data the only way available: SSH into the server, `mysql` to the DB, parse the result. That works, but it's intrusive and slow, and it's invisible to the client. Companion inverts the relationship:
+Pre-Companion, Clockwork Control pulled WP data the only way available: SSH into the server, `mysql` to the DB, parse the result. That works, but it's intrusive and slow, and it's invisible to the client. Companion inverts the relationship:
 
-- **For Clockwork** — signed REST calls instead of SSH+SQL. Faster, cleaner attribution, less intrusive.
-- **For clients** — a Tools → Clockwork section in wp-admin showing what we monitor on their behalf, what scans we run, and what we found. Hosting-tier clients see what's running and what care plan would add. Care-plan clients see real data.
+- **For Clockwork Control** — signed REST calls instead of SSH+SQL. Faster, cleaner attribution, less intrusive.
+- **For clients & site administrators** — a top-level sidebar menu (or white-labeled custom menu) visible to all users with `manage_options`. Shows what we monitor on their behalf (Connection status, Capabilities, Notifications, and Two-Factor Authentication). Hosting-tier clients see what's running and what care plan would add. Care-plan clients see real data. Sensitive agency tools (such as the LLAR Unlock Hub) remain strictly isolated and hidden.
 
 The two paths coexist. Where Companion is installed, we prefer signed REST. Where it isn't, the SSH+SQL fallbacks still run. Capability advertisement (`sites.companion_capabilities`) gates which call path is taken per feature.
 
@@ -39,7 +39,7 @@ wp-content/mu-plugins/ (or wp-content/plugins/)
 
 Clockwork Control supports two distinct plugin variants (tracked per-site in `sites.companion_variant`):
 - **`companion` (Private Mu-Plugin / Active Plugin)**: Private distribution (`~/Projects/clockwork-companion`), REST route `/wp-json/clockwork/v1/`, supports internal operations including arbitrary code execution for recovery (`CodeSnippetRoute`).
-- **`renegade` (WordPress.org Plugin Directory)**: Public open-source distribution (`~/Projects/clockwork-renegade`), GPL-2.0-or-later, REST route `/wp-json/clockwork-renegade/v1/`. Strictly compliant with WordPress.org guidelines: no arbitrary code execution / remote `eval()`, updates via WordPress.org SVN, full affirmative consent pairing screen, and complete cleanup on uninstall. See [Clockwork Renegade](/docs/features/clockwork-renegade) for full details.
+- **`renegade` (WordPress.org Plugin Directory)**: Public open-source distribution (`~/Projects/clockwork-renegade`), GPL-2.0-or-later, REST route `/wp-json/clockwork-renegade/v1/`. Strictly compliant with WordPress.org guidelines: no arbitrary code execution / remote `eval()`, updates via WordPress.org SVN, full affirmative consent pairing screen, and complete cleanup on uninstall. See [Clockwork Renegade](/documentation/features/clockwork-renegade) for full details.
 
 ## Install path
 
@@ -47,7 +47,7 @@ Four installation paths share common secret management:
 
 ### 1. Standalone / Unmanaged Hosts (WP Engine, Kinsta, Custom) — Direct ZIP Upload
 
-For sites hosted on platforms where Clockwork does not have server-level API keys or SSH access:
+For sites hosted on platforms where Clockwork Control does not have server-level API keys or SSH access:
 1. **Download Compiled ZIP Package**: Operators download the pre-packaged plugin directly from Clockwork Control via `/companion/download` (`CompanionDownloadController::downloadZip()`).
 2. **Standard WordPress Install**: Upload and activate `clockwork-companion.zip` via standard WP Admin (`Plugins -> Add New -> Upload Plugin`).
 3. **One-Click 256-Bit Connection Key Pairing**: Navigate to **Clockwork → Connection** (`admin.php?page=clockwork-connection`) for Renegade, or **Tools → Clockwork Control** for Companion in WP Admin, and click **Copy Connection Key**. This key encodes the site URL and a 256-bit cryptographically secure secret (`random_bytes(32)`).
@@ -65,7 +65,7 @@ For sites hosted on platforms where Clockwork does not have server-level API key
 
 ### 3. Pressable — async command API
 
-Pressable has no SSH. `Modules\Pressable\PressableCompanionInstaller` reaches the same end state over `PressableCommandRunner` (see [Integrations → Pressable](/docs/integrations/pressable) for how that turns Pressable's fire-and-forget command API into something synchronous):
+Pressable has no SSH. `Modules\Pressable\PressableCompanionInstaller` reaches the same end state over `PressableCommandRunner` (see [Integrations → Pressable](/documentation/integrations/pressable) for how that turns Pressable's fire-and-forget command API into something synchronous):
 
 1. Acquire the tarball via the same `CompanionTarballBuilder`.
 2. **Order-independent chunked upload** — Pressable gives no ordering guarantee between queued commands, so the tarball is split into 45,000-byte chunks (below Pressable's ~50,000-byte serialized-command limit), written as zero-padded part files, then reassembled with a glob `cat`. Reassembly is gated on a sha256 comparison against the locally-computed hash, retried while the command queue drains.
@@ -97,12 +97,12 @@ The two source modes shift the trust boundary:
 
 ## Auth — HMAC-SHA256 with a 5-minute replay window
 
-Per-site shared secret, 32 random bytes. Generated Laravel-side at install, pushed to WP's `wp_options`, mirrored encrypted into `sites.companion_secret`. Full details on [Security model](/docs/architecture/security-model) — including the `wp-config.php` constant alternative, the failure rate limit, and the audit log.
+Per-site shared secret, 32 random bytes. Generated Laravel-side at install, pushed to WP's `wp_options`, mirrored encrypted into `sites.companion_secret`. Full details on [Security model](/documentation/architecture/security-model) — including the `wp-config.php` constant alternative, the failure rate limit, and the audit log.
 
 Every Companion request includes:
 
-- `X-Clockwork-Signature` — hex SHA-256 HMAC of `METHOD\nPATH\nTIMESTAMP\nBODY`
-- `X-Clockwork-Timestamp` — unix seconds
+- `X-Clockwork Control-Signature` — hex SHA-256 HMAC of `METHOD\nPATH\nTIMESTAMP\nBODY`
+- `X-Clockwork Control-Timestamp` — unix seconds
 
 POST bodies use Laravel's `withBody($jsonBody, 'application/json')` to send the byte-exact JSON we signed. Re-encoding via `->post($url, $array)` would risk drift (key order, unicode escaping).
 
@@ -114,7 +114,7 @@ During installation, `CompanionInstaller` pushes the secret via `wp db query` an
 
 ## Capabilities — per-site feature gates
 
-`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.37.0+, the version bundled via `config('clockwork.companion.version')`):
+`Plugin::CAPABILITIES` advertises what the plugin version supports. The current list (v1.38.1+, the version bundled via `config('clockwork.companion.version')`):
 
 ```
 contact-form-test, lockouts, wordfence-blocks, plugins, admins, wp-cron,
@@ -126,7 +126,7 @@ white-label, comments-moderation, maintenance-mode, code-snippets, cache-flush,
 backup-create, backup-restore
 ```
 
-Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin. Site Maintenance still gates only on `companion_installed`, not the `maintenance-mode` capability.
+Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork Control-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin. Site Maintenance still gates only on `companion_installed`, not the `maintenance-mode` capability.
 
 ## Routes
 
@@ -138,26 +138,20 @@ Read-only GETs (HMAC-signed):
 - `/lockouts`, `/wordfence-blocks` — what the SSH+SQL fallback used to read
 - `/comments` — paginated, filterable comment listing for the Comment Moderation module (`ClockworkCompanionClient::comments()`)
 - `/maintenance-mode` — current maintenance-mode status and config for the Site Maintenance module (`maintenanceMode()`)
-- `/environment` — detailed PHP, MySQL, and WordPress runtime environment telemetry (`getEnvironment()`)
-- `/debug-log` — stream tail of WordPress `wp-content/debug.log` (`getDebugLog()`)
-- `/database/summary` — MySQL table sizes, overhead, and engine statistics (`getDatabaseSummary()`)
 
-Mutating POSTs (HMAC-signed):
+Mutating Requests (HMAC-signed POST / DELETE):
 
+- `DELETE /lockouts` — flush Limit Login Attempts Reloaded (LLAR) lockouts for an IP or username directly from the designated Agency Primary Hub console (`lockouts-unlock` capability)
 - `/test-contact-form` — fire a marker-injected submission for the form-test add-on
-- `/backups-report` — Clockwork pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork's own (LAN-only) login screen
-- `/action-log/append` — Clockwork mirrors every meaningful action so wp-admin can show it
+- `/backups-report` — Clockwork Control pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork Control's own (LAN-only) login screen
+- `/action-log/append` — Clockwork Control mirrors every meaningful action so wp-admin can show it
 - `/sso/magic-link` — mint a one-time URL the operator clicks to land in wp-admin as the named admin
-- `/cache/flush` — object/page cache flush (`cache-flush` capability). Companion 1.35.0+. Clockwork also applies Pressable and Cloudflare layers from Control.
+- `/cache/flush` — object/page cache flush (`cache-flush` capability). Companion 1.35.0+. Clockwork Control also applies Pressable and Cloudflare layers from Control.
 - `/plugins/update` — single-slug WP plugin upgrade via `Plugin_Upgrader`
-- `/plugins/toggle`, `/plugins/delete`, `/plugins/install` — full plugin lifecycle management (activate, deactivate, delete, install via WP.org slug or signed package URL)
-- `/updates/translations` — execute WordPress core, plugin, and theme translation updates
 - `/secret/rotate` — rotate the per-site HMAC secret
-- `/debug-log/clear` — truncate `debug.log` (`clearDebugLog()`)
-- `/database/optimize` — optimize tables and reclaim overhead (`optimizeDatabase()`)
 - `/malware-scan` — run the in-WP malware probe (PHP-in-uploads, obfuscated-eval signatures, recently-touched wp-config). Returns findings as `{findings: [{kind, path, evidence}], scanned_at, scanned_files_count}`. Called nightly by `clockwork:run-companion-malware-scans`. Bypasses Cloudflare entirely — replaces SiteCheck's role on CF-fronted sites where Sucuri's external scanner gets 403'd at the edge. SSH wp-cli fallback exists for sites without the Companion installed.
-- `/post-update-verify` — post-update state verification and repair (v1.21.3+). Clockwork POSTs the expected active-plugin list and active theme after every successful update. Companion compares against current WordPress state, re-activates any plugin that went inactive, restores the theme if it changed, and returns a `{ok, repairs: [{type, slug, detail}]}` payload. Gated on the `post-update-verify` capability; sites with older Companion versions skip this call silently.
-- `/security-summary-report` — Pressable-only vulnerability alerts + Defensive Mode status (v1.31.6+). Clockwork pushes known plugin/theme CVEs (Pressable's own feed) and edge-cache Defensive Mode's on/off state; Companion stores it in `wp_options['clockwork_companion_pressable_security_summary']` and renders it on the Security admin page. Defensive Mode is status-only by design — no client-facing toggle. Called daily by `clockwork:pressable-security-summary-report`.
+- `/post-update-verify` — post-update state verification and repair (v1.21.3+). Clockwork Control POSTs the expected active-plugin list and active theme after every successful update. Companion compares against current WordPress state, re-activates any plugin that went inactive, restores the theme if it changed, and returns a `{ok, repairs: [{type, slug, detail}]}` payload. Gated on the `post-update-verify` capability; sites with older Companion versions skip this call silently.
+- `/security-summary-report` — Pressable-only vulnerability alerts + Defensive Mode status (v1.31.6+). Clockwork Control pushes known plugin/theme CVEs (Pressable's own feed) and edge-cache Defensive Mode's on/off state; Companion stores it in `wp_options['clockwork_companion_pressable_security_summary']` and renders it on the Security admin page. Defensive Mode is status-only by design — no client-facing toggle. Called daily by `clockwork:pressable-security-summary-report`.
 - `/comments/moderate` — bulk approve/hold/spam/trash/delete on one or more comment IDs (`moderateComments()`), driving the Comment Moderation dashboard tab
 - `/comments/cleanup` — purge spam and trash comments older than N days (`cleanupComments()`); called weekly by `clockwork:cleanup-spam-comments`
 - `/maintenance-mode` — enable/disable maintenance mode with an optional custom title, message, and bypass secret key (`setMaintenanceMode()`)
@@ -175,23 +169,26 @@ The Issues "WordPress plugins out of date" section reads `companion_snapshot.plu
 
 ## Push pattern (Round 1.5+)
 
-Several Companion routes accept Clockwork-pushed data so the plugin can render it in wp-admin without making outbound calls of its own. The `/backups-report` and `/action-log/append` routes are the workhorses. The pattern:
+Several Companion routes accept Clockwork Control-pushed data so the plugin can render it in wp-admin without making outbound calls of its own. The `/backups-report` and `/action-log/append` routes are the workhorses. The pattern:
 
-- Clockwork is the source of truth (it computed the data).
+- Clockwork Control is the source of truth (it computed the data).
 - Companion stores the latest payload in `wp_options` (autoload off).
 - The plugin's admin pages read the option and render. No outbound calls.
 
-Result: Companion can show backup history, scan history, performance scans, and uptime data without ever needing to reach Clockwork's home LAN.
+Result: Companion can show backup history, scan history, performance scans, and uptime data without ever needing to reach Clockwork Control's home LAN.
 
 ## SSO
 
-`POST /sso/magic-link` mints a 192-bit nonce, stores it in `wp_options[clockwork_sso_<nonce>]` with a 60-second TTL, and returns a `?clockwork_sso=<nonce>` URL. Clockwork redirects the operator's tab to it. Companion's `Sso\Interceptor` runs on `init` priority 1, validates and **deletes** the option (one-time semantics), then `wp_set_auth_cookie($userId, false)` + `wp_safe_redirect`.
+`POST /sso/magic-link` mints a 192-bit nonce, stores it in `wp_options[clockwork_sso_<nonce>]` with a 60-second TTL, and returns a `?clockwork_sso=<nonce>` URL. Clockwork Control redirects the operator's tab to it. Companion's `Sso\Interceptor` runs on `init` priority 1, validates and **deletes** the option (one-time semantics), then `wp_set_auth_cookie($userId, false)` + `wp_safe_redirect`.
 
 Skips MFA — same as `wp-cli user create-session`. None of our agency clients have 2FA configured today; revisit when one does.
 
 ## White Labeling & Feature Gating
 
-- **White Labeling hub (v1.33.0+, consolidated in v1.4.0, upgraded in v1.6.5)**: Configured under `/settings/companion` (the Agency Branding pillar). Features a Master Agency Brand Palette cascading primary and accent colors across Companion (wp-admin), Client Reports, and Notification Emails. Includes dedicated `<x-color-picker>` Blade components, two-tone header contrast (`CompanionBrandingManager::deriveMediumTone` and `deriveSoftColor`), separated `brand_text` (admin header bar) vs `menu_title` (sidebar menu), and strict logo validation (`png, jpg, jpeg, webp` — rejecting SVG) with automatic disk cleanup. `/settings/wordpress-plugins` is a **separate, unrelated page** under Fleet Policies. See [Features → Companion Branding](/docs/features/companion-branding).
+- **White Labeling hub (v1.33.0+, consolidated in v1.4.0, upgraded in v1.6.5, locked down in v1.7.3)**: Configured under `/settings/companion` (the Agency Branding pillar). Features a Master Agency Brand Palette cascading primary and accent colors across Companion (wp-admin), Client Reports, and Notification Emails. Includes dedicated `<x-color-picker>` Blade components, two-tone header contrast (`CompanionBrandingManager::deriveMediumTone` and `deriveSoftColor`), separated `brand_text` (admin header bar) vs `menu_title` (sidebar menu), and strict logo validation (`png, jpg, jpeg, webp` — rejecting SVG) with automatic disk cleanup. `/settings/wordpress-plugins` is a **separate, unrelated page** under Fleet Policies. See [Features → Companion Branding](/documentation/features/companion-branding).
+- **Public Admin Menu Visibility**: The parent Companion and Renegade menus are publicly visible to all site administrators (`manage_options`). The legacy email-domain restriction was removed so site admins can see their Connection status, Capabilities, Notifications, and Login Security / 2FA.
+- **Dynamic Hub Detection (`WhiteLabel::getUnlockHubDomain()`)**: Emergency remote lockout recovery (`Clockwork → Unlock`) only appears on the site matching the configured Agency Primary Hub domain (`unlock_hub_domain` in `/settings/companion`, default: `clockworkwd.com`), or when overridden by the `CLOCKWORK_UNLOCK_HUB` constant in `wp-config.php`. Subdomain hubs (e.g. `support.customagency.com`) allow authorized staff email addresses from both the parent domain (`*@customagency.com`) and subdomain. Client sites never show this tool; unauthorized attempts return HTTP 403 `wp_die` and AJAX requests return 403 JSON errors.
+- **Permanent White-Label Lockdown**: Local in-WP branding editing (`admin.php?page=clockwork-branding`) is permanently removed and returns HTTP 403 Forbidden. All branding is managed centrally in Clockwork Control and pushed over HMAC REST.
 - **Traffic Tab Visibility**: Managed via `Site::canViewCompanionTraffic()`, conditionally hiding the Traffic tab in client wp-admin when SSH access or traffic rollups are unavailable on the host.
 
 ## Where to find each piece

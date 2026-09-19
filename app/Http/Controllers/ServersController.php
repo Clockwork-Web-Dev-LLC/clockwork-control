@@ -175,7 +175,7 @@ class ServersController extends Controller
             'confirm_name' => ['required', 'string'],
         ]);
 
-        if ($validated['confirm_name'] !== $server->name) {
+        if ($validated['confirm_name'] !== $server->name && $validated['confirm_name'] !== $server->display_name) {
             return redirect()
                 ->route('servers.show', $server)
                 ->with('status', "Confirmation name didn't match — server NOT deleted.");

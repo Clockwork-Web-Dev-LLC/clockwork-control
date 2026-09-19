@@ -103,14 +103,14 @@
                                 formaction="{{ route('review-queue.bulkApprove') }}"
                                 class="btn-primary text-xs px-3 py-1"
                                 data-bulk-action="approve"
-                                data-confirm="Ban the selected IPs across every server where they are pending?">
+                                data-queue-confirm="Ban the selected IPs across every server where they are pending?">
                             <i class="fa-solid fa-ban"></i> Ban selected
                         </button>
                         <button type="submit"
                                 formaction="{{ route('review-queue.bulkDismiss') }}"
                                 class="btn-pill-nav text-xs px-3 py-1"
                                 data-bulk-action="dismiss"
-                                data-confirm="Dismiss the selected IPs?">
+                                data-queue-confirm="Dismiss the selected IPs?">
                             <i class="fa-solid fa-xmark"></i> Dismiss selected
                         </button>
                     </div>
@@ -191,13 +191,13 @@
                         <button type="submit"
                                 formaction="{{ route('review-queue.bulkApprove') }}"
                                 class="btn-primary text-xs px-3 py-1"
-                                data-confirm="Ban the selected IPs?">
+                                data-queue-confirm="Ban the selected IPs?">
                             <i class="fa-solid fa-ban"></i> Ban selected
                         </button>
                         <button type="submit"
                                 formaction="{{ route('review-queue.bulkDismiss') }}"
                                 class="btn-pill-nav text-xs px-3 py-1"
-                                data-confirm="Dismiss the selected IPs?">
+                                data-queue-confirm="Dismiss the selected IPs?">
                             <i class="fa-solid fa-xmark"></i> Dismiss selected
                         </button>
                     </div>
@@ -271,17 +271,39 @@
             }
             checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
 
-            form.addEventListener('submit', function (e) {
+            form.addEventListener('submit', async function (e) {
+                if (form._cwConfirmed) {
+                    delete form._cwConfirmed;
+                    return;
+                }
                 const n = form.querySelectorAll('.bulk-row-checkbox:checked').length;
                 if (n === 0) {
                     e.preventDefault();
-                    alert('Select at least one IP first.');
+                    await window.alertModal({
+                        title: 'Selection Required',
+                        message: 'Select at least one IP first.',
+                        variant: 'warning'
+                    });
                     return;
                 }
                 const btn = e.submitter;
-                const msg = btn?.dataset.confirm;
-                if (msg && ! confirm(msg + ' (' + n + ' selected)')) {
+                const msg = btn?.dataset.queueConfirm;
+                if (msg) {
                     e.preventDefault();
+                    const isBan = /ban/i.test(msg);
+                    const ok = await window.confirmModal({
+                        title: msg,
+                        details: n + ' IP' + (n === 1 ? '' : 's') + ' selected.',
+                        confirmText: isBan ? 'Ban Selected' : 'Dismiss Selected',
+                        variant: isBan ? 'danger' : 'primary'
+                    });
+                    if (ok) {
+                        form._cwConfirmed = true;
+                        if (btn && btn.formAction) {
+                            form.action = btn.formAction;
+                        }
+                        form.submit();
+                    }
                 }
             });
 

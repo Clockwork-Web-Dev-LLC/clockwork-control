@@ -472,7 +472,10 @@
                                 <button type="submit"
                                         class="btn-pill-nav text-xs"
                                         title="Pause the 15-min ingest cron. Historical data stays visible; collection resumes when re-enabled."
-                                        onclick="return confirm('Pause per-site CPU collection? Historical data will still be visible; the 15-min ingest will stop until re-enabled.');">
+                                        data-confirm="Pause per-site CPU collection?"
+                                        data-confirm-details="Historical data will still be visible; the 15-min ingest will stop until re-enabled."
+                                        data-confirm-btn="Pause Collection"
+                                        data-confirm-variant="warning">
                                     <i class="fa-solid fa-pause text-[10px]"></i> Pause collection
                                 </button>
                             @else
@@ -640,7 +643,7 @@
                                     <x-sort-th key="cpu" align="right">CPU</x-sort-th>
                                     <x-sort-th key="mem" align="right">MEM</x-sort-th>
                                     <x-sort-th key="sites" align="right">Sites</x-sort-th>
-                                    <x-sort-th key="visits" align="right">Visits MTD</x-sort-th>
+                                    <x-sort-th key="visits" align="right">Visits {{ $rollingDays }}d</x-sort-th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -650,14 +653,14 @@
                                         data-sort-cpu="{{ $row['avg_cpu'] ?? '' }}"
                                         data-sort-mem="{{ $row['avg_memory'] ?? '' }}"
                                         data-sort-sites="{{ $row['site_count'] }}"
-                                        data-sort-visits="{{ $row['visits_mtd'] }}">
+                                        data-sort-visits="{{ $row['visits_rolling'] }}">
                                         <td class="px-4 py-2">
                                             <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
                                         </td>
                                         <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_cpu']) }}">{{ $fmtPct($row['avg_cpu']) }}</td>
                                         <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_memory']) }}">{{ $fmtPct($row['avg_memory']) }}</td>
                                         <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ $row['site_count'] }}</td>
-                                        <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ number_format($row['visits_mtd']) }}</td>
+                                        <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ number_format($row['visits_rolling']) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>

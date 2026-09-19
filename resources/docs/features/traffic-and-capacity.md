@@ -2,7 +2,7 @@
 title: Traffic + capacity
 section: Features
 order: 120
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [traffic, capacity, visits, analytics, pressable, eol, php]
 tracks: [app/Console/Commands/RollupTraffic.php, app/Http/Controllers/CapacityController.php, app/Services/Runtime/**, app/Console/Commands/RefreshRuntimeEol.php, app/Console/Commands/PressableTrafficReport.php, modules/Pressable/src/PressableClient.php]

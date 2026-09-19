@@ -2,7 +2,7 @@
 title: Backup relay (Multi-Provider → S3 Glacier)
 section: Features
 order: 130
-updated: 2026-09-12
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
 tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]

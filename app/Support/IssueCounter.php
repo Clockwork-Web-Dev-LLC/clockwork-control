@@ -42,9 +42,19 @@ class IssueCounter
         }
     }
 
+    public function emergencyTotal(): int
+    {
+        return $this->total('emergency');
+    }
+
     public function pressingTotal(): int
     {
         return $this->total('pressing');
+    }
+
+    public function notPressingTotal(): int
+    {
+        return $this->total('not_pressing');
     }
 
     public function allEnabledTotal(): int
@@ -293,13 +303,29 @@ class IssueCounter
             if ($categoryConfig->isOff($key)) {
                 continue;
             }
-            if ($mode === 'all' || $categoryConfig->isPressing($key)) {
+            if ($mode === 'all') {
+                $total += $count;
+            } elseif ($mode === 'emergency') {
+                if ($categoryConfig->isEmergency($key)) {
+                    $total += $count;
+                }
+            } elseif ($mode === 'pressing') {
+                if ($categoryConfig->isPressing($key)) {
+                    $total += $count;
+                }
+            } elseif ($mode === 'not_pressing') {
+                if ($categoryConfig->isNotPressing($key)) {
+                    $total += $count;
+                }
+            } elseif ($categoryConfig->isUrgent($key)) {
                 $total += $count;
             }
         }
 
         // Over-quota is a /capacity concern, not a toggleable Issues category,
         // but it still belongs on the navbar total (calendar MTD vs threshold).
+        // Note: Pressable over-quota sites are tracked on /capacity under the Pressable tab
+        // and are deliberately excluded from the navbar total (which tracks VPS/Shared density).
         return $total + $overQuota;
     }
 
@@ -307,7 +333,7 @@ class IssueCounter
      * Sites on Shared servers exceeding the calendar-month visit threshold —
      * the invoice number, not a security issue, but it deserves the same surface.
      */
-    private function countOverQuotaSites(?int $threshold = null): int
+    public function countOverQuotaSites(?int $threshold = null): int
     {
         $settings = app(Settings::class);
         $threshold ??= (int) $settings->get('capacity.visit_threshold', 30_000);
@@ -353,14 +379,23 @@ class IssueCounter
             ->count();
     }
 
-    private function countHotServers(): int
+    public function countHotServers(): int
     {
         $settings = app(Settings::class);
         $cpuYellow = (float) $settings->get('capacity.cpu_threshold', config('clockwork.monitoring.cpu_yellow_threshold', 70));
         $diskYellow = (float) $settings->get('capacity.disk_threshold', config('clockwork.monitoring.disk_yellow_threshold', 85));
         $memYellow = (float) $settings->get('capacity.memory_threshold', config('clockwork.monitoring.memory_yellow_threshold', 80));
 
-        $serverIds = Server::query()->where('is_ignored', false)->pluck('id');
+        $sharedTagId = Tag::where('name', 'Shared')->value('id');
+        if ($sharedTagId === null) {
+            return 0;
+        }
+
+        $serverIds = Server::query()
+            ->where('is_ignored', false)
+            ->whereHas('tags', fn ($q) => $q->where('tags.id', $sharedTagId))
+            ->pluck('id');
+
         if ($serverIds->isEmpty()) {
             return 0;
         }

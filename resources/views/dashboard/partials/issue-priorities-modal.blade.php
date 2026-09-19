@@ -43,6 +43,13 @@
             <div class="flex items-center gap-2">
                 <span class="font-medium text-[var(--color-ink-soft)]">Presets:</span>
                 <button type="button"
+                        @click="turnAllOn()"
+                        class="px-2.5 py-1 rounded-md border border-[var(--color-border-light)] hover:border-[var(--color-border-strong)] bg-[var(--color-surface-alt)] font-medium text-[var(--color-ink-strong)] cursor-pointer transition-colors"
+                        title="Turn on monitoring for all categories">
+                    <i class="fa-solid fa-bell text-[10px] text-emerald-500 mr-1"></i>
+                    Turn All On
+                </button>
+                <button type="button"
                         @click="muteRoutineCategories()"
                         class="px-2.5 py-1 rounded-md border border-[var(--color-border-light)] hover:border-[var(--color-border-strong)] bg-[var(--color-surface-alt)] font-medium text-[var(--color-ink-strong)] cursor-pointer transition-colors"
                         title="Turn off outdated plugins, closed plugins, and flagged WP admins">
@@ -73,11 +80,28 @@
         <div class="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             @foreach (['critical' => ['title' => 'Critical & Security', 'color' => 'bg-[var(--color-status-red)]'], 'infrastructure' => ['title' => 'Infrastructure & Gaps', 'color' => 'bg-[var(--color-status-yellow)]'], 'routine' => ['title' => 'Routine Upkeep & Maintenance', 'color' => 'bg-slate-400']] as $tierKey => $tierInfo)
                 <div>
-                    <div class="flex items-center gap-2 pb-2 mb-3 border-b border-[var(--color-border-light)]">
-                        <span class="w-2 h-2 rounded-full {{ $tierInfo['color'] }}"></span>
-                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">
-                            {{ $tierInfo['title'] }}
-                        </h3>
+                    <div class="flex items-center justify-between gap-2 pb-2 mb-3 border-b border-[var(--color-border-light)]">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full {{ $tierInfo['color'] }}"></span>
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">
+                                {{ $tierInfo['title'] }}
+                            </h3>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <button type="button"
+                                    @click="toggleCategoryTier('{{ $tierKey }}', true)"
+                                    class="text-[var(--color-ink-muted)] hover:text-[var(--color-brand)] cursor-pointer text-[11px]"
+                                    title="Turn on all categories in this section">
+                                Turn All On
+                            </button>
+                            <span class="text-[var(--color-border-light)]">·</span>
+                            <button type="button"
+                                    @click="toggleCategoryTier('{{ $tierKey }}', false)"
+                                    class="text-[var(--color-ink-muted)] hover:text-red-500 cursor-pointer text-[11px]"
+                                    title="Mute all categories in this section">
+                                Turn All Off
+                            </button>
+                        </div>
                     </div>
 
                     <div class="divide-y divide-[var(--color-border-light)]">
@@ -88,9 +112,9 @@
                                     <div class="min-w-0 flex-1">
                                         <div class="flex items-center gap-2">
                                             <i class="fa-solid {{ $cat['icon'] }} text-xs opacity-70 w-4 text-center"></i>
-                                            <span class="font-medium text-sm text-[var(--color-ink-strong)]">{{ $cat['label'] }}</span>
+                                            <span class="font-medium text-sm text-[var(--color-ink-strong)]" :class="isCategoryOff('{{ $catKey }}') ? 'line-through opacity-60' : ''">{{ $cat['label'] }}</span>
                                             @if (($totals[$catKey] ?? 0) > 0)
-                                                <span class="status-pill {{ $cat['class'] }} text-[10px] px-1.5 py-0.2">
+                                                <span class="status-pill {{ $cat['class'] }} text-[10px] px-1.5 py-0.2" :class="isCategoryOff('{{ $catKey }}') ? 'opacity-40' : ''">
                                                     {{ $totals[$catKey] }}
                                                 </span>
                                             @else
@@ -102,17 +126,29 @@
                                         </p>
                                     </div>
 
-                                    {{-- 3-Way Segmented Control --}}
+                                    {{-- 4-Way Segmented Control: Emergency | Pressing | Not Pressing | Off --}}
                                     <div class="flex items-center p-0.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-xs shrink-0 select-none">
+                                        {{-- Emergency --}}
+                                        <button type="button"
+                                                @click="setCategoryLevel('{{ $catKey }}', 'emergency')"
+                                                :class="isCategoryEmergency('{{ $catKey }}')
+                                                    ? 'bg-red-600 text-white font-semibold shadow-xs'
+                                                    : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                                                class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
+                                                title="Mark as Emergency / Critical (top-tier alert)">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="isCategoryEmergency('{{ $catKey }}') ? 'bg-white' : 'bg-red-600'"></span>
+                                            <span>Emergency</span>
+                                        </button>
+
                                         {{-- Pressing --}}
                                         <button type="button"
                                                 @click="setCategoryLevel('{{ $catKey }}', 'pressing')"
                                                 :class="isCategoryPressing('{{ $catKey }}')
-                                                    ? 'bg-red-500 text-white font-semibold shadow-xs'
+                                                    ? 'bg-amber-500 text-white font-semibold shadow-xs'
                                                     : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
                                                 class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
-                                                title="Mark as Pressing / Urgent (triggers primary red badge)">
-                                            <span class="w-1.5 h-1.5 rounded-full" :class="isCategoryPressing('{{ $catKey }}') ? 'bg-white' : 'bg-red-500'"></span>
+                                                title="Mark as Pressing / Urgent">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="isCategoryPressing('{{ $catKey }}') ? 'bg-white' : 'bg-amber-500'"></span>
                                             <span>Pressing</span>
                                         </button>
 
@@ -120,11 +156,11 @@
                                         <button type="button"
                                                 @click="setCategoryLevel('{{ $catKey }}', 'not_pressing')"
                                                 :class="isCategoryNotPressing('{{ $catKey }}')
-                                                    ? 'bg-amber-500 text-white font-semibold shadow-xs'
+                                                    ? 'bg-slate-500 text-white font-semibold shadow-xs'
                                                     : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
                                                 class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
                                                 title="Mark as Not Pressing (monitored, but routine)">
-                                            <span class="w-1.5 h-1.5 rounded-full" :class="isCategoryNotPressing('{{ $catKey }}') ? 'bg-white' : 'bg-amber-500'"></span>
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="isCategoryNotPressing('{{ $catKey }}') ? 'bg-white' : 'bg-slate-400'"></span>
                                             <span>Not Pressing</span>
                                         </button>
 
@@ -132,7 +168,7 @@
                                         <button type="button"
                                                 @click="setCategoryLevel('{{ $catKey }}', 'off')"
                                                 :class="isCategoryOff('{{ $catKey }}')
-                                                    ? 'bg-slate-600 text-white font-semibold shadow-xs'
+                                                    ? 'bg-slate-700 text-white font-semibold shadow-xs'
                                                     : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
                                                 class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
                                                 title="Turn completely off fleet-wide (muted)">
@@ -152,7 +188,7 @@
         <div class="px-6 py-3 border-t border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/50 flex items-center justify-between text-xs">
             <span class="text-[var(--color-ink-soft)]">
                 <i class="fa-solid fa-circle-info mr-1 text-[var(--color-brand)]"></i>
-                Pressing categories surface in red and power the navbar counter.
+                Emergency & Pressing categories power the navbar counter. Off categories are muted fleet-wide.
             </span>
             <button type="button"
                     @click="prioritiesModalOpen = false"

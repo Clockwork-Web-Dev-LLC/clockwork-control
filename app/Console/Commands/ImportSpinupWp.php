@@ -396,6 +396,15 @@ class ImportSpinupWp extends Command
         $site = $this->resolveSite((string) $domain, $spinupId, (int) $serverId, (array) ($row['additional_domains'] ?? []));
         $existed = $site->exists;
 
+        // Never overwrite a site that has been migrated to Pressable. SpinupWP
+        // may still hold a decommissioned/un-deleted instance until cleaned up.
+        if ($existed && ($site->hosting_provider === Site::HOSTING_PROVIDER_PRESSABLE || $site->pressable_site_id !== null)) {
+            $this->line("  Skipping {$domain}: site is tracked under Pressable (pressable_site_id: {$site->pressable_site_id}).");
+            $stats['skipped_pressable'] = ($stats['skipped_pressable'] ?? 0) + 1;
+
+            return;
+        }
+
         // New staging/dev sites should never fire uptime alerts.
         // Only set this on creation — don't override a manual re-enable on
         // an existing site.

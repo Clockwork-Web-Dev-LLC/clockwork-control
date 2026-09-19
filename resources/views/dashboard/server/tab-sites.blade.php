@@ -23,6 +23,22 @@
                         <i class="fa-solid fa-rotate"></i> <span>Sync sites from GridPane</span>
                     </button>
                 </form>
+            @elseif (! $server->spinupwp_id && ! $server->isGridPane())
+                <div class="mt-4">
+                    <form method="POST" action="{{ route('servers.destroy', $server) }}"
+                          data-confirm="Permanently remove {{ $server->display_name }} from Clockwork?"
+                          data-confirm-details="No sites are mapped to this server. Removing it will clear its metrics and records from Clockwork inventory. This cannot be undone."
+                          data-confirm-match="{{ $server->display_name }}"
+                          data-confirm-btn="Delete Server"
+                          data-confirm-variant="danger">
+                        @csrf
+                        @method('DELETE')
+                        <input type="hidden" name="confirm_name" value="{{ $server->display_name }}">
+                        <button type="submit" class="btn-pill-nav text-xs whitespace-normal justify-center max-w-full" style="color: var(--color-status-red); border-color: var(--color-status-red);">
+                            <i class="fa-solid fa-trash"></i> Remove this server from Clockwork
+                        </button>
+                    </form>
+                </div>
             @endif
         </div>
     @else

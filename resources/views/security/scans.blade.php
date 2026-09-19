@@ -279,7 +279,12 @@
                 btn.title = 'Toggle failed: ' + e.message;
                 setTimeout(() => { btn.style.outline = ''; }, 3000);
                 console.error('[clockwork care-plan toggle] FAILED for ' + domain + ':', e);
-                alert('Care-plan toggle failed for ' + domain + '\n\n' + e.message + '\n\nCheck the browser console for details.');
+                await window.alertModal({
+                    title: 'Care-Plan Toggle Failed',
+                    message: 'Could not toggle care-plan for ' + domain + ': ' + e.message,
+                    details: 'Check the browser console for details.',
+                    variant: 'danger'
+                });
             } finally {
                 btn.disabled = false;
                 btn.style.opacity = origOpacity;

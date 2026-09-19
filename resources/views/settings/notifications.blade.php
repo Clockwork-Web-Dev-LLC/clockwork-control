@@ -149,7 +149,9 @@
                                     </form>
                                 </details>
                                 <form method="POST" action="{{ route('settings.notifications.recipients.destroy', $recipient) }}" class="inline"
-                                      onsubmit="return confirm('Remove {{ $recipient->name }} and all their off-windows?');">
+                                      data-confirm="Remove {{ $recipient->name }} and all their off-windows?"
+                                      data-confirm-btn="Remove Recipient"
+                                      data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn-pill-nav text-xs text-[var(--color-status-red)]" title="Remove this recipient">
@@ -179,7 +181,9 @@
                                                 <span class="status-pill status-unknown text-[10px]">disabled</span>
                                             @endif
                                             <form method="POST" action="{{ route('settings.notifications.windows.destroy', $win) }}" class="inline ml-auto"
-                                                  onsubmit="return confirm('Remove off-window {{ $win->label }}?');">
+                                                  data-confirm="Remove off-window {{ $win->label }}?"
+                                                  data-confirm-btn="Remove Off-Window"
+                                                  data-confirm-variant="danger">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] text-xs">

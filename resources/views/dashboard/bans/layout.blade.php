@@ -37,7 +37,10 @@
                 <form method="POST" action="{{ route('review-queue.toggleAutoApprove') }}">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
-                            onclick="return confirm('{{ $autoApproveEnabled ? 'Switch back to manual review for repeat offenders?' : 'Auto-approve repeat offenders? Any IP with 2+ lockouts (same site twice OR multiple servers) will be banned automatically — including pending entries that already qualify.' }}')">
+                            data-confirm="{{ $autoApproveEnabled ? 'Switch back to manual review for repeat offenders?' : 'Auto-approve repeat offenders?' }}"
+                            @if(! $autoApproveEnabled) data-confirm-details="Any IP with 2+ lockouts (same site twice OR multiple servers) will be banned automatically — including pending entries that already qualify." @endif
+                            data-confirm-btn="{{ $autoApproveEnabled ? 'Disable Auto-Approve' : 'Enable Auto-Approve' }}"
+                            data-confirm-variant="{{ $autoApproveEnabled ? 'warning' : 'primary' }}">
                         <i class="fa-solid {{ $autoApproveEnabled ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
                         {{ $autoApproveEnabled ? 'Disable' : 'Enable' }}
                     </button>

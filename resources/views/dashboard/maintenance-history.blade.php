@@ -68,9 +68,9 @@
     {{-- Filters. --}}
     <form method="GET" action="{{ route('maintenance-history.index') }}" class="card px-4 py-3 mb-4 flex items-end gap-3 flex-wrap">
         <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
-        <label class="block">
+        <label class="block w-full sm:w-auto">
             <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Site</span>
-            <select name="site_id" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1 min-w-[14rem]">
+            <select name="site_id" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1 w-full sm:w-auto sm:min-w-[14rem] max-w-full">
                 <option value="">All sites</option>
                 @foreach ($allSites as $s)
                     <option value="{{ $s->id }}" @selected((string) $siteFilter === (string) $s->id)>

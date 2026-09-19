@@ -982,7 +982,14 @@
         const llarBtn = document.getElementById('llar-install-btn');
         const llarResult = document.getElementById('llar-install-result');
         llarBtn?.addEventListener('click', async () => {
-            if (!confirm('Install Limit Login Attempts Reloaded on this site? Email-on-lockout will be turned off.')) {
+            const ok = await window.confirmModal({
+                title: 'Install Limit Login Attempts Reloaded?',
+                message: 'Install LLAR on this site?',
+                details: 'Email-on-lockout will be turned off automatically.',
+                confirmText: 'Install Plugin',
+                variant: 'primary'
+            });
+            if (!ok) {
                 return;
             }
             llarBtn.disabled = true;

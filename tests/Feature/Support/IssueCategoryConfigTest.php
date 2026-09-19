@@ -39,30 +39,38 @@ describe('IssueCategoryConfig', function () {
                 'wp_admins',
             ]);
 
-        // Verify sensible emergency defaults vs routine defaults
-        expect($defaults['down_sites'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
-        expect($defaults['scheduler_stale'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
-        expect($defaults['malware'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
-        expect($defaults['health'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        // Verify sensible emergency defaults vs pressing vs routine defaults
+        expect($defaults['down_sites'])->toBe(IssueCategoryConfig::LEVEL_EMERGENCY);
+        expect($defaults['scheduler_stale'])->toBe(IssueCategoryConfig::LEVEL_EMERGENCY);
+        expect($defaults['malware'])->toBe(IssueCategoryConfig::LEVEL_EMERGENCY);
+        expect($defaults['health'])->toBe(IssueCategoryConfig::LEVEL_EMERGENCY);
+
+        expect($defaults['hot'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        expect($defaults['domain-expiration'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        expect($defaults['reboot'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        expect($defaults['seo-indexability'])->toBe(IssueCategoryConfig::LEVEL_PRESSING);
 
         expect($defaults['plugins_outdated'])->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
-        expect($defaults['plugins_closed'])->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
+        expect($defaults['patches'])->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
         expect($defaults['wp_admins'])->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
-        expect($defaults['reboot'])->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
     });
 
     it('retrieves effective levels with normalization', function () {
         $config = app(IssueCategoryConfig::class);
 
-        expect($config->getLevel('domain-expiration'))->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
-        expect($config->getLevel('domain_expiration'))->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
+        expect($config->getLevel('domain-expiration'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        expect($config->getLevel('domain_expiration'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
 
         expect($config->getLevel('seo-indexability'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
         expect($config->getLevel('seo_indexability'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
 
-        expect($config->isPressing('down_sites'))->toBeTrue();
+        expect($config->isEmergency('down_sites'))->toBeTrue();
+        expect($config->isPressing('hot'))->toBeTrue();
         expect($config->isNotPressing('plugins_outdated'))->toBeTrue();
         expect($config->isOff('plugins_outdated'))->toBeFalse();
+        expect($config->isUrgent('down_sites'))->toBeTrue();
+        expect($config->isUrgent('hot'))->toBeTrue();
+        expect($config->isUrgent('plugins_outdated'))->toBeFalse();
     });
 
     it('persists and updates individual category levels', function () {
@@ -71,6 +79,10 @@ describe('IssueCategoryConfig', function () {
         $config->setLevel('plugins_outdated', IssueCategoryConfig::LEVEL_OFF);
         expect($config->getLevel('plugins_outdated'))->toBe(IssueCategoryConfig::LEVEL_OFF);
         expect($config->isOff('plugins_outdated'))->toBeTrue();
+
+        $config->setLevel('plugins_outdated', IssueCategoryConfig::LEVEL_EMERGENCY);
+        expect($config->getLevel('plugins_outdated'))->toBe(IssueCategoryConfig::LEVEL_EMERGENCY);
+        expect($config->isEmergency('plugins_outdated'))->toBeTrue();
 
         $config->setLevel('plugins_outdated', IssueCategoryConfig::LEVEL_PRESSING);
         expect($config->getLevel('plugins_outdated'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
@@ -87,54 +99,58 @@ describe('IssueCategoryConfig', function () {
 
         $config->saveLevels([
             'plugins_outdated' => IssueCategoryConfig::LEVEL_OFF,
-            'plugins_closed' => IssueCategoryConfig::LEVEL_OFF,
-            'hot' => IssueCategoryConfig::LEVEL_PRESSING,
+            'plugins_closed' => IssueCategoryConfig::LEVEL_EMERGENCY,
+            'hot' => IssueCategoryConfig::LEVEL_NOT_PRESSING,
         ]);
 
         expect($config->isOff('plugins_outdated'))->toBeTrue();
-        expect($config->isOff('plugins_closed'))->toBeTrue();
-        expect($config->isPressing('hot'))->toBeTrue();
+        expect($config->isEmergency('plugins_closed'))->toBeTrue();
+        expect($config->isNotPressing('hot'))->toBeTrue();
 
         $config->resetToDefaults();
 
         expect($config->getLevel('plugins_outdated'))->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
-        expect($config->getLevel('plugins_closed'))->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
-        expect($config->getLevel('hot'))->toBe(IssueCategoryConfig::LEVEL_NOT_PRESSING);
+        expect($config->getLevel('plugins_closed'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
+        expect($config->getLevel('hot'))->toBe(IssueCategoryConfig::LEVEL_PRESSING);
     });
 
-    it('integrates with IssueCounter to calculate pressing vs all totals', function () {
+    it('integrates with IssueCounter to calculate urgent vs all totals', function () {
         $counter = app(IssueCounter::class);
         $config = app(IssueCategoryConfig::class);
 
         // Reset config
         $config->resetToDefaults();
 
-        // Stale scheduler is PRESSING by default
+        // Stale scheduler is EMERGENCY by default
         app(Settings::class)->put(
             SchedulerHeartbeat::SETTING_HEARTBEAT_AT,
             now()->subMinutes(12)->toIso8601String()
         );
 
-        // Reboot required is NOT_PRESSING by default
+        // Reboot required is PRESSING by default
         Server::factory()->create([
             'is_ignored' => false,
             'reboot_required' => true,
         ]);
 
-        $pressingTotal = $counter->total(); // default: pressing
-        $allTotal = $counter->total('all'); // all enabled (pressing + not_pressing)
+        $urgentTotal = $counter->total(); // default: urgent (emergency + pressing)
+        $emergencyTotal = $counter->emergencyTotal();
+        $pressingTotal = $counter->pressingTotal();
+        $allTotal = $counter->total('all'); // all enabled (emergency + pressing + not_pressing)
 
+        expect($urgentTotal)->toBeGreaterThanOrEqual(2);
+        expect($emergencyTotal)->toBeGreaterThanOrEqual(1);
         expect($pressingTotal)->toBeGreaterThanOrEqual(1);
-        expect($allTotal)->toBeGreaterThan($pressingTotal);
+        expect($allTotal)->toBeGreaterThanOrEqual($urgentTotal);
 
         // Now turn OFF reboot category completely
         $config->setLevel('reboot', IssueCategoryConfig::LEVEL_OFF);
-        $allAfterMute = $counter->total('all');
-        expect($allAfterMute)->toBeLessThan($allTotal);
+        $urgentAfterMute = $counter->total();
+        expect($urgentAfterMute)->toBe($urgentTotal - 1);
 
         // Now turn OFF scheduler_stale
         $config->setLevel('scheduler_stale', IssueCategoryConfig::LEVEL_OFF);
-        $pressingAfterMute = $counter->total();
-        expect($pressingAfterMute)->toBe($pressingTotal - 1);
+        $urgentAfterBothMuted = $counter->total();
+        expect($urgentAfterBothMuted)->toBe($urgentAfterMute - 1);
     });
 });

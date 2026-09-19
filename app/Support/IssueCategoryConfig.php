@@ -4,6 +4,8 @@ namespace App\Support;
 
 class IssueCategoryConfig
 {
+    public const LEVEL_EMERGENCY = 'emergency';
+
     public const LEVEL_PRESSING = 'pressing';
 
     public const LEVEL_NOT_PRESSING = 'not_pressing';
@@ -24,33 +26,33 @@ class IssueCategoryConfig
     public function defaults(): array
     {
         return [
-            // Critical emergencies (default: pressing)
-            'down_sites' => self::LEVEL_PRESSING,
-            'scheduler_stale' => self::LEVEL_PRESSING,
-            'malware' => self::LEVEL_PRESSING,
-            'companion_malware' => self::LEVEL_PRESSING,
-            'tampering' => self::LEVEL_PRESSING,
-            'health' => self::LEVEL_PRESSING,
-            'forms_failing' => self::LEVEL_PRESSING,
-            'stuck_maintenance' => self::LEVEL_PRESSING,
-            'seo-indexability' => self::LEVEL_PRESSING,
-            'ssl' => self::LEVEL_PRESSING,
+            // Critical emergencies (default: emergency)
+            'down_sites' => self::LEVEL_EMERGENCY,
+            'scheduler_stale' => self::LEVEL_EMERGENCY,
+            'malware' => self::LEVEL_EMERGENCY,
+            'companion_malware' => self::LEVEL_EMERGENCY,
+            'tampering' => self::LEVEL_EMERGENCY,
+            'health' => self::LEVEL_EMERGENCY,
+            'forms_failing' => self::LEVEL_EMERGENCY,
+            'stuck_maintenance' => self::LEVEL_EMERGENCY,
+            'ssl' => self::LEVEL_EMERGENCY,
 
-            // Infrastructure & server health (default: not_pressing)
-            'hot' => self::LEVEL_NOT_PRESSING,
-            'domain-expiration' => self::LEVEL_NOT_PRESSING,
-            'reboot' => self::LEVEL_NOT_PRESSING,
-            'patches' => self::LEVEL_NOT_PRESSING,
-            'cf' => self::LEVEL_NOT_PRESSING,
-            'no_ssh' => self::LEVEL_NOT_PRESSING,
-            'no_jail' => self::LEVEL_NOT_PRESSING,
-            'no_db' => self::LEVEL_NOT_PRESSING,
-            'no_companion' => self::LEVEL_NOT_PRESSING,
-            'orphans' => self::LEVEL_NOT_PRESSING,
+            // Infrastructure & urgent issues (default: pressing)
+            'hot' => self::LEVEL_PRESSING,
+            'domain-expiration' => self::LEVEL_PRESSING,
+            'seo-indexability' => self::LEVEL_PRESSING,
+            'reboot' => self::LEVEL_PRESSING,
+            'no_ssh' => self::LEVEL_PRESSING,
+            'no_db' => self::LEVEL_PRESSING,
+            'no_companion' => self::LEVEL_PRESSING,
+            'plugins_closed' => self::LEVEL_PRESSING,
 
             // Routine upkeep & audits (default: not_pressing)
+            'patches' => self::LEVEL_NOT_PRESSING,
+            'cf' => self::LEVEL_NOT_PRESSING,
+            'no_jail' => self::LEVEL_NOT_PRESSING,
+            'orphans' => self::LEVEL_NOT_PRESSING,
             'plugins_outdated' => self::LEVEL_NOT_PRESSING,
-            'plugins_closed' => self::LEVEL_NOT_PRESSING,
             'wp_admins' => self::LEVEL_NOT_PRESSING,
         ];
     }
@@ -68,7 +70,7 @@ class IssueCategoryConfig
         }
 
         $defaults = $this->defaults();
-        $validLevels = [self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
+        $validLevels = [self::LEVEL_EMERGENCY, self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
 
         $effective = [];
         foreach ($defaults as $category => $defaultLevel) {
@@ -108,6 +110,11 @@ class IssueCategoryConfig
         return $this->getLevel($category) === self::LEVEL_OFF;
     }
 
+    public function isEmergency(string $category): bool
+    {
+        return $this->getLevel($category) === self::LEVEL_EMERGENCY;
+    }
+
     public function isPressing(string $category): bool
     {
         return $this->getLevel($category) === self::LEVEL_PRESSING;
@@ -118,13 +125,20 @@ class IssueCategoryConfig
         return $this->getLevel($category) === self::LEVEL_NOT_PRESSING;
     }
 
+    public function isUrgent(string $category): bool
+    {
+        $level = $this->getLevel($category);
+
+        return $level === self::LEVEL_EMERGENCY || $level === self::LEVEL_PRESSING;
+    }
+
     /**
      * Set a single category's level.
      */
     public function setLevel(string $category, string $level): void
     {
         $key = $this->normalizeKey($category);
-        $validLevels = [self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
+        $validLevels = [self::LEVEL_EMERGENCY, self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
         if (! in_array($level, $validLevels, true)) {
             throw new \InvalidArgumentException("Invalid issue category level: {$level}");
         }
@@ -145,7 +159,7 @@ class IssueCategoryConfig
      */
     public function saveLevels(array $newLevels): void
     {
-        $validLevels = [self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
+        $validLevels = [self::LEVEL_EMERGENCY, self::LEVEL_PRESSING, self::LEVEL_NOT_PRESSING, self::LEVEL_OFF];
         $defaults = $this->defaults();
 
         $saved = $this->settings->get(self::SETTING_KEY, []);

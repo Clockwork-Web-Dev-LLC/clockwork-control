@@ -112,7 +112,26 @@ describe('DashboardController', function () {
 
         $response->assertOk()
             ->assertSee('no longer exists at')
-            ->assertSee(route('servers.destroy', $server), false);
+            ->assertSee(route('servers.destroy', $server), false)
+            ->assertSee('flex flex-col sm:flex-row sm:items-start gap-3', false);
+    });
+
+    it('stacks the ignored-server banner actions below the copy so phone widths cannot crush the reason', function () {
+        $server = Server::factory()->create([
+            'name' => 'ignored.example.com',
+            'is_ignored' => true,
+            'ignore_reason' => 'Removed from panel after migration.',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', $server));
+
+        $response->assertOk()
+            ->assertSee('This server is excluded from monitoring')
+            ->assertSee('Stop ignoring')
+            ->assertSee('Remove from Clockwork')
+            ->assertSee('flex flex-col sm:flex-row sm:items-start gap-3', false)
+            ->assertSee('w-full sm:w-auto sm:shrink-0', false);
     });
 
     it('does not show the provider-missing banner for a server currently polling fine', function () {
@@ -310,4 +329,27 @@ describe('DashboardController', function () {
         $html = $response->getContent();
         expect(substr_count($html, route('servers.create')))->toBe(2);
     });
+
+    it('renders delete server actions in the header, ignored banner, and empty sites state for disconnected servers', function () {
+        $server = Server::factory()->create([
+            'name' => 'disconnected.example.com',
+            'spinupwp_id' => null,
+            'is_ignored' => true,
+            'ignore_reason' => 'Removed from SpinupWP',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', ['server' => $server]));
+
+        $response->assertOk();
+        // Delete button in header next to Edit
+        $response->assertSee('Delete', false);
+        // Remove from Clockwork in ignored banner
+        $response->assertSee('Remove from Clockwork', false);
+        // Remove from Clockwork in empty sites state
+        $response->assertSee('Remove this server from Clockwork', false);
+        // Action targets servers.destroy
+        $response->assertSee(route('servers.destroy', $server), false);
+    });
 });
+

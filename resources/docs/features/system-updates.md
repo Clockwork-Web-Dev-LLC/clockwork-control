@@ -2,13 +2,13 @@
 title: System updates
 section: Features
 order: 92
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [system-updates, self-update, core, companion, releases]
 tracks: [app/Services/Updates/**, app/Http/Controllers/SystemUpdatesController.php, app/Console/Commands/CheckSystemUpdates.php, app/Console/Commands/ApplySystemUpdate.php, resources/views/settings/updates.blade.php, routes/web.php]
 ---
 
-Lives at **`/settings/updates`** (gear menu → System Updates, also reachable via the centralized [Settings Hub](/docs/features/settings-hub) at `/settings` under System & Workspace). This is Clockwork Control updating *itself* — not to be confused with [Features → Updates](/docs/features/updates), the fleet-wide page for updating plugins/themes/core on the WordPress sites you manage. Same word, two completely different systems; the naming collision is unfortunate but the URLs (`/updates` vs `/settings/updates`) keep them apart.
+Lives at **`/settings/updates`** (gear menu → System Updates, also reachable via the centralized [Settings Hub](/documentation/features/settings-hub) at `/settings` under System & Workspace). This is Clockwork Control updating *itself* — not to be confused with [Features → Updates](/documentation/features/updates), the fleet-wide page for updating plugins/themes/core on the WordPress sites you manage. Same word, two completely different systems; the naming collision is unfortunate but the URLs (`/updates` vs `/settings/updates`) keep them apart.
 
 ## What it shows
 
@@ -35,7 +35,7 @@ Three sections, one page:
 
 Each step's output is captured and shown back to the operator, success or failure, so a broken update isn't a silent black box — you can see exactly which of the five steps it got through.
 
-**Subprocess environment forwarding**: Steps 2 and 3 explicitly pass `HOME`/`COMPOSER_HOME` into the `git pull` and `composer install` subprocesses via `SystemUpdateService::subprocessEnv()` — preferring whatever the ambient environment already provides, and falling back to a Clockwork-owned `storage/app/subprocess-home` directory (created on demand) when neither is set. This exists because `php artisan serve` run without `--no-reload` strips almost every environment variable (including `HOME`) from its worker process, to support hot-reload-on-`.env`-change; without the explicit forward, Composer has nowhere to write its cache/config and the composer-install step fails purely as an artifact of which dev server happens to be in front of PHP. A real php-fpm/nginx deployment doesn't have this problem, but self-update works regardless of how the operator is running the app.
+**Subprocess environment forwarding**: Steps 2 and 3 explicitly pass `HOME`/`COMPOSER_HOME` into the `git pull` and `composer install` subprocesses via `SystemUpdateService::subprocessEnv()` — preferring whatever the ambient environment already provides, and falling back to a Clockwork Control-owned `storage/app/subprocess-home` directory (created on demand) when neither is set. This exists because `php artisan serve` run without `--no-reload` strips almost every environment variable (including `HOME`) from its worker process, to support hot-reload-on-`.env`-change; without the explicit forward, Composer has nowhere to write its cache/config and the composer-install step fails purely as an artifact of which dev server happens to be in front of PHP. A real php-fpm/nginx deployment doesn't have this problem, but self-update works regardless of how the operator is running the app.
 
 **This only works if the app is actually a git checkout.** If `.git` doesn't exist (e.g. you deployed via a tarball), the page still shows whether an update is available, but skips straight to migrations — there's no code to pull. In that case, use the manual terminal command shown on the page (`git clone`... doesn't apply; you'd `composer install --no-dev && php artisan migrate --force && php artisan optimize:clear` after replacing the files yourself).
 
@@ -45,7 +45,7 @@ Every shell command here goes through `Illuminate\Support\Facades\Process` rathe
 
 ## Authorization
 
-Gated behind the same `auth` middleware group as the rest of the app — any allowlisted user can trigger a self-update, matching this app's existing no-admin-tier model (see [Architecture → Security model](/docs/architecture/security-model)). `clockwork:self-update` is **not** scheduled anywhere; it only ever runs when an operator clicks the button or runs the command by hand.
+Gated behind the same `auth` middleware group as the rest of the app — any allowlisted user can trigger a self-update, matching this app's existing no-admin-tier model (see [Architecture → Security model](/documentation/architecture/security-model)). `clockwork:self-update` is **not** scheduled anywhere; it only ever runs when an operator clicks the button or runs the command by hand.
 
 ## Config
 
@@ -57,9 +57,11 @@ The installed version itself is deliberately **not** an env var — it's `config
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Used to build the default releases API URL. |
 | `CLOCKWORK_UPDATES_API_URL` | (derived from the repo above) | Full override. |
 | `CLOCKWORK_UPDATES_CACHE_TTL` | `43200` (12h) | Release-check cache. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.37.1` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.38.1` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
+| `CLOCKWORK_RENEGADE_VERSION` | `1.0.3` | Bundled Clockwork Renegade version for standalone sites. |
+| `CLOCKWORK_UNLOCK_HUB_DOMAIN` | `clockworkwd.com` | Optional fallback domain for the LLAR emergency unlock console host. |
 
-See [Reference → Environment variables](/docs/reference/env-vars#system-updates).
+See [Reference → Environment variables](/documentation/reference/env-vars#system-updates).
 
 ## What's NOT here
 

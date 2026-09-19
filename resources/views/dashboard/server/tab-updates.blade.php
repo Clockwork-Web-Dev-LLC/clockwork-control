@@ -170,7 +170,11 @@
             {{-- Two-row form: label + (input + button) on one row so they share
                  a baseline; helper text drops below the whole form so it doesn't
                  push the button out of alignment with the input. --}}
-            <form method="POST" action="{{ route('servers.update.queue', $server) }}">
+            <form method="POST" action="{{ route('servers.update.queue', $server) }}"
+                  data-confirm="Run apt-get update + upgrade + autoremove on {{ $server->name }}?"
+                  data-confirm-details="Takes 1–3 minutes."
+                  data-confirm-btn="Run Updates"
+                  data-confirm-variant="warning">
                 @csrf
                 <label class="block text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">
                     Schedule reboot at (optional, server-local)
@@ -178,8 +182,7 @@
                 <div class="flex items-stretch gap-3 flex-wrap">
                     <input type="time" name="reboot_at"
                            class="font-data border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                    <button type="submit" class="btn-primary"
-                            onclick="return confirm('Run apt-get update + upgrade + autoremove on {{ $server->name }}? Takes 1–3 minutes.')">
+                    <button type="submit" class="btn-primary">
                         <i class="fa-solid fa-cube"></i>
                         Run updates
                     </button>
@@ -238,7 +241,9 @@
                         <span class="text-[var(--color-ink-muted)]">Server-local {{ $server->scheduled_reboot_at->format('M j, H:i T') }} ({{ $server->scheduled_reboot_at->diffForHumans() }}).</span>
                     </div>
                     <form method="POST" action="{{ route('servers.reboot.cancel', $server) }}"
-                          onsubmit="return confirm('Cancel the scheduled reboot on {{ $server->name }}?');">
+                          data-confirm="Cancel the scheduled reboot on {{ $server->name }}?"
+                          data-confirm-btn="Cancel Reboot"
+                          data-confirm-variant="danger">
                         @csrf
                         <button type="submit" class="btn-pill-nav text-xs">Cancel</button>
                     </form>
@@ -248,7 +253,10 @@
             @if ($needsReboot)
                 <div class="flex items-end gap-3 flex-wrap">
                     <form method="POST" action="{{ route('servers.reboot', $server) }}" class="flex items-end gap-2"
-                          onsubmit="return confirm('Reboot {{ $server->name }} in ~1 minute? Active SSH sessions will drop.');">
+                          data-confirm="Reboot {{ $server->name }} in ~1 minute?"
+                          data-confirm-details="Active SSH sessions will drop."
+                          data-confirm-btn="Reboot Now"
+                          data-confirm-variant="warning">
                         @csrf
                         <button type="submit" class="btn-primary">
                             <i class="fa-solid fa-power-off"></i>
@@ -257,7 +265,22 @@
                     </form>
 
                     <form method="POST" action="{{ route('servers.reboot', $server) }}" class="flex items-end gap-2"
-                          onsubmit="if (! this.reboot_at.value) { alert('Pick a time first.'); return false; } return confirm('Reboot {{ $server->name }} at ' + this.reboot_at.value + ' (server-local)?');">
+                          onsubmit="event.preventDefault(); (async () => {
+                              if (!this.reboot_at.value) {
+                                  await window.alertModal({ title: 'Time Required', message: 'Pick a time first before scheduling a reboot.', variant: 'warning' });
+                                  return;
+                              }
+                              const ok = await window.confirmModal({
+                                  title: 'Schedule Server Reboot?',
+                                  message: 'Reboot {{ $server->name }} at ' + this.reboot_at.value + ' (server-local)?',
+                                  confirmText: 'Schedule Reboot',
+                                  variant: 'warning'
+                              });
+                              if (ok) {
+                                  this._cwConfirmed = true;
+                                  this.submit();
+                              }
+                          })();">
                         @csrf
                         <label class="block">
                             <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">Or schedule for (server-local)</span>

@@ -507,7 +507,7 @@ class IssuesController extends Controller
     {
         $validated = $request->validate([
             'category' => ['required', 'string'],
-            'level' => ['required', 'string', 'in:pressing,not_pressing,off'],
+            'level' => ['required', 'string', 'in:emergency,pressing,not_pressing,off'],
         ]);
 
         $config->setLevel($validated['category'], $validated['level']);
@@ -529,7 +529,7 @@ class IssuesController extends Controller
     {
         $validated = $request->validate([
             'levels' => ['required', 'array'],
-            'levels.*' => ['required', 'string', 'in:pressing,not_pressing,off'],
+            'levels.*' => ['required', 'string', 'in:emergency,pressing,not_pressing,off'],
         ]);
 
         $config->saveLevels($validated['levels']);

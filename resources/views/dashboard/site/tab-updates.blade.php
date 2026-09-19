@@ -174,10 +174,20 @@
         e.preventDefault();
         const checked = Array.from(document.querySelectorAll('.updates-row-check:checked'));
         if (checked.length === 0) {
-            alert('Pick at least one plugin to update.');
+            await window.alertModal({
+                title: 'Selection Required',
+                message: 'Pick at least one plugin to update.',
+                variant: 'warning'
+            });
             return;
         }
-        if (!confirm('Update ' + checked.length + ' ' + (checked.length === 1 ? 'plugin' : 'plugins') + ' on {{ $site->domain }}? This runs synchronously and may take a few minutes.')) {
+        const ok = await window.confirmModal({
+            title: 'Update ' + checked.length + ' ' + (checked.length === 1 ? 'plugin' : 'plugins') + ' on {{ $site->domain }}?',
+            details: 'This runs synchronously and may take a few minutes.',
+            confirmText: 'Update Plugins',
+            variant: 'primary'
+        });
+        if (!ok) {
             return;
         }
 
@@ -271,7 +281,11 @@
         } catch (e) {
             refreshBtn.disabled = false;
             refreshBtn.innerHTML = original;
-            alert('Refresh failed: ' + e.message);
+            await window.alertModal({
+                title: 'Refresh Failed',
+                message: 'Refresh failed: ' + e.message,
+                variant: 'danger'
+            });
         }
     });
 

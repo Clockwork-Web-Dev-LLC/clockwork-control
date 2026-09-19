@@ -156,7 +156,10 @@ class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex item
                 </div>
 
                 <form method="POST" action="{{ route('bans.prune') }}" class="space-y-4"
-                      onsubmit="return confirm('Are you sure you want to prune expired bans matching this cutoff? They will be archived to History.');">
+                      data-confirm="Prune expired bans matching this cutoff?"
+                      data-confirm-details="They will be archived to History."
+                      data-confirm-btn="Prune Bans"
+                      data-confirm-variant="warning">
                     @csrf
 
                     <div>

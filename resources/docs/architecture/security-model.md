@@ -2,17 +2,17 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Http/Controllers/SitesController.php, app/Services/Companion/**, modules/BackupRelay/src/Services/BackupArchiveEnumerator.php, modules/Pressable/src/**, config/clockwork.php]
 ---
 
-How we protect a database that holds the SSH and WP-DB credentials for ~150 SpinupWP sites, plus the OAuth2 credentials reaching ~90 more on Pressable (no SSH — see [Integrations → Pressable](/docs/integrations/pressable) for that provider's different trust model). The short version: defense in depth — local-LAN-only network posture, OAuth + allowlist for humans, HMAC for plugin calls, dual-scoped CF tokens, encrypted-at-rest credentials.
+How we protect a database that holds the SSH and WP-DB credentials for ~150 SpinupWP sites, plus the OAuth2 credentials reaching ~90 more on Pressable (no SSH — see [Integrations → Pressable](/documentation/integrations/pressable) for that provider's different trust model). The short version: defense in depth — local-LAN-only network posture, OAuth + allowlist for humans, HMAC for plugin calls, dual-scoped CF tokens, encrypted-at-rest credentials.
 
 ## Threat model in one paragraph
 
-Clockwork is local-LAN-only. The DB is the highest-value target on the host: SSH private keys for every SpinupWP server, MySQL credentials for every WordPress site, plus the per-site Companion HMAC secrets and the Pressable API credentials. We assume an attacker who reaches the LAN, an attacker who steals an API token from the env, and an attacker who compromises a single managed WordPress site. Each gets a different bounded blast radius.
+Clockwork Control is local-LAN-only. The DB is the highest-value target on the host: SSH private keys for every SpinupWP server, MySQL credentials for every WordPress site, plus the per-site Companion HMAC secrets and the Pressable API credentials. We assume an attacker who reaches the LAN, an attacker who steals an API token from the env, and an attacker who compromises a single managed WordPress site. Each gets a different bounded blast radius.
 
 ## Network posture
 
@@ -39,7 +39,7 @@ The network posture above assumes the machine itself is safe. It might not be �
 - **Bootstrap and recovery** via `clockwork:add-user <email> [--name=] [--password=]` and `clockwork:set-password <email> [--password=]`. Idempotent — restores revoked rows and sets or resets operator credentials via masked CLI prompts. Always-works escape hatch when the UI is locked out.
 - **Optional Workspace pin** — `GOOGLE_HD=your-agency.com` restricts the Google account picker to that domain *and* is re-checked on the OAuth callback (`hd` claim). Off by default so personal accounts work for testing.
 - **Revoke and password change kill live sessions.** `User::invalidateSessions()` cycles `remember_token` and deletes `sessions` rows for that user. `EnsureUserIsActive` middleware re-checks `revoked_at` on every web request and logs the operator out immediately. Login + add/revoke/restore/password-change all land in `action_logs`.
-- **Roles.** `users.role` is `admin` (default for existing rows, the installer, and `clockwork:add-user`) or `operator`. Operators can run the fleet; only admins can manage the allowlist, download the Clockwork DB backup, apply in-app system updates, or execute Code Snippets. New teammates added from `/settings/users` default to operator.
+- **Roles.** `users.role` is `admin` (default for existing rows, the installer, and `clockwork:add-user`) or `operator`. Operators can run the fleet; only admins can manage the allowlist, download the Clockwork Control DB backup, apply in-app system updates, or execute Code Snippets. New teammates added from `/settings/users` default to operator.
 - **`/dev-login` is local-loopback only.** `DevLoginController` 404s unless `APP_ENV=local` **and** the request is un-proxied loopback (`127.0.0.1` / `::1` / `localhost`, no `X-Forwarded-*`). The optional `?redirect=` query is same-origin paths starting with `/` only — absolute URLs, `//host`, encoded `/%2f%2f…`, and backslash variants fall back to Companion settings. Never treat this as a production login.
 
 ### Users settings page (`/settings/users`)
@@ -52,7 +52,7 @@ The network posture above assumes the machine itself is safe. It might not be �
 - **`revoke`** (`PATCH /settings/users/{user}/revoke`) sets `revoked_at = now()`. **Blocked at the controller for self-revoke** — `Auth::id() === $user->id` bounces back with an error rather than letting you lock yourself out of the UI, since the artisan recovery path doesn't help if you can't reach the host to run it. Logs `TYPE_USER_REVOKED`.
 - **`restore`** (`PATCH /settings/users/{user}/restore`) clears `revoked_at` for an already-revoked user. Logs `TYPE_USER_RESTORED`.
 
-All user actions go through `App\Services\ActionLog\ActionLogger` with the acting admin's email as `actor`, landing in `action_logs` alongside every other audited action — see [Architecture → Data model](/docs/architecture/data-model).
+All user actions go through `App\Services\ActionLog\ActionLogger` with the acting admin's email as `actor`, landing in `action_logs` alongside every other audited action — see [Architecture → Data model](/documentation/architecture/data-model).
 
 ## App-side encrypted columns
 
@@ -72,14 +72,14 @@ Never log them. Never render them in views or API responses. The `companion_secr
 | `CLOCKWORK_DIGITALOCEAN_TOKEN` | Read | Used only for monitoring metrics. Never provisions or destroys droplets. |
 | `CLOCKWORK_SPINUPWP_TOKEN` | Inventory | Used for read + the migration runner's create-site call only. |
 | `CLOCKWORK_CLOUDFLARE_API_TOKEN` | Zone:Read + per-phase Read | Diagnostics only. Cannot mutate DNS or firewall rules. |
-| `CLOCKWORK_CLOUDFLARE_WRITE_TOKEN` | Zone.DNS:Edit + Zone.Firewall Services:Edit | Migration cutover (DNS) and rate-limit/custom-WAF-rule writes. Independently rotatable from the read token — a leak of the read token grants neither. See [Integrations → Cloudflare](/docs/integrations/cloudflare) for why it needs two scopes, not one. |
+| `CLOCKWORK_CLOUDFLARE_WRITE_TOKEN` | Zone.DNS:Edit + Zone.Firewall Services:Edit | Migration cutover (DNS) and rate-limit/custom-WAF-rule writes. Independently rotatable from the read token — a leak of the read token grants neither. See [Integrations → Cloudflare](/documentation/integrations/cloudflare) for why it needs two scopes, not one. |
 | `CLOCKWORK_DO_SPACES_KEY/SECRET` | Bucket scope | S3-style HMAC, not the DO PAT. List-only access pattern; we never write or delete. |
 | `CLOCKWORK_BILL_COM_*` | Account login | Read-only sync. We don't mutate Bill.com. |
 | `CLOCKWORK_PRESSABLE_CLIENT_ID/SECRET` | OAuth2 client_credentials, account-level | No per-site scoping available — Pressable's API doesn't offer it. This token can reach every Pressable site on the account, including running arbitrary shell/wp-cli commands via the async command API. Treat it at the same sensitivity as an SSH private key, not as a scoped read token. |
 | `CLOCKWORK_AZURE_CLIENT_ID/SECRET` | Reader on the subscription/resource group | Monitoring only — same posture as the DO/Hetzner tokens, just OAuth2 instead of a static bearer token. |
 | `CLOCKWORK_VULTR_API_KEY` / `CLOCKWORK_LINODE_TOKEN` | Read-only | Monitoring + IP-matching only, same posture as DO/Hetzner. Vultr's API has no metrics surface to begin with; Linode's is CPU-only. |
 | `CLOCKWORK_WPENGINE_SSH_PRIVATE_KEY` / `CLOCKWORK_KINSTA_SSH_PASSWORD` | Real per-install/per-environment SSH | Same sensitivity class as a server's own `ssh_private_key`/`ssh_password` columns — not scoped per-site by the provider, treat with SSH-key handling discipline. The WP Engine/Kinsta REST API credentials themselves (`api_user_id`/`api_password`, bearer token) are separate and lower-stakes — inventory/read only, command execution goes over the SSH credential instead. |
-| `CLOCKWORK_CLOUDWAYS_API_KEY` | OAuth2 (API key → bearer token), account-level | Cloudways provisions real servers on a cloud of its own choosing (DO/AWS/GCP/Vultr/Linode) that this app never holds credentials for — see [Integrations → Cloudways](/docs/integrations/cloudways). Command execution and Companion install go through Cloudways' own async command API, same account-wide-reach caveat as the Pressable token below. |
+| `CLOCKWORK_CLOUDWAYS_API_KEY` | OAuth2 (API key → bearer token), account-level | Cloudways provisions real servers on a cloud of its own choosing (DO/AWS/GCP/Vultr/Linode) that this app never holds credentials for — see [Integrations → Cloudways](/documentation/integrations/cloudways). Command execution and Companion install go through Cloudways' own async command API, same account-wide-reach caveat as the Pressable token below. |
 
 ## Companion plugin auth
 
@@ -88,7 +88,7 @@ The mu-plugin sits inside each WordPress site and exposes signed REST endpoints 
 - Secret is 32 random bytes (`bin2hex(random_bytes(32))` = 64 hex chars, 256 bits), generated Laravel-side at install, pushed into `wp_options` via wp-cli, mirrored encrypted into `sites.companion_secret`.
 - Two storage modes: `wp_options` (default; rotation via `clockwork:rotate-companion-secret`) or a `CLOCKWORK_COMPANION_SECRET` constant in `wp-config.php` (operator-pinned; rotation request returns 409 `secret_pinned`).
 - **Per-site secret** — compromising one site doesn't pwn the fleet.
-- **Encrypted at rest** in Clockwork's DB; in WP `wp_options` it's plaintext, same trust posture as `wp-config.php` keys.
+- **Encrypted at rest** in Clockwork Control's DB; in WP `wp_options` it's plaintext, same trust posture as `wp-config.php` keys.
 
 Signature payload (both sides must match exactly):
 
@@ -96,7 +96,7 @@ Signature payload (both sides must match exactly):
 METHOD\n/wp-json/clockwork/v1<route>\nTIMESTAMP\nBODY
 ```
 
-Headers on every request: `X-Clockwork-Signature` (hex), `X-Clockwork-Timestamp` (unix seconds). Verifier rejects on missing headers, `|now − ts| > 300s`, missing secret, or signature mismatch (`hash_equals` constant-time compare). Replay window is 5 minutes.
+Headers on every request: `X-Clockwork Control-Signature` (hex), `X-Clockwork Control-Timestamp` (unix seconds). Verifier rejects on missing headers, `|now − ts| > 300s`, missing secret, or signature mismatch (`hash_equals` constant-time compare). Replay window is 5 minutes.
 
 POST bodies use Laravel's `withBody($jsonBody, 'application/json')` so the byte-exact JSON we signed is what gets sent — `->post($url, $array)` would re-encode and could drift.
 
@@ -107,7 +107,27 @@ The signature is computed over the *logical* route string (`/wp-json/clockwork/v
 - **HMAC failure rate limit** — 30 fails per IP per 60s → 429. Per-IP transient counter. Defends `wp_options` and CPU from noise; not the cryptographic protocol.
 - **HMAC failure audit log** — `wp_clockwork_auth_failures` table, lazy-pruned to 1000 rows. Surfaces in Tools → Clockwork → Security → Authentication audit.
 - **SSO nonce ceiling** — `/sso/magic-link` refuses to mint past 100 active. Prevents `wp_options` bloat under abuse.
-- **Plugin-side admin pages** — Tools → Clockwork is gated to authorized agency emails. REST endpoints remain HMAC-gated regardless.
+- **Plugin-side admin pages** — The parent menu is visible to all users with `manage_options`. Sensitive tools (such as the LLAR Unlock Hub and team governance actions) use strict fail-closed authorization checks (see below). REST endpoints remain HMAC-gated regardless.
+
+### Team-Wide 2FA Governance & Role-Aware Capabilities
+
+Clockwork Companion and Renegade feature native Two-Factor Authentication (2FA) governance designed for client teams:
+- **Role-Aware Self-Enrollment**: Self-enrollment pages use the `read` capability. This ensures that non-admin team members (such as editors, authors, and contributors) can safely configure and manage their own 2FA credentials without requiring `manage_options` or triggering infinite 403 redirect loops.
+- **Team-Wide Administration (`TwoFactorPage`)**: Users with `manage_options` can view an aggregated roster of all registered WordPress accounts, inspecting active 2FA adoption, enrolled methods, and grace period status across the entire organization.
+- **Admin Actions**: Authorized administrators can:
+  - **Require 2FA**: Flags a specific user account for mandatory 2FA enforcement, prompting them on their next login.
+  - **Stop Requiring**: Relaxes the mandatory enforcement requirement for a user while preserving any already configured credentials.
+  - **Turn Off 2FA**: Immediately wipes a user's enrolled 2FA credentials and emergency recovery codes during client lockout recovery scenarios.
+- **Emergency Bypass Hatch**: If an administrator or agency operator is locked out due to a broken authenticator app or email transport failure, defining `define('CLOCKWORK_2FA_DISABLE', true);` in `wp-config.php` completely bypasses 2FA checks until recovery is complete.
+
+### Fail-Closed 403 Architecture (LLAR Unlock Hub & Client Isolation)
+
+The remote emergency lockout clearing console (`Clockwork → Unlock`) operates on a strict fail-closed isolation model:
+- **Client Site Isolation**: Monitored client sites never register the Unlock submenu or navigation tab.
+- **Direct URL Guard**: If a user attempts to bypass navigation by visiting `admin.php?page=clockwork-unlock` directly, `UnlockPage::renderBody()` immediately executes `wp_die(__('You do not have sufficient permissions to access this page.'), 403)` before any HTML chrome or sensitive forms render.
+- **AJAX Endpoint Gate**: The background AJAX handler (`clockwork_companion_unlock_target`) validates WordPress security nonces, checks `current_user_can('manage_options')`, confirms agency staff email identity, and confirms hub domain matching. Any failure immediately returns `wp_send_json_error(['message' => 'Unauthorized'], 403)`.
+- **Target Site Verification**: When the Unlock console triggers an unlock on a client site, it signs an HMAC-SHA256 request to `DELETE /wp-json/clockwork/v1/lockouts`. The target site verifies the signature against its own encrypted secret with a 5-minute replay window before flushing lockouts from Limit Login Attempts Reloaded.
+
 
 ### Standalone Pairing & 256-Bit Cryptographic Connection Key
 
@@ -116,14 +136,14 @@ For sites without cloud hosting API access or SSH (e.g. WP Engine, Kinsta, or cl
 - **Base64 Connection Key Envelope**: The site packages the target URL, the 256-bit secret, and the plugin variant (`renegade` or `companion`) into a base64-encoded JSON payload:
   - **Clockwork Renegade (WordPress.org)**: Located under **Clockwork → Connection** (`admin.php?page=clockwork-connection`).
   - **Clockwork Companion (Private mu-plugin)**: Located under **Tools → Clockwork Control** (or white-labeled custom menu).
-- When pasted into Clockwork Control, Clockwork decodes the key, performs an immediate HMAC `/health` handshake to verify mutual possession of the secret, and persists the secret encrypted at rest (`sites.companion_secret`).
+- When pasted into Clockwork Control, Clockwork Control decodes the key, performs an immediate HMAC `/health` handshake to verify mutual possession of the secret, and persists the secret encrypted at rest (`sites.companion_secret`).
 - **Never flash the secret back.** `SitesController::enrollSafeInput()` strips `companion_secret` and `connection_key` from old input on every validation error. The create-site form does not repopulate those fields, and the domain goes through `@js()` so a crafted domain cannot break out of Alpine state. Handshake failures other than 401/404 are reported server-side; the form only shows a generic “could not connect” message.
 
 ### Direct S3 Glacier Backup Upload Security
 
 When streaming backups directly from WordPress to AWS S3 Glacier Instant Retrieval (`POST /wp-json/clockwork/v1/backup/create`):
 - **IAM Credentials Never Touch WordPress**: The AWS IAM access key and secret live solely on Clockwork Control.
-- **Time-Limited Presigned PUT URLs**: Clockwork signs an S3 PUT URL valid for only 2 hours.
+- **Time-Limited Presigned PUT URLs**: Clockwork Control signs an S3 PUT URL valid for only 2 hours.
 - **Strict Scope & Storage Class**: The presigned URL is locked to a specific object key (`archives/{domain}/{timestamp}_{id}.zip`) and enforces `x-amz-storage-class: GLACIER_IR`. The WordPress site cannot read, delete, or list other objects in the bucket.
 - **Companion refuses non-public upload URLs** before it dumps the site. HTTPS only, no private/reserved IPs, no redirects, TLS hostname verified. Header names/values with CR/LF are rejected so a stolen HMAC cannot inject extra headers.
 
@@ -133,27 +153,27 @@ A stolen or guessed S3 object key must not let an authenticated operator pull an
 
 Companion’s restore download is the same public-HTTPS rule as upload: HMAC already gates the route; the URL check stops a stolen secret from turning Companion into a metadata/SSRF client. Redirects are refused (presigned S3 GETs are direct). Zip extraction already rejects `../` and absolute paths; file apply skips those names again.
 
-See [Architecture → Companion plugin](/docs/architecture/companion-plugin) for the full picture.
+See [Architecture → Companion plugin](/documentation/architecture/companion-plugin) for the full picture.
 
 ### Pressable transport: a different secret-exposure risk
 
 Pressable has no SSH equivalent — the Companion secret has to reach the site some other way, and Pressable logs **every** command it runs verbatim in its own control panel for ~30 days. Pushing the real long-lived HMAC secret through that channel (the way SSH tarball push does over an encrypted, non-logged connection) would put it in a third party's logs.
 
-`PressableCompanionInstaller` avoids this with a **bootstrap-then-rotate** sequence: a throwaway secret goes through the logged install command, `/health` verifies the plugin loaded, then `rotateSecret()` replaces it with the real secret over authenticated HTTPS — a channel Pressable doesn't log. If rotation fails, the install is reported as a loud warning rather than a silent success, precisely so a site left running on the throwaway (logged) secret doesn't go unnoticed. See [Integrations → Pressable](/docs/integrations/pressable).
+`PressableCompanionInstaller` avoids this with a **bootstrap-then-rotate** sequence: a throwaway secret goes through the logged install command, `/health` verifies the plugin loaded, then `rotateSecret()` replaces it with the real secret over authenticated HTTPS — a channel Pressable doesn't log. If rotation fails, the install is reported as a loud warning rather than a silent success, precisely so a site left running on the throwaway (logged) secret doesn't go unnoticed. See [Integrations → Pressable](/documentation/integrations/pressable).
 
 ## SSH
 
 - Auth precedence: per-server stored key → local default key (`CLOCKWORK_SSH_KEY_PATH`) → per-server password.
 - Default user is `clockwork-deploy` (overridable per server). Non-root, with NOPASSWD on `/usr/bin/fail2ban-client` only — granted by `/etc/sudoers.d/clockwork` during fail2ban provisioning.
-- Other privileged commands run via `sudo -S` with the SSH password fed on stdin. Never write that password into a file (the v0 provisioner did and broke sudo on the box — see [Runbook → Bad IP ban recovery](/docs/runbooks/bad-ip-ban-recovery) and the `clockwork:clean-failed-provision` recovery flow).
+- Other privileged commands run via `sudo -S` with the SSH password fed on stdin. Never write that password into a file (the v0 provisioner did and broke sudo on the box — see [Runbook → Bad IP ban recovery](/documentation/runbooks/bad-ip-ban-recovery) and the `clockwork:clean-failed-provision` recovery flow).
 
-**This section (and [Integrations → SSH + fail2ban](/docs/integrations/ssh-and-fail2ban)) is SpinupWP/Cloudways-scoped** — those go through `servers.ssh_private_key`/`ssh_password` and `App\Services\Ssh\SshClient`. **WP Engine and Kinsta use a separate, parallel SSH credential store**: `modules/Core/src/Support/SshConnector.php` connects directly via `phpseclib3\Net\SSH2` (not `SshClient`/the `servers` table) using per-environment env vars — `CLOCKWORK_WPENGINE_SSH_PRIVATE_KEY`, `CLOCKWORK_KINSTA_SSH_PASSWORD` (see the outbound-token table above) — solely to install the Companion mu-plugin on those hosts. Same sensitivity class as the encrypted `servers` columns, same physical/network-security stakes above apply to those env vars too, just a different storage location — don't assume "it's not in the `servers` table" means "not SSH."
+**This section (and [Integrations → SSH + fail2ban](/documentation/integrations/ssh-and-fail2ban)) is SpinupWP/Cloudways-scoped** — those go through `servers.ssh_private_key`/`ssh_password` and `App\Services\Ssh\SshClient`. **WP Engine and Kinsta use a separate, parallel SSH credential store**: `modules/Core/src/Support/SshConnector.php` connects directly via `phpseclib3\Net\SSH2` (not `SshClient`/the `servers` table) using per-environment env vars — `CLOCKWORK_WPENGINE_SSH_PRIVATE_KEY`, `CLOCKWORK_KINSTA_SSH_PASSWORD` (see the outbound-token table above) — solely to install the Companion mu-plugin on those hosts. Same sensitivity class as the encrypted `servers` columns, same physical/network-security stakes above apply to those env vars too, just a different storage location — don't assume "it's not in the `servers` table" means "not SSH."
 
-**Is SSH avoidable for any of this?** Not really, and not just for one feature. SSH is the substrate for a dozen unrelated things on an SSH-capable provider — apt-get updates, reboot scheduling, fail2ban bans, `wp-cli` plugin/checksum checks, and nginx log tailing for the Traffic feature (see [Features → Traffic + capacity](/docs/features/traffic-and-capacity)) all go through the same credential. Even where an alternative exists for one narrow piece — Pressable proves traffic data *can* be sourced over plain HTTPS instead of a log tail, see that doc — the same server still needs the SSH credential stored for everything else on this list. Isolating "just the traffic feature" behind its own SSH toggle wouldn't shrink the fleet's actual credential-storage risk at all, since updates/fail2ban/plugin-detection would still need the exact same key on the exact same server. The credential is fleet-wide the moment you want any one of these; there's no smaller boundary to draw.
+**Is SSH avoidable for any of this?** Not really, and not just for one feature. SSH is the substrate for a dozen unrelated things on an SSH-capable provider — apt-get updates, reboot scheduling, fail2ban bans, `wp-cli` plugin/checksum checks, and nginx log tailing for the Traffic feature (see [Features → Traffic + capacity](/documentation/features/traffic-and-capacity)) all go through the same credential. Even where an alternative exists for one narrow piece — Pressable proves traffic data *can* be sourced over plain HTTPS instead of a log tail, see that doc — the same server still needs the SSH credential stored for everything else on this list. Isolating "just the traffic feature" behind its own SSH toggle wouldn't shrink the fleet's actual credential-storage risk at all, since updates/fail2ban/plugin-detection would still need the exact same key on the exact same server. The credential is fleet-wide the moment you want any one of these; there's no smaller boundary to draw.
 
 ## App database backups (`/settings/maintenance`)
 
-`MaintenanceController::index()` shows the operator a one-glance summary of Clockwork's own database (name, host, driver, and a rough total-byte size via a single `information_schema.tables` query) before they commit to downloading anything. `downloadBackup()` then streams a gzipped `mysqldump` (`--single-transaction --quick --no-tablespaces`, piped through `gzip`) straight to the browser via `passthru()` — no temp file ever touches the server's disk, and the password goes through the `MYSQL_PWD` env var rather than the command line so it never shows up in `ps` output.
+`MaintenanceController::index()` shows the operator a one-glance summary of Clockwork Control's own database (name, host, driver, and a rough total-byte size via a single `information_schema.tables` query) before they commit to downloading anything. `downloadBackup()` then streams a gzipped `mysqldump` (`--single-transaction --quick --no-tablespaces`, piped through `gzip`) straight to the browser via `passthru()` — no temp file ever touches the server's disk, and the password goes through the `MYSQL_PWD` env var rather than the command line so it never shows up in `ps` output.
 
 This is the highest-value single file an attacker could get: it contains every encrypted column's ciphertext (SSH private keys, per-site DB passwords, Companion secrets) plus all snapshot/threat-log data. The ciphertext alone is safe — decrypting it requires pairing the dump with `APP_KEY` from `.env`, which never leaves the server through this path — but treat any downloaded copy of this file with the same handling discipline as `.env` itself. Downloads are limited to admin-role operators and recorded as `TYPE_BACKUP_DOWNLOADED` in `action_logs`.
 

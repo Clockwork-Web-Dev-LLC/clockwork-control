@@ -183,7 +183,10 @@
                                         </form>
                                     @elseif (auth()->id() !== $u->id)
                                         <form method="POST" action="{{ route('settings.users.revoke', $u) }}" class="inline"
-                                              onsubmit="return confirm('Revoke {{ $u->email }}? They will be denied at next sign-in attempt.');">
+                                              data-confirm="Revoke {{ $u->email }}?"
+                                              data-confirm-details="They will be denied at next sign-in attempt."
+                                              data-confirm-btn="Revoke User"
+                                              data-confirm-variant="danger">
                                             @csrf @method('PATCH')
                                             <button type="submit" class="text-xs text-[var(--color-status-red)] hover:underline cursor-pointer">
                                                 Revoke

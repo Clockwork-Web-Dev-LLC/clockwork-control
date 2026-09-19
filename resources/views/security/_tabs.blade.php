@@ -11,7 +11,7 @@
     ];
 @endphp
 
-<div class="flex items-center gap-1 mb-6 border-b border-[var(--color-border-light)]">
+<div class="flex items-center gap-1 mb-6 border-b border-[var(--color-border-light)] overflow-x-auto scrollbar-none">
     @foreach ($tabs as $t)
         <a href="{{ route($t['route']) }}"
            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors

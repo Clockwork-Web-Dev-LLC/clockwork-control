@@ -79,7 +79,10 @@
                 <button type="submit"
                         class="btn-primary text-sm"
                         @disabled(! $configured)
-                        onclick="return confirm('Run customer sync now? Pulls all customers + last 365 days of invoices from Bill.com. Takes ~30s.')">
+                        data-confirm="Run customer sync now?"
+                        data-confirm-details="Pulls all customers + last 365 days of invoices from Bill.com. Takes ~30s."
+                        data-confirm-btn="Run Customer Sync"
+                        data-confirm-variant="primary">
                     <i class="fa-solid fa-rotate"></i> Run customer sync now
                 </button>
             </form>
@@ -106,7 +109,10 @@
                 <button type="submit"
                         class="btn-primary text-sm"
                         @disabled(! $configured)
-                        onclick="return confirm('Run care plan sync now? Walks last 60 days of invoices, may flip care_plan_enabled on linked sites (manual overrides preserved).')">
+                        data-confirm="Run care plan sync now?"
+                        data-confirm-details="Walks last 60 days of invoices, may flip care_plan_enabled on linked sites (manual overrides preserved)."
+                        data-confirm-btn="Run Care Plan Sync"
+                        data-confirm-variant="primary">
                     <i class="fa-solid fa-rotate"></i> Run care plan sync now
                 </button>
             </form>

@@ -502,8 +502,14 @@
 
             document.querySelectorAll('.companion-install-btn').forEach((btn) => {
                 btn.addEventListener('click', async () => {
-                    const domain = btn.dataset.siteDomain;
-                    if (!confirm('Install Clockwork Companion on ' + domain + '? Pushes the source, configures the per-site secret, and verifies /health.')) return;
+                    const ok = await window.confirmModal({
+                        title: 'Install Clockwork Companion?',
+                        message: 'Install Clockwork Companion on ' + domain + '?',
+                        details: 'Pushes the source, configures the per-site secret, and verifies /health.',
+                        confirmText: 'Install Companion',
+                        variant: 'primary'
+                    });
+                    if (!ok) return;
 
                     const row = btn.closest('tr');
                     const original = btn.innerHTML;
@@ -539,8 +545,14 @@
             // LLAR Installer
             document.querySelectorAll('.llar-install-btn').forEach((btn) => {
                 btn.addEventListener('click', async () => {
-                    const domain = btn.dataset.siteDomain;
-                    if (!confirm('Install Limit Login Attempts Reloaded on ' + domain + '? Email-on-lockout will be turned off. Existing installs will be left untouched.')) return;
+                    const ok = await window.confirmModal({
+                        title: 'Install Limit Login Attempts Reloaded?',
+                        message: 'Install Limit Login Attempts Reloaded on ' + domain + '?',
+                        details: 'Email-on-lockout will be turned off. Existing installs will be left untouched.',
+                        confirmText: 'Install LLAR',
+                        variant: 'primary'
+                    });
+                    if (!ok) return;
 
                     const row = btn.closest('tr');
                     const original = btn.innerHTML;

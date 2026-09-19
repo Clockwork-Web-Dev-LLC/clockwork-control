@@ -44,7 +44,7 @@
         {{-- 1. Clockwork Companion --}}
         <div class="card p-6 flex flex-col justify-between border-t-4 border-t-blue-500 shadow-xs hover:shadow-md transition-shadow">
             <div>
-                <div class="flex items-start justify-between gap-3 pb-4 mb-4 border-b border-[var(--color-border-light)]">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 mb-4 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-3">
                         <div class="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shrink-0">
                             <i class="fa-solid fa-shield-halved"></i>
@@ -121,7 +121,7 @@
         {{-- 2. Clockwork Renegade --}}
         <div class="card p-6 flex flex-col justify-between border-t-4 border-t-emerald-500 shadow-xs hover:shadow-md transition-shadow">
             <div>
-                <div class="flex items-start justify-between gap-3 pb-4 mb-4 border-b border-[var(--color-border-light)]">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 mb-4 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-3">
                         <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0">
                             <i class="fa-brands fa-wordpress-simple"></i>

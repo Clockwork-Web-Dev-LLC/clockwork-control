@@ -175,38 +175,75 @@
 }
 
 .docs-sidebar__search-result {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.5rem;
+    display: block;
     padding: 0.5rem 0.625rem;
     border-radius: 0.375rem;
     text-decoration: none;
     font-size: 0.8125rem;
     transition: background 0.12s ease;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 60%, transparent);
+}
+
+.docs-sidebar__search-result:last-child {
+    border-bottom: none;
 }
 
 .docs-sidebar__search-result:hover {
     background: var(--color-surface-alt);
 }
 
+.docs-sidebar__search-result-header {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.625rem;
+    font-family: var(--font-data);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-wrap: wrap;
+    line-height: 1.25;
+}
+
+.docs-sidebar__search-result-section {
+    color: var(--color-brand);
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
+    display: inline-block;
+}
+
+.docs-sidebar__search-result-subcat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--color-ink-muted);
+    font-weight: 500;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border-light);
+}
+
 .docs-sidebar__search-result-title {
     color: var(--color-ink-strong);
     font-weight: 600;
     line-height: 1.35;
+    word-break: normal;
+    overflow-wrap: break-word;
 }
 
-.docs-sidebar__search-result-section {
-    color: var(--color-ink-soft);
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    background: var(--color-surface-alt);
-    border: 1px solid var(--color-border-light);
-    flex-shrink: 0;
-    font-family: var(--font-data);
+.docs-sidebar__search-result-excerpt {
+    font-size: 0.6875rem;
+    color: var(--color-ink-muted);
+    line-height: 1.35;
+    margin-top: 0.2rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 /* ==========================================================================

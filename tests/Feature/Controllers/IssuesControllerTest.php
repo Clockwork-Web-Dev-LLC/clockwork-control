@@ -217,4 +217,52 @@ describe('IssuesController', function () {
             ->assertSee('crontab is not spawning')
             ->assertViewHas('totals', fn ($totals) => ($totals['scheduler_stale'] ?? 0) === 1);
     });
+
+    it('updates category level via POST /issues/category-level', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('issues.category-level.update'), [
+                'category' => 'plugins_outdated',
+                'level' => 'emergency',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('category', 'plugins_outdated')
+            ->assertJsonPath('level', 'emergency')
+            ->assertJsonPath('levels.plugins_outdated', 'emergency');
+    });
+
+    it('rejects invalid category level via POST /issues/category-level', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('issues.category-level.update'), [
+                'category' => 'plugins_outdated',
+                'level' => 'invalid_level',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['level']);
+    });
+
+    it('updates all category levels via POST /issues/category-levels', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->postJson(route('issues.category-levels.update'), [
+                'levels' => [
+                    'plugins_outdated' => 'off',
+                    'hot' => 'emergency',
+                    'domain-expiration' => 'not_pressing',
+                ],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('levels.plugins_outdated', 'off')
+            ->assertJsonPath('levels.hot', 'emergency')
+            ->assertJsonPath('levels.domain-expiration', 'not_pressing');
+    });
 });

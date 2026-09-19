@@ -3,7 +3,7 @@ title: Servers (inventory + credentials)
 section: Features
 order: 12
 author: Aaron Reimann
-updated: 2026-09-11
+updated: 2026-09-18
 tags: [servers, ssh, credentials, inventory, fleet]
 tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---
@@ -28,9 +28,14 @@ Each button (`POST /servers/refresh-spinupwp` → `ServersController::refreshFro
 
 ## Removing a server
 
-**Destroy** (`DELETE /servers/{server}`) is permanent — it cascades to sites, server metrics, blocked-IP records, and the tag pivot via FK constraints. The operator must type the server's exact name as confirmation, checked server-side (not just a JS `confirm()`). Use this only when the box is actually gone at the provider — for "stop polling but keep the record," use **Toggle ignore** instead, which just flips `is_ignored` (with an optional reason) and leaves everything else intact.
+**Destroy** (`DELETE /servers/{server}`) is permanent — it cascades to sites, server metrics, blocked-IP records, and the tag pivot via FK constraints. The operator must type the server's name as confirmation (either the full hostname or the short UI `display_name`), checked server-side (not just a JS `confirm()`). Use this when the box is actually decommissioned or disconnected from control panels like SpinupWP.
 
-When `clockwork:poll-servers` finds a server's `provider_id` genuinely absent from the cloud provider's own inventory (`CloudProvider::isDeletedAtProvider()` — a precise signal, distinct from a generic polling error like a bad credential), it stamps `provider_missing_since`. The server detail page header then surfaces a red "This server no longer exists at ⟨provider⟩" banner with its own **Remove from Clockwork** button, regardless of which tab is open — same `servers.destroy` route and typed-name confirmation as above, just reachable directly from the page you're most likely to be looking at when a server has gone dark. `provider_missing_since` clears automatically the next time a poll succeeds, so a transient API hiccup doesn't permanently flag a live server.
+To make server removal seamless when cleaning up decommissioned or disconnected servers, removal actions are surfaced directly across the server detail view:
+1. **Ignored Banner:** If a server is marked as ignored (e.g. decommissioned in SpinupWP), the monitoring exclusion banner provides a red **Remove from Clockwork** button right alongside **Stop ignoring**. Below `sm`, the copy stacks above full-width actions so the pills cannot crush the reason text.
+2. **Header Action Row:** In the tags and action row next to the **Edit** button, a **Delete** button is directly accessible on the server header.
+3. **Empty Sites State:** When 0 sites are mapped to a server not managed by a live panel, the **Sites** tab empty state offers an immediate **Remove this server from Clockwork** button.
+4. **Provider-Missing Banner:** When `clockwork:poll-servers` finds a server's `provider_id` genuinely absent from the cloud provider's own inventory (`CloudProvider::isDeletedAtProvider()`), it stamps `provider_missing_since` and displays the red alert banner with **Remove from Clockwork**.
+5. **Settings Tab Danger Zone:** The full-page Settings tab contains the complete cascade overview and destruction form.
 
 ## Auto-ban toggles
 
