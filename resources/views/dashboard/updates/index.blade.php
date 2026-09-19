@@ -17,11 +17,13 @@
                 'care_plan' => $filters['care_plan'],
                 'tags' => $filters['tags'],
                 'show_ignored' => $filters['show_ignored'] ? 1 : null,
+                'auto_ignored' => ! empty($filters['auto_ignored']) ? 1 : null,
             ], $overrides);
             $merged = array_filter($merged, fn ($v, $k) => ! ($v === null
                 || ($k === 'care_plan' && $v === 'on')
                 || ($k === 'tags' && (! is_array($v) || $v === []))
                 || ($k === 'show_ignored' && ! $v)
+                || ($k === 'auto_ignored' && ! $v)
             ), ARRAY_FILTER_USE_BOTH);
 
             return route('updates.index', $merged);
@@ -36,7 +38,7 @@
             return $filterUrl(['tags' => $next]);
         };
 
-        $hasActiveFilters = $filters['care_plan'] !== 'on' || ! empty($filters['tags']) || $filters['show_ignored'];
+        $hasActiveFilters = $filters['care_plan'] !== 'on' || ! empty($filters['tags']) || $filters['show_ignored'] || ! empty($filters['auto_ignored']);
     @endphp
 
     @if (session('flash'))
@@ -300,6 +302,79 @@
         </script>
     @endif
 
+    @if (! empty($autoIgnoredList) && $autoIgnoredList->isNotEmpty())
+        <div class="card p-4 mb-4 border-l-4 border-[var(--color-status-yellow)]" x-data="{ open: false }">
+            <div class="flex items-center justify-between cursor-pointer" @click="open = !open">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)] text-xs">
+                        <i class="fa-solid fa-pause"></i>
+                    </span>
+                    <span class="font-display font-medium text-sm text-[var(--color-ink-strong)]">
+                        Automatic updates paused ({{ $autoIgnoredList->count() }} item{{ $autoIgnoredList->count() === 1 ? '' : 's' }})
+                    </span>
+                    <span class="text-xs text-[var(--color-ink-soft)] hidden sm:inline">
+                        · Paused after repeated nightly failures
+                    </span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
+                    <span x-text="open ? 'Hide list' : 'Show list'"></span>
+                    <i class="fa-solid fa-chevron-down transition-transform" :class="{ 'rotate-180': open }"></i>
+                </div>
+            </div>
+
+            <div x-show="open" class="mt-3 pt-3 border-t border-[var(--color-border-light)] overflow-x-auto" style="display: none;">
+                <table class="w-full text-xs text-left">
+                    <thead class="text-[10px] uppercase text-[var(--color-ink-soft)] border-b border-[var(--color-border-light)]">
+                        <tr>
+                            <th class="py-1.5 px-2">Site</th>
+                            <th class="py-1.5 px-2">Target</th>
+                            <th class="py-1.5 px-2 text-center">Failures</th>
+                            <th class="py-1.5 px-2">Last Error</th>
+                            <th class="py-1.5 px-2">Paused</th>
+                            <th class="py-1.5 px-2 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--color-border-light)]">
+                        @foreach ($autoIgnoredList as $exc)
+                            @php $targetId = "{$exc->target_kind}:{$exc->site_id}:{$exc->target_slug}"; @endphp
+                            <tr class="hover:bg-[var(--color-surface-alt)]">
+                                <td class="py-2 px-2 font-data">
+                                    <a href="{{ route('sites.show', $exc->site_id) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                        {{ $exc->site?->domain ?? '#' . $exc->site_id }}
+                                    </a>
+                                </td>
+                                <td class="py-2 px-2">
+                                    <span class="font-medium text-[var(--color-ink-strong)]">{{ $exc->target_slug }}</span>
+                                    <span class="text-[10px] text-[var(--color-ink-soft)]">({{ $exc->target_kind }})</span>
+                                </td>
+                                <td class="py-2 px-2 text-center font-data">
+                                    <span class="px-1.5 py-0.5 rounded bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)] font-semibold">
+                                        {{ $exc->failure_count ?? 5 }}
+                                    </span>
+                                </td>
+                                <td class="py-2 px-2 max-w-xs truncate text-[var(--color-ink-muted)]" title="{{ $exc->last_error }}">
+                                    {{ $exc->last_error ?: 'Repeated failures' }}
+                                </td>
+                                <td class="py-2 px-2 text-[var(--color-ink-soft)] whitespace-nowrap">
+                                    {{ $exc->ignored_at?->diffForHumans() ?? 'recently' }}
+                                </td>
+                                <td class="py-2 px-2 text-right whitespace-nowrap">
+                                    <form method="POST" action="{{ route('updates.bulkUnignore') }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="targets[]" value="{{ $targetId }}">
+                                        <button type="submit" class="text-[11px] font-medium px-2 py-0.5 rounded border border-[var(--color-primary-600)] text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)] hover:text-white" title="Resume automatic updates for this item">
+                                            Resume
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
     <div class="card overflow-hidden">
 
         {{-- Stats bar: 4 stat columns. Each is a tab switcher. --}}
@@ -368,8 +443,15 @@
                 @endforeach
             @endif
 
-            <a href="{{ $filterUrl(['show_ignored' => $filters['show_ignored'] ? null : 1]) }}"
-               class="ml-auto px-2 py-0.5 rounded-full border {{ $filters['show_ignored'] ? 'bg-[var(--color-nav-active-bg)] text-[var(--color-nav-active-ink)] border-[var(--color-nav-active-border)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-ink-strong)]' }}">
+            <a href="{{ $filterUrl(['auto_ignored' => ! empty($filters['auto_ignored']) ? null : 1, 'show_ignored' => null]) }}"
+               class="ml-auto px-2 py-0.5 rounded-full border {{ ! empty($filters['auto_ignored']) ? 'bg-[var(--color-status-yellow)]/20 text-[var(--color-status-yellow)] border-[var(--color-status-yellow)] font-medium' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-ink-strong)]' }}"
+               title="Show only plugins and themes whose updates are paused after repeated failures">
+                <i class="fa-solid fa-pause text-[10px]"></i>
+                Auto-ignored
+            </a>
+
+            <a href="{{ $filterUrl(['show_ignored' => $filters['show_ignored'] ? null : 1, 'auto_ignored' => null]) }}"
+               class="px-2 py-0.5 rounded-full border {{ $filters['show_ignored'] ? 'bg-[var(--color-nav-active-bg)] text-[var(--color-nav-active-ink)] border-[var(--color-nav-active-border)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-muted)] hover:border-[var(--color-ink-strong)]' }}">
                 <i class="fa-solid fa-eye{{ $filters['show_ignored'] ? '' : '-slash' }}"></i>
                 {{ $filters['show_ignored'] ? 'Hide ignored' : 'Show ignored' }}
             </a>

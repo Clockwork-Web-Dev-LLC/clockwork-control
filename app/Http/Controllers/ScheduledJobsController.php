@@ -38,6 +38,9 @@ class ScheduledJobsController extends Controller
 
     public function index(Schedule $schedule): View
     {
+        if (empty($schedule->events()) && file_exists(base_path('routes/console.php'))) {
+            require base_path('routes/console.php');
+        }
         $latestRuns = ScheduledJobRun::latestPerCommand();
 
         $jobs = collect($schedule->events())
@@ -86,6 +89,10 @@ class ScheduledJobsController extends Controller
 
         // Never trust the client-supplied string directly — only accept it if
         // it exactly matches a command currently in the live schedule.
+        if (empty($schedule->events()) && file_exists(base_path('routes/console.php'))) {
+            require base_path('routes/console.php');
+        }
+
         $known = collect($schedule->events())
             ->map(fn ($event) => ScheduledCommandName::normalize($event->command))
             ->all();

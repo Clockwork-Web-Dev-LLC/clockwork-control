@@ -2780,6 +2780,81 @@
         </section>
     @endif
 
+    {{-- AUTOMATIC UPDATES PAUSED (AUTO-IGNORED) --}}
+    @if (! empty($autoIgnoredUpdates) && $autoIgnoredUpdates->isNotEmpty())
+        <section id="section-auto_ignored_updates" class="card mb-6">
+            <div @click="toggleSection('auto_ignored_updates')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('auto_ignored_updates') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-pause text-[var(--color-status-yellow)] mr-2"></i>
+                        Automatic updates paused
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Plugins and themes excluded from the nightly auto-update loop after repeated update failures. Other plugins on these sites continue updating.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="status-pill status-yellow">{{ $autoIgnoredUpdates->count() }}</span>
+                    <button type="button" @click.stop="toggleSection('auto_ignored_updates')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('auto_ignored_updates') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('auto_ignored_updates') ? 'rotate-180' : ''"></i>
+                    </button>
+                </div>
+            </div>
+            <div x-show="!isSectionCollapsed('auto_ignored_updates')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+                <div class="max-h-[28rem] overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2 text-left">Site</th>
+                                <th class="px-5 py-2 text-left">Target</th>
+                                <th class="px-5 py-2 text-center">Consecutive Failures</th>
+                                <th class="px-5 py-2 text-left">Last Error</th>
+                                <th class="px-5 py-2 text-left">Paused</th>
+                                <th class="px-5 py-2 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($autoIgnoredUpdates as $ign)
+                                @php $targetId = "{$ign->target_kind}:{$ign->site_id}:{$ign->target_slug}"; @endphp
+                                <tr>
+                                    <td class="px-5 py-2 font-data text-xs">
+                                        <a href="{{ route('sites.show', ['site' => $ign->site_id, 'tab' => 'updates']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                            {{ $ign->site?->domain ?? '#' . $ign->site_id }}
+                                        </a>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs">
+                                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $ign->target_slug }}</span>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)]">({{ $ign->target_kind }})</span>
+                                    </td>
+                                    <td class="px-5 py-2 text-center font-data text-xs">
+                                        <span class="px-1.5 py-0.5 rounded bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)] font-semibold">
+                                            {{ $ign->failure_count ?? 5 }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] max-w-xs truncate" title="{{ $ign->last_error }}">
+                                        {{ $ign->last_error ?: 'Automatic update failed repeated runs' }}
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] whitespace-nowrap">
+                                        {{ $ign->ignored_at?->diffForHumans() ?? 'recently' }}
+                                    </td>
+                                    <td class="px-5 py-2 text-right text-xs whitespace-nowrap">
+                                        <form method="POST" action="{{ route('updates.bulkUnignore') }}" class="inline">
+                                            @csrf
+                                            <input type="hidden" name="targets[]" value="{{ $targetId }}">
+                                            <button type="submit" class="btn-pill-nav text-[11px] py-0.5 px-2" title="Resume automatic updates">
+                                                Resume
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    @endif
+
         {{-- CLOSED PLUGINS ON WORDPRESS.ORG --}}
     @if ($closedPluginSites->isNotEmpty() || $ignoredClosedPluginIssues->isNotEmpty())
         <section id="section-plugins_closed" x-show="isCategoryVisible('plugins_closed') && matchesTier('routine')" class="card mb-6">

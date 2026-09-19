@@ -123,7 +123,7 @@ action-log, security-scans, malware-scan, secret-rotate, auth-audit,
 traffic-report, resource-sampler, resource-sampler-toggle,
 form-subscriptions, lockouts-unlock, post-update-verify, two-factor,
 white-label, comments-moderation, maintenance-mode, code-snippets, cache-flush,
-backup-create, backup-restore
+backup-create, backup-restore, update-exceptions
 ```
 
 Refreshed per-site daily by `clockwork:refresh-companion-capabilities` into `sites.companion_capabilities`. Clockwork Control-side commands cap-gate their work — a feature requiring `'sso'` skips sites where it isn't advertised, instead of getting a 404 from a too-old plugin. Site Maintenance still gates only on `companion_installed`, not the `maintenance-mode` capability.
@@ -144,6 +144,7 @@ Mutating Requests (HMAC-signed POST / DELETE):
 - `DELETE /lockouts` — flush Limit Login Attempts Reloaded (LLAR) lockouts for an IP or username directly from the designated Agency Primary Hub console (`lockouts-unlock` capability)
 - `/test-contact-form` — fire a marker-injected submission for the form-test add-on
 - `/backups-report` — Clockwork Control pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork Control's own (LAN-only) login screen
+- `/update-exceptions` — Clockwork Control pushes the active list of auto-paused plugin/theme update exceptions when failures cross the streak threshold, on operator resume, and during the daily 06:45 catch-up. Stored in `wp_options['clockwork_update_exceptions']`. Companion renders the "Update coverage" submenu page and a dismissible warning notice on `plugins.php` (`update-exceptions` capability).
 - `/action-log/append` — Clockwork Control mirrors every meaningful action so wp-admin can show it
 - `/sso/magic-link` — mint a one-time URL the operator clicks to land in wp-admin as the named admin
 - `/cache/flush` — object/page cache flush (`cache-flush` capability). Companion 1.35.0+. Clockwork Control also applies Pressable and Cloudflare layers from Control.

@@ -9,6 +9,7 @@ use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
+use App\Models\PluginUpdateIgnore;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
@@ -412,10 +413,15 @@ class SitesController extends Controller
 
         $counts = is_array($pluginsPayload['counts'] ?? null) ? $pluginsPayload['counts'] : [];
 
+        $ignoredUpdates = PluginUpdateIgnore::query()
+            ->where('site_id', $site->id)
+            ->get();
+
         return [
             'updatesAvailable' => $updatesAvailable,
             'upToDate' => $upToDate,
             'inactive' => $inactive,
+            'ignoredUpdates' => $ignoredUpdates,
             'pluginCounts' => [
                 'total' => (int) ($counts['total'] ?? count($plugins)),
                 'active' => (int) ($counts['active'] ?? 0),

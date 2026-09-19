@@ -7,6 +7,7 @@ use App\Models\Site;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
 use App\Services\Companion\ClockworkCompanionClient;
+use App\Services\Updates\UpdateFailureStreakRecorder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -106,6 +107,9 @@ abstract class AbstractRunUpdate implements ShouldQueue
 
             return;
         }
+
+        $result = null;
+        $caughtException = null;
 
         try {
             $row->forceFill([
@@ -253,6 +257,7 @@ abstract class AbstractRunUpdate implements ShouldQueue
                 actor: $row->requested_by_user_id !== null ? "user:{$row->requested_by_user_id}" : 'auto',
             );
         } catch (Throwable $e) {
+            $caughtException = $e;
             $row->forceFill([
                 'status' => PluginUpdateJob::STATUS_FAILED,
                 'error' => $e->getMessage(),
@@ -277,6 +282,16 @@ abstract class AbstractRunUpdate implements ShouldQueue
 
             $this->maybeRefreshSnapshot($row);
             $this->maybePurgeSiteCache($row);
+
+            try {
+                app(UpdateFailureStreakRecorder::class)
+                    ->record($row, $result, $caughtException);
+            } catch (Throwable $e) {
+                Log::warning('updates.failure_streak_recorder_threw', [
+                    'job_id' => $row->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Real-time Mattermost ping for nightly auto-update failures.
             // Manual bulk-update failures stay quiet — the operator is

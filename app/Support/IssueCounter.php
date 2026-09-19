@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\ContactFormTest;
 use App\Models\IgnoredIssue;
+use App\Models\PluginUpdateIgnore;
+use App\Models\PluginUpdateJob;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
@@ -165,14 +167,9 @@ class IssueCounter
             })
             ->count();
 
-        // Sites whose cached Companion snapshot reports plugins.counts.updates_available > 0.
-        // JSON path query is fine at fleet scale (~150 sites); we read once per page render.
-        $pluginsOutdated = Site::query()
-            ->where('is_inactive', false)
-            ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
-            ->whereNotNull('companion_snapshot')
-            ->whereRaw("CAST(JSON_EXTRACT(companion_snapshot, '$.plugins.counts.updates_available') AS UNSIGNED) > 0")
-            ->count();
+        // Sites whose cached Companion snapshot reports plugins.counts.updates_available > 0,
+        // excluding sites where all pending plugins are ignored.
+        $pluginsOutdated = $this->countPluginsOutdated();
 
         // Orphaned sites — Site rows lost their SpinupWP linkage and weren't archived.
         // Detected nightly by clockwork:find-orphan-sites; surfaced here so users notice.
@@ -327,6 +324,49 @@ class IssueCounter
         // Note: Pressable over-quota sites are tracked on /capacity under the Pressable tab
         // and are deliberately excluded from the navbar total (which tracks VPS/Shared density).
         return $total + $overQuota;
+    }
+
+    public function countPluginsOutdated(): int
+    {
+        $ignoredSlugsBySite = PluginUpdateIgnore::query()
+            ->where('target_kind', PluginUpdateJob::KIND_PLUGIN)
+            ->get(['site_id', 'target_slug'])
+            ->groupBy('site_id')
+            ->map(fn ($rows) => $rows->pluck('target_slug')->all());
+
+        $candidateSites = Site::query()
+            ->select('id', 'companion_snapshot')
+            ->where('is_inactive', false)
+            ->whereHas('server', fn ($q) => $q->where('is_ignored', false))
+            ->whereNotNull('companion_snapshot')
+            ->whereRaw("CAST(JSON_EXTRACT(companion_snapshot, '$.plugins.counts.updates_available') AS UNSIGNED) > 0")
+            ->get();
+
+        $pluginsOutdated = 0;
+        foreach ($candidateSites as $candidate) {
+            $siteIgnored = $ignoredSlugsBySite->get($candidate->id, []);
+            if ($siteIgnored === []) {
+                $pluginsOutdated++;
+
+                continue;
+            }
+
+            $plugins = $candidate->companion_snapshot['plugins']['plugins'] ?? [];
+            $hasUnignoredPending = false;
+            foreach ($plugins as $p) {
+                if (is_array($p) && ! empty($p['update_available']) && ! empty($p['slug'])) {
+                    if (! in_array((string) $p['slug'], $siteIgnored, true)) {
+                        $hasUnignoredPending = true;
+                        break;
+                    }
+                }
+            }
+            if ($hasUnignoredPending) {
+                $pluginsOutdated++;
+            }
+        }
+
+        return $pluginsOutdated;
     }
 
     /**

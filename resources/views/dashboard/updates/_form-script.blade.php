@@ -129,6 +129,23 @@
             });
         });
 
+        // Per-row "Resume" / "Unignore": ticks just this target, submits to bulk-unignore.
+        form.querySelectorAll('[data-unignore-row]').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const target = btn.dataset.unignoreRow;
+                const cb = form.querySelector(`input[name="targets[]"][value="${CSS.escape(target)}"]`);
+                if (! cb) return;
+                form.querySelectorAll('input[name="targets[]"]:checked').forEach(c => c.checked = false);
+                cb.checked = true;
+                syncCounter();
+                const oldAction = form.action;
+                form.action = '{{ route("updates.bulkUnignore") }}';
+                form.submit();
+            });
+        });
+
         // "Ignore everywhere" on a parent group: untick everything else,
         // tick this group's children, submit to bulk-ignore endpoint. The
         // confirm() guards against the not-uncommon misclick where the

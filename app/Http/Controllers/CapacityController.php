@@ -298,14 +298,18 @@ class CapacityController extends Controller
         // 7-day CPU sparkline data — bucket by 6-hour windows so each server
         // has ~28 points (manageable for inline SVG, dense enough to show
         // the trend). One grouped query covers the whole fleet at once.
+        $bucketSql = DB::getDriverName() === 'sqlite'
+            ? "CAST(strftime('%s', recorded_at) / 21600 AS INTEGER)"
+            : "FLOOR(UNIX_TIMESTAMP(recorded_at) / 21600)";
+
         $sparkRows = DB::table('server_metrics')
             ->whereIn('server_id', $allServers->pluck('id'))
             ->where('recorded_at', '>=', $window7Start)
-            ->selectRaw('
+            ->selectRaw("
                 server_id,
-                FLOOR(UNIX_TIMESTAMP(recorded_at) / 21600) AS bucket,
+                {$bucketSql} AS bucket,
                 AVG(cpu_pct) AS avg_cpu
-            ')
+            ")
             ->groupBy('server_id', 'bucket')
             ->orderBy('server_id')
             ->orderBy('bucket')

@@ -654,6 +654,31 @@ abstract class WebhookChatNotifier implements ChatNotifier
         return $this->send($title, [$attachment]);
     }
 
+    public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool
+    {
+        if (! $this->isEventEnabled('plugin_update_auto_ignored')) {
+            return false;
+        }
+        $domain = $site->domain;
+        $name = $job->target_name ?: ($job->target_slug ?? 'target');
+        $kind = $job->target_kind ?? 'plugin';
+        $title = sprintf(':pause_button: Paused automatic updates: %s on %s after %d failures', $name, $domain, $failures);
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#f59e0b',
+            'title' => $title,
+            'text' => sprintf('Automatic updates for %s were paused on %s after failing %d nightly runs in a row.', $name, $domain, $failures),
+            'fields' => [
+                ['title' => 'Site', 'value' => $domain, 'short' => true],
+                ['title' => ucfirst($kind), 'value' => (string) $job->target_slug, 'short' => true],
+                ['title' => 'Failures', 'value' => (string) $failures, 'short' => true],
+                ['title' => 'Last Error', 'value' => mb_strimwidth((string) ($job->error ?? 'unknown'), 0, 140, '…'), 'short' => true],
+            ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
     /**
      * Fires only on the clean → malware-hit transition (see
      * SecurityScanRecorder) — a site that's still infected on the next

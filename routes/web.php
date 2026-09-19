@@ -243,6 +243,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/bulk-update', [UpdatesController::class, 'bulkUpdate'])->name('bulkUpdate');
         Route::post('/bulk-ignore', [UpdatesController::class, 'bulkIgnore'])->name('bulkIgnore');
         Route::post('/bulk-unignore', [UpdatesController::class, 'bulkUnignore'])->name('bulkUnignore');
+        Route::post('/settings', [UpdatesController::class, 'updateSettings'])->name('settings.update');
         Route::get('/batches/{batchId}/status', [UpdatesController::class, 'batchStatus'])
             ->where('batchId', '[0-9a-f-]{36}')
             ->name('batches.status');
