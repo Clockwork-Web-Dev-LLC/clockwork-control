@@ -7,6 +7,7 @@ use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\Companion\CompanionTarballBuilder;
+use App\Services\Updates\UpdateFailureStreakRecorder;
 use Modules\Core\Contracts\CompanionInstaller as CompanionInstallerContract;
 use Throwable;
 
@@ -152,6 +153,12 @@ class PressableCompanionInstaller implements CompanionInstallerContract
         // Push active white-label branding if configured (best-effort, non-blocking)
         try {
             app(CompanionBrandingManager::class)->syncSite($site->fresh());
+        } catch (Throwable) {
+            // Non-blocking on install
+        }
+
+        try {
+            app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site->fresh());
         } catch (Throwable) {
             // Non-blocking on install
         }

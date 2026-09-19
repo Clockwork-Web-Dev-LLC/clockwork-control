@@ -65,15 +65,32 @@ class UpdateFailureStreakRecorder
             return;
         }
 
-        // Increment only when there is a Companion response body or an in-job
-        // classifier (e.g. stalled no-op / reactivation failure).
-        // Skip transport, DNS, TLS, and connection timeouts where no response
-        // body was received from WordPress.
-        if (! is_array($result)) {
+        // Increment only on plugin-level failures: Companion returned a body
+        // (ok=false), or an in-job classifier set an error (stalled no-op /
+        // reactivation). Skip transport, DNS, TLS, timeouts, and the case
+        // where Companion succeeded but a later step threw — those mark the
+        // job failed without meaning this plugin is un-updatable.
+        if (! $this->isPluginLevelFailure($result)) {
             return;
         }
 
         $this->incrementStreak($job);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $result
+     */
+    private function isPluginLevelFailure(?array $result): bool
+    {
+        if (! is_array($result)) {
+            return false;
+        }
+
+        if (($result['ok'] ?? false) === true && empty($result['error'])) {
+            return false;
+        }
+
+        return true;
     }
 
     public function resetStreak(int $siteId, string $targetKind, string $targetSlug): void
@@ -122,6 +139,12 @@ class UpdateFailureStreakRecorder
             ->where('target_kind', $job->target_kind)
             ->where('target_slug', $job->target_slug)
             ->first();
+
+        // Operator already paused this slug by hand — do not rewrite it as
+        // auto_failure or push it into wp-admin.
+        if ($existingIgnore && $existingIgnore->isManual()) {
+            return;
+        }
 
         // If already auto-ignored, simply keep error and failure count up-to-date.
         if ($existingIgnore && $streak->ignored_at !== null) {

@@ -4,6 +4,7 @@ namespace App\Services\Companion;
 
 use App\Models\Site;
 use App\Services\Ssh\SshClient;
+use App\Services\Updates\UpdateFailureStreakRecorder;
 use Modules\Core\Contracts\CompanionInstaller as CompanionInstallerContract;
 use Throwable;
 
@@ -114,6 +115,12 @@ class CompanionInstaller implements CompanionInstallerContract
         // Push active white-label branding if configured (best-effort, non-blocking)
         try {
             app(CompanionBrandingManager::class)->syncSite($site->fresh());
+        } catch (Throwable) {
+            // Non-blocking on install
+        }
+
+        try {
+            app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site->fresh());
         } catch (Throwable) {
             // Non-blocking on install
         }

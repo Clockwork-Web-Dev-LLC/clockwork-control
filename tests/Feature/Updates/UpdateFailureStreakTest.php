@@ -506,4 +506,121 @@ describe('Update failure streaks and auto-ignore', function () {
         // After ignore: the site has no unignored pending updates, so countPluginsOutdated drops to 0
         expect($counter->countPluginsOutdated())->toBe(0);
     });
+
+    it('does not increment when Companion succeeded but the job was later marked failed', function () {
+        $site = makeExampleSite();
+        $job = fakeNightlyJob($site, 'ok-plugin', [
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => 'Action log write failed after a successful upgrade',
+        ]);
+
+        app(UpdateFailureStreakRecorder::class)->record($job, [
+            'ok' => true,
+            'slug' => 'ok-plugin',
+            'before_version' => '1.0.0',
+            'after_version' => '1.1.0',
+        ]);
+
+        expect(PluginUpdateFailureStreak::where('site_id', $site->id)
+            ->where('target_slug', 'ok-plugin')
+            ->exists())->toBeFalse();
+    });
+
+    it('increments streak on a stalled no-op even when Companion reported ok=true', function () {
+        $site = makeExampleSite();
+        $job = fakeNightlyJob($site, 'stalled-plugin', [
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'target_version' => '9.0.1',
+            'error' => "WordPress's own update-checker no longer offered this update when the job ran.",
+        ]);
+
+        app(UpdateFailureStreakRecorder::class)->record($job, [
+            'ok' => true,
+            'slug' => 'stalled-plugin',
+            'before_version' => '8.7.2',
+            'after_version' => '8.7.2',
+            'error' => "WordPress's own update-checker no longer offered this update when the job ran.",
+        ]);
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)
+            ->where('target_slug', 'stalled-plugin')
+            ->first();
+
+        expect($streak)->not->toBeNull()
+            ->and($streak->consecutive_failures)->toBe(1);
+    });
+
+    it('does not convert a manual ignore into a client-visible auto-ignore', function () {
+        $site = makeExampleSite();
+
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'held-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'client_visible' => false,
+            'note' => 'Hold this one',
+        ]);
+
+        $job = fakeNightlyJob($site, 'held-plugin', [
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => 'Plugin update failed.',
+        ]);
+
+        $recorder = app(UpdateFailureStreakRecorder::class);
+        for ($i = 1; $i <= 5; $i++) {
+            $recorder->record($job, [
+                'ok' => false,
+                'error' => 'Plugin update failed.',
+                'slug' => 'held-plugin',
+            ]);
+        }
+
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)
+            ->where('target_slug', 'held-plugin')
+            ->first();
+
+        expect($ignore)->not->toBeNull()
+            ->and($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_MANUAL)
+            ->and($ignore->client_visible)->toBeFalse();
+
+        $payload = $recorder->buildExceptionsPayload($site);
+        expect($payload['items'])->toBeEmpty();
+    });
+
+    it('pushes an updated exceptions list when an auto-ignore is converted to a manual ignore', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+        $user = User::factory()->create();
+
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'was-auto',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+        ]);
+
+        $this->actingAs($user)->post(route('updates.bulkIgnore'), [
+            'targets' => ["plugin:{$site->id}:was-auto"],
+            'note' => 'Taking this private',
+        ])->assertRedirect();
+
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)
+            ->where('target_slug', 'was-auto')
+            ->first();
+
+        expect($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_MANUAL)
+            ->and($ignore->client_visible)->toBeFalse();
+
+        Http::assertSent(function ($request) use ($site) {
+            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+                && isset($request['items'])
+                && count($request['items']) === 0;
+        });
+    });
 });

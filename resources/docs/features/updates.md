@@ -5,7 +5,7 @@ order: 35
 updated: 2026-09-15
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
-tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
+tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
 ---
 
 Fleet-wide page for plugin / theme / WP core / translation updates. Replaces the per-site click-through workflow with a single grouped-by-name view modeled after ManageWP Orion. Lives at **`/updates`** (top-nav between Issues and Security).
@@ -102,8 +102,8 @@ When a stubborn plugin or theme fails the nightly update queue night after night
 - Manual `/updates` or per-site tab attempts are operator-initiated — they write action logs but **never increment** the auto-ignore streak (though manual successes **do** reset it).
 
 #### Increment vs. Skip
-- **Increments streak**: Plugin-level failures where Companion returns an error response body, stalled no-ops (`after_version === before_version !== target_version`), or post-update reactivation failures.
-- **Does not increment**: Infrastructure, site, or transport issues. Connection timeouts, DNS/TLS errors, HTTP transport throwables without response bodies, per-site cache lock contention, and stale-job reaper flips do **not** march a plugin toward auto-ignore.
+- **Increments streak**: Plugin-level failures where Companion returns an error response body, stalled no-ops (`after_version === before_version !== target_version`), or post-update reactivation failures. A stalled no-op still counts even when Companion's own `ok` is true, because Control reclassifies it and stamps an `error` onto the result.
+- **Does not increment**: Infrastructure, site, or transport issues. Connection timeouts, DNS/TLS errors, HTTP transport throwables without response bodies, per-site cache lock contention, stale-job reaper flips, and the case where Companion succeeded (`ok=true`, no error) but a later Control-side step threw do **not** march a plugin toward auto-ignore.
 
 #### Threshold and Kill Switch
 - **Threshold**: Default 5 consecutive nightly failures (min 3, max 20), configurable via the `updates.auto_ignore_after_failures` setting.
@@ -113,13 +113,15 @@ When a stubborn plugin or theme fails the nightly update queue night after night
 - Any **successful update** (nightly or manual) resets `consecutive_failures` back to 0.
 - When an auto-ignored plugin ships a new version, it remains paused until resumed (badged as "New version available — still paused") to prevent endless retries on broken plugins.
 - Clicking **Resume** (or unignore) in Control deletes the ignore record, resets the consecutive failure streak to 0, and immediately pushes an updated exceptions payload to the WordPress site.
+- Converting an auto-ignore into a **manual ignore** keeps nightly retries paused but sets `client_visible=false` and pushes an updated exceptions list so the slug drops out of wp-admin.
+- Manual ignores are never rewritten as auto-failure, even if the slug later fails nightly.
 
 #### What clients see in wp-admin (Companion & Renegade)
-Sites equipped with Companion or Renegade (v1.39.0+) advertise the `update-exceptions` capability. Control pushes the full list of active update exceptions to `POST /wp-json/clockwork/v1/update-exceptions` (or `/wp-json/clockwork-renegade/v1/update-exceptions`), which is stored in `wp_options['clockwork_update_exceptions']`.
+Sites that advertise the `update-exceptions` capability (Companion / Renegade builds that include the Update coverage page) receive the full list of active update exceptions at `POST /wp-json/clockwork/v1/update-exceptions` (or `/wp-json/clockwork-renegade/v1/update-exceptions`), stored in `wp_options['clockwork_update_exceptions']`. Older plugin versions without the capability are a no-op until upgraded; Control still pauses nightly retries.
 - **Update coverage page**: Visible to `manage_options` administrators under the branded Clockwork menu.
-  - *Empty state*: "Automatic plugin updates are on for this site when a care plan is active. Nothing is currently paused."
+  - *Empty state*: "Automatic plugin and theme updates are on for this site when a care plan is active. Nothing is currently paused."
   - *Populated state*: Displays a clear table of paused plugins, version stopped on, date paused, and public explanation.
-- **Plugins notice**: A dismissible warning notice on `plugins.php` alerts administrators: "Clockwork has paused automatic updates for {N} plugin(s) after repeated failures. [View details]".
+- **Plugins / themes notice**: A dismissible warning notice on `plugins.php` and `themes.php` alerts administrators when paused items exist (plugins and/or themes) and links to Update coverage.
 - **Manual updates remain unlocked**: WordPress's native "Update now" links and controls are never disabled. Clients or other vendors can still apply updates manually by hand.
 
 #### Client email drafts (Phase 3)

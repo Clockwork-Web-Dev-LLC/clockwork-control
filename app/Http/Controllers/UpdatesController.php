@@ -259,6 +259,7 @@ class UpdatesController extends Controller
 
         $userId = $request->user()?->id;
         $count = 0;
+        $sitesToSync = [];
         foreach ($data['targets'] as $target) {
             $parsed = $this->parseTarget($target);
             if ($parsed === null) {
@@ -280,7 +281,15 @@ class UpdatesController extends Controller
                     'ignored_at' => Carbon::now(),
                 ],
             );
+            $sitesToSync[$siteId] = true;
             $count++;
+        }
+
+        foreach (array_keys($sitesToSync) as $siteId) {
+            $site = Site::find($siteId);
+            if ($site) {
+                app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site);
+            }
         }
 
         return back()->with('flash', "Ignored {$count} update".($count === 1 ? '' : 's').'.');
