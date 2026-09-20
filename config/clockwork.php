@@ -13,6 +13,11 @@ return [
     // per RELEASING.md; do not reintroduce an env() wrapper here.
     'version' => '1.7.2',
 
+    // Demo mode interlock for marketing screenshots and anonymized datasets.
+    // Gates screenshot Dusk runs to prevent running against live production,
+    // and prevents export-anonymized-snapshot from running on already-mocked data.
+    'demo_mode' => (bool) env('CLOCKWORK_DEMO_MODE', false),
+
     'arcjet' => [
         'bots_url' => env(
             'CLOCKWORK_ARCJET_BOTS_URL',
