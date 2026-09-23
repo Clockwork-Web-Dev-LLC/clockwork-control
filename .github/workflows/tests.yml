@@ -27,6 +27,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, bcmath, curl, openssl, tokenizer, xml, ctype, json
+          ini-values: memory_limit=2G
           # pcov over Xdebug: coverage-only, no step-debugger overhead — the
           # right choice for a CI run that only ever needs the numbers.
           coverage: pcov
@@ -93,7 +94,7 @@ jobs:
         # Note: --exclude-group must be repeated per group — a single
         # comma-separated value (--exclude-group=network,mysql) is silently
         # treated as one nonexistent group name and excludes nothing.
-        run: vendor/bin/pest --coverage --min=0 --coverage-clover=coverage.xml --exclude-group=network --exclude-group=mysql
+        run: php -d memory_limit=2G vendor/bin/pest --coverage --min=0 --coverage-clover=coverage.xml --exclude-group=network --exclude-group=mysql
 
       - name: Add coverage summary to the job
         run: |
