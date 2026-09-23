@@ -70,4 +70,3 @@ class PluginUpdateIgnore extends Model
         return $this->source === self::SOURCE_MANUAL;
     }
 }
-

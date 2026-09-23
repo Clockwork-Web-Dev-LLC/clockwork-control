@@ -352,4 +352,3 @@ describe('DashboardController', function () {
         $response->assertSee(route('servers.destroy', $server), false);
     });
 });
-

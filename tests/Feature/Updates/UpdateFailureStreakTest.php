@@ -38,7 +38,7 @@ function makeExampleSite(array $overrides = []): Site
 function fakeNightlyJob(Site $site, string $slug = 'stubborn-plugin', array $overrides = []): PluginUpdateJob
 {
     return PluginUpdateJob::factory()->for($site)->create(array_merge([
-        'batch_id' => 'nightly-' . now()->format('Y-m-d'),
+        'batch_id' => 'nightly-'.now()->format('Y-m-d'),
         'requested_by_user_id' => null,
         'target_kind' => PluginUpdateJob::KIND_PLUGIN,
         'target_slug' => $slug,

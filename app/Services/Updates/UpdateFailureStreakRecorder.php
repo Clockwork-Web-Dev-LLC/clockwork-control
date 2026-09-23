@@ -299,7 +299,7 @@ class UpdateFailureStreakRecorder
                 $name = $snapshotPlugins->get($ignore->target_slug)['name'] ?? $ignore->target_slug;
             }
 
-            $count = $ignore->failure_count ?? ($streak?->consecutive_failures ?? 5);
+            $count = $ignore->failure_count ?? ($streak->consecutive_failures ?? 5);
             $kindLabel = $ignore->target_kind === PluginUpdateJob::KIND_THEME ? 'theme' : 'plugin';
 
             $items[] = [
@@ -308,8 +308,8 @@ class UpdateFailureStreakRecorder
                 'name' => (string) $name,
                 'stopped_at' => $ignore->ignored_at?->toDateString() ?? Carbon::now()->toDateString(),
                 'failure_count' => $count,
-                'from_version' => $streak?->last_from_version ?? '?',
-                'attempted_version' => $streak?->last_target_version ?? '?',
+                'from_version' => $streak->last_from_version ?? '?',
+                'attempted_version' => $streak->last_target_version ?? '?',
                 'reason_public' => sprintf(
                     'Automatic updates did not complete after %d attempts. Clockwork has paused automatic updates for this %s. Other plugins on this site are still updated automatically.',
                     $count,
