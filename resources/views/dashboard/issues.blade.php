@@ -1908,17 +1908,45 @@
                     </button>
             </div>
             <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
+            @php
+                $patchQueueable = $patchesAvailable->filter(fn ($s) => ! in_array($s->update_status, [\App\Models\Server::UPDATE_STATUS_QUEUED, \App\Models\Server::UPDATE_STATUS_RUNNING], true)
+                    && ($s->clockwork_jail_provisioned_at !== null || ! empty($s->ssh_password)));
+            @endphp
+            {{-- Bulk toolbar: queue apt on every listed server in one click. The processor
+                 drains one server per minute, so N servers take at least N minutes. --}}
+            <div class="px-5 py-3 border-b border-[var(--color-border-light)] bg-[var(--color-surface-alt)] flex flex-wrap items-center gap-3 text-xs" id="patches-toolbar">
+                <span class="text-[var(--color-ink-muted)]">
+                    Installs pending apt packages over SSH, one server per minute, and reboots each box afterwards if the upgrade asks for it.
+                </span>
+                <label class="ml-auto flex items-center gap-1.5 text-[var(--color-ink-muted)]">
+                    Reboot at
+                    <input type="time" id="patches-reboot-at" class="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs font-data bg-[var(--color-surface)]"
+                           title="Optional. Server-local HH:MM. Blank = reboot right after the upgrade if one is required.">
+                </label>
+                <button type="button" id="patches-install-all"
+                        class="btn-primary !py-1.5 !px-3 !text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-url="{{ route('operations.server-updates.queueBulk') }}"
+                        data-server-ids="{{ $patchQueueable->pluck('id')->implode(',') }}"
+                        @disabled($patchQueueable->isEmpty())>
+                    <i class="fa-solid fa-download"></i> Install updates on all {{ $patchQueueable->count() }}
+                </button>
+            </div>
+            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="patches-list">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
                         <x-sort-th key="ubuntu" class="px-5 py-2">Ubuntu</x-sort-th>
                         <x-sort-th key="reboot" class="px-5 py-2">Reboot</x-sort-th>
+                        <th class="px-5 py-2"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border-light)]">
                     @foreach ($patchesAvailable as $s)
-                        <tr
+                        @php
+                            $inFlight = in_array($s->update_status, [\App\Models\Server::UPDATE_STATUS_QUEUED, \App\Models\Server::UPDATE_STATUS_RUNNING], true);
+                            $hasSsh = $s->clockwork_jail_provisioned_at !== null || ! empty($s->ssh_password);
+                        @endphp
+                        <tr data-server-id="{{ $s->id }}"
                             data-sort-server="{{ $s->name }}"
                             data-sort-ubuntu="{{ $s->ubuntu_version ?: '' }}"
                             data-sort-reboot="{{ $s->reboot_required ? '1' : '0' }}">
@@ -1926,21 +1954,41 @@
                                 <a href="{{ route('servers.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $s->name }}</a>
                             </td>
                             <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data">ubuntu {{ $s->ubuntu_version ?: '?' }}</td>
-                            <td class="px-5 py-2 text-xs text-right">
+                            <td class="px-5 py-2 text-xs patch-reboot-cell">
                                 @if ($s->reboot_required)
-                                    <span class="text-[var(--color-ink-soft)] mr-2">reboot pending</span>
+                                    <span class="text-[var(--color-status-yellow)] mr-2 patch-reboot-pending"><i class="fa-solid fa-triangle-exclamation"></i> reboot pending</span>
+                                    <button type="button"
+                                            class="reboot-now text-xs text-[var(--color-status-yellow)] hover:opacity-80 disabled:opacity-50 font-medium"
+                                            data-url="{{ route('servers.reboot', $s) }}"
+                                            data-server-name="{{ $s->name }}">
+                                        <i class="fa-solid fa-power-off"></i> Reboot now
+                                    </button>
+                                @else
+                                    <span class="text-[var(--color-ink-soft)]">—</span>
                                 @endif
-                                <button type="button"
-                                        class="reboot-now text-xs text-[var(--color-status-yellow)] hover:opacity-80 disabled:opacity-50 font-medium"
-                                        data-url="{{ route('servers.reboot', $s) }}"
-                                        data-server-name="{{ $s->name }}">
-                                    <i class="fa-solid fa-power-off"></i> Reboot now
-                                </button>
+                            </td>
+                            <td class="px-5 py-2 text-xs text-right patch-action-cell">
+                                @if ($inFlight)
+                                    <span class="text-[var(--color-primary-700)]"><i class="fa-solid fa-spinner {{ $s->update_status === \App\Models\Server::UPDATE_STATUS_RUNNING ? 'fa-spin' : '' }}"></i> {{ $s->update_status }}</span>
+                                @elseif (! $hasSsh)
+                                    <span class="text-[var(--color-ink-soft)]" title="No SSH credentials on file for this server">no SSH</span>
+                                @else
+                                    <button type="button"
+                                            class="patch-now text-xs text-[var(--color-primary-600)] hover:opacity-80 disabled:opacity-50 font-medium"
+                                            data-url="{{ route('operations.server-updates.queueBulk') }}"
+                                            data-server-id="{{ $s->id }}"
+                                            data-server-name="{{ $s->name }}">
+                                        <i class="fa-solid fa-download"></i> Install updates
+                                    </button>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+            <p class="px-5 py-2 text-xs text-[var(--color-ink-soft)]">
+                Queued servers stay listed until the nightly poll (or <a href="{{ route('operations.server-updates.index') }}" class="text-[var(--color-primary-600)] hover:underline">Re-poll fleet now</a>) confirms the packages are gone. Rebooting alone does not install anything.
+            </p>
         </div>
         </section>
     @endif
@@ -2061,6 +2109,81 @@
                     });
                 });
 
+                // Install updates — POST to the fleet queue endpoint (JSON) and flip the
+                // row(s) to "queued" in place. The processor drains one server per
+                // minute; the row disappears only after a poll confirms packages are gone.
+                const queuedMarkup = '<span class="text-[var(--color-primary-700)]"><i class="fa-solid fa-spinner"></i> queued</span>';
+                const markQueued = (ids) => {
+                    ids.forEach((id) => {
+                        const row = document.querySelector(`#patches-list tr[data-server-id="${id}"]`);
+                        if (row) {
+                            const cell = row.querySelector('.patch-action-cell');
+                            if (cell) { cell.innerHTML = queuedMarkup; }
+                        }
+                    });
+                    const allBtn = document.getElementById('patches-install-all');
+                    if (allBtn) {
+                        const remaining = (allBtn.dataset.serverIds || '').split(',').filter(Boolean).filter((id) => ! ids.map(String).includes(String(id)));
+                        allBtn.dataset.serverIds = remaining.join(',');
+                        allBtn.innerHTML = `<i class="fa-solid fa-download"></i> Install updates on all ${remaining.length}`;
+                        allBtn.disabled = remaining.length === 0;
+                    }
+                };
+                const queueUpdates = async (ids, label, trigger) => {
+                    const rebootAt = (document.getElementById('patches-reboot-at') || {}).value || '';
+                    const ok = await window.confirmModal({
+                        title: `Install updates on ${label}?`,
+                        details: `Runs apt-get upgrade over SSH, one server per minute, then ${rebootAt ? 'reboots at ' + rebootAt + ' server-local' : 'reboots right away'} if the upgrade requires it. Sites stay up during the upgrade; each reboot takes ~30–90 seconds.`,
+                        confirmText: 'Queue updates',
+                        variant: 'warning'
+                    });
+                    if (! ok) { return; }
+                    trigger.disabled = true;
+                    const original = trigger.innerHTML;
+                    trigger.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Queueing…';
+                    setBanner('text-[var(--color-ink-muted)]', `Queueing updates on ${label}…`);
+                    try {
+                        const body = { server_ids: ids, reboot_immediate: rebootAt === '' };
+                        if (rebootAt) { body.reboot_at = rebootAt; }
+                        const r = await fetch(trigger.dataset.url, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(body),
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            markQueued(data.queued_ids || ids);
+                            const eta = Math.max(1, (data.stats && data.stats.queued) || ids.length);
+                            setBanner('text-[var(--color-status-green)]',
+                                `<i class="fa-solid fa-circle-check"></i> ${data.message} The processor runs one server per minute, so allow roughly ${eta}–${eta * 4} minutes. Progress: <a class="underline" href="{{ route('operations.server-updates.index') }}">Operations → Server updates</a>.`);
+                        } else {
+                            setBanner('text-[var(--color-status-red)]',
+                                `<i class="fa-solid fa-circle-xmark"></i> ${data.message || 'Nothing was queued.'}`);
+                            trigger.disabled = false;
+                            trigger.innerHTML = original;
+                        }
+                    } catch (e) {
+                        setBanner('text-[var(--color-status-red)]', 'Network error: ' + e.message);
+                        trigger.disabled = false;
+                        trigger.innerHTML = original;
+                    }
+                };
+                document.querySelectorAll('.patch-now').forEach((btn) => {
+                    btn.addEventListener('click', () => queueUpdates([parseInt(btn.dataset.serverId, 10)], btn.dataset.serverName, btn));
+                });
+                const installAll = document.getElementById('patches-install-all');
+                if (installAll) {
+                    installAll.addEventListener('click', () => {
+                        const ids = (installAll.dataset.serverIds || '').split(',').filter(Boolean).map((v) => parseInt(v, 10));
+                        if (ids.length === 0) { return; }
+                        queueUpdates(ids, `all ${ids.length} servers`, installAll);
+                    });
+                }
+
                 // Reboot now — confirm, POST, fade row. Posts no reboot_at, so
                 // ServerUpdateController::reboot schedules a +1-minute reboot.
                 document.querySelectorAll('.reboot-now').forEach((btn) => {
@@ -2094,7 +2217,16 @@
                             if (data.ok) {
                                 setBanner('text-[var(--color-status-green)]',
                                     `<i class="fa-solid fa-circle-check"></i> ${name}: ${data.message}`);
-                                fadeOut(row);
+                                if (row.closest('#patches-list')) {
+                                    // Patches rows exist because packages are pending, which a
+                                    // reboot doesn't change — only clear the reboot indicator.
+                                    const cell = row.querySelector('.patch-reboot-cell');
+                                    if (cell) {
+                                        cell.innerHTML = '<span class="text-[var(--color-ink-soft)]"><i class="fa-solid fa-circle-check"></i> rebooting…</span>';
+                                    }
+                                } else {
+                                    fadeOut(row);
+                                }
                             } else {
                                 setBanner('text-[var(--color-status-red)]',
                                     `<i class="fa-solid fa-circle-xmark"></i> ${name}: ${data.message || 'Reboot failed.'}`);

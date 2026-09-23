@@ -2,10 +2,10 @@
 title: Server updates + reboots
 section: Features
 order: 110
-updated: 2026-09-09
+updated: 2026-09-23
 author: Aaron Reimann
 tags: [updates, reboot, ssh, ops, fleet, tags]
-tracks: [app/Http/Controllers/ServerUpdateController.php, app/Http/Controllers/OperationsUpdatesController.php, app/Http/Controllers/TagsController.php, app/Console/Commands/ProcessServerUpdates.php, app/Console/Commands/PollSystemUpdates.php, app/Console/Commands/ReapStaleServerUpdates.php, app/Services/Servers/ServerUpdater.php]
+tracks: [app/Http/Controllers/IssuesController.php, resources/views/dashboard/issues.blade.php, app/Http/Controllers/ServerUpdateController.php, app/Http/Controllers/OperationsUpdatesController.php, app/Http/Controllers/TagsController.php, app/Console/Commands/ProcessServerUpdates.php, app/Console/Commands/PollSystemUpdates.php, app/Console/Commands/ReapStaleServerUpdates.php, app/Services/Servers/ServerUpdater.php]
 ---
 
 The server detail page → Updates tab handles `apt-get` upgrades and reboots one server at a time. **For multi-server work, use the fleet view at `/operations/server-updates`** — that page exposes bulk selection ("Select all with packages", "Security only") plus a single button that queues every selected server at once. Both surfaces share the same backend pipeline: `clockwork:process-server-updates` drains the queue once per minute, one server per tick.
@@ -29,6 +29,14 @@ Click **Queue apt-get upgrade**. The button POSTs to `/servers/{id}/update/queue
 The runner SSH-connects, runs `sudo apt-get update && sudo apt-get -y upgrade`, captures the output to `last_update_log`, and sets `update_status='done'`. If the upgrade flips `/var/run/reboot-required`, `reboot_required` is set on the server row. After the upgrade, `ServerUpdater` also captures nginx's service state (`systemctl is-active nginx`) so the Updates tab can surface "nginx stopped after apt upgrade" without a separate SSH round-trip.
 
 Cancel a queued update with the **Cancel** button before it picks up. Once it's running, you have to let it finish.
+
+## Issues page → "Patches available"
+
+`/issues` lists every server with `upgrade_required=true` under **Patches available**. That flag means non-security apt packages are pending; it is cleared only when a poll (`clockwork:poll-system-updates`, nightly, or "Re-poll fleet now") finds nothing left to upgrade. **Rebooting does not install anything**, so a reboot never removes a row from this card — the `Reboot now` link is shown only on rows whose `reboot_required` flag is also set, next to a "reboot pending" marker.
+
+Each row has an **Install updates** button, and the card's toolbar has **Install updates on all N** plus an optional **Reboot at** (server-local HH:MM; blank = reboot immediately after the upgrade if it asks for one). Both POST to the same `queueBulk` endpoint the fleet page uses, with `Accept: application/json`, and flip the affected rows to a `queued` spinner in place; the banner above the card reports how many were queued, what was skipped (ignored / already in flight / no SSH credentials) and a rough ETA. Rows already `queued`/`running` show that state instead of a button, and rows with no SSH credentials show `no SSH`.
+
+Timing: the processor drains **one server per minute** and an apt run typically takes 1–4 minutes, so queueing 16 servers means the last one finishes roughly 20–60 minutes later. Track progress on the fleet page.
 
 ## Fleet page (`/operations/server-updates`)
 
