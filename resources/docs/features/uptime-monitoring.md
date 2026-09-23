@@ -2,7 +2,7 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack]
 tracks: [app/Services/Uptime/**, app/Support/Monitoring/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php]

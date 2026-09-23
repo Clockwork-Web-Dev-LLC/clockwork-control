@@ -37,6 +37,10 @@ class ActionLog extends Model
 
     public const TYPE_THEME_UPDATE = 'theme_update';
 
+    public const TYPE_PLUGIN_UPDATE_AUTO_IGNORED = 'plugin_update_auto_ignored';
+
+    public const TYPE_THEME_UPDATE_AUTO_IGNORED = 'theme_update_auto_ignored';
+
     public const TYPE_CORE_UPDATE = 'core_update';
 
     public const TYPE_TRANSLATIONS_UPDATE = 'translations_update';

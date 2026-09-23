@@ -52,6 +52,7 @@ describe('CISA KEV actively exploited badge', function () {
                             'name' => 'Sample Addon',
                             'version' => '1.5.0',
                             'active' => true,
+                            'update_available' => true,
                         ],
                     ],
                 ],
@@ -96,6 +97,7 @@ describe('CISA KEV actively exploited badge', function () {
                             'name' => 'Regular Vuln Plugin',
                             'version' => '1.2.0',
                             'active' => true,
+                            'update_available' => true,
                         ],
                     ],
                 ],
@@ -140,6 +142,7 @@ describe('CISA KEV actively exploited badge', function () {
                             'name' => 'Patched Plugin',
                             'version' => '2.1.0', // Above patched_in
                             'active' => true,
+                            'update_available' => true,
                         ],
                     ],
                 ],

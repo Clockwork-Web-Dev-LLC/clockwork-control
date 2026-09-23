@@ -129,18 +129,41 @@
             });
         });
 
+        // Per-row "Resume" / "Unignore": ticks just this target, submits to bulk-unignore.
+        form.querySelectorAll('[data-unignore-row]').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const target = btn.dataset.unignoreRow;
+                const cb = form.querySelector(`input[name="targets[]"][value="${CSS.escape(target)}"]`);
+                if (! cb) return;
+                form.querySelectorAll('input[name="targets[]"]:checked').forEach(c => c.checked = false);
+                cb.checked = true;
+                syncCounter();
+                const oldAction = form.action;
+                form.action = '{{ route("updates.bulkUnignore") }}';
+                form.submit();
+            });
+        });
+
         // "Ignore everywhere" on a parent group: untick everything else,
         // tick this group's children, submit to bulk-ignore endpoint. The
         // confirm() guards against the not-uncommon misclick where the
         // operator meant to expand but caught the button instead.
         form.querySelectorAll('[data-ignore-group]').forEach(btn => {
-            btn.addEventListener('click', e => {
+            btn.addEventListener('click', async e => {
                 e.preventDefault();
                 e.stopPropagation();
                 const slug = btn.dataset.ignoreGroup;
                 const children = form.querySelectorAll(`input[name="targets[]"][data-group-row="${CSS.escape(slug)}"]:not(:disabled)`);
                 if (children.length === 0) return;
-                if (! confirm(`Ignore this on all ${children.length} site(s)? It'll stop showing in pending lists until you unignore.`)) return;
+                const ok = await window.confirmModal({
+                    title: `Ignore this on all ${children.length} site(s)?`,
+                    details: "It'll stop showing in pending lists until you unignore.",
+                    confirmText: 'Ignore Everywhere',
+                    variant: 'warning'
+                });
+                if (! ok) return;
 
                 form.querySelectorAll('input[name="targets[]"]:checked').forEach(c => c.checked = false);
                 children.forEach(c => c.checked = true);

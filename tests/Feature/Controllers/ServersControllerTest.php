@@ -332,6 +332,18 @@ describe('ServersController', function () {
             expect($ban->fresh()->server_id)->toBeNull();
         });
 
+        it('deletes the server when confirm_name matches display_name', function () {
+            $server = Server::factory()->create(['name' => 'decom99.example.com']);
+
+            $response = $this->actingAs(User::factory()->create())->delete(
+                route('servers.destroy', $server),
+                ['confirm_name' => $server->display_name],
+            );
+
+            $response->assertRedirect(route('dashboard'));
+            expect(Server::find($server->id))->toBeNull();
+        });
+
         it('refuses to delete and flashes a mismatch message when confirm_name does not match', function () {
             $server = Server::factory()->create(['name' => 'keep-me.example.com']);
 

@@ -159,7 +159,33 @@
                                         <i class="fa-solid {{ $isRunning ? 'fa-spinner fa-spin' : 'fa-clock' }}"></i> {{ $row['live_job_status'] }}
                                     </span>
                                 @elseif ($row['is_ignored'])
-                                    <span class="text-[10px] text-[var(--color-ink-soft)]">ignored</span>
+                                    @if ($row['is_auto_failure'])
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)] border border-[var(--color-status-yellow)]/30"
+                                                  title="{{ $row['ignore_last_error'] ? $row['ignore_last_error'].' · ' : '' }}Paused {{ $row['ignore_date'] ?? '' }}">
+                                                <i class="fa-solid fa-pause text-[8px]"></i>
+                                                Auto-ignored · {{ $row['ignore_failure_count'] ?? 5 }} failures
+                                            </span>
+                                            <span class="text-[9px] text-[var(--color-ink-muted)] bg-[var(--color-surface)] px-1.5 py-0.5 rounded border border-[var(--color-border-light)]"
+                                                  title="A newer version was detected in the latest snapshot, but automatic updates remain paused until resumed.">
+                                                New version available — still paused
+                                            </span>
+                                            <button type="button" data-unignore-row="{{ $target }}"
+                                                    onclick="event.stopPropagation(); event.preventDefault();"
+                                                    class="text-[11px] font-medium px-2 py-0.5 rounded border border-[var(--color-primary-600)] text-[var(--color-primary-600)] hover:bg-[var(--color-primary-600)] hover:text-white"
+                                                    title="Resume automatic update management for this plugin on this site">
+                                                Resume
+                                            </button>
+                                        </div>
+                                    @else
+                                        <span class="text-[10px] text-[var(--color-ink-soft)]">ignored</span>
+                                        <button type="button" data-unignore-row="{{ $target }}"
+                                                onclick="event.stopPropagation(); event.preventDefault();"
+                                                class="text-[11px] font-medium px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]"
+                                                title="Remove ignore">
+                                            Unignore
+                                        </button>
+                                    @endif
                                 @else
                                     <button type="button" data-update-row="{{ $target }}"
                                             onclick="event.stopPropagation(); event.preventDefault();"

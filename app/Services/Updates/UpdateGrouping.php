@@ -52,6 +52,7 @@ class UpdateGrouping
             ->groupBy('site_id');
 
         $showIgnored = (bool) ($filters['show_ignored'] ?? false);
+        $onlyAutoIgnored = (bool) ($filters['auto_ignored'] ?? false);
 
         $plugins = [];
         $themes = [];
@@ -71,12 +72,16 @@ class UpdateGrouping
                 if ($slug === '') {
                     continue;
                 }
-                $isIgnored = $this->isIgnored($siteIgnores, PluginUpdateJob::KIND_PLUGIN, $slug);
-                if ($isIgnored && ! $showIgnored) {
+                $ignore = $this->getIgnore($siteIgnores, PluginUpdateJob::KIND_PLUGIN, $slug);
+                if ($onlyAutoIgnored) {
+                    if (! ($ignore && $ignore->isAutoFailure())) {
+                        continue;
+                    }
+                } elseif ($ignore !== null && ! $showIgnored) {
                     continue;
                 }
                 $plugins[$slug]['name'] ??= (string) ($item['name'] ?? $slug);
-                $plugins[$slug]['sites'][] = $this->siteRow($site, $item, $siteJobs, PluginUpdateJob::KIND_PLUGIN, $slug, $isIgnored);
+                $plugins[$slug]['sites'][] = $this->siteRow($site, $item, $siteJobs, PluginUpdateJob::KIND_PLUGIN, $slug, $ignore);
             }
 
             // Themes
@@ -88,32 +93,49 @@ class UpdateGrouping
                 if ($slug === '') {
                     continue;
                 }
-                $isIgnored = $this->isIgnored($siteIgnores, PluginUpdateJob::KIND_THEME, $slug);
-                if ($isIgnored && ! $showIgnored) {
+                $ignore = $this->getIgnore($siteIgnores, PluginUpdateJob::KIND_THEME, $slug);
+                if ($onlyAutoIgnored) {
+                    if (! ($ignore && $ignore->isAutoFailure())) {
+                        continue;
+                    }
+                } elseif ($ignore !== null && ! $showIgnored) {
                     continue;
                 }
                 $themes[$slug]['name'] ??= (string) ($item['name'] ?? $slug);
-                $themes[$slug]['sites'][] = $this->siteRow($site, $item, $siteJobs, PluginUpdateJob::KIND_THEME, $slug, $isIgnored);
+                $themes[$slug]['sites'][] = $this->siteRow($site, $item, $siteJobs, PluginUpdateJob::KIND_THEME, $slug, $ignore);
             }
 
             // Core
             if ($site->core_update_available) {
-                $isIgnored = $this->isIgnored($siteIgnores, PluginUpdateJob::KIND_CORE, null);
-                if ($isIgnored && ! $showIgnored) {
+                $ignore = $this->getIgnore($siteIgnores, PluginUpdateJob::KIND_CORE, null);
+                if ($onlyAutoIgnored) {
+                    if (! ($ignore && $ignore->isAutoFailure())) {
+                        // skip
+                    } else {
+                        $core[] = $this->siteRow($site, $site->companion_snapshot['wp_core'] ?? [], $siteJobs, PluginUpdateJob::KIND_CORE, null, $ignore);
+                    }
+                } elseif ($ignore !== null && ! $showIgnored) {
                     // skip
                 } else {
-                    $core[] = $this->siteRow($site, $site->companion_snapshot['wp_core'] ?? [], $siteJobs, PluginUpdateJob::KIND_CORE, null, $isIgnored);
+                    $core[] = $this->siteRow($site, $site->companion_snapshot['wp_core'] ?? [], $siteJobs, PluginUpdateJob::KIND_CORE, null, $ignore);
                 }
             }
 
             // Translations
             if ($site->translation_updates_count > 0) {
-                $isIgnored = $this->isIgnored($siteIgnores, PluginUpdateJob::KIND_TRANSLATION, null);
-                if ($isIgnored && ! $showIgnored) {
+                $ignore = $this->getIgnore($siteIgnores, PluginUpdateJob::KIND_TRANSLATION, null);
+                if ($onlyAutoIgnored) {
+                    if (! ($ignore && $ignore->isAutoFailure())) {
+                        // skip
+                    } else {
+                        $core_data = $site->companion_snapshot['translations'] ?? [];
+                        $translations[] = $this->siteRow($site, $core_data, $siteJobs, PluginUpdateJob::KIND_TRANSLATION, null, $ignore);
+                    }
+                } elseif ($ignore !== null && ! $showIgnored) {
                     // skip
                 } else {
                     $core_data = $site->companion_snapshot['translations'] ?? [];
-                    $translations[] = $this->siteRow($site, $core_data, $siteJobs, PluginUpdateJob::KIND_TRANSLATION, null, $isIgnored);
+                    $translations[] = $this->siteRow($site, $core_data, $siteJobs, PluginUpdateJob::KIND_TRANSLATION, null, $ignore);
                 }
             }
         }
@@ -205,9 +227,9 @@ class UpdateGrouping
     /**
      * @param  Collection<int, PluginUpdateIgnore>  $siteIgnores
      */
-    private function isIgnored(Collection $siteIgnores, string $kind, ?string $slug): bool
+    private function getIgnore(Collection $siteIgnores, string $kind, ?string $slug): ?PluginUpdateIgnore
     {
-        return $siteIgnores->contains(function (PluginUpdateIgnore $ig) use ($kind, $slug) {
+        return $siteIgnores->first(function (PluginUpdateIgnore $ig) use ($kind, $slug) {
             if ($ig->target_kind !== $kind) {
                 return false;
             }
@@ -221,7 +243,7 @@ class UpdateGrouping
      * @param  Collection<int, PluginUpdateJob>  $siteJobs
      * @return array<string, mixed>
      */
-    private function siteRow(Site $site, array $item, Collection $siteJobs, string $kind, ?string $slug, bool $isIgnored): array
+    private function siteRow(Site $site, array $item, Collection $siteJobs, string $kind, ?string $slug, ?PluginUpdateIgnore $ignore): array
     {
         $live = $siteJobs->first(function (PluginUpdateJob $j) use ($kind, $slug) {
             return $j->target_kind === $kind && $j->target_slug === $slug;
@@ -233,6 +255,9 @@ class UpdateGrouping
                 ->whereIn('name', ['Dedicated', 'Shared'])
                 ->first()?->name;
         }
+
+        $isIgnored = $ignore !== null;
+        $isAutoFailure = $ignore?->isAutoFailure() ?? false;
 
         return [
             'site_id' => $site->id,
@@ -252,6 +277,11 @@ class UpdateGrouping
             'has_live_job' => $live !== null,
             'live_job_status' => $live?->status,
             'is_ignored' => $isIgnored,
+            'is_auto_failure' => $isAutoFailure,
+            'ignore_source' => $ignore->source ?? 'manual',
+            'ignore_failure_count' => $ignore?->failure_count,
+            'ignore_last_error' => $ignore?->last_error,
+            'ignore_date' => $ignore?->ignored_at?->toDateString(),
         ];
     }
 

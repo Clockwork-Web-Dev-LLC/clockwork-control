@@ -269,6 +269,19 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Push active update exceptions to WordPress.
+     * Stored in wp_options['clockwork_update_exceptions']; rendered in
+     * wp-admin under Update coverage for manage_options users.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function pushUpdateExceptions(array $payload): array
+    {
+        return $this->postJson('/update-exceptions', $payload);
+    }
+
+    /**
      * Flush object / page caches on the origin (Companion cache-flush capability).
      *
      * @return array<string, mixed>

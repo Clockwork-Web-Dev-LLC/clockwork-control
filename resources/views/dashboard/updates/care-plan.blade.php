@@ -47,6 +47,44 @@
             </div>
         </div>
 
+        {{-- Auto-ignore policy settings --}}
+        <div class="card p-4 mb-4">
+            <form method="POST" action="{{ route('updates.settings.update') }}" class="flex items-center justify-between gap-4 flex-wrap text-sm">
+                @csrf
+                <div>
+                    <div class="font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                        <i class="fa-solid fa-pause text-[var(--color-status-yellow)]"></i>
+                        Repeated failure auto-ignore policy
+                    </div>
+                    <div class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Pause automatic updates for a plugin or theme after repeated nightly failures. Other plugins continue updating.
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4 flex-wrap">
+                    <label class="flex items-center gap-2 text-xs">
+                        <span class="text-[var(--color-ink-muted)]">Pause after:</span>
+                        <input type="number" name="auto_ignore_after_failures" min="3" max="20"
+                               value="{{ $autoIgnoreThreshold ?? 5 }}"
+                               class="w-16 px-2 py-1 border border-[var(--color-border)] rounded text-center bg-[var(--color-surface)] text-[var(--color-ink-strong)] text-xs">
+                        <span class="text-[var(--color-ink-soft)]">failures</span>
+                    </label>
+
+                    <label class="flex items-center gap-2 text-xs">
+                        <input type="hidden" name="auto_ignore_enabled" value="0">
+                        <input type="checkbox" name="auto_ignore_enabled" value="1"
+                               {{ ($autoIgnoreEnabled ?? true) ? 'checked' : '' }}
+                               class="rounded">
+                        <span class="text-[var(--color-ink-strong)]">Enabled</span>
+                    </label>
+
+                    <button type="submit" class="btn-pill-nav text-xs">
+                        Save policy
+                    </button>
+                </div>
+            </form>
+        </div>
+
     @if ($sites->isEmpty())
         <div class="card p-6 text-sm text-[var(--color-ink-muted)] text-center">
             {{ $carePlansEnabled ? "No sites are currently on a care plan. Toggle a site's care-plan flag from its Settings tab to add it here." : "No eligible sites found in the fleet." }}

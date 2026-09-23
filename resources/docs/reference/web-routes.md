@@ -2,15 +2,15 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
 ---
 
-Listing of every registered HTTP route in `routes/web.php`, grouped by feature area. Public vs. auth-gated boundaries are explicit. See [Architecture → Request lifecycle](/docs/architecture/request-lifecycle) for the middleware pipeline that processes each request.
+Listing of every registered HTTP route in `routes/web.php`, grouped by feature area. Public vs. auth-gated boundaries are explicit. See [Architecture → Request lifecycle](/documentation/architecture/request-lifecycle) for the middleware pipeline that processes each request.
 
-**Note on module routes:** Not every URL below is defined directly in `routes/web.php`. Modular routes (such as `/settings/bill-com`, `/settings/mattermost`, and `/settings/slack`) reside in their owning module's `routes/web.php` (`modules/BillCom`, `modules/Mattermost`, `modules/Slack`), loaded via `loadRoutesFrom()` and each explicitly wrapped in `Route::middleware(['web', 'auth'])` — see [Architecture → Request lifecycle](/docs/architecture/request-lifecycle#the-auth-gate-core-routes-vs-module-routes). The URLs and behavior are identical.
+**Note on module routes:** Not every URL below is defined directly in `routes/web.php`. Modular routes (such as `/settings/bill-com`, `/settings/mattermost`, and `/settings/slack`) reside in their owning module's `routes/web.php` (`modules/BillCom`, `modules/Mattermost`, `modules/Slack`), loaded via `loadRoutesFrom()` and each explicitly wrapped in `Route::middleware(['web', 'auth'])` — see [Architecture → Request lifecycle](/documentation/architecture/request-lifecycle#the-auth-gate-core-routes-vs-module-routes). The URLs and behavior are identical.
 
 For a live listing run:
 
@@ -41,13 +41,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/issues/poll-servers` | Re-poll all servers on demand from the Issues page (background `clockwork:poll-servers`). |
 | POST | `/issues/fetch-all-db-creds` | Bulk-fetch missing WP DB credentials over SSH for all eligible sites (background `clockwork:extract-wp-configs`). |
 | DELETE | `/issues/orphans/{siteId}` | Remove an orphaned site row (archives it via `archived_at`). Confirm dialog required. |
-| POST | `/issues/category-level` | Set an issue category's display tier (`critical`, `attention`, `low`, `hidden`). |
-| POST | `/issues/category-levels` | Bulk save all issue category display tiers. |
-| POST | `/issues/category-levels/reset` | Reset all issue category display tiers to their default configuration. |
-| GET | `/capacity` | Shared-server capacity / over-quota table with Pressable fleet metrics, filter tabs, and quick jumps. |
+| GET | `/capacity` | Shared-server capacity / over-quota table. |
 | GET/PATCH | `/capacity/settings` | Configure shared-server visit quota, lookback windows, and pressure limits. |
 | GET | `/settings/capacity` | Redirects to `capacity.settings` — legacy-alias route, same shape as other `/settings/*` redirects. |
-| POST | `/capacity/site-metrics/toggle` | Pause/resume fleet-wide Companion resource-sampler collection, then push the new flag in the background. See [Features → Dashboard](/docs/features/dashboard) ("Per-site CPU collection toggle"). |
+| POST | `/capacity/site-metrics/toggle` | Pause/resume fleet-wide Companion resource-sampler collection, then push the new flag in the background. See [Features → Dashboard](/documentation/features/dashboard) ("Per-site CPU collection toggle"). |
 | GET | `/maintenance-history` | Action-log review across the fleet. |
 | GET | `/setup` | Fleet integrations setup and onboarding dashboard. |
 | POST | `/setup` | Save active integrations and finish setup (redirecting to dashboard). |
@@ -97,16 +94,14 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/uptime-body-check` | Per-site skip of the white-screen body-length check (parked / SPA / gated homepages). |
 | POST | `/sites/{site}/cache/purge` | Queue a best-effort cache flush (Companion, Pressable, Cloudflare). |
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
-| GET | `/downloads` | WordPress Plugin Download Hub comparing Clockwork Companion and Clockwork Renegade editions. |
 | GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
-| GET | `/renegade/download` | Stream compiled `clockwork-renegade.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
 | POST | `/sites/{site}/care-plan[/clear-override]` | Toggle / un-pin care plan. |
 | POST | `/sites/{site}/auto-updates/toggle` | Per-site nightly auto-update opt-in/out. |
-| POST | `/sites/{site}/uptime-monitoring` · `/uptime-ignore` | Per-site uptime opt-out / mute-alerts-but-keep-probing toggle (two different things — see [Features → Uptime monitoring](/docs/features/uptime-monitoring)). |
-| POST | `/sites/{site}/inactive` | Fleet-wide inactive toggle — site stays visible everywhere, excluded from Issues/nav badge/routine-maintenance alerts. See [Features → Inactive sites](/docs/features/inactive-sites). |
+| POST | `/sites/{site}/uptime-monitoring` · `/uptime-ignore` | Per-site uptime opt-out / mute-alerts-but-keep-probing toggle (two different things — see [Features → Uptime monitoring](/documentation/features/uptime-monitoring)). |
+| POST | `/sites/{site}/inactive` | Fleet-wide inactive toggle — site stays visible everywhere, excluded from Issues/nav badge/routine-maintenance alerts. See [Features → Inactive sites](/documentation/features/inactive-sites). |
 | POST | `/sites/{site}/fetch-db-creds` | Fetch WP DB credentials over SSH for a single site. |
 | POST | `/sites/{site}/refresh-wp-plugins` | Re-probe via SSH. |
 | POST | `/sites/{site}/email-vuln-report` | Email a plugin-vulnerability summary for one site. |
@@ -123,7 +118,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/updates/care-plan` | Curation page — per-site auto-update opt-in/out toggles. |
 | POST | `/updates/bulk-update` | Queue a batch of `plugin_update_jobs` for the selected targets. |
 | POST | `/updates/bulk-ignore` · `/bulk-unignore` | Add/remove `plugin_update_ignores` entries. |
-| GET | `/updates/batches/{batchId}/status` | Batch progress JSON (UUID-constrained). Infrastructure exists; polling JS isn't wired up yet — see [Features → Updates](/docs/features/updates). |
+| GET | `/updates/batches/{batchId}/status` | Batch progress JSON (UUID-constrained). Infrastructure exists; polling JS isn't wired up yet — see [Features → Updates](/documentation/features/updates). |
 
 ### Bans
 
@@ -142,9 +137,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 |---|---|---|
 | GET | `/monitoring` | Fleet uptime status board. |
 | POST | `/monitoring/refresh` | On-demand fleet uptime re-check (background `clockwork:check-site-uptime`). |
-| GET/PATCH | `/monitoring/settings` | Probe interval, failure threshold, and fleet-wide domain ignore patterns (`monitoring.ignored_domain_patterns`). |
-| POST | `/monitoring/sites/{site}/classify-outage` | Classify an active outage reason / maintenance flag. |
-| POST | `/monitoring/events/{event}/classify` | Classify a specific historical monitoring outage event. |
+| GET/PATCH | `/monitoring/settings` | Probe interval + failure threshold. |
 | GET | `/security/admins` | Fleet WordPress administrator directory and allowlist. |
 | PATCH | `/security/admins/allowlist` | Save approved admin email domains/emails. |
 | POST | `/security/admins/{site}/ignore` · DELETE `/ignore/{ignoredWpAdmin}` | Acknowledge or restore a flagged WP admin. |
@@ -166,7 +159,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings` | Settings & Operations Hub — 4-quadrant operations command center with real-time tool search. See [Features → Settings Hub](/docs/features/settings-hub). |
+| GET | `/settings` | Settings & Operations Hub — 4-quadrant operations command center with real-time tool search. See [Features → Settings Hub](/documentation/features/settings-hub). |
 | GET/POST/PATCH | `/settings/users[/{user}/{revoke,restore}]` | Allowlist management. |
 | GET/PATCH/POST | `/settings/ingest[/run-now]` | LLAR/Wordfence pull cadence + manual run. |
 | PATCH | `/settings/ingest/retention` | Days/weeks window for raw `threat_logs` (default 30 days). |
@@ -176,8 +169,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET/PATCH/POST | `/settings/security-scans[/run-now]` | Scan toggles + manual run. |
 | GET/PATCH/POST | `/settings/backup-relay[/run-now]` | Backup Relay (S3 Glacier IR) settings + on-demand execution. |
 | GET | `/settings/backup-relay/sites/{site}/{archives,download}` | Per-site S3 Glacier archive listing (`archives`) and streamed download of a specific archive (`download`). |
-| GET/POST | `/settings/scheduled-jobs[/run]` | [Scheduled Jobs dashboard](/docs/features/scheduled-jobs-dashboard) — every cron entry's last outcome + manual Run now. |
-| GET/PATCH | `/settings/care-plans` | Global care plan master toggle (`care_plans.enabled`) and fleet enrollment statistics. |
+| GET/POST | `/settings/scheduled-jobs[/run]` | [Scheduled Jobs dashboard](/documentation/features/scheduled-jobs-dashboard) — every cron entry's last outcome + manual Run now. |
 | GET/POST | `/settings/bill-com[/run-{customer,care-plan}-sync]` | Sync status + manual runs. |
 | GET/POST | `/settings/mattermost` | Per-event Mattermost notification toggles (ip_blocked, ssl_state_changed, site_went_down/up, etc.). |
 | GET/POST | `/settings/slack` | Same per-event toggles, Slack channel. Independent settings key (`notifications.slack.events`) from Mattermost's. |
@@ -188,16 +180,17 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | PATCH | `/settings/integrations/{service}/limits` | Save operator connection tunables and write API credentials directly to .env. |
 | POST | `/settings/integrations/{service}/limits/reset` | Reset service connection tunables back to recommended vendor defaults. |
 | POST | `/settings/integrations/{service}/credentials/{field}/remove` | Remove an API key/credential from the root .env file. |
-| GET | `/settings/modules` | Module Directory — browses the official + community module catalog (`Modules\Core\ModuleDirectoryClient`, cached feed from `clockworkcontrol.com/api/modules.json`). See [Features → Module Directory](/docs/features/module-directory). |
+| GET | `/settings/modules` | Module Directory — browses the official + community module catalog (`Modules\Core\ModuleDirectoryClient`, cached feed from `clockworkcontrol.com/api/modules.json`). See [Features → Module Directory](/documentation/features/module-directory). |
 | POST | `/settings/modules/refresh` | Force-refresh the module feed, bypassing the cache. |
-| GET | `/settings/updates` | Clockwork Control's own self-update hub — checks the GitHub Releases API for a newer Core version, shows the Companion fleet-rollout breakdown, and links to the module catalog. Not to be confused with the fleet-wide `/updates` page (client WordPress sites) — see [Features → System updates](/docs/features/system-updates). |
+| GET | `/settings/updates` | Clockwork Control's own self-update hub — checks the GitHub Releases API for a newer Core version, shows the Companion fleet-rollout breakdown, and links to the module catalog. Not to be confused with the fleet-wide `/updates` page (client WordPress sites) — see [Features → System updates](/documentation/features/system-updates). |
 | POST | `/settings/updates/check` | Force a fresh check against the upstream release channel, bypassing the 12h cache. |
 | POST | `/settings/updates/apply` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. |
 | GET | `/settings/diagnostics` | System diagnostics dashboard. |
 | GET | `/settings/maintenance` | Operator-only page showing DB size + a download button. |
-| GET | `/settings/maintenance/backup` | Streams a gzipped `mysqldump` of Clockwork's own database straight to the browser (no temp file on the server). Contains every encrypted column ciphertext — SSH keys, per-site DB creds, Companion secrets — decryptable only by pairing the dump with `APP_KEY`. Treat downloaded copies with the same care as `.env`. |
+| GET | `/settings/maintenance/backup` | Streams a gzipped `mysqldump` of Clockwork Control's own database straight to the browser (no temp file on the server). Contains every encrypted column ciphertext — SSH keys, per-site DB creds, Companion secrets — decryptable only by pairing the dump with `APP_KEY`. Treat downloaded copies with the same care as `.env`. |
 | GET | `/settings/weird-stats` | Pre-warmed threat-log stats. |
 | GET/POST/PATCH/DELETE | `/settings/tags[/{tag}]` | Server tier tag CRUD. |
+| GET | `/styleguide` | Developer design system styleguide (`StyleguideController`) — interactive workbench displaying color tokens, buttons, form controls, badges, and modal components. |
 
 ### Docs (this site)
 

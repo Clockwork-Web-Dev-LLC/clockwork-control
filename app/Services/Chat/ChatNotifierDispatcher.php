@@ -134,6 +134,11 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->pluginUpdateFailed($site, $job));
     }
 
+    public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool
+    {
+        return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->pluginUpdateAutoIgnored($site, $job, $failures));
+    }
+
     // malwareFindingDetected, siteWentDown/Up, and ipBlocked are deliberately
     // NOT gated on is_inactive — those are active-incident signals (a real
     // compromise, a real outage, a real attacker at the firewall) on

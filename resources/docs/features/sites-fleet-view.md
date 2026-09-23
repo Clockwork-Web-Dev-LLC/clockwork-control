@@ -2,7 +2,7 @@
 title: Sites (fleet view)
 section: Features
 order: 15
-updated: 2026-09-12
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [sites, fleet, pressable, spinupwp, hosting, standalone, companion]
 tracks: [app/Http/Controllers/SitesController.php, resources/views/sites/create.blade.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]

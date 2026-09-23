@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -10,7 +10,7 @@ tracks: [.env.example, config/clockwork.php, config/services.php]
 
 Every `CLOCKWORK_*` variable plus the standard Laravel ones we actually use. Defaults come from `config/clockwork.php` — most things work if the variable is empty (the feature short-circuits).
 
-The provider-credential variables below (DigitalOcean, Hetzner, Azure, Vultr, Linode, SpinupWP, Pressable, WP Engine, Kinsta, Cloudways, Cloudflare, Twilio, Bill.com, blacklist-scan keys, GTmetrix, PSI, OAuth credentials, etc.) are managed directly in the root `.env` file — either manually or through the **Setup** dashboard (`/setup`) and **Settings → API limits** (`/settings/integrations/{service}/limits`). The built-in `EnvCredentialManager` writes atomically to `.env` and immediately reflects changes in running process memory without server reboots. `CredentialResolver` maintains backward-compatible fallback for any legacy database-stored credentials. On a fresh install (zero servers, zero sites), the dashboard redirects to **Setup** (`/setup`) — the fleet integration and credential configuration hub. See [Features → Fleet Integrations Setup](/docs/features/setup-checklist).
+The provider-credential variables below (DigitalOcean, Hetzner, Azure, Vultr, Linode, SpinupWP, Pressable, WP Engine, Kinsta, Cloudways, Cloudflare, Twilio, Bill.com, blacklist-scan keys, GTmetrix, PSI, OAuth credentials, etc.) are managed directly in the root `.env` file — either manually or through the **Setup** dashboard (`/setup`) and **Settings → API limits** (`/settings/integrations/{service}/limits`). The built-in `EnvCredentialManager` writes atomically to `.env` and immediately reflects changes in running process memory without server reboots. `CredentialResolver` maintains backward-compatible fallback for any legacy database-stored credentials. On a fresh install (zero servers, zero sites), the dashboard redirects to **Setup** (`/setup`) — the fleet integration and credential configuration hub. See [Features → Fleet Integrations Setup](/documentation/features/setup-checklist).
 
 Group order matches `.env.example` so you can keep them side by side.
 
@@ -77,7 +77,7 @@ None of the three login providers is required — `LoginController` only shows a
 | `CLOCKWORK_AZURE_LOGIN_URL` | `https://login.microsoftonline.com` | |
 | `CLOCKWORK_AZURE_TIMEOUT` | `15` | Seconds. |
 
-All four of tenant/client/secret/subscription are required together — `AzureClient::isConfigured()` is all-or-nothing. Third cloud-provider branch in `poll-servers` / `reconcile-provider`, alongside DO and Hetzner. See [Integrations → Azure](/docs/integrations/azure).
+All four of tenant/client/secret/subscription are required together — `AzureClient::isConfigured()` is all-or-nothing. Third cloud-provider branch in `poll-servers` / `reconcile-provider`, alongside DO and Hetzner. See [Integrations → Azure](/documentation/integrations/azure).
 
 ## Vultr
 
@@ -87,7 +87,7 @@ All four of tenant/client/secret/subscription are required together — `AzureCl
 | `CLOCKWORK_VULTR_BASE_URL` | `https://api.vultr.com/v2` | |
 | `CLOCKWORK_VULTR_TIMEOUT` | `15` | Seconds. |
 
-Vultr's API exposes no CPU/memory/disk time series, so `clockwork:poll-servers` never gets metrics for `provider='vultr'` servers — only alive/dead state. See [Integrations → Vultr](/docs/integrations/vultr).
+Vultr's API exposes no CPU/memory/disk time series, so `clockwork:poll-servers` never gets metrics for `provider='vultr'` servers — only alive/dead state. See [Integrations → Vultr](/documentation/integrations/vultr).
 
 ## Linode (Akamai)
 
@@ -97,7 +97,7 @@ Vultr's API exposes no CPU/memory/disk time series, so `clockwork:poll-servers` 
 | `CLOCKWORK_LINODE_BASE_URL` | `https://api.linode.com/v4` | |
 | `CLOCKWORK_LINODE_TIMEOUT` | `15` | Seconds. |
 
-CPU-only metrics (normalized by `server.vcpus`) — memory/disk/load stay null, same gap as Hetzner and Azure. See [Integrations → Linode](/docs/integrations/linode).
+CPU-only metrics (normalized by `server.vcpus`) — memory/disk/load stay null, same gap as Hetzner and Azure. See [Integrations → Linode](/documentation/integrations/linode).
 
 ## WP Engine
 
@@ -109,7 +109,7 @@ CPU-only metrics (normalized by `server.vcpus`) — memory/disk/load stay null, 
 | `CLOCKWORK_WPENGINE_VIEW_ONLY` | `true` | When `true`, enforces read-only mode: blocks mutating API requests and prevents remote Companion deployment over SSH. Safe default for unverified accounts. |
 | `CLOCKWORK_WPENGINE_SSH_PRIVATE_KEY` / `_SSH_PRIVATE_KEY_PASSPHRASE` | unset | Separate credential from the API creds above — WP Engine's SSH gateway auths by key, not by the REST API's Basic Auth. Command execution and Companion install go over this, not the API. Same sensitivity class as a server's own `ssh_private_key` column. |
 
-No server concept — same shape as Pressable, every operation addressed by install name. Unverified against a live account — see [Integrations → WP Engine](/docs/integrations/wp-engine).
+No server concept — same shape as Pressable, every operation addressed by install name. Unverified against a live account — see [Integrations → WP Engine](/documentation/integrations/wp-engine).
 
 ## Kinsta
 
@@ -121,7 +121,7 @@ No server concept — same shape as Pressable, every operation addressed by inst
 | `CLOCKWORK_KINSTA_VIEW_ONLY` | `true` | When `true`, enforces read-only mode: blocks mutating API requests (`POST`, `PUT`, `DELETE`) and prevents remote Companion deployment over SSH. Safe default for unverified accounts. |
 | `CLOCKWORK_KINSTA_SSH_PASSWORD` | unset | Separate credential — Kinsta's API can manage SSH access/credentials but can't execute remote commands itself, so command execution and Companion install go over real per-environment SSH instead. |
 
-Same "no server concept, unverified against a live account" caveat as WP Engine — see [Integrations → Kinsta](/docs/integrations/kinsta).
+Same "no server concept, unverified against a live account" caveat as WP Engine — see [Integrations → Kinsta](/documentation/integrations/kinsta).
 
 ## Cloudways
 
@@ -132,7 +132,7 @@ Same "no server concept, unverified against a live account" caveat as WP Engine 
 | `CLOCKWORK_CLOUDWAYS_TIMEOUT` | `15` | Seconds. |
 | `CLOCKWORK_CLOUDWAYS_VIEW_ONLY` | `true` | When `true`, enforces read-only mode: blocks mutating API requests (`POST`, `PUT`, `DELETE`) and disables SSH command execution and Companion deployment. Safe default for unverified accounts. |
 
-The one hosting provider that's also a `CloudProvider` — see [Integrations → Cloudways](/docs/integrations/cloudways) for why metrics come from Cloudways' own API rather than whichever cloud (DO/AWS/GCP/Vultr/Linode) it actually provisioned on.
+The one hosting provider that's also a `CloudProvider` — see [Integrations → Cloudways](/documentation/integrations/cloudways) for why metrics come from Cloudways' own API rather than whichever cloud (DO/AWS/GCP/Vultr/Linode) it actually provisioned on.
 
 ## GridPane
 
@@ -143,7 +143,7 @@ The one hosting provider that's also a `CloudProvider` — see [Integrations →
 | `GRIDPANE_TIMEOUT` | `15` | Seconds. |
 | `GRIDPANE_VIEW_ONLY` | `true` | When `true`, enforces strict read-only mode: blocks all mutating API requests (`POST`, `PUT`, `DELETE`, remote WP-CLI) and disables SSH command execution and Companion plugin deployment. Essential when connecting client-owned or third-party API keys. |
 
-Server management panel running on real VPS servers — see [Integrations → GridPane](/docs/integrations/gridpane). Direct SSH access to servers and sites at `/var/www/{domain}/htdocs`.
+Server management panel running on real VPS servers — see [Integrations → GridPane](/documentation/integrations/gridpane). Direct SSH access to servers and sites at `/var/www/{domain}/htdocs`.
 
 ## DigitalOcean Spaces (S3-compatible)
 
@@ -187,7 +187,7 @@ There's no shared token or API — this app and the standalone relay droplet
 never connect to each other directly. Instead both sides read/write two
 small JSON files on the same S3 bucket, so the variables below are the
 standard Laravel `s3` disk vars plus one prefix override. See
-[Features → Backup relay](/docs/features/backup-relay).
+[Features → Backup relay](/documentation/features/backup-relay).
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -224,7 +224,7 @@ standard Laravel `s3` disk vars plus one prefix override. See
 | `CLOCKWORK_MATTERMOST_ENABLED` | `false` | Master toggle. |
 | `CLOCKWORK_MATTERMOST_WEBHOOK_URL` | unset | Required when enabled. |
 | `CLOCKWORK_MATTERMOST_CHANNEL` | unset | Lowercase slug. Mixed case is silently rejected. |
-| `CLOCKWORK_MATTERMOST_USERNAME` | `Clockwork` | |
+| `CLOCKWORK_MATTERMOST_USERNAME` | `Clockwork Control` | |
 | `CLOCKWORK_MATTERMOST_ICON_EMOJI` | `:lock:` | |
 
 ## Slack
@@ -234,10 +234,10 @@ standard Laravel `s3` disk vars plus one prefix override. See
 | `CLOCKWORK_SLACK_ENABLED` | `false` | Master toggle. Independent of `CLOCKWORK_MATTERMOST_ENABLED` — both can be on at once. |
 | `CLOCKWORK_SLACK_WEBHOOK_URL` | unset | Required when enabled. |
 | `CLOCKWORK_SLACK_CHANNEL` | unset | |
-| `CLOCKWORK_SLACK_USERNAME` | `Clockwork` | |
+| `CLOCKWORK_SLACK_USERNAME` | `Clockwork Control` | |
 | `CLOCKWORK_SLACK_ICON_EMOJI` | `:lock:` | |
 
-See [Integrations → Slack](/docs/integrations/slack). The per-site client-facing Slack channel (`ClientSlackNotifier`) has no env vars of its own — its webhook is client-configured per site — but it does read the **Operator identity** vars below for the operator name/support link it puts in client-facing messages.
+See [Integrations → Slack](/documentation/integrations/slack). The per-site client-facing Slack channel (`ClientSlackNotifier`) has no env vars of its own — its webhook is client-configured per site — but it does read the **Operator identity** vars below for the operator name/support link it puts in client-facing messages.
 
 ## Performance scans
 
@@ -274,7 +274,7 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 | `CLOCKWORK_SSH_CONNECT_TIMEOUT` | `10` | |
 | `CLOCKWORK_SSH_EXEC_TIMEOUT` | `30` | Per-command override available in the client call. |
 | `CLOCKWORK_SSH_PREFLIGHT_TIMEOUT` | `2` | Short `fsockopen` probe before the real SSH handshake, so a deleted/firewalled server fails fast instead of hanging past `max_execution_time`. |
-| `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS` | `30` | How long [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) keeps run history before `clockwork:prune-scheduled-job-runs` deletes it. |
+| `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS` | `30` | How long [Settings → Scheduled Jobs](/documentation/features/scheduled-jobs-dashboard) keeps run history before `clockwork:prune-scheduled-job-runs` deletes it. |
 
 ## Monitoring thresholds
 
@@ -307,34 +307,16 @@ See [Integrations → Slack](/docs/integrations/slack). The per-site client-faci
 | `CLOCKWORK_COMPANION_DIST_SHA256` | unset | **REQUIRED** when `DIST_URL` is set. Mismatched hash aborts the install. |
 | `CLOCKWORK_COMPANION_LOCAL_PATH` | `~/Projects/clockwork-companion` | Resolved via `posix_getpwuid` first because `env('HOME')` is null under Herd's php-fpm. |
 | `CLOCKWORK_COMPANION_TIMEOUT` | `30` | Per-call timeout for HTTP to the plugin. |
-| `CLOCKWORK_COMPANION_TIMEOUT_MULTISITE` | `60` | Longer timeout for calls that fan out across every subsite on a multisite install. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.37.1` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
-
-## Clockwork Renegade (WordPress.org directory variant)
-
-| Variable | Default | Notes |
-|---|---|---|
-| `CLOCKWORK_RENEGADE_VERSION` | `1.0.0` | Renegade plugin version bundled with this Core release. |
-| `CLOCKWORK_RENEGADE_LOCAL_PATH` | `~/Projects/clockwork-renegade` | Local source path for development. |
-
-## Care plans
-
-| Variable | Default | Notes |
-|---|---|---|
-| `CLOCKWORK_CARE_PLANS_ENABLED` | `true` | Fleet-wide master switch for the Care Plan engine (`care_plans.enabled`). When false, care plan checks, scans, and maintenance gating are globally disabled. |
-
-## Scheduled jobs
-
-| Variable | Default | Notes |
-|---|---|---|
-| `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS` | `30` | Days of history to retain for task run results displayed on `/settings/scheduled-jobs`. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.38.1` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
+| `CLOCKWORK_RENEGADE_VERSION` | `1.0.3` | The bundled Clockwork Renegade version for standalone WordPress sites. |
+| `CLOCKWORK_UNLOCK_HUB_DOMAIN` | `clockworkwd.com` | Optional fallback domain for the LLAR emergency unlock console host. Overrides the default hub detection if `unlock_hub_domain` is unconfigured. |
 
 ## Operator identity
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_OPERATOR_NAME` | `Clockwork operator` | Whoever runs this instance — appears in client-facing Slack messages and email footers. |
-| `CLOCKWORK_OPERATOR_CONTACT_EMAIL` | unset | Appended to the uptime prober's User-Agent (`Clockwork-Uptime/1.0 (+you@example.com)`) so a monitored site's admin can identify and, if needed, whitelist or contact the bot. Sent to every monitored site on every probe — set deliberately, not by accident. |
+| `CLOCKWORK_OPERATOR_NAME` | `Clockwork Control operator` | Whoever runs this instance — appears in client-facing Slack messages and email footers. |
+| `CLOCKWORK_OPERATOR_CONTACT_EMAIL` | unset | Appended to the uptime prober's User-Agent (`Clockwork Control-Uptime/1.0 (+you@example.com)`) so a monitored site's admin can identify and, if needed, whitelist or contact the bot. Sent to every monitored site on every probe — set deliberately, not by accident. |
 | `CLOCKWORK_OPERATOR_SUPPORT_URL` | unset | Linked in client-facing Slack alerts (`ClientSlackNotifier`). |
 | `CLOCKWORK_OPERATOR_WEBSITE_URL` | unset | Linked in the footer of outbound client emails (vulnerability reports, nightly update summaries). |
 
@@ -353,7 +335,7 @@ Added in the modularization roadmap's Phase 8, replacing what used to be a hardc
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CLOCKWORK_ALERTS_EMAIL` | unset | Fallback destination when no on-call SMS recipient is available (`clockwork.alerts.email`). See [Integrations → Twilio](/docs/integrations/twilio). |
+| `CLOCKWORK_ALERTS_EMAIL` | unset | Fallback destination when no on-call SMS recipient is available (`clockwork.alerts.email`). See [Integrations → Twilio](/documentation/integrations/twilio). |
 
 ## Module Directory
 
@@ -382,7 +364,7 @@ See [DISCLAIMER.md](/DISCLAIMER.md) for the full data-handling commitment.
 | `CLOCKWORK_UPDATES_API_URL` | `https://api.github.com/repos/Clockwork-Web-Dev-LLC/clockwork-control/releases/latest` | Full override for the release-check endpoint, in case `CLOCKWORK_UPDATE_REPO` alone isn't enough (e.g. a private mirror). |
 | `CLOCKWORK_UPDATES_CACHE_TTL` | `43200` (12h) | Seconds the latest-release check is cached. "Check Again" on `/settings/updates` bypasses this. |
 
-See [Features → System updates](/docs/features/system-updates).
+See [Features → System updates](/documentation/features/system-updates).
 
 ## Domain Expiration (RDAP)
 

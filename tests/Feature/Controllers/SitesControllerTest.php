@@ -626,7 +626,19 @@ describe('pushCompanionData', function () {
         $response->assertJsonPath('results.snapshot.ok', false);
         $response->assertJsonPath('results.backups.ok', true);
         $response->assertJsonPath('results.backups.skipped', true);
+        $response->assertJsonPath('results.backups.reason', 'Backups managed natively by Pressable');
         $response->assertJsonPath('results.traffic.ok', false);
+    });
+
+    it('reports backups skipped cleanly on a custom site with host-aware reason', function () {
+        $site = Site::factory()->custom()->withCompanionInstalled()->create(['companion_capabilities' => []]);
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.companion.push-update', $site));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('results.backups.ok', true);
+        $response->assertJsonPath('results.backups.skipped', true);
+        $response->assertJsonPath('results.backups.reason', 'Backups managed by host');
     });
 
     it('pushes snapshot + backups successfully when both capabilities are advertised', function () {

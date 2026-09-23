@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\CisaKevEntry;
 use App\Models\ContactFormTest;
 use App\Models\IgnoredIssue;
+use App\Models\PluginUpdateIgnore;
+use App\Models\PluginUpdateJob;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
@@ -186,11 +188,41 @@ class IssuesController extends Controller
 
         // Outdated WP plugins — derived from the cached Companion snapshot. Only sites
         // with the snapshot capability + a recent refresh contribute. KEEP IN SYNC with
-        // App\Support\IssueCounter::total().
+        // App\Support\IssueCounter::total(). Slugs in PluginUpdateIgnore are excluded from the urgent count.
+        $allIgnores = PluginUpdateIgnore::query()
+            ->with(['site.server'])
+            ->get();
+        $ignoredSlugsBySite = $allIgnores
+            ->where('target_kind', PluginUpdateJob::KIND_PLUGIN)
+            ->groupBy('site_id')
+            ->map(fn ($rows) => $rows->pluck('target_slug')->all());
+
         $pluginsOutdated = $sites
-            ->filter(fn (Site $s) => is_array($s->companion_snapshot)
-                && (int) ($s->companion_snapshot['plugins']['counts']['updates_available'] ?? 0) > 0)
+            ->filter(function (Site $s) use ($ignoredSlugsBySite) {
+                if (! is_array($s->companion_snapshot)) {
+                    return false;
+                }
+                $siteIgnored = $ignoredSlugsBySite->get($s->id, []);
+                $plugins = $s->companion_snapshot['plugins']['plugins'] ?? [];
+                if (! is_array($plugins)) {
+                    return false;
+                }
+                foreach ($plugins as $p) {
+                    if (is_array($p) && ! empty($p['update_available']) && ! empty($p['slug'])) {
+                        if (! in_array((string) $p['slug'], $siteIgnored, true)) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            })
             ->sortByDesc(fn (Site $s) => (int) ($s->companion_snapshot['plugins']['counts']['updates_available'] ?? 0))
+            ->values();
+
+        // Quieter section: auto-ignored items paused after repeated failures
+        $autoIgnoredUpdates = $allIgnores
+            ->where('source', PluginUpdateIgnore::SOURCE_AUTO_FAILURE)
             ->values();
 
         // Security overlay: which of those sites have AT LEAST ONE plugin
@@ -387,6 +419,7 @@ class IssuesController extends Controller
             'schedulerHeartbeat',
             'flaggedAdminSites',
             'ignoredAdminIssues',
+            'autoIgnoredUpdates',
             'totals',
             'categoryLevels',
         ));
@@ -507,7 +540,7 @@ class IssuesController extends Controller
     {
         $validated = $request->validate([
             'category' => ['required', 'string'],
-            'level' => ['required', 'string', 'in:pressing,not_pressing,off'],
+            'level' => ['required', 'string', 'in:emergency,pressing,not_pressing,off'],
         ]);
 
         $config->setLevel($validated['category'], $validated['level']);
@@ -529,7 +562,7 @@ class IssuesController extends Controller
     {
         $validated = $request->validate([
             'levels' => ['required', 'array'],
-            'levels.*' => ['required', 'string', 'in:pressing,not_pressing,off'],
+            'levels.*' => ['required', 'string', 'in:emergency,pressing,not_pressing,off'],
         ]);
 
         $config->saveLevels($validated['levels']);

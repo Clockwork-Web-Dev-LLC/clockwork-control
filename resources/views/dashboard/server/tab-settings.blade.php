@@ -106,10 +106,13 @@
                         </div>
                     @endif
                 </div>
-                <form method="POST" action="{{ route('servers.toggleAutoBanLlar', $server) }}">
+                <form method="POST" action="{{ route('servers.toggleAutoBanLlar', $server) }}"
+                      data-confirm="{{ $server->auto_ban_llar ? 'Switch back to manual review for LLAR lockouts?' : 'Auto-ban LLAR lockouts on ' . $server->name . '?' }}"
+                      @if(! $server->auto_ban_llar) data-confirm-details="IPs already locked out by Limit Login Attempts Reloaded will be banned via fail2ban as soon as they are seen." @endif
+                      data-confirm-btn="{{ $server->auto_ban_llar ? 'Disable Auto-ban' : 'Enable Auto-ban' }}"
+                      data-confirm-variant="{{ $server->auto_ban_llar ? 'warning' : 'primary' }}">
                     @csrf
-                    <button type="submit" class="btn-pill-nav"
-                            onclick="return confirm('{{ $server->auto_ban_llar ? 'Switch back to manual review for LLAR lockouts?' : 'Auto-ban LLAR lockouts on ' . $server->name . '? IPs already locked out by Limit Login Attempts Reloaded will be banned via fail2ban as soon as they are seen.' }}')">
+                    <button type="submit" class="btn-pill-nav">
                         <i class="fa-solid {{ $server->auto_ban_llar ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
                         {{ $server->auto_ban_llar ? 'Disable auto-ban' : 'Enable auto-ban' }}
                     </button>
@@ -145,10 +148,13 @@
                         </div>
                     @endif
                 </div>
-                <form method="POST" action="{{ route('servers.toggleAutoBanWordfence', $server) }}">
+                <form method="POST" action="{{ route('servers.toggleAutoBanWordfence', $server) }}"
+                      data-confirm="{{ $server->auto_ban_wordfence ? 'Switch back to manual review for Wordfence blocks?' : 'Auto-ban Wordfence blocks on ' . $server->name . '?' }}"
+                      @if(! $server->auto_ban_wordfence) data-confirm-details="IPs blocked by Wordfence will be banned via fail2ban as soon as they are seen." @endif
+                      data-confirm-btn="{{ $server->auto_ban_wordfence ? 'Disable Auto-ban' : 'Enable Auto-ban' }}"
+                      data-confirm-variant="{{ $server->auto_ban_wordfence ? 'warning' : 'primary' }}">
                     @csrf
-                    <button type="submit" class="btn-pill-nav"
-                            onclick="return confirm('{{ $server->auto_ban_wordfence ? 'Switch back to manual review for Wordfence blocks?' : 'Auto-ban Wordfence blocks on ' . $server->name . '? IPs blocked by Wordfence will be banned via fail2ban as soon as they are seen.' }}')">
+                    <button type="submit" class="btn-pill-nav">
                         <i class="fa-solid {{ $server->auto_ban_wordfence ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
                         {{ $server->auto_ban_wordfence ? 'Disable auto-ban' : 'Enable auto-ban' }}
                     </button>
@@ -165,10 +171,13 @@
                         Stop polling this server, hide it from health stats, and exclude it from the issues count.
                     </div>
                 </div>
-                <form method="POST" action="{{ route('servers.toggleIgnore', $server) }}">
+                <form method="POST" action="{{ route('servers.toggleIgnore', $server) }}"
+                      data-confirm="Ignore {{ $server->name }}?"
+                      data-confirm-details="Polling stops; existing data is kept."
+                      data-confirm-btn="Ignore Server"
+                      data-confirm-variant="warning">
                     @csrf
-                    <button type="submit" class="btn-pill-nav"
-                            onclick="return confirm('Ignore {{ $server->name }}? Polling stops; existing data is kept.')">
+                    <button type="submit" class="btn-pill-nav">
                         <i class="fa-solid fa-eye-slash"></i> Ignore this server
                     </button>
                 </form>
@@ -195,17 +204,16 @@
                 </div>
             </div>
             <form method="POST" action="{{ route('servers.destroy', $server) }}"
-                  onsubmit="
-                      var name = prompt('Type the server name to confirm deletion:\n\n{{ $server->name }}');
-                      if (name === null) return false;
-                      this.querySelector('input[name=confirm_name]').value = name;
-                      return confirm('FINAL CONFIRMATION: permanently remove {{ $server->name }} from Clockwork? This cascade-deletes {{ $server->sites()->count() }} site(s) and all related data.');
-                  ">
+                  data-confirm="Permanently remove {{ $server->display_name }} from Clockwork?"
+                  data-confirm-details="This cascade-deletes {{ $server->sites()->count() }} site(s) and all related data. This cannot be undone."
+                  data-confirm-match="{{ $server->display_name }}"
+                  data-confirm-btn="Delete Server"
+                  data-confirm-variant="danger">
                 @csrf
                 @method('DELETE')
-                <input type="hidden" name="confirm_name" value="">
+                <input type="hidden" name="confirm_name" value="{{ $server->display_name }}">
                 <button type="submit" class="btn-pill-nav" style="color: var(--color-status-red); border-color: var(--color-status-red);">
-                    <i class="fa-solid fa-triangle-exclamation"></i> Remove from Clockwork
+                    <i class="fa-solid fa-trash"></i> Remove from Clockwork
                 </button>
             </form>
         </div>

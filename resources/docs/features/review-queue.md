@@ -2,7 +2,7 @@
 title: Review queue
 section: Features
 order: 20
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [bans, review-queue, security, fail2ban, pressable]
 tracks: [app/Http/Controllers/{BansController,ReviewQueueController,BlockedIpsController,SitesController}.php, app/Console/Commands/{AutoApproveRepeats,ProcessPendingBans,PruneExpiredBans}.php, app/Services/Fail2ban/BanRetention.php, app/Support/BanHistoryRow.php, database/migrations/2026_09_14_210000_backfill_review_queue_and_blocked_ips_server_id.php, resources/views/dashboard/bans/**, resources/views/settings/index.blade.php]

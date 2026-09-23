@@ -99,5 +99,7 @@
     <footer class="border-t border-[var(--color-border-light)] py-4 text-center text-xs text-[var(--color-ink-soft)]">
         Clockwork Control Installer · Self-hosted WordPress fleet management
     </footer>
+    {{-- Global Confirmation & Prompt Modal --}}
+    <x-confirm-modal />
 </body>
 </html>

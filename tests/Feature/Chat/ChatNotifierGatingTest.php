@@ -176,6 +176,13 @@ function fakeChatNotifier(bool $returns): ChatNotifier
             return $this->returns;
         }
 
+        public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
         public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool
         {
             $this->calls[] = __FUNCTION__;
@@ -244,6 +251,11 @@ dataset('gatedMethods', [
     'pluginUpdateFailed' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->pluginUpdateFailed(
         $s,
         PluginUpdateJob::factory()->create(['site_id' => $s->id])
+    )],
+    'pluginUpdateAutoIgnored' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->pluginUpdateAutoIgnored(
+        $s,
+        PluginUpdateJob::factory()->create(['site_id' => $s->id]),
+        5
     )],
 ]);
 

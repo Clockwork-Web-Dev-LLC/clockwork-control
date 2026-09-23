@@ -611,7 +611,11 @@
                         <div class="text-sm font-medium text-[var(--color-ink-strong)]">Reset to Clockwork Defaults</div>
                         <div class="text-xs text-[var(--color-ink-soft)] mt-0.5">Revert company name, plugin details, and support links back to Clockwork Control defaults.</div>
                     </div>
-                    <form method="POST" action="{{ route('settings.companion.reset') }}" onsubmit="return confirm('Reset all companion branding back to Clockwork Control defaults?');">
+                    <form method="POST" action="{{ route('settings.companion.reset') }}"
+                          data-confirm="Reset all companion branding back to Clockwork Control defaults?"
+                          data-confirm-details="Reverts company name, plugin details, and support links."
+                          data-confirm-btn="Reset Branding"
+                          data-confirm-variant="warning">
                         @csrf
                         <button type="submit" class="btn-pill-secondary text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200">
                             <i class="fa-solid fa-rotate-left mr-1"></i> Reset Defaults
@@ -886,7 +890,11 @@
                                 <div class="text-sm font-medium text-[var(--color-ink-strong)]">Reset Reports to Defaults</div>
                                 <div class="text-xs text-[var(--color-ink-soft)] mt-0.5">Revert report styling and colors back to default Clockwork theme values.</div>
                             </div>
-                            <form method="POST" action="{{ route('settings.companion.reset-reports') }}" onsubmit="return confirm('Reset Client Reports styling back to shared defaults?');">
+                            <form method="POST" action="{{ route('settings.companion.reset-reports') }}"
+                                  data-confirm="Reset Client Reports styling back to shared defaults?"
+                                  data-confirm-details="Reverts report styling and colors back to default theme values."
+                                  data-confirm-btn="Reset Reports"
+                                  data-confirm-variant="warning">
                                 @csrf
                                 <button type="submit" class="btn-pill-secondary text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200">
                                     <i class="fa-solid fa-rotate-left mr-1"></i> Reset Reports Styling
@@ -1158,7 +1166,11 @@
                         <div class="text-sm font-medium text-[var(--color-ink-strong)]">Reset Email Branding to Defaults</div>
                         <div class="text-xs text-[var(--color-ink-soft)] mt-0.5">Revert email colors, wordmark, and footer copy back to Clockwork Control defaults.</div>
                     </div>
-                    <form method="POST" action="{{ route('settings.companion.reset-email') }}" onsubmit="return confirm('Reset email notification styling back to defaults?');">
+                    <form method="POST" action="{{ route('settings.companion.reset-email') }}"
+                          data-confirm="Reset email notification styling back to defaults?"
+                          data-confirm-details="Reverts email colors, wordmark, and footer copy back to defaults."
+                          data-confirm-btn="Reset Email"
+                          data-confirm-variant="warning">
                         @csrf
                         <button type="submit" class="btn-pill-secondary text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200">
                             <i class="fa-solid fa-rotate-left mr-1"></i> Reset Email Defaults

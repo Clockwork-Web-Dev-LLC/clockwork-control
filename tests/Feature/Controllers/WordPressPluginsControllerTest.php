@@ -3,6 +3,8 @@
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Companion\CompanionProtectedPlugins;
+use App\Support\Settings;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleStateResolver;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -134,12 +136,12 @@ it('saves the protected plugin list and uses it on the control plane', function 
         ])
         ->assertRedirect(route('settings.wordpress-plugins.index'));
 
-    expect(app(\App\Support\Settings::class)->get(\App\Services\Companion\CompanionProtectedPlugins::SETTING_KEY))
+    expect(app(Settings::class)->get(CompanionProtectedPlugins::SETTING_KEY))
         ->toBe(['woocommerce/woocommerce.php', 'jetpack/jetpack.php']);
 
-    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('jetpack/jetpack.php'))->toBeTrue();
-    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('hello-dolly/hello.php'))->toBeFalse();
-    expect(\App\Services\Companion\CompanionProtectedPlugins::contains('clockwork-companion/clockwork-companion.php'))->toBeTrue();
+    expect(CompanionProtectedPlugins::contains('jetpack/jetpack.php'))->toBeTrue();
+    expect(CompanionProtectedPlugins::contains('hello-dolly/hello.php'))->toBeFalse();
+    expect(CompanionProtectedPlugins::contains('clockwork-companion/clockwork-companion.php'))->toBeTrue();
 });
 
 it('blocks installLlar endpoint when LLAR module is disabled', function () {

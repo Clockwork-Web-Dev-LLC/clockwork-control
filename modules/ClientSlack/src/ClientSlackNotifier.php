@@ -66,6 +66,11 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool
+    {
+        return false;
+    }
+
     public function companionUnreachable(Site $site, string $reason): bool
     {
         return false;

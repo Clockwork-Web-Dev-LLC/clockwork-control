@@ -40,6 +40,9 @@ class BansController extends Controller
 
     public function queue(Request $request, ReviewQueueController $reviewController, Settings $settings, BanRetention $retention): View
     {
+        if (! app()->runningUnitTests()) {
+            @ini_set('memory_limit', '512M');
+        }
         $data = $reviewController->assembleData($request, $settings);
 
         return view('dashboard.bans.layout', array_merge($data, [

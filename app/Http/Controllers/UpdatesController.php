@@ -6,11 +6,14 @@ use App\Jobs\RunCoreUpdate;
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
 use App\Jobs\RunTranslationsUpdate;
+use App\Models\PluginUpdateFailureStreak;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\Site;
 use App\Models\Tag;
+use App\Services\Updates\UpdateFailureStreakRecorder;
 use App\Services\Updates\UpdateGrouping;
+use App\Support\Settings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -62,6 +65,8 @@ class UpdatesController extends Controller
         return view('dashboard.updates.care-plan', [
             'sites' => $sites,
             'totals' => $totals,
+            'autoIgnoreThreshold' => (int) app(Settings::class)->get('updates.auto_ignore_after_failures', 5),
+            'autoIgnoreEnabled' => (bool) app(Settings::class)->get('updates.auto_ignore_enabled', true),
         ]);
     }
 
@@ -74,6 +79,7 @@ class UpdatesController extends Controller
             'care_plan' => (string) $request->query('care_plan', 'on'),
             'tags' => $tagSlugs,
             'show_ignored' => (bool) $request->query('show_ignored', false),
+            'auto_ignored' => (bool) $request->query('auto_ignored', false),
         ];
 
         $built = $grouping->build($filters);
@@ -92,6 +98,12 @@ class UpdatesController extends Controller
             ->orderBy('name')
             ->get();
 
+        $autoIgnoredList = PluginUpdateIgnore::query()
+            ->with(['site.server'])
+            ->where('source', PluginUpdateIgnore::SOURCE_AUTO_FAILURE)
+            ->orderByDesc('updated_at')
+            ->get();
+
         return view('dashboard.updates.index', [
             'activeTab' => $activeTab,
             'stats' => $built['stats'],
@@ -102,6 +114,9 @@ class UpdatesController extends Controller
             'filters' => $filters,
             'availableTags' => $availableTags,
             'batchInProgress' => $request->query('batch') ?: $batchInProgress,
+            'autoIgnoredList' => $autoIgnoredList,
+            'autoIgnoreThreshold' => (int) app(Settings::class)->get('updates.auto_ignore_after_failures', 5),
+            'autoIgnoreEnabled' => (bool) app(Settings::class)->get('updates.auto_ignore_enabled', true),
         ]);
     }
 
@@ -244,6 +259,7 @@ class UpdatesController extends Controller
 
         $userId = $request->user()?->id;
         $count = 0;
+        $sitesToSync = [];
         foreach ($data['targets'] as $target) {
             $parsed = $this->parseTarget($target);
             if ($parsed === null) {
@@ -258,12 +274,22 @@ class UpdatesController extends Controller
                     'target_slug' => $slug,
                 ],
                 [
+                    'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+                    'client_visible' => false,
                     'note' => $data['note'] ?? null,
                     'ignored_by_user_id' => $userId,
                     'ignored_at' => Carbon::now(),
                 ],
             );
+            $sitesToSync[$siteId] = true;
             $count++;
+        }
+
+        foreach (array_keys($sitesToSync) as $siteId) {
+            $site = Site::find($siteId);
+            if ($site) {
+                app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site);
+            }
         }
 
         return back()->with('flash', "Ignored {$count} update".($count === 1 ? '' : 's').'.');
@@ -277,6 +303,7 @@ class UpdatesController extends Controller
         ]);
 
         $count = 0;
+        $sitesToSync = [];
         foreach ($data['targets'] as $target) {
             $parsed = $this->parseTarget($target);
             if ($parsed === null) {
@@ -289,10 +316,46 @@ class UpdatesController extends Controller
                 ->where('target_kind', $kind)
                 ->where('target_slug', $slug)
                 ->delete();
+
+            if ($deleted > 0) {
+                PluginUpdateFailureStreak::query()
+                    ->where('site_id', $siteId)
+                    ->where('target_kind', $kind)
+                    ->where('target_slug', $slug)
+                    ->update([
+                        'consecutive_failures' => 0,
+                        'ignored_at' => null,
+                        'ignore_id' => null,
+                    ]);
+
+                $sitesToSync[$siteId] = true;
+            }
+
             $count += $deleted;
         }
 
+        foreach (array_keys($sitesToSync) as $siteId) {
+            $site = Site::find($siteId);
+            if ($site) {
+                app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site);
+            }
+        }
+
         return back()->with('flash', "Removed {$count} ignore entr".($count === 1 ? 'y' : 'ies').'.');
+    }
+
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'auto_ignore_after_failures' => ['required', 'integer', 'min:3', 'max:20'],
+            'auto_ignore_enabled' => ['required', 'boolean'],
+        ]);
+
+        $settings = app(Settings::class);
+        $settings->put('updates.auto_ignore_after_failures', (int) $data['auto_ignore_after_failures']);
+        $settings->put('updates.auto_ignore_enabled', (bool) $data['auto_ignore_enabled']);
+
+        return back()->with('flash', 'Auto-ignore settings updated.');
     }
 
     /**

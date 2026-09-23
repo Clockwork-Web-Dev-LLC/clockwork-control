@@ -218,6 +218,7 @@
         initialTotals: {{ \Illuminate\Support\Js::from($totals) }},
         categories: {{ \Illuminate\Support\Js::from($categoryDefinitions) }},
         initialLevels: {{ \Illuminate\Support\Js::from($categoryLevels) }},
+        defaultLevels: {{ \Illuminate\Support\Js::from(app(\App\Support\IssueCategoryConfig::class)->defaults()) }},
         updateLevelUrl: '{{ route('issues.category-level.update') }}',
         updateAllLevelsUrl: '{{ route('issues.category-levels.update') }}',
         resetLevelsUrl: '{{ route('issues.category-levels.reset') }}',
@@ -237,37 +238,92 @@
                             (<span x-text="hiddenItemsCount"></span> hidden)
                         </span>
                         <span class="text-[var(--color-ink-soft)] font-normal text-xs ml-1">
-                            · <span class="text-[var(--color-status-red)] font-semibold"><span x-text="pressingItemsCount"></span> pressing</span>
-                            · <span class="text-[var(--color-status-yellow)]"><span x-text="notPressingItemsCount"></span> routine</span>
+                            · <span class="text-red-500 font-semibold"><span x-text="emergencyItemsCount"></span> emergency</span>
+                            · <span class="text-amber-500 font-semibold"><span x-text="pressingItemsCount"></span> pressing</span>
+                            · <span class="text-slate-400"><span x-text="notPressingItemsCount"></span> routine</span>
                         </span>
                     </span>
                 @endif
             </x-slot:subtitle>
             <x-slot:actions>
                 <div class="flex items-center gap-2 flex-wrap text-sm">
-                    @foreach ($categoryDefinitions as $catKey => $cat)
-                        @if (($totals[$catKey] ?? 0) > 0)
-                            <a href="#{{ $cat['html_id'] }}"
-                               x-show="isCategoryVisible('{{ $catKey }}') && (tierTab === 'all' || tierTab === '{{ $cat['tier'] }}')"
-                               class="status-pill {{ $cat['class'] }}">
-                                <span class="status-dot"></span>
-                                {{ $cat['label'] }} {{ $totals[$catKey] }}
-                            </a>
-                        @endif
-                    @endforeach
+                    @php
+                        $activeCategoriesCount = collect($categoryDefinitions)->filter(fn($cat, $k) => ($totals[$k] ?? 0) > 0)->count();
+                    @endphp
+
+                    {{-- Jump to Active Issue Dropdown --}}
+                    @if ($activeCategoriesCount > 0)
+                        <div class="relative" @click.outside="jumpMenuOpen = false">
+                            <button type="button"
+                                    @click="jumpMenuOpen = !jumpMenuOpen"
+                                    class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer text-xs md:text-sm font-medium"
+                                    title="Jump directly to an active issue category section">
+                                <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+                                <span>Jump to Issue</span>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-500">
+                                    {{ $activeCategoriesCount }}
+                                </span>
+                                <i class="fa-solid fa-chevron-down text-[10px] opacity-60 transition-transform duration-200"
+                                   :class="jumpMenuOpen ? 'rotate-180' : ''"></i>
+                            </button>
+
+                            <div x-show="jumpMenuOpen"
+                                 x-transition:enter="transition ease-out duration-150"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-100"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 x-cloak
+                                 class="absolute right-0 mt-1.5 w-72 rounded-[var(--radius-card)] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-2xl py-2 z-50 max-h-96 overflow-y-auto">
+                                <div class="px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-ink-soft)] border-b border-[var(--color-border-light)] flex items-center justify-between">
+                                    <span>Active Categories</span>
+                                    <span class="font-mono text-[var(--color-ink-muted)]">{{ $totals['all'] }} items</span>
+                                </div>
+                                <div class="py-1">
+                                    @foreach ($categoryDefinitions as $catKey => $cat)
+                                        @if (($totals[$catKey] ?? 0) > 0)
+                                            <a href="#{{ $cat['html_id'] }}"
+                                               @click.prevent="jumpMenuOpen = false; jumpToCategory('{{ $cat['html_id'] }}')"
+                                               x-show="isCategoryVisible('{{ $catKey }}')"
+                                               class="flex items-center justify-between px-3.5 py-2 text-xs hover:bg-[var(--color-surface-alt)] transition-colors group">
+                                                <div class="flex items-center gap-2.5 truncate">
+                                                    <span class="status-dot"></span>
+                                                    <span class="truncate font-medium text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)]">
+                                                        {{ $cat['label'] }}
+                                                    </span>
+                                                </div>
+                                                <span class="status-pill {{ $cat['class'] }} text-[10px] font-mono px-1.5 py-0.2 shrink-0">
+                                                    {{ $totals[$catKey] }}
+                                                </span>
+                                            </a>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- WordPress-Style Screen Options Tab Button --}}
                     <button type="button"
-                            @click="prioritiesModalOpen = true"
-                            class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer"
-                            title="Configure alert priorities or mute categories fleet-wide">
-                        <i class="fa-solid fa-sliders text-[var(--color-brand)]"></i>
-                        <span>Priorities</span>
-                        <span x-show="disabledCategoriesCount > 0"
+                            @click="screenOptionsOpen = !screenOptionsOpen"
+                            :class="screenOptionsOpen ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-xs' : (hiddenCategoriesCount > 0 ? 'border-[var(--color-brand)] text-[var(--color-brand)]' : '')"
+                            class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer text-xs md:text-sm font-medium transition-all"
+                            title="Customize which issue sections appear on this screen">
+                        <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-brand)]'"></i>
+                        <span>Screen Options</span>
+                        <span x-show="hiddenCategoriesCount > 0"
                               x-cloak
-                              x-text="disabledCategoriesCount + ' off'"
-                              class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-500/20 text-[var(--color-ink-soft)] font-mono font-semibold"></span>
+                              x-text="hiddenCategoriesCount + ' hidden'"
+                              class="px-1.5 py-0.2 text-[10px] rounded-full bg-amber-500/20 text-amber-500 font-semibold font-mono"
+                              :class="screenOptionsOpen ? 'bg-white/25 text-white' : ''"></span>
+                        <i class="fa-solid fa-chevron-down text-[10px] opacity-70 transition-transform duration-200"
+                           :class="screenOptionsOpen ? 'rotate-180' : ''"></i>
                     </button>
+
+                    {{-- Page Refresh --}}
                     <a href="{{ route('issues.index') }}"
-                       class="btn-pill-nav inline-flex items-center gap-1.5"
+                       class="btn-pill-nav inline-flex items-center gap-1.5 text-xs md:text-sm"
                        title="Loaded {{ now()->format('g:i:s a') }}"
                        onclick="this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
                         <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
@@ -276,41 +332,136 @@
             </x-slot:actions>
         </x-page-header>
 
-        {{-- TOOLBAR: Tier Filters + Categories Visibility Dropdown + Collapse All --}}
-        <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
-            {{-- Priority Filter Pills (Pressing vs Routine vs All) --}}
-            <div class="flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs md:text-sm">
-                <button type="button"
-                        @click="setPriorityFilter('all')"
-                        :class="priorityFilter === 'all' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
-                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1 cursor-pointer">
-                    <span>All Active</span>
-                </button>
-                <button type="button"
-                        @click="setPriorityFilter('pressing')"
-                        :class="priorityFilter === 'pressing' ? 'bg-[var(--color-surface)] text-[var(--color-status-red)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
-                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Show only urgent / pressing alert categories">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-red)]"></span>
-                    <span>Pressing</span>
-                    <span class="px-1.5 py-0.2 rounded-full text-xs font-mono"
-                          :class="pressingItemsCount > 0 ? 'bg-red-500/15 text-[var(--color-status-red)] font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]'"
-                          x-text="pressingItemsCount"></span>
-                </button>
-                <button type="button"
-                        @click="setPriorityFilter('not_pressing')"
-                        :class="priorityFilter === 'not_pressing' ? 'bg-[var(--color-surface)] text-[var(--color-status-yellow)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
-                        class="px-2.5 py-1.5 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Show only routine / low priority categories">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-status-yellow)]"></span>
-                    <span>Not Pressing</span>
-                    <span class="px-1.5 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-xs font-mono"
-                          x-text="notPressingItemsCount"></span>
-                </button>
+        {{-- WORDPRESS-STYLE SCREEN OPTIONS DRAWER --}}
+        <div x-show="screenOptionsOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 -translate-y-2"
+             x-cloak
+             class="mb-6 rounded-[var(--radius-card)] border-2 border-[var(--color-brand)]/40 bg-[var(--color-surface)] shadow-xl overflow-hidden">
+            {{-- Screen Options Top Control Bar --}}
+            <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)]"></span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)]">Screen Options: Elements on this page</span>
+                    <span class="text-xs text-[var(--color-ink-muted)] hidden sm:inline">— Select categories to display. Saved in your browser.</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs flex-wrap">
+                    <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
+                    <button type="button"
+                            @click="showAllCategories()"
+                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-brand)] text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
+                        Show All
+                    </button>
+                    <button type="button"
+                            @click="showOnlyCritical()"
+                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-red-500 text-red-500 transition-all cursor-pointer font-medium">
+                        Critical Only
+                    </button>
+                    <button type="button"
+                            @click="hideRoutine()"
+                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
+                        Hide Routine
+                    </button>
+                    <button type="button"
+                            @click="resetCategories()"
+                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] transition-all cursor-pointer">
+                        Reset
+                    </button>
+                    <span class="text-[var(--color-border-light)]">|</span>
+                    <button type="button"
+                            @click="prioritiesModalOpen = true"
+                            class="text-[var(--color-brand)] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1">
+                        <i class="fa-solid fa-sliders text-[11px]"></i> Fleet Priorities
+                    </button>
+                    <button type="button"
+                            @click="screenOptionsOpen = false"
+                            class="ml-2 px-3 py-1 rounded bg-[var(--color-brand)] text-white hover:opacity-90 font-medium text-xs cursor-pointer shadow-xs">
+                        Done
+                    </button>
+                </div>
             </div>
 
-            {{-- Tier filter pills --}}
-            <div class="flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs md:text-sm">
+            {{-- 3-Tier Checkbox Columns --}}
+            <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
+                @php
+                    $tierColumns = [
+                        'critical' => [
+                            'title' => 'Critical & Security',
+                            'icon' => 'fa-shield-halved',
+                            'color' => 'text-[var(--color-status-red)]',
+                            'badge' => 'bg-red-500/10 text-red-500',
+                        ],
+                        'infrastructure' => [
+                            'title' => 'Infrastructure & Health',
+                            'icon' => 'fa-server',
+                            'color' => 'text-[var(--color-status-yellow)]',
+                            'badge' => 'bg-amber-500/10 text-amber-500',
+                        ],
+                        'routine' => [
+                            'title' => 'Routine Maintenance',
+                            'icon' => 'fa-screwdriver-wrench',
+                            'color' => 'text-slate-400',
+                            'badge' => 'bg-slate-500/10 text-slate-400',
+                        ],
+                    ];
+                @endphp
+
+                @foreach ($tierColumns as $tierKey => $tierInfo)
+                    <div class="flex flex-col space-y-2">
+                        <div class="flex items-center gap-2 pb-2 border-b border-[var(--color-border-light)]">
+                            <i class="fa-solid {{ $tierInfo['icon'] }} {{ $tierInfo['color'] }} text-xs"></i>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)]">
+                                {{ $tierInfo['title'] }}
+                            </h4>
+                            <span class="ml-auto text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded-full {{ $tierInfo['badge'] }}">
+                                {{ $tierTotals[$tierKey] ?? 0 }}
+                            </span>
+                        </div>
+                        <div class="space-y-1 pt-1">
+                            @foreach ($categoryDefinitions as $catKey => $cat)
+                                @if ($cat['tier'] === $tierKey)
+                                    <label class="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--color-surface-alt)] cursor-pointer transition-colors group">
+                                        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+                                            <input type="checkbox"
+                                                   :checked="isCategoryVisible('{{ $catKey }}')"
+                                                   @change="toggleCategory('{{ $catKey }}')"
+                                                   class="w-4 h-4 rounded border-[var(--color-border-light)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] cursor-pointer" />
+                                            <i class="fa-solid {{ $cat['icon'] }} text-xs opacity-70 w-4 text-center shrink-0"></i>
+                                            <span class="text-xs font-medium text-[var(--color-ink-strong)] truncate group-hover:text-[var(--color-brand)]">
+                                                {{ $cat['label'] }}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <span x-show="isCategoryOff('{{ $catKey }}')"
+                                                  x-cloak
+                                                  class="text-[10px] text-slate-400 italic">
+                                                (muted)
+                                            </span>
+                                            @if (($totals[$catKey] ?? 0) > 0)
+                                                <span class="status-pill {{ $cat['class'] }} text-[10px] font-mono px-1.5 py-0.2">
+                                                    {{ $totals[$catKey] }}
+                                                </span>
+                                            @else
+                                                <span class="text-[10px] font-mono text-[var(--color-ink-soft)] px-1">0</span>
+                                            @endif
+                                        </div>
+                                    </label>
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        {{-- UNIFIED TOOLBAR: Tier Tabs (Left) + Urgency Filters & Global Actions (Right) --}}
+        <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+            {{-- Left: Tier filter tabs --}}
+            <div class="max-w-full min-w-0 w-full sm:w-auto overflow-x-auto scrollbar-none flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs md:text-sm">
                 <button type="button"
                         @click="setTier('all')"
                         :class="tierTab === 'all' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
@@ -345,11 +496,66 @@
                 </button>
             </div>
 
-            {{-- Right tools: Priorities Modal + Categories Filter dropdown + Collapse All toggle --}}
-            <div class="flex items-center gap-2">
+            {{-- Right: Urgency Level Filters + Priorities Button + Collapse All --}}
+            <div class="flex items-center gap-2.5 flex-wrap w-full sm:w-auto min-w-0">
+                {{-- Priority Filter Pills --}}
+                <div class="max-w-full min-w-0 overflow-x-auto scrollbar-none flex items-center gap-1 p-1 bg-[var(--color-surface-alt)] rounded-lg border border-[var(--color-border-light)] text-xs">
+                    <button type="button"
+                            @click="setPriorityFilter('all')"
+                            :class="priorityFilter === 'all' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                            class="px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer">
+                        <span>All Active</span>
+                    </button>
+                    <button type="button"
+                            @click="setPriorityFilter('emergency')"
+                            :class="priorityFilter === 'emergency' ? 'bg-[var(--color-surface)] text-red-500 shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                            class="px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                            title="Show only emergency / critical alert categories">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                        <span>Emergency</span>
+                        <span class="px-1 py-0.2 rounded-full text-[10px] font-mono"
+                              :class="emergencyItemsCount > 0 ? 'bg-red-500/15 text-red-500 font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]'"
+                              x-text="emergencyItemsCount"></span>
+                    </button>
+                    <button type="button"
+                            @click="setPriorityFilter('pressing')"
+                            :class="priorityFilter === 'pressing' ? 'bg-[var(--color-surface)] text-amber-500 shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                            class="px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                            title="Show only urgent / pressing alert categories">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        <span>Pressing</span>
+                        <span class="px-1 py-0.2 rounded-full text-[10px] font-mono"
+                              :class="pressingItemsCount > 0 ? 'bg-amber-500/15 text-amber-500 font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]'"
+                              x-text="pressingItemsCount"></span>
+                    </button>
+                    <button type="button"
+                            @click="setPriorityFilter('not_pressing')"
+                            :class="priorityFilter === 'not_pressing' ? 'bg-[var(--color-surface)] text-slate-400 shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                            class="px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                            title="Show only routine / low priority categories">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                        <span>Routine</span>
+                        <span class="px-1 py-0.2 rounded-full bg-[var(--color-surface-alt)] text-[10px] font-mono"
+                              x-text="notPressingItemsCount"></span>
+                    </button>
+                    <button type="button"
+                            x-show="disabledCategoriesCount > 0"
+                            x-cloak
+                            @click="setPriorityFilter('off')"
+                            :class="priorityFilter === 'off' ? 'bg-[var(--color-surface)] text-slate-400 shadow-xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'"
+                            class="px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                            title="Show categories turned off / muted fleet-wide">
+                        <i class="fa-solid fa-bell-slash text-[9px]"></i>
+                        <span>Muted</span>
+                        <span class="px-1 py-0.2 rounded-full bg-slate-500/20 text-[10px] font-mono"
+                              x-text="disabledCategoriesCount"></span>
+                    </button>
+                </div>
+
+                {{-- Fleet Priorities Config Button --}}
                 <button type="button"
                         @click="prioritiesModalOpen = true"
-                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer py-1.5"
                         :class="disabledCategoriesCount > 0 ? 'border-amber-500/50 text-amber-500 ring-1 ring-amber-500/20' : ''"
                         title="Configure category alert priorities or mute categories fleet-wide">
                     <i class="fa-solid fa-sliders text-[var(--color-brand)]"></i>
@@ -359,83 +565,11 @@
                           x-text="disabledCategoriesCount + ' muted'"
                           class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-500/20 text-[var(--color-ink-soft)] font-semibold font-mono"></span>
                 </button>
-                {{-- Category Visibility Dropdown --}}
-                <div class="relative" @click.outside="categoriesOpen = false">
-                    <button type="button"
-                            @click="categoriesOpen = !categoriesOpen"
-                            class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                            :class="hiddenCategoriesCount > 0 ? 'border-[var(--color-brand)] text-[var(--color-brand)] ring-1 ring-[var(--color-brand)]/20' : ''"
-                            title="Show or hide individual categories. Preferences saved in browser.">
-                        <i class="fa-solid fa-sliders"></i>
-                        <span>Categories</span>
-                        <span x-show="hiddenCategoriesCount > 0"
-                              x-cloak
-                              x-text="hiddenCategoriesCount + ' hidden'"
-                              class="px-1.5 py-0.2 text-[10px] rounded-full bg-amber-500/20 text-[var(--color-status-yellow)] font-semibold"></span>
-                        <i class="fa-solid fa-chevron-down text-[10px] ml-0.5 opacity-60"></i>
-                    </button>
-
-                    <div x-show="categoriesOpen"
-                         x-transition.opacity.duration.100ms
-                         x-cloak
-                         class="absolute right-0 mt-2 w-80 rounded-[var(--radius-card)] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-xl py-2.5 z-40 max-h-[32rem] overflow-y-auto">
-                        <div class="px-4 py-1.5 flex items-center justify-between border-b border-[var(--color-border-light)] pb-2 mb-2">
-                            <span class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">Filter Categories</span>
-                            <div class="flex items-center gap-2 text-xs">
-                                <button type="button"
-                                        @click="hideRoutine()"
-                                        class="text-[var(--color-brand)] hover:underline font-medium cursor-pointer"
-                                        title="Hide outdated plugins, closed plugins, and WP admins">
-                                    Hide routine
-                                </button>
-                                <span class="text-[var(--color-border-light)]">·</span>
-                                <button type="button"
-                                        @click="showAllCategories()"
-                                        class="text-[var(--color-ink-muted)] hover:underline cursor-pointer">
-                                    Show all
-                                </button>
-                                <span class="text-[var(--color-border-light)]">·</span>
-                                <button type="button"
-                                        @click="resetCategories()"
-                                        class="text-[var(--color-ink-muted)] hover:underline cursor-pointer">
-                                    Reset
-                                </button>
-                            </div>
-                        </div>
-
-                        @foreach (['critical' => 'Critical & Security', 'infrastructure' => 'Infrastructure & Gaps', 'routine' => 'Routine Maintenance'] as $tierKey => $tierTitle)
-                            <div class="px-3 py-1 text-[10px] uppercase font-semibold tracking-wider text-[var(--color-ink-soft)] bg-[var(--color-surface-alt)]/60 mt-1.5 mb-1">
-                                {{ $tierTitle }}
-                            </div>
-                            @foreach ($categoryDefinitions as $catKey => $cat)
-                                @if ($cat['tier'] === $tierKey)
-                                    <label class="flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-[var(--color-surface-alt)] transition-colors">
-                                        <div class="flex items-center gap-2 truncate">
-                                            <input type="checkbox"
-                                                   :checked="isCategoryVisible('{{ $catKey }}')"
-                                                   @change="toggleCategory('{{ $catKey }}')"
-                                                   class="cursor-pointer accent-[var(--color-primary-600)] rounded" />
-                                            <i class="fa-solid {{ $cat['icon'] }} text-xs opacity-70 w-4 text-center"></i>
-                                            <span class="text-xs text-[var(--color-ink-strong)] truncate">{{ $cat['label'] }}</span>
-                                        </div>
-                                        @if (($totals[$catKey] ?? 0) > 0)
-                                            <span class="status-pill {{ $cat['class'] }} text-[10px] px-1.5 py-0.2">
-                                                {{ $totals[$catKey] }}
-                                            </span>
-                                        @else
-                                            <span class="text-[10px] text-[var(--color-ink-soft)]">0</span>
-                                        @endif
-                                    </label>
-                                @endif
-                            @endforeach
-                        @endforeach
-                    </div>
-                </div>
 
                 {{-- Collapse / Expand All button --}}
                 <button type="button"
                         @click="toggleCollapseAll()"
-                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer py-1.5"
                         :title="isAllCollapsed ? 'Expand all section cards' : 'Collapse all section cards into compact headers'">
                     <i class="fa-solid" :class="isAllCollapsed ? 'fa-angles-down' : 'fa-angles-up'"></i>
                     <span x-text="isAllCollapsed ? 'Expand all' : 'Collapse all'"></span>
@@ -496,8 +630,8 @@
 
         {{-- SCHEDULER HEARTBEAT — if this is stale, every other monitor is lying --}}
     @if ($schedulerHeartbeat->isStale())
-        <section id="section-scheduler_stale" x-show="isCategoryVisible('scheduler_stale') && matchesTier('critical')" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div @click="toggleSection('scheduler_stale')" class="px-5 py-4 flex items-start justify-between gap-4 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-scheduler_stale" x-show="isCategoryVisible('scheduler_stale') && matchesTier('critical')" class="card mb-6 ring-1 ring-[var(--color-status-red)]/30">
+            <div @click="toggleSection('scheduler_stale')" class="px-5 py-4 flex items-start justify-between gap-4 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('scheduler_stale') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-clock text-[var(--color-status-red)] mr-2"></i>
@@ -521,15 +655,15 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('scheduler_stale') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('scheduler_stale')">
+            <div x-show="!isSectionCollapsed('scheduler_stale')" class="rounded-b-[var(--radius-card)] overflow-hidden">
         </div>
         </section>
     @endif
 
         {{-- MALWARE / BLACKLIST (Sucuri SiteCheck) --}}
     @if ($malwareHits->isNotEmpty())
-        <section id="section-malware" x-show="isCategoryVisible('malware') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-malware" x-show="isCategoryVisible('malware') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-bug text-[var(--color-status-red)] mr-2"></i>
@@ -544,7 +678,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('malware') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('malware')">
+            <div x-show="!isSectionCollapsed('malware')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -582,8 +716,8 @@
 
         {{-- COMPANION MALWARE FINDINGS (PHP-in-uploads + obfuscation signatures, scanned on-site) --}}
     @if ($companionMalwareFindings->isNotEmpty())
-        <section id="section-companion_malware" x-show="isCategoryVisible('companion_malware') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('companion_malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-companion_malware" x-show="isCategoryVisible('companion_malware') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('companion_malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('companion_malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-file-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
@@ -598,7 +732,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('companion_malware') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('companion_malware')">
+            <div x-show="!isSectionCollapsed('companion_malware')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -633,8 +767,8 @@
 
         {{-- CORE FILE TAMPERING (wp core verify-checksums) --}}
     @if ($checksumTampering->isNotEmpty())
-        <section id="section-tampering" x-show="isCategoryVisible('tampering') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('tampering')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-tampering" x-show="isCategoryVisible('tampering') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('tampering')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('tampering') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-status-red)] mr-2"></i>
@@ -649,7 +783,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('tampering') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('tampering')">
+            <div x-show="!isSectionCollapsed('tampering')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -684,8 +818,8 @@
 
         {{-- SITES CURRENTLY DOWN — real outages outrank everything below --}}
     @if ($downSites->isNotEmpty())
-        <section id="section-down-sites" x-show="isCategoryVisible('down_sites') && matchesTier('critical')" class="card overflow-hidden mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div @click="toggleSection('down_sites')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-down-sites" x-show="isCategoryVisible('down_sites') && matchesTier('critical')" class="card mb-6 ring-1 ring-[var(--color-status-red)]/30">
+            <div @click="toggleSection('down_sites')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('down_sites') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
@@ -700,7 +834,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('down_sites') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('down_sites')">
+            <div x-show="!isSectionCollapsed('down_sites')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -788,8 +922,8 @@
 
         {{-- STUCK MAINTENANCE — forgotten windows, not outages --}}
     @if ($stuckMaintenanceSites->isNotEmpty())
-        <section id="section-stuck_maintenance" x-show="isCategoryVisible('stuck_maintenance') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('stuck_maintenance')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-stuck_maintenance" x-show="isCategoryVisible('stuck_maintenance') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('stuck_maintenance')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('stuck_maintenance') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-wrench text-[var(--color-status-yellow)] mr-2"></i>
@@ -804,7 +938,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('stuck_maintenance') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('stuck_maintenance')">
+            <div x-show="!isSectionCollapsed('stuck_maintenance')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -837,8 +971,8 @@
 
         {{-- HEALTH --}}
     @if ($unhealthyServers->isNotEmpty())
-        <section id="section-health" x-show="isCategoryVisible('health') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('health')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-health" x-show="isCategoryVisible('health') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('health')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('health') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-heart-pulse text-[var(--color-status-red)] mr-2"></i>
@@ -853,7 +987,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('health') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('health')">
+            <div x-show="!isSectionCollapsed('health')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -932,8 +1066,8 @@
 
         {{-- FORM TESTING FAILING --}}
     @if ($failedFormTests->isNotEmpty())
-        <section id="section-forms_failing" x-show="isCategoryVisible('forms_failing') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('forms_failing')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-forms_failing" x-show="isCategoryVisible('forms_failing') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('forms_failing')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('forms_failing') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-envelope-circle-check text-[var(--color-status-red)] mr-2"></i>
@@ -948,7 +1082,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('forms_failing') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('forms_failing')">
+            <div x-show="!isSectionCollapsed('forms_failing')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1005,8 +1139,8 @@
                 };
             };
         @endphp
-        <section id="section-ssl" x-show="isCategoryVisible('ssl') && matchesTier('critical')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('ssl')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-ssl" x-show="isCategoryVisible('ssl') && matchesTier('critical')" class="card mb-6">
+            <div @click="toggleSection('ssl')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('ssl') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-lock-open text-[var(--color-ink-muted)] mr-2"></i>
@@ -1021,7 +1155,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('ssl') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('ssl')">
+            <div x-show="!isSectionCollapsed('ssl')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1132,7 +1266,7 @@
 
         {{-- SEO INDEXABILITY --}}
     @if ($seoIssues->isNotEmpty() || $ignoredSeoIssues->isNotEmpty())
-        <section id="section-seo-indexability" x-show="isCategoryVisible('seo-indexability') && matchesTier('critical')" class="card overflow-hidden mb-6" x-data="{
+        <section id="section-seo-indexability" x-show="isCategoryVisible('seo-indexability') && matchesTier('critical')" class="card mb-6" x-data="{
             activeTab: 'active',
             ignoreModalOpen: false,
             targetSiteId: null,
@@ -1145,7 +1279,7 @@
                 this.ignoreModalOpen = true;
             }
         }">
-            <div @click="toggleSection('seo-indexability')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+            <div @click="toggleSection('seo-indexability')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('seo-indexability') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-magnifying-glass text-[var(--color-status-red)] mr-2"></i>
@@ -1185,7 +1319,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('seo-indexability') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('seo-indexability')">
+            <div x-show="!isSectionCollapsed('seo-indexability')" class="rounded-b-[var(--radius-card)] overflow-hidden">
 
             {{-- ACTIVE SEO ISSUES TABLE --}}
             <div x-show="activeTab === 'active'">
@@ -1507,8 +1641,8 @@
 
         {{-- HOT --}}
     @if ($hotServers->isNotEmpty())
-        <section id="section-hot" x-show="isCategoryVisible('hot') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('hot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-hot" x-show="isCategoryVisible('hot') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('hot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('hot') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-temperature-three-quarters text-[var(--color-status-yellow)] mr-2"></i>
@@ -1523,7 +1657,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('hot') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('hot')">
+            <div x-show="!isSectionCollapsed('hot')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1566,8 +1700,8 @@
 
         {{-- DOMAIN EXPIRATION --}}
     @if ($domainExpirationIssues->isNotEmpty())
-        <section id="section-domain-expiration" x-show="isCategoryVisible('domain-expiration') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('domain-expiration')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-domain-expiration" x-show="isCategoryVisible('domain-expiration') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('domain-expiration')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('domain-expiration') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-globe text-[var(--color-ink-muted)] mr-2"></i>
@@ -1584,7 +1718,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('domain-expiration') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('domain-expiration')">
+            <div x-show="!isSectionCollapsed('domain-expiration')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1695,8 +1829,8 @@
 
         {{-- CLOUDFLARE MISCONFIG --}}
     @if ($cfMisconfigured->isNotEmpty())
-        <section id="section-cf" x-show="isCategoryVisible('cf') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('cf')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-cf" x-show="isCategoryVisible('cf') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('cf')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('cf') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cloud text-yellow-500 mr-2"></i>
@@ -1713,7 +1847,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('cf') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('cf')">
+            <div x-show="!isSectionCollapsed('cf')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1757,8 +1891,8 @@
 
     {{-- PATCHES (Server.upgrade_required — set by SpinupWP import or the daily SSH poll) --}}
     @if ($patchesAvailable->isNotEmpty())
-        <section id="section-patches" x-show="isCategoryVisible('patches') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('patches')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-patches" x-show="isCategoryVisible('patches') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('patches')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('patches') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
@@ -1773,7 +1907,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('patches') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('patches')">
+            <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1813,8 +1947,8 @@
 
         {{-- REBOOT (Server.reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
     @if ($rebootRequired->isNotEmpty())
-        <section id="section-reboot" x-show="isCategoryVisible('reboot') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('reboot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-reboot" x-show="isCategoryVisible('reboot') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('reboot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('reboot') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-power-off text-[var(--color-ink-muted)] mr-2"></i>
@@ -1829,7 +1963,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('reboot') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('reboot')">
+            <div x-show="!isSectionCollapsed('reboot')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="reboot-list">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -1933,7 +2067,13 @@
                     btn.addEventListener('click', async () => {
                         const row = btn.closest('tr');
                         const name = btn.dataset.serverName;
-                        if (! confirm(`Reboot ${name} now? The box will go down momentarily and come back in ~30–90 seconds.`)) {
+                        const ok = await window.confirmModal({
+                            title: `Reboot ${name} now?`,
+                            details: 'The box will go down momentarily and come back in ~30–90 seconds.',
+                            confirmText: 'Reboot Server',
+                            variant: 'warning'
+                        });
+                        if (! ok) {
                             return;
                         }
                         btn.disabled = true;
@@ -1973,8 +2113,8 @@
 
     {{-- SSH --}}
     @if ($missingSsh->isNotEmpty())
-        <section id="section-no_ssh" x-show="isCategoryVisible('no_ssh') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('no_ssh')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-no_ssh" x-show="isCategoryVisible('no_ssh') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('no_ssh')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_ssh') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-key text-[var(--color-ink-muted)] mr-2"></i>
@@ -1989,7 +2129,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_ssh') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_ssh')">
+            <div x-show="!isSectionCollapsed('no_ssh')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -2049,8 +2189,8 @@
 
         {{-- JAIL --}}
     @if ($missingJail->isNotEmpty())
-        <section id="section-no_jail" x-show="isCategoryVisible('no_jail') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('no_jail')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-no_jail" x-show="isCategoryVisible('no_jail') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('no_jail')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_jail') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)] mr-2"></i>
@@ -2065,7 +2205,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_jail') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_jail')">
+            <div x-show="!isSectionCollapsed('no_jail')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -2088,8 +2228,8 @@
 
         {{-- COMPANION MISSING / STALE --}}
     @if ($companionMissing->isNotEmpty())
-        <section id="section-no_companion" x-show="isCategoryVisible('no_companion') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('no_companion')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-no_companion" x-show="isCategoryVisible('no_companion') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('no_companion')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_companion') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-plug-circle-xmark text-[var(--color-ink-muted)] mr-2"></i>
@@ -2104,7 +2244,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_companion') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_companion')">
+            <div x-show="!isSectionCollapsed('no_companion')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -2144,8 +2284,8 @@
 
         {{-- ORPHAN SITES --}}
     @if ($orphanSites->isNotEmpty())
-        <section id="section-orphans" x-show="isCategoryVisible('orphans') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('orphans')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-orphans" x-show="isCategoryVisible('orphans') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('orphans')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('orphans') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-link-slash text-[var(--color-ink-muted)] mr-2"></i>
@@ -2160,7 +2300,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('orphans') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('orphans')">
+            <div x-show="!isSectionCollapsed('orphans')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
@@ -2208,7 +2348,10 @@
                             </td>
                             <td class="px-5 py-2 text-right">
                                 <form method="POST" action="{{ route('issues.orphans.destroy', $s->id) }}"
-                                    onsubmit="return confirm('Remove {{ $s->domain }} from monitoring? This archives the site row and removes it from all listings.')">
+                                      data-confirm="Remove {{ $s->domain }} from monitoring?"
+                                      data-confirm-details="This archives the site row and removes it from all listings."
+                                      data-confirm-btn="Remove Site"
+                                      data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
@@ -2226,8 +2369,8 @@
 
         {{-- DB CREDS --}}
     @if ($missingDbCreds->isNotEmpty())
-        <section id="section-no_db" x-show="isCategoryVisible('no_db') && matchesTier('infrastructure')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('no_db')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-no_db" x-show="isCategoryVisible('no_db') && matchesTier('infrastructure')" class="card mb-6">
+            <div @click="toggleSection('no_db')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_db') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-database text-[var(--color-ink-muted)] mr-2"></i>
@@ -2250,7 +2393,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_db') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_db')">
+            <div x-show="!isSectionCollapsed('no_db')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <div class="max-h-96 overflow-y-auto">
                 <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
@@ -2307,8 +2450,8 @@
 
         {{-- WP PLUGINS OUTDATED --}}
     @if ($pluginsOutdated->isNotEmpty())
-        <section id="section-plugins_outdated" x-show="isCategoryVisible('plugins_outdated') && matchesTier('routine')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('plugins_outdated')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-plugins_outdated" x-show="isCategoryVisible('plugins_outdated') && matchesTier('routine')" class="card mb-6">
+            <div @click="toggleSection('plugins_outdated')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('plugins_outdated') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
@@ -2323,7 +2466,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_outdated') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('plugins_outdated')">
+            <div x-show="!isSectionCollapsed('plugins_outdated')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             <div class="max-h-[32rem] overflow-y-auto">
                 <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'security', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
@@ -2637,10 +2780,85 @@
         </section>
     @endif
 
+    {{-- AUTOMATIC UPDATES PAUSED (AUTO-IGNORED) --}}
+    @if (! empty($autoIgnoredUpdates) && $autoIgnoredUpdates->isNotEmpty())
+        <section id="section-auto_ignored_updates" class="card mb-6">
+            <div @click="toggleSection('auto_ignored_updates')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('auto_ignored_updates') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
+                        <i class="fa-solid fa-pause text-[var(--color-status-yellow)] mr-2"></i>
+                        Automatic updates paused
+                    </h2>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                        Plugins and themes excluded from the nightly auto-update loop after repeated update failures. Other plugins on these sites continue updating.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="status-pill status-yellow">{{ $autoIgnoredUpdates->count() }}</span>
+                    <button type="button" @click.stop="toggleSection('auto_ignored_updates')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('auto_ignored_updates') ? 'Expand section' : 'Collapse section'">
+                        <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('auto_ignored_updates') ? 'rotate-180' : ''"></i>
+                    </button>
+                </div>
+            </div>
+            <div x-show="!isSectionCollapsed('auto_ignored_updates')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+                <div class="max-h-[28rem] overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                            <tr>
+                                <th class="px-5 py-2 text-left">Site</th>
+                                <th class="px-5 py-2 text-left">Target</th>
+                                <th class="px-5 py-2 text-center">Consecutive Failures</th>
+                                <th class="px-5 py-2 text-left">Last Error</th>
+                                <th class="px-5 py-2 text-left">Paused</th>
+                                <th class="px-5 py-2 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--color-border-light)]">
+                            @foreach ($autoIgnoredUpdates as $ign)
+                                @php $targetId = "{$ign->target_kind}:{$ign->site_id}:{$ign->target_slug}"; @endphp
+                                <tr>
+                                    <td class="px-5 py-2 font-data text-xs">
+                                        <a href="{{ route('sites.show', ['site' => $ign->site_id, 'tab' => 'updates']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                            {{ $ign->site?->domain ?? '#' . $ign->site_id }}
+                                        </a>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs">
+                                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $ign->target_slug }}</span>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)]">({{ $ign->target_kind }})</span>
+                                    </td>
+                                    <td class="px-5 py-2 text-center font-data text-xs">
+                                        <span class="px-1.5 py-0.5 rounded bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)] font-semibold">
+                                            {{ $ign->failure_count ?? 5 }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] max-w-xs truncate" title="{{ $ign->last_error }}">
+                                        {{ $ign->last_error ?: 'Automatic update failed repeated runs' }}
+                                    </td>
+                                    <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] whitespace-nowrap">
+                                        {{ $ign->ignored_at?->diffForHumans() ?? 'recently' }}
+                                    </td>
+                                    <td class="px-5 py-2 text-right text-xs whitespace-nowrap">
+                                        <form method="POST" action="{{ route('updates.bulkUnignore') }}" class="inline">
+                                            @csrf
+                                            <input type="hidden" name="targets[]" value="{{ $targetId }}">
+                                            <button type="submit" class="btn-pill-nav text-[11px] py-0.5 px-2" title="Resume automatic updates">
+                                                Resume
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    @endif
+
         {{-- CLOSED PLUGINS ON WORDPRESS.ORG --}}
     @if ($closedPluginSites->isNotEmpty() || $ignoredClosedPluginIssues->isNotEmpty())
-        <section id="section-plugins_closed" x-show="isCategoryVisible('plugins_closed') && matchesTier('routine')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('plugins_closed')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-plugins_closed" x-show="isCategoryVisible('plugins_closed') && matchesTier('routine')" class="card mb-6">
+            <div @click="toggleSection('plugins_closed')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('plugins_closed') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-box-archive text-amber-600 mr-2"></i>
@@ -2656,7 +2874,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_closed') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('plugins_closed')">
+            <div x-show="!isSectionCollapsed('plugins_closed')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             @if ($closedPluginSites->isNotEmpty())
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
@@ -2746,8 +2964,8 @@
     @endif
 
         @if ($flaggedAdminSites->isNotEmpty() || $ignoredAdminIssues->isNotEmpty())
-        <section id="section-wp_admins" x-show="isCategoryVisible('wp_admins') && matchesTier('routine')" class="card overflow-hidden mb-6">
-            <div @click="toggleSection('wp_admins')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+        <section id="section-wp_admins" x-show="isCategoryVisible('wp_admins') && matchesTier('routine')" class="card mb-6">
+            <div @click="toggleSection('wp_admins')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('wp_admins') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
                 <div>
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-user-shield text-amber-600 mr-2"></i>
@@ -2764,7 +2982,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('wp_admins') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('wp_admins')">
+            <div x-show="!isSectionCollapsed('wp_admins')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             @if ($flaggedAdminSites->isNotEmpty())
                 <table class="w-full text-sm">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">

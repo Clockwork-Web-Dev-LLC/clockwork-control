@@ -81,6 +81,14 @@ describe('GET /docs/{slug} (show)', function () {
         $response->assertSee('Features');
         $response->assertSee('Updates, Maintenance &amp; Backups', false);
     });
+
+    it('renders search results with stacked category header in sidebar', function () {
+        $response = $this->get('/docs/features/backup-relay');
+
+        $response->assertOk();
+        $response->assertSee('docs-sidebar__search-result-header');
+        $response->assertSee('docs-sidebar__search-result-subcat');
+    });
 });
 
 describe('path traversal is blocked', function () {

@@ -161,7 +161,9 @@
                                                 </span>
                                                 <button type="submit" name="clear_cred_{{ $cred['field'] }}" value="1"
                                                         class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border border-rose-200"
-                                                        onclick="return confirm('Remove {{ $cred['label'] }} from your .env file?');">
+                                                        data-confirm="Remove {{ $cred['label'] }} from your .env file?"
+                                                        data-confirm-btn="Remove Credential"
+                                                        data-confirm-variant="danger">
                                                     <i class="fa-solid fa-trash-can mr-1"></i> Remove from .env
                                                 </button>
                                             @else
@@ -684,7 +686,10 @@
                             </button>
                     </form>
 
-                    <form method="POST" action="{{ route('settings.integrations.limits.reset', $service['id']) }}" onsubmit="return confirm('Reset {{ $service['name'] }} rate limit tunables back to factory defaults?');">
+                    <form method="POST" action="{{ route('settings.integrations.limits.reset', $service['id']) }}"
+                          data-confirm="Reset {{ $service['name'] }} rate limit tunables back to factory defaults?"
+                          data-confirm-btn="Reset Defaults"
+                          data-confirm-variant="warning">
                         @csrf
                         <button type="submit" class="btn-pill-nav text-xs text-[var(--color-ink-muted)] hover:text-rose-600">
                             <i class="fa-solid fa-arrow-rotate-left mr-1"></i> Reset Defaults

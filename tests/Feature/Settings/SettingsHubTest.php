@@ -46,7 +46,10 @@ test('settings tabs partial renders correctly', function () {
         ->assertSee('Agency Branding', false)
         ->assertSee('Fleet Policies', false)
         ->assertSee('Integrations &amp; Alerts', false)
-        ->assertSee('System &amp; Workspace', false);
+        ->assertSee('System &amp; Workspace', false)
+        ->assertSee('settings-pillar-picker', false)
+        ->assertSee('aria-label="Settings section"', false)
+        ->assertSee('hidden lg:flex', false);
 });
 
 test('module directory renders with search input in header and tabs', function () {

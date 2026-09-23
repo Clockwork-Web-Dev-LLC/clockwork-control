@@ -63,6 +63,12 @@
                         </span>
                     @elseif ($row['is_ignored'])
                         <span class="text-[10px] text-[var(--color-ink-soft)]">ignored</span>
+                        <button type="button" data-unignore-row="{{ $target }}"
+                                onclick="event.stopPropagation(); event.preventDefault();"
+                                class="text-[11px] font-medium px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]"
+                                title="Remove ignore">
+                            Unignore
+                        </button>
                     @else
                         <button type="button" data-update-row="{{ $target }}"
                                 onclick="event.stopPropagation(); event.preventDefault();"

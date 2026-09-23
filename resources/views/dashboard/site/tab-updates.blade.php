@@ -59,6 +59,49 @@
         </div>
     @endif
 
+    @if (! empty($ignoredUpdates) && $ignoredUpdates->isNotEmpty())
+        <div class="mb-6 rounded-md p-4 bg-[var(--color-surface-alt)] border border-[var(--color-border-light)]">
+            <h3 class="text-xs uppercase tracking-wide font-semibold text-[var(--color-ink-strong)] mb-2 flex items-center gap-1.5">
+                <i class="fa-solid fa-pause text-[var(--color-status-yellow)]"></i>
+                Paused / Ignored updates ({{ $ignoredUpdates->count() }})
+            </h3>
+            <div class="divide-y divide-[var(--color-border-light)] text-xs">
+                @foreach ($ignoredUpdates as $ign)
+                    @php $targetId = "{$ign->target_kind}:{$site->id}:{$ign->target_slug}"; @endphp
+                    <div class="py-2 flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <span class="font-medium text-[var(--color-ink-strong)]">{{ $ign->target_slug }}</span>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] font-data">({{ $ign->target_kind }})</span>
+                            @if ($ign->isAutoFailure())
+                                <span class="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-status-yellow)]/10 text-[var(--color-status-yellow)]">
+                                    Auto-paused · {{ $ign->failure_count ?? 5 }} failures
+                                </span>
+                            @else
+                                <span class="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--color-surface)] text-[var(--color-ink-soft)] border border-[var(--color-border-light)]">
+                                    Manual ignore
+                                </span>
+                            @endif
+                            @if ($ign->last_error)
+                                <div class="text-[10px] text-[var(--color-ink-muted)] mt-0.5 max-w-lg truncate" title="{{ $ign->last_error }}">
+                                    {{ $ign->last_error }}
+                                </div>
+                            @endif
+                        </div>
+                        <div>
+                            <form method="POST" action="{{ route('updates.bulkUnignore') }}" class="inline">
+                                @csrf
+                                <input type="hidden" name="targets[]" value="{{ $targetId }}">
+                                <button type="submit" class="btn-pill-nav text-[11px] py-0.5 px-2">
+                                    {{ $ign->isAutoFailure() ? 'Resume updates' : 'Unignore' }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @if (! $hasUpdates)
         <div class="rounded-md p-6 text-center text-[var(--color-ink-soft)]">
             <i class="fa-solid fa-circle-check text-[var(--color-status-green)] text-2xl mb-2 block"></i>
@@ -174,10 +217,20 @@
         e.preventDefault();
         const checked = Array.from(document.querySelectorAll('.updates-row-check:checked'));
         if (checked.length === 0) {
-            alert('Pick at least one plugin to update.');
+            await window.alertModal({
+                title: 'Selection Required',
+                message: 'Pick at least one plugin to update.',
+                variant: 'warning'
+            });
             return;
         }
-        if (!confirm('Update ' + checked.length + ' ' + (checked.length === 1 ? 'plugin' : 'plugins') + ' on {{ $site->domain }}? This runs synchronously and may take a few minutes.')) {
+        const ok = await window.confirmModal({
+            title: 'Update ' + checked.length + ' ' + (checked.length === 1 ? 'plugin' : 'plugins') + ' on {{ $site->domain }}?',
+            details: 'This runs synchronously and may take a few minutes.',
+            confirmText: 'Update Plugins',
+            variant: 'primary'
+        });
+        if (!ok) {
             return;
         }
 
@@ -271,7 +324,11 @@
         } catch (e) {
             refreshBtn.disabled = false;
             refreshBtn.innerHTML = original;
-            alert('Refresh failed: ' + e.message);
+            await window.alertModal({
+                title: 'Refresh Failed',
+                message: 'Refresh failed: ' + e.message,
+                variant: 'danger'
+            });
         }
     });
 

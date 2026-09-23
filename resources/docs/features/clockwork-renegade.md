@@ -25,6 +25,7 @@ While private Clockwork Companion is distributed via SSH tarball push or direct 
 | **Arbitrary Remote Code (`eval`)** | Supported (`CodeSnippetRoute.php` for internal rescue operations) | **Completely Removed** (Strict WordPress.org Guideline compliance; zero `eval()` on remote payloads) |
 | **Plugin Updates** | Self-hosted release tarballs / SSH push | WordPress Core official updater via WordPress.org SVN repository |
 | **Pairing UI** | Tools → Clockwork Control (mu-plugin) | Clockwork → Connection (`admin.php?page=clockwork-connection`) |
+| **Update Exceptions & Transparency** | `/wp-json/clockwork/v1/update-exceptions` (`wp_options['clockwork_update_exceptions']`) | `/wp-json/clockwork-renegade/v1/update-exceptions` (identical option storage & wp-admin Update coverage submenu) |
 
 ---
 

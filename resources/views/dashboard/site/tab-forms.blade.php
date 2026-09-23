@@ -80,7 +80,9 @@
                                 </form>
                             @endif
                             <form method="POST" action="{{ route('sites.forms.destroy', ['site' => $site, 'cft' => $cft]) }}" class="inline"
-                                  onsubmit="return confirm('Remove form-test {{ $cft->form_id }}?');">
+                                  data-confirm="Remove form-test {{ $cft->form_id }}?"
+                                  data-confirm-btn="Remove Form Test"
+                                  data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-pill-nav text-xs text-[var(--color-status-red)]" title="Remove this form-test">

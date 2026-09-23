@@ -19,6 +19,8 @@ import { initThemeSystem, themePicker } from './theme.js';
 import { initFontScaleSystem } from './font-scale.js';
 import { initLayoutStyleSystem, layoutStylePicker } from './layout-style.js';
 import { initTooltipSystem } from './tooltip.js';
+import { initConfirmModalSystem } from './confirm-modal.js';
+import { quickJumpPicker } from './quick-jump.js';
 
 echarts.use([
     LineChart,
@@ -286,7 +288,13 @@ Alpine.data('siteDashboardReorder', ({ updateUrl, csrf, order = [], isCustom = f
     },
 
     async resetLayout() {
-        if (!confirm('Reset dashboard cards to the default layout?')) return;
+        const ok = await window.confirmModal({
+            title: 'Reset Dashboard Layout?',
+            message: 'Reset dashboard cards to the default layout?',
+            confirmText: 'Reset Layout',
+            variant: 'warning'
+        });
+        if (!ok) return;
         this.saving = true;
         this.savedToast = false;
         this.errorToast = false;
@@ -345,15 +353,18 @@ Alpine.data('issuesDashboard', ({
     initialTotals = {},
     categories = {},
     initialLevels = {},
+    defaultLevels = {},
     updateLevelUrl = '',
     updateAllLevelsUrl = '',
     resetLevelsUrl = '',
     csrfToken = '',
 } = {}) => ({
     tierTab: 'all',
-    priorityFilter: 'all', // 'all', 'pressing', 'not_pressing'
+    priorityFilter: 'all', // 'all', 'emergency', 'pressing', 'not_pressing', 'off'
     categoriesOpen: false,
     prioritiesModalOpen: false,
+    screenOptionsOpen: false,
+    jumpMenuOpen: false,
     activePriorityMenu: null,
     savingLevels: false,
     feedbackToast: null,
@@ -362,6 +373,7 @@ Alpine.data('issuesDashboard', ({
     totals: initialTotals,
     categoryMeta: categories,
     categoryLevels: { ...initialLevels },
+    defaultLevels: { ...defaultLevels },
     updateLevelUrl,
     updateAllLevelsUrl,
     resetLevelsUrl,
@@ -377,7 +389,7 @@ Alpine.data('issuesDashboard', ({
 
         try {
             const savedPriority = localStorage.getItem('cw_issues_priority_filter');
-            if (savedPriority && ['all', 'pressing', 'not_pressing'].includes(savedPriority)) {
+            if (savedPriority && ['all', 'emergency', 'pressing', 'not_pressing', 'off'].includes(savedPriority)) {
                 this.priorityFilter = savedPriority;
             }
         } catch (_) {}
@@ -412,11 +424,15 @@ Alpine.data('issuesDashboard', ({
     },
 
     getCategoryLevel(key) {
-        return this.categoryLevels[key] || 'not_pressing';
+        return this.categoryLevels[key] || this.defaultLevels[key] || 'not_pressing';
     },
 
     isCategoryEnabled(key) {
         return this.getCategoryLevel(key) !== 'off';
+    },
+
+    isCategoryEmergency(key) {
+        return this.getCategoryLevel(key) === 'emergency';
     },
 
     isCategoryPressing(key) {
@@ -431,13 +447,25 @@ Alpine.data('issuesDashboard', ({
         return this.getCategoryLevel(key) === 'off';
     },
 
+    isCategoryUrgent(key) {
+        return this.isCategoryEmergency(key) || this.isCategoryPressing(key);
+    },
+
     isCategoryVisible(key) {
+        // If filter is explicitly 'off', show only muted categories
+        if (this.priorityFilter === 'off') {
+            return this.isCategoryOff(key) && !this.hiddenCategories[key];
+        }
+
         // Categories turned completely off are muted fleet-wide
         if (!this.isCategoryEnabled(key)) {
             return false;
         }
 
-        // Priority filter (all vs pressing only vs not pressing only)
+        // Priority filter (all vs emergency only vs pressing only vs not pressing only)
+        if (this.priorityFilter === 'emergency' && !this.isCategoryEmergency(key)) {
+            return false;
+        }
         if (this.priorityFilter === 'pressing' && !this.isCategoryPressing(key)) {
             return false;
         }
@@ -476,17 +504,65 @@ Alpine.data('issuesDashboard', ({
             }
 
             const label = this.categoryMeta[category]?.label || category;
-            const levelNames = { pressing: 'Pressing (Important)', not_pressing: 'Not Pressing', off: 'Turned Off' };
+            const levelNames = {
+                emergency: 'Emergency (Critical)',
+                pressing: 'Pressing (Urgent)',
+                not_pressing: 'Not Pressing (Routine)',
+                off: 'Turned Off'
+            };
             this.showFeedback(`${label} set to ${levelNames[level] || level}`);
         } catch (err) {
             this.categoryLevels = { ...this.categoryLevels, [category]: prevLevel };
-            alert('Failed to save category priority: ' + err.message);
+            await window.alertModal({
+                title: 'Save Failed',
+                message: 'Failed to save category priority: ' + err.message,
+                variant: 'danger'
+            });
         } finally {
             this.savingLevels = false;
         }
     },
 
-    async saveAllCategoryLevels(newLevels) {
+    restoreCategoryLevel(category) {
+        const defaultLevel = this.defaultLevels[category] || 'pressing';
+        this.setCategoryLevel(category, defaultLevel);
+    },
+
+    toggleCategoryTier(tierKey, enable) {
+        const next = { ...this.categoryLevels };
+        Object.entries(this.categoryMeta).forEach(([catKey, meta]) => {
+            if (meta.tier === tierKey) {
+                if (enable) {
+                    if (next[catKey] === 'off') {
+                        next[catKey] = this.defaultLevels[catKey] || 'not_pressing';
+                    }
+                } else {
+                    next[catKey] = 'off';
+                }
+            }
+        });
+        this.saveAllCategoryLevels(next);
+    },
+
+    turnAllOn() {
+        const next = { ...this.categoryLevels };
+        Object.keys(this.categoryMeta).forEach(catKey => {
+            if (next[catKey] === 'off') {
+                next[catKey] = this.defaultLevels[catKey] || 'not_pressing';
+            }
+        });
+        this.saveAllCategoryLevels(next);
+    },
+
+    turnAllOff() {
+        const next = { ...this.categoryLevels };
+        Object.keys(this.categoryMeta).forEach(catKey => {
+            next[catKey] = 'off';
+        });
+        this.saveAllCategoryLevels(next);
+    },
+
+    async saveAllCategoryLevels(newLevels = this.categoryLevels) {
         this.savingLevels = true;
         try {
             const res = await fetch(this.updateAllLevelsUrl, {
@@ -509,16 +585,24 @@ Alpine.data('issuesDashboard', ({
             }
             this.showFeedback('Category priorities updated.');
         } catch (err) {
-            alert('Failed to save category priorities: ' + err.message);
+            await window.alertModal({
+                title: 'Save Failed',
+                message: 'Failed to save category priorities: ' + err.message,
+                variant: 'danger'
+            });
         } finally {
             this.savingLevels = false;
         }
     },
 
     async resetCategoryLevels() {
-        if (!confirm('Reset all alert category priorities to system defaults?')) {
-            return;
-        }
+        const ok = await window.confirmModal({
+            title: 'Reset Priorities?',
+            message: 'Reset all alert category priorities to system defaults?',
+            confirmText: 'Reset Defaults',
+            variant: 'warning'
+        });
+        if (!ok) return;
 
         this.savingLevels = true;
         try {
@@ -539,9 +623,13 @@ Alpine.data('issuesDashboard', ({
             if (data.levels) {
                 this.categoryLevels = data.levels;
             }
-            this.showFeedback('Alert priorities reset to defaults.');
+            this.showFeedback('Priorities reset to system defaults.');
         } catch (err) {
-            alert('Failed to reset alert priorities: ' + err.message);
+            await window.alertModal({
+                title: 'Reset Failed',
+                message: 'Failed to reset alert priorities: ' + err.message,
+                variant: 'danger'
+            });
         } finally {
             this.savingLevels = false;
         }
@@ -583,9 +671,42 @@ Alpine.data('issuesDashboard', ({
         this.persistHidden();
     },
 
+    showOnlyCritical() {
+        const next = {};
+        Object.entries(this.categoryMeta).forEach(([k, meta]) => {
+            if (meta.tier !== 'critical') {
+                next[k] = true;
+            }
+        });
+        this.hiddenCategories = next;
+        this.persistHidden();
+    },
+
+    showOnlyUrgent() {
+        const next = {};
+        Object.keys(this.categoryMeta).forEach(k => {
+            if (!this.isCategoryUrgent(k)) {
+                next[k] = true;
+            }
+        });
+        this.hiddenCategories = next;
+        this.persistHidden();
+    },
+
     showAllCategories() {
         this.hiddenCategories = {};
         this.persistHidden();
+    },
+
+    jumpToCategory(htmlId) {
+        const el = document.getElementById(htmlId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('ring-2', 'ring-[var(--color-brand)]', 'transition-all');
+            setTimeout(() => {
+                el.classList.remove('ring-2', 'ring-[var(--color-brand)]');
+            }, 2000);
+        }
     },
 
     resetCategories() {
@@ -656,6 +777,14 @@ Alpine.data('issuesDashboard', ({
         return this.disabledCategories.reduce((sum, k) => sum + (this.totals[k] ?? 0), 0);
     },
 
+    get emergencyCategories() {
+        return Object.keys(this.categoryMeta).filter(k => this.isCategoryEmergency(k));
+    },
+
+    get emergencyItemsCount() {
+        return this.emergencyCategories.reduce((sum, k) => sum + (this.totals[k] ?? 0), 0);
+    },
+
     get pressingCategories() {
         return Object.keys(this.categoryMeta).filter(k => this.isCategoryPressing(k));
     },
@@ -711,6 +840,7 @@ initThemeSystem(Alpine);
 initFontScaleSystem(Alpine);
 initLayoutStyleSystem(Alpine);
 initTooltipSystem();
+initConfirmModalSystem(Alpine);
 
 // One Alpine component for the app shell. Spreading layoutStylePicker() and
 // themePicker() into an object literal would collide on init() — Alpine only
@@ -718,29 +848,56 @@ initTooltipSystem();
 export function appChrome() {
     const layout = layoutStylePicker();
     const theme = themePicker();
+    const quickJump = quickJumpPicker();
     const layoutInit = layout.init;
     const themeInit = theme.init;
+    const quickJumpInit = quickJump.initQuickJump;
 
-    return {
+    const chrome = {
         sidebarOpen: typeof localStorage !== 'undefined' && localStorage.getItem('cw_cc_sidebar') !== 'false',
         mobileNavOpen: false,
         userMenuOpen: false,
         sidebarUserMenuOpen: false,
-        paletteOpen: false,
-        paletteQuery: '',
         toggleSidebar() {
             this.sidebarOpen = !this.sidebarOpen;
             try {
                 localStorage.setItem('cw_cc_sidebar', this.sidebarOpen);
             } catch (e) {}
         },
+        closeMobileNav() {
+            this.mobileNavOpen = false;
+        },
         ...layout,
         ...theme,
         init() {
             layoutInit.call(this);
             themeInit.call(this);
+            if (typeof quickJumpInit === 'function') {
+                quickJumpInit.call(this);
+            }
+
+            this.$watch('mobileNavOpen', (open) => {
+                document.body.classList.toggle('cw-mobile-nav-open', open);
+            });
+
+            if (typeof window.matchMedia === 'function') {
+                const desktop = window.matchMedia('(min-width: 768px)');
+                const dismiss = (event) => {
+                    if (event.matches) {
+                        this.mobileNavOpen = false;
+                    }
+                };
+                if (typeof desktop.addEventListener === 'function') {
+                    desktop.addEventListener('change', dismiss);
+                } else if (typeof desktop.addListener === 'function') {
+                    desktop.addListener(dismiss);
+                }
+            }
         },
     };
+
+    Object.defineProperties(chrome, Object.getOwnPropertyDescriptors(quickJump));
+    return chrome;
 }
 
 window.appChrome = appChrome;

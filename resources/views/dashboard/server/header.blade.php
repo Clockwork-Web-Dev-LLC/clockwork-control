@@ -50,8 +50,8 @@
         </div>
     @endif
 
-    <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div>
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div class="min-w-0">
             <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] mb-1" title="{{ $server->name }}">{{ $server->display_name }}</h1>
             <div class="text-[var(--color-ink-muted)] font-data text-sm">
                 {{ $server->hostname }}<span class="text-[var(--color-ink-soft)]">:{{ $server->ssh_port }}</span>
@@ -74,6 +74,22 @@
                     <i class="fa-solid fa-pen-to-square text-[10px]"></i>
                     {{ $server->tags->isEmpty() ? 'Add tag' : 'Edit' }}
                 </a>
+                <form method="POST" action="{{ route('servers.destroy', $server) }}" class="inline-flex"
+                      data-confirm="Permanently remove {{ $server->display_name }} from Clockwork?"
+                      data-confirm-details="This cascade-deletes {{ $server->sites()->count() }} site(s) and all related server metrics and ban records. This cannot be undone."
+                      data-confirm-match="{{ $server->display_name }}"
+                      data-confirm-btn="Delete Server"
+                      data-confirm-variant="danger">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="confirm_name" value="{{ $server->display_name }}">
+                    <button type="submit"
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] text-[var(--color-status-red)] hover:bg-red-500/10 cursor-pointer"
+                            title="Permanently remove this server from Clockwork">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                        Delete
+                    </button>
+                </form>
                 @if ($server->isStaging())
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] italic"
                           title="Tagged staging — sites on this server are excluded from uptime probes, security scans, plugin checks, and alerts.">
@@ -83,12 +99,12 @@
                 @endif
             </div>
         </div>
-        <div class="flex flex-col items-end gap-2">
+        <div class="flex flex-col items-start sm:items-end gap-2">
             @if ($hasSpecs)
                 {{-- Server specs at a glance. Populated daily by
                      clockwork:import-spinupwp from whichever cloud provider
                      owns this server (DigitalOcean, Hetzner, …). --}}
-                <div class="text-xs text-[var(--color-ink-muted)] font-data flex items-center gap-2 flex-wrap justify-end"
+                <div class="text-xs text-[var(--color-ink-muted)] font-data flex items-center gap-2 flex-wrap justify-start sm:justify-end"
                      title="From the {{ $server->provider_label }} payload — refreshed daily on the SpinupWP import.">
                     @if ($tier)
                         <span class="text-[var(--color-ink-strong)] font-medium">{{ $tier }}</span>
@@ -179,23 +195,25 @@
     </div>
 
     @if ($server->provider_missing_since)
-        <div class="mt-4 p-4 rounded-[var(--radius-card)] status-red flex items-start gap-3">
-            <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
-            <div class="flex-1">
-                <div class="font-medium text-[var(--color-ink-strong)] mb-0.5">This server no longer exists at {{ $server->provider_label }}</div>
-                <div>Missing from {{ $server->provider_label }}'s own inventory since {{ $server->provider_missing_since->diffForHumans() }} — it was likely decommissioned there. If that's expected, remove it from Clockwork below; it'll keep failing every poll until then.</div>
+        <div class="mt-4 p-4 rounded-[var(--radius-card)] status-red flex flex-col sm:flex-row sm:items-start gap-3">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <i class="fa-solid fa-triangle-exclamation mt-0.5 shrink-0"></i>
+                <div class="min-w-0">
+                    <div class="font-medium text-[var(--color-ink-strong)] mb-0.5">This server no longer exists at {{ $server->provider_label }}</div>
+                    <div>Missing from {{ $server->provider_label }}'s own inventory since {{ $server->provider_missing_since->diffForHumans() }} — it was likely decommissioned there. If that's expected, remove it from Clockwork below; it'll keep failing every poll until then.</div>
+                </div>
             </div>
             <form method="POST" action="{{ route('servers.destroy', $server) }}"
-                  onsubmit="
-                      var name = prompt('Type the server name to confirm deletion:\n\n{{ $server->name }}');
-                      if (name === null) return false;
-                      this.querySelector('input[name=confirm_name]').value = name;
-                      return confirm('FINAL CONFIRMATION: permanently remove {{ $server->name }} from Clockwork? This cascade-deletes {{ $server->sites()->count() }} site(s) and all related data.');
-                  ">
+                  class="w-full sm:w-auto sm:shrink-0"
+                  data-confirm="Permanently remove {{ $server->display_name }} from Clockwork?"
+                  data-confirm-details="This cascade-deletes {{ $server->sites()->count() }} site(s) and all related data. This cannot be undone."
+                  data-confirm-match="{{ $server->display_name }}"
+                  data-confirm-btn="Delete Server"
+                  data-confirm-variant="danger">
                 @csrf
                 @method('DELETE')
-                <input type="hidden" name="confirm_name" value="">
-                <button type="submit" class="btn-pill-nav" style="color: var(--color-status-red); border-color: var(--color-status-red);">
+                <input type="hidden" name="confirm_name" value="{{ $server->display_name }}">
+                <button type="submit" class="btn-pill-nav w-full sm:w-auto justify-center" style="color: var(--color-status-red); border-color: var(--color-status-red);">
                     <i class="fa-solid fa-trash"></i> Remove from Clockwork
                 </button>
             </form>
@@ -203,18 +221,36 @@
     @endif
 
     @if ($server->is_ignored)
-        <div class="mt-4 p-4 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)] text-sm text-[var(--color-ink-muted)] flex items-start gap-3">
-            <i class="fa-solid fa-circle-info text-[var(--color-ink-soft)] mt-0.5"></i>
-            <div class="flex-1">
-                <div class="font-medium text-[var(--color-ink-strong)] mb-0.5">This server is excluded from monitoring</div>
-                <div>{{ $server->ignore_reason ?: 'Manually ignored — not polled, not counted in stats.' }}</div>
+        <div class="mt-4 p-4 rounded-[var(--radius-card)] bg-[var(--color-surface-alt)] text-sm text-[var(--color-ink-muted)] flex flex-col sm:flex-row sm:items-start gap-3">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <i class="fa-solid fa-circle-info text-[var(--color-ink-soft)] mt-0.5 shrink-0"></i>
+                <div class="min-w-0">
+                    <div class="font-medium text-[var(--color-ink-strong)] mb-0.5">This server is excluded from monitoring</div>
+                    <div>{{ $server->ignore_reason ?: 'Manually ignored — not polled, not counted in stats.' }}</div>
+                </div>
             </div>
-            <form method="POST" action="{{ route('servers.toggleIgnore', $server) }}">
-                @csrf
-                <button type="submit" class="btn-pill-nav">
-                    <i class="fa-solid fa-eye"></i> Stop ignoring
-                </button>
-            </form>
+            <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:shrink-0">
+                <form method="POST" action="{{ route('servers.toggleIgnore', $server) }}" class="w-full sm:w-auto">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav w-full sm:w-auto justify-center">
+                        <i class="fa-solid fa-eye"></i> Stop ignoring
+                    </button>
+                </form>
+                <form method="POST" action="{{ route('servers.destroy', $server) }}"
+                      class="w-full sm:w-auto"
+                      data-confirm="Permanently remove {{ $server->display_name }} from Clockwork?"
+                      data-confirm-details="This cascade-deletes {{ $server->sites()->count() }} site(s) and all related server metrics and ban records. This cannot be undone."
+                      data-confirm-match="{{ $server->display_name }}"
+                      data-confirm-btn="Delete Server"
+                      data-confirm-variant="danger">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="confirm_name" value="{{ $server->display_name }}">
+                    <button type="submit" class="btn-pill-nav w-full sm:w-auto justify-center" style="color: var(--color-status-red); border-color: var(--color-status-red);">
+                        <i class="fa-solid fa-trash"></i> Remove from Clockwork
+                    </button>
+                </form>
+            </div>
         </div>
     @endif
 </div>

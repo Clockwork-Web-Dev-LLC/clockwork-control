@@ -71,11 +71,47 @@
     ];
 
     $currentTools = array_filter($categoryTools[$activeKey] ?? [], fn ($item) => Route::has($item['route']));
+    $activeTab = collect($tabs)->firstWhere('active', true) ?? $tabs[0];
 @endphp
 
 <div class="mb-6 space-y-2.5">
-    {{-- Tier 1: Core Settings Pillars --}}
-    <div class="flex items-center gap-1 border-b border-[var(--color-border-light)] overflow-x-auto">
+    {{-- Phone / tablet: the five pillar names do not fit a tab row. A full-width
+         picker lists every section so nothing is clipped off-screen. --}}
+    <div class="lg:hidden" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+        <button type="button"
+                class="settings-pillar-picker w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-left shadow-xs"
+                @click="open = !open"
+                :aria-expanded="open"
+                aria-controls="settings-pillar-menu"
+                aria-label="Settings section">
+            <span class="inline-flex items-center gap-2.5 min-w-0">
+                <i class="fa-solid {{ $activeTab['icon'] }} text-xs text-[var(--color-brand)] shrink-0"></i>
+                <span class="truncate text-sm font-semibold text-[var(--color-ink-strong)]">{{ $activeTab['label'] }}</span>
+            </span>
+            <i class="fa-solid fa-chevron-down text-[11px] text-[var(--color-ink-muted)] shrink-0 transition-transform" :class="open && 'rotate-180'"></i>
+        </button>
+        <div id="settings-pillar-menu"
+             x-show="open"
+             x-cloak
+             class="mt-1.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-lg overflow-hidden">
+            @foreach ($tabs as $t)
+                <a href="{{ route($t['route']) }}"
+                   class="flex items-center gap-2.5 px-3.5 py-2.5 text-sm border-b border-[var(--color-border-light)] last:border-b-0
+                          {{ $t['active']
+                                ? 'bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold'
+                                : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]/70 hover:text-[var(--color-ink-strong)]' }}">
+                    <i class="fa-solid {{ $t['icon'] }} text-xs w-4 text-center {{ $t['active'] ? 'text-[var(--color-brand)]' : 'text-[var(--color-ink-soft)]' }}"></i>
+                    <span>{{ $t['label'] }}</span>
+                    @if ($t['active'])
+                        <i class="fa-solid fa-check ml-auto text-[11px] text-[var(--color-brand)]"></i>
+                    @endif
+                </a>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- Desktop: underline tab row --}}
+    <div class="hidden lg:flex items-center gap-1 border-b border-[var(--color-border-light)]">
         @foreach ($tabs as $t)
             <a href="{{ route($t['route']) }}"
                class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap
@@ -90,10 +126,10 @@
 
     {{-- Tier 2: Category Tools Ribbon (visible when viewing a multi-tool section) --}}
     @if (!empty($currentTools) && count($currentTools) > 1 && $activeKey !== 'hub')
-        <div class="p-1 rounded-xl bg-[var(--color-surface-alt)]/70 border border-[var(--color-border-light)] flex items-center gap-1 overflow-x-auto text-xs">
+        <div class="p-1 rounded-xl bg-[var(--color-surface-alt)]/70 border border-[var(--color-border-light)] flex flex-wrap items-center gap-1 text-xs">
             @foreach ($currentTools as $tool)
                 <a href="{{ route($tool['route']) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
                           {{ $tool['active']
                                 ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] font-semibold shadow-xs border border-[var(--color-border-light)]'
                                 : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface)]/50' }}">

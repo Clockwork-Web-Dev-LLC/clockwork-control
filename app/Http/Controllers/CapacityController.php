@@ -157,6 +157,7 @@ class CapacityController extends Controller
                 'avg_disk' => $m?->avg_disk !== null ? (float) $m->avg_disk : null,
                 'peak_cpu' => $m?->peak_cpu !== null ? (float) $m->peak_cpu : null,
                 'site_count' => (int) $s->sites_count,
+                'visits_rolling' => (int) ($visitsByServer[$s->id] ?? 0),
                 'visits_mtd' => (int) ($visitsByServer[$s->id] ?? 0),
             ];
         });
@@ -179,9 +180,11 @@ class CapacityController extends Controller
         // Rolling-window visits stay on the row as an early-warning column.
         // Pull rolling, MTD, trending-window visits per site in one pass — used by
         // both the "Over visit threshold" and "Trending toward overage" tables.
+        // Scoped to active sites (is_inactive = false) to match IssueCounter::countOverQuotaSites().
         $perSiteVisits = SiteTrafficDaily::query()
             ->join('sites', 'sites.id', '=', 'site_traffic_daily.site_id')
             ->whereIn('sites.server_id', $serverIds)
+            ->where('sites.is_inactive', false)
             ->whereNull('sites.archived_at')
             ->whereNull('sites.consolidated_into_site_id')
             ->where('site_traffic_daily.date', '>=', $rolling30Start->toDateString())
@@ -295,14 +298,18 @@ class CapacityController extends Controller
         // 7-day CPU sparkline data — bucket by 6-hour windows so each server
         // has ~28 points (manageable for inline SVG, dense enough to show
         // the trend). One grouped query covers the whole fleet at once.
+        $bucketSql = DB::getDriverName() === 'sqlite'
+            ? "CAST(strftime('%s', recorded_at) / 21600 AS INTEGER)"
+            : 'FLOOR(UNIX_TIMESTAMP(recorded_at) / 21600)';
+
         $sparkRows = DB::table('server_metrics')
             ->whereIn('server_id', $allServers->pluck('id'))
             ->where('recorded_at', '>=', $window7Start)
-            ->selectRaw('
+            ->selectRaw("
                 server_id,
-                FLOOR(UNIX_TIMESTAMP(recorded_at) / 21600) AS bucket,
+                {$bucketSql} AS bucket,
                 AVG(cpu_pct) AS avg_cpu
-            ')
+            ")
             ->groupBy('server_id', 'bucket')
             ->orderBy('server_id')
             ->orderBy('bucket')
@@ -690,10 +697,11 @@ class CapacityController extends Controller
         if ($maxBillable <= 0) {
             $maxBillable = (int) ($accountSummary['maxSites'] ?? 0);
         }
-        if ($maxBillable <= 0 && ! empty($accountSummary['productName'])) {
-            if (preg_match('/Agency\s*(\d+)/i', (string) $accountSummary['productName'], $m)) {
-                $maxBillable = (int) $m[1] * 100;
-            }
+        // If API maxBillable and maxSites are both <= 0, leave max at 0 so only the billable
+        // count is displayed (blade hides the denominator when maxBillable <= 0). Do not invent
+        // an Agency N * 100 seat cap.
+        if ($maxBillable < 0) {
+            $maxBillable = 0;
         }
 
         return [
@@ -763,7 +771,7 @@ class CapacityController extends Controller
 
         try {
             $account = $pressableClient->account();
-            if (! is_array($account) || $account === []) {
+            if ($account === []) {
                 Cache::put('pressable.capacity.account_summary.negative', true, 300);
 
                 return [];

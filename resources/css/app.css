@@ -861,7 +861,6 @@ body {
 }
 
 .cw-font-stepper {
-    display: inline-flex;
     align-items: center;
     border: 1px solid var(--color-border);
     background-color: var(--color-surface);
@@ -911,6 +910,48 @@ body {
     color: var(--color-brand);
 }
 
+/* Phone chrome: one drawer instead of a second copy of the studio tabs. */
+body.cw-mobile-nav-open {
+    overflow: hidden;
+}
+
+.cw-mobile-drawer {
+    background: var(--color-surface);
+    box-shadow: -12px 0 40px -12px rgba(0, 0, 0, 0.28);
+}
+
+.cw-mobile-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-ink-strong);
+    text-decoration: none;
+}
+
+.cw-mobile-nav-link:hover {
+    background: var(--color-surface-alt);
+}
+
+.cw-mobile-nav-link.is-active {
+    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+    color: var(--color-brand);
+    font-weight: 600;
+}
+
+/* Wide tables (Issues, Monitoring, Capacity) stay reachable on a phone. */
+@media (max-width: 767px) {
+    main table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
 /* ==========================================================================
    UNIFIED DUAL-LAYOUT ARCHITECTURE (Command Center vs Modern Studio)
    ========================================================================== */
@@ -920,7 +961,12 @@ body {
     display: none !important;
 }
 [data-layout-style="modern"] .cw-subnav-tier {
-    display: block;
+    display: none;
+}
+@media (min-width: 768px) {
+    [data-layout-style="modern"] .cw-subnav-tier {
+        display: block;
+    }
 }
 
 [data-layout-style="command-center"] .cw-subnav-tier {
@@ -933,15 +979,16 @@ body {
     max-width: 100% !important;
 }
 
+.cw-toolbar-inner {
+    transition: max-width 450ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Header Dual-Layout Elements */
 .cw-top-brand {
     display: flex;
 }
 .cw-top-cmd-search {
     display: none;
-}
-.cw-top-jump-btn {
-    display: inline-flex;
 }
 .cw-top-profile {
     display: block;
@@ -967,6 +1014,267 @@ body {
     /* In Command Center layout on desktop, hide top-right profile since it lives in the sidebar footer */
     [data-layout-style="command-center"] .cw-top-profile {
         display: none !important;
+    }
+}
+
+/* ==========================================================================
+   CUTE LAYOUT SWITCHING & SPRING MORPHING ANIMATIONS
+   ========================================================================== */
+
+/* 1. Button Squish & Icon Spin Keyframes */
+@keyframes cw-jelly-squish {
+    0% {
+        transform: scale(1);
+    }
+    22% {
+        transform: scale(0.82, 0.86) rotate(-5deg);
+    }
+    48% {
+        transform: scale(1.18, 1.12) rotate(4deg);
+    }
+    72% {
+        transform: scale(0.95, 0.98) rotate(-1deg);
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+@keyframes cw-icon-spin {
+    0% {
+        transform: rotate(0deg) scale(0.8);
+    }
+    50% {
+        transform: rotate(180deg) scale(1.25);
+    }
+    100% {
+        transform: rotate(360deg) scale(1);
+    }
+}
+
+.cw-jelly-squish {
+    animation: cw-jelly-squish 450ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.cw-icon-spin {
+    display: inline-flex;
+    animation: cw-icon-spin 500ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+/* 2. Layout Toast Floating Glow */
+.cw-layout-toast {
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.08), 0 0 25px 0 rgba(37, 99, 235, 0.12);
+}
+
+:root[data-theme="dark"] .cw-layout-toast {
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.6), 0 0 30px 0 rgba(14, 165, 233, 0.22);
+}
+
+/* 3. Smooth Layout Morphing (To Command Center: Top Nav -> Sidebar Rail) */
+[data-layout-morphing="to-command-center"] .cw-subnav-tier {
+    display: block !important;
+    animation: cw-subnav-collapse 380ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (min-width: 1024px) {
+    [data-layout-morphing="to-command-center"] .cw-sidebar-rail {
+        display: flex !important;
+        animation: cw-sidebar-spring-in 480ms cubic-bezier(0.34, 1.45, 0.64, 1) forwards;
+    }
+    [data-layout-morphing="to-command-center"] .cw-sidebar-rail.w-18 {
+        animation-name: cw-sidebar-spring-in-collapsed;
+    }
+    [data-layout-morphing="to-command-center"] .cw-top-brand {
+        display: flex !important;
+        animation: cw-brand-fade-out 250ms ease-out forwards;
+    }
+    [data-layout-morphing="to-command-center"] .cw-top-cmd-search {
+        display: flex !important;
+        animation: cw-search-fade-in 380ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    }
+}
+
+/* 4. Smooth Layout Morphing (To Modern Studio: Sidebar Rail -> Top Nav) */
+[data-layout-morphing="to-modern"] .cw-subnav-tier {
+    display: block !important;
+    animation: cw-subnav-expand 420ms cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+@media (min-width: 1024px) {
+    [data-layout-morphing="to-modern"] .cw-sidebar-rail {
+        display: flex !important;
+        animation: cw-sidebar-spring-out 320ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    [data-layout-morphing="to-modern"] .cw-sidebar-rail.w-18 {
+        animation-name: cw-sidebar-spring-out-collapsed;
+    }
+    [data-layout-morphing="to-modern"] .cw-top-brand {
+        display: flex !important;
+        animation: cw-brand-fade-in 360ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    }
+    [data-layout-morphing="to-modern"] .cw-top-cmd-search {
+        display: flex !important;
+        animation: cw-search-fade-out 220ms ease-out forwards;
+    }
+}
+
+/* Morphing Keyframes */
+@keyframes cw-subnav-collapse {
+    0% {
+        max-height: 54px;
+        opacity: 1;
+        transform: translateY(0);
+        overflow: hidden;
+    }
+    100% {
+        max-height: 0px;
+        opacity: 0;
+        transform: translateY(-8px);
+        overflow: hidden;
+        border-top-width: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+}
+
+@keyframes cw-subnav-expand {
+    0% {
+        max-height: 0px;
+        opacity: 0;
+        transform: translateY(-10px);
+        overflow: hidden;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    70% {
+        max-height: 58px;
+        opacity: 1;
+        transform: translateY(2px);
+        overflow: hidden;
+    }
+    100% {
+        max-height: 54px;
+        opacity: 1;
+        transform: translateY(0);
+        overflow: visible;
+    }
+}
+
+@keyframes cw-sidebar-spring-in {
+    0% {
+        margin-left: -16rem;
+        opacity: 0;
+    }
+    65% {
+        margin-left: 6px;
+        opacity: 0.95;
+    }
+    100% {
+        margin-left: 0;
+        opacity: 1;
+    }
+}
+
+@keyframes cw-sidebar-spring-out {
+    0% {
+        margin-left: 0;
+        opacity: 1;
+    }
+    100% {
+        margin-left: -16rem;
+        opacity: 0;
+    }
+}
+
+@keyframes cw-sidebar-spring-in-collapsed {
+    0% {
+        margin-left: -4.5rem;
+        opacity: 0;
+    }
+    65% {
+        margin-left: 4px;
+        opacity: 0.95;
+    }
+    100% {
+        margin-left: 0;
+        opacity: 1;
+    }
+}
+
+@keyframes cw-sidebar-spring-out-collapsed {
+    0% {
+        margin-left: 0;
+        opacity: 1;
+    }
+    100% {
+        margin-left: -4.5rem;
+        opacity: 0;
+    }
+}
+
+@keyframes cw-brand-fade-out {
+    0% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-14px) scale(0.94);
+    }
+}
+
+@keyframes cw-brand-fade-in {
+    0% {
+        opacity: 0;
+        transform: translateX(-14px) scale(0.94);
+    }
+    70% {
+        opacity: 1;
+        transform: translateX(3px) scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes cw-search-fade-in {
+    0% {
+        opacity: 0;
+        transform: translateX(14px) scale(0.96);
+    }
+    70% {
+        opacity: 1;
+        transform: translateX(-2px) scale(1.01);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes cw-search-fade-out {
+    0% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(14px) scale(0.96);
+    }
+}
+
+/* Accessibility: Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .cw-jelly-squish,
+    .cw-icon-spin,
+    .cw-toolbar-inner,
+    [data-layout-morphing] .cw-sidebar-rail,
+    [data-layout-morphing] .cw-subnav-tier,
+    [data-layout-morphing] .cw-top-brand,
+    [data-layout-morphing] .cw-top-cmd-search {
+        animation: none !important;
+        transition: none !important;
     }
 }
 

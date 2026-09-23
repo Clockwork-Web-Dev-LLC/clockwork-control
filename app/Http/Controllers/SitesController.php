@@ -9,6 +9,7 @@ use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
+use App\Models\PluginUpdateIgnore;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
@@ -412,10 +413,15 @@ class SitesController extends Controller
 
         $counts = is_array($pluginsPayload['counts'] ?? null) ? $pluginsPayload['counts'] : [];
 
+        $ignoredUpdates = PluginUpdateIgnore::query()
+            ->where('site_id', $site->id)
+            ->get();
+
         return [
             'updatesAvailable' => $updatesAvailable,
             'upToDate' => $upToDate,
             'inactive' => $inactive,
+            'ignoredUpdates' => $ignoredUpdates,
             'pluginCounts' => [
                 'total' => (int) ($counts['total'] ?? count($plugins)),
                 'active' => (int) ($counts['active'] ?? 0),
@@ -1016,7 +1022,10 @@ class SitesController extends Controller
         //    today. Any other host cleanly skips rather than showing an
         //    error pill for something it was never expected to have.
         if (! $site->isSpinupWp()) {
-            $results['backups'] = ['ok' => true, 'skipped' => true, 'reason' => 'Host does not use SpinupWP backup reporting.'];
+            $reason = $site->isCustom()
+                ? 'Backups managed by host'
+                : "Backups managed natively by {$site->hostLabel()}";
+            $results['backups'] = ['ok' => true, 'skipped' => true, 'reason' => $reason];
         } elseif (! $site->spinupwp_id) {
             $results['backups'] = ['ok' => false, 'error' => 'site has no SpinupWP id'];
         } elseif (! in_array('backups-report', $caps, true)) {

@@ -810,6 +810,27 @@ class Site extends Model
     }
 
     /**
+     * Human-friendly display label for this site's hosting provider.
+     */
+    public function hostLabel(): string
+    {
+        try {
+            return $this->host()->label();
+        } catch (\Throwable) {
+            return match ($this->hosting_provider) {
+                self::HOSTING_PROVIDER_SPINUPWP => 'SpinupWP',
+                self::HOSTING_PROVIDER_PRESSABLE => 'Pressable',
+                self::HOSTING_PROVIDER_WPENGINE => 'WP Engine',
+                self::HOSTING_PROVIDER_KINSTA => 'Kinsta',
+                self::HOSTING_PROVIDER_CLOUDWAYS => 'Cloudways',
+                self::HOSTING_PROVIDER_GRIDPANE => 'GridPane',
+                self::HOSTING_PROVIDER_CUSTOM => 'Custom / Standalone',
+                default => ucfirst((string) $this->hosting_provider),
+            };
+        }
+    }
+
+    /**
      * On-disk WordPress root for SSH-based probes (checksum verification,
      * plugin detection). Prefers the recorded wp_path; only known-convention
      * providers get a fallback guess — an unrecorded path on a provider

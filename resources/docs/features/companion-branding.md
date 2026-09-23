@@ -2,7 +2,7 @@
 title: Companion & White Label
 section: Features
 order: 93
-updated: 2026-09-11
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [companion, branding, white-label, agency, wordpress]
 tracks: [app/Http/Controllers/CompanionSettingsController.php, app/Services/Companion/CompanionBrandingManager.php, app/Jobs/PushCompanionBrandingJob.php, app/Console/Commands/PushCompanionBranding.php, resources/views/settings/companion.blade.php, resources/views/settings/companion-preview.blade.php, resources/views/components/color-picker.blade.php]
@@ -31,19 +31,19 @@ A quick-action palette bar anchored at the top of the hub allows operators to se
 A client-side segmented control (`activeTab` Alpine state) switches between the three panels; `?tab=companion|reports|email` on the index route (and on every redirect after saving/resetting a given tab) makes sure a link or page reload lands back on the right one.
 
 - **Companion (wp-admin)** is the original branding surface; configuring company identity, custom colors (with companion header two-tone contrast), logo, and admin menu preferences.
-- **Client Reports** writes to `reports.branding.*` settings keys, falling back to tab 1's shared agency identity (company name, logo, support email/URL) for any field left blank. Colors default to Clockwork's own purple/green (`#2D2062` / `#7EFF83`) until customized. This tab is only meaningfully exercised when the `client_reports` module is enabled (`ModuleStateResolver::isEnabled('client_reports')`) — its tab button shows a small "Disabled" badge instead of the enabled/disabled status dot when the module is off, though the form itself doesn't block saving.
+- **Client Reports** writes to `reports.branding.*` settings keys, falling back to tab 1's shared agency identity (company name, logo, support email/URL) for any field left blank. Colors default to Clockwork Control's own purple/green (`#2D2062` / `#7EFF83`) until customized. This tab is only meaningfully exercised when the `client_reports` module is enabled (`ModuleStateResolver::isEnabled('client_reports')`) — its tab button shows a small "Disabled" badge instead of the enabled/disabled status dot when the module is off, though the form itself doesn't block saving.
 - **Plugin Notification Email** writes to `email.branding.*` settings keys with the same shared-defaults fallback, plus a **"Send test email"** action that fires a real `SiteVulnerabilityReportMail` — populated with two fabricated demo plugin vulnerabilities, not live site data — to an operator-supplied address, so the styling can be checked in an actual inbox before a client ever sees it.
 
 ## How it's stored and pushed
 
-- **`App\Services\Companion\CompanionBrandingManager`** persists tab 1's configuration to `App\Support\Settings` (key prefix `companion.branding.*`), merged with sane Clockwork defaults (`DEFAULT_COMPANY_NAME`, `DEFAULT_PLUGIN_NAME`, etc.) whenever a field is unset. Tabs 2 and 3 have their own prefixes (`reports.branding.*`, `email.branding.*`) via `getReportsBranding()`/`saveReportsBranding()`/`resetReports()` and `getEmailBranding()`/`saveEmailBranding()`/`resetEmail()`. Master palette is stored in `master.branding.*`.
+- **`App\Services\Companion\CompanionBrandingManager`** persists tab 1's configuration to `App\Support\Settings` (key prefix `companion.branding.*`), merged with sane Clockwork Control defaults (`DEFAULT_COMPANY_NAME`, `DEFAULT_PLUGIN_NAME`, etc.) whenever a field is unset. Tabs 2 and 3 have their own prefixes (`reports.branding.*`, `email.branding.*`) via `getReportsBranding()`/`saveReportsBranding()`/`resetReports()` and `getEmailBranding()`/`saveEmailBranding()`/`resetEmail()`. Master palette is stored in `master.branding.*`.
 - Saving tab 1 triggers **`ClockworkCompanionClient::pushBranding()`**, an HMAC-signed REST call to each site's `POST /wp-json/clockwork/v1/branding` — the same signed-request mechanism used by every other Companion write endpoint. The remote plugin stores the payload in `wp_options['clockwork_companion_branding']` and filters its own plugin header, admin menu, and support links from it on every page load — no outbound requests from the WordPress side.
 - **Only tab 1 (Companion/wp-admin) is pushed to the fleet.** Client Reports and Plugin Notification Email branding render entirely inside Clockwork Control (report output, outbound emails) and never reach the remote plugin — there's no "sync fleet" concept for them. They take effect the next time a Client Report is generated or a vulnerability email is sent.
 - **Push timing** (tab 1 only):
   - Checking "Push to all connected sites upon saving" (default on) when saving the form dispatches `PushCompanionBrandingJob` (queued, fleet-wide).
   - The dedicated **"Sync Fleet Now"** button in the page header launches `clockwork:push-companion-branding` in the background (`BackgroundArtisan`) and redirects immediately.
   - `php artisan clockwork:push-companion-branding [--site=<id-or-domain>]` does the same from the CLI, scoped to one site or the whole fleet.
-  - **Every Companion install or update** (`CompanionInstaller`/`PressableCompanionInstaller::installOrUpdate()`) also pushes the current branding to that one site inline, best-effort — so a freshly-installed or re-installed Companion never briefly shows default Clockwork branding before the next fleet sync.
+  - **Every Companion install or update** (`CompanionInstaller`/`PressableCompanionInstaller::installOrUpdate()`) also pushes the current branding to that one site inline, best-effort — so a freshly-installed or re-installed Companion never briefly shows default Clockwork Control branding before the next fleet sync.
 - Only sites with `companion_installed = true` and a non-empty `companion_secret` are eligible; everything else is silently skipped (not an error) since there's no signed channel to reach them yet.
 
 ## Vulnerability emails use the Plugin Notification Email tab
@@ -64,14 +64,31 @@ A client-side segmented control (`activeTab` Alpine state) switches between the 
 
 The right-hand column of the Companion (wp-admin) tab is an Alpine.js mockup of the WordPress sidebar menu, plugins list row, and Companion dashboard header, updating live as the form fields change — nothing here calls out to a real site; it's local-only, for visualizing the effect before saving. A dedicated preview route (`/settings/companion/preview`) also renders the full isolated wp-admin chrome mockup in a separate window/tab.
 
+## Section 6: LLAR Unlock Hub & Emergency Access
+
+When Limit Login Attempts Reloaded (LLAR) locks an agency technician or client out of a site due to false positives or brute-force protection, you don't need SSH access or WP credentials to clear it. The **Unlock Console** (`Clockwork → Unlock` in wp-admin) fires an authenticated HMAC-SHA256 signed `DELETE /wp-json/clockwork/v1/lockouts` request directly to the target site's Companion plugin to immediately flush lockouts.
+
+### How Hub Detection & Client Isolation Works
+
+- **Configured Hub Domain (`unlock_hub_domain`)**: Configured on `/settings/companion` (default: `clockworkwd.com`), this sets your agency's designated primary management host.
+- **HMAC Wire Sync**: The `unlock_hub_domain` value is included in the JSON branding payload pushed to all connected sites during fleet sync (`ClockworkCompanionClient::pushBranding()`) and stored in `wp_options['clockwork_companion_branding']`.
+- **Subdomain Hub Matching**: Subdomain hubs (e.g., `support.customagency.com`) permit staff email addresses from the parent domain (`*@customagency.com`) as well as the subdomain itself.
+- **Client Isolation & Fail-Closed 403s**: Client sites *never* show the Unlock submenu or navigation tab. Direct URL navigation to `admin.php?page=clockwork-unlock` immediately aborts with an HTTP 403 `wp_die` before layout rendering. Unauthorized AJAX calls (`clockwork_companion_unlock_target`) return `wp_send_json_error(..., 403)`.
+- **Legacy Fallback**: Defining `define('CLOCKWORK_UNLOCK_HUB', true);` in `wp-config.php` remains supported as an explicit manual override.
+
+## Permanent White-Label Lockdown
+
+Local wp-admin branding customization (`admin.php?page=clockwork-branding`) was permanently removed and returns HTTP 403 Forbidden. All branding is now strictly managed centrally in Clockwork Control at `/settings/companion` and pushed downstream over HMAC-signed REST. Clients cannot tamper with, override, or revert agency branding locally from their WordPress admin dashboards.
+
 ## Routes
 
 - `GET /settings/companion` (`settings.companion.index`) — the settings + preview page; accepts `?tab=companion|reports|email`.
 - `GET /settings/companion/preview` (`settings.companion.preview`) — isolated full-page endpoint rendering the live WordPress admin chrome preview.
-- `PATCH|POST /settings/companion` (`settings.companion.update`) — save branding for whichever tab was submitted (`tab=companion|reports|email|master`), optionally cascading colors or queuing a fleet push.
+- `PATCH|POST /settings/companion` (`settings.companion.update`) — save branding for whichever tab was submitted (`tab=companion|reports|email|master`), including `unlock_hub_domain`, optionally cascading colors or queuing a fleet push.
 - `POST /settings/companion/logo` (`settings.companion.logo`) — upload a brand logo (`png, jpg, jpeg, webp` up to 2MB).
 - `POST /settings/companion/sync` (`settings.companion.sync`) — push current Companion (wp-admin) branding to the whole fleet now.
 - `POST /settings/companion/reset` (`settings.companion.reset`) — revert Companion (wp-admin) tab fields back to Clockwork Control defaults and purge stored logo.
 - `POST /settings/companion/reset-reports` (`settings.companion.reset-reports`) — revert Client Reports branding to shared defaults.
 - `POST /settings/companion/reset-email` (`settings.companion.reset-email`) — revert Plugin Notification Email branding to defaults.
 - `POST /settings/companion/test-email` (`settings.companion.test-email`) — send a real test vulnerability-alert email (fabricated demo CVE data) to an operator-supplied address, styled with the current Plugin Notification Email branding.
+

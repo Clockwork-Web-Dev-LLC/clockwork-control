@@ -51,7 +51,10 @@
                             </button>
                         </form>
                         <form method="POST" action="{{ route('settings.tags.destroy', $tag) }}"
-                              onsubmit="return confirm('Delete tag &quot;{{ $tag->name }}&quot;? Servers tagged with it will lose this tag.');">
+                              data-confirm="Delete tag &quot;{{ $tag->name }}&quot;?"
+                              data-confirm-details="Servers tagged with it will lose this tag."
+                              data-confirm-btn="Delete Tag"
+                              data-confirm-variant="danger">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn-pill-nav text-[var(--color-status-red)]" title="Delete tag">

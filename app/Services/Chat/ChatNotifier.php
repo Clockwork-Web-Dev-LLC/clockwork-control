@@ -50,6 +50,11 @@ interface ChatNotifier
             'description' => 'Nightly plugin-update job failed on a care-plan site (manual bulk runs are always silent).',
             'default' => true,
         ],
+        'plugin_update_auto_ignored' => [
+            'label' => 'Plugin auto-update paused',
+            'description' => 'Automatic updates were paused for a plugin after repeated nightly failures.',
+            'default' => true,
+        ],
         'ip_blocked' => [
             'label' => 'IP blocked',
             'description' => 'fail2ban auto-banned a noisy IP at the firewall.',
@@ -163,6 +168,8 @@ interface ChatNotifier
     public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool;
 
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool;
+
+    public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool;
 
     public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool;
 

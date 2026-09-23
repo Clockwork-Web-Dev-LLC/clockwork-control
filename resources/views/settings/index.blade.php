@@ -15,7 +15,7 @@
     <x-page-header title="Settings & Operations"
         subtitle="Manage fleet configuration, API integrations, operational tools, and system administration.">
         <x-slot:actions>
-            <div class="relative w-72 sm:w-80">
+            <div class="relative w-full sm:w-72 md:w-80 max-w-full">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ink-muted)]"></i>
                 <input type="text"
                        x-model="search"

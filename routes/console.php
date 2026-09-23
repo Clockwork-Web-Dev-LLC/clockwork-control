@@ -348,6 +348,14 @@ Schedule::command('clockwork:push-companion-traffic')
     ->withoutOverlapping(60)
     ->onOneServer();
 
+// Daily catch-up sync for update exceptions (paused auto-updates).
+// Pushes the active exceptions list to Companion and Renegade on all sites.
+// Runs after nightly updates have completed so any newly paused plugins are synced to wp-admin.
+Schedule::command('clockwork:push-update-exceptions')
+    ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Pressable counterpart (06:37) moved to Modules\Pressable\PressableServiceProvider::scheduledTasks() (Phase 7)
 // — pulls page-view stats straight from Pressable's API (no nginx
 // access-log rollup dependency, unlike the SpinupWP version).

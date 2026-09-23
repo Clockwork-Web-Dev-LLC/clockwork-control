@@ -11,7 +11,10 @@
         </div>
         @if ($bannedIps->isNotEmpty())
             <form method="POST" action="{{ route('sites.bans.unban-all', $site) }}"
-                  onsubmit="return confirm('Unban {{ $bannedIps->total() }} IP{{ $bannedIps->total() === 1 ? '' : 's' }} for {{ $site->domain }}? This removes them from fail2ban on the server.');">
+                  data-confirm="Unban {{ $bannedIps->total() }} IP{{ $bannedIps->total() === 1 ? '' : 's' }} for {{ $site->domain }}?"
+                  data-confirm-details="This removes them from fail2ban on the server."
+                  data-confirm-btn="Unban All"
+                  data-confirm-variant="warning">
                 @csrf
                 <button type="submit" class="text-xs px-3 py-1.5 rounded-full border border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]">
                     <i class="fa-solid fa-rotate-left"></i>

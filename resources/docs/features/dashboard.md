@@ -2,7 +2,7 @@
 title: Dashboard
 section: Features
 order: 10
-updated: 2026-09-14
+updated: 2026-09-18
 author: Aaron Reimann
 tags: [dashboard, fleet, monitoring]
 tracks: [app/Http/Controllers/DashboardController.php, resources/views/dashboard/**]
@@ -20,6 +20,24 @@ Clockwork Control provides two complementary layout philosophies selectable on t
 2. **Modern Studio (`modern`)**: A spacious, card-forward, human-centric interface with floating filter chips, integrated fleet-wide search, expandable quick drawers, and modern whitespace.
 
 Layout preferences are saved locally in the browser (`localStorage.getItem('cw_layout_style')`) and initialized before document render via `data-layout-style` on `<html>` to ensure zero flash of unstyled content (FOUC). Both layouts operate on top of a unified Alpine.js `appChrome` store and share underlying live telemetric models.
+
+On viewports below `lg` (1024px) there is one chrome: top bar + hamburger **Menu** sheet (overlay, current-route highlight, badge counts, font stepper). The Command Center / Modern Studio switcher is hidden and the toggle is a no-op — the rail only exists at `lg+`. Below `md`, the studio tab strip is also hidden so the sheet is the only primary nav.
+
+## ⌘K Quick Jump Palette & Jump Codes
+
+Operators can press **⌘K** (macOS) or **Ctrl+K** (Windows/Linux), or click the **Jump** button in the top navigation bar to open the Quick Jump command palette.
+
+- **Instant Jump Codes**: Typing a two-letter jump code (case-insensitive, spaces optional) navigates immediately without requiring a mouse click:
+  - `GS` or `G S`: Servers Fleet (`/`)
+  - `GT` or `G T`: Sites Directory (`/sites`)
+  - `GI` or `G I`: Issues Console (`/issues`)
+  - `GM` or `G M`: Uptime Monitoring (`/monitoring`)
+  - `GU` or `G U`: Updates Manager (`/updates`)
+  - `GX` or `G X`: Security Scans (`/security/scans`)
+  - `GD` or `G D`: Documentation & Runbooks (`/docs`)
+- **Fuzzy & Substring Filtering**: Typing other terms (such as `capacity`, `credentials`, `settings`) filters visible rows in real-time.
+- **Keyboard Navigation**: Pressing `↑` / `↓` moves the selection highlight, and pressing `Enter` navigates to the highlighted destination.
+- **Dismissal**: Pressing `Esc` or clicking outside dismisses the palette and resets the search query.
 
 ## What you see
 
@@ -83,9 +101,10 @@ Press `/` from anywhere on the dashboard (or any page) to focus the site search 
 
 Several feature areas surface on the `/issues` page rather than the main dashboard:
 
-- **3-Tier Hierarchy & Category Organization**: Issues are categorized into three structured tiers: **Critical** (e.g. sites down, critical malware), **Needs Attention** (e.g. vulnerable plugins, SSL expirations), and **Low Priority** (e.g. out-of-date plugins, informational notices).
-- **Category Visibility & Priority Customization**: An operator modal allows assigning each issue category to any tier or marking it **Hidden** entirely (`POST /issues/category-level`). Hidden categories do not appear in any tier and are subtracted from the header navigation badge count.
-- **Collapsible Section Cards**: Tier sections and issue cards can be collapsed or expanded, preserving space when managing large fleets.
+- **WordPress-Style Screen Options Drawer**: A pull-down drawer accessible via the top-right header actions bar allows operators to customize which category sections to display on screen. Grouped into 3 columns (*Critical & Security*, *Infrastructure & Health*, *Routine Maintenance*) with quick presets (**Show All**, **Critical Only**, **Hide Routine**, **Reset**), persisted in browser `localStorage`.
+- **Compact "Jump to Issue" Dropdown**: Replaces multiple rows of header status pills with a single jump menu showing all active issue categories and counts, featuring smooth scrolling and an animated brand ring highlight.
+- **3-Tier Priority Hierarchy & Fleet Defaults**: Alert categories support three granular urgency tiers: **Emergency** (Critical alerts), **Pressing** (Urgent alerts), and **Not Pressing** (Routine maintenance), plus the ability to turn a category **Off** fleet-wide.
+- **Unified Control Strip**: Tier filter tabs (`All Issues`, `Critical & Security`, `Infrastructure`, `Routine`) and Urgency filter pills (`All Active`, `Emergency`, `Pressing`, `Routine`, `Muted`) are organized in a balanced, single toolbar row alongside global section collapse/expand controls.
 - **Patches Available** rows now include a **Reboot now** button. Clicking it triggers the same confirm-then-POST reboot flow as the server detail page without needing to scroll down to the Reboot Required section. Useful when `reboot_required` hasn't flipped on the row yet but you know an apt upgrade just ran.
 - **Orphaned sites** (sites with no SpinupWP record and not archived) now have a **Remove** button with an "Are you sure" confirmation — archives the site row rather than hard-deleting it.
 - **SSH credentials** — servers missing SSH credentials surface on the Issues page. Each row has an inline action: **Test SSH** (AJAX, fires `POST /servers/{id}/test`, shows pass/fail inline without a page reload) if a password is already stored, or **Add password** (links to the credentials edit page) if none is on record yet.

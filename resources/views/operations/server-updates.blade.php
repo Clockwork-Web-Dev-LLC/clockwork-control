@@ -62,12 +62,15 @@
 
     {{-- Toolbar --}}
     <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
-        <form method="POST" action="{{ route('operations.server-updates.refresh') }}" class="flex items-center gap-2">
+        <form method="POST" action="{{ route('operations.server-updates.refresh') }}" class="flex items-center gap-2"
+              data-confirm="Re-poll every non-ignored server now?"
+              data-confirm-details="Runs in the background — takes a few minutes."
+              data-confirm-btn="Re-poll Fleet"
+              data-confirm-variant="warning">
             @csrf
             <button type="submit"
                     class="btn-pill-nav text-sm @if($pollInProgress) opacity-50 cursor-not-allowed @endif"
-                    @if($pollInProgress) disabled @endif
-                    onclick="return confirm('Re-poll every non-ignored server now? Runs in the background — takes a few minutes.')">
+                    @if($pollInProgress) disabled @endif>
                 <i class="fa-solid @if($pollInProgress) fa-spinner fa-spin @else fa-rotate @endif"></i>
                 {{ $pollInProgress ? 'Polling in background…' : 'Re-poll fleet now' }}
             </button>
@@ -217,7 +220,10 @@
                                             <button type="submit"
                                                     form="single-update-{{ $server->id }}"
                                                     class="btn-pill-nav text-xs mr-2 text-[var(--color-primary-700)] hover:bg-[var(--color-primary-50)]"
-                                                    onclick="return confirm('Are you sure you want to run updates and reboot on {{ $server->display_name }}?');"
+                                                    data-confirm="Run updates and reboot on {{ $server->display_name }}?"
+                                                    data-confirm-details="The server will install updates and reboot immediately."
+                                                    data-confirm-btn="Update & Reboot"
+                                                    data-confirm-variant="warning"
                                                     title="Install updates and reboot immediately">
                                                 <i class="fa-solid fa-bolt"></i> Update & reboot
                                             </button>
@@ -257,7 +263,7 @@
                         </div>
                         <div class="flex flex-col gap-1">
                             <button type="submit" id="bulk-queue-btn" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled
-                                    onclick="return confirmBulkSubmit(this);">
+                                    onclick="confirmBulkSubmit(event);">
                                 <i class="fa-solid fa-bolt"></i>
                                 <span id="bulk-btn-label">Install updates & reboot immediately</span> (<span data-bulk-count>0</span>)
                             </button>
@@ -347,12 +353,25 @@
                 syncRebootLabel();
             })();
 
-            function confirmBulkSubmit(btn) {
+            async function confirmBulkSubmit(e) {
+                e.preventDefault();
+                const btn = document.getElementById('bulk-queue-btn');
+                const form = btn?.closest('form');
+                if (!form) return;
                 const rebootAt = document.getElementById('bulk-reboot-at')?.value;
-                if (rebootAt) {
-                    return confirm(`Are you sure you want to run updates on all selected servers and schedule reboot for ${rebootAt}?`);
+                const title = rebootAt
+                    ? `Run updates on selected servers and schedule reboot for ${rebootAt}?`
+                    : 'are you sure you want to run updates and reboot on all selected servers?';
+                const ok = await window.confirmModal({
+                    title: title,
+                    details: 'Drains via clockwork:process-server-updates (every minute, one server per tick).',
+                    confirmText: 'Queue Updates',
+                    variant: 'warning'
+                });
+                if (ok) {
+                    form._cwConfirmed = true;
+                    form.submit();
                 }
-                return confirm("are you sure you want to run updates and reboot on all selected servers?");
             }
         </script>
     @endif

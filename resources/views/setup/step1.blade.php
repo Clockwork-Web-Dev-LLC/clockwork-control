@@ -959,8 +959,14 @@
                         this.errorMessage = 'Network error saving settings';
                     });
                 },
-                removeCredential(field, label) {
-                    if (!confirm('Remove ' + label + ' from your .env file?')) return;
+                async removeCredential(field, label) {
+                    const ok = await window.confirmModal({
+                        title: 'Remove Credential?',
+                        message: 'Remove ' + label + ' from your .env file?',
+                        confirmText: 'Remove Credential',
+                        variant: 'danger'
+                    });
+                    if (!ok) return;
                     this.saving = true;
                     this.errorMessage = '';
                     const token = document.querySelector('input[name=_token]')?.value;
@@ -1001,8 +1007,14 @@
                         this.errorMessage = 'Network error removing credential';
                     });
                 },
-                resetDefaults() {
-                    if (!confirm('Reset ' + this.serviceName + ' API limits to recommended defaults?')) return;
+                async resetDefaults() {
+                    const ok = await window.confirmModal({
+                        title: 'Reset API Limits?',
+                        message: 'Reset ' + this.serviceName + ' API limits to recommended defaults?',
+                        confirmText: 'Reset Defaults',
+                        variant: 'warning'
+                    });
+                    if (!ok) return;
                     this.saving = true;
                     this.errorMessage = '';
                     const token = document.querySelector('input[name=_token]')?.value;
@@ -1074,8 +1086,14 @@
                         this.errorMessage = 'Network error during reconciliation';
                     });
                 },
-                importInstance(instanceId) {
-                    if (!confirm('Import this cloud instance into your Clockwork Control Server Fleet?')) return;
+                async importInstance(instanceId) {
+                    const ok = await window.confirmModal({
+                        title: 'Import Cloud Instance?',
+                        message: 'Import this cloud instance into your Clockwork Control Server Fleet?',
+                        confirmText: 'Import Instance',
+                        variant: 'primary'
+                    });
+                    if (!ok) return;
                     this.actionLoading = true;
                     this.errorMessage = '';
                     const token = document.querySelector('input[name=_token]')?.value;
@@ -1470,11 +1488,27 @@
                 });
 
                 if (fleetCount === 0) {
-                    const confirmed = confirm("You have not selected any Managed WordPress Hosts or Server Management Panels.\n\nWithout a fleet source, Clockwork Control will have no sites or servers to monitor.\n\nDo you want to continue anyway?");
-                    if (!confirmed) {
-                        e.preventDefault();
-                        servicesForm.scrollIntoView({ behavior: 'smooth' });
+                    if (servicesForm._cwConfirmed) {
+                        delete servicesForm._cwConfirmed;
+                        return;
                     }
+                    e.preventDefault();
+                    (async () => {
+                        const confirmed = await window.confirmModal({
+                            title: 'No Fleet Source Selected',
+                            message: 'You have not selected any Managed WordPress Hosts or Server Management Panels.',
+                            details: 'Without a fleet source, Clockwork Control will have no sites or servers to monitor. Do you want to continue anyway?',
+                            confirmText: 'Continue Anyway',
+                            cancelText: 'Go Back',
+                            variant: 'warning'
+                        });
+                        if (confirmed) {
+                            servicesForm._cwConfirmed = true;
+                            servicesForm.submit();
+                        } else {
+                            servicesForm.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    })();
                 }
             });
 

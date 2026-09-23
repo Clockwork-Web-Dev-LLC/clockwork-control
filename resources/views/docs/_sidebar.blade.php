@@ -77,18 +77,19 @@
                 </template>
                 <template x-for="r in results" :key="r.url">
                     <a :href="r.url" class="docs-sidebar__search-result group">
-                        <div class="min-w-0 flex-1">
-                            <div class="docs-sidebar__search-result-title group-hover:text-[var(--color-brand)]" x-text="r.title"></div>
-                            <template x-if="r.excerpt">
-                                <div class="text-[11px] text-[var(--color-ink-muted)] truncate mt-0.5" x-text="r.excerpt"></div>
+                        <div class="docs-sidebar__search-result-header">
+                            <span class="docs-sidebar__search-result-section" x-text="r.section"></span>
+                            <template x-if="r.category && r.category !== r.section">
+                                <span class="docs-sidebar__search-result-subcat">
+                                    <span class="opacity-40">›</span>
+                                    <span x-text="r.category"></span>
+                                </span>
                             </template>
                         </div>
-                        <span class="docs-sidebar__search-result-section ml-2">
-                            <span x-text="r.section"></span>
-                            <template x-if="r.category && r.category !== r.section">
-                                <span class="opacity-75 font-normal" x-text="' › ' + r.category"></span>
-                            </template>
-                        </span>
+                        <div class="docs-sidebar__search-result-title group-hover:text-[var(--color-brand)]" x-text="r.title"></div>
+                        <template x-if="r.excerpt">
+                            <div class="docs-sidebar__search-result-excerpt" x-text="r.excerpt"></div>
+                        </template>
                     </a>
                 </template>
             </div>

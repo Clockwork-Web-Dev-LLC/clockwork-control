@@ -7,6 +7,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
+use App\Support\IssueCounter;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -387,5 +388,156 @@ describe('CapacityController', function () {
             ->assertSee('All Fleets')
             ->assertSee('Pressable Cloud')
             ->assertSee('Back to top');
+    });
+
+    it('renders rolling visits and column header Visits 30d instead of Visits MTD in Chillin table', function () {
+        Carbon::setTestNow('2026-09-19 12:00:00');
+
+        $tag = Tag::factory()->create(['name' => 'Shared']);
+        $server = Server::factory()->create(['name' => 'shared-chillin.example.com']);
+        $server->tags()->attach($tag);
+
+        $site = Site::factory()->create([
+            'server_id' => $server->id,
+            'domain' => 'chillin-site.example.com',
+            'is_inactive' => false,
+        ]);
+
+        // 10,000 visits last month (2026-08-25, within 30d rolling window from 2026-08-21 to 2026-09-19)
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => '2026-08-25',
+            'visits' => 10_000,
+        ]);
+
+        // 1,000 visits this month (2026-09-05)
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $site->id,
+            'date' => '2026-09-05',
+            'visits' => 1_000,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk();
+        // Column header must be Visits 30d and NOT Visits MTD
+        $response->assertSee('Visits 30d');
+        $response->assertDontSee('>Visits MTD<', false);
+        // Headroom row displays the rolling 11,000 visits, not just the calendar MTD 1,000
+        $response->assertSee('11,000');
+
+        Carbon::setTestNow();
+    });
+
+    it('displays billable sites without invented cap when Pressable API reports maxBillable and maxSites <= 0', function () {
+        Cache::forget('pressable.capacity.account_summary');
+        Cache::forget('pressable.capacity.account_summary.negative');
+
+        $this->mock(PressableClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('account')->andReturn([
+                'productName' => 'Agency 1',
+                'organization' => 'ClockworkWP',
+                'capacity' => [
+                    'sites' => [
+                        'billable' => 158,
+                        'staging' => 0,
+                        'total' => 158,
+                        'maxBillable' => 0,
+                        'maxStaging' => 0,
+                    ],
+                ],
+                'maxSites' => 0,
+                'sitesCount' => 158,
+            ]);
+        });
+
+        Site::factory()->create([
+            'hosting_provider' => 'pressable',
+            'domain' => 'pressable-nocap.example.com',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk();
+        $response->assertSee('158');
+        $response->assertDontSee('/ 100');
+
+        Cache::forget('pressable.capacity.account_summary');
+    });
+
+    it('excludes inactive shared sites from capacity over-quota and trending tables', function () {
+        Carbon::setTestNow('2026-09-19 12:00:00');
+
+        $tag = Tag::factory()->create(['name' => 'Shared']);
+        $server = Server::factory()->create(['name' => 'shared-quota.example.com']);
+        $server->tags()->attach($tag);
+
+        $inactiveSite = Site::factory()->create([
+            'server_id' => $server->id,
+            'domain' => 'inactive-high-traffic.example.com',
+            'is_inactive' => true,
+        ]);
+
+        SiteTrafficDaily::factory()->create([
+            'site_id' => $inactiveSite->id,
+            'date' => '2026-09-10',
+            'visits' => 45_000,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'));
+
+        $response->assertOk();
+        $response->assertDontSee('inactive-high-traffic.example.com');
+
+        Carbon::setTestNow();
+    });
+
+    it('scopes hot-server counting in IssueCounter strictly to shared non-ignored servers', function () {
+        $sharedTag = Tag::factory()->create(['name' => 'Shared']);
+
+        $nonSharedServer = Server::factory()->create([
+            'name' => 'dedicated-hot.example.com',
+            'is_ignored' => false,
+        ]);
+
+        $sharedServer = Server::factory()->create([
+            'name' => 'shared-hot.example.com',
+            'is_ignored' => false,
+        ]);
+        $sharedServer->tags()->attach($sharedTag);
+
+        // Put non-shared server over CPU yellow threshold (85% > 70%)
+        DB::table('server_metrics')->insert([
+            'server_id' => $nonSharedServer->id,
+            'cpu_pct' => 85.0,
+            'memory_pct' => 40.0,
+            'disk_pct' => 50.0,
+            'recorded_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $counter = app(IssueCounter::class);
+
+        // Non-shared server over CPU threshold must NOT count toward hot servers
+        expect($counter->countHotServers())->toBe(0);
+
+        // Now put shared server over CPU threshold (85% > 70%)
+        DB::table('server_metrics')->insert([
+            'server_id' => $sharedServer->id,
+            'cpu_pct' => 85.0,
+            'memory_pct' => 40.0,
+            'disk_pct' => 50.0,
+            'recorded_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Shared server over threshold DOES increment hot server count
+        expect($counter->countHotServers())->toBe(1);
     });
 });
