@@ -272,6 +272,39 @@ namespace {
                 ->assertSee('Update & reboot', false);
         });
 
+        it('answers queue-bulk with JSON (queued ids + skip counts) when the Issues page asks for it', function () {
+            $ready = Server::factory()->create(['name' => 'patch-me.example.com', 'ssh_password' => 'pw', 'upgrade_required' => true]);
+            $inFlight = Server::factory()->create(['name' => 'busy.example.com', 'ssh_password' => 'pw', 'update_status' => Server::UPDATE_STATUS_RUNNING]);
+            $noSsh = Server::factory()->create(['name' => 'nossh.example.com', 'ssh_password' => null, 'clockwork_jail_provisioned_at' => null]);
+
+            $response = $this->actingAs(User::factory()->create())
+                ->postJson(route('operations.server-updates.queueBulk'), [
+                    'server_ids' => [$ready->id, $inFlight->id, $noSsh->id],
+                    'reboot_immediate' => true,
+                ]);
+
+            $response->assertOk()
+                ->assertJsonPath('ok', true)
+                ->assertJsonPath('stats.queued', 1)
+                ->assertJsonPath('stats.skipped_inflight', 1)
+                ->assertJsonPath('stats.skipped_no_ssh', 1)
+                ->assertJsonPath('queued_ids', [$ready->id]);
+
+            expect($ready->fresh()->update_status)->toBe(Server::UPDATE_STATUS_QUEUED)
+                ->and($ready->fresh()->scheduled_reboot_at)->not->toBeNull()
+                ->and($inFlight->fresh()->update_status)->toBe(Server::UPDATE_STATUS_RUNNING);
+        });
+
+        it('returns 422 JSON when nothing could be queued', function () {
+            $ignored = Server::factory()->ignored()->create(['ssh_password' => 'pw']);
+
+            $this->actingAs(User::factory()->create())
+                ->postJson(route('operations.server-updates.queueBulk'), ['server_ids' => [$ignored->id]])
+                ->assertStatus(422)
+                ->assertJsonPath('ok', false)
+                ->assertJsonPath('stats.skipped_ignored', 1);
+        });
+
         it('removes the Update & reboot button for servers that are up to date', function () {
             $upToDateServer = Server::factory()->create([
                 'name' => 'uptodate-box.example.com',
