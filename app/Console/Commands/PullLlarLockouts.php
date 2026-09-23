@@ -29,7 +29,9 @@ class PullLlarLockouts extends Command
         $dryRun = (bool) $this->option('dry-run');
 
         $servers = $this->resolveServers();
-        if ($servers->isEmpty()) {
+        $serverlessSites = $this->resolveServerlessSites();
+
+        if ($servers->isEmpty() && $serverlessSites->isEmpty()) {
             $this->warn('No servers matched.');
 
             return self::SUCCESS;
@@ -53,6 +55,12 @@ class PullLlarLockouts extends Command
             foreach (['sites', 'lockouts', 'queued', 'auto_banned', 'skipped_existing', 'filtered_protected', 'errors'] as $k) {
                 $totals[$k] += $perServer[$k];
             }
+        }
+
+        foreach ($serverlessSites as $site) {
+            $totals['sites']++;
+            // Serverless sites (e.g. Pressable) have no fail2ban server, so auto_ban is always false.
+            $this->pullForSite(null, $site, $puller, $fail2ban, $ignoreMatcher, false, $dryRun, $chat, $totals);
         }
 
         $msg = sprintf(
@@ -84,7 +92,13 @@ class PullLlarLockouts extends Command
     {
         $q = Server::query()
             ->monitored()
-            ->whereHas('sites', fn ($qq) => $qq->where('is_wordpress', true)->whereNotNull('db_password'));
+            ->whereHas('sites', fn ($qq) => $qq->where('is_wordpress', true)->where(function ($w) {
+                $w->whereNotNull('db_password')
+                    ->orWhere(function ($g) {
+                        $g->where('companion_installed', true)
+                            ->whereJsonContains('companion_capabilities', 'gatekeeper');
+                    });
+            }));
 
         if ($needle = $this->option('server')) {
             $q->where(function ($q) use ($needle) {
@@ -98,6 +112,24 @@ class PullLlarLockouts extends Command
     }
 
     /**
+     * @return Collection<int, Site>
+     */
+    private function resolveServerlessSites(): Collection
+    {
+        if ($this->option('server')) {
+            return new Collection;
+        }
+
+        return Site::query()
+            ->whereNull('server_id')
+            ->where('is_wordpress', true)
+            ->where('companion_installed', true)
+            ->whereJsonContains('companion_capabilities', 'gatekeeper')
+            ->orderBy('domain')
+            ->get();
+    }
+
+    /**
      * @return array{sites: int, lockouts: int, queued: int, auto_banned: int, skipped_existing: int, filtered_protected: int, errors: int}
      */
     private function pullForServer(Server $server, LlarLockoutPuller $puller, Fail2banClient $fail2ban, IgnoreIpMatcher $ignoreMatcher, bool $dryRun, ChatNotifier $chat): array
@@ -107,66 +139,20 @@ class PullLlarLockouts extends Command
         $autoBan = (bool) $server->auto_ban_llar;
         $sites = $server->sites()
             ->where('is_wordpress', true)
-            ->whereNotNull('db_password')
+            ->where(function ($w) {
+                $w->whereNotNull('db_password')
+                    ->orWhere(function ($g) {
+                        $g->where('companion_installed', true)
+                            ->whereJsonContains('companion_capabilities', 'gatekeeper');
+                    });
+            })
             ->orderBy('domain')
             ->get();
 
         /** @var Site $site */
         foreach ($sites as $site) {
             $stats['sites']++;
-
-            try {
-                $lockouts = $puller->activeLockouts($site);
-            } catch (\Throwable $e) {
-                $stats['errors']++;
-                Log::warning('llar.pull.site_failed', [
-                    'server' => $server->name,
-                    'site' => $site->domain,
-                    'error' => $e->getMessage(),
-                ]);
-
-                continue;
-            }
-
-            foreach ($lockouts as $lockout) {
-                $stats['lockouts']++;
-
-                if ($protectedReason = $ignoreMatcher->reason($lockout['ip'])) {
-                    $stats['filtered_protected']++;
-                    // debug, not info — this re-fires for every still-active
-                    // protected IP on every pull with no new information each
-                    // time (628k lines observed from this alone).
-                    Log::debug('llar.lockout.filtered_protected', [
-                        'server' => $server->name,
-                        'site' => $site->domain,
-                        'ip' => $lockout['ip'],
-                        'reason' => $protectedReason,
-                    ]);
-
-                    continue;
-                }
-
-                $action = $this->processLockout($server, $site, $lockout, $autoBan, $dryRun, $fail2ban, $chat, $stats);
-
-                // activeLockouts() returns every lockout still active on the
-                // site, not just new ones — logging unconditionally here
-                // re-logged the same standing lockouts on every 5-15 min
-                // pull. Sites with large lockout tables (e.g. one site alone
-                // produced 863k lines) turned laravel.log into pure noise.
-                // Only log actions that represent a genuinely new event.
-                if (! in_array($action, ['skipped_active_ban', 'incremented_existing', 'skipped_queued_for_ban'], true)) {
-                    Log::info('llar.lockout', [
-                        'server' => $server->name,
-                        'site' => $site->domain,
-                        'ip' => $lockout['ip'],
-                        'unlock_at' => $lockout['unlock_at']?->toIso8601String(),
-                        'source' => $lockout['source_table'],
-                        'action' => $action,
-                        'auto_ban' => $autoBan,
-                        'dry_run' => $dryRun,
-                    ]);
-                }
-            }
+            $this->pullForSite($server, $site, $puller, $fail2ban, $ignoreMatcher, $autoBan, $dryRun, $chat, $stats);
         }
 
         if (! $dryRun) {
@@ -177,11 +163,81 @@ class PullLlarLockouts extends Command
     }
 
     /**
+     * @param  array{sites: int, lockouts: int, queued: int, auto_banned: int, skipped_existing: int, filtered_protected: int, errors: int}  $stats
+     */
+    private function pullForSite(
+        ?Server $server,
+        Site $site,
+        LlarLockoutPuller $puller,
+        Fail2banClient $fail2ban,
+        IgnoreIpMatcher $ignoreMatcher,
+        bool $autoBan,
+        bool $dryRun,
+        ChatNotifier $chat,
+        array &$stats,
+    ): void {
+        $serverName = $server?->name ?? ($site->hosting_provider ?? 'serverless');
+
+        try {
+            $lockouts = $puller->activeLockouts($site);
+        } catch (\Throwable $e) {
+            $stats['errors']++;
+            Log::warning('llar.pull.site_failed', [
+                'server' => $serverName,
+                'site' => $site->domain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        foreach ($lockouts as $lockout) {
+            $stats['lockouts']++;
+
+            if ($protectedReason = $ignoreMatcher->reason($lockout['ip'])) {
+                $stats['filtered_protected']++;
+                // debug, not info — this re-fires for every still-active
+                // protected IP on every pull with no new information each
+                // time (628k lines observed from this alone).
+                Log::debug('llar.lockout.filtered_protected', [
+                    'server' => $serverName,
+                    'site' => $site->domain,
+                    'ip' => $lockout['ip'],
+                    'reason' => $protectedReason,
+                ]);
+
+                continue;
+            }
+
+            $action = $this->processLockout($server, $site, $lockout, $autoBan, $dryRun, $fail2ban, $chat, $stats);
+
+            // activeLockouts() returns every lockout still active on the
+            // site, not just new ones — logging unconditionally here
+            // re-logged the same standing lockouts on every 5-15 min
+            // pull. Sites with large lockout tables (e.g. one site alone
+            // produced 863k lines) turned laravel.log into pure noise.
+            // Only log actions that represent a genuinely new event.
+            if (! in_array($action, ['skipped_active_ban', 'incremented_existing', 'skipped_queued_for_ban'], true)) {
+                Log::info('llar.lockout', [
+                    'server' => $serverName,
+                    'site' => $site->domain,
+                    'ip' => $lockout['ip'],
+                    'unlock_at' => $lockout['unlock_at']?->toIso8601String(),
+                    'source' => $lockout['source_table'],
+                    'action' => $action,
+                    'auto_ban' => $autoBan,
+                    'dry_run' => $dryRun,
+                ]);
+            }
+        }
+    }
+
+    /**
      * @param  array{ip: string, unlock_at: ?Carbon, source_table: string}  $lockout
      * @param  array{sites: int, lockouts: int, queued: int, auto_banned: int, skipped_existing: int, errors: int}  $stats
      */
     private function processLockout(
-        Server $server,
+        ?Server $server,
         Site $site,
         array $lockout,
         bool $autoBan,
@@ -193,11 +249,18 @@ class PullLlarLockouts extends Command
         $ip = $lockout['ip'];
 
         // De-dupe: skip if we already have an active ban OR a pending review entry
-        // for this IP on this server. Anchor on server (not site) because fail2ban bans
-        // are server-scoped — once banned for one site on this box, it's banned for all.
+        // for this IP on this server (or site/global if server is null). Anchor on server
+        // (not site) because fail2ban bans are server-scoped — once banned for one site
+        // on this box, it's banned for all.
         $hasActiveBan = BlockedIp::query()
-            ->where('server_id', $server->id)
             ->where('ip', $ip)
+            ->where(function ($q) use ($server) {
+                if ($server) {
+                    $q->where('server_id', $server->id);
+                } else {
+                    $q->whereNull('server_id');
+                }
+            })
             ->whereNull('unbanned_at')
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
@@ -213,8 +276,14 @@ class PullLlarLockouts extends Command
         // Don't re-create or bump if the entry is already queued for ban — it's about to
         // be processed off the request path. Pending is the only state we mutate.
         $hasOpenEntry = ReviewQueueEntry::query()
-            ->where('server_id', $server->id)
             ->where('ip', $ip)
+            ->where(function ($q) use ($server) {
+                if ($server) {
+                    $q->where('server_id', $server->id);
+                } else {
+                    $q->whereNull('server_id');
+                }
+            })
             ->whereIn('status', [
                 ReviewQueueEntry::STATUS_PENDING,
                 ReviewQueueEntry::STATUS_QUEUED_FOR_BAN,
@@ -236,7 +305,7 @@ class PullLlarLockouts extends Command
             return $autoBan ? 'would_auto_ban' : 'would_queue';
         }
 
-        if ($autoBan) {
+        if ($autoBan && $server) {
             $result = $fail2ban->banIp($server, $ip);
             if (! $result['ok']) {
                 $stats['errors']++;
@@ -286,12 +355,14 @@ class PullLlarLockouts extends Command
     /**
      * @param  array{ip: string, unlock_at: ?Carbon, source_table: string}  $lockout
      */
-    private function queueEntry(Server $server, Site $site, array $lockout, string $reason): void
+    private function queueEntry(?Server $server, Site $site, array $lockout, string $reason): void
     {
         ReviewQueueEntry::create([
             'ip' => $lockout['ip'],
-            'server_id' => $server->id,
+            'server_id' => $server?->id,
             'site_id' => $site->id,
+            // Review queue / auto_ban_llar / fail2ban stay on SOURCE_LLAR for now (less UI churn).
+            // Note: Lockout rows may now be native Gatekeeper lockouts.
             'source' => ReviewQueueEntry::SOURCE_LLAR,
             'reason' => $reason,
             'llm_verdict' => null,
@@ -340,7 +411,11 @@ class PullLlarLockouts extends Command
     private function reasonText(array $lockout): string
     {
         $unlock = $lockout['unlock_at']?->diffForHumans() ?? 'no expiry recorded';
+        $source = $lockout['source_table'] ?? '';
+        $isGatekeeper = str_contains($source, 'clockwork_lockouts');
 
-        return "Locked out by Limit Login Attempts Reloaded. Plugin lockout {$unlock}.";
+        $name = $isGatekeeper ? 'Gatekeeper' : 'Limit Login Attempts Reloaded';
+
+        return "Locked out by {$name}. Plugin lockout {$unlock}.";
     }
 }

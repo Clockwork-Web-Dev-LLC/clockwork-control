@@ -348,6 +348,13 @@ Schedule::command('clockwork:push-companion-traffic')
     ->withoutOverlapping(60)
     ->onOneServer();
 
+// Daily catch-up sync for Gatekeeper login lockout settings.
+// Pushes policy defaults and site overrides to Companion and Renegade on all sites.
+Schedule::command('clockwork:push-gatekeeper-settings')
+    ->dailyAt('06:40')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Daily catch-up sync for update exceptions (paused auto-updates).
 // Pushes the active exceptions list to Companion and Renegade on all sites.
 // Runs after nightly updates have completed so any newly paused plugins are synced to wp-admin.

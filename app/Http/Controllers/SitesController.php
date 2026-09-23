@@ -22,6 +22,7 @@ use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
+use App\Services\Gatekeeper\GatekeeperSettingsPusher;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Security\PluginVulnerabilityMatcher;
@@ -139,7 +140,7 @@ class SitesController extends Controller
             'performance' => $this->loadPerformanceTab($site),
             'forms' => $this->loadFormsTab($site),
             'updates' => $this->loadUpdatesTab($site),
-            'settings' => [],
+            'settings' => $this->loadSettingsTab($site),
         };
 
         return view('dashboard.site', array_merge([
@@ -430,6 +431,21 @@ class SitesController extends Controller
             ],
             'pluginsCheckedAt' => isset($pluginsPayload['checked_at']) ? (string) $pluginsPayload['checked_at'] : null,
             'snapshotAt' => $site->companion_snapshot_at,
+        ];
+    }
+
+    /**
+     * @return array{fleetGatekeeper: array<string, mixed>, siteGatekeeper: array<string, mixed>}
+     */
+    private function loadSettingsTab(Site $site): array
+    {
+        $pusher = app(GatekeeperSettingsPusher::class);
+        $fleetGatekeeper = $pusher->buildPayload();
+        $siteGatekeeper = is_array($site->gatekeeper_settings) ? $site->gatekeeper_settings : [];
+
+        return [
+            'fleetGatekeeper' => $fleetGatekeeper,
+            'siteGatekeeper' => $siteGatekeeper,
         ];
     }
 
@@ -829,6 +845,109 @@ class SitesController extends Controller
 
         return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
             ->with('status', 'Cert details updated.');
+    }
+
+    public function updateGatekeeperSettings(Request $request, Site $site, GatekeeperSettingsPusher $pusher): RedirectResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['nullable', 'in:default,1,0'],
+            'threshold' => ['nullable', 'integer', 'min:3', 'max:20'],
+            'window_seconds' => ['nullable', 'integer', 'min:60', 'max:86400'],
+            'lockout_seconds' => ['nullable', 'integer', 'min:60', 'max:86400'],
+            'consecutive_lockouts_for_extended' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'extended_lockout_seconds' => ['nullable', 'integer', 'min:60', 'max:604800'],
+            'headline' => ['nullable', 'string', 'max:255'],
+            'body' => ['nullable', 'string', 'max:1000'],
+            'support_label' => ['nullable', 'string', 'max:100'],
+            'support_email' => ['nullable', 'email', 'max:255'],
+            'support_url' => ['nullable', 'url', 'max:255'],
+            'show_ip' => ['nullable', 'in:default,1,0'],
+            'show_unlock_link' => ['nullable', 'in:default,1,0'],
+            'unlock_url' => ['nullable', 'url', 'max:255'],
+            'ignore_ips' => ['nullable', 'string'],
+            'ignore_cidrs' => ['nullable', 'string'],
+        ]);
+
+        $overrides = [];
+        if (isset($validated['enabled']) && $validated['enabled'] !== 'default') {
+            $overrides['enabled'] = $validated['enabled'] === '1';
+        }
+        if (! empty($validated['threshold'])) {
+            $overrides['threshold'] = (int) $validated['threshold'];
+        }
+        if (! empty($validated['window_seconds'])) {
+            $overrides['window_seconds'] = (int) $validated['window_seconds'];
+        }
+        if (! empty($validated['lockout_seconds'])) {
+            $overrides['lockout_seconds'] = (int) $validated['lockout_seconds'];
+        }
+        if (! empty($validated['consecutive_lockouts_for_extended'])) {
+            $overrides['consecutive_lockouts_for_extended'] = (int) $validated['consecutive_lockouts_for_extended'];
+        }
+        if (! empty($validated['extended_lockout_seconds'])) {
+            $overrides['extended_lockout_seconds'] = (int) $validated['extended_lockout_seconds'];
+        }
+        if (! empty(trim((string) ($validated['headline'] ?? '')))) {
+            $overrides['headline'] = trim((string) $validated['headline']);
+        }
+        if (! empty(trim((string) ($validated['body'] ?? '')))) {
+            $overrides['body'] = trim((string) $validated['body']);
+        }
+        if (! empty(trim((string) ($validated['support_label'] ?? '')))) {
+            $overrides['support_label'] = trim((string) $validated['support_label']);
+        }
+        if (! empty(trim((string) ($validated['support_email'] ?? '')))) {
+            $overrides['support_email'] = trim((string) $validated['support_email']);
+        }
+        if (! empty(trim((string) ($validated['support_url'] ?? '')))) {
+            $overrides['support_url'] = trim((string) $validated['support_url']);
+        }
+        if (isset($validated['show_ip']) && $validated['show_ip'] !== 'default') {
+            $overrides['show_ip'] = $validated['show_ip'] === '1';
+        }
+        if (isset($validated['show_unlock_link']) && $validated['show_unlock_link'] !== 'default') {
+            $overrides['show_unlock_link'] = $validated['show_unlock_link'] === '1';
+        }
+        if (! empty(trim((string) ($validated['unlock_url'] ?? '')))) {
+            $overrides['unlock_url'] = trim((string) $validated['unlock_url']);
+        }
+
+        if (! empty($validated['ignore_ips'])) {
+            $overrides['ignore_ips'] = array_values(array_filter(
+                array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_ips']) ?: []),
+                fn ($ip) => filter_var($ip, FILTER_VALIDATE_IP)
+            ));
+        }
+        if (! empty($validated['ignore_cidrs'])) {
+            $overrides['ignore_cidrs'] = array_values(array_filter(
+                array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_cidrs']) ?: []),
+                fn ($cidr) => str_contains($cidr, '/')
+            ));
+        }
+
+        $site->gatekeeper_settings = empty($overrides) ? null : $overrides;
+        $site->save();
+
+        // Best-effort push to site
+        $pushed = $pusher->maybePush($site);
+
+        $msg = 'Gatekeeper site settings saved'.($pushed ? ' and synced to WordPress.' : '.');
+
+        return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
+            ->with('status', $msg);
+    }
+
+    public function pushGatekeeperSettings(Site $site, GatekeeperSettingsPusher $pusher): RedirectResponse
+    {
+        $pushed = $pusher->maybePush($site);
+
+        if ($pushed) {
+            return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
+                ->with('status', 'Gatekeeper settings pushed to site successfully.');
+        }
+
+        return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
+            ->with('error', 'Failed to push Gatekeeper settings. Verify Companion is installed and advertises gatekeeper capability.');
     }
 
     public function updateNotes(Request $request, Site $site): JsonResponse|RedirectResponse

@@ -282,6 +282,18 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Push Gatekeeper lockout settings to WordPress.
+     * Stored in wp_options['clockwork_gatekeeper_settings'].
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function pushGatekeeperSettings(array $payload): array
+    {
+        return $this->postJson('/gatekeeper-settings', $payload);
+    }
+
+    /**
      * Flush object / page caches on the origin (Companion cache-flush capability).
      *
      * @return array<string, mixed>
