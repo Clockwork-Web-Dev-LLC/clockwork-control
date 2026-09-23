@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Server;
 use App\Models\ServerUpdateSnapshot;
 use App\Services\Process\BackgroundArtisan;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -103,7 +104,7 @@ class OperationsUpdatesController extends Controller
      * already queued — the response surfaces the per-bucket counts so the
      * operator knows what landed and what was passed over.
      */
-    public function queueBulk(Request $request): RedirectResponse
+    public function queueBulk(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'server_ids' => ['required', 'array', 'min:1'],
@@ -117,6 +118,7 @@ class OperationsUpdatesController extends Controller
             ->get();
 
         $stats = ['queued' => 0, 'skipped_ignored' => 0, 'skipped_staging' => 0, 'skipped_inflight' => 0, 'skipped_no_ssh' => 0];
+        $queuedIds = [];
         $now = Carbon::now();
 
         $rebootAt = null;
@@ -163,6 +165,7 @@ class OperationsUpdatesController extends Controller
             ]);
 
             $stats['queued']++;
+            $queuedIds[] = $server->id;
         }
 
         $msg = "Queued {$stats['queued']} server(s).";
@@ -186,6 +189,17 @@ class OperationsUpdatesController extends Controller
             $msg .= " Reboots scheduled for {$validated['reboot_at']} server-local.";
         } elseif ($rebootAt !== null) {
             $msg .= ' Reboots scheduled immediately upon completion.';
+        }
+
+        // The /issues page's "Install updates" buttons POST with Accept: application/json
+        // so they can flip rows to "queued" in place instead of leaving the page.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $stats['queued'] > 0,
+                'message' => $msg,
+                'stats' => $stats,
+                'queued_ids' => $queuedIds,
+            ], $stats['queued'] > 0 ? 200 : 422);
         }
 
         // 303 See Other (instead of back()'s default 302 Found): every

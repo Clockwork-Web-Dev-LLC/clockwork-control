@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Install updates from the Issues page**: the *Patches available* card now has an **Install updates** button per server and an **Install updates on all N** toolbar action with an optional server-local *Reboot at* time. Both queue `apt-get upgrade` through the existing fleet `queueBulk` endpoint (which now answers JSON with queued ids and per-reason skip counts) and flip rows to a `queued` state in place. Rows already in flight or lacking SSH credentials show that instead of a button.
+
+### Changed
+- *Patches available* rows only offer **Reboot now** when the server's `reboot_required` flag is set, alongside a "reboot pending" marker. Previously every row had the button and clicking it faded the row as if the pending packages were gone — a reboot installs nothing, so the row reappeared on reload.
+
+
 ## [1.7.3] - 2026-09-18
 
 ### Added
