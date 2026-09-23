@@ -883,6 +883,157 @@
         </div>
     @endif
 
+    {{-- Card 10: Gatekeeper Login Lockouts --}}
+    @php
+        $siteOverrides = $siteGatekeeper ?? [];
+        $hasCustomOverrides = ! empty($siteOverrides);
+        $isOverriddenEnabled = isset($siteOverrides['enabled']) && $siteOverrides['enabled'] !== null;
+        $effectiveEnabled = $isOverriddenEnabled ? (bool) $siteOverrides['enabled'] : (bool) ($fleetGatekeeper['enabled'] ?? false);
+        $effectiveThreshold = $siteOverrides['threshold'] ?? $fleetGatekeeper['threshold'] ?? 4;
+        $effectiveLockout = $siteOverrides['lockout_seconds'] ?? $fleetGatekeeper['lockout_seconds'] ?? 1200;
+        $effectiveHeadline = $siteOverrides['headline'] ?? $fleetGatekeeper['headline'] ?? 'Too many failed login attempts';
+        $effectiveSupportLabel = $siteOverrides['support_label'] ?? $fleetGatekeeper['support_label'] ?? 'IT Helpdesk';
+        $effectiveSupportEmail = $siteOverrides['support_email'] ?? $fleetGatekeeper['support_email'] ?? '';
+    @endphp
+    <div class="card p-5 flex flex-col justify-between h-full" id="gatekeeper-card">
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-blue-600"></i>
+                    Login lockouts (Gatekeeper)
+                </h3>
+                @if ($hasCustomOverrides)
+                    <span class="status-pill status-blue text-[10px]"><span class="status-dot"></span> Custom override</span>
+                @else
+                    <span class="status-pill {{ $effectiveEnabled ? 'status-green' : 'status-unknown' }} text-[10px]">
+                        <span class="status-dot"></span> Inherit fleet ({{ $effectiveEnabled ? 'On' : 'Off' }})
+                    </span>
+                @endif
+            </div>
+
+            <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                Native login brute-force throttling and custom enterprise lockout page copy.
+            </p>
+
+            <div id="gatekeeper-view" class="space-y-2">
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Enforcement:</span>
+                        <span class="font-medium {{ $effectiveEnabled ? 'text-emerald-600' : 'text-[var(--color-ink-soft)]' }}">
+                            {{ $effectiveEnabled ? 'Active (Locking brute-force)' : 'Disabled' }}
+                            @if ($isOverriddenEnabled)
+                                <span class="text-[10px] text-[var(--color-ink-soft)]">(Site Override)</span>
+                            @else
+                                <span class="text-[10px] text-[var(--color-ink-soft)]">(Fleet Policy)</span>
+                            @endif
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Threshold:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $effectiveThreshold }} attempts</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Lockout:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)]">{{ round($effectiveLockout / 60) }}m duration</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)]">Headline:</span>
+                        <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[160px]" title="{{ $effectiveHeadline }}">{{ $effectiveHeadline }}</span>
+                    </div>
+                    @if ($effectiveSupportEmail)
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-[var(--color-ink-muted)]">Support:</span>
+                            <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[160px]">{{ $effectiveSupportLabel }} &lt;{{ $effectiveSupportEmail }}&gt;</span>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <form id="gatekeeper-form" method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="hidden space-y-2.5 text-xs">
+                @csrf
+                @method('PATCH')
+
+                <div>
+                    <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Policy Mode</label>
+                    <select name="enabled" class="block w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                        <option value="default" @selected(! isset($siteOverrides['enabled']) || $siteOverrides['enabled'] === null)>Inherit Fleet Default ({{ ($fleetGatekeeper['enabled'] ?? false) ? 'Enabled' : 'Disabled' }})</option>
+                        <option value="1" @selected(isset($siteOverrides['enabled']) && $siteOverrides['enabled'] === true)>Force Enable on Site</option>
+                        <option value="0" @selected(isset($siteOverrides['enabled']) && $siteOverrides['enabled'] === false)>Force Disable on Site</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Threshold</label>
+                        <input type="number" name="threshold" min="3" max="20"
+                               placeholder="Fleet: {{ $fleetGatekeeper['threshold'] ?? 4 }}"
+                               value="{{ $siteOverrides['threshold'] ?? '' }}"
+                               class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Lockout (sec)</label>
+                        <input type="number" name="lockout_seconds" min="60" max="86400"
+                               placeholder="Fleet: {{ $fleetGatekeeper['lockout_seconds'] ?? 1200 }}"
+                               value="{{ $siteOverrides['lockout_seconds'] ?? '' }}"
+                               class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Custom Headline</label>
+                    <input type="text" name="headline" maxlength="255"
+                           placeholder="Fleet: {{ $fleetGatekeeper['headline'] ?? '' }}"
+                           value="{{ $siteOverrides['headline'] ?? '' }}"
+                           class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Custom Body Text</label>
+                    <input type="text" name="body" maxlength="1000"
+                           placeholder="Fleet: {{ $fleetGatekeeper['body'] ?? '' }}"
+                           value="{{ $siteOverrides['body'] ?? '' }}"
+                           class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                    <span class="text-[10px] text-[var(--color-ink-soft)]">Supports <code>{duration}</code>. Empty = inherit fleet.</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Support Label</label>
+                        <input type="text" name="support_label" maxlength="100"
+                               placeholder="Fleet: {{ $fleetGatekeeper['support_label'] ?? '' }}"
+                               value="{{ $siteOverrides['support_label'] ?? '' }}"
+                               class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-medium tracking-wide text-[var(--color-ink-soft)] mb-0.5">Support Email</label>
+                        <input type="email" name="support_email" maxlength="255"
+                               placeholder="Fleet: {{ $fleetGatekeeper['support_email'] ?? '' }}"
+                               value="{{ $siteOverrides['support_email'] ?? '' }}"
+                               class="w-full border border-[var(--color-border-light)] rounded px-2 py-1 text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <button type="submit" class="btn-primary text-xs">Save Overrides</button>
+                    <button type="button" id="gatekeeper-cancel-toggle" class="btn-pill-nav text-xs">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between">
+            <form method="POST" action="{{ route('sites.gatekeeper.push', $site) }}">
+                @csrf
+                <button type="submit" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] flex items-center gap-1"
+                        title="Push current effective Gatekeeper settings to this site immediately">
+                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i> Push to site
+                </button>
+            </form>
+            <button type="button" id="gatekeeper-edit-toggle" class="btn-pill-nav text-xs flex items-center gap-1">
+                <i class="fa-solid fa-pen-to-square text-[10px]"></i> Edit Overrides
+            </button>
+        </div>
+    </div>
+
 </div>
 
 {{-- Danger Zone: Remove from Monitoring --}}
@@ -1110,6 +1261,25 @@
                 archiveForm.classList.add('hidden');
                 archiveToggle.classList.remove('hidden');
                 archiveForm.reset();
+            });
+        }
+
+        // Gatekeeper toggle
+        const gatekeeperEditToggle = document.getElementById('gatekeeper-edit-toggle');
+        const gatekeeperForm = document.getElementById('gatekeeper-form');
+        const gatekeeperView = document.getElementById('gatekeeper-view');
+        const gatekeeperCancel = document.getElementById('gatekeeper-cancel-toggle');
+        if (gatekeeperEditToggle && gatekeeperForm && gatekeeperView && gatekeeperCancel) {
+            gatekeeperEditToggle.addEventListener('click', () => {
+                gatekeeperForm.classList.remove('hidden');
+                gatekeeperView.classList.add('hidden');
+                gatekeeperEditToggle.classList.add('hidden');
+            });
+            gatekeeperCancel.addEventListener('click', () => {
+                gatekeeperForm.classList.add('hidden');
+                gatekeeperView.classList.remove('hidden');
+                gatekeeperEditToggle.classList.remove('hidden');
+                gatekeeperForm.reset();
             });
         }
     })();

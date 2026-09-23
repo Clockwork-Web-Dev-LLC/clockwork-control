@@ -3,6 +3,7 @@
 namespace App\Services\Companion;
 
 use App\Models\Site;
+use App\Services\Gatekeeper\GatekeeperSettingsPusher;
 use App\Services\Ssh\SshClient;
 use App\Services\Updates\UpdateFailureStreakRecorder;
 use Modules\Core\Contracts\CompanionInstaller as CompanionInstallerContract;
@@ -121,6 +122,12 @@ class CompanionInstaller implements CompanionInstallerContract
 
         try {
             app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site->fresh());
+        } catch (Throwable) {
+            // Non-blocking on install
+        }
+
+        try {
+            app(GatekeeperSettingsPusher::class)->maybePush($site->fresh());
         } catch (Throwable) {
             // Non-blocking on install
         }

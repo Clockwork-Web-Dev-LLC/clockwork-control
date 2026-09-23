@@ -60,6 +60,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:pull-wordfence-blocks',
         'clockwork:push-companion-backups',
         'clockwork:push-companion-traffic',
+        'clockwork:push-gatekeeper-settings',
         'clockwork:push-update-exceptions',
         'clockwork:reap-stale-server-updates',
         'clockwork:reap-stale-update-jobs',

@@ -141,7 +141,8 @@ Read-only GETs (HMAC-signed):
 
 Mutating Requests (HMAC-signed POST / DELETE):
 
-- `DELETE /lockouts` — flush Limit Login Attempts Reloaded (LLAR) lockouts for an IP or username directly from the designated Agency Primary Hub console (`lockouts-unlock` capability)
+- `DELETE /lockouts` — flush native Gatekeeper (`clockwork_lockouts`) and legacy Limit Login Attempts Reloaded (LLAR) lockouts for an IP or username directly from the designated Agency Primary Hub console (`lockouts-unlock` capability)
+- `/gatekeeper-settings` — Clockwork Control pushes Gatekeeper lockout throttling rules, progressive backoff thresholds, and white-labeled lockout screen copy. Stored in `wp_options['clockwork_gatekeeper_settings']` (`gatekeeper` capability).
 - `/test-contact-form` — fire a marker-injected submission for the form-test add-on
 - `/backups-report` — Clockwork Control pushes SpinupWP config + DO Spaces history, plus (as of the S3 Glacier archive enumerator) an `offsite_archive` field: presigned S3 download links for the site's off-host Glacier snapshots, resolved by `Modules\BackupRelay\Services\BackupArchiveEnumerator` and gated on `supportsPresignedUrls()` so a disk driver that can't mint a real presigned URL never hands the client-facing wp-admin page a dead-end link back to Clockwork Control's own (LAN-only) login screen
 - `/update-exceptions` — Clockwork Control pushes the active list of auto-paused plugin/theme update exceptions when failures cross the streak threshold, on operator resume, after Companion/Renegade install or upgrade, and during the daily 06:45 catch-up. Stored in `wp_options['clockwork_update_exceptions']`. Companion renders the "Update coverage" submenu page and a dismissible warning notice on `plugins.php` / `themes.php` (`update-exceptions` capability). Older plugin versions that do not advertise the capability are a no-op.

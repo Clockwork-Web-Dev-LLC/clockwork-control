@@ -13,10 +13,10 @@ use App\Http\Controllers\CompanionSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiagnosticsController;
 use App\Http\Controllers\DocsController;
+use App\Http\Controllers\GatekeeperSettingsController;
 use App\Http\Controllers\IngestSettingsController;
 use App\Http\Controllers\IntegrationCredentialsController;
 use App\Http\Controllers\IssuesController;
-use App\Http\Controllers\StyleguideController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceHistoryController;
 use App\Http\Controllers\ModuleDirectoryController;
@@ -40,6 +40,7 @@ use App\Http\Controllers\Sites\DomainExpirationController;
 use App\Http\Controllers\Sites\SeoPreflightController;
 use App\Http\Controllers\SitesController;
 use App\Http\Controllers\SiteWorkLogsController;
+use App\Http\Controllers\StyleguideController;
 use App\Http\Controllers\SystemUpdatesController;
 use App\Http\Controllers\TagsController;
 use App\Http\Controllers\UpdatesController;
@@ -335,6 +336,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/refresh-wp-plugins', [SitesController::class, 'refreshWpPlugins'])->name('sites.wp-plugins.refresh');
     Route::post('/sites/{site}/fetch-db-creds', [SitesController::class, 'fetchDbCreds'])->name('sites.fetch-db-creds');
     Route::post('/sites/{site}/email-vuln-report', [SitesController::class, 'emailVulnerabilityReport'])->name('sites.email-vuln-report');
+    Route::patch('/sites/{site}/gatekeeper', [SitesController::class, 'updateGatekeeperSettings'])->name('sites.gatekeeper.update');
+    Route::post('/sites/{site}/gatekeeper/push', [SitesController::class, 'pushGatekeeperSettings'])->name('sites.gatekeeper.push');
 
     // Contact form testing Companion install & secret rotation (delegated to SitesController).
     // The form-test CRUD routes (/forms, /sites/{site}/form-tests) are provided by Modules\ContactForms.
@@ -388,6 +391,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Care Plans fleet policy settings
     Route::get('/settings/care-plans', [CarePlanSettingsController::class, 'index'])->name('settings.care-plans.index');
     Route::patch('/settings/care-plans', [CarePlanSettingsController::class, 'update'])->name('settings.care-plans.update');
+
+    // Gatekeeper login lockouts fleet policy settings
+    Route::get('/settings/gatekeeper', [GatekeeperSettingsController::class, 'index'])->name('settings.gatekeeper.index');
+    Route::patch('/settings/gatekeeper', [GatekeeperSettingsController::class, 'update'])->name('settings.gatekeeper.update');
+    Route::post('/settings/gatekeeper/sync', [GatekeeperSettingsController::class, 'syncNow'])->name('settings.gatekeeper.syncNow');
 
     // Scheduled jobs dashboard — view every cron entry's last outcome, run one on demand.
     Route::get('/settings/scheduled-jobs', [ScheduledJobsController::class, 'index'])->name('settings.scheduled-jobs.index');

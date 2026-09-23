@@ -39,6 +39,22 @@ class LlarLockoutPuller
             return [];
         }
 
+        // Gatekeeper native: REST GET /lockouts only. Never fall back to SSH/MySQL
+        // (Pressable has no DB creds, and scraping legacy LLAR is wrong once Gatekeeper is active).
+        // Rows may be sourced from native Gatekeeper (source_table: clockwork_lockouts) or LLAR.
+        if ($this->companionAdvertisesGatekeeper($site)) {
+            try {
+                return (new ClockworkCompanionClient($site))->lockouts();
+            } catch (Throwable $e) {
+                Log::warning('gatekeeper.lockouts.companion_failed', [
+                    'site' => $site->domain,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return [];
+            }
+        }
+
         if ($this->companionAdvertisesLockouts($site)) {
             try {
                 return (new ClockworkCompanionClient($site))->lockouts();
@@ -197,6 +213,20 @@ class LlarLockoutPuller
         }
 
         return $out;
+    }
+
+    private function companionAdvertisesGatekeeper(Site $site): bool
+    {
+        if (! $site->companion_installed || ! $site->companion_secret) {
+            return false;
+        }
+
+        $caps = $site->companion_capabilities;
+        if (! is_array($caps)) {
+            return false;
+        }
+
+        return in_array('gatekeeper', $caps, true);
     }
 
     private function companionAdvertisesLockouts(Site $site): bool

@@ -7,6 +7,7 @@ use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\Companion\CompanionTarballBuilder;
+use App\Services\Gatekeeper\GatekeeperSettingsPusher;
 use App\Services\Updates\UpdateFailureStreakRecorder;
 use Modules\Core\Contracts\CompanionInstaller as CompanionInstallerContract;
 use Throwable;
@@ -159,6 +160,12 @@ class PressableCompanionInstaller implements CompanionInstallerContract
 
         try {
             app(UpdateFailureStreakRecorder::class)->maybePushExceptions($site->fresh());
+        } catch (Throwable) {
+            // Non-blocking on install
+        }
+
+        try {
+            app(GatekeeperSettingsPusher::class)->maybePush($site->fresh());
         } catch (Throwable) {
             // Non-blocking on install
         }
