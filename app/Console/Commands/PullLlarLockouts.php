@@ -163,7 +163,7 @@ class PullLlarLockouts extends Command
     }
 
     /**
-     * @param  array{sites: int, lockouts: int, queued: int, auto_banned: int, skipped_existing: int, filtered_protected: int, errors: int}  $stats
+     * @param  array<string, int>  $stats
      */
     private function pullForSite(
         ?Server $server,
@@ -176,7 +176,7 @@ class PullLlarLockouts extends Command
         ChatNotifier $chat,
         array &$stats,
     ): void {
-        $serverName = $server?->name ?? ($site->hosting_provider ?? 'serverless');
+        $serverName = $server ? $server->name : ($site->hosting_provider ?? 'serverless');
 
         try {
             $lockouts = $puller->activeLockouts($site);
@@ -234,7 +234,7 @@ class PullLlarLockouts extends Command
 
     /**
      * @param  array{ip: string, unlock_at: ?Carbon, source_table: string}  $lockout
-     * @param  array{sites: int, lockouts: int, queued: int, auto_banned: int, skipped_existing: int, errors: int}  $stats
+     * @param  array<string, int>  $stats
      */
     private function processLockout(
         ?Server $server,

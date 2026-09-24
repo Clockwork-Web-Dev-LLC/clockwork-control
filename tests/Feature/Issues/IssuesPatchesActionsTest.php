@@ -60,6 +60,8 @@ class IssuesPatchesActionsTest extends TestCase
 
         $this->assertStringContainsString('reboot pending', $html);
         $this->assertStringContainsString('class="reboot-now', $html);
-        $this->assertStringContainsString('Install updates', $html);
+        // Server awaiting reboot hides "Install updates" so operator is not prompted to re-install
+        $this->assertStringNotContainsString('class="patch-now', $html);
+        $this->assertStringContainsString('Install updates on all 0', $html);
     }
 }

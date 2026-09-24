@@ -294,6 +294,8 @@ class Server extends Model
      * Latest apt-update snapshot. Schema constrains one row per server, so
      * the relation is a hasOne — the daily PollSystemUpdates command upserts
      * via `updateOrCreate` on `server_id`.
+     *
+     * @return HasOne<ServerUpdateSnapshot, $this>
      */
     public function updateSnapshot(): HasOne
     {

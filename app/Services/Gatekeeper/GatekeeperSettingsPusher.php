@@ -72,7 +72,7 @@ class GatekeeperSettingsPusher
         // Merge site-level overrides if present
         $siteOverrides = $site?->gatekeeper_settings;
         if (is_array($siteOverrides)) {
-            if (isset($siteOverrides['enabled']) && $siteOverrides['enabled'] !== null && $siteOverrides['enabled'] !== '') {
+            if (isset($siteOverrides['enabled']) && $siteOverrides['enabled'] !== '') {
                 $fleet['enabled'] = (bool) $siteOverrides['enabled'];
             }
             if (! empty($siteOverrides['threshold'])) {
@@ -105,10 +105,10 @@ class GatekeeperSettingsPusher
             if (isset($siteOverrides['support_url']) && trim((string) $siteOverrides['support_url']) !== '') {
                 $fleet['support_url'] = trim((string) $siteOverrides['support_url']);
             }
-            if (isset($siteOverrides['show_ip']) && $siteOverrides['show_ip'] !== null && $siteOverrides['show_ip'] !== '') {
+            if (isset($siteOverrides['show_ip']) && $siteOverrides['show_ip'] !== '') {
                 $fleet['show_ip'] = (bool) $siteOverrides['show_ip'];
             }
-            if (isset($siteOverrides['show_unlock_link']) && $siteOverrides['show_unlock_link'] !== null && $siteOverrides['show_unlock_link'] !== '') {
+            if (isset($siteOverrides['show_unlock_link']) && $siteOverrides['show_unlock_link'] !== '') {
                 $fleet['show_unlock_link'] = (bool) $siteOverrides['show_unlock_link'];
             }
             if (isset($siteOverrides['unlock_url']) && trim((string) $siteOverrides['unlock_url']) !== '') {
