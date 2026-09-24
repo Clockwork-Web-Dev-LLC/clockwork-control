@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-24
+
+### Added
+- **Gatekeeper: Native WordPress Login Protection & Lockout Orchestration**:
+  - Replaces external Limit Login Attempts Reloaded (LLAR) dependencies with native Clockwork Gatekeeper integration bundled into Clockwork Companion 1.38.4+ and Clockwork Renegade 1.0.3+.
+  - **Fleet Settings Hub (`/settings/gatekeeper`)**: Central configuration for fleet-wide lockout thresholds, progressive backoff windows, extended lockouts, customizable 429 lockout response messaging, support links, and IP allowlists.
+  - **Per-Site Gatekeeper Overrides**: Sites can inherit agency fleet defaults or define granular threshold, backoff, and copy overrides via the site settings tab.
+  - **Signed HMAC REST Synchronization**: Central dispatch of Gatekeeper configuration (`clockwork:push-gatekeeper-settings` and scheduled sync) directly to WordPress instances over HMAC-SHA256 authenticated REST endpoints.
+  - **Serverless Lockout Ingestion**: `clockwork:pull-llar-lockouts` now pulls active lockouts via REST `GET /wp-json/clockwork/v1/lockouts`, enabling full lockout tracking, automated IP banning, and review queue ingestion for Pressable and other serverless hosting environments with no SSH or direct MySQL access.
+  - **Database Migration**: Added `gatekeeper_settings` JSON column to the `sites` table.
+- **Demo Mode Configuration**: Added `CLOCKWORK_DEMO_MODE` environment variable and `config('clockwork.demo_mode')` toggle.
+
 ## [1.7.4] - 2026-09-24
 
 ### Added

@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.7.4',
+    'version' => '1.8.0',
 
     // Demo mode interlock for marketing screenshots and anonymized datasets.
     // Gates screenshot Dusk runs to prevent running against live production,
