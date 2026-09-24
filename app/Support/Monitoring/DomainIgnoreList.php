@@ -2,6 +2,7 @@
 
 namespace App\Support\Monitoring;
 
+use App\Models\Site;
 use App\Support\Settings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
@@ -93,8 +94,8 @@ class DomainIgnoreList
      * charset guard in patterns() guarantees no literal `%`/`_` can leak in
      * (SQLite LIKE has no default escape character, so escaping isn't an option).
      *
-     * @param  Builder<\App\Models\Site>  $query
-     * @return Builder<\App\Models\Site>
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
      */
     public function applyExclusion(Builder $query): Builder
     {

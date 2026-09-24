@@ -49,6 +49,7 @@ class PushUpdateExceptions extends Command
             $capabilities = is_array($site->companion_capabilities) ? $site->companion_capabilities : [];
             if (! in_array('update-exceptions', $capabilities, true)) {
                 $skipped++;
+
                 continue;
             }
 

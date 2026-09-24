@@ -127,7 +127,7 @@ class BlockedIpsController extends Controller
         }
 
         $blockedIp->update([
-            'server_id' => $server?->id ?? $blockedIp->server_id,
+            'server_id' => $server ? $server->id : $blockedIp->server_id,
             'unbanned_at' => Carbon::now(),
         ]);
 

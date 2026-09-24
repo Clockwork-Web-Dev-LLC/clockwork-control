@@ -3,6 +3,7 @@
 namespace Tests\Feature\Console;
 
 use App\Models\Server;
+use App\Models\ServerUpdateSnapshot;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
 use Illuminate\Support\Facades\Http;
@@ -291,6 +292,72 @@ describe('clockwork:import-spinupwp', function () {
         $this->artisan('clockwork:import-spinupwp')->assertSuccessful();
 
         expect($server->fresh()->reboot_required)->toBeFalse();
+    });
+
+    it('does not overwrite upgrade_required when our own poll is fresh (guard against SpinupWP\'s stale flag)', function () {
+        spinupwpConfig();
+
+        $server = Server::factory()->create([
+            'spinupwp_id' => '654',
+            'hostname' => '203.0.113.41',
+            'upgrade_required' => false,
+        ]);
+        ServerUpdateSnapshot::factory()->for($server)->create([
+            'polled_at' => now()->subHours(2), // within 24h => "fresh poll" guard applies
+            'total_updates' => 0,
+        ]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server([
+                        'id' => 654,
+                        'ip_address' => '203.0.113.41',
+                        'provider_name' => 'DigitalOcean',
+                        'upgrade_required' => true, // SpinupWP still says yes — stale
+                    ]),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(SpinupWpFixtures::listResponse([]), 200),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')->assertSuccessful();
+
+        expect($server->fresh()->upgrade_required)->toBeFalse();
+    });
+
+    it('does overwrite upgrade_required from SpinupWP when our own poll is stale (>24h)', function () {
+        spinupwpConfig();
+
+        $server = Server::factory()->create([
+            'spinupwp_id' => '655',
+            'hostname' => '203.0.113.42',
+            'upgrade_required' => false,
+        ]);
+        ServerUpdateSnapshot::factory()->for($server)->create([
+            'polled_at' => now()->subHours(25), // outside the 24h freshness window
+            'total_updates' => 0,
+        ]);
+
+        Http::fake([
+            'api.spinupwp.app/v1/servers*' => Http::response(
+                SpinupWpFixtures::listResponse([
+                    SpinupWpFixtures::server([
+                        'id' => 655,
+                        'ip_address' => '203.0.113.42',
+                        'provider_name' => 'DigitalOcean',
+                        'upgrade_required' => true,
+                    ]),
+                ]),
+                200
+            ),
+            'api.spinupwp.app/v1/sites*' => Http::response(SpinupWpFixtures::listResponse([]), 200),
+        ]);
+
+        $this->artisan('clockwork:import-spinupwp')->assertSuccessful();
+
+        expect($server->fresh()->upgrade_required)->toBeTrue();
     });
 
     it('disables uptime monitoring for a new staging-pattern domain but not for a normal one', function () {

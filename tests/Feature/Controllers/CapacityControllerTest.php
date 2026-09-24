@@ -7,6 +7,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
+use App\Support\IssueCounter;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -520,7 +521,7 @@ describe('CapacityController', function () {
             'updated_at' => now(),
         ]);
 
-        $counter = app(\App\Support\IssueCounter::class);
+        $counter = app(IssueCounter::class);
 
         // Non-shared server over CPU threshold must NOT count toward hot servers
         expect($counter->countHotServers())->toBe(0);

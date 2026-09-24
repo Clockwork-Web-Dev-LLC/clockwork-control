@@ -169,18 +169,6 @@ parameters:
 			path: app/Http/Controllers/IssuesController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$poll_status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/OperationsUpdatesController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$polled_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/OperationsUpdatesController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\ReviewQueueController\:\:aggregateByIp\(\) should return Illuminate\\Support\\Collection\<int, array\{ip\: string, total_occurrences\: int, sites\: array\<int, string\>, servers\: array\<int, array\{id\: int, name\: string\}\>, multi_server\: bool, latest_at\: Illuminate\\Support\\Carbon\|null, source\: string, entry_ids\: array\<int, int\>\}\> but returns Illuminate\\Support\\Collection\<int, array\{ip\: string, total_occurrences\: int, sites\: list\<mixed\>, servers\: list\<array\{id\: int, name\: string\}\>, multi_server\: bool, latest_at\: Illuminate\\Support\\Carbon\|null, source\: string, entry_ids\: array\<mixed\>\}\>\.$#'
 			identifier: return.type
 			count: 1

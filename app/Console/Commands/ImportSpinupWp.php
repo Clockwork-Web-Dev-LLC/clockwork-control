@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Server;
+use App\Models\ServerUpdateSnapshot;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
 use App\Support\SiteIngestExclusionSet;
@@ -238,10 +239,31 @@ class ImportSpinupWp extends Command
             // Mirrored from SpinupWP — refreshed daily on import. Their dashboard refreshes
             // these on-demand, so values may be a few hours stale relative to their UI.
             'ubuntu_version' => $row['ubuntu_version'] ?? null,
-            'upgrade_required' => (bool) ($row['upgrade_required'] ?? false),
         ];
 
         $server = Server::firstOrNew(['spinupwp_id' => $spinupId]);
+
+        // Same staleness problem as the reboot_required guard below, but for
+        // patches: clockwork:poll-system-updates SSHes in nightly and writes
+        // ground-truth upgrade_required straight onto the server row. This
+        // import runs hourly and, without a guard, unconditionally clobbers
+        // that truth back to whatever SpinupWP's mirror says — which can stay
+        // stuck on YES for a box the nightly poll already confirmed has zero
+        // pending packages, leaving it stranded on /issues' Patches Available
+        // card all day. Guard: skip the overwrite when we have our own OK
+        // poll from within the last 24h; SpinupWP's flag only wins once our
+        // local data is that stale too (the weekly --all sweep is the
+        // backstop for servers that never get a fresh poll).
+        $upgradeRequired = (bool) ($row['upgrade_required'] ?? false);
+        $snapshot = $server->exists ? $server->updateSnapshot : null;
+        $recentPollIsFresh = $snapshot !== null
+            && $snapshot->poll_status === ServerUpdateSnapshot::STATUS_OK
+            && $snapshot->polled_at !== null
+            && $snapshot->polled_at->gt(now()->subHours(24));
+
+        if (! $recentPollIsFresh) {
+            $attributes['upgrade_required'] = $upgradeRequired;
+        }
 
         // SpinupWP's reboot_required can lag the truth by hours — their cron
         // re-probes /var/run/reboot-required on each server, but not always

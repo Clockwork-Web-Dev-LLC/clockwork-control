@@ -124,6 +124,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $contact_form_last_test_error
  * @property int $contact_form_test_failure_streak
  * @property ?Carbon $contact_forms_detected_at
+ * @property ?array $gatekeeper_settings
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
  * @property-read ?Server $server

@@ -1910,6 +1910,7 @@
             <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-hidden">
             @php
                 $patchQueueable = $patchesAvailable->filter(fn ($s) => ! in_array($s->update_status, [\App\Models\Server::UPDATE_STATUS_QUEUED, \App\Models\Server::UPDATE_STATUS_RUNNING], true)
+                    && ! $s->reboot_required
                     && ($s->clockwork_jail_provisioned_at !== null || ! empty($s->ssh_password)));
             @endphp
             {{-- Bulk toolbar: queue apt on every listed server in one click. The processor
@@ -1970,6 +1971,8 @@
                             <td class="px-5 py-2 text-xs text-right patch-action-cell">
                                 @if ($inFlight)
                                     <span class="text-[var(--color-primary-700)]"><i class="fa-solid fa-spinner {{ $s->update_status === \App\Models\Server::UPDATE_STATUS_RUNNING ? 'fa-spin' : '' }}"></i> {{ $s->update_status }}</span>
+                                @elseif ($s->reboot_required)
+                                    <span class="text-[var(--color-ink-soft)]" title="Reboot required before further updates can be installed">—</span>
                                 @elseif (! $hasSsh)
                                     <span class="text-[var(--color-ink-soft)]" title="No SSH credentials on file for this server">no SSH</span>
                                 @else

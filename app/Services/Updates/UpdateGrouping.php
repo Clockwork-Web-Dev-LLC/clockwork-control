@@ -278,7 +278,7 @@ class UpdateGrouping
             'live_job_status' => $live?->status,
             'is_ignored' => $isIgnored,
             'is_auto_failure' => $isAutoFailure,
-            'ignore_source' => $ignore?->source ?? 'manual',
+            'ignore_source' => $ignore->source ?? 'manual',
             'ignore_failure_count' => $ignore?->failure_count,
             'ignore_last_error' => $ignore?->last_error,
             'ignore_date' => $ignore?->ignored_at?->toDateString(),
