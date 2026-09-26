@@ -39,9 +39,9 @@ class LlarLockoutPuller
             return [];
         }
 
-        // Gatekeeper native: REST GET /lockouts only. Never fall back to SSH/MySQL
-        // (Pressable has no DB creds, and scraping legacy LLAR is wrong once Gatekeeper is active).
-        // Rows may be sourced from native Gatekeeper (source_table: clockwork_lockouts) or LLAR.
+        // Gatekeeper native: REST GET /lockouts is primary. If REST fails on a site with
+        // direct MySQL credentials (SpinupWP), fall back directly to clockwork_lockouts.
+        // Never scrape legacy LLAR tables once Gatekeeper capability is advertised.
         if ($this->companionAdvertisesGatekeeper($site)) {
             try {
                 return (new ClockworkCompanionClient($site))->lockouts();
@@ -50,6 +50,10 @@ class LlarLockoutPuller
                     'site' => $site->domain,
                     'error' => $e->getMessage(),
                 ]);
+
+                if ($site->db_name && $site->db_user && $site->db_password) {
+                    return $this->fromGatekeeperTable($site, ($site->table_prefix ?: 'wp_').'clockwork_lockouts');
+                }
 
                 return [];
             }
@@ -209,6 +213,60 @@ class LlarLockoutPuller
                 'ip' => $ip,
                 'unlock_at' => $unlockTs > 0 ? Carbon::createFromTimestamp($unlockTs) : null,
                 'source_table' => $optionsTable.':limit_login_lockouts',
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array{ip: string, unlock_at: ?Carbon, source_table: string}>
+     */
+    private function fromGatekeeperTable(Site $site, string $tableName): array
+    {
+        try {
+            $exists = $this->mysql->listTables($site, $tableName);
+            if ($exists === [] || ! in_array($tableName, $exists, true)) {
+                return [];
+            }
+        } catch (Throwable $e) {
+            Log::warning('gatekeeper.lockouts.table_probe_failed', [
+                'site' => $site->domain,
+                'table' => $tableName,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        $sql = "SELECT ip, unlock_at FROM `{$tableName}` "
+            .'WHERE unlock_at IS NOT NULL AND unlock_at > UTC_TIMESTAMP()';
+
+        try {
+            $rows = $this->mysql->query($site, $sql);
+        } catch (Throwable $e) {
+            Log::warning('gatekeeper.lockouts.table_query_failed', [
+                'site' => $site->domain,
+                'table' => $tableName,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $ip = trim((string) ($row['ip'] ?? ''));
+            if ($ip === '' || ! filter_var($ip, FILTER_VALIDATE_IP)) {
+                continue;
+            }
+            $unlock = isset($row['unlock_at']) && $row['unlock_at']
+                ? Carbon::parse($row['unlock_at'], 'UTC')
+                : null;
+            $out[] = [
+                'ip' => $ip,
+                'unlock_at' => $unlock,
+                'source_table' => 'clockwork_lockouts',
             ];
         }
 

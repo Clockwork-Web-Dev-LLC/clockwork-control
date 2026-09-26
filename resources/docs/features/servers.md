@@ -39,7 +39,8 @@ To make server removal seamless when cleaning up decommissioned or disconnected 
 
 ## Auto-ban toggles
 
-`toggleAutoBanLlar` / `toggleAutoBanWordfence` (`POST /servers/{server}/auto-ban-llar` and `.../auto-ban-wordfence`) flip `auto_ban_llar` / `auto_ban_wordfence` on the server row. When on, LLAR/Wordfence lockouts from that server skip the human review step in the [Review queue](/docs/features/review-queue) and go straight to fail2ban. When off, they land in the queue like any other source.
+`toggleAutoBanLlar` / `toggleAutoBanWordfence` (`POST /servers/{server}/auto-ban-llar` and `.../auto-ban-wordfence`) flip `auto_ban_llar` / `auto_ban_wordfence` on the server row. When on, login lockouts from Gatekeeper (and legacy LLAR) or Wordfence blocks from that server skip the human review step in the [Review queue](/docs/features/review-queue) and go straight to fail2ban over SSH (`fail2ban-client set clockwork banip <ip>`). When off, they land in the queue like any other source.
+
 
 ## Recheck health
 

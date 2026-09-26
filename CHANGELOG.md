@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Gatekeeper Companion & Renegade Version Alignment**: Corrected minimum version requirements. Gatekeeper officially ships with Clockwork Companion 1.39.1+ and Clockwork Renegade 1.0.4+ (corrected from earlier 1.38.4 / 1.0.3 pre-release notes).
+- **Gatekeeper Ingest SQL Fallback**: Fixed `LlarLockoutPuller::fromGatekeeperTable()` to strictly query `WHERE unlock_at IS NOT NULL AND unlock_at > UTC_TIMESTAMP()`, ensuring non-locked attempt-tracking rows (`unlock_at IS NULL`) are not ingested as active lockouts.
+- **Advanced Navigation & Agency Gating**: Companion 1.39.1 and Renegade 1.0.4 fold Notifications into Advanced sub-tabs (8 primary tabs) and gate sensitive configuration, bulk unlocks, cache flushes, and credentials behind `Menu::currentUserIsAgency()`.
+
 ## [1.8.0] - 2026-09-24
 
 ### Added
 - **Gatekeeper: Native WordPress Login Protection & Lockout Orchestration**:
-  - Replaces external Limit Login Attempts Reloaded (LLAR) dependencies with native Clockwork Gatekeeper integration bundled into Clockwork Companion 1.38.4+ and Clockwork Renegade 1.0.3+.
+  - Replaces external Limit Login Attempts Reloaded (LLAR) dependencies with native Clockwork Gatekeeper integration bundled into Clockwork Companion 1.39.1+ and Clockwork Renegade 1.0.4+.
   - **Fleet Settings Hub (`/settings/gatekeeper`)**: Central configuration for fleet-wide lockout thresholds, progressive backoff windows, extended lockouts, customizable 429 lockout response messaging, support links, and IP allowlists.
   - **Per-Site Gatekeeper Overrides**: Sites can inherit agency fleet defaults or define granular threshold, backoff, and copy overrides via the site settings tab.
   - **Signed HMAC REST Synchronization**: Central dispatch of Gatekeeper configuration (`clockwork:push-gatekeeper-settings` and scheduled sync) directly to WordPress instances over HMAC-SHA256 authenticated REST endpoints.

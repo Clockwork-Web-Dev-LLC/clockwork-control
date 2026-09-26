@@ -57,8 +57,8 @@ The installed version itself is deliberately **not** an env var — it's `config
 | `CLOCKWORK_UPDATE_REPO` | `Clockwork-Web-Dev-LLC/clockwork-control` | Used to build the default releases API URL. |
 | `CLOCKWORK_UPDATES_API_URL` | (derived from the repo above) | Full override. |
 | `CLOCKWORK_UPDATES_CACHE_TTL` | `43200` (12h) | Release-check cache. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.38.1` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
-| `CLOCKWORK_RENEGADE_VERSION` | `1.0.3` | Bundled Clockwork Renegade version for standalone sites. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.39.1` | Bundled Companion version, drives the fleet-rollout numbers on this page. |
+| `CLOCKWORK_RENEGADE_VERSION` | `1.0.4` | Bundled Clockwork Renegade version for standalone sites. |
 | `CLOCKWORK_UNLOCK_HUB_DOMAIN` | `clockworkwd.com` | Optional fallback domain for the LLAR emergency unlock console host. |
 
 See [Reference → Environment variables](/documentation/reference/env-vars#system-updates).

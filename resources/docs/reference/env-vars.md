@@ -307,8 +307,8 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 | `CLOCKWORK_COMPANION_DIST_SHA256` | unset | **REQUIRED** when `DIST_URL` is set. Mismatched hash aborts the install. |
 | `CLOCKWORK_COMPANION_LOCAL_PATH` | `~/Projects/clockwork-companion` | Resolved via `posix_getpwuid` first because `env('HOME')` is null under Herd's php-fpm. |
 | `CLOCKWORK_COMPANION_TIMEOUT` | `30` | Per-call timeout for HTTP to the plugin. |
-| `CLOCKWORK_COMPANION_VERSION` | `1.38.1` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
-| `CLOCKWORK_RENEGADE_VERSION` | `1.0.3` | The bundled Clockwork Renegade version for standalone WordPress sites. |
+| `CLOCKWORK_COMPANION_VERSION` | `1.39.1` | The mu-plugin version bundled with this Core release. Compared per-site against `sites.companion_version` to compute the fleet rollout breakdown on `/settings/updates` — bump this when a new Companion tarball ships. |
+| `CLOCKWORK_RENEGADE_VERSION` | `1.0.4` | The bundled Clockwork Renegade version for standalone WordPress sites. |
 | `CLOCKWORK_UNLOCK_HUB_DOMAIN` | `clockworkwd.com` | Optional fallback domain for the LLAR emergency unlock console host. Overrides the default hub detection if `unlock_hub_domain` is unconfigured. |
 
 ## Operator identity

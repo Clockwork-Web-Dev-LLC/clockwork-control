@@ -83,6 +83,50 @@ describe('Gatekeeper Login Lockouts', function () {
             expect($lockouts)->toBeArray()->toBeEmpty();
         });
 
+        it('falls back to MySQL clockwork_lockouts when REST fails on a gatekeeper site with DB credentials', function () {
+            $site = Site::factory()->create([
+                'domain' => 'example.gov',
+                'is_wordpress' => true,
+                'companion_installed' => true,
+                'companion_secret' => 'test-secret',
+                'companion_capabilities' => ['gatekeeper'],
+                'db_name' => 'wp_db',
+                'db_user' => 'wp_user',
+                'db_password' => 'wp_pass',
+                'table_prefix' => 'wp_',
+            ]);
+
+            Http::fake([
+                'https://example.gov/wp-json/clockwork/v1/lockouts' => Http::response(['error' => 'server error'], 500),
+            ]);
+
+            $mysqlMock = $this->mock(SiteMySqlClient::class, function ($mock) {
+                $mock->shouldReceive('listTables')
+                    ->once()
+                    ->andReturn(['wp_clockwork_lockouts']);
+                $mock->shouldReceive('query')
+                    ->once()
+                    ->withArgs(function (Site $s, string $sql) {
+                        return str_contains($sql, 'wp_clockwork_lockouts')
+                            && str_contains($sql, 'unlock_at IS NOT NULL')
+                            && str_contains($sql, 'unlock_at > UTC_TIMESTAMP()');
+                    })
+                    ->andReturn([
+                        [
+                            'ip' => '198.51.100.77',
+                            'unlock_at' => Carbon::now()->addHour()->toDateTimeString(),
+                        ],
+                    ]);
+            });
+
+            $puller = new LlarLockoutPuller($mysqlMock);
+            $lockouts = $puller->activeLockouts($site);
+
+            expect($lockouts)->toHaveCount(1)
+                ->and($lockouts[0]['ip'])->toBe('198.51.100.77')
+                ->and($lockouts[0]['source_table'])->toBe('clockwork_lockouts');
+        });
+
         it('pulls serverless Pressable site without db_password into review queue', function () {
             // Pressable site has server_id null, db_password null, but companion_installed + gatekeeper
             $pressableSite = Site::factory()->pressable()->create([

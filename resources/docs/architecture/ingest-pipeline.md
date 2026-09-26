@@ -20,12 +20,13 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
    └──────────────┘  │   ┌──────────────┐    ┌────────────────────┐
                      ├──►│ review_queue │───►│ queued_for_ban     │
    ┌──────────────┐  │   └──────────────┘    └────────────────────┘
-   │ LLAR DB pull │──┤      ▲                         │
-   └──────────────┘  │      │                         ▼
-                     │      │ auto-approve     ┌──────────────┐
-   ┌──────────────┐  │      │ (≥2 sightings)   │ fail2ban-    │
-   │ Wordfence    │──┘      │                  │ client banip │
-   │ DB pull      │         │                  │  via SSH     │
+   │ Gatekeeper   │──┤      ▲                         │
+   │ (REST) /     │  │      │                         ▼
+   │ LLAR (DB)    │  │      │ auto-approve     ┌──────────────┐
+   └──────────────┘  │      │ (≥2 sightings)   │ fail2ban-    │
+   ┌──────────────┐  │      │                  │ client banip │
+   │ Wordfence    │──┘      │                  │  via SSH     │
+   │ DB pull      │         │                  │ (SpinupWP)   │
    └──────────────┘         │                  └──────────────┘
                             │                         │
                        (operator click)               ▼
@@ -46,13 +47,14 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
 - Parsed lines land in `threat_logs` (append-only). Nightly `clockwork:prune-threat-logs` drops rows older than the window set at `/settings/ingest` (default 30 days, minimum 7). On MySQL that is `DROP PARTITION` after `clockwork:rebuild-threat-logs-partitions`; otherwise chunked DELETE. Daily rollups in `site_traffic_daily` are kept.
 - Per-site try/catch: one unreachable server does not fail the whole run. Errors are isolated per site so a temporary connectivity issue on one host does not block log processing for the rest of the fleet. Per-site failures log `tail_nginx_logs.site_failed` at warning level, and the command only reports overall failure when every site in the fleet fails.
 
-### LLAR + Wordfence direct-DB pulls
+### Gatekeeper REST + LLAR / Wordfence pulls
 
 `clockwork:pull-llar-lockouts` and `clockwork:pull-wordfence-blocks` run every 15 minutes — when the `IngestScheduleGate` says they should.
 
-- Each source has its own enable toggle and `last_run_at`, all configurable from `/settings/ingest` (see below).
-- The pull goes via `App\Services\Sites\SiteMySqlClient` — wraps the `mysql` CLI over SSH using a temp `defaults` file (base64 transport, 600 perms). Where Companion is installed, we use the HMAC-signed `/lockouts` and `/wordfence-blocks` routes instead — same data, no SSH session, faster.
-- Both source queries return every *currently active* lockout/block on each pull, not just new ones — that's the DB shape, not a bug. To prevent log noise, only genuinely new events log at `info` (an action outside `skipped_active_ban` / `incremented_existing` / `skipped_queued_for_ban`); the "still active, nothing changed" and `filtered_protected` cases log at `debug`.
+- **Gatekeeper as the Primary Ingest Engine:** We are migrating our fleet away from Limit Login Attempts Reloaded (eliminating LLAR's third-party ads, aggressive paid upsells, and panic-inducing "attacks blocked" dashboard graphs that frighten clients). On sites running Clockwork Companion 1.39.0+ or Renegade with the `gatekeeper` capability, `LlarLockoutPuller` queries the signed HMAC REST route `GET /wp-json/clockwork/v1/lockouts` directly. This enables login lockout monitoring for **Pressable** managed hosting for the first time (where direct MySQL access was impossible).
+- **Legacy LLAR SSH+SQL Fallback:** For un-migrated sites or sites without Companion, the puller wraps the `mysql` CLI over SSH using a temporary `defaults` file (base64 transport, 600 perms) checking both `prefix_limit_login_lockouts` and `prefix_options`.
+- **Deduplication & Noise Reduction:** Both source queries return every *currently active* lockout/block on each pull, not just new ones — that's the DB shape, not a bug. To prevent log noise, only genuinely new events log at `info` (an action outside `skipped_active_ban` / `incremented_existing` / `skipped_queued_for_ban`); the "still active, nothing changed" and `filtered_protected` cases log at `debug`.
+
 
 ## Settings page (`/settings/ingest`)
 

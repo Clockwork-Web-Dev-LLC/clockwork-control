@@ -26,11 +26,13 @@ Unified agency white-label styling and client-facing branding:
 
 ### 3. Fleet Policies
 Policies, fleet-wide plugins, and automated maintenance cadences:
+* **Gatekeeper Lockouts** (`/settings/gatekeeper`) — Configure native login lockout thresholds, progressive backoff durations, enterprise 429 page branding, and automated fleet sync.
 * **WordPress Plugins** (`/settings/wordpress-plugins`) — Fleet-wide plugin version inventory, adoption metrics, and update tracking.
-* **Ingest Pipeline** (`/settings/ingest`) — LLAR and Wordfence threat log ingestion frequency and IP ban auto-approval policies.
+* **Ingest Pipeline** (`/settings/ingest`) — Threat log ingestion frequency (Gatekeeper, Wordfence, nginx) and IP ban auto-approval policies.
 * **Security Scans** (`/settings/security-scans`) — Daily vulnerability, checksum, and malware scan cadences.
 * **Backup Relay** (`/settings/backup-relay`) — Offsite S3/Glacier backup relay configuration and status monitoring.
 *(Note: **Tag Management** (`/settings/tags`) is also accessible directly from the main Dashboard header and inline filter pills on `/` for rapid access).*
+
 
 ### 4. Integrations & Alerts
 Outbound API credentials, ecosystem modules, and alerting channels:

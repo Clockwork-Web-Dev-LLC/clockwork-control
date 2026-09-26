@@ -420,7 +420,7 @@
                     <span class="clockwork-admin__tab">Traffic</span>
                     <span class="clockwork-admin__tab">Forms</span>
                     <span class="clockwork-admin__tab">Backups</span>
-                    <span class="clockwork-admin__tab">Notifications</span>
+                    <span class="clockwork-admin__tab">Advanced</span>
                 </nav>
 
                 {{-- Body Content --}}
