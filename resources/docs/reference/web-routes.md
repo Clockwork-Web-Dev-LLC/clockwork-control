@@ -96,8 +96,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/work-logs` · PATCH/DELETE `/work-logs/{workLog}` | Client-report work log CRUD. |
 | GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
-| POST | `/sites/{site}/install-llar` · `/install-companion` | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. |
+| POST | `/sites/{site}/gatekeeper/push` | Push effective Gatekeeper lockout settings to this site immediately via HMAC REST. |
+| POST | `/sites/{site}/install-companion` · `/install-llar` (legacy) | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. LLAR installation is phased out in favor of Gatekeeper. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
+
 | POST | `/sites/{site}/care-plan[/clear-override]` | Toggle / un-pin care plan. |
 | POST | `/sites/{site}/auto-updates/toggle` | Per-site nightly auto-update opt-in/out. |
 | POST | `/sites/{site}/uptime-monitoring` · `/uptime-ignore` | Per-site uptime opt-out / mute-alerts-but-keep-probing toggle (two different things — see [Features → Uptime monitoring](/documentation/features/uptime-monitoring)). |
@@ -166,7 +168,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/settings/ingest/prune-now` | Start `clockwork:prune-threat-logs` in the background. |
 | POST | `/settings/ingest/rebuild-partitions` | Start `clockwork:rebuild-threat-logs-partitions` in the background. |
 | GET | `/settings/wordpress-plugins` | Fleet WP plugin inventory. |
+| GET/PATCH | `/settings/gatekeeper` | Fleet Gatekeeper policy settings: failed attempt thresholds, lockout backoff duration, 429 page branding, and automated sync. |
+| POST | `/settings/gatekeeper/push` | Push effective Gatekeeper policy to all Companion-installed sites immediately. |
 | GET/PATCH/POST | `/settings/security-scans[/run-now]` | Scan toggles + manual run. |
+
 | GET/PATCH/POST | `/settings/backup-relay[/run-now]` | Backup Relay (S3 Glacier IR) settings + on-demand execution. |
 | GET | `/settings/backup-relay/sites/{site}/{archives,download}` | Per-site S3 Glacier archive listing (`archives`) and streamed download of a specific archive (`download`). |
 | GET/POST | `/settings/scheduled-jobs[/run]` | [Scheduled Jobs dashboard](/documentation/features/scheduled-jobs-dashboard) — every cron entry's last outcome + manual Run now. |

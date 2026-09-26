@@ -51,9 +51,10 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 
 | Command | What it does |
 |---|---|
-| `clockwork:pull-llar-lockouts` | Direct-DB pull of LLAR lockouts. Gated by `IngestScheduleGate` (per-source enable + window + cadence). |
+| `clockwork:pull-llar-lockouts` | Ingest active login lockouts from Gatekeeper (via Companion HMAC REST) with legacy LLAR direct-DB fallback. Gated by `IngestScheduleGate` (per-source enable + window + cadence). |
 | `clockwork:pull-wordfence-blocks` | Same for Wordfence blocks. |
 | `clockwork:pull-site-metrics` | Per-site CPU/memory rollups from Companion sites advertising `resource-sampler`. Feeds `/capacity`. Pausable via `monitoring.site_metrics_enabled`. |
+
 
 ## Hourly
 
@@ -126,8 +127,11 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 06:35 | `clockwork:push-companion-traffic` | Push yesterday's traffic rollup to each Companion-equipped site. |
 | 06:37 | `clockwork:pressable-traffic-report` | Pressable counterpart — pulls page-view period totals straight from Pressable's stats API (no nginx access-log rollup dependency). |
 | 06:39 | `clockwork:pressable-security-summary-report` | Pressable-only: known plugin/theme vulnerabilities + Defensive Mode status. No SpinupWP equivalent — pure additional capability, not a parity fix. |
+| 06:40 | `clockwork:push-gatekeeper-settings` | Daily catch-up sync for Gatekeeper login lockout settings. Pushes policy defaults and site overrides to Companion and Renegade across the fleet. |
 | 06:40 | `clockwork:pull-backup-relay-report` | External-agent mode only: reads the backup-relay droplet's last run summary back from S3 and records it into `backup_relay_runs`. Also alerts if no run has completed within 6 days. See [Features → Backup relay](/docs/features/backup-relay). |
+| 06:45 | `clockwork:push-update-exceptions` | Daily catch-up sync for update exceptions (paused auto-updates). Pushes active exceptions to Companion and Renegade. |
 | 07:15 | `clockwork:check-robots-txt` | Check root `/robots.txt` across monitored sites to detect accidental crawler disallow directives. |
+
 
 ## Weekly
 

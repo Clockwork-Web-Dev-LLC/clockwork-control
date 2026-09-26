@@ -64,9 +64,11 @@ A client-side segmented control (`activeTab` Alpine state) switches between the 
 
 The right-hand column of the Companion (wp-admin) tab is an Alpine.js mockup of the WordPress sidebar menu, plugins list row, and Companion dashboard header, updating live as the form fields change — nothing here calls out to a real site; it's local-only, for visualizing the effect before saving. A dedicated preview route (`/settings/companion/preview`) also renders the full isolated wp-admin chrome mockup in a separate window/tab.
 
-## Section 6: LLAR Unlock Hub & Emergency Access
+## Section 6: Emergency Access & The Unlock Hub (Gatekeeper & LLAR)
 
-When Limit Login Attempts Reloaded (LLAR) locks an agency technician or client out of a site due to false positives or brute-force protection, you don't need SSH access or WP credentials to clear it. The **Unlock Console** (`Clockwork → Unlock` in wp-admin) fires an authenticated HMAC-SHA256 signed `DELETE /wp-json/clockwork/v1/lockouts` request directly to the target site's Companion plugin to immediately flush lockouts.
+When an IP address or technician is locked out of a site due to failed login attempts or false positives, you don't need SSH access or database credentials to clear it. The **Unlock Console** (`Clockwork → Unlock` in wp-admin on your agency hub) fires an authenticated HMAC-SHA256 signed `DELETE /wp-json/clockwork/v1/lockouts` request directly to the target site's Companion plugin to immediately flush lockouts.
+
+This endpoint automatically flushes both **native Gatekeeper lockouts** (`wp_clockwork_lockouts`) and legacy Limit Login Attempts Reloaded (LLAR) tables/options simultaneously. As we transition the fleet away from LLAR (eliminating LLAR's third-party ads, upsell promos, and client-facing scare-tactic widgets) to our native white-labeled Gatekeeper engine, the Unlock Hub provides seamless, identical unlocking across all sites regardless of which engine is active.
 
 ### How Hub Detection & Client Isolation Works
 

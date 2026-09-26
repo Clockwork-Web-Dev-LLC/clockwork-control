@@ -14,7 +14,8 @@ It's meant to run on your own infrastructure, not as a hosted SaaS: no public UR
 
 - **Server health** — cloud-provider metrics every 5 minutes; hot servers turn yellow/red on the dashboard. DigitalOcean, Hetzner, Azure, and Cloudways-provisioned servers supported out of the box.
 - **Uptime + SSL** — HTTP probes with chat alerts on transitions; per-site cert tracking.
-- **Attack detection + bans** — nginx log tailing, LLAR/Wordfence ingest, an optional local LLM flags suspicious IPs into a review queue. A human approves every ban; approved blocks go out via fail2ban over SSH.
+- **Attack detection + bans** — nginx log tailing, Gatekeeper native login attack protection (replacing third-party plugins with zero client-facing ads or scare tactics), Wordfence ingest, and an optional local LLM flagging suspicious IPs into a review queue. A human approves every ban (or auto-ban triggers on configured servers); approved blocks go out via fail2ban over SSH.
+
 - **Security scans** — Sucuri SiteCheck, domain blacklists, WP core checksum verification, and an in-WP malware probe, consolidated on the `/issues` page.
 - **Performance scans** — Lighthouse scores via GTmetrix (PSI fallback), or a hosting provider's own native scan engine where one exists.
 - **Updates** — apt-update visibility per server with bulk patch queueing, plus nightly WordPress plugin auto-updates.
