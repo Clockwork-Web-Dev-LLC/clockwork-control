@@ -4,13 +4,20 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "lint": "biome check resources/js",
+        "lint:fix": "biome check --write resources/js",
+        "format": "biome format --write resources/js",
+        "typecheck": "tsc --noEmit"
     },
     "devDependencies": {
+        "@biomejs/biome": "^2.5.14",
         "@tailwindcss/vite": "^4.3.3",
+        "@types/alpinejs": "^3.17.0",
         "concurrently": "^10.0.5",
         "laravel-vite-plugin": "^3.2.0",
         "tailwindcss": "^4.3.3",
+        "typescript": "^7.0.2",
         "vite": "^8.3.0"
     },
     "overrides": {

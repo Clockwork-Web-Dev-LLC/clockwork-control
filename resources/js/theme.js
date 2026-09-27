@@ -19,7 +19,7 @@ export function themePicker() {
             let storedTheme = null;
             try {
                 storedTheme = localStorage.getItem('cw_theme');
-            } catch (e) {}
+            } catch (_e) {}
 
             if (!storedTheme) {
                 const cookieMatch = document.cookie.match(/(?:^|; )cw_theme=([^;]*)/);
@@ -54,7 +54,7 @@ export function themePicker() {
 
         checkIsDark() {
             if (this.current === 'system') {
-                return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                return !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
             }
             return this.current === 'dark' || this.current === 'high-contrast';
         },
@@ -71,18 +71,18 @@ export function themePicker() {
         applyResolvedTheme(theme) {
             let resolved = theme;
             if (resolved === 'system') {
-                resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-                    ? 'dark'
-                    : 'light';
+                resolved = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             }
             if (resolved === 'midnight') {
                 resolved = 'dark';
             }
             document.documentElement.setAttribute('data-theme', resolved);
             this.updateDarkState();
-            window.dispatchEvent(new CustomEvent('theme-changed', {
-                detail: { theme, resolved }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('theme-changed', {
+                    detail: { theme, resolved },
+                }),
+            );
         },
 
         async setTheme(theme) {
@@ -94,11 +94,12 @@ export function themePicker() {
             try {
                 localStorage.setItem('cw_theme', theme);
                 document.cookie = `cw_theme=${encodeURIComponent(theme)}; path=/; max-age=31536000; SameSite=Lax`;
-            } catch (e) {}
+            } catch (_e) {}
 
             // Persist to server if authenticated
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                || document.querySelector('input[name="_token"]')?.value;
+            const csrfToken =
+                document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                document.querySelector('input[name="_token"]')?.value;
 
             try {
                 this.saving = true;
@@ -106,12 +107,12 @@ export function themePicker() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json',
+                        Accept: 'application/json',
                         'X-CSRF-TOKEN': csrfToken || '',
                     },
                     body: JSON.stringify({ theme }),
                 });
-            } catch (err) {
+            } catch (_err) {
                 // Silently handle offline/guest mode
             } finally {
                 this.saving = false;

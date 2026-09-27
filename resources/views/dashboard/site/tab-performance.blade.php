@@ -172,56 +172,13 @@
 
 {{-- 30-day trend chart --}}
 @if (count($perfTrend['mobile']) + count($perfTrend['desktop']) > 0)
-    <div class="card p-5 mb-6">
+    <div class="card p-5 mb-6" x-data="performanceTrendChart({{ json_encode($perfTrend) }})">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-3">
             <i class="fa-solid fa-chart-line text-[var(--color-ink-soft)] mr-1"></i>
             30-day score trend
         </h2>
-        <div style="height: 240px;">
-            <canvas id="perf-trend-chart"></canvas>
-        </div>
+        <div id="perf-trend-chart" style="height: 240px;"></div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script>
-    (() => {
-        const ctx = document.getElementById('perf-trend-chart');
-        if (!ctx) return;
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [
-                    {
-                        label: 'Mobile',
-                        data: @json($perfTrend['mobile']),
-                        borderColor: '#dc2626',
-                        backgroundColor: 'rgba(220, 38, 38, 0.08)',
-                        tension: 0.2,
-                        pointRadius: 3,
-                    },
-                    {
-                        label: 'Desktop',
-                        data: @json($perfTrend['desktop']),
-                        borderColor: '#0ea5e9',
-                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
-                        tension: 0.2,
-                        pointRadius: 3,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { type: 'time', time: { unit: 'day' } },
-                    y: { min: 0, max: 100, ticks: { stepSize: 20 } },
-                },
-                plugins: { legend: { position: 'bottom' } },
-            },
-        });
-    })();
-    </script>
 @endif
 
 {{-- History table --}}

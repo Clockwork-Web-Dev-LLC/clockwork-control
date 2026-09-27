@@ -136,6 +136,15 @@ use Modules\Core\Contracts\HostingProvider;
  * @property-read ?SiteSecurityScan $latestSiteCheckScan
  * @property-read ?SiteSecurityScan $latestChecksumScan
  * @property-read Collection<int, SiteIngestExclusion> $ingestExclusions
+ *
+ * @method static Builder<Site> notArchived()
+ * @method static Builder<Site> backupRelayEnabled()
+ * @method static Builder<Site> gatekeeperProtected()
+ * @method static Builder<Site> loginUnprotected()
+ * @method static Builder<Site> carePlanEligible()
+ * @method static Builder<Site> hostMonitored()
+ * @method static Builder<Site> notDomainIgnored()
+ * @method static Builder<Site> stuckInMaintenance()
  */
 class Site extends Model
 {

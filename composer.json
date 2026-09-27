@@ -296,6 +296,23 @@
         "phpstan": [
             "vendor/bin/phpstan analyse --memory-limit=2G"
         ],
+        "pint": [
+            "vendor/bin/pint"
+        ],
+        "format": [
+            "vendor/bin/pint",
+            "npm run format"
+        ],
+        "check": [
+            "vendor/bin/pint --test",
+            "@composer phpstan",
+            "npm run lint",
+            "npm run typecheck"
+        ],
+        "gate": [
+            "@composer check",
+            "@composer test"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

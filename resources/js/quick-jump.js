@@ -8,18 +8,114 @@
  */
 
 export const DEFAULT_QUICK_JUMP_ITEMS = [
-    { id: 'servers', section: 'Quick Jump', label: 'Servers Fleet', code: 'GS', kbd: 'G S', icon: 'fa-solid fa-server text-[var(--color-brand)]', url: '/' },
-    { id: 'sites', section: 'Quick Jump', label: 'Sites Directory', code: 'GT', kbd: 'G T', icon: 'fa-solid fa-globe text-[var(--color-brand)]', url: '/sites' },
-    { id: 'issues', section: 'Quick Jump', label: 'Issues Console', code: 'GI', kbd: 'G I', icon: 'fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)]', url: '/issues' },
-    { id: 'monitoring', section: 'Quick Jump', label: 'Uptime Monitoring', code: 'GM', kbd: 'G M', icon: 'fa-solid fa-heart-pulse text-[var(--color-status-green)]', url: '/monitoring' },
-    { id: 'updates', section: 'Quick Jump', label: 'Updates Manager', code: 'GU', kbd: 'G U', icon: 'fa-solid fa-rotate text-[var(--color-brand)]', url: '/updates' },
-    { id: 'security', section: 'Quick Jump', label: 'Security Scans', code: 'GX', kbd: 'G X', icon: 'fa-solid fa-shield-halved text-[var(--color-brand)]', url: '/security/scans' },
-    { id: 'capacity', section: 'Operations', label: 'Capacity Dashboard', code: null, kbd: null, icon: 'fa-solid fa-gauge-high text-[var(--color-ink-muted)]', url: '/capacity' },
-    { id: 'server-updates', section: 'Operations', label: 'Fleet OS Updates', code: null, kbd: null, icon: 'fa-solid fa-cube text-[var(--color-ink-muted)]', url: '/operations/server-updates' },
-    { id: 'maintenance-history', section: 'Operations', label: 'Maintenance History', code: null, kbd: null, icon: 'fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]', url: '/maintenance-history' },
-    { id: 'credentials', section: 'Operations', label: 'Bulk SSH Passwords', code: null, kbd: null, icon: 'fa-solid fa-key text-[var(--color-ink-muted)]', url: '/servers/credentials' },
-    { id: 'settings', section: 'Configuration', label: 'Global Settings Hub', code: null, kbd: null, icon: 'fa-solid fa-sliders text-[var(--color-ink-muted)]', url: '/settings' },
-    { id: 'docs', section: 'Configuration', label: 'Documentation & Runbooks', code: 'GD', kbd: 'G D', icon: 'fa-solid fa-book-bookmark text-[var(--color-brand)]', url: '/docs' },
+    {
+        id: 'servers',
+        section: 'Quick Jump',
+        label: 'Servers Fleet',
+        code: 'GS',
+        kbd: 'G S',
+        icon: 'fa-solid fa-server text-[var(--color-brand)]',
+        url: '/',
+    },
+    {
+        id: 'sites',
+        section: 'Quick Jump',
+        label: 'Sites Directory',
+        code: 'GT',
+        kbd: 'G T',
+        icon: 'fa-solid fa-globe text-[var(--color-brand)]',
+        url: '/sites',
+    },
+    {
+        id: 'issues',
+        section: 'Quick Jump',
+        label: 'Issues Console',
+        code: 'GI',
+        kbd: 'G I',
+        icon: 'fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)]',
+        url: '/issues',
+    },
+    {
+        id: 'monitoring',
+        section: 'Quick Jump',
+        label: 'Uptime Monitoring',
+        code: 'GM',
+        kbd: 'G M',
+        icon: 'fa-solid fa-heart-pulse text-[var(--color-status-green)]',
+        url: '/monitoring',
+    },
+    {
+        id: 'updates',
+        section: 'Quick Jump',
+        label: 'Updates Manager',
+        code: 'GU',
+        kbd: 'G U',
+        icon: 'fa-solid fa-rotate text-[var(--color-brand)]',
+        url: '/updates',
+    },
+    {
+        id: 'security',
+        section: 'Quick Jump',
+        label: 'Security Scans',
+        code: 'GX',
+        kbd: 'G X',
+        icon: 'fa-solid fa-shield-halved text-[var(--color-brand)]',
+        url: '/security/scans',
+    },
+    {
+        id: 'capacity',
+        section: 'Operations',
+        label: 'Capacity Dashboard',
+        code: null,
+        kbd: null,
+        icon: 'fa-solid fa-gauge-high text-[var(--color-ink-muted)]',
+        url: '/capacity',
+    },
+    {
+        id: 'server-updates',
+        section: 'Operations',
+        label: 'Fleet OS Updates',
+        code: null,
+        kbd: null,
+        icon: 'fa-solid fa-cube text-[var(--color-ink-muted)]',
+        url: '/operations/server-updates',
+    },
+    {
+        id: 'maintenance-history',
+        section: 'Operations',
+        label: 'Maintenance History',
+        code: null,
+        kbd: null,
+        icon: 'fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]',
+        url: '/maintenance-history',
+    },
+    {
+        id: 'credentials',
+        section: 'Operations',
+        label: 'Bulk SSH Passwords',
+        code: null,
+        kbd: null,
+        icon: 'fa-solid fa-key text-[var(--color-ink-muted)]',
+        url: '/servers/credentials',
+    },
+    {
+        id: 'settings',
+        section: 'Configuration',
+        label: 'Global Settings Hub',
+        code: null,
+        kbd: null,
+        icon: 'fa-solid fa-sliders text-[var(--color-ink-muted)]',
+        url: '/settings',
+    },
+    {
+        id: 'docs',
+        section: 'Configuration',
+        label: 'Documentation & Runbooks',
+        code: 'GD',
+        kbd: 'G D',
+        icon: 'fa-solid fa-book-bookmark text-[var(--color-brand)]',
+        url: '/docs',
+    },
 ];
 
 export function quickJumpPicker() {
@@ -30,7 +126,11 @@ export function quickJumpPicker() {
         paletteNavigating: false,
 
         get paletteItemsList() {
-            if (typeof window !== 'undefined' && Array.isArray(window.cwQuickJumpItems) && window.cwQuickJumpItems.length > 0) {
+            if (
+                typeof window !== 'undefined' &&
+                Array.isArray(window.cwQuickJumpItems) &&
+                window.cwQuickJumpItems.length > 0
+            ) {
                 return window.cwQuickJumpItems;
             }
             return DEFAULT_QUICK_JUMP_ITEMS;
@@ -44,13 +144,13 @@ export function quickJumpPicker() {
             const q = raw.toLowerCase();
             const normalizedCode = raw.toUpperCase().replace(/\s+/g, '');
 
-            return all.filter(item => {
+            return all.filter((item) => {
                 if (item.code) {
                     const c = item.code.toUpperCase();
                     if (c === normalizedCode || c.startsWith(normalizedCode)) {
                         return true;
                     }
-                    if (item.kbd && item.kbd.toLowerCase().includes(q)) {
+                    if (item.kbd?.toLowerCase().includes(q)) {
                         return true;
                     }
                 }
@@ -70,14 +170,14 @@ export function quickJumpPicker() {
             const sectionOrder = ['Quick Jump', 'Operations', 'Configuration'];
 
             for (const sec of sectionOrder) {
-                const secItems = items.filter(i => i.section === sec);
+                const secItems = items.filter((i) => i.section === sec);
                 if (secItems.length > 0) {
                     groups.push({ section: sec, items: secItems });
                 }
             }
 
             const knownSecs = new Set(sectionOrder);
-            const otherItems = items.filter(i => !knownSecs.has(i.section));
+            const otherItems = items.filter((i) => !knownSecs.has(i.section));
             if (otherItems.length > 0) {
                 groups.push({ section: 'Other', items: otherItems });
             }
@@ -86,7 +186,7 @@ export function quickJumpPicker() {
         },
 
         getItemGlobalIndex(item) {
-            return this.filteredPaletteItems.findIndex(i => i.id === item.id);
+            return this.filteredPaletteItems.findIndex((i) => i.id === item.id);
         },
 
         openPalette() {
@@ -104,7 +204,7 @@ export function quickJumpPicker() {
 
         focusPaletteInput() {
             const focus = () => {
-                if (this.$refs && this.$refs.paletteInput) {
+                if (this.$refs?.paletteInput) {
                     this.$refs.paletteInput.focus();
                     this.$refs.paletteInput.select();
                 }
@@ -122,7 +222,7 @@ export function quickJumpPicker() {
 
             // Immediate jump: normalized query equals a 2-character jump code
             if (normalized.length >= 2) {
-                const match = this.paletteItemsList.find(i => i.code && i.code.toUpperCase() === normalized);
+                const match = this.paletteItemsList.find((i) => i.code && i.code.toUpperCase() === normalized);
                 if (match) {
                     this.navigateTo(match.url);
                     return;
@@ -151,7 +251,7 @@ export function quickJumpPicker() {
             const normalized = raw.toUpperCase().replace(/\s+/g, '');
 
             if (normalized.length >= 2) {
-                const match = this.paletteItemsList.find(i => i.code && i.code.toUpperCase() === normalized);
+                const match = this.paletteItemsList.find((i) => i.code && i.code.toUpperCase() === normalized);
                 if (match) {
                     this.navigateTo(match.url);
                     return;
@@ -166,7 +266,7 @@ export function quickJumpPicker() {
 
         scrollSelectedIntoView() {
             const scroll = () => {
-                const el = document.getElementById('cw-palette-item-' + this.paletteSelectedIndex);
+                const el = document.getElementById(`cw-palette-item-${this.paletteSelectedIndex}`);
                 if (el) {
                     el.scrollIntoView({ block: 'nearest' });
                 }
@@ -194,6 +294,6 @@ export function quickJumpPicker() {
                     this.focusPaletteInput();
                 }
             });
-        }
+        },
     };
 }

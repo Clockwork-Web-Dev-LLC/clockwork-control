@@ -31,7 +31,7 @@ export function layoutStylePicker() {
                         this.style = decodeURIComponent(match[1]);
                     }
                 }
-            } catch (e) {}
+            } catch (_e) {}
 
             this.applyStyle();
         },
@@ -78,11 +78,13 @@ export function layoutStylePicker() {
             try {
                 localStorage.setItem('cw_layout_style', newStyle);
                 document.cookie = `cw_layout_style=${encodeURIComponent(newStyle)}; path=/; max-age=31536000; SameSite=Lax`;
-            } catch (e) {}
+            } catch (_e) {}
 
-            window.dispatchEvent(new CustomEvent('layout-style-changed', {
-                detail: { style: newStyle }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('layout-style-changed', {
+                    detail: { style: newStyle },
+                }),
+            );
 
             // 5. Clean up morphing classes after spring animation finishes
             setTimeout(() => {
@@ -132,16 +134,18 @@ export function layoutStylePicker() {
             try {
                 localStorage.setItem('cw_layout_style', newStyle);
                 document.cookie = `cw_layout_style=${encodeURIComponent(newStyle)}; path=/; max-age=31536000; SameSite=Lax`;
-            } catch (e) {}
+            } catch (_e) {}
 
-            window.dispatchEvent(new CustomEvent('layout-style-changed', {
-                detail: { style: newStyle }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('layout-style-changed', {
+                    detail: { style: newStyle },
+                }),
+            );
         },
 
         applyStyle() {
             document.documentElement.setAttribute('data-layout-style', this.style);
-        }
+        },
     };
 }
 

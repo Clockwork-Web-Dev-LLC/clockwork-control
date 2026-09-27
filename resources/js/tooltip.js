@@ -42,8 +42,8 @@ export function initTooltipSystem() {
         const spacing = 7; // Distance between trigger and arrow point
 
         // Center horizontally over the trigger element
-        const targetCenter = rect.left + (rect.width / 2);
-        let left = targetCenter - (tooltipWidth / 2);
+        const targetCenter = rect.left + rect.width / 2;
+        const left = targetCenter - tooltipWidth / 2;
 
         // Clamp inside the viewport with 8px buffer
         const minLeft = 8;
@@ -78,8 +78,7 @@ export function initTooltipSystem() {
     }
 
     function isStillInside(related) {
-        return related instanceof Node
-            && (activeTarget.contains(related) || tooltipEl.contains(related));
+        return related instanceof Node && (activeTarget.contains(related) || tooltipEl.contains(related));
     }
 
     function showTooltip(target) {
@@ -140,15 +139,23 @@ export function initTooltipSystem() {
         }
     });
 
-    window.addEventListener('scroll', () => {
-        if (activeTarget) {
-            positionTooltip(activeTarget);
-        }
-    }, { passive: true });
+    window.addEventListener(
+        'scroll',
+        () => {
+            if (activeTarget) {
+                positionTooltip(activeTarget);
+            }
+        },
+        { passive: true },
+    );
 
-    window.addEventListener('resize', () => {
-        if (activeTarget) {
-            positionTooltip(activeTarget);
-        }
-    }, { passive: true });
+    window.addEventListener(
+        'resize',
+        () => {
+            if (activeTarget) {
+                positionTooltip(activeTarget);
+            }
+        },
+        { passive: true },
+    );
 }

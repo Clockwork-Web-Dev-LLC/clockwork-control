@@ -60,7 +60,7 @@
             ];
         })->values();
     @endphp
-    <div class="card p-5 mb-6">
+    <div class="card p-5 mb-6" x-data="serverMetricsChart({{ json_encode($metricsForChart) }})">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Resource trends</h2>
@@ -97,71 +97,8 @@
             @endforeach
         </div>
 
-        <div style="height: 280px"><canvas id="metrics-chart"></canvas></div>
+        <div id="metrics-chart" style="height: 280px"></div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script>
-        (function () {
-            const data = @json($metricsForChart);
-
-            const ctx = document.getElementById('metrics-chart');
-            if (!ctx || !window.Chart) return;
-
-            const labels = data.map(d => new Date(d.recorded_at));
-
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: 'CPU %',    data: data.map(d => d.cpu_pct),    borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.2, pointRadius: 0, borderWidth: 1.5, yAxisID: 'pct' },
-                        { label: 'Memory %', data: data.map(d => d.memory_pct), borderColor: '#10b981', backgroundColor: 'transparent', tension: 0.2, pointRadius: 0, borderWidth: 1.5, yAxisID: 'pct' },
-                        { label: 'Disk %',   data: data.map(d => d.disk_pct),   borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.2, pointRadius: 0, borderWidth: 1.5, yAxisID: 'pct' },
-                        { label: 'Load 1m',  data: data.map(d => d.load_1),     borderColor: '#a78bfa', backgroundColor: 'transparent', tension: 0.2, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 4], yAxisID: 'load' },
-                    ],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { intersect: false, mode: 'index' },
-                    plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 11 } } },
-                        tooltip: { callbacks: { title: (items) => new Date(items[0].parsed.x).toLocaleString() } },
-                    },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: @json($rangeConfig['unit']),
-                                stepSize: @json($rangeConfig['step']),
-                                tooltipFormat: 'MMM d, HH:mm',
-                                displayFormats: {
-                                    minute: @json($rangeConfig['fmt']),
-                                    hour: @json($rangeConfig['fmt']),
-                                    day: @json($rangeConfig['fmt']),
-                                },
-                            },
-                            grid: { color: 'rgba(0,0,0,0.04)', drawTicks: false },
-                            ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 12 },
-                        },
-                        pct: {
-                            type: 'linear', position: 'left', min: 0, max: 100,
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                            ticks: { callback: v => v + '%', font: { size: 10 } },
-                        },
-                        load: {
-                            type: 'linear', position: 'right',
-                            grid: { display: false },
-                            ticks: { font: { size: 10 } },
-                        },
-                    },
-                },
-            });
-        })();
-    </script>
 @endif
 
 {{-- Live diagnostics --}}

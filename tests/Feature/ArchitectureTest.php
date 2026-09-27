@@ -93,6 +93,22 @@ arch('every module service provider extends the shared base')
         'Modules\Twilio\TwilioServiceProvider',
         'Modules\BillCom\BillComServiceProvider',
         'Modules\ClientSlack\ClientSlackServiceProvider',
+        'Modules\Gatekeeper\GatekeeperServiceProvider',
+        'Modules\BackupRelay\BackupRelayServiceProvider',
+        'Modules\CommentModeration\CommentModerationServiceProvider',
+        'Modules\CodeSnippets\CodeSnippetsServiceProvider',
+        'Modules\SiteMaintenance\SiteMaintenanceServiceProvider',
+        'Modules\ClientManagement\ClientManagementServiceProvider',
+        'Modules\ClientReports\ClientReportsServiceProvider',
+        'Modules\Sucuri\SucuriServiceProvider',
+        'Modules\ContactForms\ContactFormsServiceProvider',
+        'Modules\GTmetrix\GTmetrixServiceProvider',
+        'Modules\GridPane\GridPaneServiceProvider',
+        'Modules\Llar\LlarServiceProvider',
+        'Modules\AuthGoogle\GoogleAuthServiceProvider',
+        'Modules\PageSpeedInsights\PageSpeedInsightsServiceProvider',
+        'Modules\AuthGitHub\GitHubAuthServiceProvider',
+        'Modules\AuthMicrosoft\MicrosoftAuthServiceProvider',
     ])
     ->toExtend('Modules\Core\ModuleServiceProvider');
 

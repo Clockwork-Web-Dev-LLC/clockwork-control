@@ -2,17 +2,18 @@
 # Pre-commit guard, added after a real incident (commit 1b4fc08, a vim swap
 # file .env.swp accidentally committed and pushed — cleaned up 2026-09-02).
 #
-# Two layers, deliberately: gitleaks' default ruleset alone would NOT have
-# caught that leak (Laravel's APP_KEY=base64:... and this app's own token
-# formats aren't in its default patterns — confirmed live during cleanup).
-# So this hook first blocks the exact filename shape that caused the
-# incident outright, then runs gitleaks (with .gitleaks.toml's app-specific
-# rules layered on top of the defaults) as a second, broader net.
+# Layers:
+# 1. Blocks .env*, *.swp, *.swo filenames from being committed.
+# 2. Blocks client-identifying names in staged content (via ~/.config/clockwork/client-denylist.txt).
+# 3. Runs gitleaks against staged changes (using .gitleaks.toml).
+# 4. Validates PHP formatting (Pint) on staged .php files.
+# 5. Validates JS/TS formatting and types (Biome + tsc) on staged frontend files.
 #
 # One-time setup per clone: git config core.hooksPath .githooks
 
 set -euo pipefail
 
+# Layer 1: Block never-commit filename shapes (.env*, *.swp, *.swo)
 blocked=0
 
 while IFS= read -r -d '' file; do
@@ -33,15 +34,9 @@ if [ "$blocked" -eq 1 ]; then
     exit 1
 fi
 
-# Third layer: block client-identifying names in staged content. The pattern
-# list lives OUTSIDE the repo on purpose — committing it would itself leak the
-# names it exists to protect. One extended-regex fragment per line, matched
-# case-insensitively against added lines only. Absent file = layer disabled.
+# Layer 2: Block client-identifying names in staged content.
 DENYLIST="${HOME}/.config/clockwork/client-denylist.txt"
 if [ -f "$DENYLIST" ]; then
-    # NB: '+' is a literal in BRE, so these patterns stay un-escaped — BSD
-    # grep rejects '\+' escapes ("repetition-operator operand invalid"), and
-    # under '|| true' that failure would silently disable this whole layer.
     matches="$(git diff --cached --no-color --unified=0 --diff-filter=ACM \
         | grep '^+' | grep -v '^+++' \
         | grep -iE -f "$DENYLIST" || true)"
@@ -53,6 +48,7 @@ if [ -f "$DENYLIST" ]; then
     fi
 fi
 
+# Layer 3: Gitleaks scan for secrets
 if command -v gitleaks >/dev/null 2>&1; then
     repo_root="$(git rev-parse --show-toplevel)"
     if ! gitleaks git --staged --no-banner --config "${repo_root}/.gitleaks.toml" "$repo_root"; then
@@ -61,6 +57,30 @@ if command -v gitleaks >/dev/null 2>&1; then
     fi
 else
     echo "WARNING: gitleaks not installed — skipping secret-content scan (filename check still ran). Install with: brew install gitleaks" >&2
+fi
+
+# Layer 4: Check staged PHP files with Pint
+STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+if [ -n "$STAGED_PHP" ]; then
+    echo "🐘 Checking PHP formatting..."
+    ./vendor/bin/pint --test || {
+        echo "❌ Pint failed. Run 'composer format' or './vendor/bin/pint' to fix." >&2
+        exit 1
+    }
+fi
+
+# Layer 5: Check staged JS/TS/JSON files with Biome & TypeScript
+STAGED_JS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|json)$' || true)
+if [ -n "$STAGED_JS" ]; then
+    echo "⚡ Checking JavaScript/TypeScript..."
+    npm run lint || {
+        echo "❌ Biome check failed. Run 'npm run lint:fix' or 'npm run format' to fix." >&2
+        exit 1
+    }
+    npm run typecheck || {
+        echo "❌ TypeScript check failed." >&2
+        exit 1
+    }
 fi
 
 exit 0

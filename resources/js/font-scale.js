@@ -14,11 +14,11 @@ export function initFontScaleSystem(Alpine) {
                 const stored = localStorage.getItem('cw_font_scale');
                 if (stored) {
                     const parsed = parseInt(stored, 10);
-                    if (!isNaN(parsed) && parsed >= this.min && parsed <= this.max) {
+                    if (!Number.isNaN(parsed) && parsed >= this.min && parsed <= this.max) {
                         this.scale = parsed;
                     }
                 }
-            } catch (e) {}
+            } catch (_e) {}
 
             this.applyScale();
         },
@@ -46,11 +46,11 @@ export function initFontScaleSystem(Alpine) {
             try {
                 localStorage.setItem('cw_font_scale', this.scale);
                 document.cookie = `cw_font_scale=${this.scale}; path=/; max-age=31536000; SameSite=Lax`;
-            } catch (e) {}
+            } catch (_e) {}
         },
 
         applyScale() {
-            document.documentElement.style.fontSize = this.scale + '%';
-        }
+            document.documentElement.style.fontSize = `${this.scale}%`;
+        },
     }));
 }

@@ -57,6 +57,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Tag> $tags
  * @property-read string $display_name short form of `name` for UI tables — strips configured hostname suffix
  * @property-read string $provider_label human label for `$provider` (e.g. "DigitalOcean droplet")
+ *
+ * @method static Builder<Server> monitored()
  */
 class Server extends Model
 {

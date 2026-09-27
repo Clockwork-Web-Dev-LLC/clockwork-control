@@ -14,7 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Command Alias & Single-Site Targeting**: Added `clockwork:pull-lockouts` alias to `PullLlarLockouts` command; added `--site=<id|domain>` filter to `clockwork:gatekeeper-rollout` for single-site migrations.
 - **`clockwork:gatekeeper-rollout` covers Companion sites still on LLAR**: the rollout now targets both sites with no Companion and Companion-installed sites where LLAR is still active (`--scope=all|no-companion|llar`). It upgrades Companion when it lacks the `gatekeeper` capability and re-reads `/health` before proceeding, and adds `--force` for unattended runs.
 - **`Site::gatekeeperEnabled()` / `gatekeeperProtected()` / `loginUnprotected()`**: one definition of "Gatekeeper is the effective lockout layer" (capability + per-site override or fleet default) shared by Weird Stats, the WordPress Plugins page, the LLAR installer, and the protected-plugins guard.
-- `llar_retired` action-log type recorded when the rollout removes LLAR from a site.
+- **Frontend Modularization & TypeScript Extraction**:
+  - Extracted monolithic inline page scripts into modular, typed components under `resources/js/components/` and `resources/js/charts/`: `sitesPage` (`sites-page.ts`), `wpPluginsManager` (`wp-plugins-manager.ts`), `trafficCharts` (`traffic-charts.ts`), `performanceTrendChart` (`performance-chart.ts`), and `serverMetricsChart` (`server-metrics-chart.ts`).
+  - Streamlined `resources/js/app.js` into a lean 48-line entry point registering Alpine components and initializing system services.
+  - Added TypeScript type definitions (`resources/js/types/index.d.ts`) covering global window helpers, `confirmModal`, `alertModal`, and Alpine components.
+- **Bundled ECharts & Elimination of CDN Scripts**:
+  - Replaced Chart.js and date-fns loaded via `cdn.jsdelivr.net` with bundled, tree-shaken Apache ECharts across Traffic, Performance, and Server Stats tabs.
+  - Interactive charts include automatic resizing, theme alignment, and lifecycle cleanup on component unmount.
+  - Eliminated external CDN script dependencies fleet-wide.
+- **Developer Tooling & Quality Gate**:
+  - Integrated Biome for sub-60ms linting and formatting across frontend JavaScript, TypeScript, and JSON files.
+  - Configured TypeScript compiler (`tsc`) with non-emitting typechecking.
+  - Added unified Composer scripts: `composer format` (Pint + Biome), `composer check` (Pint + PHPStan + Biome + `tsc`), and `composer gate` (check + full Pest test suite).
+  - Hardened `.githooks/pre-commit` combining 5-layer defenses: filename pattern guards (`.env*`, `*.swp`), local client denylist scanner, `gitleaks` staged secret scanner, Pint PHP formatting, and Biome + `tsc` frontend checks.
+- **Internal Developer & Testing Documentation**:
+  - Added `/docs/internal/developer-guide`: comprehensive architecture breakdown, directory layout, and conventions for new engineers.
+  - Added `/docs/internal/testing-playbook`: testing standards, command reference, and authentic test double patterns for `SshClient::exec`, `SiteCommandRunner::run`, and `Http::fake`.
+- **Architecture Invariant Hardening**:
+  - Expanded `ArchitectureTest.php` to assert all 31 provider and feature module ServiceProviders extend `Modules\Core\ModuleServiceProvider`.
+  - Added `@method` docblocks for custom query scopes on `Site` and `Server` models for strict static analysis.
 
 ### Changed
 - **Phase 3 Fleet Migration Complete**: 88 out of 88 targeted sites successfully migrated to Gatekeeper. Companion verified, Gatekeeper per-site override persisted and pushed to WordPress, LLAR deactivated, and LLAR plugin files deleted across all active client sites.

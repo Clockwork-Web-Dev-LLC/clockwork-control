@@ -70,10 +70,13 @@ export function initConfirmModalSystem(Alpine) {
         init() {
             window.addEventListener('cw-open-confirm-modal', (e) => {
                 const opts = e.detail || {};
-                this.title = opts.title || (opts.variant === 'danger' ? 'Confirm Deletion' : (opts.isAlert ? 'Notice' : 'Confirmation'));
+                this.title =
+                    opts.title ||
+                    (opts.variant === 'danger' ? 'Confirm Deletion' : opts.isAlert ? 'Notice' : 'Confirmation');
                 this.message = opts.message || '';
                 this.details = opts.details || '';
-                this.confirmText = opts.confirmText || (opts.isAlert ? 'OK' : (opts.variant === 'danger' ? 'Delete' : 'Confirm'));
+                this.confirmText =
+                    opts.confirmText || (opts.isAlert ? 'OK' : opts.variant === 'danger' ? 'Delete' : 'Confirm');
                 this.cancelText = opts.cancelText || 'Cancel';
                 this.variant = opts.variant || 'danger';
                 this.icon = opts.icon || '';
@@ -107,8 +110,6 @@ export function initConfirmModalSystem(Alpine) {
                     return 'fa-solid fa-triangle-exclamation';
                 case 'warning':
                     return 'fa-solid fa-circle-exclamation';
-                case 'primary':
-                case 'info':
                 default:
                     return 'fa-solid fa-circle-question';
             }
@@ -120,8 +121,6 @@ export function initConfirmModalSystem(Alpine) {
                     return 'bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/20';
                 case 'warning':
                     return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20';
-                case 'primary':
-                case 'info':
                 default:
                     return 'bg-[var(--color-brand)]/10 text-[var(--color-brand)] ring-1 ring-[var(--color-brand)]/20';
             }
@@ -133,8 +132,6 @@ export function initConfirmModalSystem(Alpine) {
                     return 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-xs focus:ring-red-500';
                 case 'warning':
                     return 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-xs focus:ring-amber-500';
-                case 'primary':
-                case 'info':
                 default:
                     return 'bg-[var(--color-brand)] hover:bg-[var(--color-brand-deep)] active:bg-[var(--color-brand-deep)] text-white shadow-xs focus:ring-[var(--color-brand)]';
             }
@@ -176,76 +173,82 @@ export function initConfirmModalSystem(Alpine) {
             } else if (e.key === 'Enter' && !this.loading && this.canConfirm) {
                 this.handleConfirm();
             }
-        }
+        },
     }));
 
     // Programmatic APIs
-    window.confirmModal = function (options) {
+    window.confirmModal = (options) => {
         if (typeof options === 'string') {
             options = parseConfirmString(options);
         }
         return new Promise((resolve) => {
             activeResolver = resolve;
-            window.dispatchEvent(new CustomEvent('cw-open-confirm-modal', {
-                detail: {
-                    title: options.title || 'Confirm Action',
-                    message: options.message || '',
-                    details: options.details || '',
-                    confirmText: options.confirmText || (options.variant === 'danger' ? 'Confirm' : 'Yes, proceed'),
-                    cancelText: options.cancelText || 'Cancel',
-                    variant: options.variant || detectVariant(options.message + ' ' + (options.title || '')),
-                    icon: options.icon || '',
-                    requireMatch: options.requireMatch || '',
-                    isPrompt: false,
-                    isAlert: false,
-                }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('cw-open-confirm-modal', {
+                    detail: {
+                        title: options.title || 'Confirm Action',
+                        message: options.message || '',
+                        details: options.details || '',
+                        confirmText: options.confirmText || (options.variant === 'danger' ? 'Confirm' : 'Yes, proceed'),
+                        cancelText: options.cancelText || 'Cancel',
+                        variant: options.variant || detectVariant(`${options.message} ${options.title || ''}`),
+                        icon: options.icon || '',
+                        requireMatch: options.requireMatch || '',
+                        isPrompt: false,
+                        isAlert: false,
+                    },
+                }),
+            );
         });
     };
 
-    window.promptModal = function (options) {
+    window.promptModal = (options) => {
         if (typeof options === 'string') {
             options = { message: options };
         }
         return new Promise((resolve) => {
             activeResolver = resolve;
-            window.dispatchEvent(new CustomEvent('cw-open-confirm-modal', {
-                detail: {
-                    title: options.title || 'Input Required',
-                    message: options.message || '',
-                    details: options.details || '',
-                    confirmText: options.confirmText || 'Submit',
-                    cancelText: options.cancelText || 'Cancel',
-                    variant: options.variant || 'primary',
-                    icon: options.icon || 'fa-solid fa-pen-to-square',
-                    isPrompt: true,
-                    isAlert: false,
-                    placeholder: options.placeholder || '',
-                    defaultValue: options.defaultValue || '',
-                    requireMatch: options.requireMatch || '',
-                }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('cw-open-confirm-modal', {
+                    detail: {
+                        title: options.title || 'Input Required',
+                        message: options.message || '',
+                        details: options.details || '',
+                        confirmText: options.confirmText || 'Submit',
+                        cancelText: options.cancelText || 'Cancel',
+                        variant: options.variant || 'primary',
+                        icon: options.icon || 'fa-solid fa-pen-to-square',
+                        isPrompt: true,
+                        isAlert: false,
+                        placeholder: options.placeholder || '',
+                        defaultValue: options.defaultValue || '',
+                        requireMatch: options.requireMatch || '',
+                    },
+                }),
+            );
         });
     };
 
-    window.alertModal = function (options) {
+    window.alertModal = (options) => {
         if (typeof options === 'string') {
             options = { message: options };
         }
         return new Promise((resolve) => {
             activeResolver = resolve;
-            window.dispatchEvent(new CustomEvent('cw-open-confirm-modal', {
-                detail: {
-                    title: options.title || 'Notice',
-                    message: options.message || '',
-                    details: options.details || '',
-                    confirmText: options.buttonText || 'OK',
-                    variant: options.variant || 'primary',
-                    icon: options.icon || 'fa-solid fa-circle-info',
-                    isPrompt: false,
-                    isAlert: true,
-                }
-            }));
+            window.dispatchEvent(
+                new CustomEvent('cw-open-confirm-modal', {
+                    detail: {
+                        title: options.title || 'Notice',
+                        message: options.message || '',
+                        details: options.details || '',
+                        confirmText: options.buttonText || 'OK',
+                        variant: options.variant || 'primary',
+                        icon: options.icon || 'fa-solid fa-circle-info',
+                        isPrompt: false,
+                        isAlert: true,
+                    },
+                }),
+            );
         });
     };
 
@@ -258,14 +261,14 @@ export function initConfirmModalSystem(Alpine) {
                 title: match[1].trim(),
                 message: '',
                 details: match[2].trim(),
-                variant: detectVariant(str)
+                variant: detectVariant(str),
             };
         }
         return {
             title: 'Please Confirm',
             message: str,
             details: '',
-            variant: detectVariant(str)
+            variant: detectVariant(str),
         };
     }
 
@@ -281,121 +284,130 @@ export function initConfirmModalSystem(Alpine) {
     }
 
     // Global Event Delegation for declarative data-confirm
-    document.addEventListener('submit', async (e) => {
-        const form = e.target;
-        if (!form || !(form instanceof HTMLFormElement)) return;
+    document.addEventListener(
+        'submit',
+        async (e) => {
+            const form = e.target;
+            if (!form || !(form instanceof HTMLFormElement)) return;
 
-        // If bypass flag is active, allow submission to proceed natively
-        if (form._cwConfirmed) {
-            delete form._cwConfirmed;
-            return;
-        }
+            // If bypass flag is active, allow submission to proceed natively
+            if (form._cwConfirmed) {
+                delete form._cwConfirmed;
+                return;
+            }
 
-        // Check form itself or active submit button
-        const submitter = e.submitter;
-        const confirmSource = (submitter && submitter.hasAttribute('data-confirm'))
-            ? submitter
-            : (form.hasAttribute('data-confirm') ? form : null);
+            // Check form itself or active submit button
+            const submitter = e.submitter;
+            const confirmSource = submitter?.hasAttribute('data-confirm')
+                ? submitter
+                : form.hasAttribute('data-confirm')
+                  ? form
+                  : null;
 
-        if (!confirmSource) return;
+            if (!confirmSource) return;
 
-        e.preventDefault();
-        e.stopImmediatePropagation();
+            e.preventDefault();
+            e.stopImmediatePropagation();
 
-        const rawConfirm = confirmSource.getAttribute('data-confirm');
-        const details = confirmSource.getAttribute('data-confirm-details') || '';
-        const btnText = confirmSource.getAttribute('data-confirm-btn') || '';
-        const cancelText = confirmSource.getAttribute('data-confirm-cancel') || 'Cancel';
-        const requireMatch = confirmSource.getAttribute('data-confirm-match') || '';
-        const variant = confirmSource.getAttribute('data-confirm-variant') || detectVariant(rawConfirm + ' ' + details);
+            const rawConfirm = confirmSource.getAttribute('data-confirm');
+            const details = confirmSource.getAttribute('data-confirm-details') || '';
+            const btnText = confirmSource.getAttribute('data-confirm-btn') || '';
+            const cancelText = confirmSource.getAttribute('data-confirm-cancel') || 'Cancel';
+            const requireMatch = confirmSource.getAttribute('data-confirm-match') || '';
+            const variant =
+                confirmSource.getAttribute('data-confirm-variant') || detectVariant(`${rawConfirm} ${details}`);
 
-        let title = rawConfirm;
-        let message = '';
-        if (rawConfirm.includes('?')) {
-            const parts = rawConfirm.split('?');
-            title = parts[0] + '?';
-            message = parts.slice(1).join('?').trim();
-        }
+            let title = rawConfirm;
+            let message = '';
+            if (rawConfirm.includes('?')) {
+                const parts = rawConfirm.split('?');
+                title = `${parts[0]}?`;
+                message = parts.slice(1).join('?').trim();
+            }
 
-        const confirmed = await window.confirmModal({
-            title: title.trim(),
-            message: message,
-            details: details,
-            confirmText: btnText || (variant === 'danger' ? 'Confirm' : 'Continue'),
-            cancelText: cancelText,
-            variant: variant,
-            requireMatch: requireMatch,
-        });
+            const confirmed = await window.confirmModal({
+                title: title.trim(),
+                message: message,
+                details: details,
+                confirmText: btnText || (variant === 'danger' ? 'Confirm' : 'Continue'),
+                cancelText: cancelText,
+                variant: variant,
+                requireMatch: requireMatch,
+            });
 
-        if (confirmed) {
-            form._cwConfirmed = true;
-            if (requireMatch) {
-                const matchInput = form.querySelector('input[name="confirm_name"]');
-                if (matchInput) {
-                    matchInput.value = requireMatch;
+            if (confirmed) {
+                form._cwConfirmed = true;
+                if (requireMatch) {
+                    const matchInput = form.querySelector('input[name="confirm_name"]');
+                    if (matchInput) {
+                        matchInput.value = requireMatch;
+                    }
+                }
+                if (submitter?.name) {
+                    // Include submitter name/value if present
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = submitter.name;
+                    hidden.value = submitter.value;
+                    form.appendChild(hidden);
+                }
+                form.submit();
+            }
+        },
+        true,
+    );
+
+    document.addEventListener(
+        'click',
+        async (e) => {
+            const target = e.target?.closest?.('a[data-confirm], button[data-confirm]');
+            if (!target) return;
+
+            // If button is inside a form with type="submit" or no type, the submit listener handles it
+            if (target.tagName === 'BUTTON' && target.closest('form') && target.type === 'submit') {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            const rawConfirm = target.getAttribute('data-confirm');
+            const details = target.getAttribute('data-confirm-details') || '';
+            const btnText = target.getAttribute('data-confirm-btn') || '';
+            const cancelText = target.getAttribute('data-confirm-cancel') || 'Cancel';
+            const requireMatch = target.getAttribute('data-confirm-match') || '';
+            const variant = target.getAttribute('data-confirm-variant') || detectVariant(`${rawConfirm} ${details}`);
+
+            let title = rawConfirm;
+            let message = '';
+            if (rawConfirm.includes('?')) {
+                const parts = rawConfirm.split('?');
+                title = `${parts[0]}?`;
+                message = parts.slice(1).join('?').trim();
+            }
+
+            const confirmed = await window.confirmModal({
+                title: title.trim(),
+                message: message,
+                details: details,
+                confirmText: btnText || (variant === 'danger' ? 'Confirm' : 'Continue'),
+                cancelText: cancelText,
+                variant: variant,
+                requireMatch: requireMatch,
+            });
+
+            if (confirmed) {
+                if (target.tagName === 'A' && target.href) {
+                    window.location.href = target.href;
+                } else {
+                    // Custom click callback execution if defined
+                    target.dispatchEvent(new CustomEvent('cw-confirmed'));
                 }
             }
-            if (submitter && submitter.name) {
-                // Include submitter name/value if present
-                const hidden = document.createElement('input');
-                hidden.type = 'hidden';
-                hidden.name = submitter.name;
-                hidden.value = submitter.value;
-                form.appendChild(hidden);
-            }
-            form.submit();
-        }
-    }, true);
-
-    document.addEventListener('click', async (e) => {
-        const target = e.target?.closest?.('a[data-confirm], button[data-confirm]');
-        if (!target) return;
-
-        // If button is inside a form with type="submit" or no type, the submit listener handles it
-        if (target.tagName === 'BUTTON' && target.closest('form') && target.type === 'submit') {
-            return;
-        }
-
-        e.preventDefault();
-        e.stopImmediatePropagation();
-
-        const rawConfirm = target.getAttribute('data-confirm');
-        const details = target.getAttribute('data-confirm-details') || '';
-        const btnText = target.getAttribute('data-confirm-btn') || '';
-        const cancelText = target.getAttribute('data-confirm-cancel') || 'Cancel';
-        const requireMatch = target.getAttribute('data-confirm-match') || '';
-        const variant = target.getAttribute('data-confirm-variant') || detectVariant(rawConfirm + ' ' + details);
-
-        let title = rawConfirm;
-        let message = '';
-        if (rawConfirm.includes('?')) {
-            const parts = rawConfirm.split('?');
-            title = parts[0] + '?';
-            message = parts.slice(1).join('?').trim();
-        }
-
-        const confirmed = await window.confirmModal({
-            title: title.trim(),
-            message: message,
-            details: details,
-            confirmText: btnText || (variant === 'danger' ? 'Confirm' : 'Continue'),
-            cancelText: cancelText,
-            variant: variant,
-            requireMatch: requireMatch,
-        });
-
-        if (confirmed) {
-            if (target.tagName === 'A' && target.href) {
-                window.location.href = target.href;
-            } else {
-                // Custom click callback execution if defined
-                target.dispatchEvent(new CustomEvent('cw-confirmed'));
-            }
-        }
-    }, true);
+        },
+        true,
+    );
 
     // Safety fallback: route native window.alert calls to the modal
-    window.alert = function (message) {
-        return window.alertModal(message);
-    };
+    window.alert = (message) => window.alertModal(message);
 }
