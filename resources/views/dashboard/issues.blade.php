@@ -2511,7 +2511,7 @@
                         <i class="fa-solid fa-database text-[var(--color-ink-muted)] mr-2"></i>
                         WordPress DB credentials missing
                     </h2>
-                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Wordfence + LLAR ingest needs these. Fetched over SSH from wp-config.php.</p>
+                    <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Wordfence + Gatekeeper/LLAR fallback ingest needs these. Fetched over SSH from wp-config.php.</p>
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="status-pill status-yellow">{{ $missingDbCreds->count() }}</span>

@@ -161,7 +161,9 @@
                         @if ($site->wordfence_enabled)
                             <span class="status-pill status-green text-[10px]">Wordfence</span>
                         @endif
-                        @if ($site->llar_enabled)
+                        @if ($site->gatekeeperEnabled())
+                            <span class="status-pill status-green text-[10px]">Gatekeeper</span>
+                        @elseif ($site->llar_enabled)
                             <span class="status-pill status-green text-[10px]">LLAR</span>
                         @endif
                         @unless ($site->is_wordpress)

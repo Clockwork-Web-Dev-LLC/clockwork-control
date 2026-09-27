@@ -34,14 +34,20 @@ class WordPressPluginsController extends Controller
         $companionMissing = $sites->count() - $companionInstalled;
 
         $wordfenceEnabled = $sites->where('wordfence_enabled', true)->count();
+        $gatekeeperEnabledCount = $sites->filter(fn (Site $s) => $s->gatekeeperEnabled())->count();
         $llarEnabledCount = $llarEnabled ? $sites->where('llar_enabled', true)->count() : 0;
-        $llarMissingCount = $llarEnabled ? ($sites->count() - $llarEnabledCount) : 0;
 
-        $noProtection = $sites->filter(function ($s) use ($llarEnabled) {
+        // "Missing" LLAR only matters where Gatekeeper hasn't taken over.
+        // A Gatekeeper site with no LLAR is the migration's end state.
+        $llarMissingCount = $llarEnabled
+            ? $sites->filter(fn (Site $s) => ! $s->llar_enabled && ! $s->gatekeeperEnabled())->count()
+            : 0;
+
+        $noProtection = $sites->filter(function (Site $s) use ($llarEnabled) {
             $hasWf = (bool) $s->wordfence_enabled;
             $hasLlar = $llarEnabled && (bool) $s->llar_enabled;
 
-            return ! $hasWf && ! $hasLlar;
+            return ! $hasWf && ! $hasLlar && ! $s->gatekeeperEnabled();
         })->count();
 
         $totals = [
@@ -49,6 +55,7 @@ class WordPressPluginsController extends Controller
             'companion_installed' => $companionInstalled,
             'companion_missing' => $companionMissing,
             'wordfence_enabled' => $wordfenceEnabled,
+            'gatekeeper_enabled' => $gatekeeperEnabledCount,
             'llar_enabled' => $llarEnabledCount,
             'llar_missing' => $llarMissingCount,
             'no_protection' => $noProtection,

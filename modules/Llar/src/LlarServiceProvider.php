@@ -21,10 +21,10 @@ class LlarServiceProvider extends ModuleServiceProvider
         return new ModuleManifest(
             id: 'llar',
             name: 'Limit Login Attempts Reloaded',
-            description: 'WordPress brute-force login attack protection, lockout log ingest, and automatic SSH fail2ban integration.',
+            description: 'Legacy WordPress brute-force login attack protection plugin. Retired across the fleet in favor of native Gatekeeper.',
             credentialFields: [],
-            status: ModuleManifest::STATUS_VERIFIED,
-            statusNote: 'Automated wp-cli deployment and security lockout log synchronization.',
+            status: ModuleManifest::STATUS_DEPRECATED,
+            statusNote: 'Deprecated — replaced by native Gatekeeper module with fail2ban integration.',
         );
     }
 }

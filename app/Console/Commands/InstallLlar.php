@@ -6,17 +6,27 @@ use App\Models\Site;
 use App\Services\Sites\LlarInstaller;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
+use Modules\Core\ModuleStateResolver;
 
 class InstallLlar extends Command
 {
     protected $signature = 'clockwork:install-llar
         {--site= : Limit to a specific site ID or domain}
-        {--all-missing : Process every WordPress site where llar_enabled is false}';
+        {--all-missing : Process every WordPress site with no lockout layer (llar_enabled false and Gatekeeper not enabled)}';
 
     protected $description = 'Install Limit Login Attempts Reloaded on WordPress sites and disable its lockout email feature. Sites that already have LLAR are left untouched.';
 
     public function handle(LlarInstaller $installer): int
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('llar')) {
+            $this->error('The LLAR module is deprecated and disabled.');
+            $this->line('Use native Gatekeeper instead: php artisan clockwork:gatekeeper-rollout');
+
+            return self::FAILURE;
+        }
+
+        $this->warn('Notice: Limit Login Attempts Reloaded is deprecated. Use native Gatekeeper for login protection.');
+
         if (! $this->option('site') && ! $this->option('all-missing')) {
             $this->error('Pass --site=<id|domain> or --all-missing.');
 
@@ -52,6 +62,7 @@ class InstallLlar extends Command
                     $alreadyPresent++;
                     break;
                 case LlarInstaller::RESULT_SKIPPED_NOT_WP:
+                case LlarInstaller::RESULT_SKIPPED_GATEKEEPER:
                     $this->line("  · {$result['message']}");
                     $skipped++;
                     break;
@@ -85,7 +96,10 @@ class InstallLlar extends Command
                     ->orWhere('domain', $siteOpt);
             });
         } elseif ($this->option('all-missing')) {
-            $q->where('llar_enabled', false);
+            // "Missing" means no lockout layer at all. Sites already on
+            // Gatekeeper are done, not missing — never re-seed LLAR there.
+            $q->where('llar_enabled', false)
+                ->whereNotIn('id', Site::query()->gatekeeperProtected()->select('id'));
         }
 
         return $q->orderBy('domain')->get();

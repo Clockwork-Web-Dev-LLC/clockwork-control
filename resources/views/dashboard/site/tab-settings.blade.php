@@ -195,11 +195,13 @@
                         WordPress security
                     </h3>
                     @php
-                        $secPill = ($site->wordfence_enabled && $site->llar_enabled)
+                        $lockoutActive = $site->gatekeeperEnabled() || $site->llar_enabled;
+                        $secPill = ($site->wordfence_enabled && $lockoutActive)
                             ? ['class' => 'status-green', 'text' => 'Hardened']
-                            : (($site->wordfence_enabled || $site->llar_enabled)
+                            : (($site->wordfence_enabled || $lockoutActive)
                                 ? ['class' => 'status-yellow', 'text' => 'Partial']
                                 : ['class' => 'status-unknown', 'text' => 'Unconfigured']);
+                        $llarModuleEnabled = app(\Modules\Core\ModuleStateResolver::class)->isEnabled('llar');
                     @endphp
                     <span class="status-pill {{ $secPill['class'] }} text-[10px]">
                         <span class="status-dot"></span> {{ $secPill['text'] }}
@@ -218,29 +220,39 @@
                         @endif
                     </div>
 
-                    <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--color-ink-muted)]">Limit Login Attempts:</span>
-                        <div id="llar-state">
-                            @if ($site->llar_enabled)
-                                <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
-                                    <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
-                                </span>
-                            @else
+                    @if ($site->gatekeeperEnabled())
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-[var(--color-ink-muted)]">Gatekeeper:</span>
+                            <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
+                            </span>
+                        </div>
+                    @elseif ($site->llar_enabled)
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-[var(--color-ink-muted)]">Limit Login Attempts:</span>
+                            <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
+                            </span>
+                        </div>
+                    @else
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-[var(--color-ink-muted)]">Login Lockouts:</span>
+                            <div id="llar-state">
                                 <div class="flex items-center gap-2">
                                     <span class="text-[var(--color-ink-soft)] text-[11px]">Not enabled</span>
-                                    @unless ($site->isPressable())
+                                    @if ($llarModuleEnabled && ! $site->isPressable())
                                         <button type="button"
                                                 id="llar-install-btn"
                                                 class="btn-pill-nav text-[10px] py-0.5 px-2"
                                                 data-url="{{ route('sites.llar.install', $site) }}"
                                                 title="Install LLAR via wp-cli over SSH">
-                                            <i class="fa-solid fa-download text-[9px]"></i> Install
+                                            <i class="fa-solid fa-download text-[9px]"></i> Install LLAR
                                         </button>
-                                    @endunless
+                                    @endif
                                 </div>
-                            @endif
+                            </div>
                         </div>
-                    </div>
+                    @endif
                 </div>
 
                 <div id="llar-install-result" class="hidden text-xs mb-2"></div>

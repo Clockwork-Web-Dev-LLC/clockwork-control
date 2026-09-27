@@ -15,13 +15,14 @@
 <div class="card overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--color-border-light)]">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Plugin coverage by Cloudflare state</h2>
-        <p class="text-xs text-[var(--color-ink-muted)] mt-1">Are CF-proxied sites better-protected than dns_only or non-CF ones? Red = real exposure (no plugin at all).</p>
+        <p class="text-xs text-[var(--color-ink-muted)] mt-1">Are CF-proxied sites better-protected than dns_only or non-CF ones? Gatekeeper is the native lockout layer replacing LLAR. Red = real exposure (no lockout layer and no Wordfence).</p>
     </div>
     <table class="w-full text-sm">
         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
             <tr>
                 <th class="px-5 py-2 text-left">CF state</th>
                 <th class="px-5 py-2 text-right">Sites</th>
+                <th class="px-5 py-2 text-right">Gatekeeper</th>
                 <th class="px-5 py-2 text-right">LLAR</th>
                 <th class="px-5 py-2 text-right">Wordfence</th>
                 <th class="px-5 py-2 text-right">Both</th>
@@ -38,6 +39,10 @@
                         </span>
                     </td>
                     <td class="px-5 py-2 text-right font-data">{{ number_format($row['total']) }}</td>
+                    <td class="px-5 py-2 text-right">
+                        <span class="font-data">{{ $pct($row['gatekeeper'] ?? 0, $row['total']) }}%</span>
+                        <span class="text-xs text-[var(--color-ink-soft)] ml-1">({{ $row['gatekeeper'] ?? 0 }})</span>
+                    </td>
                     <td class="px-5 py-2 text-right">
                         <span class="font-data">{{ $pct($row['llar'], $row['total']) }}%</span>
                         <span class="text-xs text-[var(--color-ink-soft)] ml-1">({{ $row['llar'] }})</span>
@@ -60,7 +65,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="px-5 py-6 text-center text-[var(--color-ink-soft)]">No site data yet.</td></tr>
+                <tr><td colspan="7" class="px-5 py-6 text-center text-[var(--color-ink-soft)]">No site data yet.</td></tr>
             @endforelse
         </tbody>
     </table>

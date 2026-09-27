@@ -2,6 +2,7 @@
 
 namespace App\Services\Companion;
 
+use App\Models\Site;
 use App\Support\Settings;
 use RuntimeException;
 
@@ -134,13 +135,41 @@ class CompanionProtectedPlugins
         ], true);
     }
 
-    public static function guardDestructive(string $slug, string $action): void
+    /**
+     * Limit Login Attempts Reloaded slugs. Protected like any other security
+     * plugin *until* Gatekeeper is the effective lockout layer on the site —
+     * at that point LLAR is the thing being retired, and blocking its
+     * removal would leave both engines running.
+     *
+     * @var list<string>
+     */
+    public const LLAR_SLUGS = [
+        'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php',
+        'limit-login-attempts/limit-login-attempts.php',
+    ];
+
+    public static function isLlar(string $slug): bool
+    {
+        $normalized = strtolower(str_replace('\\', '/', trim($slug)));
+
+        return in_array($normalized, self::LLAR_SLUGS, true);
+    }
+
+    /**
+     * @param  ?Site  $site  When given, LLAR is exempt from protection on a
+     *                       site where Gatekeeper is already enabled.
+     */
+    public static function guardDestructive(string $slug, string $action, ?Site $site = null): void
     {
         if (! in_array($action, ['deactivate', 'delete'], true)) {
             return;
         }
 
         if (! self::contains($slug)) {
+            return;
+        }
+
+        if ($site !== null && self::isLlar($slug) && $site->gatekeeperEnabled()) {
             return;
         }
 

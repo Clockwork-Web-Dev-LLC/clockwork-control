@@ -64,7 +64,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 |---|---|---|
 | `clockwork:tail-nginx-logs` | Inode-tracked tail of every site's nginx access log. | `php artisan clockwork:tail-nginx-logs` |
 | `clockwork:rollup-traffic` | `threat_logs` → `site_traffic_daily`. | `php artisan clockwork:rollup-traffic --backfill=2` |
-| `clockwork:pull-llar-lockouts` | Ingest active lockouts from Gatekeeper (Companion HMAC REST) with legacy LLAR direct-DB fallback. | `php artisan clockwork:pull-llar-lockouts` |
+| `clockwork:pull-lockouts`<br>*(alias: `clockwork:pull-llar-lockouts`)* | Ingest active lockouts from Gatekeeper (Companion HMAC REST) with legacy LLAR direct-DB fallback. | `php artisan clockwork:pull-lockouts` |
 | `clockwork:pull-wordfence-blocks` | Direct-DB pull of Wordfence blocks. | `php artisan clockwork:pull-wordfence-blocks` |
 | `clockwork:warm-weird-stats` | Pre-warm the `/settings/weird-stats` cache. | `php artisan clockwork:warm-weird-stats` |
 | `clockwork:ingest-rotated-logs` | One-time recovery: ingest date-stamped rotated nginx logs (`access.log-YYYYMMDD.gz`) to fill gaps in `threat_logs` left by a stalled cursor. Only inserts rows not already present for the requested window. | `php artisan clockwork:ingest-rotated-logs --dates=YYYY-MM-DD,YYYY-MM-DD` |
@@ -74,8 +74,9 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | Command | Purpose | Example |
 |---|---|---|
 | `clockwork:push-gatekeeper-settings` | Push Gatekeeper lockout policy defaults and site overrides to WordPress via Companion or Renegade. | `php artisan clockwork:push-gatekeeper-settings [--site=42]` |
+| `clockwork:gatekeeper-rollout` | Migrate sites off LLAR: install/upgrade Companion where needed, persist + push a per-site `enabled=true` override, deactivate and delete LLAR over Companion REST, flip `llar_enabled`. Never removes LLAR unless Gatekeeper is confirmed enforcing. `--site=domain`, `--scope=all\|no-companion\|llar`, `--limit`, `--dry-run`, `--force`, `--skip=a,b`. | `php artisan clockwork:gatekeeper-rollout --scope=llar --limit=20 --dry-run` |
 | `clockwork:detect-wp-plugins` | SSH `wp plugin list` per WP site, refresh LLAR/Wordfence flags. | `php artisan clockwork:detect-wp-plugins` |
-| `clockwork:install-llar` | *(Legacy / Deprecated)* Install + activate LLAR. Phased out in favor of native Gatekeeper. | `php artisan clockwork:install-llar --site=42` |
+| `clockwork:install-llar` | *(Legacy / Deprecated)* Install + activate LLAR. Refuses sites where Gatekeeper is enabled (`skipped-gatekeeper`); `--all-missing` excludes them. | `php artisan clockwork:install-llar --site=42` |
 | `clockwork:extract-wp-configs` | One-off: parse wp-config.php → DB creds for sites missing them. | `php artisan clockwork:extract-wp-configs` |
 
 

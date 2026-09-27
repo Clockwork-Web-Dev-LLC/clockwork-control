@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Site;
 use App\Services\Gatekeeper\GatekeeperSettingsPusher;
 use Illuminate\Console\Command;
+use Modules\Core\ModuleStateResolver;
 
 class PushGatekeeperSettings extends Command
 {
@@ -15,6 +16,15 @@ class PushGatekeeperSettings extends Command
 
     public function handle(GatekeeperSettingsPusher $pusher): int
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('gatekeeper')) {
+            // Not an error: the nightly schedule keeps calling this, and an
+            // agency that turned the module off should see a quiet skip, not
+            // a red "failed to sync" for every site.
+            $this->info('Gatekeeper module is disabled in the Module Directory — skipping push.');
+
+            return self::SUCCESS;
+        }
+
         $siteFilter = $this->option('site');
 
         $query = Site::query()

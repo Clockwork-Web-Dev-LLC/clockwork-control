@@ -48,7 +48,7 @@ describe('IngestSettingsController', function () {
 
             $response->assertOk()
                 ->assertSee('Scheduling')
-                ->assertSee('Limit Login Attempts Reloaded')
+                ->assertSee('Gatekeeper & Login Lockouts')
                 ->assertSee('Wordfence')
                 ->assertSee('America/New_York')
                 ->assertSee('Raw nginx log retention')

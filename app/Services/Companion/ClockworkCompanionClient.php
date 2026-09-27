@@ -374,7 +374,7 @@ class ClockworkCompanionClient
      */
     public function togglePlugin(string $slug, string $action, bool $networkWide = false): array
     {
-        CompanionProtectedPlugins::guardDestructive($slug, $action);
+        CompanionProtectedPlugins::guardDestructive($slug, $action, $this->site);
 
         return $this->postJson('/plugins/toggle', [
             'slug' => $slug,
@@ -390,7 +390,7 @@ class ClockworkCompanionClient
      */
     public function deletePlugin(string $slug, bool $networkWide = false): array
     {
-        CompanionProtectedPlugins::guardDestructive($slug, 'delete');
+        CompanionProtectedPlugins::guardDestructive($slug, 'delete', $this->site);
 
         return $this->postJson('/plugins/delete', [
             'slug' => $slug,

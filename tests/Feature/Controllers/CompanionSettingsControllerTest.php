@@ -77,7 +77,7 @@ describe('CompanionSettingsController', function () {
                 ->assertDontSee('White Label &amp;amp;', false)
                 ->assertSee('Clockwork Web Dev')
                 ->assertSee('Clockwork Companion')
-                ->assertSee('LLAR Unlock Hub')
+                ->assertSee('Remote Lockout Hub')
                 ->assertSee('Agency Primary Hub Domain')
                 ->assertSee('Monitored Sites')
                 ->assertSee('Companion Installed');

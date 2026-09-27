@@ -134,6 +134,8 @@ class ActionLog extends Model
 
     public const TYPE_WFLS_PLUGIN_REMOVED = 'wfls_plugin_removed';
 
+    public const TYPE_LLAR_RETIRED = 'llar_retired';
+
     public const TYPE_CACHE_PURGED = 'cache_purged';
 
     public const TYPE_SCHEDULED_JOB_RUN_NOW = 'scheduled_job_run_now';

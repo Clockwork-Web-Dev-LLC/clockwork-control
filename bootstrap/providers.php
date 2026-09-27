@@ -17,6 +17,7 @@ use Modules\CommentModeration\CommentModerationServiceProvider;
 use Modules\ContactForms\ContactFormsServiceProvider;
 use Modules\Core\CoreServiceProvider;
 use Modules\DigitalOcean\DigitalOceanServiceProvider;
+use Modules\Gatekeeper\GatekeeperServiceProvider;
 use Modules\GridPane\GridPaneServiceProvider;
 use Modules\GTmetrix\GTmetrixServiceProvider;
 use Modules\Hetzner\HetznerServiceProvider;
@@ -75,6 +76,7 @@ return [
     // Security scanning & protection modules (ManageWP replacement suite, brute-force defense)
     SucuriServiceProvider::class,
     LlarServiceProvider::class,
+    GatekeeperServiceProvider::class,
     // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay)
     ContactFormsServiceProvider::class,
     BackupRelayServiceProvider::class,

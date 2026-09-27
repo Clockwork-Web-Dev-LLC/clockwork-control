@@ -703,13 +703,21 @@ class SitesController extends Controller
             LlarInstaller::RESULT_ALREADY_PRESENT,
         ], true);
 
+        // Declining to install on a Gatekeeper site is the correct outcome,
+        // not an error — 409 so the button's failure path doesn't fire.
+        $status = match (true) {
+            $ok => 200,
+            $result['result'] === LlarInstaller::RESULT_SKIPPED_GATEKEEPER => 409,
+            default => 422,
+        };
+
         return response()->json([
             'ok' => $ok,
             'result' => $result['result'],
             'message' => $result['message'],
             'output' => $result['output'] ?? null,
             'llar_enabled' => $site->fresh()->llar_enabled,
-        ], $ok ? 200 : 422);
+        ], $status);
     }
 
     public function search(Request $request): JsonResponse

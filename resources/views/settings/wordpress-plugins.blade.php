@@ -29,7 +29,7 @@
     </x-page-header>
 
     {{-- Primary Metrics Row --}}
-    <div class="grid grid-cols-2 md:grid-cols-{{ $llarEnabled ? '5' : '4' }} gap-3 mb-6">
+    <div class="grid grid-cols-2 {{ $llarEnabled ? 'md:grid-cols-6' : 'md:grid-cols-5' }} gap-3 mb-6">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">WordPress sites</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ number_format($totals['sites']) }}</div>
@@ -53,6 +53,15 @@
                     </span>
                 @endif
             </div>
+        </div>
+
+        <div class="card px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Gatekeeper</div>
+            <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">
+                {{ number_format($totals['gatekeeper_enabled']) }}
+                <span class="text-sm text-[var(--color-ink-soft)]">/ {{ number_format($totals['sites']) }}</span>
+            </div>
+            <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">Native login lockouts (replaces LLAR)</div>
         </div>
 
         <div class="card px-4 py-3">
@@ -121,7 +130,7 @@
                      if (this.filter === 'missing-companion' && row.dataset.companion === '1') return false;
                      if (this.filter === 'companion-installed' && row.dataset.companion !== '1') return false;
                      @if ($llarEnabled)
-                     if (this.filter === 'missing-llar' && row.dataset.llar === '1') return false;
+                     if (this.filter === 'missing-llar' && (row.dataset.llar === '1' || row.dataset.gatekeeper === '1')) return false;
                      @endif
                      if (this.search.trim() !== '') {
                          const q = this.search.toLowerCase();
@@ -237,6 +246,7 @@
                                 data-server="{{ $serverName }}"
                                 data-companion="{{ $site->companion_installed ? '1' : '0' }}"
                                 data-llar="{{ $site->llar_enabled ? '1' : '0' }}"
+                                data-gatekeeper="{{ $site->gatekeeperEnabled() ? '1' : '0' }}"
                                 data-wordfence="{{ $site->wordfence_enabled ? '1' : '0' }}"
                                 data-sort-site="{{ $site->domain }}"
                                 data-sort-server="{{ $serverName }}"
@@ -324,6 +334,10 @@
                                             <span class="status-pill status-green text-xs inline-flex items-center gap-1.5" title="Limit Login Attempts Reloaded active">
                                                 <i class="fa-solid fa-lock"></i> Active
                                             </span>
+                                        @elseif ($site->gatekeeperEnabled())
+                                            <span class="status-pill status-cf text-xs inline-flex items-center gap-1.5" title="Gatekeeper (native Companion login lockouts) is enabled — LLAR not needed">
+                                                <i class="fa-solid fa-shield-halved"></i> Gatekeeper
+                                            </span>
                                         @elseif ($probed)
                                             <span class="text-[var(--color-ink-soft)] inline-flex items-center gap-1" title="LLAR not active or not installed">
                                                 <i class="fa-solid fa-minus text-[10px]"></i> Inactive
@@ -360,8 +374,8 @@
                                             </button>
                                         @endif
 
-                                        {{-- Install LLAR button (conditional on module state) --}}
-                                        @if ($llarEnabled && ! $site->llar_enabled)
+                                        {{-- Install LLAR button (module on, no LLAR, and Gatekeeper not already covering logins) --}}
+                                        @if ($llarEnabled && ! $site->llar_enabled && ! $site->gatekeeperEnabled())
                                             <button type="button"
                                                     class="llar-install-btn btn-pill-nav text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]"
                                                     data-url="{{ route('sites.llar.install', $site) }}"

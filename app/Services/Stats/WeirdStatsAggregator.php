@@ -44,11 +44,17 @@ class WeirdStatsAggregator
      * Plugin coverage broken down by Cloudflare state. One row per CF state
      * (proxied / dns_only / not_using / unknown), with counts + percentages.
      *
-     * @return array<int, array{cf_state: string, total: int, llar: int, wf: int, both: int, neither: int}>
+     * "Both" means a lockout layer (Gatekeeper or LLAR) plus Wordfence.
+     * "Neither" means no lockout layer and no Wordfence — the red column.
+     *
+     * @return array<int, array{cf_state: string, total: int, gatekeeper: int, llar: int, wf: int, both: int, neither: int}>
      */
     public function pluginCoverageMatrix(): array
     {
-        $rows = DB::table('sites')
+        // Start from the Eloquent builder (not DB::table) so every column
+        // below shares the notArchived global scope and the totals reconcile;
+        // toBase() applies the scope and returns plain rows, not Site models.
+        $rows = Site::query()
             ->whereIn('server_id', $this->activeServerIds())
             ->where('is_wordpress', true)
             ->groupBy('cloudflare_state')
@@ -57,19 +63,51 @@ class WeirdStatsAggregator
                 DB::raw('COUNT(*) AS total'),
                 DB::raw('SUM(CASE WHEN llar_enabled = 1 THEN 1 ELSE 0 END) AS llar'),
                 DB::raw('SUM(CASE WHEN wordfence_enabled = 1 THEN 1 ELSE 0 END) AS wf'),
-                DB::raw('SUM(CASE WHEN llar_enabled = 1 AND wordfence_enabled = 1 THEN 1 ELSE 0 END) AS both_count'),
-                DB::raw('SUM(CASE WHEN llar_enabled = 0 AND wordfence_enabled = 0 THEN 1 ELSE 0 END) AS neither_count'),
             ])
-            ->get();
+            ->toBase()
+            ->get()
+            ->keyBy(fn ($r) => (string) $r->cloudflare_state);
 
-        return $rows->map(fn ($r) => [
-            'cf_state' => (string) $r->cloudflare_state,
+        // Gatekeeper's "enabled" lives in a JSON column with a fleet-default
+        // fallback, so it can't be a SUM(CASE …) on the raw table. Resolve it
+        // through the model scope and merge per CF state.
+        $gatekeeper = Site::query()
+            ->whereIn('server_id', $this->activeServerIds())
+            ->where('is_wordpress', true)
+            ->gatekeeperProtected()
+            ->groupBy('cloudflare_state')
+            ->select(['cloudflare_state', DB::raw('COUNT(*) AS n')])
+            ->pluck('n', 'cloudflare_state');
+
+        $bothRows = Site::query()
+            ->whereIn('server_id', $this->activeServerIds())
+            ->where('is_wordpress', true)
+            ->where('wordfence_enabled', true)
+            ->where(function ($q) {
+                $q->where('llar_enabled', true)
+                    ->orWhereIn('id', Site::query()->gatekeeperProtected()->select('id'));
+            })
+            ->groupBy('cloudflare_state')
+            ->select(['cloudflare_state', DB::raw('COUNT(*) AS n')])
+            ->pluck('n', 'cloudflare_state');
+
+        $neitherRows = Site::query()
+            ->whereIn('server_id', $this->activeServerIds())
+            ->where('is_wordpress', true)
+            ->loginUnprotected()
+            ->groupBy('cloudflare_state')
+            ->select(['cloudflare_state', DB::raw('COUNT(*) AS n')])
+            ->pluck('n', 'cloudflare_state');
+
+        return $rows->map(fn ($r, $state) => [
+            'cf_state' => $state,
             'total' => (int) $r->total,
+            'gatekeeper' => (int) ($gatekeeper[$state] ?? 0),
             'llar' => (int) $r->llar,
             'wf' => (int) $r->wf,
-            'both' => (int) $r->both_count,
-            'neither' => (int) $r->neither_count,
-        ])->all();
+            'both' => (int) ($bothRows[$state] ?? 0),
+            'neither' => (int) ($neitherRows[$state] ?? 0),
+        ])->values()->all();
     }
 
     /**
@@ -333,8 +371,9 @@ class WeirdStatsAggregator
     }
 
     /**
-     * Sites with no security plugin (LLAR + Wordfence both off), sorted by
-     * 30-day visits descending so the high-traffic exposure rises to the top.
+     * Sites with no login protection at all (no Gatekeeper, no LLAR, no
+     * Wordfence), sorted by 30-day visits descending so the high-traffic
+     * exposure rises to the top.
      *
      * @return Collection<int, Site> with extra props on each: visits_30d, days_since_probe
      */
@@ -351,8 +390,7 @@ class WeirdStatsAggregator
         $sites = Site::with(['server:id,name,is_ignored', 'server.tags:id,name'])
             ->whereIn('server_id', $this->activeServerIds())
             ->where('is_wordpress', true)
-            ->where('llar_enabled', false)
-            ->where('wordfence_enabled', false)
+            ->loginUnprotected()
             ->orderBy('domain')
             ->get();
 
@@ -397,11 +435,10 @@ class WeirdStatsAggregator
                 ->whereNotNull('banned_at')
                 ->whereNull('unbanned_at')
                 ->count(),
-            'unprotected_count' => (int) DB::table('sites')
+            'unprotected_count' => (int) Site::query()
                 ->whereIn('server_id', $this->activeServerIds())
                 ->where('is_wordpress', true)
-                ->where('llar_enabled', false)
-                ->where('wordfence_enabled', false)
+                ->loginUnprotected()
                 ->count(),
         ];
     }

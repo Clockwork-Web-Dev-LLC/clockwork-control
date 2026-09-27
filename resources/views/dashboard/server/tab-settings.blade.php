@@ -78,37 +78,37 @@
             @endif
         </div>
 
-        {{-- LLAR auto-ban --}}
+        {{-- Lockout auto-ban --}}
         <div class="px-5 py-4">
             <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">LLAR auto-ban</div>
+                    <div class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">Login Lockout auto-ban</div>
                     <div class="flex items-center gap-3 mt-1">
                         @if ($server->auto_ban_llar)
                             <span class="status-pill status-green">
                                 <i class="fa-solid fa-bolt"></i> Auto-ban on
                             </span>
                             <span class="text-sm text-[var(--color-ink-muted)]">
-                                Lockouts on this server are banned via fail2ban automatically.
+                                Gatekeeper and login lockouts on this server are banned via fail2ban automatically.
                             </span>
                         @else
                             <span class="status-pill status-unknown">
                                 <i class="fa-solid fa-hand"></i> Manual review
                             </span>
                             <span class="text-sm text-[var(--color-ink-muted)]">
-                                Lockouts on this server go to the <a href="{{ route('review-queue.index') }}" class="underline">review queue</a> for approval.
+                                Login lockouts on this server go to the <a href="{{ route('review-queue.index') }}" class="underline">review queue</a> for approval.
                             </span>
                         @endif
                     </div>
                     @if ($server->last_llar_pull_at)
                         <div class="text-xs text-[var(--color-ink-soft)] mt-2">
-                            Last LLAR pull: {{ $server->last_llar_pull_at->diffForHumans() }}
+                            Last lockout sync: {{ $server->last_llar_pull_at->diffForHumans() }}
                         </div>
                     @endif
                 </div>
                 <form method="POST" action="{{ route('servers.toggleAutoBanLlar', $server) }}"
-                      data-confirm="{{ $server->auto_ban_llar ? 'Switch back to manual review for LLAR lockouts?' : 'Auto-ban LLAR lockouts on ' . $server->name . '?' }}"
-                      @if(! $server->auto_ban_llar) data-confirm-details="IPs already locked out by Limit Login Attempts Reloaded will be banned via fail2ban as soon as they are seen." @endif
+                      data-confirm="{{ $server->auto_ban_llar ? 'Switch back to manual review for login lockouts?' : 'Auto-ban login lockouts on ' . $server->name . '?' }}"
+                      @if(! $server->auto_ban_llar) data-confirm-details="IPs locked out by Gatekeeper or WordPress login protection will be banned via fail2ban as soon as they are seen." @endif
                       data-confirm-btn="{{ $server->auto_ban_llar ? 'Disable Auto-ban' : 'Enable Auto-ban' }}"
                       data-confirm-variant="{{ $server->auto_ban_llar ? 'warning' : 'primary' }}">
                     @csrf

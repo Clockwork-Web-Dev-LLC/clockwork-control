@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-09-27
+
+### Added
+- **Gatekeeper Modular Architecture (`modules/Gatekeeper`)**: Extracted Gatekeeper into a first-class modular package with `GatekeeperServiceProvider`, registered in `ModuleCatalog` under `security`. Gatekeeper is **optional, not forced**: opt-in by default (`enabled: false`), can be enabled/disabled via `/settings/modules`, and supports granular per-site overrides and third-party SSO bypasses.
+- **Command Alias & Single-Site Targeting**: Added `clockwork:pull-lockouts` alias to `PullLlarLockouts` command; added `--site=<id|domain>` filter to `clockwork:gatekeeper-rollout` for single-site migrations.
+- **`clockwork:gatekeeper-rollout` covers Companion sites still on LLAR**: the rollout now targets both sites with no Companion and Companion-installed sites where LLAR is still active (`--scope=all|no-companion|llar`). It upgrades Companion when it lacks the `gatekeeper` capability and re-reads `/health` before proceeding, and adds `--force` for unattended runs.
+- **`Site::gatekeeperEnabled()` / `gatekeeperProtected()` / `loginUnprotected()`**: one definition of "Gatekeeper is the effective lockout layer" (capability + per-site override or fleet default) shared by Weird Stats, the WordPress Plugins page, the LLAR installer, and the protected-plugins guard.
+- `llar_retired` action-log type recorded when the rollout removes LLAR from a site.
+
+### Changed
+- **Phase 3 Fleet Migration Complete**: 88 out of 88 targeted sites successfully migrated to Gatekeeper. Companion verified, Gatekeeper per-site override persisted and pushed to WordPress, LLAR deactivated, and LLAR plugin files deleted across all active client sites.
+- **Phase 4 & 5 UI Rebranding & LLAR Module Deprecation**:
+  - `modules/Llar` marked as `STATUS_DEPRECATED` in its manifest.
+  - `clockwork:install-llar` gated behind `ModuleStateResolver::isEnabled('llar')` with deprecation notice.
+  - Legacy "Install LLAR" button hidden on site settings when Gatekeeper is active or LLAR module is disabled.
+  - Rebranded LLAR labels to Gatekeeper / Login Lockouts in Ingest Settings, Review Queue sources and icons, Server Sites tab, and Companion Unlock Hub.
+- **Gatekeeper counts as login protection**: Weird Stats' coverage matrix gains a Gatekeeper column and its "Both" / "Neither" and "Unprotected sites" figures treat a Gatekeeper-enabled site as protected. The WordPress Plugins page gets a Gatekeeper tile, a Gatekeeper state in the LLAR column, and no longer counts Gatekeeper sites as "Missing LLAR" or "No protection".
+- **LLAR can be removed from Gatekeeper sites**: `CompanionProtectedPlugins::guardDestructive()` takes an optional site and exempts LLAR only when `gatekeeperEnabled()` is true. `ClockworkCompanionClient::togglePlugin()` / `deletePlugin()` pass their site through.
+
+### Fixed
+- **Rollout enable was not durable**: `clockwork:gatekeeper-rollout` pushed `enabled=true` without persisting a per-site override, so the nightly `clockwork:push-gatekeeper-settings` (fleet default off) would have turned Gatekeeper back off the next morning. The override is now written before the push.
+- **LLAR re-install on Gatekeeper sites**: `LlarInstaller::process()` returns `skipped-gatekeeper` (HTTP 409 from the per-site button) and `clockwork:install-llar --all-missing` excludes Gatekeeper-protected sites, so neither path can put LLAR back after the migration.
+- **Module off actually means off**: with the Gatekeeper module disabled, `clockwork:push-gatekeeper-settings` now logs a single skip and exits 0 instead of reporting every site as "failed to sync" (and failing the nightly schedule), and `/settings/gatekeeper` (index, update, sync) redirects to the Module Directory rather than only hiding its tab link.
+
 ## [1.8.0] - 2026-09-27
 
 ### Added

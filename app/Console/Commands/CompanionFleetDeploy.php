@@ -64,6 +64,10 @@ class CompanionFleetDeploy extends Command
 
         $sites = Site::query()
             ->where('companion_installed', true)
+            ->where(function ($q) {
+                $q->whereNull('companion_variant')
+                    ->orWhere('companion_variant', '!=', 'renegade');
+            })
             ->whereNotIn('id', $canaryIds)
             ->whereNotIn('domain', $skipDomains)
             ->hostMonitored()
@@ -109,13 +113,26 @@ class CompanionFleetDeploy extends Command
             }
             $bar->setMessage($site->domain);
 
+            $installer = $site->host()->companionInstaller();
+            if (! $installer) {
+                $stats['skipped']++;
+                if ($this->getOutput()->isVerbose()) {
+                    $bar->clear();
+                    $this->line("  · {$site->domain}: host does not support companion installer");
+                    $bar->display();
+                }
+                $bar->advance();
+
+                continue;
+            }
+
             // Per-site exceptions (SSH connect timeout, blown TLS, broken
             // permission grant) used to abort the entire fleet pass. Match
             // InstallCompanion's try/catch so one bad host doesn't shadow
             // the remaining 100+. Caught 2026-06-30 when sportsclient.example
             // SSH-timed-out at position 62/124 and killed the rest of the run.
             try {
-                $result = $site->host()->companionInstaller()->installOrUpdate($site, (bool) $this->option('rotate-secret'));
+                $result = $installer->installOrUpdate($site, (bool) $this->option('rotate-secret'));
             } catch (\Throwable $e) {
                 $stats['failed']++;
                 $bar->clear();

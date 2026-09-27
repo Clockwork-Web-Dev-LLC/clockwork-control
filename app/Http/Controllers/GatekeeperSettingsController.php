@@ -9,11 +9,16 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
+use Modules\Core\ModuleStateResolver;
 
 class GatekeeperSettingsController extends Controller
 {
-    public function index(Settings $settings): View
+    public function index(Settings $settings): View|RedirectResponse
     {
+        if ($redirect = $this->redirectIfModuleDisabled()) {
+            return $redirect;
+        }
+
         $config = [
             'enabled' => (bool) $settings->get('gatekeeper.enabled', GatekeeperSettingsPusher::DEFAULT_ENABLED),
             'threshold' => (int) $settings->get('gatekeeper.threshold', GatekeeperSettingsPusher::DEFAULT_THRESHOLD),
@@ -58,6 +63,10 @@ class GatekeeperSettingsController extends Controller
 
     public function update(Request $request, Settings $settings): RedirectResponse
     {
+        if ($redirect = $this->redirectIfModuleDisabled()) {
+            return $redirect;
+        }
+
         $validated = $request->validate([
             'enabled' => ['nullable', 'boolean'],
             'threshold' => ['required', 'integer', 'min:3', 'max:20'],
@@ -110,10 +119,28 @@ class GatekeeperSettingsController extends Controller
 
     public function syncNow(): RedirectResponse
     {
+        if ($redirect = $this->redirectIfModuleDisabled()) {
+            return $redirect;
+        }
+
         Artisan::call('clockwork:push-gatekeeper-settings');
         $output = trim(Artisan::output());
 
         return redirect()->route('settings.gatekeeper.index')
             ->with('status', 'Gatekeeper settings push completed: '.$output);
+    }
+
+    /**
+     * The tab link is already hidden when the module is off; this keeps the
+     * routes themselves from working via a bookmark or a stale form.
+     */
+    private function redirectIfModuleDisabled(): ?RedirectResponse
+    {
+        if (app(ModuleStateResolver::class)->isEnabled('gatekeeper')) {
+            return null;
+        }
+
+        return redirect()->route('settings.modules.index')
+            ->with('status_error', 'The Gatekeeper module is disabled. Enable it in the Module Directory to manage login lockout settings.');
     }
 }

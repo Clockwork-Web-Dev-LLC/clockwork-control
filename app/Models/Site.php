@@ -515,6 +515,92 @@ class Site extends Model
     }
 
     /**
+     * Fleet-wide Gatekeeper default from /settings/gatekeeper. Resolved once
+     * per request — the WordPress Plugins page calls gatekeeperEnabled() on
+     * every row and must not hit app_settings 200 times.
+     */
+    public static function fleetGatekeeperEnabled(): bool
+    {
+        try {
+            return (bool) app(Settings::class)->get('gatekeeper.enabled', false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Is Gatekeeper the effective login-lockout layer on this site?
+     *
+     * Mirrors GatekeeperSettingsPusher::buildPayload(): the plugin must
+     * advertise the capability, and either the per-site override says
+     * enabled or (no override) the fleet default does. This is the
+     * "protected" test that replaces `llar_enabled` as the fleet moves off
+     * Limit Login Attempts Reloaded — Weird Stats, the WordPress Plugins
+     * page, and the LLAR installer all key off it.
+     */
+    public function gatekeeperEnabled(): bool
+    {
+        if (! $this->companion_installed) {
+            return false;
+        }
+
+        $caps = is_array($this->companion_capabilities) ? $this->companion_capabilities : [];
+        if (! in_array('gatekeeper', $caps, true)) {
+            return false;
+        }
+
+        $override = is_array($this->gatekeeper_settings) ? $this->gatekeeper_settings : [];
+        if (array_key_exists('enabled', $override) && $override['enabled'] !== '' && $override['enabled'] !== null) {
+            return (bool) $override['enabled'];
+        }
+
+        return self::fleetGatekeeperEnabled();
+    }
+
+    /**
+     * SQL twin of gatekeeperEnabled(). Per-site `enabled` is always written
+     * as a JSON boolean (SitesController::updateGatekeeperSettings), so the
+     * JSON-path comparison is safe on both MySQL and the sqlite test DB.
+     *
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
+     */
+    public function scopeGatekeeperProtected(Builder $query): Builder
+    {
+        $fleetEnabled = self::fleetGatekeeperEnabled();
+
+        return $query
+            ->where('companion_installed', true)
+            ->whereJsonContains('companion_capabilities', 'gatekeeper')
+            ->where(function (Builder $q) use ($fleetEnabled) {
+                $q->where('gatekeeper_settings->enabled', true);
+
+                if ($fleetEnabled) {
+                    // Inheriting sites: no override row, or an override that
+                    // doesn't pin `enabled` either way.
+                    $q->orWhereNull('gatekeeper_settings')
+                        ->orWhereNull('gatekeeper_settings->enabled');
+                }
+            });
+    }
+
+    /**
+     * Sites with no login-lockout layer at all: no Wordfence, no LLAR, and
+     * Gatekeeper not effective. The subquery form keeps this usable from
+     * plain DB::table('sites') callers too.
+     *
+     * @param  Builder<Site>  $query
+     * @return Builder<Site>
+     */
+    public function scopeLoginUnprotected(Builder $query): Builder
+    {
+        return $query
+            ->where('wordfence_enabled', false)
+            ->where('llar_enabled', false)
+            ->whereNotIn('id', self::query()->gatekeeperProtected()->select('id'));
+    }
+
+    /**
      * Effective backup-relay cadence. A per-site value (standalone / unhosted
      * sites) wins; otherwise inherit the fleet setting from /settings/backup-relay.
      */

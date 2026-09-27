@@ -7,9 +7,9 @@
 
     $sourceLabels = [
         'llar' => [
-            'name' => 'Limit Login Attempts Reloaded',
-            'short' => 'LLAR',
-            'desc' => 'Reads each WordPress site\'s LLAR plugin tables for active failed-login lockouts.',
+            'name' => 'Gatekeeper & Login Lockouts',
+            'short' => 'Lockouts',
+            'desc' => 'Ingests failed-login lockouts via Gatekeeper REST (and legacy LLAR table fallback).',
             'icon' => 'fa-key',
         ],
         'wordfence' => [

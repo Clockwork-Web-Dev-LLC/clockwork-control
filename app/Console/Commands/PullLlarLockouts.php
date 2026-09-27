@@ -22,7 +22,9 @@ class PullLlarLockouts extends Command
         {--server= : Limit to a single server (id, name, or hostname)}
         {--dry-run : Read LLAR data and log decisions, but do not ban or queue}';
 
-    protected $description = 'Pull active LLAR lockouts per site. Auto-ban or queue for review based on per-server toggle.';
+    protected $aliases = ['clockwork:pull-lockouts'];
+
+    protected $description = 'Pull active Gatekeeper and legacy LLAR lockouts per site. Auto-ban or queue for review based on per-server toggle.';
 
     public function handle(LlarLockoutPuller $puller, Fail2banClient $fail2ban, IgnoreIpMatcher $ignoreMatcher, IngestScheduleGate $gate, ChatNotifier $chat): int
     {

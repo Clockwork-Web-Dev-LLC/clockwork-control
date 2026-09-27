@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/gatekeeper",
+    "description": "Native WordPress brute-force login attack protection, rate limiting, and remote lockout clearing via Companion and fail2ban.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Gatekeeper\\": "src/"
+        }
+    }
+}

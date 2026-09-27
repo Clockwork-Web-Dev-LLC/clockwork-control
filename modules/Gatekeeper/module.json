@@ -1,0 +1,10 @@
+{
+  "id": "gatekeeper",
+  "name": "Gatekeeper",
+  "version": "1.0.0",
+  "description": "Native WordPress brute-force login attack protection, rate limiting, and remote lockout clearing via Companion and fail2ban.",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["gatekeeper"],
+  "namespace": "Modules\\Gatekeeper"
+}

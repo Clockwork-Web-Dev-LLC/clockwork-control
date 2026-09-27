@@ -29,11 +29,13 @@ class IngestScheduleGate
      */
     public const KEY_ALWAYS_ON = 'ingest.schedule.always_on';
 
+    public const SOURCE_GATEKEEPER = 'gatekeeper';
+
     public const SOURCE_LLAR = 'llar';
 
     public const SOURCE_WORDFENCE = 'wordfence';
 
-    public const SOURCES = [self::SOURCE_LLAR, self::SOURCE_WORDFENCE];
+    public const SOURCES = [self::SOURCE_GATEKEEPER, self::SOURCE_LLAR, self::SOURCE_WORDFENCE];
 
     public const DEFAULTS = [
         self::KEY_WINDOW_START => '01:00',

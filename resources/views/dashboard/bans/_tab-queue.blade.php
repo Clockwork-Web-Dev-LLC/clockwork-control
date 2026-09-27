@@ -2,7 +2,8 @@
     use App\Models\ReviewQueueEntry;
 
     $sourceLabels = [
-        ReviewQueueEntry::SOURCE_LLAR => 'LLAR',
+        ReviewQueueEntry::SOURCE_GATEKEEPER => 'Gatekeeper',
+        ReviewQueueEntry::SOURCE_LLAR => 'Gatekeeper / LLAR',
         ReviewQueueEntry::SOURCE_WORDFENCE => 'Wordfence',
         ReviewQueueEntry::SOURCE_LLM => 'LLM',
         ReviewQueueEntry::SOURCE_NGINX => 'Nginx',
@@ -10,6 +11,7 @@
     ];
 
     $sourceIcons = [
+        ReviewQueueEntry::SOURCE_GATEKEEPER => 'fa-door-closed',
         ReviewQueueEntry::SOURCE_LLAR => 'fa-key',
         ReviewQueueEntry::SOURCE_WORDFENCE => 'fa-shield',
         ReviewQueueEntry::SOURCE_LLM => 'fa-brain',

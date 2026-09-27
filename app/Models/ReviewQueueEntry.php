@@ -54,6 +54,8 @@ class ReviewQueueEntry extends Model
 
     public const SOURCE_LLM = 'llm';
 
+    public const SOURCE_GATEKEEPER = 'gatekeeper';
+
     public const SOURCE_LLAR = 'llar';
 
     public const SOURCE_WORDFENCE = 'wordfence';

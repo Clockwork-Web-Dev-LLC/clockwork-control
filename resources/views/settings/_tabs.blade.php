@@ -45,14 +45,16 @@
         'branding' => [
             ['label' => 'White Label & Styling Hub', 'icon' => 'fa-solid fa-paintbrush', 'route' => 'settings.companion.index', 'active' => request()->routeIs('settings.companion.*')],
         ],
-        'fleet' => [
+        'fleet' => array_values(array_filter([
             ['label' => 'WordPress Plugins', 'icon' => 'fa-brands fa-wordpress', 'route' => 'settings.wordpress-plugins.index', 'active' => request()->routeIs('settings.wordpress-plugins.*')],
             ['label' => 'Scheduling & Ingest', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'settings.ingest.index', 'active' => request()->routeIs('settings.ingest.*')],
             ['label' => 'Security Scans', 'icon' => 'fa-solid fa-shield-halved', 'route' => 'settings.security-scans.index', 'active' => request()->routeIs('settings.security-scans.*')],
             ['label' => 'Backup Relay', 'icon' => 'fa-solid fa-cloud-arrow-up', 'route' => 'settings.backup-relay.index', 'active' => request()->routeIs('settings.backup-relay.*')],
             ['label' => 'Care Plans', 'icon' => 'fa-solid fa-shield-heart', 'route' => 'settings.care-plans.index', 'active' => request()->routeIs('settings.care-plans.*')],
-            ['label' => 'Login Lockouts', 'icon' => 'fa-solid fa-lock', 'route' => 'settings.gatekeeper.index', 'active' => request()->routeIs('settings.gatekeeper.*')],
-        ],
+            app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gatekeeper')
+                ? ['label' => 'Login Lockouts', 'icon' => 'fa-solid fa-lock', 'route' => 'settings.gatekeeper.index', 'active' => request()->routeIs('settings.gatekeeper.*')]
+                : null,
+        ])),
         'integrations' => [
             ['label' => 'API Credentials', 'icon' => 'fa-solid fa-key', 'route' => 'settings.integrations.index', 'active' => request()->routeIs('settings.integrations.*')],
             ['label' => 'Module Directory', 'icon' => 'fa-solid fa-boxes-stacked', 'route' => 'settings.modules.index', 'active' => request()->routeIs('settings.modules.*')],

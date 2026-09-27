@@ -16,6 +16,12 @@ class LlarInstaller
 
     public const RESULT_SKIPPED_NOT_WP = 'skipped-not-wp';
 
+    /**
+     * Gatekeeper is already the lockout layer here. Installing LLAR on top
+     * would put two engines on the login path and undo the migration.
+     */
+    public const RESULT_SKIPPED_GATEKEEPER = 'skipped-gatekeeper';
+
     public function __construct(
         private readonly SshClient $ssh,
         private readonly ChatNotifier $mattermost,
@@ -36,6 +42,12 @@ class LlarInstaller
     {
         if (! $site->is_wordpress) {
             return ['result' => self::RESULT_SKIPPED_NOT_WP, 'message' => 'Not a WordPress site.'];
+        }
+        if ($site->gatekeeperEnabled()) {
+            return [
+                'result' => self::RESULT_SKIPPED_GATEKEEPER,
+                'message' => 'Gatekeeper is already protecting logins on this site; LLAR is not needed.',
+            ];
         }
         if (! $site->server) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Site has no linked server.'];

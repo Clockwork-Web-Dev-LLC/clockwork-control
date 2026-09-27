@@ -54,7 +54,7 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         // WordPress security card
         ->assertSee('WordPress security')
         ->assertSee('Hardened')
-        ->assertSee('id="llar-state"', false)
+        ->assertSee('Limit Login Attempts:')
         // Care plan card
         ->assertSee('Care plan')
         ->assertSee('On care plan')

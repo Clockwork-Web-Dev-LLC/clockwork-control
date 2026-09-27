@@ -18,7 +18,7 @@
 
 <div class="card overflow-hidden">
     <div class="px-5 py-4 border-b border-[var(--color-border-light)]">
-        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Unprotected sites (LLAR + Wordfence both off)</h2>
+        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">Unprotected sites (no Gatekeeper, LLAR, or Wordfence)</h2>
         <p class="text-xs text-[var(--color-ink-muted)] mt-1">
             Sorted by 30-day visits — high-traffic unprotected sites are real risk; 0-visit are probably parked.
             <span class="text-[var(--color-ink-soft)]">Visits = distinct IPs per UTC day, ex. 403s + static assets; not bot-filtered.</span>

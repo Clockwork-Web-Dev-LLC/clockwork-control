@@ -7,6 +7,7 @@ use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Fail2ban\IgnoreIpListBuilder;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Log;
+use Modules\Core\ModuleStateResolver;
 use Throwable;
 
 class GatekeeperSettingsPusher
@@ -161,6 +162,10 @@ class GatekeeperSettingsPusher
      */
     public function maybePush(Site $site): bool
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('gatekeeper')) {
+            return false;
+        }
+
         if (! $site->companion_installed || $site->is_inactive) {
             return false;
         }

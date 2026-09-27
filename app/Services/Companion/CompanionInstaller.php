@@ -416,6 +416,13 @@ BASH;
     private function runAsSiteUser(Site $site, string $script): array
     {
         $sentinel = '__CLOCKWORK_COMPANION_EXIT__';
+
+        if ($site->server && $site->server->ssh_user === $site->site_user) {
+            $cmd = sprintf('bash -c %s 2>&1; echo "%s:$?"', escapeshellarg($script), $sentinel);
+
+            return $this->parseSentinelOutput($this->ssh->exec($site->server, $cmd), $sentinel);
+        }
+
         $inner = sprintf(
             'echo "$CW_SUDO_PW" | sudo -S -p "" -u %s bash -c %s 2>&1; echo "%s:$?"',
             escapeshellarg((string) $site->site_user),

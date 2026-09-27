@@ -126,7 +126,7 @@ The remote emergency lockout clearing console (`Clockwork → Unlock`) operates 
 - **Client Site Isolation**: Monitored client sites never register the Unlock submenu or navigation tab.
 - **Direct URL Guard**: If a user attempts to bypass navigation by visiting `admin.php?page=clockwork-unlock` directly, `UnlockPage::renderBody()` immediately executes `wp_die(__('You do not have sufficient permissions to access this page.'), 403)` before any HTML chrome or sensitive forms render.
 - **AJAX Endpoint Gate**: The background AJAX handler (`clockwork_companion_unlock_target`) validates WordPress security nonces, checks `current_user_can('manage_options')`, confirms agency staff email identity, and confirms hub domain matching. Any failure immediately returns `wp_send_json_error(['message' => 'Unauthorized'], 403)`.
-- **Target Site Verification**: When the Unlock console triggers an unlock on a client site, it signs an HMAC-SHA256 request to `DELETE /wp-json/clockwork/v1/lockouts`. The target site verifies the signature against its own encrypted secret with a 5-minute replay window before flushing lockouts from Limit Login Attempts Reloaded.
+- **Target Site Verification**: When the Unlock console triggers an unlock on a client site, it signs an HMAC-SHA256 request to `DELETE /wp-json/clockwork/v1/lockouts`. The target site verifies the signature against its own encrypted secret with a 5-minute replay window before flushing lockouts from native Gatekeeper (and legacy LLAR tables if present).
 
 
 ### Standalone Pairing & 256-Bit Cryptographic Connection Key

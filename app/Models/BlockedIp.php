@@ -30,6 +30,8 @@ class BlockedIp extends Model
 {
     use HasFactory;
 
+    public const SOURCE_GATEKEEPER = 'gatekeeper';
+
     public const SOURCE_WORDFENCE = 'wordfence';
 
     public const SOURCE_LLAR = 'llar';

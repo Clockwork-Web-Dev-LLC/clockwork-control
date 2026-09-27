@@ -511,10 +511,10 @@
                         </label>
                     </div>
 
-                    {{-- Section 6: LLAR Unlock Hub & Emergency Security Access --}}
+                    {{-- Section 6: Remote Lockout Hub & Emergency Security Access --}}
                     <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">6. LLAR Unlock Hub &amp; Emergency Access</h3>
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">6. Remote Lockout Hub &amp; Emergency Access</h3>
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <i class="fa-solid fa-shield-halved text-[10px]"></i> Gated to Agency Staff
                             </span>
@@ -527,9 +527,9 @@
                                     <i class="fa-solid fa-key text-xs"></i>
                                 </div>
                                 <div class="space-y-1 leading-relaxed">
-                                    <p class="font-semibold text-[var(--color-ink-strong)] text-sm">How Remote LLAR Unlocking Works</p>
+                                    <p class="font-semibold text-[var(--color-ink-strong)] text-sm">How Remote Lockout Clearing Works</p>
                                     <p class="text-[var(--color-ink-soft)] leading-normal">
-                                        When Limit Login Attempts Reloaded (LLAR) locks an agency technician or client out of a site due to false positives or brute-force protection, you don't need SSH access or WP credentials to clear it. 
+                                        When Gatekeeper (or legacy LLAR) locks an agency technician or client out of a site due to false positives or brute-force protection, you don't need SSH access or WP credentials to clear it. 
                                         The <strong>Unlock Console</strong> (<code>Clockwork &rarr; Unlock</code>) fires an authenticated HMAC-SHA256 signed <code>DELETE /wp-json/clockwork/v1/lockouts</code> request directly to the target site's Companion plugin to immediately flush lockouts.
                                     </p>
                                 </div>

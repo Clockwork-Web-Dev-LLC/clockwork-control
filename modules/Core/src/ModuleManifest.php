@@ -14,6 +14,8 @@ final readonly class ModuleManifest
 
     public const STATUS_LOOKING_FOR_TESTERS = 'looking_for_testers';
 
+    public const STATUS_DEPRECATED = 'deprecated';
+
     /**
      * @param  array<string, array{label: string, secret: bool}>  $credentialFields
      *                                                                               Keyed by the field name under this module's id in
@@ -38,10 +40,16 @@ final readonly class ModuleManifest
         return $this->status === self::STATUS_LOOKING_FOR_TESTERS;
     }
 
+    public function isDeprecated(): bool
+    {
+        return $this->status === self::STATUS_DEPRECATED;
+    }
+
     public function statusLabel(): string
     {
         return match ($this->status) {
             self::STATUS_LOOKING_FOR_TESTERS => 'Looking for Testers',
+            self::STATUS_DEPRECATED => 'Deprecated',
             default => 'Verified in Production',
         };
     }
