@@ -7,12 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Gatekeeper Companion & Renegade Version Alignment**: Corrected minimum version requirements. Gatekeeper officially ships with Clockwork Companion 1.39.1+ and Clockwork Renegade 1.0.4+ (corrected from earlier 1.38.4 / 1.0.3 pre-release notes).
-- **Gatekeeper Ingest SQL Fallback**: Fixed `LlarLockoutPuller::fromGatekeeperTable()` to strictly query `WHERE unlock_at IS NOT NULL AND unlock_at > UTC_TIMESTAMP()`, ensuring non-locked attempt-tracking rows (`unlock_at IS NULL`) are not ingested as active lockouts.
-- **Advanced Navigation & Agency Gating**: Companion 1.39.1 and Renegade 1.0.4 fold Notifications into Advanced sub-tabs (8 primary tabs) and gate sensitive configuration, bulk unlocks, cache flushes, and credentials behind `Menu::currentUserIsAgency()`.
-
-## [1.8.0] - 2026-09-24
+## [1.8.0] - 2026-09-27
 
 ### Added
 - **Gatekeeper: Native WordPress Login Protection & Lockout Orchestration**:
@@ -23,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Serverless Lockout Ingestion**: `clockwork:pull-llar-lockouts` now pulls active lockouts via REST `GET /wp-json/clockwork/v1/lockouts`, enabling full lockout tracking, automated IP banning, and review queue ingestion for Pressable and other serverless hosting environments with no SSH or direct MySQL access.
   - **Database Migration**: Added `gatekeeper_settings` JSON column to the `sites` table.
 - **Demo Mode Configuration**: Added `CLOCKWORK_DEMO_MODE` environment variable and `config('clockwork.demo_mode')` toggle.
+- **Fleet Health Verification (`clockwork:verify-canary-health`)**: Post-deploy sanity command probes homepage and `/wp-login.php` for every canary site (or `--all-installed` for the full fleet). Gracefully handles Cloudflare bot-challenge 403s and redirect chains; exits non-zero only on genuine failures.
+- **Policy Denylist for Fleet Deploy**: Added `builtlikeclockwork.com` to `companion.excluded_domain_suffixes` so internal staging sites are permanently excluded from all fleet commands without `--force`.
+- **GatekeeperRollout Safe-Install Guard**: `clockwork:gatekeeper-rollout` now skips Gatekeeper enablement and LLAR deletion on any site that never had LLAR active, preventing accidental login-lockout behavior on clean sites.
+
+### Fixed
+- **Gatekeeper Companion & Renegade Version Alignment**: Corrected minimum version requirements. Gatekeeper officially ships with Clockwork Companion 1.39.1+ and Clockwork Renegade 1.0.4+ (corrected from earlier 1.38.4 / 1.0.3 pre-release notes).
+- **Gatekeeper Ingest SQL Fallback**: Fixed `LlarLockoutPuller::fromGatekeeperTable()` to strictly query `WHERE unlock_at IS NOT NULL AND unlock_at > UTC_TIMESTAMP()`, ensuring non-locked attempt-tracking rows (`unlock_at IS NULL`) are not ingested as active lockouts.
+- **Advanced Navigation & Agency Gating**: Companion 1.39.1 and Renegade 1.0.4 fold Notifications into Advanced sub-tabs (8 primary tabs) and gate sensitive configuration, bulk unlocks, cache flushes, and credentials behind `Menu::currentUserIsAgency()`.
 
 ## [1.7.4] - 2026-09-24
 
