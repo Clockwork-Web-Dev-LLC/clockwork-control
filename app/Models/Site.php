@@ -1313,7 +1313,7 @@ class Site extends Model
     public function screenshotUrl(): string
     {
         if ($this->screenshot_path && Storage::disk('public')->exists($this->screenshot_path)) {
-            return Storage::disk('public')->url($this->screenshot_path);
+            return '/storage/'.ltrim($this->screenshot_path, '/');
         }
 
         // Automattic mShots: free public high-quality screenshot renderer
