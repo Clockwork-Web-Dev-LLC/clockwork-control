@@ -709,6 +709,9 @@
             { id: 'maintenance-history', section: 'Operations', label: 'Maintenance History', code: null, kbd: null, icon: 'fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]', url: '{{ route('maintenance-history.index') }}' },
             { id: 'credentials', section: 'Operations', label: 'Bulk SSH Passwords', code: null, kbd: null, icon: 'fa-solid fa-key text-[var(--color-ink-muted)]', url: '{{ route('servers.credentials.bulk') }}' },
             { id: 'settings', section: 'Configuration', label: 'Global Settings Hub', code: null, kbd: null, icon: 'fa-solid fa-sliders text-[var(--color-ink-muted)]', url: '{{ route('settings.index') }}' },
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
+                { id: 'feedback', section: 'Operations', label: 'Feedback & Bug Notes', code: 'GF', kbd: 'G F', icon: 'fa-solid fa-comment-dots text-purple-500', url: '{{ route('feedback.index') }}' },
+            @endif
             { id: 'docs', section: 'Configuration', label: 'Documentation & Runbooks', code: 'GD', kbd: 'G D', icon: 'fa-solid fa-book-bookmark text-[var(--color-brand)]', url: '{{ route('docs.index') }}' }
         ];
     </script>

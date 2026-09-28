@@ -28,7 +28,7 @@
             'label' => 'Integrations & Alerts',
             'icon' => 'fa-plug',
             'route' => 'settings.integrations.index',
-            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*'),
+            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*') || request()->routeIs('feedback.*'),
         ],
         [
             'key' => 'system',
@@ -55,14 +55,17 @@
                 ? ['label' => 'Login Lockouts', 'icon' => 'fa-solid fa-lock', 'route' => 'settings.gatekeeper.index', 'active' => request()->routeIs('settings.gatekeeper.*')]
                 : null,
         ])),
-        'integrations' => [
+        'integrations' => array_values(array_filter([
             ['label' => 'API Credentials', 'icon' => 'fa-solid fa-key', 'route' => 'settings.integrations.index', 'active' => request()->routeIs('settings.integrations.*')],
             ['label' => 'Module Directory', 'icon' => 'fa-solid fa-boxes-stacked', 'route' => 'settings.modules.index', 'active' => request()->routeIs('settings.modules.*')],
+            app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback')
+                ? ['label' => 'Feedback Notes', 'icon' => 'fa-solid fa-comment-dots', 'route' => 'feedback.index', 'active' => request()->routeIs('feedback.*')]
+                : null,
             ['label' => 'SMS Alerts', 'icon' => 'fa-solid fa-comment-sms', 'route' => 'settings.notifications.index', 'active' => request()->routeIs('settings.notifications.*')],
             ['label' => 'Slack Alerts', 'icon' => 'fa-brands fa-slack', 'route' => 'settings.slack.index', 'active' => request()->routeIs('settings.slack.*')],
             ['label' => 'Mattermost', 'icon' => 'fa-solid fa-comment-dots', 'route' => 'settings.mattermost.index', 'active' => request()->routeIs('settings.mattermost.*')],
             ['label' => 'Bill.com Sync', 'icon' => 'fa-solid fa-file-invoice-dollar', 'route' => 'settings.bill-com.index', 'active' => request()->routeIs('settings.bill-com.*')],
-        ],
+        ])),
         'system' => array_values(array_filter([
             $isAdmin ? ['label' => 'Team & Users', 'icon' => 'fa-solid fa-people-group', 'route' => 'settings.users.index', 'active' => request()->routeIs('settings.users.*')] : null,
             ['label' => 'System Updates', 'icon' => 'fa-solid fa-arrows-rotate', 'route' => 'settings.updates.index', 'active' => request()->routeIs('settings.updates.*')],

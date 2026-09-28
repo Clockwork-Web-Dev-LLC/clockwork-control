@@ -217,7 +217,7 @@
 
         {{-- 2. Integrations & Alerts --}}
         <div class="card p-5 flex flex-col justify-between"
-             x-show="matches('integrations alerts api credentials modules twilio sms slack mattermost bill.com')">
+             x-show="matches('integrations alerts api credentials modules twilio sms slack mattermost bill.com feedback notes bug report atarim claude')">
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
@@ -247,7 +247,7 @@
                     </a>
 
                     <a href="{{ route('settings.modules.index') }}"
-                       x-show="matches('modules directory ecosystem marketplace catalog')"
+                       x-show="matches('modules directory ecosystem marketplace catalog feedback')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
                         <div class="flex items-start gap-3 min-w-0">
                             <i class="fa-solid fa-boxes-stacked text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
@@ -258,6 +258,73 @@
                         </div>
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
                     </a>
+
+                    @php
+                        $feedbackEnabled = app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback');
+                    @endphp
+                    <div x-show="matches('feedback notes bug report pins claude atarim working list module comments')"
+                         x-data="{
+                             isEnabled: {{ $feedbackEnabled ? 'true' : 'false' }},
+                             isBusy: false,
+                             async toggle() {
+                                 if (this.isBusy) return;
+                                 this.isBusy = true;
+                                 const target = !this.isEnabled;
+                                 try {
+                                     const res = await fetch('{{ route('settings.modules.toggle') }}', {
+                                         method: 'POST',
+                                         headers: {
+                                             'Content-Type': 'application/json',
+                                             'Accept': 'application/json',
+                                             'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content') || '{{ csrf_token() }}'
+                                         },
+                                         body: JSON.stringify({ module: 'feedback', enabled: target })
+                                     });
+                                     const data = await res.json();
+                                     if (data.success) {
+                                         this.isEnabled = target;
+                                     }
+                                 } catch (e) {
+                                     console.error('Failed to toggle feedback module:', e);
+                                 } finally {
+                                     this.isBusy = false;
+                                 }
+                             }
+                         }"
+                         class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <i class="fa-solid fa-comment-dots text-purple-600 dark:text-purple-400 text-xs mt-1 w-4 transition-colors"></i>
+                            <div class="min-w-0">
+                                <a href="{{ route('feedback.index') }}" class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors block">
+                                    Feedback &amp; Bug Notes
+                                </a>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">
+                                    In-app visual right-click notes, live pin overlays, team discussions &amp; Claude prompts
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <button type="button"
+                                    role="switch"
+                                    :aria-checked="isEnabled ? 'true' : 'false'"
+                                    aria-label="Toggle Feedback module"
+                                    @click="toggle()"
+                                    :disabled="isBusy"
+                                    class="cw-switch flex-shrink-0 cursor-pointer"
+                                    :class="{ 'cw-switch--on': isEnabled, 'cw-switch--busy': isBusy }"
+                                    title="Click to toggle Feedback module on/off">
+                                <span class="cw-switch__knob"></span>
+                            </button>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                                  :class="isEnabled ? 'bg-[var(--color-status-green-bg)] text-[var(--color-status-green)]' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)]'"
+                                  x-text="isEnabled ? 'Active' : 'Disabled'">
+                                {{ $feedbackEnabled ? 'Active' : 'Disabled' }}
+                            </span>
+                            <a href="{{ route('feedback.index') }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-brand)] p-1" title="Open Feedback Working List">
+                                <i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+                            </a>
+                        </div>
+                    </div>
 
                     <a href="{{ route('settings.notifications.index') }}"
                        x-show="matches('sms twilio phone notifications alerts quiet hours')"

@@ -29,6 +29,8 @@ test('authenticated operators can access /settings hub with all categories', fun
         ->assertSee(route('settings.wordpress-plugins.index'))
         ->assertSee(route('settings.integrations.index'))
         ->assertSee(route('settings.modules.index'))
+        ->assertSee('Feedback &amp; Bug Notes', false)
+        ->assertSee(route('feedback.index'))
         ->assertSee(route('capacity.index'))
         ->assertSee(route('operations.server-updates.index'))
         ->assertSee(route('settings.users.index'))
