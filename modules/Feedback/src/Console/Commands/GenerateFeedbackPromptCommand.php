@@ -17,6 +17,7 @@ class GenerateFeedbackPromptCommand extends Command
     protected $signature = 'clockwork:feedback-prompt
                             {--status=approved : Feedback item status to bundle (default: approved)}
                             {--mark-in-progress : Automatically update bundled items to in_progress}
+                            {--mark-resolved : Automatically update bundled items to resolved}
                             {--output= : Optional custom file path to write markdown prompt to}';
 
     /**
@@ -67,6 +68,11 @@ class GenerateFeedbackPromptCommand extends Command
         if ($this->option('mark-in-progress')) {
             FeedbackItem::whereIn('id', $items->pluck('id'))->update(['status' => FeedbackItem::STATUS_IN_PROGRESS]);
             $this->info("Updated {$items->count()} items to 'in_progress'.");
+        }
+
+        if ($this->option('mark-resolved')) {
+            FeedbackItem::whereIn('id', $items->pluck('id'))->update(['status' => FeedbackItem::STATUS_RESOLVED]);
+            $this->info("Updated {$items->count()} items to 'resolved'.");
         }
 
         return Command::SUCCESS;

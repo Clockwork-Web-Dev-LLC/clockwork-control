@@ -8,6 +8,7 @@ use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
 use Modules\Feedback\Console\Commands\GenerateFeedbackPromptCommand;
+use Modules\Feedback\Console\Commands\ResolveFeedbackCommand;
 
 class FeedbackServiceProvider extends ModuleServiceProvider
 {
@@ -19,6 +20,7 @@ class FeedbackServiceProvider extends ModuleServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 GenerateFeedbackPromptCommand::class,
+                ResolveFeedbackCommand::class,
             ]);
         }
 

@@ -574,13 +574,14 @@ export function feedbackOverlay() {
             }
         },
 
-        async updateStatus(newStatus: 'open' | 'in_progress' | 'resolved' | 'dismissed') {
+        async updateStatus(newStatus: 'open' | 'approved' | 'in_progress' | 'resolved' | 'dismissed') {
             if (!this.activePin) return;
 
+            const targetPinId = this.activePin.id;
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
             try {
-                const res = await fetch(`/feedback/${this.activePin.id}`, {
+                const res = await fetch(`/feedback/${targetPinId}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -594,9 +595,19 @@ export function feedbackOverlay() {
 
                 const data = await res.json();
                 if (data.ok) {
-                    this.activePin.status = newStatus;
-                    this.activePin.status_class = data.status_class;
-                    this.showToast(`Status updated to ${newStatus.replace('_', ' ')}.`);
+                    if (this.activePin && this.activePin.id === targetPinId) {
+                        this.activePin.status = newStatus;
+                        this.activePin.status_class = data.status_class;
+                    }
+
+                    if (newStatus === 'resolved' || newStatus === 'dismissed') {
+                        // Immediately remove pin from page overlay
+                        this.pins = this.pins.filter((p) => p.id !== targetPinId);
+                        this.activePin = null;
+                        this.showToast('Issue marked as resolved and removed from screen.');
+                    } else {
+                        this.showToast(`Status updated to ${newStatus.replace('_', ' ')}.`);
+                    }
                 }
             } catch (_) {
                 this.showToast('Error updating status.');

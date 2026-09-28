@@ -261,3 +261,133 @@ test('feedback module is toggleable in settings and respects enabled state', fun
     $responseDisabled->assertOk();
     $responseDisabled->assertDontSee('id="cw-feedback-overlay-root"', false);
 });
+
+test('pins endpoint excludes resolved and dismissed items so they disappear from screen', function () {
+    $activeItem = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'route_name' => 'monitoring.index',
+        'type' => FeedbackItem::TYPE_BUG,
+        'status' => FeedbackItem::STATUS_APPROVED,
+        'title' => 'Active approved bug',
+        'content' => 'Should be returned as a pin',
+    ]);
+
+    $resolvedItem = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'route_name' => 'monitoring.index',
+        'type' => FeedbackItem::TYPE_TWEAK,
+        'status' => FeedbackItem::STATUS_RESOLVED,
+        'title' => 'Solved tweak',
+        'content' => 'Should NOT be returned as a pin',
+    ]);
+
+    $dismissedItem = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'route_name' => 'monitoring.index',
+        'type' => FeedbackItem::TYPE_COPY,
+        'status' => FeedbackItem::STATUS_DISMISSED,
+        'title' => 'Dismissed question',
+        'content' => 'Should NOT be returned as a pin',
+    ]);
+
+    // Normal pin fetch excludes resolved and dismissed items
+    $response = $this->actingAs($this->user)->getJson(route('feedback.pins', ['path' => '/monitoring']));
+    $response->assertOk();
+    $response->assertJsonPath('count', 1);
+    $response->assertJsonPath('pins.0.id', $activeItem->id);
+
+    // If include_resolved is requested, all items are returned
+    $responseAll = $this->actingAs($this->user)->getJson(route('feedback.pins', ['path' => '/monitoring', 'include_resolved' => 1]));
+    $responseAll->assertOk();
+    $responseAll->assertJsonPath('count', 3);
+
+    // Direct deep-link to a resolved pin still works
+    $responseDirect = $this->actingAs($this->user)->getJson(route('feedback.pins', ['path' => '/monitoring', 'feedback_pin' => $resolvedItem->id]));
+    $responseDirect->assertOk();
+    $responseDirect->assertJsonPath('count', 2);
+});
+
+test('markApprovedResolved endpoint marks all approved items as resolved', function () {
+    $approved1 = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'type' => FeedbackItem::TYPE_TWEAK,
+        'status' => FeedbackItem::STATUS_APPROVED,
+        'title' => 'Task 1',
+        'content' => 'Task 1 content',
+    ]);
+
+    $approved2 = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/feedback',
+        'path' => '/feedback',
+        'type' => FeedbackItem::TYPE_TWEAK,
+        'status' => FeedbackItem::STATUS_APPROVED,
+        'title' => 'Task 2',
+        'content' => 'Task 2 content',
+    ]);
+
+    $openItem = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'type' => FeedbackItem::TYPE_BUG,
+        'status' => FeedbackItem::STATUS_OPEN,
+        'title' => 'Keep Open',
+        'content' => 'Keep open content',
+    ]);
+
+    $response = $this->actingAs($this->user)->postJson(route('feedback.prompt.mark-resolved'));
+    $response->assertOk();
+    $response->assertJsonPath('ok', true);
+    $response->assertJsonPath('count', 2);
+
+    expect($approved1->fresh()->status)->toBe(FeedbackItem::STATUS_RESOLVED);
+    expect($approved2->fresh()->status)->toBe(FeedbackItem::STATUS_RESOLVED);
+    expect($openItem->fresh()->status)->toBe(FeedbackItem::STATUS_OPEN);
+});
+
+test('clockwork:feedback-resolve artisan command marks target items as resolved', function () {
+    $item1 = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'type' => FeedbackItem::TYPE_TWEAK,
+        'status' => FeedbackItem::STATUS_APPROVED,
+        'title' => 'CLI Task 1',
+        'content' => 'CLI Task 1 content',
+    ]);
+
+    $item2 = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'type' => FeedbackItem::TYPE_BUG,
+        'status' => FeedbackItem::STATUS_OPEN,
+        'title' => 'CLI Task 2',
+        'content' => 'CLI Task 2 content',
+    ]);
+
+    // Test dry run
+    $this->artisan('clockwork:feedback-resolve', ['--approved' => true, '--dry-run' => true])
+        ->assertSuccessful();
+    expect($item1->fresh()->status)->toBe(FeedbackItem::STATUS_APPROVED);
+
+    // Test resolving approved
+    $this->artisan('clockwork:feedback-resolve', ['--approved' => true])
+        ->assertSuccessful();
+    expect($item1->fresh()->status)->toBe(FeedbackItem::STATUS_RESOLVED);
+    expect($item2->fresh()->status)->toBe(FeedbackItem::STATUS_OPEN);
+
+    // Test resolving by ID
+    $this->artisan('clockwork:feedback-resolve', ['--id' => [$item2->id]])
+        ->assertSuccessful();
+    expect($item2->fresh()->status)->toBe(FeedbackItem::STATUS_RESOLVED);
+});

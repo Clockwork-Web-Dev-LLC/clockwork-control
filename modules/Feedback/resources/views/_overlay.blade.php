@@ -99,25 +99,25 @@
         </div>
     </div>
 
-    {{-- 2. Visual Pin Badges on Page --}}
+    {{-- 2. Visual Pin Badges on Page (Only active pins render; resolved/dismissed disappear) --}}
     <template x-if="pinsVisible">
         <div>
             <template x-for="pin in pins" :key="pin.id">
-                <div class="absolute z-40 cursor-pointer transition-transform hover:scale-125"
-                     :style="'left: ' + (pin.screenX || 0) + 'px; top: ' + (pin.screenY || 0) + 'px;'"
-                     @click.stop="openPin(pin)"
-                     :title="pin.title + ' (' + pin.type_label + ')'">
-                    <div class="w-6 h-6 rounded-full shadow-lg flex items-center justify-center font-data font-bold text-[11px] ring-2 ring-white dark:ring-black text-white"
-                         :class="{
-                             'bg-amber-500': pin.status === 'open',
-                             'bg-emerald-600': pin.status === 'approved',
-                             'bg-blue-500': pin.status === 'in_progress',
-                             'bg-emerald-500': pin.status === 'resolved',
-                             'bg-neutral-500': pin.status === 'dismissed'
-                         }">
-                        <span x-text="pin.number"></span>
+                <template x-if="pin.status !== 'resolved' && pin.status !== 'dismissed'">
+                    <div class="absolute z-40 cursor-pointer transition-transform hover:scale-125"
+                         :style="'left: ' + (pin.screenX || 0) + 'px; top: ' + (pin.screenY || 0) + 'px;'"
+                         @click.stop="openPin(pin)"
+                         :title="pin.title + ' (' + pin.type_label + ')'">
+                        <div class="w-6 h-6 rounded-full shadow-lg flex items-center justify-center font-data font-bold text-[11px] ring-2 ring-white dark:ring-black text-white"
+                             :class="{
+                                 'bg-amber-500': pin.status === 'open',
+                                 'bg-emerald-600': pin.status === 'approved',
+                                 'bg-blue-500': pin.status === 'in_progress'
+                             }">
+                            <span x-text="pin.number"></span>
+                        </div>
                     </div>
-                </div>
+                </template>
             </template>
         </div>
     </template>
@@ -139,11 +139,11 @@
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-data" :class="activePin?.type_class" x-text="activePin?.type_label"></span>
             </div>
             <div class="flex items-center gap-1.5">
-                <template x-if="activePin?.status !== 'approved'">
+                <template x-if="activePin?.status !== 'approved' && activePin?.status !== 'resolved'">
                     <button type="button"
                             @click="updateStatus('approved')"
                             class="btn-pill-nav text-[11px] py-0.5 px-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1 cursor-pointer font-medium"
-                            title="Approve for Claude implementation">
+                            title="Approve for implementation">
                         <i class="fa-solid fa-check text-[10px]"></i> Approve
                     </button>
                 </template>
@@ -154,9 +154,16 @@
                 </template>
 
                 <button type="button"
+                        @click="updateStatus('resolved')"
+                        class="btn-pill-nav text-[11px] py-0.5 px-2 text-[var(--color-status-green)] hover:bg-[var(--color-status-green)]/10 border-[var(--color-status-green)]/30 flex items-center gap-1 cursor-pointer font-medium"
+                        title="Mark as Resolved and remove pin from page">
+                    <i class="fa-solid fa-check-double text-[10px]"></i> Resolve
+                </button>
+
+                <button type="button"
                         @click="copyClaudePrompt()"
                         class="btn-pill-nav text-[11px] py-0.5 px-2 text-[var(--color-brand)] hover:bg-[var(--color-brand)] hover:text-white flex items-center gap-1 cursor-pointer"
-                        title="Copy full Claude/Antigravity prompt to clipboard">
+                        title="Copy AI implementation prompt to clipboard">
                     <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Prompt
                 </button>
                 <button type="button" @click="closeActivePin()" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] p-1 cursor-pointer" aria-label="Close thread">

@@ -87,10 +87,21 @@ class FeedbackController extends Controller
         $rawPath = (string) $request->input('path', '/');
         $parsedPath = parse_url($rawPath, PHP_URL_PATH) ?: '/';
 
-        $items = FeedbackItem::where('path', $parsedPath)
+        $query = FeedbackItem::where('path', $parsedPath)
             ->with(['user', 'comments.user'])
-            ->orderBy('id', 'asc')
-            ->get();
+            ->orderBy('id', 'asc');
+
+        // Only show active pins on page overlay so resolved/dismissed pins disappear
+        if ($request->filled('feedback_pin')) {
+            $pinId = (int) $request->input('feedback_pin');
+            $query->where(function ($q) use ($pinId) {
+                $q->active()->orWhere('id', $pinId);
+            });
+        } elseif (! $request->boolean('include_resolved')) {
+            $query->active();
+        }
+
+        $items = $query->get();
 
         $pins = $items->map(function (FeedbackItem $item, int $index) {
             return [
@@ -432,6 +443,25 @@ class FeedbackController extends Controller
         }
 
         return back()->with('status', "Marked {$count} approved items as In Progress.");
+    }
+
+    /**
+     * Mark all approved feedback items as Resolved.
+     */
+    public function markApprovedResolved(Request $request): JsonResponse|RedirectResponse
+    {
+        $count = FeedbackItem::where('status', FeedbackItem::STATUS_APPROVED)->count();
+        FeedbackItem::where('status', FeedbackItem::STATUS_APPROVED)->update(['status' => FeedbackItem::STATUS_RESOLVED]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'count' => $count,
+                'message' => "Marked {$count} approved items as Resolved.",
+            ]);
+        }
+
+        return back()->with('status', "Marked {$count} approved items as Resolved.");
     }
 
     /**

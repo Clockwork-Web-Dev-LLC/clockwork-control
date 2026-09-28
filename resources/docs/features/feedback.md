@@ -32,9 +32,10 @@ When the Feedback module is enabled, an unobtrusive floating widget appears in t
 Every feedback item supports back-and-forth discussion threads:
 
 * Team members can reply to items to ask clarifying questions, propose alternative implementations, or confirm fixes.
-* **Approval State**: Operators can mark items as **Approved** with a single click (`POST /feedback/{id}/approve`). Approved items are queued for the next Claude implementation batch.
+* **Approval State**: Operators can mark items as **Approved** with a single click (`POST /feedback/{id}/approve`) without full page reloads via asynchronous JSON requests. Approved items are queued for the next Claude/AI implementation batch.
 * Status tracking: Items transition between **Open**, **Approved**, **In Progress**, **Resolved**, and **Dismissed**.
-* Operators can mark feedback resolved directly from the live page overlay or the central triage dashboard.
+* **Automatic Pin Removal on Resolve**: As soon as an item is marked **Resolved** or **Dismissed** (via the live pin drawer, the backlog card, the batch resolver, or CLI), the pin badge immediately disappears from the live screen overlay. Pins only render for active, unresolved items.
+* Operators can mark feedback resolved directly from the live page overlay drawer, the central triage dashboard (`/feedback`), or via the batch action bar.
 
 ### 3. Central Working List (`/feedback`)
 
@@ -44,7 +45,8 @@ The working list at **`/feedback`** aggregates all feedback across the applicati
 * Shows submitter, timestamp, target page, and comment excerpt.
 * Direct link back to the target page to view the pin in its live context.
 * Detail view with the full threaded discussion history.
-* 1-click **Approve** button on every open issue.
+* 1-click **Approve** and **Resolve** action buttons on every card (with instantaneous status update without full-page refreshes).
+* Batch action buttons to **Mark In Progress** or **Mark All Resolved** in a single operation.
 
 ### 4. Claude / AI Batch Prompt Generator & Scheduled Exports
 
@@ -66,6 +68,20 @@ The following 4 feedback items have been reviewed, discussed, and Approved...
 ```
 
 This eliminates the back-and-forth ambiguity between team member feedback and developer implementation.
+
+### 5. CLI Tooling & Artisan Commands
+
+For operators and automated CI/CD deployment pipelines:
+
+* **Generate Prompt**: `php artisan clockwork:feedback-prompt`
+  * Options: `--status=approved`, `--mark-in-progress`, `--mark-resolved`, `--output=<path>`.
+  * Example: `php artisan clockwork:feedback-prompt --mark-resolved` generates the prompt and instantly marks the items as solved.
+* **Resolve Items**: `php artisan clockwork:feedback-resolve`
+  * Options:
+    * `--approved`: Mark all approved items as resolved (e.g. after committing changes).
+    * `--id=<id>`: Mark specific item(s) as resolved (e.g. `--id=1 --id=2`).
+    * `--all`: Mark all active items as resolved.
+    * `--dry-run`: Preview matching items without changing database state.
 
 ## Module Administration & Toggling
 

@@ -186,6 +186,17 @@
                             <span>Mark in Progress</span>
                         </button>
                     </form>
+
+                    {{-- Mark Resolved --}}
+                    <form method="POST" action="{{ route('feedback.prompt.mark-resolved') }}" class="inline" onsubmit="return confirm('Mark all {{ $stats['approved'] }} approved items as Resolved?');">
+                        @csrf
+                        <button type="submit"
+                                class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 font-semibold"
+                                title="Mark all approved items as Resolved once implemented">
+                            <i class="fa-solid fa-check-double text-[10px]"></i>
+                            <span>Mark All Resolved</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -483,6 +494,22 @@
                             <template x-if="itemStatus === 'approved'">
                                 <span class="px-2.5 py-1 rounded-full text-xs font-semibold font-data bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                                     <i class="fa-solid fa-circle-check text-[10px]"></i> Approved
+                                </span>
+                            </template>
+
+                            {{-- 1-Click Resolve Button (AJAX) --}}
+                            <template x-if="itemStatus !== 'resolved'">
+                                <button type="button"
+                                        @click="updateStatus('resolved')"
+                                        class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-status-green)] hover:bg-[var(--color-status-green)]/10 border-[var(--color-status-green)]/30 flex items-center gap-1.5 cursor-pointer font-medium"
+                                        title="Mark as Resolved / Solved">
+                                    <i class="fa-solid fa-check-double text-[10px]"></i>
+                                    <span>Resolve</span>
+                                </button>
+                            </template>
+                            <template x-if="itemStatus === 'resolved'">
+                                <span class="px-2.5 py-1 rounded-full text-xs font-semibold font-data bg-[var(--color-status-green)]/15 text-[var(--color-status-green)] border border-[var(--color-status-green)]/30 flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> Resolved
                                 </span>
                             </template>
 
