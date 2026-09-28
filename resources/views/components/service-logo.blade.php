@@ -107,6 +107,26 @@
     <div class="{{ $class }} rounded-lg bg-[#E6F4EA] text-[#137333] font-bold flex items-center justify-center text-sm shadow-xs dark:bg-[#0D652D]/30 dark:text-[#81C995]">
         <i class="fa-solid fa-shield-virus text-emerald-600 dark:text-emerald-400"></i>
     </div>
+@elseif ($id === 'feedback')
+    <div class="{{ $class }} rounded-lg bg-[var(--color-primary-100)] text-[var(--color-primary-600)] font-bold flex items-center justify-center text-sm shadow-xs dark:bg-[var(--color-primary-950)] dark:text-[var(--color-primary-400)]">
+        <i class="fa-solid fa-comment-dots"></i>
+    </div>
+@elseif ($id === 'contact-forms' || $id === 'contact_forms')
+    <div class="{{ $class }} rounded-lg bg-purple-50 text-purple-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-purple-950/40 dark:text-purple-400">
+        <i class="fa-solid fa-envelope-open-text"></i>
+    </div>
+@elseif ($id === 'backup-relay' || $id === 'backup_relay')
+    <div class="{{ $class }} rounded-lg bg-cyan-50 text-cyan-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-cyan-950/40 dark:text-cyan-400">
+        <i class="fa-solid fa-box-archive"></i>
+    </div>
+@elseif ($id === 'gatekeeper')
+    <div class="{{ $class }} rounded-lg bg-amber-50 text-amber-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-amber-950/40 dark:text-amber-400">
+        <i class="fa-solid fa-shield-halved"></i>
+    </div>
+@elseif ($id === 'llar')
+    <div class="{{ $class }} rounded-lg bg-rose-50 text-rose-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-rose-950/40 dark:text-rose-400">
+        <i class="fa-solid fa-user-shield"></i>
+    </div>
 @else
     <div class="{{ $class }} text-[var(--color-ink-muted)] flex items-center justify-center text-base">
         <i class="fa-solid fa-layer-group"></i>

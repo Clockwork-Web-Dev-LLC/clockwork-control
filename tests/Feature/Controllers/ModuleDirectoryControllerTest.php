@@ -2,6 +2,8 @@
 
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Modules\Core\InstalledModule;
+use Modules\Core\ModuleStateResolver;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -60,11 +62,13 @@ describe('index (GET /settings/modules)', function () {
             ->assertSee('Module directory')
             ->assertSee('DigitalOcean')
             ->assertSee('RunCloud Hosting')
+            ->assertSee('Feedback')
             ->assertSee('Community')
             ->assertSee('Official')
             ->assertSee('Check for updates')
             ->assertDontSee('CPU &amp; RAM Telemetry', false)
-            ->assertSee(route('settings.integrations.index').'#integration-digitalocean', false);
+            ->assertSee(route('settings.integrations.index').'#integration-digitalocean', false)
+            ->assertSee(route('feedback.index'), false);
     });
 
     it('gracefully renders fallback directory when remote API is unreachable', function () {
@@ -79,6 +83,7 @@ describe('index (GET /settings/modules)', function () {
         $response->assertOk()
             ->assertSee('Module directory')
             ->assertSee('DigitalOcean')
+            ->assertSee('Feedback')
             ->assertSee('GTmetrix')
             ->assertSee('Google');
     });
@@ -109,5 +114,70 @@ describe('refresh (POST /settings/modules/refresh)', function () {
 
         $response->assertRedirect(route('settings.modules.index'))
             ->assertSessionHas('status', 'Module directory refreshed successfully from clockworkcontrol.com.');
+    });
+});
+
+describe('toggle (POST /settings/modules/toggle)', function () {
+    it('requires authentication to toggle a module', function () {
+        $this->post(route('settings.modules.toggle'), ['module' => 'feedback', 'enabled' => false])
+            ->assertRedirect(route('login'));
+    });
+
+    it('immediately disables an active module and returns json', function () {
+        $user = User::factory()->create();
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'feedback'],
+            ['name' => 'Feedback', 'enabled' => true, 'status' => 'active']
+        );
+
+        $response = $this->actingAs($user)->postJson(route('settings.modules.toggle'), [
+            'module' => 'feedback',
+            'enabled' => false,
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'module' => 'feedback',
+                'enabled' => false,
+            ]);
+
+        expect(InstalledModule::where('module_id', 'feedback')->value('enabled'))->toBeFalse();
+        expect(app(ModuleStateResolver::class)->isEnabled('feedback'))->toBeFalse();
+    });
+
+    it('immediately enables a disabled module', function () {
+        $user = User::factory()->create();
+
+        InstalledModule::updateOrCreate(
+            ['module_id' => 'feedback'],
+            ['name' => 'Feedback', 'enabled' => false, 'status' => 'active']
+        );
+
+        $response = $this->actingAs($user)->post(route('settings.modules.toggle'), [
+            'module' => 'feedback',
+            'enabled' => true,
+        ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('status');
+
+        expect(InstalledModule::where('module_id', 'feedback')->value('enabled'))->toBeTrue();
+        expect(app(ModuleStateResolver::class)->isEnabled('feedback'))->toBeTrue();
+    });
+
+    it('returns 404 for unknown modules', function () {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson(route('settings.modules.toggle'), [
+            'module' => 'nonexistent_module',
+            'enabled' => true,
+        ]);
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'success' => false,
+            ]);
     });
 });

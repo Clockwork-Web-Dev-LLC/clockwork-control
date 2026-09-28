@@ -423,6 +423,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Module Directory (official feed & community ecosystem browser)
     Route::get('/settings/modules', [ModuleDirectoryController::class, 'index'])->name('settings.modules.index');
     Route::post('/settings/modules/refresh', [ModuleDirectoryController::class, 'refresh'])->name('settings.modules.refresh');
+    Route::post('/settings/modules/toggle', [ModuleDirectoryController::class, 'toggle'])->name('settings.modules.toggle');
 
     Route::get('/settings/weird-stats', [WeirdStatsController::class, 'index'])->name('settings.weird-stats.index');
 

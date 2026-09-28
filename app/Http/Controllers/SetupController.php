@@ -20,6 +20,7 @@ use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleStateResolver;
+use Modules\Feedback\Models\FeedbackItem;
 use Throwable;
 
 class SetupController extends Controller
@@ -330,6 +331,11 @@ class SetupController extends Controller
         }
         if ($id === 'llar') {
             if (Site::where('llar_enabled', true)->exists() || Server::where('auto_ban_llar', true)->exists()) {
+                $hasActivity = true;
+            }
+        }
+        if ($id === 'feedback') {
+            if (FeedbackItem::exists()) {
                 $hasActivity = true;
             }
         }

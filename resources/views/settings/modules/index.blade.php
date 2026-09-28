@@ -116,7 +116,35 @@
                     $isOfficial = in_array($mod['status'] ?? '', ['official', 'verified'], true);
                 @endphp
                 <div class="card p-5 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col justify-between space-y-4 hover:border-[var(--color-border-strong)] transition-all shadow-xs"
-                     x-show="matches('{{ $mod['category'] ?? 'misc' }}', '{{ addslashes($mod['name']) }}', '{{ addslashes($mod['description']) }}', {{ json_encode($mod['tags'] ?? []) }}, '{{ addslashes($mod['author']) }}')">
+                     x-show="matches('{{ $mod['category'] ?? 'misc' }}', '{{ addslashes($mod['name']) }}', '{{ addslashes($mod['description']) }}', {{ json_encode($mod['tags'] ?? []) }}, '{{ addslashes($mod['author']) }}')"
+                     x-data="{
+                         isEnabled: {{ !empty($mod['is_enabled']) ? 'true' : 'false' }},
+                         isBusy: false,
+                         async toggle() {
+                             if (this.isBusy) return;
+                             this.isBusy = true;
+                             const target = !this.isEnabled;
+                             try {
+                                 const res = await fetch('{{ route('settings.modules.toggle') }}', {
+                                     method: 'POST',
+                                     headers: {
+                                         'Content-Type': 'application/json',
+                                         'Accept': 'application/json',
+                                         'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content') || '{{ csrf_token() }}'
+                                     },
+                                     body: JSON.stringify({ module: '{{ $mod['id'] }}', enabled: target })
+                                 });
+                                 const data = await res.json();
+                                 if (data.success) {
+                                     this.isEnabled = target;
+                                 }
+                             } catch (e) {
+                                 console.error('Failed to toggle module:', e);
+                             } finally {
+                                 this.isBusy = false;
+                             }
+                         }
+                     }">
 
                     <div>
                         <!-- Card Header: Logo, Title, Badges -->
@@ -170,19 +198,24 @@
 
                     <!-- Footer: Status & Actions -->
                     <div class="pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between gap-2">
-                        <div>
+                        <div class="flex items-center gap-2">
                             @if (!empty($mod['is_bundled']))
-                                @if (!empty($mod['is_enabled']))
-                                    <span class="status-pill status-green text-[10px]">
-                                        <span class="status-dot"></span>
-                                        <span>Active in fleet</span>
-                                    </span>
-                                @else
-                                    <span class="status-pill status-unknown text-[10px]">
-                                        <span class="status-dot"></span>
-                                        <span>Disabled</span>
-                                    </span>
-                                @endif
+                                <button type="button"
+                                        role="switch"
+                                        :aria-checked="isEnabled ? 'true' : 'false'"
+                                        aria-label="Toggle {{ $mod['name'] }}"
+                                        @click="toggle()"
+                                        :disabled="isBusy"
+                                        class="cw-switch flex-shrink-0 cursor-pointer"
+                                        :class="{ 'cw-switch--on': isEnabled, 'cw-switch--busy': isBusy }"
+                                        title="Click to toggle module on/off">
+                                    <span class="cw-switch__knob"></span>
+                                </button>
+                                <span class="status-pill text-[10px]"
+                                      :class="isEnabled ? 'status-green' : 'status-unknown'">
+                                    <span class="status-dot"></span>
+                                    <span x-text="isEnabled ? 'Active in fleet' : 'Disabled'">{{ !empty($mod['is_enabled']) ? 'Active in fleet' : 'Disabled' }}</span>
+                                </span>
                             @else
                                 <span class="status-pill status-yellow text-[10px]">
                                     <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
@@ -192,7 +225,12 @@
                         </div>
 
                         <div class="flex items-center gap-2">
-                            @if (!empty($mod['is_bundled']))
+                            @if ($mod['id'] === 'feedback')
+                                <a href="{{ route('feedback.index') }}" class="btn-pill-nav text-xs py-1 px-2.5 flex items-center gap-1.5" title="View feedback items & backlog">
+                                    <i class="fa-solid fa-comment-dots text-[var(--color-primary-600)]"></i>
+                                    <span>Working List</span>
+                                </a>
+                            @elseif (!empty($mod['is_bundled']))
                                 <a href="{{ route('settings.integrations.index') }}#integration-{{ $mod['id'] }}" class="btn-pill-nav text-xs py-1 px-2.5">
                                     Configure
                                 </a>
