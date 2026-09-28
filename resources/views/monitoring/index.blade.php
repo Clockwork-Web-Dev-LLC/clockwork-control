@@ -7,6 +7,18 @@
     <x-page-header title="Monitoring"
         subtitle="Fleet-wide uptime activity. Probes every monitored site on a schedule and alerts on transitions.">
         <x-slot:actions>
+            {{-- WordPress-Style Screen Options Tab Button --}}
+            <button type="button"
+                    @click="screenOptionsOpen = !screenOptionsOpen"
+                    :class="screenOptionsOpen ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-xs' : ''"
+                    class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer text-xs md:text-sm font-medium transition-all"
+                    title="Customize monitoring pagination and display settings">
+                <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-brand)]'"></i>
+                <span>Screen Options</span>
+                <i class="fa-solid fa-chevron-down text-[10px] opacity-70 transition-transform duration-200"
+                   :class="screenOptionsOpen ? 'rotate-180' : ''"></i>
+            </button>
+
             <form method="POST" action="{{ route('monitoring.refresh') }}" class="inline">
                 @csrf
                 <button type="submit" class="btn-pill-nav"
@@ -17,6 +29,106 @@
             </form>
         </x-slot:actions>
     </x-page-header>
+
+    {{-- WORDPRESS-STYLE SCREEN OPTIONS DRAWER --}}
+    <div x-show="screenOptionsOpen"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-2"
+         x-cloak
+         class="mb-6 rounded-[var(--radius-card)] border-2 border-[var(--color-brand)]/40 bg-[var(--color-surface)] shadow-xl overflow-hidden">
+        {{-- Screen Options Top Control Bar --}}
+        <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)]"></span>
+                <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)]">Screen Options: Monitoring Display</span>
+                <span class="text-xs text-[var(--color-ink-muted)] hidden sm:inline">— Customize table pagination and display settings. Saved in your browser.</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs flex-wrap">
+                <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
+                <button type="button"
+                        @click="setPerPage(25)"
+                        :class="perPage === 25 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                    25
+                </button>
+                <button type="button"
+                        @click="setPerPage(50)"
+                        :class="perPage === 50 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                    50 (Default)
+                </button>
+                <button type="button"
+                        @click="setPerPage(100)"
+                        :class="perPage === 100 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                    100
+                </button>
+                <button type="button"
+                        @click="setPerPage('all')"
+                        :class="perPage === 'all' ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                    All
+                </button>
+                <button type="button"
+                        @click="resetScreenOptions()"
+                        class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium ml-2">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        {{-- Screen Options Body --}}
+        <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+            <div>
+                <h4 class="font-semibold text-xs text-[var(--color-ink-strong)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-table-list text-[var(--color-brand)]"></i>
+                    Pagination
+                </h4>
+                <p class="text-[var(--color-ink-muted)] mb-3 leading-relaxed">
+                    Set how many monitored sites to display on each page. Defaults to 50 sites per page for optimal scanning and performance.
+                </p>
+                <form @submit.prevent="applyPerPage()" class="flex items-center gap-2">
+                    <label for="screen-options-per-page" class="text-[var(--color-ink-strong)] font-medium">
+                        Number of sites per page:
+                    </label>
+                    <input type="number"
+                           id="screen-options-per-page"
+                           min="1"
+                           max="500"
+                           x-model.number="perPageInput"
+                           class="w-20 px-2.5 py-1 text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] font-data focus:outline-none focus:border-[var(--color-brand)]">
+                    <button type="submit"
+                            class="btn-primary text-xs py-1 px-3 cursor-pointer">
+                        Apply
+                    </button>
+                </form>
+            </div>
+            <div>
+                <h4 class="font-semibold text-xs text-[var(--color-ink-strong)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
+                    Display Notes
+                </h4>
+                <ul class="space-y-1.5 text-[var(--color-ink-muted)]">
+                    <li class="flex items-start gap-1.5">
+                        <i class="fa-solid fa-check text-[var(--color-status-green)] text-[10px] mt-0.5"></i>
+                        <span>Fleet totals and 7d/30d uptime averages always reflect all monitored sites regardless of page size.</span>
+                    </li>
+                    <li class="flex items-start gap-1.5">
+                        <i class="fa-solid fa-check text-[var(--color-status-green)] text-[10px] mt-0.5"></i>
+                        <span>Instant search matches across all sites; pagination dynamically re-indexes matching results.</span>
+                    </li>
+                    <li class="flex items-start gap-1.5">
+                        <i class="fa-solid fa-check text-[var(--color-status-green)] text-[10px] mt-0.5"></i>
+                        <span>Per-site instant re-checks update live without reloading or changing your active page.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
@@ -138,19 +250,27 @@
             <input
                 type="search"
                 id="monitoring-search"
+                x-model="searchQuery"
+                @input="onSearchInput()"
                 value="{{ request('q', '') }}"
                 placeholder="Search monitored sites (domain, server, state)…"
                 autocomplete="off"
                 class="w-full pl-11 pr-10 py-3 rounded-full border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] focus:bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-brand)] text-base text-[var(--color-ink-strong)]"
             >
-            <button type="button" id="monitoring-search-clear" class="{{ request('q') ? '' : 'hidden' }} absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] w-6 h-6 rounded-full flex items-center justify-center" aria-label="Clear search">
+            <button type="button"
+                    id="monitoring-search-clear"
+                    x-show="searchQuery.trim().length > 0"
+                    @click="clearSearch()"
+                    x-cloak
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] w-6 h-6 rounded-full flex items-center justify-center cursor-pointer"
+                    aria-label="Clear search">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
     </div>
 
     {{-- Per-site uptime table --}}
-    <div class="card mb-6">
+    <div class="card mb-6" id="monitoring-sites-card">
         <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-3">
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                 <i class="fa-solid fa-list text-[var(--color-ink-soft)] mr-1"></i>
@@ -329,6 +449,70 @@
                     </tbody>
                 </table>
             </div>
+
+            {{-- Pagination footer bar --}}
+            <div x-show="totalSites > 0"
+                 x-cloak
+                 class="px-5 py-3 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 text-xs"
+                 id="monitoring-pagination">
+                <div class="text-[var(--color-ink-muted)]">
+                    <template x-if="searchQuery.trim()">
+                        <span>
+                            Showing <strong class="font-data text-[var(--color-ink-strong)]" x-text="pageStart"></strong> to <strong class="font-data text-[var(--color-ink-strong)]" x-text="pageEnd"></strong> of <strong class="font-data text-[var(--color-ink-strong)]" x-text="totalFilteredSites"></strong> matching sites
+                            <span class="text-[var(--color-ink-soft)] font-data">(of <span x-text="totalSites"></span> total)</span>
+                        </span>
+                    </template>
+                    <template x-if="!searchQuery.trim()">
+                        <span x-show="perPage === 'all' || totalSites <= perPage">
+                            Showing all <strong class="font-data text-[var(--color-ink-strong)]" x-text="totalSites"></strong> monitored sites
+                        </span>
+                    </template>
+                    <template x-if="!searchQuery.trim() && perPage !== 'all' && totalSites > perPage">
+                        <span>
+                            Showing <strong class="font-data text-[var(--color-ink-strong)]" x-text="pageStart"></strong> to <strong class="font-data text-[var(--color-ink-strong)]" x-text="pageEnd"></strong> of <strong class="font-data text-[var(--color-ink-strong)]" x-text="totalSites"></strong> monitored sites
+                        </span>
+                    </template>
+                </div>
+
+                {{-- Pagination controls --}}
+                <div x-show="totalPages > 1" class="flex items-center gap-1">
+                    <button type="button"
+                            @click="prevPage()"
+                            :disabled="currentPage <= 1"
+                            class="btn-pill-nav text-xs py-1 px-2.5 flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            aria-label="Previous page">
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                        <span>Prev</span>
+                    </button>
+
+                    <div class="flex items-center gap-1 px-1">
+                        <template x-for="(p, idx) in pagesList" :key="idx">
+                            <span>
+                                <template x-if="p === '...'">
+                                    <span class="px-2 py-1 text-[var(--color-ink-soft)] font-data">…</span>
+                                </template>
+                                <template x-if="p !== '...'">
+                                    <button type="button"
+                                            @click="goToPage(p)"
+                                            :class="currentPage === p ? 'bg-[var(--color-brand)] text-white font-bold border-[var(--color-brand)] shadow-xs' : 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] border-[var(--color-border-light)]'"
+                                            class="min-w-7 h-7 px-2 rounded border text-xs font-data flex items-center justify-center transition-all cursor-pointer"
+                                            x-text="p">
+                                    </button>
+                                </template>
+                            </span>
+                        </template>
+                    </div>
+
+                    <button type="button"
+                            @click="nextPage()"
+                            :disabled="currentPage >= totalPages"
+                            class="btn-pill-nav text-xs py-1 px-2.5 flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            aria-label="Next page">
+                        <span>Next</span>
+                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
         @endif
     </div>
 
@@ -471,293 +655,4 @@
         </div>
     </div>
 </div>
-
-<script>
-    function monitoringPage() {
-        return {
-            modalOpen: false,
-            siteId: null,
-            domain: '',
-            reason: 'client_dns',
-            notes: '',
-            actionUrl: '',
-            openModal(id, dom, r, n) {
-                this.siteId = id;
-                this.domain = dom;
-                this.reason = r || 'client_dns';
-                this.notes = n || '';
-                this.actionUrl = '/monitoring/sites/' + id + '/classify-outage';
-                this.modalOpen = true;
-                this.$nextTick(() => {
-                    const select = document.getElementById('classify-outage-reason');
-                    if (select) select.focus();
-                });
-            },
-            closeModal() {
-                this.modalOpen = false;
-            },
-            filterSearch(term) {
-                window.monitoringFilterSearch(term);
-            }
-        };
-    }
-
-    window.monitoringFilterSearch = function (term) {
-        const input = document.getElementById('monitoring-search');
-        if (input) {
-            input.value = term;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            input.focus();
-        }
-    };
-
-    window.monitoringOpenClassify = function (siteId, domain, reason = 'client_dns', notes = '') {
-        const root = document.getElementById('monitoring-page-root');
-        if (root && root._x_dataStack && root._x_dataStack[0]) {
-            root._x_dataStack[0].openModal(siteId, domain, reason, notes);
-            return;
-        }
-        const modal = document.getElementById('classify-outage-modal');
-        const form = document.getElementById('classify-outage-form');
-        const domainEl = document.getElementById('classify-outage-domain');
-        const reasonEl = document.getElementById('classify-outage-reason');
-        const notesEl = document.getElementById('classify-outage-notes');
-        if (form) form.action = `/monitoring/sites/${siteId}/classify-outage`;
-        if (domainEl) domainEl.textContent = domain;
-        if (reasonEl && reason) reasonEl.value = reason;
-        if (notesEl) notesEl.value = notes || '';
-        if (modal) {
-            modal.classList.remove('hidden');
-            modal.style.display = 'flex';
-        }
-    };
-
-    window.monitoringCloseClassify = function () {
-        const root = document.getElementById('monitoring-page-root');
-        if (root && root._x_dataStack && root._x_dataStack[0]) {
-            root._x_dataStack[0].closeModal();
-            return;
-        }
-        const modal = document.getElementById('classify-outage-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-            modal.style.display = 'none';
-        }
-    };
-
-    (function () {
-        const input = document.getElementById('monitoring-search');
-        const clearBtn = document.getElementById('monitoring-search-clear');
-        const siteRows = Array.from(document.querySelectorAll('.site-row'));
-        const eventRows = Array.from(document.querySelectorAll('.event-row'));
-        const countSpan = document.getElementById('monitoring-sites-count');
-        const noMatchRow = document.getElementById('monitoring-no-match');
-        const noMatchQuery = document.getElementById('monitoring-no-match-query');
-        const eventsNoMatchRow = document.getElementById('monitoring-events-no-match');
-        const totalSites = siteRows.length;
-
-        function applyFilter(rawQ) {
-            const q = (rawQ || '').trim().toLowerCase();
-            const isQuery = q.length > 0;
-
-            if (clearBtn) {
-                clearBtn.classList.toggle('hidden', !isQuery);
-            }
-
-            let visibleSites = 0;
-            siteRows.forEach(row => {
-                const text = (row.dataset.search || '').toLowerCase();
-                const matched = !isQuery || text.includes(q);
-                row.style.display = matched ? '' : 'none';
-                if (matched) visibleSites++;
-            });
-
-            if (countSpan) {
-                countSpan.textContent = isQuery
-                    ? `Showing ${visibleSites} of ${totalSites} monitored`
-                    : `${totalSites} monitored`;
-            }
-
-            if (noMatchRow) {
-                noMatchRow.classList.toggle('hidden', visibleSites > 0 || totalSites === 0);
-                if (noMatchQuery) {
-                    noMatchQuery.textContent = rawQ || '';
-                }
-            }
-
-            let visibleEvents = 0;
-            eventRows.forEach(row => {
-                const text = (row.dataset.search || '').toLowerCase();
-                const matched = !isQuery || text.includes(q);
-                row.style.display = matched ? '' : 'none';
-                if (matched) visibleEvents++;
-            });
-
-            if (eventsNoMatchRow) {
-                eventsNoMatchRow.classList.toggle('hidden', visibleEvents > 0 || eventRows.length === 0 || !isQuery);
-            }
-
-            // Update URL query parameter smoothly without page reload
-            const url = new URL(window.location.href);
-            if (isQuery) {
-                url.searchParams.set('q', rawQ.trim());
-            } else {
-                url.searchParams.delete('q');
-            }
-            window.history.replaceState(null, '', url.toString());
-        }
-
-        if (input) {
-            input.addEventListener('input', e => applyFilter(e.target.value));
-
-            input.addEventListener('keydown', e => {
-                if (e.key === 'Escape') {
-                    input.value = '';
-                    applyFilter('');
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const firstSite = document.querySelector('.site-row:not([style*="display: none"]) a');
-                    if (firstSite) {
-                        firstSite.click();
-                    }
-                }
-            });
-
-            // Initialize filter if query was passed in URL
-            if (input.value) {
-                applyFilter(input.value);
-            }
-        }
-
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                if (input) {
-                    input.value = '';
-                    applyFilter('');
-                    input.focus();
-                }
-            });
-        }
-
-        // "/" focuses search from anywhere on the page
-        document.addEventListener('keydown', e => {
-            if (e.key === '/' && input && document.activeElement !== input
-                    && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
-                e.preventDefault();
-                input.focus();
-                input.select();
-            }
-        });
-
-        // Direct event listeners for cancel and close buttons (DOM fallback)
-        const cancelBtn = document.getElementById('classify-outage-cancel');
-        const closeBtn = document.getElementById('classify-outage-close');
-        const modal = document.getElementById('classify-outage-modal');
-        if (cancelBtn) cancelBtn.addEventListener('click', window.monitoringCloseClassify);
-        if (closeBtn) closeBtn.addEventListener('click', window.monitoringCloseClassify);
-        if (modal) {
-            modal.addEventListener('click', e => {
-                if (e.target === modal) window.monitoringCloseClassify();
-            });
-            document.addEventListener('keydown', e => {
-                if (e.key === 'Escape' && modal.style.display !== 'none' && !modal.classList.contains('hidden')) {
-                    window.monitoringCloseClassify();
-                }
-            });
-        }
-
-        // Wire up per-site instant re-check buttons
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        document.querySelectorAll('.monitoring-recheck-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (btn.disabled) return;
-
-                const origHtml = btn.innerHTML;
-                const row = btn.closest('tr');
-                const stateCell = row?.querySelector('.site-state-cell');
-                const lastEventCell = row?.querySelector('.site-last-event-cell');
-                const actionsCell = row?.querySelector('.site-actions-cell');
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i> Probing…';
-
-                try {
-                    const res = await fetch(btn.dataset.url, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/json',
-                        },
-                    });
-                    const data = await res.json();
-
-                    if (data.ok) {
-                        if (data.state === 'up') {
-                            btn.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1"></i> Up (' + (data.status_code || 200) + ')';
-
-                            if (stateCell) {
-                                stateCell.innerHTML = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 bg-[var(--color-status-green)]/15 text-[var(--color-status-green)]">UP</span>';
-                            }
-                            if (lastEventCell) {
-                                lastEventCell.textContent = 'Up — checked just now';
-                            }
-                            if (actionsCell) {
-                                actionsCell.querySelectorAll('.classify-btn, form[action*="classify-outage"]').forEach(el => el.remove());
-                            }
-                            if (row) {
-                                row.classList.remove('opacity-60');
-                                if (row.dataset.search) {
-                                    row.dataset.search = row.dataset.search.replace(/\bdown\b/g, 'up');
-                                }
-                            }
-
-                            const downStat = document.getElementById('monitoring-stat-down');
-                            const upStat = document.getElementById('monitoring-stat-up');
-                            if (downStat && upStat) {
-                                const currentDown = parseInt(downStat.textContent, 10);
-                                if (!isNaN(currentDown) && currentDown > 0) {
-                                    downStat.textContent = currentDown - 1;
-                                    const currentUp = parseInt(upStat.textContent, 10);
-                                    if (!isNaN(currentUp)) {
-                                        upStat.textContent = currentUp + 1;
-                                    }
-                                }
-                            }
-
-                            setTimeout(() => {
-                                btn.innerHTML = origHtml;
-                                btn.disabled = false;
-                            }, 2500);
-                        } else {
-                            const code = data.status_code ? 'HTTP ' + data.status_code : 'Down';
-                            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-[10px] mr-1"></i> ' + code;
-                            if (lastEventCell) {
-                                lastEventCell.textContent = 'Down — checked just now';
-                            }
-                            setTimeout(() => {
-                                btn.innerHTML = origHtml;
-                                btn.disabled = false;
-                            }, 3000);
-                        }
-                    } else {
-                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> ' + (data.message || 'Error');
-                        setTimeout(() => {
-                            btn.innerHTML = origHtml;
-                            btn.disabled = false;
-                        }, 3500);
-                    }
-                } catch (err) {
-                    btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> Failed';
-                    setTimeout(() => {
-                        btn.innerHTML = origHtml;
-                        btn.disabled = false;
-                    }, 3500);
-                }
-            });
-        });
-    })();
-</script>
 @endsection

@@ -47,5 +47,8 @@ declare global {
         appChrome: () => Record<string, unknown>;
         themePicker: () => Record<string, unknown>;
         layoutStylePicker: () => Record<string, unknown>;
+        monitoringFilterSearch?: (term: string) => void;
+        monitoringOpenClassify?: (siteId: number, domain: string, reason?: string, notes?: string) => void;
+        monitoringCloseClassify?: () => void;
     }
 }

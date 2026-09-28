@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Monitoring Screen Options & Table Pagination**:
+  - Added a WordPress-style "Screen Options" pull-down drawer to the `/monitoring` dashboard, enabling operators to customize table pagination (default: 50 items per page, presets for 25, 50, 100, All, or custom numeric entry), persisted in `localStorage` (`cw_monitoring_per_page`).
+  - Added interactive table pagination controls (Previous, Next, page number windowing, and status indicators) integrated with real-time client-side search filtering.
+  - Extracted inline monitoring scripts (~290 lines) into a modular, typed component `resources/js/components/monitoring-page.ts` registered in Alpine (`monitoringPage`).
 - **Permanent User Deletion from Allowlist**: Added `DELETE /settings/users/{user}` (`UsersSettingsController::destroy`) and interactive confirmation modal to permanently remove users from the allowlist (both revoked and active teammates). Guards prevent self-deletion and removing the last administrator, invalidates stored sessions, and logs `TYPE_USER_DELETED`.
 - **Per-Site Uptime Re-check on Monitoring Dashboard**: Added an on-demand "Re-check" button to each row in the `/monitoring` sites table, enabling operators to trigger an instant HTTP probe for any individual site via AJAX with live spinner feedback and in-place status badge / counter updates.
 - **Frontend Modularization & TypeScript Extraction**:
