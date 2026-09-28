@@ -14,6 +14,19 @@
  * - Discreet floating toggle pill in the bottom corner with Show/Hide pins switch.
  */
 
+declare global {
+    interface Window {
+        __CW_FEEDBACK_SERVER_CONTEXT__?: {
+            url?: string;
+            path?: string;
+            routeName?: string;
+            controllerAction?: string;
+            viewName?: string;
+            viewPath?: string;
+        };
+    }
+}
+
 export interface FeedbackPinAuthor {
     name: string;
     email: string;
@@ -35,8 +48,11 @@ export interface FeedbackPinData {
     type: 'bug' | 'tweak' | 'feature' | 'copy';
     type_label: string;
     type_class: string;
-    status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
+    status: 'open' | 'approved' | 'in_progress' | 'resolved' | 'dismissed';
     status_class: string;
+    path?: string;
+    route_name?: string | null;
+    view_name?: string | null;
     selector: string | null;
     element_tag: string | null;
     element_text: string | null;
@@ -47,6 +63,7 @@ export interface FeedbackPinData {
     comments_count: number;
     comments: FeedbackPinComment[];
     claude_prompt: string;
+    metadata?: Record<string, any>;
     // Computed screen coordinates
     screenX?: number;
     screenY?: number;
@@ -71,7 +88,7 @@ export function feedbackOverlay() {
         replyContent: '',
         replySubmitting: false,
 
-        // Context menu state
+        // Context menu state with rich page, container, and AI code context
         contextMenu: {
             visible: false,
             x: 0,
@@ -80,6 +97,16 @@ export function feedbackOverlay() {
             selector: '',
             tag: '',
             text: '',
+            pagePath: '',
+            pageUrl: '',
+            pageTitle: '',
+            routeName: '',
+            controllerAction: '',
+            viewName: '',
+            viewPath: '',
+            nearestHeading: '',
+            containerSummary: '',
+            hierarchy: '',
         },
 
         // New Feedback modal state
@@ -176,6 +203,81 @@ export function feedbackOverlay() {
             window.addEventListener('scroll', update, { passive: true });
         },
 
+        findNearestHeading(el: HTMLElement): string {
+            // 1. Check if el or its parent container has a header or title
+            const container = el.closest('section, article, .card, main, [role="region"], header, nav');
+            if (container) {
+                const heading = container.querySelector('h1, h2, h3, h4, h5, [role="heading"], .font-display');
+                if (heading && heading !== el && heading.textContent?.trim()) {
+                    return heading.textContent.trim().replace(/\s+/g, ' ').slice(0, 70);
+                }
+            }
+
+            // 2. Scan previous siblings and upwards
+            let curr: Element | null = el;
+            while (curr && curr !== document.body) {
+                let prev = curr.previousElementSibling;
+                while (prev) {
+                    if (prev.matches('h1, h2, h3, h4, h5, [role="heading"]')) {
+                        const txt = prev.textContent?.trim().replace(/\s+/g, ' ');
+                        if (txt) return txt.slice(0, 70);
+                    }
+                    const nested = prev.querySelector('h1, h2, h3, h4, h5, [role="heading"]');
+                    if (nested?.textContent?.trim()) {
+                        return nested.textContent.trim().replace(/\s+/g, ' ').slice(0, 70);
+                    }
+                    prev = prev.previousElementSibling;
+                }
+                curr = curr.parentElement;
+            }
+
+            // 3. Fallback to main page h1
+            const h1 = document.querySelector('h1');
+            return h1?.textContent?.trim().replace(/\s+/g, ' ').slice(0, 70) || '';
+        },
+
+        getContainerSummary(el: HTMLElement): string {
+            const container = el.closest('.card, table, form, nav, header, aside, section, [id]');
+            if (!container || container === el) {
+                return '';
+            }
+
+            let desc = '';
+            if (container.id) {
+                desc += `#${container.id}`;
+            } else if (container.classList.contains('card')) {
+                desc += 'Card Container';
+            } else {
+                desc += `<${container.tagName.toLowerCase()}>`;
+            }
+
+            const ariaLabel = container.getAttribute('aria-label');
+            if (ariaLabel) {
+                desc += ` (${ariaLabel})`;
+            }
+
+            return desc;
+        },
+
+        getElementHierarchy(el: HTMLElement): string {
+            const parts: string[] = [];
+            let curr: HTMLElement | null = el;
+            while (curr && curr !== document.body && parts.length < 4) {
+                let name = curr.tagName.toLowerCase();
+                if (curr.id) {
+                    name += `#${curr.id}`;
+                } else if (curr.className && typeof curr.className === 'string') {
+                    const firstClass = curr.className
+                        .split(' ')
+                        .filter((c) => c && !c.includes(':') && !c.includes('[') && !c.includes('/'))[0];
+                    if (firstClass) name += `.${firstClass}`;
+                }
+                parts.unshift(name);
+                curr = curr.parentElement;
+            }
+            return parts.join(' > ');
+        },
+
         setupRightClickListener() {
             document.addEventListener('contextmenu', (e: MouseEvent) => {
                 // If user holds Shift, allow native browser context menu
@@ -203,12 +305,30 @@ export function feedbackOverlay() {
                     .trim()
                     .slice(0, 100);
 
+                const serverCtx = window.__CW_FEEDBACK_SERVER_CONTEXT__;
+                const pagePath = window.location.pathname;
+                const pageUrl = window.location.href;
+                const pageTitle = document.title;
+                const routeName = serverCtx?.routeName || '';
+                const controllerAction = serverCtx?.controllerAction || '';
+                const viewName = serverCtx?.viewName || '';
+                const viewPath = serverCtx?.viewPath || '';
+
+                const nearestHeading = this.findNearestHeading(target);
+                const containerSummary = this.getContainerSummary(target);
+                const hierarchy = this.getElementHierarchy(target);
+
                 // Ensure context menu stays on-screen
-                const menuWidth = 260;
-                const menuHeight = 120;
-                const x = e.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : e.clientX;
+                const menuWidth = 320;
+                const menuHeight = 220;
+                const x =
+                    e.clientX + menuWidth > window.innerWidth
+                        ? Math.max(10, window.innerWidth - menuWidth - 10)
+                        : e.clientX;
                 const y =
-                    e.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : e.clientY;
+                    e.clientY + menuHeight > window.innerHeight
+                        ? Math.max(10, window.innerHeight - menuHeight - 10)
+                        : e.clientY;
 
                 this.contextMenu = {
                     visible: true,
@@ -218,6 +338,16 @@ export function feedbackOverlay() {
                     selector,
                     tag,
                     text,
+                    pagePath,
+                    pageUrl,
+                    pageTitle,
+                    routeName,
+                    controllerAction,
+                    viewName,
+                    viewPath,
+                    nearestHeading,
+                    containerSummary,
+                    hierarchy,
                 };
             });
 
@@ -288,7 +418,14 @@ export function feedbackOverlay() {
         openNewFeedbackModal() {
             this.contextMenu.visible = false;
             this.newForm.type = 'bug';
-            this.newForm.title = this.contextMenu.text ? `Issue on ${this.contextMenu.tag}` : 'Change Request';
+            const contextPrefix = this.contextMenu.nearestHeading
+                ? `${this.contextMenu.nearestHeading}: `
+                : this.contextMenu.containerSummary
+                  ? `${this.contextMenu.containerSummary}: `
+                  : '';
+            this.newForm.title = this.contextMenu.text
+                ? `${contextPrefix}${this.contextMenu.text.slice(0, 50)}`
+                : `${contextPrefix}Issue on <${this.contextMenu.tag}>`;
             this.newForm.content = '';
             this.newModalOpen = true;
 
@@ -331,8 +468,11 @@ export function feedbackOverlay() {
                         Accept: 'application/json',
                     },
                     body: JSON.stringify({
-                        url: window.location.href,
-                        path: window.location.pathname,
+                        url: this.contextMenu.pageUrl || window.location.href,
+                        path: this.contextMenu.pagePath || window.location.pathname,
+                        route_name: this.contextMenu.routeName || null,
+                        controller_action: this.contextMenu.controllerAction || null,
+                        view_name: this.contextMenu.viewPath || null,
                         title: this.newForm.title.trim(),
                         content: this.newForm.content.trim(),
                         type: this.newForm.type,
@@ -344,6 +484,10 @@ export function feedbackOverlay() {
                         viewport_width: window.innerWidth,
                         viewport_height: window.innerHeight,
                         metadata: {
+                            page_title: this.contextMenu.pageTitle || document.title,
+                            nearest_heading: this.contextMenu.nearestHeading || null,
+                            container: this.contextMenu.containerSummary || null,
+                            hierarchy: this.contextMenu.hierarchy || null,
                             theme: document.documentElement.getAttribute('data-theme') || 'light',
                             userAgent: navigator.userAgent,
                         },

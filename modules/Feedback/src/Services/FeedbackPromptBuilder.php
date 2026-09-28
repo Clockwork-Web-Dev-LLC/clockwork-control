@@ -34,21 +34,34 @@ class FeedbackPromptBuilder
         }
 
         $prompt .= "### Page & Code Context\n";
-        $prompt .= '- **URL**: '.$item->url."\n";
+        $prompt .= '- **Screen URL**: '.$item->url."\n";
+        $prompt .= '- **Screen Path**: `'.$item->path."`\n";
+        if (is_array($item->metadata) && ! empty($item->metadata['page_title'])) {
+            $prompt .= '- **Page Title**: '.$item->metadata['page_title']."\n";
+        }
         if ($item->route_name) {
-            $prompt .= '- **Route**: '.$item->route_name."\n";
+            $prompt .= '- **Laravel Route**: `'.$item->route_name."`\n";
         }
         if ($item->controller_action) {
-            $prompt .= '- **Controller Action**: '.$item->controller_action."\n";
+            $prompt .= '- **Controller Action**: `'.$item->controller_action."`\n";
         }
         if ($item->view_name) {
-            $prompt .= '- **Blade Template**: '.$item->view_name."\n";
+            $prompt .= '- **Blade Template**: `'.$item->view_name."`\n";
+        }
+        if (is_array($item->metadata) && ! empty($item->metadata['nearest_heading'])) {
+            $prompt .= '- **Nearest Section / Heading**: "'.$item->metadata['nearest_heading']."\"\n";
+        }
+        if (is_array($item->metadata) && ! empty($item->metadata['container'])) {
+            $prompt .= '- **Container Context**: '.$item->metadata['container']."\n";
         }
         if ($item->selector) {
             $prompt .= '- **Target Element Selector**: `'.$item->selector."`\n";
         }
         if ($item->element_text) {
             $prompt .= '- **Element Text Snippet**: "'.addcslashes($item->element_text, '"')."\"\n";
+        }
+        if (is_array($item->metadata) && ! empty($item->metadata['hierarchy'])) {
+            $prompt .= '- **DOM Hierarchy**: `'.$item->metadata['hierarchy']."`\n";
         }
         if ($item->viewport_width && $item->viewport_height) {
             $prompt .= "- **Viewport Dimensions**: {$item->viewport_width}x{$item->viewport_height}\n";
@@ -109,7 +122,8 @@ class FeedbackPromptBuilder
         $index = 1;
         foreach ($collection as $item) {
             $typeLabel = strtoupper($item->type);
-            $prompt .= "{$index}. **[{$typeLabel}]** {$item->title} (`{$item->path}`)\n";
+            $viewHint = $item->view_name ? " · `{$item->view_name}`" : '';
+            $prompt .= "{$index}. **[{$typeLabel}]** {$item->title} (`{$item->path}`{$viewHint})\n";
             $index++;
         }
         $prompt .= "\n---\n\n";
@@ -127,7 +141,11 @@ class FeedbackPromptBuilder
             $prompt .= "- **Logged At**: {$item->created_at->format('M j, Y g:i A')}\n";
             $prompt .= '- **Status**: '.ucfirst($item->status)."\n";
             $prompt .= "- **Target Screen URL**: {$item->url}\n";
+            $prompt .= "- **Screen Path**: `{$item->path}`\n";
 
+            if (is_array($item->metadata) && ! empty($item->metadata['page_title'])) {
+                $prompt .= "- **Page Title**: {$item->metadata['page_title']}\n";
+            }
             if ($item->route_name) {
                 $prompt .= "- **Route**: `{$item->route_name}`\n";
             }
@@ -137,11 +155,20 @@ class FeedbackPromptBuilder
             if ($item->view_name) {
                 $prompt .= "- **Blade Template**: `{$item->view_name}`\n";
             }
+            if (is_array($item->metadata) && ! empty($item->metadata['nearest_heading'])) {
+                $prompt .= "- **Nearest Section / Heading**: \"{$item->metadata['nearest_heading']}\"\n";
+            }
+            if (is_array($item->metadata) && ! empty($item->metadata['container'])) {
+                $prompt .= "- **Container Context**: {$item->metadata['container']}\n";
+            }
             if ($item->selector) {
                 $prompt .= "- **DOM Target Selector**: `{$item->selector}`\n";
             }
             if ($item->element_text) {
                 $prompt .= '- **Element Text Snippet**: "'.addcslashes($item->element_text, '"')."\"\n";
+            }
+            if (is_array($item->metadata) && ! empty($item->metadata['hierarchy'])) {
+                $prompt .= "- **DOM Hierarchy**: `{$item->metadata['hierarchy']}`\n";
             }
             if ($item->viewport_width && $item->viewport_height) {
                 $prompt .= "- **Viewport**: {$item->viewport_width}x{$item->viewport_height}\n";

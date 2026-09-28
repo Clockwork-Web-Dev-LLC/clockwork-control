@@ -3,6 +3,7 @@
 namespace Modules\Feedback;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\View\View;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
@@ -23,6 +24,28 @@ class FeedbackServiceProvider extends ModuleServiceProvider
 
         if ($this->enabled()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+            $this->app['view']->composer('*', function (View $view): void {
+                $name = $view->getName();
+                if (str_starts_with($name, 'layouts.') ||
+                    str_starts_with($name, 'components.') ||
+                    $name === 'feedback::_overlay') {
+                    return;
+                }
+
+                if (! app()->bound('feedback.page_view')) {
+                    $realPath = realpath($view->getPath()) ?: $view->getPath();
+                    $basePath = base_path();
+                    $relative = str_starts_with($realPath, $basePath)
+                        ? ltrim(substr($realPath, strlen($basePath)), '/\\')
+                        : $realPath;
+
+                    app()->instance('feedback.page_view', [
+                        'name' => $name,
+                        'path' => $relative,
+                    ]);
+                }
+            });
         }
     }
 

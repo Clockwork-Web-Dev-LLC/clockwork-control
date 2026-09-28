@@ -79,6 +79,65 @@ test('can create feedback item via API and auto-resolves route name', function (
     expect($item->route_name)->toBe('monitoring.index');
 });
 
+test('captures rich page context, blade file, nearest section, and formats in Claude prompt', function () {
+    $response = $this->actingAs($this->user)->postJson(route('feedback.store'), [
+        'url' => 'http://control.test/feedback',
+        'path' => '/feedback',
+        'route_name' => 'feedback.index',
+        'controller_action' => 'Modules\Feedback\Http\Controllers\FeedbackController@index',
+        'view_name' => 'modules/Feedback/resources/views/index.blade.php',
+        'title' => 'Feedback & Backlog: Total Submissions',
+        'content' => 'Make this stat card clickable to filter by all submissions.',
+        'type' => 'tweak',
+        'selector' => 'div.grid > a.card:nth-of-type(1) > div',
+        'element_tag' => 'div',
+        'element_text' => 'Total Submissions',
+        'x_pos' => 20.5,
+        'y_pos' => 15.0,
+        'metadata' => [
+            'page_title' => 'Feedback & Backlog · Clockwork Control',
+            'nearest_heading' => 'Feedback & Backlog',
+            'container' => 'Card Container',
+            'hierarchy' => 'main > div.grid > a.card > div',
+        ],
+    ]);
+
+    $response->assertOk();
+    $item = FeedbackItem::where('title', 'Feedback & Backlog: Total Submissions')->first();
+    expect($item)->not->toBeNull();
+    expect($item->path)->toBe('/feedback');
+    expect($item->route_name)->toBe('feedback.index');
+    expect($item->view_name)->toBe('modules/Feedback/resources/views/index.blade.php');
+    expect($item->metadata['nearest_heading'])->toBe('Feedback & Backlog');
+    expect($item->metadata['container'])->toBe('Card Container');
+
+    $prompt = $item->toClaudePrompt();
+    expect($prompt)->toContain('- **Screen Path**: `/feedback`');
+    expect($prompt)->toContain('- **Page Title**: Feedback & Backlog · Clockwork Control');
+    expect($prompt)->toContain('- **Laravel Route**: `feedback.index`');
+    expect($prompt)->toContain('- **Blade Template**: `modules/Feedback/resources/views/index.blade.php`');
+    expect($prompt)->toContain('- **Nearest Section / Heading**: "Feedback & Backlog"');
+    expect($prompt)->toContain('- **Container Context**: Card Container');
+    expect($prompt)->toContain('- **Target Element Selector**: `div.grid > a.card:nth-of-type(1) > div`');
+    expect($prompt)->toContain('- **Element Text Snippet**: "Total Submissions"');
+});
+
+test('auto-resolves module blade view when client does not pass view_name', function () {
+    $response = $this->actingAs($this->user)->postJson(route('feedback.store'), [
+        'url' => 'http://control.test/feedback',
+        'path' => '/feedback',
+        'title' => 'Stats Card Tweak',
+        'content' => 'Check alignment',
+        'type' => 'tweak',
+    ]);
+
+    $response->assertOk();
+    $item = FeedbackItem::where('title', 'Stats Card Tweak')->first();
+    expect($item)->not->toBeNull();
+    expect($item->route_name)->toBe('feedback.index');
+    expect($item->view_name)->toBe('modules/Feedback/resources/views/index.blade.php');
+});
+
 test('pins endpoint returns items for active path with formatted properties', function () {
     $item = FeedbackItem::create([
         'user_id' => $this->user->id,

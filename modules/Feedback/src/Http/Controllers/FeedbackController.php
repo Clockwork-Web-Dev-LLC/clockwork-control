@@ -103,6 +103,10 @@ class FeedbackController extends Controller
                 'type_class' => $item->typeBadgeClass(),
                 'status' => $item->status,
                 'status_class' => $item->statusBadgeClass(),
+                'path' => $item->path,
+                'route_name' => $item->route_name,
+                'view_name' => $item->view_name,
+                'metadata' => $item->metadata,
                 'selector' => $item->selector,
                 'element_tag' => $item->element_tag,
                 'element_text' => $item->element_text,
@@ -148,6 +152,9 @@ class FeedbackController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
             'type' => ['nullable', 'string', 'in:bug,tweak,feature,copy'],
+            'route_name' => ['nullable', 'string', 'max:255'],
+            'controller_action' => ['nullable', 'string', 'max:255'],
+            'view_name' => ['nullable', 'string', 'max:255'],
             'selector' => ['nullable', 'string'],
             'element_tag' => ['nullable', 'string', 'max:50'],
             'element_text' => ['nullable', 'string'],
@@ -160,28 +167,29 @@ class FeedbackController extends Controller
 
         $path = parse_url($validated['path'], PHP_URL_PATH) ?: '/';
 
-        // Auto-detect Route and Controller action via router
-        $routeName = null;
-        $controllerAction = null;
-        $viewName = null;
+        $routeName = ! empty($validated['route_name']) ? (string) $validated['route_name'] : null;
+        $controllerAction = ! empty($validated['controller_action']) ? (string) $validated['controller_action'] : null;
+        $viewName = ! empty($validated['view_name']) ? (string) $validated['view_name'] : null;
 
-        try {
-            $fakeReq = Request::create($path, 'GET');
-            $route = app('router')->getRoutes()->match($fakeReq);
-            $routeName = $route->getName();
-            $controllerAction = $route->getActionName();
-
-            // Infer common Blade view paths based on route name
-            if ($routeName) {
-                $candidate = str_replace('.', '/', $routeName);
-                if (file_exists(resource_path("views/{$candidate}.blade.php"))) {
-                    $viewName = "resources/views/{$candidate}.blade.php";
-                } elseif (file_exists(resource_path("views/dashboard/{$candidate}.blade.php"))) {
-                    $viewName = "resources/views/dashboard/{$candidate}.blade.php";
+        // Auto-detect Route and Controller action via router if not passed from client
+        if (! $routeName || ! $controllerAction) {
+            try {
+                $fakeReq = Request::create($path, 'GET');
+                $route = app('router')->getRoutes()->match($fakeReq);
+                if (! $routeName) {
+                    $routeName = $route->getName();
                 }
+                if (! $controllerAction) {
+                    $controllerAction = $route->getActionName();
+                }
+            } catch (\Throwable) {
+                // Unmatched route or dynamic parameter error: safe fallback
             }
-        } catch (\Throwable) {
-            // Unmatched route or dynamic parameter error: safe fallback
+        }
+
+        // Infer Blade view template file if not passed from client
+        if (! $viewName) {
+            $viewName = $this->resolveViewFile($routeName, $controllerAction);
         }
 
         $user = $request->user();
@@ -411,5 +419,43 @@ class FeedbackController extends Controller
         }
 
         return redirect()->route('feedback.index')->with('status', 'Feedback item deleted.');
+    }
+
+    /**
+     * Infer the relative Blade view template path based on route name or controller action.
+     */
+    private function resolveViewFile(?string $routeName, ?string $controllerAction): ?string
+    {
+        if ($routeName) {
+            $candidate = str_replace('.', '/', $routeName);
+            if (file_exists(resource_path("views/{$candidate}.blade.php"))) {
+                return "resources/views/{$candidate}.blade.php";
+            }
+            if (file_exists(resource_path("views/dashboard/{$candidate}.blade.php"))) {
+                return "resources/views/dashboard/{$candidate}.blade.php";
+            }
+
+            // Check module views e.g. feedback.index -> modules/Feedback/resources/views/index.blade.php
+            $parts = explode('.', $routeName);
+            $moduleCandidate = ucfirst($parts[0]);
+            $viewCandidate = implode('/', array_slice($parts, 1)) ?: 'index';
+            $moduleViewPath = base_path("modules/{$moduleCandidate}/resources/views/{$viewCandidate}.blade.php");
+            if (file_exists($moduleViewPath)) {
+                return "modules/{$moduleCandidate}/resources/views/{$viewCandidate}.blade.php";
+            }
+        }
+
+        if ($controllerAction && str_contains($controllerAction, 'Modules\\')) {
+            if (preg_match('/Modules\\\\([^\\\\]+)\\\\Http\\\\Controllers\\\\([^@]+)Controller@(.*)/', $controllerAction, $matches)) {
+                $module = $matches[1];
+                $action = strtolower($matches[3]);
+                $moduleViewPath = base_path("modules/{$module}/resources/views/{$action}.blade.php");
+                if (file_exists($moduleViewPath)) {
+                    return "modules/{$module}/resources/views/{$action}.blade.php";
+                }
+            }
+        }
+
+        return null;
     }
 }

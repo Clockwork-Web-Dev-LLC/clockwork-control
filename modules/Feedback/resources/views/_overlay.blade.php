@@ -1,3 +1,21 @@
+@php
+    $currentPageView = app()->bound('feedback.page_view') ? app('feedback.page_view') : null;
+    $currentRouteName = Route::currentRouteName();
+    $currentRouteAction = Route::currentRouteAction();
+    $currentUrl = request()->fullUrl();
+    $currentPath = '/' . ltrim(request()->path(), '/');
+@endphp
+<script id="cw-feedback-server-context">
+    window.__CW_FEEDBACK_SERVER_CONTEXT__ = {
+        url: @json($currentUrl),
+        path: @json($currentPath),
+        routeName: @json($currentRouteName),
+        controllerAction: @json($currentRouteAction),
+        viewName: @json($currentPageView['name'] ?? null),
+        viewPath: @json($currentPageView['path'] ?? null),
+    };
+</script>
+
 <div id="cw-feedback-overlay-root" x-data="feedbackOverlay()" x-cloak class="cw-feedback-no-intercept select-none">
     <style>
         .cw-feedback-target-pulse {
@@ -19,24 +37,65 @@
          x-transition:leave="transition ease-in duration-100"
          x-transition:leave-start="opacity-100 scale-100"
          x-transition:leave-end="opacity-0 scale-95"
-         class="fixed z-50 min-w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl p-2 text-xs"
+         class="fixed z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl p-3 text-xs space-y-2.5 backdrop-blur-md"
          :style="'left: ' + contextMenu.x + 'px; top: ' + contextMenu.y + 'px;'"
          @click.stop>
+        
+        {{-- Location / Page Header Badge --}}
+        <div class="flex items-center justify-between gap-1.5 pb-2 border-b border-[var(--color-border-light)] text-[11px]">
+            <div class="flex items-center gap-1.5 font-semibold text-[var(--color-ink-strong)] truncate">
+                <i class="fa-solid fa-file-code text-[var(--color-brand)] text-xs"></i>
+                <span class="truncate" x-text="contextMenu.pagePath || '/'" :title="contextMenu.pageUrl"></span>
+            </div>
+            <template x-if="contextMenu.routeName">
+                <span class="px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] font-data text-[9px] text-[var(--color-ink-muted)] shrink-0 font-medium"
+                      x-text="contextMenu.routeName"
+                      title="Laravel Route Name"></span>
+            </template>
+        </div>
+
+        {{-- Inspected Target Context Card --}}
+        <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/80 border border-[var(--color-border-light)] space-y-1.5">
+            <div class="flex items-start gap-1.5 overflow-hidden">
+                <span class="px-1.5 py-0.5 rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)] font-data font-bold text-[9px] uppercase tracking-wider shrink-0 mt-0.5"
+                      x-text="'<' + contextMenu.tag + '>'"></span>
+                <span class="font-data text-[11px] text-[var(--color-ink-strong)] font-semibold truncate leading-tight mt-0.5"
+                      x-text="contextMenu.text ? '&quot;' + contextMenu.text + '&quot;' : contextMenu.selector"
+                      :title="contextMenu.text || contextMenu.selector"></span>
+            </div>
+
+            {{-- Nearest Section / Container Hint --}}
+            <template x-if="contextMenu.nearestHeading || contextMenu.containerSummary">
+                <div class="flex items-center gap-1.5 text-[10px] text-[var(--color-ink-muted)] truncate pt-1 border-t border-[var(--color-border-light)]/60">
+                    <i class="fa-solid fa-layer-group text-[9px] shrink-0 text-[var(--color-ink-soft)]"></i>
+                    <span class="truncate" x-text="(contextMenu.nearestHeading ? 'Section: ' + contextMenu.nearestHeading : '') + (contextMenu.nearestHeading && contextMenu.containerSummary ? ' · ' : '') + (contextMenu.containerSummary || '')"></span>
+                </div>
+            </template>
+
+            {{-- Hidden AI Code Anchor Status --}}
+            <div class="flex items-center justify-between text-[9px] text-[var(--color-ink-soft)] pt-1 border-t border-[var(--color-border-light)]/60">
+                <div class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>AI Anchor Ready</span>
+                </div>
+                <template x-if="contextMenu.viewPath">
+                    <span class="font-data truncate max-w-44 text-right opacity-80" x-text="contextMenu.viewPath.split('/').pop()" :title="contextMenu.viewPath"></span>
+                </template>
+            </div>
+        </div>
+
+        {{-- Primary Action Button --}}
         <button type="button"
                 @click="openNewFeedbackModal()"
-                class="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-[var(--color-brand)] hover:text-white text-[var(--color-ink-strong)] text-left transition-colors cursor-pointer group">
-            <div class="w-6 h-6 rounded-md bg-[var(--color-brand)]/15 group-hover:bg-white/20 text-[var(--color-brand)] group-hover:text-white flex items-center justify-center shrink-0 mt-0.5">
-                <i class="fa-solid fa-comment-dots text-xs"></i>
-            </div>
-            <div class="overflow-hidden">
-                <div class="font-semibold text-xs leading-tight">Leave Feedback Here</div>
-                <div class="text-[10px] opacity-75 font-data truncate mt-0.5" x-text="'&lt;' + contextMenu.tag + '&gt; ' + (contextMenu.text || contextMenu.selector)"></div>
-            </div>
+                class="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-[var(--color-brand)] hover:opacity-90 text-white font-semibold text-xs shadow-md transition-all cursor-pointer">
+            <i class="fa-solid fa-comment-dots text-xs"></i>
+            <span>Leave Feedback Here</span>
         </button>
 
-        <div class="mt-1 pt-1 border-t border-[var(--color-border-light)] flex items-center justify-between text-[10px] text-[var(--color-ink-muted)] px-2">
-            <span>Shift + Right-Click for browser menu</span>
-            <button type="button" @click="contextMenu.visible = false" class="hover:text-[var(--color-ink)] cursor-pointer">Esc</button>
+        {{-- Footer --}}
+        <div class="pt-1 border-t border-[var(--color-border-light)] flex items-center justify-between text-[10px] text-[var(--color-ink-muted)] px-0.5">
+            <span>Shift + Right-Click for native menu</span>
+            <button type="button" @click="contextMenu.visible = false" class="hover:text-[var(--color-ink-strong)] cursor-pointer">Esc</button>
         </div>
     </div>
 
@@ -108,12 +167,20 @@
 
         {{-- Thread Content (Scrollable) --}}
         <div class="p-4 overflow-y-auto space-y-4 flex-1">
-            {{-- Target Element Snippet --}}
-            <div class="p-2 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] flex items-start gap-2">
-                <i class="fa-solid fa-crosshairs text-[var(--color-brand)] text-[10px] mt-0.5 shrink-0"></i>
-                <div class="overflow-hidden">
-                    <span class="text-[10px] text-[var(--color-ink-muted)] uppercase tracking-wider font-semibold">Element:</span>
-                    <p class="font-data text-[11px] text-[var(--color-ink-strong)] truncate mt-0.5" x-text="activePin?.element_tag + (activePin?.element_text ? ': &quot;' + activePin.element_text + '&quot;' : (activePin?.selector || ''))"></p>
+            {{-- Target Element Snippet & Code Context --}}
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] space-y-1 text-xs">
+                <div class="flex items-center justify-between text-[10px] text-[var(--color-ink-muted)]">
+                    <div class="flex items-center gap-1.5 font-medium truncate">
+                        <i class="fa-solid fa-file-code text-[var(--color-brand)] text-[9px]"></i>
+                        <span class="truncate" x-text="activePin?.path || '/'"></span>
+                    </div>
+                    <template x-if="activePin?.route_name">
+                        <span class="px-1 py-0.2 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] font-data text-[9px] text-[var(--color-ink-soft)]" x-text="activePin?.route_name"></span>
+                    </template>
+                </div>
+                <div class="flex items-start gap-1.5 pt-1 border-t border-[var(--color-border-light)]/60">
+                    <span class="px-1 py-0.2 rounded bg-[var(--color-brand)]/15 text-[var(--color-brand)] font-data font-bold text-[9px] uppercase tracking-wider shrink-0 mt-0.5" x-text="'<' + (activePin?.element_tag || 'el') + '>'"></span>
+                    <p class="font-data text-[10px] text-[var(--color-ink-strong)] truncate leading-tight mt-0.5" x-text="activePin?.element_text ? '&quot;' + activePin.element_text + '&quot;' : (activePin?.selector || '')"></p>
                 </div>
             </div>
 
@@ -222,10 +289,54 @@
                 </button>
             </div>
 
-            {{-- Element context info --}}
-            <div class="p-2 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[11px] text-[var(--color-ink-muted)]">
-                <span class="font-semibold text-[var(--color-ink-strong)]">Target:</span>
-                <code class="font-data text-[10px]" x-text="'&lt;' + contextMenu.tag + '&gt; ' + (contextMenu.text ? '&quot;' + contextMenu.text + '&quot;' : contextMenu.selector)"></code>
+            {{-- Target & Code Location Context (AI Anchors) --}}
+            <div class="p-3 rounded-xl bg-[var(--color-surface-alt)]/90 border border-[var(--color-border-light)] space-y-2 text-[11px]">
+                <div class="flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-muted)]">
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-crosshairs text-[var(--color-brand)]"></i>
+                        <span>Inspected Location & AI Anchors</span>
+                    </span>
+                    <span class="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium font-data lowercase text-[10px]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>captured</span>
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                    <div class="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)]">
+                        <div class="text-[9px] uppercase tracking-wider text-[var(--color-ink-muted)] font-semibold">Page / Screen</div>
+                        <div class="font-data font-medium text-[var(--color-ink-strong)] truncate mt-0.5" x-text="contextMenu.pagePath || '/'" :title="contextMenu.pageUrl"></div>
+                    </div>
+                    <div class="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)]">
+                        <div class="text-[9px] uppercase tracking-wider text-[var(--color-ink-muted)] font-semibold">Route Name</div>
+                        <div class="font-data font-medium text-[var(--color-brand)] truncate mt-0.5" x-text="contextMenu.routeName || 'route.auto'" :title="contextMenu.routeName"></div>
+                    </div>
+                </div>
+
+                <template x-if="contextMenu.viewPath">
+                    <div class="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] text-[10px]">
+                        <div class="text-[9px] uppercase tracking-wider text-[var(--color-ink-muted)] font-semibold flex items-center justify-between">
+                            <span>Blade View File (AI Hint)</span>
+                            <i class="fa-solid fa-code text-[9px] text-[var(--color-brand)]"></i>
+                        </div>
+                        <div class="font-data text-[10px] text-[var(--color-ink-strong)] truncate mt-0.5" x-text="contextMenu.viewPath" :title="contextMenu.viewPath"></div>
+                    </div>
+                </template>
+
+                <div class="p-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] text-[10px]">
+                    <div class="flex items-center justify-between text-[9px] uppercase tracking-wider text-[var(--color-ink-muted)] font-semibold">
+                        <span>Target Element</span>
+                        <code class="font-data text-[9px] text-[var(--color-brand)]" x-text="'<' + contextMenu.tag + '>'"></code>
+                    </div>
+                    <div class="font-data text-[10px] text-[var(--color-ink-strong)] truncate mt-0.5"
+                         x-text="contextMenu.text ? '&quot;' + contextMenu.text + '&quot;' : contextMenu.selector"
+                         :title="contextMenu.text || contextMenu.selector"></div>
+                    <template x-if="contextMenu.nearestHeading">
+                        <div class="text-[9px] text-[var(--color-ink-muted)] mt-1 pt-1 border-t border-[var(--color-border-light)] truncate">
+                            <span class="font-semibold">Section:</span> <span x-text="contextMenu.nearestHeading"></span>
+                        </div>
+                    </template>
+                </div>
             </div>
 
             <form @submit.prevent="submitNewFeedback()" class="space-y-3">
