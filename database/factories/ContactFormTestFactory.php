@@ -15,10 +15,12 @@ class ContactFormTestFactory extends Factory
 
     public function definition(): array
     {
+        static $formId = 1;
+
         return [
             'site_id' => Site::factory(),
             'slot' => 1,
-            'form_id' => (string) $this->faker->numberBetween(1, 999),
+            'form_id' => (string) ($formId++),
             'form_plugin' => Site::CONTACT_FORM_PLUGIN_CF7,
             'frequency' => ContactFormTest::FREQUENCY_DAILY,
             'enabled' => true,
