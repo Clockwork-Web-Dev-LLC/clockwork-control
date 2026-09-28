@@ -3,10 +3,49 @@
 @section('title', 'Feedback & Backlog · Clockwork')
 
 @section('content')
-<div class="relative">
+<div class="relative" x-data="{
+    batchModalOpen: false,
+    batchLoading: false,
+    batchPromptText: '',
+    batchCount: {{ $stats['approved'] }},
+    batchCopied: false,
+    async openBatchModal() {
+        this.batchModalOpen = true;
+        this.batchLoading = true;
+        try {
+            const res = await fetch('{{ route('feedback.prompt.batch') }}', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            if (data.ok) {
+                this.batchPromptText = data.prompt;
+                this.batchCount = data.count;
+            } else {
+                this.batchPromptText = 'No approved feedback items found.';
+            }
+        } catch (e) {
+            this.batchPromptText = 'Failed to load batch prompt.';
+        } finally {
+            this.batchLoading = false;
+        }
+    },
+    copyBatchPrompt() {
+        if (!this.batchPromptText) return;
+        navigator.clipboard.writeText(this.batchPromptText).then(() => {
+            this.batchCopied = true;
+            setTimeout(() => this.batchCopied = false, 2500);
+        });
+    }
+}">
     <x-page-header title="Feedback & Backlog"
         subtitle="Visual in-app feedback, employee change requests, and threaded collaboration across Clockwork Control.">
         <x-slot:actions>
+            @if ($stats['approved'] > 0)
+                <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
+                   class="btn-primary inline-flex items-center gap-1.5 text-xs md:text-sm font-semibold"
+                   title="Download prompt for all approved items to paste into Claude">
+                    <i class="fa-solid fa-download"></i> <span>Download Claude Prompt ({{ $stats['approved'] }})</span>
+                </a>
+            @endif
+
             <a href="{{ route('feedback.index') }}"
                class="btn-pill-nav inline-flex items-center gap-1.5 text-xs md:text-sm"
                title="Refresh feedback backlog">
@@ -22,57 +61,124 @@
         </div>
     @endif
 
-    {{-- Stats Cards --}}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    {{-- Stats Cards (5 Pillars including Approved) --}}
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <a href="{{ route('feedback.index', ['status' => 'all']) }}"
-           class="card p-5 hover:border-[var(--color-brand)] transition-all cursor-pointer {{ $currentStatus === 'all' ? 'border-[var(--color-brand)] shadow-xs' : '' }}">
-            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Total Submissions</div>
-            <div class="text-3xl font-bold font-data text-[var(--color-ink-strong)]">{{ $stats['total'] }}</div>
-            <div class="text-xs text-[var(--color-ink-muted)] mt-1">all-time feedback</div>
+           class="card p-4 hover:border-[var(--color-brand)] transition-all cursor-pointer {{ $currentStatus === 'all' ? 'border-[var(--color-brand)] shadow-xs' : '' }}">
+            <div class="text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Total Submissions</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-[var(--color-ink-strong)]">{{ $stats['total'] }}</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">all-time feedback</div>
         </a>
 
         <a href="{{ route('feedback.index', ['status' => 'open']) }}"
-           class="card p-5 hover:border-amber-500 transition-all cursor-pointer {{ $currentStatus === 'open' ? 'border-amber-500 shadow-xs' : '' }}">
-            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Open Issues</div>
-            <div class="text-3xl font-bold font-data text-amber-500">{{ $stats['open'] }}</div>
-            <div class="text-xs text-[var(--color-ink-muted)] mt-1">awaiting review</div>
+           class="card p-4 hover:border-amber-500 transition-all cursor-pointer {{ $currentStatus === 'open' ? 'border-amber-500 shadow-xs' : '' }}">
+            <div class="text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Open Issues</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-amber-500">{{ $stats['open'] }}</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">awaiting review</div>
+        </a>
+
+        <a href="{{ route('feedback.index', ['status' => 'approved']) }}"
+           class="card p-4 hover:border-emerald-500 transition-all cursor-pointer {{ $currentStatus === 'approved' ? 'border-emerald-500 shadow-xs ring-1 ring-emerald-500/20' : '' }}">
+            <div class="text-[11px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold mb-1 flex items-center gap-1">
+                <i class="fa-solid fa-check-circle text-[10px]"></i> Approved
+            </div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-emerald-600 dark:text-emerald-400">{{ $stats['approved'] }}</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">ready for Claude prompt</div>
         </a>
 
         <a href="{{ route('feedback.index', ['status' => 'in_progress']) }}"
-           class="card p-5 hover:border-blue-500 transition-all cursor-pointer {{ $currentStatus === 'in_progress' ? 'border-blue-500 shadow-xs' : '' }}">
-            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">In Progress</div>
-            <div class="text-3xl font-bold font-data text-blue-500">{{ $stats['in_progress'] }}</div>
-            <div class="text-xs text-[var(--color-ink-muted)] mt-1">under development</div>
+           class="card p-4 hover:border-blue-500 transition-all cursor-pointer {{ $currentStatus === 'in_progress' ? 'border-blue-500 shadow-xs' : '' }}">
+            <div class="text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">In Progress</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-blue-500">{{ $stats['in_progress'] }}</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">under development</div>
         </a>
 
         <a href="{{ route('feedback.index', ['status' => 'resolved']) }}"
-           class="card p-5 hover:border-[var(--color-status-green)] transition-all cursor-pointer {{ $currentStatus === 'resolved' ? 'border-[var(--color-status-green)] shadow-xs' : '' }}">
-            <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Resolved</div>
-            <div class="text-3xl font-bold font-data text-[var(--color-status-green)]">{{ $stats['resolved'] }}</div>
-            <div class="text-xs text-[var(--color-ink-muted)] mt-1">completed & closed</div>
+           class="card p-4 hover:border-[var(--color-status-green)] transition-all cursor-pointer {{ $currentStatus === 'resolved' ? 'border-[var(--color-status-green)] shadow-xs' : '' }}">
+            <div class="text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Resolved</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-[var(--color-status-green)]">{{ $stats['resolved'] }}</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">completed & closed</div>
         </a>
     </div>
+
+    {{-- Approved Implementation Batch Banner --}}
+    @if ($stats['approved'] > 0)
+        <div class="card p-5 mb-6 border-emerald-500/40 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent relative overflow-hidden">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-display font-bold text-sm text-[var(--color-ink-strong)]">
+                                Claude Implementation Batch: {{ $stats['approved'] }} Approved {{ \Illuminate\Support\Str::plural('Item', $stats['approved']) }}
+                            </h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                Ready
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--color-ink-muted)] mt-1 max-w-2xl leading-relaxed">
+                            These items have been reviewed and approved. Download the complete batch prompt file or copy it directly into Claude/Grok to implement all requested features and bug fixes with complete code and DOM context.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                    {{-- Copy Batch Prompt Button --}}
+                    <button type="button"
+                            @click="openBatchModal()"
+                            class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium hover:border-[var(--color-brand)]">
+                        <i class="fa-solid fa-eye text-[11px]"></i>
+                        <span>Preview & Copy</span>
+                    </button>
+
+                    {{-- Download Prompt File (.md) --}}
+                    <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
+                       class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold shadow-xs">
+                        <i class="fa-solid fa-download text-[11px]"></i>
+                        <span>Download Prompt (.md)</span>
+                    </a>
+
+                    {{-- Mark In Progress --}}
+                    <form method="POST" action="{{ route('feedback.prompt.mark-in-progress') }}" class="inline" onsubmit="return confirm('Mark all {{ $stats['approved'] }} approved items as In Progress?');">
+                        @csrf
+                        <button type="submit"
+                                class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 border-blue-500/30"
+                                title="Move approved items to In Progress once you have handed them to Claude">
+                            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            <span>Mark in Progress</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- Filter & Search Toolbar --}}
     <div class="card p-4 mb-6">
         <form method="GET" action="{{ route('feedback.index') }}" class="flex flex-wrap items-center gap-3">
             {{-- Status Tabs --}}
-            <div class="flex items-center gap-1 text-xs">
+            <div class="flex items-center gap-1 text-xs flex-wrap">
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'active'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'active' ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
                     Active
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'open'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'open' ? 'bg-amber-500 text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
-                    Open
+                    Open ({{ $stats['open'] }})
+                </a>
+                <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'approved'])) }}"
+                   class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'approved' ? 'bg-emerald-600 text-white' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10' }}">
+                    Approved ({{ $stats['approved'] }})
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'in_progress'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'in_progress' ? 'bg-blue-500 text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
-                    In Progress
+                    In Progress ({{ $stats['in_progress'] }})
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'resolved'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'resolved' ? 'bg-[var(--color-status-green)] text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
-                    Resolved
+                    Resolved ({{ $stats['resolved'] }})
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'all'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'all' ? 'bg-[var(--color-surface-alt)] font-bold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
@@ -198,7 +304,7 @@
 
                     {{-- Thread Discussion & Bottom Actions --}}
                     <div class="pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             {{-- Thread Discussion Accordion Button --}}
                             <button type="button"
                                     @click="expanded = !expanded"
@@ -216,7 +322,23 @@
                                 <i class="fa-solid fa-location-dot text-[10px]"></i> View Pin
                             </a>
 
-                            {{-- One-Click Copy Claude Prompt Button --}}
+                            {{-- 1-Click Approve Button --}}
+                            @if ($item->status !== 'approved')
+                                <form method="POST" action="{{ route('feedback.approve', $item) }}" class="inline">
+                                    @csrf
+                                    <button type="submit"
+                                            class="btn-pill-nav text-xs py-1 px-2.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1.5 cursor-pointer font-semibold"
+                                            title="Mark as Approved for the next Claude implementation batch">
+                                        <i class="fa-solid fa-check text-[10px]"></i> Approve
+                                    </button>
+                                </form>
+                            @else
+                                <span class="px-2.5 py-1 rounded-full text-xs font-semibold font-data bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> Approved
+                                </span>
+                            @endif
+
+                            {{-- Copy Claude Prompt Button --}}
                             <button type="button"
                                     @click="
                                         navigator.clipboard.writeText(@js($item->toClaudePrompt())).then(() => {
@@ -224,10 +346,18 @@
                                             setTimeout(() => promptCopied = false, 2500);
                                         });
                                     "
-                                    class="btn-primary text-xs py-1 px-3 flex items-center gap-1.5 cursor-pointer">
+                                    class="btn-primary text-xs py-1 px-2.5 flex items-center gap-1.5 cursor-pointer">
                                 <i class="fa-solid" :class="promptCopied ? 'fa-check text-emerald-300' : 'fa-wand-magic-sparkles'"></i>
-                                <span x-text="promptCopied ? 'Copied Prompt!' : 'Copy Claude Prompt'"></span>
+                                <span x-text="promptCopied ? 'Copied!' : 'Copy Claude Prompt'"></span>
                             </button>
+
+                            {{-- Download Single Item .md --}}
+                            <a href="{{ route('feedback.prompt.download', ['id' => $item->id]) }}"
+                               class="btn-pill-nav text-xs py-1 px-2 text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] flex items-center gap-1 cursor-pointer"
+                               title="Download markdown prompt for this item">
+                                <i class="fa-solid fa-download text-[10px]"></i>
+                                <span>.md</span>
+                            </a>
                         </div>
 
                         {{-- Quick Status Changer & Delete --}}
@@ -237,6 +367,7 @@
                                 @method('PATCH')
                                 <select name="status" onchange="this.form.submit()" class="text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-1 px-2 text-[var(--color-ink-strong)] font-data cursor-pointer focus:outline-none focus:border-[var(--color-brand)]">
                                     <option value="open" {{ $item->status === 'open' ? 'selected' : '' }}>Open</option>
+                                    <option value="approved" {{ $item->status === 'approved' ? 'selected' : '' }}>Approved</option>
                                     <option value="in_progress" {{ $item->status === 'in_progress' ? 'selected' : '' }}>In Progress</option>
                                     <option value="resolved" {{ $item->status === 'resolved' ? 'selected' : '' }}>Resolved</option>
                                     <option value="dismissed" {{ $item->status === 'dismissed' ? 'selected' : '' }}>Dismissed</option>
@@ -306,5 +437,77 @@
             {{ $items->links() }}
         </div>
     @endif
+
+    {{-- Batch Prompt Modal --}}
+    <div x-show="batchModalOpen"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs text-xs"
+         @click.self="batchModalOpen = false"
+         x-cloak>
+        <div class="card p-6 max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl relative bg-[var(--color-surface)] border border-[var(--color-border)] space-y-4"
+             @click.stop>
+            <div class="flex items-start justify-between shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">Claude Implementation Batch Prompt</h3>
+                        <p class="text-[11px] text-[var(--color-ink-muted)]">
+                            Bundling <span x-text="batchCount"></span> approved feedback and feature request item(s).
+                        </p>
+                    </div>
+                </div>
+                <button type="button" @click="batchModalOpen = false" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] p-1 cursor-pointer">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            {{-- Textarea with generated prompt --}}
+            <div class="flex-1 overflow-hidden flex flex-col">
+                <template x-if="batchLoading">
+                    <div class="p-12 text-center text-[var(--color-ink-muted)]">
+                        <i class="fa-solid fa-spinner fa-spin text-xl mb-2 text-[var(--color-brand)]"></i>
+                        <p>Compiling prompt for approved items…</p>
+                    </div>
+                </template>
+
+                <template x-if="!batchLoading">
+                    <textarea
+                        x-model="batchPromptText"
+                        readonly
+                        class="w-full h-80 font-mono text-[11px] p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] focus:outline-none resize-none leading-relaxed"
+                    ></textarea>
+                </template>
+            </div>
+
+            {{-- Modal Actions --}}
+            <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border-light)] shrink-0">
+                <span class="text-[11px] text-[var(--color-ink-muted)]">
+                    Paste directly into Claude (or Antigravity) to implement changes.
+                </span>
+
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
+                       class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium">
+                        <i class="fa-solid fa-download text-[11px]"></i>
+                        <span>Download .md</span>
+                    </a>
+
+                    <button type="button"
+                            @click="copyBatchPrompt()"
+                            class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold">
+                        <i class="fa-solid" :class="batchCopied ? 'fa-check text-emerald-300' : 'fa-copy'"></i>
+                        <span x-text="batchCopied ? 'Copied to Clipboard!' : 'Copy Entire Prompt'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection

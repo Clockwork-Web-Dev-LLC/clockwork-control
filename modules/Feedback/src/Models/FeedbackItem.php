@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Modules\Feedback\Services\FeedbackPromptBuilder;
 
 /**
  * @property int $id
@@ -46,6 +47,8 @@ class FeedbackItem extends Model
     public const TYPE_COPY = 'copy';
 
     public const STATUS_OPEN = 'open';
+
+    public const STATUS_APPROVED = 'approved';
 
     public const STATUS_IN_PROGRESS = 'in_progress';
 
@@ -121,7 +124,21 @@ class FeedbackItem extends Model
      */
     public function scopeActive(Builder $query): Builder
     {
-        return $query->whereIn('status', [self::STATUS_OPEN, self::STATUS_IN_PROGRESS]);
+        return $query->whereIn('status', [self::STATUS_OPEN, self::STATUS_APPROVED, self::STATUS_IN_PROGRESS]);
+    }
+
+    /**
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeApproved(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_APPROVED);
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
     }
 
     public function formattedType(): string
@@ -148,6 +165,7 @@ class FeedbackItem extends Model
     {
         return match ($this->status) {
             self::STATUS_RESOLVED => 'bg-[var(--color-status-green)]/15 text-[var(--color-status-green)] border border-[var(--color-status-green)]/30',
+            self::STATUS_APPROVED => 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
             self::STATUS_IN_PROGRESS => 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30',
             self::STATUS_DISMISSED => 'bg-[var(--color-ink-soft)]/15 text-[var(--color-ink-muted)] border border-[var(--color-border-light)]',
             default => 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
@@ -160,64 +178,6 @@ class FeedbackItem extends Model
      */
     public function toClaudePrompt(): string
     {
-        $prompt = "## Task: Address feedback reported on Clockwork Control\n\n";
-
-        $authorName = $this->user ? $this->user->name : 'Team Member';
-        $authorEmail = $this->user ? $this->user->email : 'unknown';
-        $prompt .= "- **Reported by**: {$authorName} ({$authorEmail})\n";
-        $prompt .= '- **Category**: '.$this->formattedType()."\n";
-        $prompt .= '- **Status**: '.ucfirst($this->status)."\n";
-        $prompt .= '- **Date**: '.$this->created_at->format('M j, Y g:i A')."\n";
-        $prompt .= '- **Title**: '.$this->title."\n";
-        $prompt .= '- **Description**: '.$this->content."\n\n";
-
-        if ($this->comments->isNotEmpty()) {
-            $prompt .= "### Discussion Thread\n";
-            foreach ($this->comments as $comment) {
-                $author = $comment->user ? $comment->user->name : 'Team Member';
-                $time = $comment->created_at->format('M j, g:i A');
-                $prompt .= "- **{$author}** ({$time}): \"{$comment->content}\"\n";
-            }
-            $prompt .= "\n";
-        }
-
-        $prompt .= "### Page & Code Context\n";
-        $prompt .= '- **URL**: '.$this->url."\n";
-        if ($this->route_name) {
-            $prompt .= '- **Route**: '.$this->route_name."\n";
-        }
-        if ($this->controller_action) {
-            $prompt .= '- **Controller Action**: '.$this->controller_action."\n";
-        }
-        if ($this->view_name) {
-            $prompt .= '- **Blade Template**: '.$this->view_name."\n";
-        }
-        if ($this->selector) {
-            $prompt .= '- **Target Element Selector**: `'.$this->selector."`\n";
-        }
-        if ($this->element_text) {
-            $prompt .= '- **Element Text Snippet**: "'.addcslashes($this->element_text, '"')."\"\n";
-        }
-        if ($this->viewport_width && $this->viewport_height) {
-            $prompt .= "- **Viewport Dimensions**: {$this->viewport_width}x{$this->viewport_height}\n";
-        }
-        if (is_array($this->metadata)) {
-            if (! empty($this->metadata['theme'])) {
-                $prompt .= '- **Theme Mode**: '.$this->metadata['theme']."\n";
-            }
-            if (! empty($this->metadata['site_id'])) {
-                $prompt .= '- **Site ID**: '.$this->metadata['site_id']."\n";
-            }
-            if (! empty($this->metadata['server_id'])) {
-                $prompt .= '- **Server ID**: '.$this->metadata['server_id']."\n";
-            }
-        }
-
-        $prompt .= "\n### Implementation Instructions\n";
-        $prompt .= "1. Inspect the relevant Blade view or controller action identified above.\n";
-        $prompt .= "2. Address the issue or requested change according to the user report and any discussion thread consensus.\n";
-        $prompt .= "3. Adhere to Clockwork design guidelines: maintain CSS tokens/variables, avoid adding Tailwind utility classes, ensure dark/light mode compatibility, and run `composer check` and Pest tests to verify.\n";
-
-        return $prompt;
+        return (new FeedbackPromptBuilder)->buildForSingle($this);
     }
 }

@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\Feedback\Models\FeedbackComment;
 use Modules\Feedback\Models\FeedbackItem;
+use Modules\Feedback\Services\FeedbackPromptBuilder;
+use Symfony\Component\HttpFoundation\Response;
 
 class FeedbackController extends Controller
 {
@@ -22,8 +24,8 @@ class FeedbackController extends Controller
         // Filter by status tab (default: active if not specified)
         $status = $request->input('status', 'active');
         if ($status === 'active') {
-            $query->whereIn('status', [FeedbackItem::STATUS_OPEN, FeedbackItem::STATUS_IN_PROGRESS]);
-        } elseif (in_array($status, [FeedbackItem::STATUS_OPEN, FeedbackItem::STATUS_IN_PROGRESS, FeedbackItem::STATUS_RESOLVED, FeedbackItem::STATUS_DISMISSED], true)) {
+            $query->whereIn('status', [FeedbackItem::STATUS_OPEN, FeedbackItem::STATUS_APPROVED, FeedbackItem::STATUS_IN_PROGRESS]);
+        } elseif (in_array($status, [FeedbackItem::STATUS_OPEN, FeedbackItem::STATUS_APPROVED, FeedbackItem::STATUS_IN_PROGRESS, FeedbackItem::STATUS_RESOLVED, FeedbackItem::STATUS_DISMISSED], true)) {
             $query->where('status', $status);
         }
 
@@ -58,6 +60,7 @@ class FeedbackController extends Controller
         $stats = [
             'total' => FeedbackItem::count(),
             'open' => FeedbackItem::where('status', FeedbackItem::STATUS_OPEN)->count(),
+            'approved' => FeedbackItem::where('status', FeedbackItem::STATUS_APPROVED)->count(),
             'in_progress' => FeedbackItem::where('status', FeedbackItem::STATUS_IN_PROGRESS)->count(),
             'resolved' => FeedbackItem::where('status', FeedbackItem::STATUS_RESOLVED)->count(),
         ];
@@ -262,7 +265,7 @@ class FeedbackController extends Controller
     public function update(Request $request, FeedbackItem $feedback): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
-            'status' => ['nullable', 'string', 'in:open,in_progress,resolved,dismissed'],
+            'status' => ['nullable', 'string', 'in:open,approved,in_progress,resolved,dismissed'],
             'type' => ['nullable', 'string', 'in:bug,tweak,feature,copy'],
             'title' => ['nullable', 'string', 'max:255'],
             'content' => ['nullable', 'string'],
@@ -283,6 +286,25 @@ class FeedbackController extends Controller
     }
 
     /**
+     * Quick-approve a feedback item for implementation.
+     */
+    public function approve(Request $request, FeedbackItem $feedback): JsonResponse|RedirectResponse
+    {
+        $feedback->update(['status' => FeedbackItem::STATUS_APPROVED]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'status' => FeedbackItem::STATUS_APPROVED,
+                'status_class' => $feedback->statusBadgeClass(),
+                'message' => 'Feedback item approved for Claude implementation.',
+            ]);
+        }
+
+        return back()->with('status', 'Feedback item approved for Claude implementation.');
+    }
+
+    /**
      * Return formatted Claude prompt for an item.
      */
     public function claudePrompt(FeedbackItem $feedback): JsonResponse
@@ -293,6 +315,85 @@ class FeedbackController extends Controller
             'ok' => true,
             'prompt' => $feedback->toClaudePrompt(),
         ]);
+    }
+
+    /**
+     * Get compiled batch prompt for all approved feedback items.
+     */
+    public function batchPrompt(FeedbackPromptBuilder $builder): JsonResponse
+    {
+        $items = FeedbackItem::query()
+            ->where('status', FeedbackItem::STATUS_APPROVED)
+            ->with(['user', 'comments.user'])
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return response()->json([
+                'ok' => false,
+                'count' => 0,
+                'message' => 'No approved feedback items found to bundle.',
+                'prompt' => '',
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'count' => $items->count(),
+            'prompt' => $builder->buildForBatch($items),
+            'ids' => $items->pluck('id'),
+        ]);
+    }
+
+    /**
+     * Download structured markdown prompt file directly to the browser.
+     */
+    public function downloadPrompt(Request $request, FeedbackPromptBuilder $builder): Response|RedirectResponse
+    {
+        if ($id = $request->input('id')) {
+            $item = FeedbackItem::with(['user', 'comments.user'])->findOrFail((int) $id);
+            $prompt = $builder->buildForSingle($item);
+            $filename = "clockwork-feedback-item-{$item->id}-".now()->format('Y-m-d').'.md';
+        } else {
+            $status = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+            $items = FeedbackItem::query()
+                ->where('status', $status)
+                ->with(['user', 'comments.user'])
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($items->isEmpty()) {
+                return back()->with('status', "No items found with status '{$status}' to download.");
+            }
+
+            $prompt = $builder->buildForBatch($items);
+            $filename = "clockwork-claude-{$status}-prompt-".now()->format('Y-m-d').'.md';
+        }
+
+        return response()->streamDownload(function () use ($prompt) {
+            echo $prompt;
+        }, $filename, [
+            'Content-Type' => 'text/markdown; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * Mark all currently approved items as in_progress once handed off to Claude.
+     */
+    public function markApprovedInProgress(Request $request): JsonResponse|RedirectResponse
+    {
+        $count = FeedbackItem::where('status', FeedbackItem::STATUS_APPROVED)->count();
+        FeedbackItem::where('status', FeedbackItem::STATUS_APPROVED)->update(['status' => FeedbackItem::STATUS_IN_PROGRESS]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'count' => $count,
+                'message' => "Marked {$count} approved items as In Progress.",
+            ]);
+        }
+
+        return back()->with('status', "Marked {$count} approved items as In Progress.");
     }
 
     /**

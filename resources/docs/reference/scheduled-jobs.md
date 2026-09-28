@@ -131,6 +131,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 06:40 | `clockwork:pull-backup-relay-report` | External-agent mode only: reads the backup-relay droplet's last run summary back from S3 and records it into `backup_relay_runs`. Also alerts if no run has completed within 6 days. See [Features → Backup relay](/docs/features/backup-relay). |
 | 06:45 | `clockwork:push-update-exceptions` | Daily catch-up sync for update exceptions (paused auto-updates). Pushes active exceptions to Companion and Renegade. |
 | 07:15 | `clockwork:check-robots-txt` | Check root `/robots.txt` across monitored sites to detect accidental crawler disallow directives. |
+| 09:00 | `clockwork:feedback-prompt` | Compile approved feedback into a master Claude implementation prompt at `storage/app/prompts/latest-feedback-prompt.md`, via `FeedbackServiceProvider::scheduledTasks()`. |
 
 
 ## Weekly

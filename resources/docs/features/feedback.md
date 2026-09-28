@@ -27,44 +27,42 @@ When the Feedback module is enabled, an unobtrusive floating widget appears in t
   * User Agent string
 * **Visual Number Badges**: Placed feedback items render as circular numbered badges (`1`, `2`, `3`...) anchored at their exact coordinates on the live page. Clicking a pin opens its discussion card inline.
 
-### 2. Threaded Discussions
+### 2. Threaded Discussions & Approval Workflow
 
 Every feedback item supports back-and-forth discussion threads:
 
 * Team members can reply to items to ask clarifying questions, propose alternative implementations, or confirm fixes.
-* Status tracking: Items transition between **Open**, **In Progress**, and **Resolved**.
+* **Approval State**: Operators can mark items as **Approved** with a single click (`POST /feedback/{id}/approve`). Approved items are queued for the next Claude implementation batch.
+* Status tracking: Items transition between **Open**, **Approved**, **In Progress**, **Resolved**, and **Dismissed**.
 * Operators can mark feedback resolved directly from the live page overlay or the central triage dashboard.
 
 ### 3. Central Working List (`/feedback`)
 
 The working list at **`/feedback`** aggregates all feedback across the application:
 
-* Filterable by status (Open, In Progress, Resolved) and by page/route.
+* Filterable by status (Open, Approved, In Progress, Resolved) and by page/route.
 * Shows submitter, timestamp, target page, and comment excerpt.
 * Direct link back to the target page to view the pin in its live context.
 * Detail view with the full threaded discussion history.
+* 1-click **Approve** button on every open issue.
 
-### 4. Claude / AI Prompt Generator
+### 4. Claude / AI Batch Prompt Generator & Scheduled Exports
 
-Each feedback item includes an automatic **Generate Claude Prompt** action. Clicking this formats a complete, structured prompt ready to copy and paste into Claude or Grok:
+Each feedback item includes an automatic **Generate Claude Prompt** action. Furthermore, all currently approved items are automatically bundled into an **Implementation Batch**:
+
+* **One-Click Copy**: Copy the entire aggregated master prompt for all approved items to clipboard.
+* **Direct File Download (`.md`)**: Download `clockwork-claude-approved-prompt-YYYY-MM-DD.md` straight from the browser (or download an individual item's markdown file).
+* **Batch State Advancement**: Clicking "Mark in Progress" immediately moves all approved items to `in_progress` once handed off to Claude.
+* **Scheduled Generation (`clockwork:feedback-prompt`)**: The scheduler automatically runs `clockwork:feedback-prompt` daily at 09:00 UTC, compiling all approved items into `storage/app/prompts/latest-feedback-prompt.md`.
 
 ```markdown
-### Bug Report / Feature Request
-- **Page URL**: /monitoring
-- **Selector**: #fleet-metrics-table
-- **Reported By**: Employee Name
-- **Description**: Add pagination with 50 items per page default and an options drawer.
+# Task: Implement Approved Feedback & Feature Requests
 
-### Context & Technical Specs
-- **Viewport**: 1920x1080
-- **User Agent**: Mozilla/5.0 ...
+The following 4 feedback items have been reviewed, discussed, and Approved...
 
-### Discussion History
-- [2026-09-28 14:15] Employee: "Can we have an options tab like WordPress?"
-- [2026-09-28 14:20] Aaron: "Yes, option A with live page count."
-
-### Instructions for Claude
-Please implement the requested changes in the codebase...
+## Executive Summary & Batch Breakdown
+- Total Approved Tasks: 4 (2 Bugs, 1 Tweak, 1 Feature)
+...
 ```
 
 This eliminates the back-and-forth ambiguity between team member feedback and developer implementation.

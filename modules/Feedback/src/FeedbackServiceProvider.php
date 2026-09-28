@@ -2,9 +2,11 @@
 
 namespace Modules\Feedback;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Feedback\Console\Commands\GenerateFeedbackPromptCommand;
 
 class FeedbackServiceProvider extends ModuleServiceProvider
 {
@@ -13,8 +15,24 @@ class FeedbackServiceProvider extends ModuleServiceProvider
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'feedback');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                GenerateFeedbackPromptCommand::class,
+            ]);
+        }
+
         if ($this->enabled()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
+    }
+
+    public function scheduledTasks(Schedule $schedule): void
+    {
+        if ($this->enabled()) {
+            $schedule->command('clockwork:feedback-prompt')
+                ->dailyAt('09:00')
+                ->withoutOverlapping()
+                ->onOneServer();
         }
     }
 

@@ -51,6 +51,7 @@
                     <div class="w-6 h-6 rounded-full shadow-lg flex items-center justify-center font-data font-bold text-[11px] ring-2 ring-white dark:ring-black text-white"
                          :class="{
                              'bg-amber-500': pin.status === 'open',
+                             'bg-emerald-600': pin.status === 'approved',
                              'bg-blue-500': pin.status === 'in_progress',
                              'bg-emerald-500': pin.status === 'resolved',
                              'bg-neutral-500': pin.status === 'dismissed'
@@ -79,6 +80,20 @@
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-data" :class="activePin?.type_class" x-text="activePin?.type_label"></span>
             </div>
             <div class="flex items-center gap-1.5">
+                <template x-if="activePin?.status !== 'approved'">
+                    <button type="button"
+                            @click="updateStatus('approved')"
+                            class="btn-pill-nav text-[11px] py-0.5 px-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1 cursor-pointer font-medium"
+                            title="Approve for Claude implementation">
+                        <i class="fa-solid fa-check text-[10px]"></i> Approve
+                    </button>
+                </template>
+                <template x-if="activePin?.status === 'approved'">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                        <i class="fa-solid fa-circle-check text-[9px]"></i> Approved
+                    </span>
+                </template>
+
                 <button type="button"
                         @click="copyClaudePrompt()"
                         class="btn-pill-nav text-[11px] py-0.5 px-2 text-[var(--color-brand)] hover:bg-[var(--color-brand)] hover:text-white flex items-center gap-1 cursor-pointer"
@@ -124,6 +139,7 @@
                         @change="updateStatus($event.target.value)"
                         class="text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-1 px-2 text-[var(--color-ink-strong)] font-data cursor-pointer focus:outline-none focus:border-[var(--color-brand)]">
                     <option value="open">Open</option>
+                    <option value="approved">Approved</option>
                     <option value="in_progress">In Progress</option>
                     <option value="resolved">Resolved</option>
                     <option value="dismissed">Dismissed</option>
