@@ -17,6 +17,7 @@ use Modules\CommentModeration\CommentModerationServiceProvider;
 use Modules\ContactForms\ContactFormsServiceProvider;
 use Modules\Core\CoreServiceProvider;
 use Modules\DigitalOcean\DigitalOceanServiceProvider;
+use Modules\Feedback\FeedbackServiceProvider;
 use Modules\Gatekeeper\GatekeeperServiceProvider;
 use Modules\GridPane\GridPaneServiceProvider;
 use Modules\GTmetrix\GTmetrixServiceProvider;
@@ -77,9 +78,10 @@ return [
     SucuriServiceProvider::class,
     LlarServiceProvider::class,
     GatekeeperServiceProvider::class,
-    // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay)
+    // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay, in-app visual feedback)
     ContactFormsServiceProvider::class,
     BackupRelayServiceProvider::class,
+    FeedbackServiceProvider::class,
     // Authentication modules — each contributes an AuthProvider implementation
     // to ModuleRegistry for dynamic sign-in on /login and /setup.
     GoogleAuthServiceProvider::class,

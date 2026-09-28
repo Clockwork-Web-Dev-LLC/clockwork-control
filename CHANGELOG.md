@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Visual Feedback & In-App Collaboration Module (`modules/Feedback`)**:
+  - Built a first-class, toggleable feedback module enabling operators and team members to right-click any UI element across the control panel to create contextual notes and bug reports.
+  - Automatically captures deep technical context in the background: route name, controller action, target Blade view, CSS selector path, HTML tag, element text snippet, viewport dimensions, user info, and theme mode.
+  - Placed interactive numbered visual pins (`①`, `②`, `③`) directly on live screens over target elements, with an Atarim-style popover supporting threaded back-and-forth discussions, replies, status changes (`Open`, `In Progress`, `Resolved`, `Dismissed`), and element pulsing highlights.
+  - Built a centralized **Feedback Backlog** dashboard at `/feedback` with metric counters (Total, Open, In Progress, Resolved), category and route filters, search, inline reply threads, direct "Jump to Pin" navigation, and status toggling.
+  - Added a one-click **"Copy Claude Prompt"** generator on both the live popover and backlog cards that produces a complete, copy-paste-ready Markdown prompt containing user reports, full discussion transcripts, and exact code locations for instant implementation in Claude or Antigravity.
+  - Full module lifecycle gating: toggleable in `/settings/modules`. When disabled, zero overlay markup, zero right-click interceptors, zero API polls, and no navigation items are loaded.
 - **Monitoring Screen Options & Table Pagination**:
   - Added a WordPress-style "Screen Options" pull-down drawer to the `/monitoring` dashboard, enabling operators to customize table pagination (default: 50 items per page, presets for 25, 50, 100, All, or custom numeric entry), persisted in `localStorage` (`cw_monitoring_per_page`).
   - Added interactive table pagination controls (Previous, Next, page number windowing, and status indicators) integrated with real-time client-side search filtering.

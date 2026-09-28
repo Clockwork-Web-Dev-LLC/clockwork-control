@@ -1,0 +1,10 @@
+{
+  "id": "feedback",
+  "name": "Feedback",
+  "version": "1.0.0",
+  "description": "In-app visual feedback, live pin annotations, threaded team discussions, and one-click Claude prompt generation.",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["feedback"],
+  "namespace": "Modules\\Feedback"
+}

@@ -268,7 +268,8 @@
             "Modules\\SiteMaintenance\\": "modules/SiteMaintenance/src/",
             "Modules\\ClientManagement\\": "modules/ClientManagement/src/",
             "Modules\\ClientManagement\\Database\\Factories\\": "modules/ClientManagement/database/factories/",
-            "Modules\\ClientReports\\": "modules/ClientReports/src/"
+            "Modules\\ClientReports\\": "modules/ClientReports/src/",
+            "Modules\\Feedback\\": "modules/Feedback/src/"
         }
     },
     "autoload-dev": {

@@ -772,5 +772,9 @@
     </div>
     {{-- Global Confirmation & Prompt Modal --}}
     <x-confirm-modal />
+
+    @if (auth()->check() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
+        @include('feedback::_overlay')
+    @endif
 </body>
 </html>
