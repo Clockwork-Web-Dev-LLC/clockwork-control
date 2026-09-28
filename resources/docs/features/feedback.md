@@ -19,13 +19,13 @@ Instead of maintaining disjointed spreadsheets or Slack threads where employees 
 When the Feedback module is enabled, an unobtrusive floating widget appears in the lower-right corner of the application:
 
 * **Mode Toggle**: Clicking the pill toggles Feedback mode (`ON` / `OFF`).
-* **Pin Placement**: When active, right-clicking (or regular clicking in pinning mode) anywhere on any page captures:
-  * Exact click coordinates (`pageX`, `pageY`, relative percentage)
-  * Target DOM selector path (e.g. `main > div:nth-child(2) > table`)
-  * Current page URL and route
-  * Browser viewport dimensions and screen resolution
-  * User Agent string
-* **Visual Number Badges**: Placed feedback items render as circular numbered badges (`1`, `2`, `3`...) anchored at their exact coordinates on the live page. Clicking a pin opens its discussion card inline.
+* **Pin Placement & Right-Click Inspection**: Right-clicking anywhere on any page brings up an in-app context menu displaying:
+  * Current page path and route name (e.g. `feedback.index`, `monitoring.index`)
+  * Target element tag and text snippet (e.g. `<DIV> "Total Submissions"`)
+  * Nearest section heading and parent container (e.g. `Section: Feedback & Backlog · Card Container`)
+  * Blade view template file hint (e.g. `modules/Feedback/resources/views/index.blade.php`)
+  * Exact click coordinates, CSS selector path, viewport dimensions, and user agent
+* **Visual Number Badges**: Placed feedback items render as circular numbered badges (`①`, `②`, `③`...) anchored dynamically to the target DOM element's bounding rect on the live page. Clicking a pin opens its discussion drawer inline.
 
 ### 2. Threaded Discussions & Approval Workflow
 
