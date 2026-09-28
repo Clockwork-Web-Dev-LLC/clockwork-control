@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\UsersSettingsController;
 use App\Models\ActionLog;
 use App\Models\User;
+use App\Services\ActionLog\ActionLogger;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -288,6 +291,68 @@ describe('UsersSettingsController', function () {
                 'email' => 'new@example.com',
             ])->assertForbidden();
             $this->actingAs($operator)->patch(route('settings.users.revoke', $target))->assertForbidden();
+            $this->actingAs($operator)->delete(route('settings.users.destroy', $target))->assertForbidden();
+        });
+    });
+
+    describe('destroy', function () {
+        it('permanently deletes a revoked user, logs it, and redirects with a status flash', function () {
+            $admin = User::factory()->create();
+            $target = User::factory()->create([
+                'email' => 'revoked-to-delete@example.com',
+                'revoked_at' => now()->subDay(),
+            ]);
+
+            $response = $this->actingAs($admin)->delete(route('settings.users.destroy', $target));
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('status', 'Removed revoked-to-delete@example.com from the allowlist.');
+
+            expect(User::query()->where('email', 'revoked-to-delete@example.com')->exists())->toBeFalse();
+
+            $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_DELETED)->firstOrFail();
+            expect($log->summary)->toBe('Removed revoked-to-delete@example.com from the allowlist.');
+            expect($log->ok)->toBeTrue();
+        });
+
+        it('permanently deletes an active user, invalidates sessions, and logs it', function () {
+            $admin = User::factory()->create();
+            $target = User::factory()->create(['email' => 'active-to-delete@example.com']);
+
+            $response = $this->actingAs($admin)->delete(route('settings.users.destroy', $target));
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('status', 'Removed active-to-delete@example.com from the allowlist.');
+
+            expect(User::query()->where('email', 'active-to-delete@example.com')->exists())->toBeFalse();
+
+            $log = ActionLog::query()->where('action_type', ActionLog::TYPE_USER_DELETED)->firstOrFail();
+            expect($log->summary)->toBe('Removed active-to-delete@example.com from the allowlist.');
+        });
+
+        it('blocks a user from deleting their own account', function () {
+            $self = User::factory()->create(['email' => 'selfdelete@example.com']);
+
+            $response = $this->actingAs($self)->delete(route('settings.users.destroy', $self));
+
+            $response->assertRedirect(route('settings.users.index'));
+            $response->assertSessionHas('error', "You can't remove your own account.");
+
+            expect(User::query()->where('email', 'selfdelete@example.com')->exists())->toBeTrue();
+            expect(ActionLog::query()->where('action_type', ActionLog::TYPE_USER_DELETED)->count())->toBe(0);
+        });
+
+        it('blocks deleting the last administrator', function () {
+            $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+            $operator = User::factory()->operator()->create();
+
+            $controller = app(UsersSettingsController::class);
+            Auth::login($operator);
+            $response = $controller->destroy($admin, app(ActionLogger::class));
+
+            expect($response->isRedirect(route('settings.users.index')))->toBeTrue();
+            expect(session('error'))->toBe("You can't remove the last administrator.");
+            expect(User::query()->where('id', $admin->id)->exists())->toBeTrue();
         });
     });
 

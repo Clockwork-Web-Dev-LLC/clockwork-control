@@ -51,6 +51,7 @@ The network posture above assumes the machine itself is safe. It might not be �
 - **`updatePassword`** (`PATCH /settings/users/{user}/password`) allows administrators to set or change an operator's local password directly from the UI. Logs `TYPE_USER_PASSWORD_CHANGED`.
 - **`revoke`** (`PATCH /settings/users/{user}/revoke`) sets `revoked_at = now()`. **Blocked at the controller for self-revoke** — `Auth::id() === $user->id` bounces back with an error rather than letting you lock yourself out of the UI, since the artisan recovery path doesn't help if you can't reach the host to run it. Logs `TYPE_USER_REVOKED`.
 - **`restore`** (`PATCH /settings/users/{user}/restore`) clears `revoked_at` for an already-revoked user. Logs `TYPE_USER_RESTORED`.
+- **`destroy`** (`DELETE /settings/users/{user}`) permanently deletes an allowlist row and invalidates any remaining sessions. Blocked for self-deletion and the last administrator. Logs `TYPE_USER_DELETED`.
 
 All user actions go through `App\Services\ActionLog\ActionLogger` with the acting admin's email as `actor`, landing in `action_logs` alongside every other audited action — see [Architecture → Data model](/documentation/architecture/data-model).
 

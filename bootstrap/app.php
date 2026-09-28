@@ -21,6 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // cloudflared (Cloudflare Tunnel) connects to the app over plain HTTP
+        // on loopback only (com.clockwork.serve is bound to 127.0.0.1) — so
+        // localhost is the sole path in and trusting it is safe. Needed so
+        // route()/url() report https:// and the real client host once
+        // traffic arrives via the tunnel instead of localhost:8000 directly.
+        $middleware->trustProxies(at: ['127.0.0.1', '::1'], headers: Request::HEADER_X_FORWARDED_FOR
+            | Request::HEADER_X_FORWARDED_HOST
+            | Request::HEADER_X_FORWARDED_PORT
+            | Request::HEADER_X_FORWARDED_PROTO);
+
         $middleware->encryptCookies(except: [
             'cw_theme',
         ]);

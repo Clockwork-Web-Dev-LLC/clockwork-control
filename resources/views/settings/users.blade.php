@@ -181,6 +181,16 @@
                                                 Restore
                                             </button>
                                         </form>
+                                        <form method="POST" action="{{ route('settings.users.destroy', $u) }}" class="inline"
+                                              data-confirm="Permanently remove {{ $u->email }}?"
+                                              data-confirm-details="This completely deletes the user from the allowlist."
+                                              data-confirm-btn="Remove User"
+                                              data-confirm-variant="danger">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="text-xs text-[var(--color-status-red)] hover:underline cursor-pointer">
+                                                Remove
+                                            </button>
+                                        </form>
                                     @elseif (auth()->id() !== $u->id)
                                         <form method="POST" action="{{ route('settings.users.revoke', $u) }}" class="inline"
                                               data-confirm="Revoke {{ $u->email }}?"
@@ -190,6 +200,16 @@
                                             @csrf @method('PATCH')
                                             <button type="submit" class="text-xs text-[var(--color-status-red)] hover:underline cursor-pointer">
                                                 Revoke
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('settings.users.destroy', $u) }}" class="inline"
+                                              data-confirm="Permanently remove {{ $u->email }}?"
+                                              data-confirm-details="This completely deletes the user from the allowlist."
+                                              data-confirm-btn="Remove User"
+                                              data-confirm-variant="danger">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-status-red)] hover:underline cursor-pointer" title="Permanently delete from allowlist">
+                                                Remove
                                             </button>
                                         </form>
                                     @else

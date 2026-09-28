@@ -75,6 +75,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::patch('/settings/users/{user}/revoke', [UsersSettingsController::class, 'revoke'])->name('settings.users.revoke');
         Route::patch('/settings/users/{user}/restore', [UsersSettingsController::class, 'restore'])->name('settings.users.restore');
         Route::patch('/settings/users/{user}/password', [UsersSettingsController::class, 'updatePassword'])->name('settings.users.password');
+        Route::delete('/settings/users/{user}', [UsersSettingsController::class, 'destroy'])->name('settings.users.destroy');
     });
 
     // Appearance & theme preferences

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Permanent User Deletion from Allowlist**: Added `DELETE /settings/users/{user}` (`UsersSettingsController::destroy`) and interactive confirmation modal to permanently remove users from the allowlist (both revoked and active teammates). Guards prevent self-deletion and removing the last administrator, invalidates stored sessions, and logs `TYPE_USER_DELETED`.
 - **Per-Site Uptime Re-check on Monitoring Dashboard**: Added an on-demand "Re-check" button to each row in the `/monitoring` sites table, enabling operators to trigger an instant HTTP probe for any individual site via AJAX with live spinner feedback and in-place status badge / counter updates.
 - **Frontend Modularization & TypeScript Extraction**:
   - Extracted monolithic inline page scripts into modular, typed components under `resources/js/components/` and `resources/js/charts/`: `sitesPage` (`sites-page.ts`), `wpPluginsManager` (`wp-plugins-manager.ts`), `trafficCharts` (`traffic-charts.ts`), `performanceTrendChart` (`performance-chart.ts`), and `serverMetricsChart` (`server-metrics-chart.ts`).

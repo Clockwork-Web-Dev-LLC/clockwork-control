@@ -103,6 +103,8 @@ class ActionLog extends Model
 
     public const TYPE_USER_RESTORED = 'user_restored';
 
+    public const TYPE_USER_DELETED = 'user_deleted';
+
     public const TYPE_USER_PASSWORD_CHANGED = 'user_password_changed';
 
     public const TYPE_BACKUP_DOWNLOADED = 'backup_downloaded';

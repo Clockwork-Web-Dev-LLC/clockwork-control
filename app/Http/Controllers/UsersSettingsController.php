@@ -15,9 +15,10 @@ use Illuminate\View\View;
  *   - store: insert (or restore if previously revoked); new UI users default to operator
  *   - revoke: set revoked_at and invalidate sessions
  *   - restore: clear revoked_at
+ *   - destroy: permanently delete user and invalidate sessions
  *   - updatePassword: set password and invalidate other sessions
  *
- * Self-revoke is blocked at the controller — losing access to your own UI is
+ * Self-revoke and self-delete are blocked at the controller — losing access to your own UI is
  * surprising and the artisan recovery path doesn't help if you can't reach
  * the host. The artisan command is still the always-works escape hatch if
  * someone else revokes you.
@@ -177,5 +178,32 @@ class UsersSettingsController extends Controller
 
         return redirect()->route('settings.users.index')
             ->with('status', "Restored {$user->email}.");
+    }
+
+    public function destroy(User $user, ActionLogger $logger): RedirectResponse
+    {
+        if (Auth::id() === $user->id) {
+            return redirect()->route('settings.users.index')
+                ->with('error', "You can't remove your own account.");
+        }
+
+        if ($user->isAdmin() && (User::query()->where('role', User::ROLE_ADMIN)->count() <= 1 || ($user->isActive() && User::query()->active()->where('role', User::ROLE_ADMIN)->count() <= 1))) {
+            return redirect()->route('settings.users.index')
+                ->with('error', "You can't remove the last administrator.");
+        }
+
+        $email = $user->email;
+        $user->invalidateSessions();
+        $user->delete();
+
+        $logger->record(
+            actionType: ActionLog::TYPE_USER_DELETED,
+            summary: "Removed {$email} from the allowlist.",
+            ok: true,
+            actor: (string) (Auth::user()->email ?? 'manual'),
+        );
+
+        return redirect()->route('settings.users.index')
+            ->with('status', "Removed {$email} from the allowlist.");
     }
 }
