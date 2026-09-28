@@ -8,27 +8,34 @@
     batchLoading: false,
     batchPromptText: '',
     batchCount: {{ $stats['approved'] }},
+    batchStatus: 'approved',
     batchCopied: false,
-    async openBatchModal() {
+    async openBatchModal(status = 'approved') {
+        this.batchStatus = status;
         this.batchModalOpen = true;
         this.batchLoading = true;
         try {
-            const res = await fetch('{{ route('feedback.prompt.batch') }}', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            const res = await fetch(`{{ route('feedback.prompt.batch') }}?status=${encodeURIComponent(this.batchStatus)}`, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
             const data = await res.json();
             if (data.ok) {
                 this.batchPromptText = data.prompt;
                 this.batchCount = data.count;
             } else {
-                this.batchPromptText = 'No approved feedback items found.';
+                this.batchPromptText = data.message || 'No feedback items found.';
+                this.batchCount = 0;
             }
         } catch (e) {
             this.batchPromptText = 'Failed to load batch prompt.';
+            this.batchCount = 0;
         } finally {
             this.batchLoading = false;
         }
     },
     copyBatchPrompt() {
-        if (!this.batchPromptText) return;
+        if (!this.batchPromptText || this.batchCount === 0) return;
         navigator.clipboard.writeText(this.batchPromptText).then(() => {
             this.batchCopied = true;
             setTimeout(() => this.batchCopied = false, 2500);
@@ -38,18 +45,32 @@
     <x-page-header title="Feedback & Backlog"
         subtitle="Visual in-app feedback, employee change requests, and threaded collaboration across Clockwork Control.">
         <x-slot:actions>
+            {{-- Master Prompt Button for Approved items (Always visible on all views including status=all) --}}
+            <button type="button"
+                    @click="openBatchModal('approved')"
+                    class="btn-primary inline-flex items-center gap-2 text-xs md:text-sm font-semibold shadow-xs cursor-pointer"
+                    title="Generate one big prompt for all approved items to paste into Claude/Grok">
+                <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
+                <span>Generate Approved Prompt</span>
+                <span class="px-1.5 py-0.2 rounded-full font-data text-xs {{ $stats['approved'] > 0 ? 'bg-white/25 text-white font-bold' : 'bg-white/10 text-white/70' }}">
+                    {{ $stats['approved'] }}
+                </span>
+            </button>
+
             @if ($stats['approved'] > 0)
                 <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
-                   class="btn-primary inline-flex items-center gap-1.5 text-xs md:text-sm font-semibold"
-                   title="Download prompt for all approved items to paste into Claude">
-                    <i class="fa-solid fa-download"></i> <span>Download Claude Prompt ({{ $stats['approved'] }})</span>
+                   class="btn-pill-nav inline-flex items-center gap-1.5 text-xs md:text-sm"
+                   title="Download .md prompt file for all approved items">
+                    <i class="fa-solid fa-download text-xs"></i>
+                    <span class="hidden sm:inline">Download .md</span>
                 </a>
             @endif
 
-            <a href="{{ route('feedback.index') }}"
+            <a href="{{ route('feedback.index', ['status' => 'all']) }}"
                class="btn-pill-nav inline-flex items-center gap-1.5 text-xs md:text-sm"
                title="Refresh feedback backlog">
-                <i class="fa-solid fa-rotate"></i> <span>Refresh</span>
+                <i class="fa-solid fa-rotate text-xs"></i>
+                <span>Refresh</span>
             </a>
         </x-slot:actions>
     </x-page-header>
@@ -79,11 +100,22 @@
 
         <a href="{{ route('feedback.index', ['status' => 'approved']) }}"
            class="card p-4 hover:border-emerald-500 transition-all cursor-pointer {{ $currentStatus === 'approved' ? 'border-emerald-500 shadow-xs ring-1 ring-emerald-500/20' : '' }}">
-            <div class="text-[11px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold mb-1 flex items-center gap-1">
-                <i class="fa-solid fa-check-circle text-[10px]"></i> Approved
+            <div class="text-[11px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-semibold mb-1 flex items-center justify-between">
+                <span class="flex items-center gap-1">
+                    <i class="fa-solid fa-check-circle text-[10px]"></i> Approved
+                </span>
+                <button type="button"
+                        @click.stop.prevent="openBatchModal('approved')"
+                        class="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline font-semibold flex items-center gap-1"
+                        title="Generate prompt for all approved items">
+                    <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i> Prompt
+                </button>
             </div>
             <div class="text-2xl lg:text-3xl font-bold font-data text-emerald-600 dark:text-emerald-400">{{ $stats['approved'] }}</div>
-            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">ready for Claude prompt</div>
+            <div class="text-[11px] text-[var(--color-ink-muted)] mt-1 flex items-center justify-between">
+                <span>ready for Claude prompt</span>
+                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Generate →</span>
+            </div>
         </a>
 
         <a href="{{ route('feedback.index', ['status' => 'in_progress']) }}"
@@ -112,14 +144,14 @@
                     <div>
                         <div class="flex items-center gap-2">
                             <h3 class="font-display font-bold text-sm text-[var(--color-ink-strong)]">
-                                Claude Implementation Batch: {{ $stats['approved'] }} Approved {{ \Illuminate\Support\Str::plural('Item', $stats['approved']) }}
+                                Implementation Batch: {{ $stats['approved'] }} Approved {{ \Illuminate\Support\Str::plural('Item', $stats['approved']) }}
                             </h3>
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                                Ready
+                                Ready for Claude & Grok
                             </span>
                         </div>
                         <p class="text-xs text-[var(--color-ink-muted)] mt-1 max-w-2xl leading-relaxed">
-                            These items have been reviewed and approved. Download the complete batch prompt file or copy it directly into Claude/Grok to implement all requested features and bug fixes with complete code and DOM context.
+                            These items have been reviewed and approved. Download the complete batch prompt file or copy it directly into Claude, Grok, or Antigravity to implement all requested features and bug fixes with complete code and DOM context.
                         </p>
                     </div>
                 </div>
@@ -127,17 +159,17 @@
                 <div class="flex items-center gap-2 shrink-0 flex-wrap">
                     {{-- Copy Batch Prompt Button --}}
                     <button type="button"
-                            @click="openBatchModal()"
-                            class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium hover:border-[var(--color-brand)]">
-                        <i class="fa-solid fa-eye text-[11px]"></i>
-                        <span>Preview & Copy</span>
+                            @click="openBatchModal('approved')"
+                            class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold shadow-xs">
+                        <i class="fa-solid fa-wand-magic-sparkles text-[11px]"></i>
+                        <span>Generate Approved Prompt</span>
                     </button>
 
                     {{-- Download Prompt File (.md) --}}
                     <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
-                       class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold shadow-xs">
+                       class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium hover:border-[var(--color-brand)]">
                         <i class="fa-solid fa-download text-[11px]"></i>
-                        <span>Download Prompt (.md)</span>
+                        <span>Download .md</span>
                     </a>
 
                     {{-- Mark In Progress --}}
@@ -151,6 +183,27 @@
                         </button>
                     </form>
                 </div>
+            </div>
+        </div>
+    @elseif ($currentStatus === 'all' && $stats['total'] > 0)
+        <div class="card p-4 mb-6 border-dashed border-[var(--color-border)] bg-[var(--color-surface-alt)]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-[var(--color-brand)]/10 text-[var(--color-brand)] flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-lightbulb text-xs"></i>
+                </div>
+                <div>
+                    <span class="font-semibold text-[var(--color-ink-strong)]">Want to generate one big AI prompt for approved items?</span>
+                    <span class="text-[var(--color-ink-muted)] block sm:inline">Click <strong>Approve</strong> on any item below to add it to your implementation batch, or generate a prompt for all items.</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <button type="button"
+                        @click="openBatchModal('all')"
+                        class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium hover:border-[var(--color-brand)]"
+                        title="Generate prompt for all feedback items regardless of status">
+                    <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                    <span>Prompt All {{ $stats['total'] }} Items</span>
+                </button>
             </div>
         </div>
     @endif
@@ -226,6 +279,18 @@
                     <i class="fa-solid fa-xmark"></i> Clear
                 </a>
             @endif
+
+            {{-- Quick action to generate approved prompt --}}
+            <button type="button"
+                    @click="openBatchModal('approved')"
+                    class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/40 cursor-pointer sm:ml-auto"
+                    title="Generate one big prompt for all approved items">
+                <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                <span>Prompt Approved</span>
+                <span class="px-1.5 py-0.2 rounded-full font-data text-[10px] {{ $stats['approved'] > 0 ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-neutral-500/10 text-[var(--color-ink-muted)]' }}">
+                    {{ $stats['approved'] }}
+                </span>
+            </button>
         </form>
     </div>
 
@@ -457,9 +522,9 @@
                         <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
                     </div>
                     <div>
-                        <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">Claude Implementation Batch Prompt</h3>
+                        <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">Implementation Master Prompt</h3>
                         <p class="text-[11px] text-[var(--color-ink-muted)]">
-                            Bundling <span x-text="batchCount"></span> approved feedback and feature request item(s).
+                            Bundling <span class="font-bold text-[var(--color-ink-strong)]" x-text="batchCount"></span> item(s) for Claude & Grok.
                         </p>
                     </div>
                 </div>
@@ -468,12 +533,50 @@
                 </button>
             </div>
 
+            {{-- Scope Selector Pills inside Modal --}}
+            <div class="flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] pb-2 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] uppercase tracking-wider text-[var(--color-ink-muted)] font-semibold mr-1">Batch Scope:</span>
+                    <button type="button"
+                            @click="openBatchModal('approved')"
+                            :class="batchStatus === 'approved' ? 'bg-emerald-600 text-white font-semibold shadow-xs' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink)] hover:bg-[var(--color-border-light)]'"
+                            class="px-2.5 py-1 rounded-full text-[11px] transition-colors cursor-pointer flex items-center gap-1">
+                        <i class="fa-solid fa-check text-[9px]"></i>
+                        <span>Approved Items</span>
+                        <span class="font-data text-[10px] opacity-80 font-bold">({{ $stats['approved'] }})</span>
+                    </button>
+
+                    <button type="button"
+                            @click="openBatchModal('all')"
+                            :class="batchStatus === 'all' ? 'bg-[var(--color-brand)] text-white font-semibold shadow-xs' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink)] hover:bg-[var(--color-border-light)]'"
+                            class="px-2.5 py-1 rounded-full text-[11px] transition-colors cursor-pointer flex items-center gap-1">
+                        <span>All Items</span>
+                        <span class="font-data text-[10px] opacity-80 font-bold">({{ $stats['total'] }})</span>
+                    </button>
+
+                    <button type="button"
+                            @click="openBatchModal('open')"
+                            :class="batchStatus === 'open' ? 'bg-amber-500 text-white font-semibold shadow-xs' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink)] hover:bg-[var(--color-border-light)]'"
+                            class="px-2.5 py-1 rounded-full text-[11px] transition-colors cursor-pointer flex items-center gap-1">
+                        <span>Open Only</span>
+                        <span class="font-data text-[10px] opacity-80 font-bold">({{ $stats['open'] }})</span>
+                    </button>
+                </div>
+
+                <template x-if="batchCount > 0">
+                    <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>Ready to copy & download</span>
+                    </span>
+                </template>
+            </div>
+
             {{-- Textarea with generated prompt --}}
             <div class="flex-1 overflow-hidden flex flex-col">
                 <template x-if="batchLoading">
                     <div class="p-12 text-center text-[var(--color-ink-muted)]">
                         <i class="fa-solid fa-spinner fa-spin text-xl mb-2 text-[var(--color-brand)]"></i>
-                        <p>Compiling prompt for approved items…</p>
+                        <p>Compiling prompt for items…</p>
                     </div>
                 </template>
 
@@ -481,27 +584,30 @@
                     <textarea
                         x-model="batchPromptText"
                         readonly
+                        placeholder="No prompt generated yet."
                         class="w-full h-80 font-mono text-[11px] p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] focus:outline-none resize-none leading-relaxed"
                     ></textarea>
                 </template>
             </div>
 
             {{-- Modal Actions --}}
-            <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border-light)] shrink-0">
+            <div class="flex items-center justify-between pt-3 border-t border-[var(--color-border-light)] shrink-0 flex-wrap gap-2">
                 <span class="text-[11px] text-[var(--color-ink-muted)]">
-                    Paste directly into Claude (or Antigravity) to implement changes.
+                    Paste directly into Claude, Grok, or Antigravity to implement all changes.
                 </span>
 
                 <div class="flex items-center gap-2">
-                    <a href="{{ route('feedback.prompt.download', ['status' => 'approved']) }}"
-                       class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium">
+                    <a :href="'{{ route('feedback.prompt.download') }}?status=' + encodeURIComponent(batchStatus)"
+                       :class="batchCount === 0 ? 'pointer-events-none opacity-40' : ''"
+                       class="btn-pill-nav text-xs py-1.5 px-3 flex items-center gap-1.5 cursor-pointer font-medium hover:border-[var(--color-brand)]">
                         <i class="fa-solid fa-download text-[11px]"></i>
                         <span>Download .md</span>
                     </a>
 
                     <button type="button"
                             @click="copyBatchPrompt()"
-                            class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold">
+                            :disabled="batchCount === 0 || !batchPromptText"
+                            class="btn-primary text-xs py-1.5 px-3.5 flex items-center gap-1.5 cursor-pointer font-semibold disabled:opacity-40">
                         <i class="fa-solid" :class="batchCopied ? 'fa-check text-emerald-300' : 'fa-copy'"></i>
                         <span x-text="batchCopied ? 'Copied to Clipboard!' : 'Copy Entire Prompt'"></span>
                     </button>

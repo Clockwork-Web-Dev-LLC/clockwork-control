@@ -326,29 +326,48 @@ class FeedbackController extends Controller
     }
 
     /**
-     * Get compiled batch prompt for all approved feedback items.
+     * Get compiled batch prompt for approved feedback items (or filtered by status).
      */
-    public function batchPrompt(FeedbackPromptBuilder $builder): JsonResponse
+    public function batchPrompt(Request $request, FeedbackPromptBuilder $builder): JsonResponse
     {
-        $items = FeedbackItem::query()
-            ->where('status', FeedbackItem::STATUS_APPROVED)
+        $status = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+
+        $query = FeedbackItem::query()
             ->with(['user', 'comments.user'])
-            ->orderBy('id', 'asc')
-            ->get();
+            ->orderBy('id', 'asc');
+
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $items = $query->get();
 
         if ($items->isEmpty()) {
+            $msg = $status === FeedbackItem::STATUS_APPROVED
+                ? 'No approved feedback items found yet. Click "Approve" on any open feedback item to add it to this batch.'
+                : "No feedback items found with status '{$status}'.";
+
             return response()->json([
                 'ok' => false,
                 'count' => 0,
-                'message' => 'No approved feedback items found to bundle.',
+                'status' => $status,
+                'message' => $msg,
                 'prompt' => '',
             ]);
         }
 
+        $title = match ($status) {
+            FeedbackItem::STATUS_APPROVED => 'Implement Approved Feedback & Feature Requests',
+            FeedbackItem::STATUS_OPEN => 'Address Open Feedback & Issues',
+            'all' => 'Complete Feedback & Task Backlog Implementation',
+            default => 'Implement Feedback Items',
+        };
+
         return response()->json([
             'ok' => true,
             'count' => $items->count(),
-            'prompt' => $builder->buildForBatch($items),
+            'status' => $status,
+            'prompt' => $builder->buildForBatch($items, $title),
             'ids' => $items->pluck('id'),
         ]);
     }
@@ -364,17 +383,28 @@ class FeedbackController extends Controller
             $filename = "clockwork-feedback-item-{$item->id}-".now()->format('Y-m-d').'.md';
         } else {
             $status = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
-            $items = FeedbackItem::query()
-                ->where('status', $status)
+            $query = FeedbackItem::query()
                 ->with(['user', 'comments.user'])
-                ->orderBy('id', 'asc')
-                ->get();
+                ->orderBy('id', 'asc');
+
+            if ($status !== 'all') {
+                $query->where('status', $status);
+            }
+
+            $items = $query->get();
 
             if ($items->isEmpty()) {
                 return back()->with('status', "No items found with status '{$status}' to download.");
             }
 
-            $prompt = $builder->buildForBatch($items);
+            $title = match ($status) {
+                FeedbackItem::STATUS_APPROVED => 'Implement Approved Feedback & Feature Requests',
+                FeedbackItem::STATUS_OPEN => 'Address Open Feedback & Issues',
+                'all' => 'Complete Feedback & Task Backlog Implementation',
+                default => 'Implement Feedback Items',
+            };
+
+            $prompt = $builder->buildForBatch($items, $title);
             $filename = "clockwork-claude-{$status}-prompt-".now()->format('Y-m-d').'.md';
         }
 

@@ -102,6 +102,22 @@ test('can generate compiled batch prompt for approved items', function () {
     expect($prompt)->toContain('Pagination missing');
     expect($prompt)->toContain('Quick shortcut');
     expect($prompt)->toContain('We agreed on 50 items per page.');
+
+    // Also supports status=all to bundle all items
+    $openItem = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/security',
+        'path' => '/security',
+        'type' => FeedbackItem::TYPE_TWEAK,
+        'status' => FeedbackItem::STATUS_OPEN,
+        'title' => 'Open Tweak',
+        'content' => 'Open tweak details',
+    ]);
+
+    $allRes = $this->actingAs($this->user)->getJson(route('feedback.prompt.batch', ['status' => 'all']));
+    $allRes->assertOk();
+    $allRes->assertJson(['ok' => true, 'count' => 3]);
+    expect($allRes->json('prompt'))->toContain('Open Tweak');
 });
 
 test('can download markdown prompt file for approved batch or single item', function () {
