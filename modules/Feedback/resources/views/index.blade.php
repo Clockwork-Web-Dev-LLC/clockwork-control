@@ -403,7 +403,7 @@
                                 </span>
                             @endif
 
-                            {{-- Copy Claude Prompt Button --}}
+                            {{-- Copy Prompt Button --}}
                             <button type="button"
                                     @click="
                                         navigator.clipboard.writeText(@js($item->toClaudePrompt())).then(() => {
@@ -411,9 +411,10 @@
                                             setTimeout(() => promptCopied = false, 2500);
                                         });
                                     "
-                                    class="btn-primary text-xs py-1 px-2.5 flex items-center gap-1.5 cursor-pointer">
-                                <i class="fa-solid" :class="promptCopied ? 'fa-check text-emerald-300' : 'fa-wand-magic-sparkles'"></i>
-                                <span x-text="promptCopied ? 'Copied!' : 'Copy Claude Prompt'"></span>
+                                    class="btn-pill-nav text-xs py-1 px-2.5 flex items-center gap-1.5 cursor-pointer hover:border-[var(--color-brand)]"
+                                    title="Copy AI implementation prompt to clipboard">
+                                <i class="fa-solid text-[10px]" :class="promptCopied ? 'fa-check text-emerald-500' : 'fa-wand-magic-sparkles text-[var(--color-brand)]'"></i>
+                                <span x-text="promptCopied ? 'Copied!' : 'Copy Prompt'"></span>
                             </button>
 
                             {{-- Download Single Item .md --}}

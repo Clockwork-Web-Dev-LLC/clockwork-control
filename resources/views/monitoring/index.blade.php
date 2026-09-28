@@ -195,11 +195,11 @@
                     default => 'ALL UP',
                 };
             @endphp
-            <div class="rounded-full border-8 {{ $heroColor }} w-32 h-32 flex items-center justify-center font-display font-bold text-lg text-center px-2 {{ $currentlyNotOurFault > 0 ? 'cursor-pointer hover:opacity-90' : '' }}"
+            <div class="rounded-full border-4 {{ $heroColor }} w-16 h-16 flex items-center justify-center font-display font-bold text-[11px] leading-tight text-center px-1 shrink-0 {{ $currentlyNotOurFault > 0 ? 'cursor-pointer hover:opacity-90' : '' }}"
                  @if ($currentlyNotOurFault > 0) @click="filterSearch('not our fault')" onclick="window.monitoringFilterSearch('not our fault')" title="Click to filter by excused / not our fault sites" @endif>
                 {{ $heroLabel }}
             </div>
-            <p class="text-xs text-[var(--color-ink-muted)] mt-3">
+            <p class="text-xs text-[var(--color-ink-muted)] mt-2">
                 @if ($currentlyNotOurFault > 0 && $currentlyDown === 0)
                     <button type="button" @click="filterSearch('not our fault')" onclick="window.monitoringFilterSearch('not our fault')" class="text-amber-600 dark:text-amber-400 font-medium hover:underline cursor-pointer">Infrastructure OK ({{ $currentlyNotOurFault }} excused)</button> ·
                 @endif

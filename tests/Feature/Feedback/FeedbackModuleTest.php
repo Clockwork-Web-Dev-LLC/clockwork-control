@@ -44,7 +44,7 @@ test('authenticated user can view feedback backlog dashboard', function () {
     $response->assertSee('Pagination alignment issue');
     $response->assertSee('Pagination overlaps footer on small screens.');
     $response->assertSee('/monitoring');
-    $response->assertSee('Copy Claude Prompt');
+    $response->assertSee('Copy Prompt');
 });
 
 test('can create feedback item via API and auto-resolves route name', function () {
