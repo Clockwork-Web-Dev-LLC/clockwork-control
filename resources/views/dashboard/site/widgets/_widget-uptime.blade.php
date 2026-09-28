@@ -143,11 +143,31 @@
             </button>
         </form>
 
-        <form method="POST" action="{{ route('sites.uptime.recheck', $site) }}" class="inline">
-            @csrf
-            <button type="submit" class="btn-pill-nav text-xs py-1 px-2.5" title="Run manual uptime probe now">
-                <i class="fa-solid fa-rotate text-[10px] mr-1"></i> Re-check
-            </button>
-        </form>
+        <button type="button"
+                class="btn-pill-nav text-xs py-1 px-2.5 cursor-pointer"
+                title="Run manual uptime probe now"
+                onclick="
+                    const btn = this;
+                    const orig = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class=\'fa-solid fa-spinner fa-spin text-[10px] mr-1\'></i> Probing…';
+                    fetch('{{ route('sites.uptime.recheck', $site) }}', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                    }).then(r => r.json()).then(d => {
+                        if (d.ok) {
+                            btn.innerHTML = '<i class=\'fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1\'></i> ' + d.message;
+                            setTimeout(() => { window.location.reload(); }, 600);
+                        } else {
+                            btn.innerHTML = '<i class=\'fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1\'></i> ' + (d.message || 'Error');
+                            setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3000);
+                        }
+                    }).catch(() => {
+                        btn.innerHTML = '<i class=\'fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1\'></i> Error';
+                        setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3000);
+                    });
+                ">
+            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> Re-check
+        </button>
     </div>
 </div>

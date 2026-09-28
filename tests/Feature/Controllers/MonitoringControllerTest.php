@@ -349,6 +349,25 @@ describe('MonitoringController', function () {
             ->assertSee('openModal('.$site->id, false);
     });
 
+    it('renders per-site re-check button with endpoint on monitoring index', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'probe-me.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => 'down',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('probe-me.example.com')
+            ->assertSee('monitoring-recheck-btn', false)
+            ->assertSee('data-url="'.route('sites.uptime.recheck', $site).'"', false)
+            ->assertSee('Re-check');
+    });
+
     it('saves the domain ignore list from the settings form', function () {
         $response = $this->actingAs(User::factory()->create())
             ->patch(route('monitoring.settings.update'), [

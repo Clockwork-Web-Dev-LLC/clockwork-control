@@ -97,13 +97,13 @@
 
         <div class="card p-5">
             <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Currently up</div>
-            <div class="text-3xl font-bold font-data text-[var(--color-status-green)]">{{ $currentlyUp }}</div>
+            <div id="monitoring-stat-up" class="text-3xl font-bold font-data text-[var(--color-status-green)]">{{ $currentlyUp }}</div>
             <div class="text-xs text-[var(--color-ink-muted)] mt-1">of {{ $sites->count() }} sites</div>
         </div>
 
         <div class="card p-5">
             <div class="text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Currently down</div>
-            <div class="text-3xl font-bold font-data {{ $currentlyDown > 0 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-ink-strong)]' }}">{{ $currentlyDown }}</div>
+            <div id="monitoring-stat-down" class="text-3xl font-bold font-data {{ $currentlyDown > 0 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-ink-strong)]' }}">{{ $currentlyDown }}</div>
             <div class="text-xs text-[var(--color-ink-muted)] mt-1">
                 {{ $unknown }} unknown
                 @if ($currentlyNotOurFault > 0)
@@ -222,12 +222,12 @@
                                     <a href="{{ route('sites.show', $site) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
                                     <div class="text-[10px] text-[var(--color-ink-muted)]">{{ $site->server?->name ?? '—' }}</div>
                                 </td>
-                                <td class="px-5 py-2">
+                                <td class="px-5 py-2 site-state-cell">
                                     @if ($isNotOurFault)
                                         <button type="button"
                                                 @click="openModal({{ $site->id }}, '{{ addslashes($site->domain) }}', '{{ $exemptionReason }}', '{{ addslashes($site->uptime_ignore_reason ?? '') }}')"
                                                 onclick="window.monitoringOpenClassify({{ $site->id }}, '{{ addslashes($site->domain) }}', '{{ $exemptionReason }}', '{{ addslashes($site->uptime_ignore_reason ?? '') }}')"
-                                                class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }} hover:opacity-85 transition-opacity cursor-pointer text-left"
+                                                class="classify-btn px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }} hover:opacity-85 transition-opacity cursor-pointer text-left"
                                                 title="External downtime ({{ $reasonLabel }}) — click to view or edit exemption details">
                                             <i class="fa-solid fa-shield-halved text-[10px]"></i>
                                             {{ $stateLabel }}
@@ -236,7 +236,7 @@
                                         <button type="button"
                                                 @click="openModal({{ $site->id }}, '{{ addslashes($site->domain) }}')"
                                                 onclick="window.monitoringOpenClassify({{ $site->id }}, '{{ addslashes($site->domain) }}')"
-                                                class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }} hover:opacity-85 transition-opacity cursor-pointer text-left"
+                                                class="classify-btn px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }} hover:opacity-85 transition-opacity cursor-pointer text-left"
                                                 title="Site is down — click to classify as Not Our Fault (client DNS, etc.)">
                                             {{ $stateLabel }}
                                         </button>
@@ -275,7 +275,7 @@
                                         <span title="SLA protected" class="text-amber-500 text-[10px] ml-0.5 cursor-help"><i class="fa-solid fa-shield"></i></span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">
+                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] site-last-event-cell">
                                     @if ($state === 'down' && $site->uptime_down_since)
                                         Down for {{ $site->uptime_down_since->diffForHumans(['parts' => 2, 'short' => true, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE]) }}
                                     @elseif ($state === 'maintenance' && $site->uptime_maintenance_since)
@@ -286,13 +286,20 @@
                                         —
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-right whitespace-nowrap">
+                                <td class="px-5 py-2 text-right whitespace-nowrap site-actions-cell">
+                                    <button type="button"
+                                            class="monitoring-recheck-btn btn-pill-nav text-[11px] py-0.5 px-2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] mr-1.5 cursor-pointer"
+                                            data-url="{{ route('sites.uptime.recheck', $site) }}"
+                                            data-domain="{{ $site->domain }}"
+                                            title="Run instant uptime probe for {{ $site->domain }}">
+                                        <i class="fa-solid fa-rotate text-[10px] mr-1"></i> Re-check
+                                    </button>
                                     @if ($isDown)
                                         @if ($isNotOurFault)
                                             <button type="button"
                                                     @click="openModal({{ $site->id }}, '{{ addslashes($site->domain) }}', '{{ $exemptionReason }}', '{{ addslashes($site->uptime_ignore_reason ?? '') }}')"
                                                     onclick="window.monitoringOpenClassify({{ $site->id }}, '{{ addslashes($site->domain) }}', '{{ $exemptionReason }}', '{{ addslashes($site->uptime_ignore_reason ?? '') }}')"
-                                                    class="btn-pill-nav text-[11px] py-0.5 px-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 mr-1.5 cursor-pointer"
+                                                    class="classify-btn btn-pill-nav text-[11px] py-0.5 px-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 mr-1.5 cursor-pointer"
                                                     title="Edit Not Our Fault exemption reason or notes">
                                                 <i class="fa-solid fa-pen-to-square text-[10px] mr-1"></i> Edit
                                             </button>
@@ -307,7 +314,7 @@
                                             <button type="button"
                                                     @click="openModal({{ $site->id }}, '{{ addslashes($site->domain) }}')"
                                                     onclick="window.monitoringOpenClassify({{ $site->id }}, '{{ addslashes($site->domain) }}')"
-                                                    class="btn-pill-nav text-[11px] py-0.5 px-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 mr-2 cursor-pointer"
+                                                    class="classify-btn btn-pill-nav text-[11px] py-0.5 px-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 mr-2 cursor-pointer"
                                                     title="Mark as Not Our Fault (Client DNS, domain expired, etc. — excludes from SLA)">
                                                 <i class="fa-solid fa-shield-halved text-[10px] mr-1"></i> Not our fault?
                                             </button>
@@ -659,6 +666,98 @@
                 }
             });
         }
+
+        // Wire up per-site instant re-check buttons
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        document.querySelectorAll('.monitoring-recheck-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (btn.disabled) return;
+
+                const origHtml = btn.innerHTML;
+                const row = btn.closest('tr');
+                const stateCell = row?.querySelector('.site-state-cell');
+                const lastEventCell = row?.querySelector('.site-last-event-cell');
+                const actionsCell = row?.querySelector('.site-actions-cell');
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i> Probing…';
+
+                try {
+                    const res = await fetch(btn.dataset.url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                        },
+                    });
+                    const data = await res.json();
+
+                    if (data.ok) {
+                        if (data.state === 'up') {
+                            btn.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1"></i> Up (' + (data.status_code || 200) + ')';
+
+                            if (stateCell) {
+                                stateCell.innerHTML = '<span class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 bg-[var(--color-status-green)]/15 text-[var(--color-status-green)]">UP</span>';
+                            }
+                            if (lastEventCell) {
+                                lastEventCell.textContent = 'Up — checked just now';
+                            }
+                            if (actionsCell) {
+                                actionsCell.querySelectorAll('.classify-btn, form[action*="classify-outage"]').forEach(el => el.remove());
+                            }
+                            if (row) {
+                                row.classList.remove('opacity-60');
+                                if (row.dataset.search) {
+                                    row.dataset.search = row.dataset.search.replace(/\bdown\b/g, 'up');
+                                }
+                            }
+
+                            const downStat = document.getElementById('monitoring-stat-down');
+                            const upStat = document.getElementById('monitoring-stat-up');
+                            if (downStat && upStat) {
+                                const currentDown = parseInt(downStat.textContent, 10);
+                                if (!isNaN(currentDown) && currentDown > 0) {
+                                    downStat.textContent = currentDown - 1;
+                                    const currentUp = parseInt(upStat.textContent, 10);
+                                    if (!isNaN(currentUp)) {
+                                        upStat.textContent = currentUp + 1;
+                                    }
+                                }
+                            }
+
+                            setTimeout(() => {
+                                btn.innerHTML = origHtml;
+                                btn.disabled = false;
+                            }, 2500);
+                        } else {
+                            const code = data.status_code ? 'HTTP ' + data.status_code : 'Down';
+                            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-[10px] mr-1"></i> ' + code;
+                            if (lastEventCell) {
+                                lastEventCell.textContent = 'Down — checked just now';
+                            }
+                            setTimeout(() => {
+                                btn.innerHTML = origHtml;
+                                btn.disabled = false;
+                            }, 3000);
+                        }
+                    } else {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> ' + (data.message || 'Error');
+                        setTimeout(() => {
+                            btn.innerHTML = origHtml;
+                            btn.disabled = false;
+                        }, 3500);
+                    }
+                } catch (err) {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> Failed';
+                    setTimeout(() => {
+                        btn.innerHTML = origHtml;
+                        btn.disabled = false;
+                    }, 3500);
+                }
+            });
+        });
     })();
 </script>
 @endsection
