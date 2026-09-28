@@ -1,3 +1,12 @@
+/**
+ * Optimized Apache ECharts Bundle
+ *
+ * Tree-shaken ECharts bundle registering only the charts (Line, Bar, Heatmap),
+ * components (Grid, Tooltip, Legend, Title, DataZoom, Calendar, VisualMap),
+ * and CanvasRenderer used across Clockwork Control.
+ *
+ * Exposes `window.echarts` for Alpine components and Blade views.
+ */
 import { BarChart, HeatmapChart, LineChart } from 'echarts/charts';
 import {
     CalendarComponent,

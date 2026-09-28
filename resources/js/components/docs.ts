@@ -1,3 +1,10 @@
+/**
+ * Documentation Navigation & Search Components
+ *
+ * Mounted in `resources/views/docs/layout.blade.php`:
+ * - `docsSidebar`: Manages collapsible sidebar navigation sections.
+ * - `docsSearch`: Real-time client-side search across article titles, sections, and excerpts.
+ */
 export interface DocsSearchResult {
     title: string;
     section: string;

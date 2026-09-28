@@ -1,3 +1,14 @@
+/**
+ * Site Overview Dashboard Widget Reordering Component
+ *
+ * Mounted on `/sites/{site}` (`resources/views/dashboard/site/tab-overview.blade.php`):
+ *   <div x-data="siteDashboardReorder(...)">
+ *
+ * Implements HTML5 drag-and-drop widget arrangement for custom site dashboards:
+ * - Live drag-over insertion indicator and reordering.
+ * - Asynchronous persistence to backend (`SiteDashboardOrderController`).
+ * - Rollback on error and reset to agency fleet defaults.
+ */
 export interface SiteDashboardReorderOptions {
     updateUrl: string;
     csrf: string;

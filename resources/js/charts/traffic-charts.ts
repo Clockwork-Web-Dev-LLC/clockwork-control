@@ -1,3 +1,7 @@
+/**
+ * Daily HTTP traffic summary aggregated from Nginx access logs (`clockwork:rollup-traffic`).
+ * Status codes are grouped into canonical 2xx/3xx/4xx/5xx families.
+ */
 export interface DailyTrafficItem {
     date: string;
     status_2xx: number;
@@ -11,6 +15,19 @@ export interface TrafficData {
     calendar?: [string, number][];
 }
 
+/**
+ * Traffic Charts Component
+ *
+ * Mounted in `resources/views/dashboard/site/tab-traffic.blade.php`:
+ *   <div x-data="trafficCharts({{ json_encode($trafficData) }})">
+ *
+ * Renders dual Apache ECharts visualizations:
+ * 1. Stacked daily HTTP status bar chart (2xx, 3xx, 4xx, 5xx) with an interactive dataZoom slider.
+ * 2. 365-day calendar activity heatmap showing daily request intensity.
+ *
+ * Automatically manages window resize handlers and Alpine `$cleanup` lifecycle
+ * hooks to dispose chart instances and prevent memory leaks on unmount.
+ */
 export function trafficCharts(trafficData: TrafficData = {}) {
     return {
         dailyChart: null as any,

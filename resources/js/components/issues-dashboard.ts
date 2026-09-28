@@ -1,3 +1,15 @@
+/**
+ * Issues Console Dashboard Component
+ *
+ * Mounted on `/issues` (`resources/views/dashboard/issues.blade.php`):
+ *   <div x-data="issuesDashboard(...)">
+ *
+ * Manages fleet-wide issue tracking and classification:
+ * - Tier filtering (all, core, security, health, operations) and priority filtering
+ *   (emergency, pressing, not pressing).
+ * - Real-time custom severity level overrides per issue category with AJAX persistence.
+ * - Batch operations, inline issue resolution, and category management drawer.
+ */
 export interface IssuesDashboardOptions {
     initialTotals?: Record<string, number>;
     categories?: Record<string, { label?: string; tier?: string }>;

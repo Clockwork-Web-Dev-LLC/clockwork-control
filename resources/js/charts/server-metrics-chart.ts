@@ -1,3 +1,6 @@
+/**
+ * Single server resource sample captured during periodic health polling.
+ */
 export interface ServerMetricItem {
     recorded_at: string;
     cpu_pct: number;
@@ -6,6 +9,19 @@ export interface ServerMetricItem {
     load_1: number;
 }
 
+/**
+ * Server Metrics Chart Component
+ *
+ * Mounted in `resources/views/dashboard/server/tab-stats.blade.php`:
+ *   <div x-data="serverMetricsChart({{ json_encode($metricsForChart) }})">
+ *
+ * Renders dual-axis server resource trends using Apache ECharts:
+ * - Left Y-Axis (0–100%): CPU %, Memory %, Disk % lines.
+ * - Right Y-Axis: 1-minute load average line.
+ *
+ * Data originates from 5-minute health polls (`ServerMetric`). Includes
+ * automatic window resize handlers and Alpine `$cleanup` lifecycle hooks.
+ */
 export function serverMetricsChart(metrics: ServerMetricItem[] = []) {
     return {
         chart: null as any,

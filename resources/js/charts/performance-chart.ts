@@ -1,3 +1,6 @@
+/**
+ * Single performance score point (timestamp and 0–100 score).
+ */
 export interface PerfPoint {
     x: string;
     y: number;
@@ -8,6 +11,18 @@ export interface PerfTrendData {
     desktop?: PerfPoint[];
 }
 
+/**
+ * Performance Trend Chart Component
+ *
+ * Mounted in `resources/views/dashboard/site/tab-performance.blade.php`:
+ *   <div x-data="performanceTrendChart({{ json_encode($perfTrend) }})">
+ *
+ * Renders a 30-day mobile and desktop Google PageSpeed / Lighthouse score trend
+ * using Apache ECharts. Data originates from scheduled audits (`SitePerformanceScan`).
+ *
+ * Includes automatic window resize handlers and Alpine `$cleanup` lifecycle
+ * hooks to dispose chart instances and prevent memory leaks on unmount.
+ */
 export function performanceTrendChart(data: PerfTrendData = {}) {
     return {
         chart: null as any,

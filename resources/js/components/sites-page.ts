@@ -1,3 +1,18 @@
+/**
+ * Sites Directory Page Component
+ *
+ * Mounted on `/sites` (`resources/views/dashboard/sites.blade.php`):
+ *   <div x-data="sitesPage()">
+ *
+ * Features:
+ * - List vs. Grid view switching persisted in localStorage (`clockwork_sites_view`).
+ * - Instant client-side DOM filtering on search input with matching row counters.
+ * - Debounced (250ms) asynchronous server search (`/sites?q=...`) updating table,
+ *   grid, and pagination via `DOMParser` partial replacement.
+ * - Add Site modal supporting raw JSON, base64 `cw_...` connection keys, and
+ *   cryptographically secure secret generation (`crypto.getRandomValues`).
+ * - Global `/` keyboard shortcut to focus search, `Escape` to clear.
+ */
 export function sitesPage() {
     return {
         view: (typeof localStorage !== 'undefined' ? localStorage.getItem('clockwork_sites_view') : null) || 'list',

@@ -1,3 +1,16 @@
+/**
+ * WordPress Plugins Fleet Manager Component
+ *
+ * Mounted on `/settings/wordpress-plugins` (`resources/views/settings/wordpress-plugins.blade.php`):
+ *   <div x-data="wpPluginsManager({ csrf: '...' })">
+ *
+ * Manages fleet-wide WordPress plugin status verification and installations:
+ * - Companion Installation: Pushes source via SSH or dispatches Pressable background jobs,
+ *   with exponential-backoff polling on queued tasks.
+ * - Plugin Re-probing: Executes remote SSH `wp plugin list` probes to refresh status flags.
+ * - Live DOM Feedback: Injects dismissable result rows with sanitized HTML (`escapeHtml`),
+ *   command output disclosure (<details>), and Gatekeeper pill rendering precedence.
+ */
 const escapeHtml = (s: string | number) =>
     String(s).replace(
         /[&<>"']/g,

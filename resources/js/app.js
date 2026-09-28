@@ -1,3 +1,10 @@
+/**
+ * Clockwork Control — Client Application Entry Point
+ *
+ * Boots the Alpine.js runtime, registers modular UI & chart components,
+ * exposes backward-compatible globals, and initializes system services
+ * (theming, typography scaling, layout switcher, tooltips, and confirmation modals).
+ */
 import Alpine from 'alpinejs';
 import { echarts } from './charts/echarts.js';
 import { performanceTrendChart } from './charts/performance-chart.js';
