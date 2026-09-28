@@ -2,7 +2,7 @@
 title: Azure
 section: Integrations
 order: 12
-updated: 2026-09-09
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [integrations, azure, monitoring]
 tracks: [modules/Azure/src/**, app/Console/Commands/{PollServers,ReconcileProvider,AzureTest}.php, app/Models/Server.php]

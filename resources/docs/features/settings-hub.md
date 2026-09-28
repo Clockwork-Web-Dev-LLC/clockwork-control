@@ -2,7 +2,7 @@
 title: Settings & Operations Hub
 section: Features
 order: 90
-updated: 2026-09-18
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [settings, operations, fleet, hub, navigation]
 tracks: [app/Http/Controllers/SettingsController.php, resources/views/settings/index.blade.php, resources/views/settings/_tabs.blade.php]
@@ -42,6 +42,7 @@ Outbound API credentials, ecosystem modules, and alerting channels:
 * **Slack Alerts** (`/settings/slack`) — Webhook integration and granular per-event notification toggles.
 * **Mattermost Alerts** (`/settings/mattermost`) — Self-hosted chatops integration and webhook channels.
 * **Bill.com Sync** (`/settings/bill-com`) — Automated recurring invoice synchronization and care plan reconciliation.
+* **Feedback & Visual Annotations** (`/settings/feedback` / `/feedback`) — In-app point-and-click comment pins, threaded team discussions, AI prompt generation for Claude/Grok, and module on/off controls. See [Visual Feedback & Collaboration](/docs/features/feedback).
 
 ### 5. System & Workspace
 Application governance, health diagnostics, and platform maintenance:

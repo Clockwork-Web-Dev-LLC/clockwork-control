@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-15
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php, app/Http/Controllers/SitesController.php]

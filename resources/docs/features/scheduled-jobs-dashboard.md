@@ -2,7 +2,7 @@
 title: Scheduled jobs dashboard
 section: Features
 order: 150
-updated: 2026-09-12
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [scheduler, cron, operations, diagnostics]
 tracks: [app/Http/Controllers/ScheduledJobsController.php, app/Models/ScheduledJobRun.php, app/Listeners/Scheduling/**, app/Support/ScheduledCommandName.php, app/Console/Commands/PruneScheduledJobRuns.php, resources/views/settings/scheduled-jobs.blade.php]

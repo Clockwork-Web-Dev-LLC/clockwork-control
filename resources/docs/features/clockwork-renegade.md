@@ -2,7 +2,7 @@
 title: Clockwork Renegade (WordPress.org Plugin)
 section: Features
 order: 94
-updated: 2026-09-15
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [renegade, companion, wordpress, wporg, plugins, enrollment, gpl]
 tracks: [app/Models/Site.php, app/Services/Companion/ClockworkCompanionClient.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/header.blade.php, resources/views/dashboard/sites.blade.php, tests/Feature/Sites/EnrollmentVariantDetectionTest.php, tests/Feature/SiteOverviewDashboardTest.php, tests/Feature/Models/SiteRelationshipsAndCastsTest.php]

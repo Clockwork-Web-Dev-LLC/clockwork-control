@@ -2,7 +2,7 @@
 title: WordPress plugin inventory
 section: Features
 order: 80
-updated: 2026-09-14
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [wordpress, plugins, inventory, updates, pressable]
 tracks: [app/Services/Sites/WpPluginDetector.php, app/Console/Commands/{DetectWpPlugins,RefreshCompanionSnapshot}.php, app/Http/Controllers/WordPressPluginsController.php]

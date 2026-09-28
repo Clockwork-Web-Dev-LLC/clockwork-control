@@ -2,7 +2,7 @@
 title: Contributing & Module Testing
 section: Getting Started
 order: 15
-updated: 2026-09-08
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [contributing, modules, open-source, vibe-coding, claude]
 tracks: [CONTRIBUTING.md]

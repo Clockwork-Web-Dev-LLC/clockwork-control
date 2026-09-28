@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-18
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -187,6 +187,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/settings/integrations/{service}/credentials/{field}/remove` | Remove an API key/credential from the root .env file. |
 | GET | `/settings/modules` | Module Directory — browses the official + community module catalog (`Modules\Core\ModuleDirectoryClient`, cached feed from `clockworkcontrol.com/api/modules.json`). See [Features → Module Directory](/documentation/features/module-directory). |
 | POST | `/settings/modules/refresh` | Force-refresh the module feed, bypassing the cache. |
+| POST | `/settings/modules/toggle` | Enable or disable an installed module on-the-fly. |
+| GET | `/settings/feedback` | Feedback module settings and global toggle. |
+| GET | `/feedback` | Working list of all visual feedback items and discussion threads. |
+| GET | `/feedback/{feedbackItem}` | Single feedback item detail view with threaded discussions and prompt generator. |
 | GET | `/settings/updates` | Clockwork Control's own self-update hub — checks the GitHub Releases API for a newer Core version, shows the Companion fleet-rollout breakdown, and links to the module catalog. Not to be confused with the fleet-wide `/updates` page (client WordPress sites) — see [Features → System updates](/documentation/features/system-updates). |
 | POST | `/settings/updates/check` | Force a fresh check against the upstream release channel, bypassing the 12h cache. |
 | POST | `/settings/updates/apply` | Operator-triggered self-update: `git pull` → `composer install --no-dev` → `migrate --force` → `optimize:clear`. Aborts before touching anything if the working copy has uncommitted changes. |

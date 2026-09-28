@@ -2,7 +2,7 @@
 title: Module Directory
 section: Features
 order: 91
-updated: 2026-09-07
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [modules, directory, ecosystem, settings, integrations]
 tracks: [app/Http/Controllers/ModuleDirectoryController.php, modules/Core/src/ModuleDirectoryClient.php]
@@ -42,7 +42,8 @@ The application interacts with the feed through `Modules\Core\ModuleDirectoryCli
   * **Settings Sub-Tabs**: Integrated with `settings._tabs.blade.php`, highlighting the *Integrations & Alerts* tab and linking back to the unified Settings Hub.
   * **Full-Width Category Navigation**: Filter across Cloud Providers, Hosting, Notifications, Authentication, Performance, Security (ManageWP Suite), and Billing.
   * **Trust Badges**: Visual indicators for `Official`, `Verified`, `Community`, and `Testing`.
-  * **Status Pills**: Distinguishes between `Active`, `Installed`, and available modules.
+  * **Status Pills & Live Activation Toggles**: Distinguishes between `Active`, `Installed`, and available modules. Installed modules feature an inline toggle switch (`POST /settings/modules/toggle`) to immediately enable or disable the module without requiring CLI commands.
+  * **Bundled Local Module Auto-Discovery**: Modules located in `modules/` in the codebase (e.g. Feedback, Core) are automatically detected and merged with the directory catalog even prior to registration in the upstream feed.
   * **Direct Actions**: Links to credential configuration for installed modules or GitHub repositories for new/community modules.
 
 ## Community Modules & Submission Workflow

@@ -2,10 +2,10 @@
 title: SSH + fail2ban
 section: Integrations
 order: 120
-updated: 2026-09-18
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [integrations, ssh, fail2ban, security, bans, pressable]
-tracks: [app/Services/Ssh/**, app/Services/Fail2ban/**, app/Http/Controllers/ServerProvisionController.php, app/Console/Commands/ProcessPendingBans.php, app/Console/Commands/RefreshFail2banIgnoreip.php, app/Console/Commands/SweepCfBans.php]
+tracks: [app/Services/Ssh/**, app/Services/Fail2ban/**, app/Http/Controllers/ServerProvisionController.php, app/Console/Commands/ProcessPendingBans.php, app/Console/Commands/RefreshFail2banIgnoreip.php, app/Console/Commands/SweepCfBans.php, app/Services/Sites/SiteMySqlClient.php]
 ---
 
 SSH is the substrate — for SpinupWP. Every SpinupWP server we manage is reached over SSH; fail2ban is the bans executor running on the other end. They're paired here because we never use fail2ban over anything but SSH and we never use SSH without leaning on fail2ban for the actual blocking.
@@ -80,6 +80,7 @@ A non-exhaustive sample of what we run remotely:
 
 - `app/Services/Ssh/SshClient.php` — the main client.
 - `app/Services/Ssh/SshCommandRunner.php` — thin `Modules\Core\Contracts\SiteCommandRunner` adapter over `SshClient::exec()`, used by `SpinupWpHostingProvider::commandRunner()` (part of the modularization roadmap's HostingProvider abstraction; `modules/Pressable/src/PressableApiCommandRunner.php` is the equivalent for Pressable).
+- `app/Services/Sites/SiteMySqlClient.php` — executes remote MySQL queries and pings via `SshClient` with safe temporary credential files; used for direct-DB fallbacks (LLAR lockouts and Wordfence blocks pullers).
 - `app/Services/Ssh/CredentialFeedParser.php` — paste-from-vault flow.
 - `app/Services/Fail2ban/Fail2banProvisioner.php`
 - `app/Services/Fail2ban/Fail2banClient.php` — `banIp`, `unbanIp`, `unbanIps`, `status`.

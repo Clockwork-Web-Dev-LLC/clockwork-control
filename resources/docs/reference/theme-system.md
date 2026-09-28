@@ -2,10 +2,10 @@
 title: Theme System
 section: Reference
 order: 25
-updated: 2026-09-11
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [reference, frontend, css, themes, ui]
-tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php]
+tracks: [resources/css/app.css, resources/js/theme.js, app/Http/Controllers/AppearanceSettingsController.php, app/Http/Controllers/StyleguideController.php]
 ---
 
 Clockwork Control features a multi-scheme theme system built on Tailwind CSS v4 custom property blocks and Alpine.js. Rather than a binary dark/light toggle, the control panel supports named curated palettes with seamless switching, zero flash of unstyled content (FOUC), and dynamic chart re-theming.
@@ -116,3 +116,7 @@ To add a new theme (e.g. `forest` or `nord`):
    ```
 2. Add the scheme key to `App\Http\Controllers\AppearanceSettingsController::VALID_THEMES`.
 3. Add the scheme descriptor to `schemes` array in `resources/js/theme.js` so the swatch thumbnail renders in the gear menu.
+
+## Developer Styleguide Workbench
+
+The application provides an interactive design system styleguide at `/styleguide` powered by `App\Http\Controllers\StyleguideController` (`resources/views/styleguide/index.blade.php`). It serves as a live workbench for verifying themes, typography scale, buttons, form controls, badges, cards, alerts, and modal dialogs under every supported color scheme.
