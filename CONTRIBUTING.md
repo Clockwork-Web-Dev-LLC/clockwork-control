@@ -57,13 +57,15 @@ above.
 
 ## Before you open a PR
 
+Run the quality gate locally before opening a PR:
+
 ```bash
-./vendor/bin/pint       # code style — run this, don't hand-format
-composer phpstan        # static analysis (Larastan, level 5) — must be clean
-./vendor/bin/pest       # test suite (in-memory SQLite, no setup needed)
+composer format         # code style (Pint for PHP + Biome for JS/TS) — don't hand-format
+composer check          # static analysis & linting (Pint + PHPStan level 5 + Biome + tsc)
+composer gate           # full gate: runs composer check + full Pest test suite
 ```
 
-All three run in CI-equivalent form (`.github/workflows/tests.yml`); a PR with a failing one of these won't merge as-is. Pint's rules are opinionated but non-negotiable — don't fight it, just run it.
+CI (`.github/workflows/tests.yml`) enforces Pint, PHPStan, Biome, and Pest; a PR with a failing check won't merge. Pre-commit hooks (`.githooks/pre-commit`) are configured automatically when you run `composer setup`.
 
 Tests are written in [Pest](https://pestphp.com) — `describe()`/`it()` blocks and `expect()` assertions, not raw PHPUnit assertion methods, even though the underlying runner is PHPUnit and a handful of pre-Pest test classes still exist. See `tests/Feature/ArchitectureTest.php` for the structural rules the suite enforces (no debug statements, `env()` only in `config/`, every module implements its contract, etc.) and `database/factories/` for every model's factory — `SiteFactory` in particular has `spinupwp()`/`pressable()`/`wpEngine()`/`kinsta()`/`cloudways()` states since `Site` has multiple, mutually-exclusive shapes depending on `hosting_provider`.
 

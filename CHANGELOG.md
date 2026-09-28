@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-Site Uptime Re-check on Monitoring Dashboard**: Added an on-demand "Re-check" button to each row in the `/monitoring` sites table, enabling operators to trigger an instant HTTP probe for any individual site via AJAX with live spinner feedback and in-place status badge / counter updates.
 - **Frontend Modularization & TypeScript Extraction**:
   - Extracted monolithic inline page scripts into modular, typed components under `resources/js/components/` and `resources/js/charts/`: `sitesPage` (`sites-page.ts`), `wpPluginsManager` (`wp-plugins-manager.ts`), `trafficCharts` (`traffic-charts.ts`), `performanceTrendChart` (`performance-chart.ts`), and `serverMetricsChart` (`server-metrics-chart.ts`).
+  - Consolidated all 6 inline `<script>` handlers on the Issues console (`resources/views/dashboard/issues.blade.php`) into `resources/js/components/issues-dashboard.ts` (`initRecheckHandlers()`), managing AJAX probes for down sites, server health, SSL certificates, SEO preflight, domain expiration, and server reboot/package patching.
   - Streamlined `resources/js/app.js` into a lean 48-line entry point registering Alpine components and initializing system services.
   - Added TypeScript type definitions (`resources/js/types/index.d.ts`) covering global window helpers, `confirmModal`, `alertModal`, and Alpine components.
   - Added standard header docblocks across all exported chart and component modules for developer context.
@@ -23,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configured TypeScript compiler (`tsc`) with non-emitting typechecking.
   - Added unified Composer scripts: `composer format` (Pint + Biome), `composer check` (Pint + PHPStan + Biome + `tsc`), and `composer gate` (check + full Pest test suite).
   - Hardened `.githooks/pre-commit` combining 5-layer defenses: filename pattern guards (`.env*`, `*.swp`), local client denylist scanner, `gitleaks` staged secret scanner, Pint PHP formatting, and Biome + `tsc` frontend checks.
+  - Configured `composer setup` to automatically activate `.githooks` via `git config core.hooksPath .githooks`.
+  - Updated `README.md` and `CONTRIBUTING.md` developer onboarding documentation with the new quality commands and pre-commit hook workflow.
 - **Internal Developer & Testing Documentation**:
   - Added `/docs/internal/developer-guide`: comprehensive architecture breakdown, directory layout, and conventions for new engineers.
   - Added `/docs/internal/testing-playbook`: testing standards, command reference, and authentic test double patterns for `SshClient::exec`, `SiteCommandRunner::run`, and `Http::fake`.

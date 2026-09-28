@@ -58,10 +58,13 @@ To populate inventory from a real fleet, set your hosting provider's token and r
 ## Tests + quality
 
 ```bash
-./vendor/bin/pest       # test suite (Pest, in-memory SQLite, no setup)
-./vendor/bin/pint       # code style
-composer phpstan        # static analysis (Larastan, level 5)
+composer format         # Pint (PHP) + Biome (JS/TS) code formatting
+composer check          # Full static gate: Pint + PHPStan (level 5) + Biome + tsc
+composer gate           # Pre-merge gate: composer check + full Pest test suite
+./vendor/bin/pest       # Run test suite directly (Pest, in-memory SQLite, no setup)
 ```
+
+Pre-commit git hooks (`.githooks/pre-commit`) run automatically (configured via `composer setup`) to enforce secret scanning via `gitleaks`, filename pattern guards, Pint, Biome, and TypeScript compilation checks.
 
 See [tests/README.md](tests/README.md) for the conventions the suite follows — factories, HTTP-fake fixtures, the authenticated-page trait, and how to mock the classes tests must never let touch real infrastructure.
 

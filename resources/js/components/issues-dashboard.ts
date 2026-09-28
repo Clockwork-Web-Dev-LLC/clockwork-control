@@ -80,6 +80,498 @@ export function issuesDashboard({
                     this.collapsedSections = savedCollapsed;
                 }
             } catch (_) {}
+
+            this.initRecheckHandlers();
+        },
+
+        initRecheckHandlers() {
+            const csrf =
+                this.csrfToken || (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
+
+            // 1. Uptime Re-check
+            document.querySelectorAll('#section-down-sites .uptime-recheck-btn').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.state === 'up') {
+                                if (row) {
+                                    row.style.transition = 'opacity 400ms';
+                                    row.style.opacity = '0';
+                                    setTimeout(() => row.remove(), 450);
+                                }
+                            } else {
+                                const failureCell = row?.querySelector('.cell-failure');
+                                if (failureCell) {
+                                    failureCell.innerHTML = data.status_code
+                                        ? `HTTP ${data.status_code}`
+                                        : '<span class="text-[var(--color-ink-muted)]">unreachable</span>';
+                                }
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        } else {
+                            btn.innerHTML = `<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> ${data.message || 'Failed'}`;
+                            setTimeout(() => {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }, 4000);
+                        }
+                    } catch (_) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.disabled = false;
+                        }, 4000);
+                    }
+                });
+            });
+
+            // 2. Server Health Re-check
+            document.querySelectorAll('#section-health .health-recheck-btn').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.status === 'green' || data.status === 'yellow') {
+                                if (row) {
+                                    row.style.transition = 'opacity 400ms';
+                                    row.style.opacity = '0';
+                                    setTimeout(() => row.remove(), 450);
+                                }
+                            } else {
+                                const polledCell = row?.querySelector('.cell-polled');
+                                if (polledCell) polledCell.textContent = data.last_polled ?? 'just now';
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        } else {
+                            btn.innerHTML = `<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> ${data.message || 'Failed'}`;
+                            setTimeout(() => {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }, 4000);
+                        }
+                    } catch (_) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.disabled = false;
+                        }, 4000);
+                    }
+                });
+            });
+
+            // 3. SSL Re-check
+            document.querySelectorAll('#section-ssl .recheck-btn').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.state === 'green' || data.state === 'none') {
+                                if (row) {
+                                    row.style.transition = 'opacity 400ms';
+                                    row.style.opacity = '0';
+                                    setTimeout(() => row.remove(), 450);
+                                }
+                            } else {
+                                const cls = data.state === 'red' ? 'status-red' : 'status-yellow';
+                                const label = data.state === 'red' ? 'Expired' : 'Renewal needed';
+                                const pill = document.createElement('span');
+                                pill.className = `status-pill ${cls} text-[10px]`;
+                                pill.textContent = label;
+                                const stateCell = row?.querySelector('.cell-state');
+                                if (stateCell) {
+                                    stateCell.textContent = '';
+                                    stateCell.appendChild(pill);
+                                }
+                                if (data.expires_at) {
+                                    const expiresCell = row?.querySelector('.cell-expires');
+                                    if (expiresCell)
+                                        expiresCell.textContent = new Date(data.expires_at).toLocaleString();
+                                }
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        } else {
+                            btn.innerHTML = `<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> ${data.message || 'Failed'}`;
+                            setTimeout(() => {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }, 4000);
+                        }
+                    } catch (_) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.disabled = false;
+                        }, 4000);
+                    }
+                });
+            });
+
+            // 4. SEO Indexability Preflight
+            document.querySelectorAll('#section-seo-indexability .preflight-btn').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking…';
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.indexable) {
+                                if (row) {
+                                    row.style.transition = 'opacity 400ms';
+                                    row.style.opacity = '0';
+                                    setTimeout(() => row.remove(), 450);
+                                }
+                            } else {
+                                const pillClass = data.is_staging ? 'status-gray' : 'status-red';
+                                const pill = document.createElement('span');
+                                pill.className = `status-pill ${pillClass} text-[10px]`;
+                                pill.textContent = data.status_label;
+                                const statusCell = row?.querySelector('.cell-status');
+                                if (statusCell) {
+                                    statusCell.textContent = '';
+                                    statusCell.appendChild(pill);
+                                }
+                                if (data.reason) {
+                                    const reasonCell = row?.querySelector('.cell-reason');
+                                    if (reasonCell) reasonCell.textContent = data.reason;
+                                }
+                                if (data.snippet) {
+                                    const codeEl = document.createElement('code');
+                                    codeEl.className =
+                                        'bg-[var(--color-surface-subtle)] px-1.5 py-0.5 rounded text-[11px]';
+                                    codeEl.textContent = data.snippet.substring(0, 55);
+                                    const snippetCell = row?.querySelector('.cell-snippet');
+                                    if (snippetCell) {
+                                        snippetCell.textContent = '';
+                                        snippetCell.appendChild(codeEl);
+                                    }
+                                }
+                                const checkedCell = row?.querySelector('.cell-checked');
+                                if (checkedCell) checkedCell.textContent = 'just now';
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        } else {
+                            btn.innerHTML =
+                                '<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> Failed';
+                            setTimeout(() => {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }, 4000);
+                        }
+                    } catch (_) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> Error';
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.disabled = false;
+                        }, 4000);
+                    }
+                });
+            });
+
+            // 5. Domain Expiration Re-check
+            document.querySelectorAll('#section-domain-expiration .recheck-btn').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.state === 'green' || data.state === 'none') {
+                                if (row) {
+                                    row.style.transition = 'opacity 400ms';
+                                    row.style.opacity = '0';
+                                    setTimeout(() => row.remove(), 450);
+                                }
+                            } else {
+                                const cls = data.state === 'red' ? 'status-red' : 'status-yellow';
+                                const pill = document.createElement('span');
+                                pill.className = `status-pill ${cls} text-[10px]`;
+                                pill.textContent = data.state_label;
+                                const stateCell = row?.querySelector('.cell-state');
+                                if (stateCell) {
+                                    stateCell.textContent = '';
+                                    stateCell.appendChild(pill);
+                                }
+                                if (data.expires_formatted) {
+                                    const expiresCell = row?.querySelector('.cell-expires');
+                                    if (expiresCell) {
+                                        expiresCell.textContent =
+                                            data.expires_formatted +
+                                            (data.days_remaining !== null ? ` (${data.days_remaining}d left)` : '');
+                                    }
+                                }
+                                if (data.registrar) {
+                                    const regCell = row?.querySelector('.cell-registrar');
+                                    if (regCell) regCell.textContent = data.registrar;
+                                }
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }
+                        } else {
+                            btn.innerHTML = `<i class="fa-solid fa-circle-xmark text-[var(--color-status-red)]"></i> Failed`;
+                            setTimeout(() => {
+                                btn.innerHTML = original;
+                                btn.disabled = false;
+                            }, 4000);
+                        }
+                    } catch (_) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                        setTimeout(() => {
+                            btn.innerHTML = original;
+                            btn.disabled = false;
+                        }, 4000);
+                    }
+                });
+            });
+
+            // 6. Reboot & Patches Handlers
+            const resultBanner = document.getElementById('reboot-action-banner');
+            const setBanner = (cls: string, html: string) => {
+                if (!resultBanner) return;
+                resultBanner.className = `card px-5 py-3 mb-4 text-sm ${cls}`;
+                resultBanner.innerHTML = html;
+                resultBanner.classList.remove('hidden');
+            };
+            const fadeOut = (row: HTMLElement | null) => {
+                if (!row) return;
+                row.style.transition = 'opacity 0.5s';
+                row.style.opacity = '0';
+                setTimeout(() => row.remove(), 500);
+            };
+
+            document.querySelectorAll('.reboot-recheck').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    btn.disabled = true;
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Probing…';
+                    setBanner('text-[var(--color-ink-muted)]', `Probing ${btn.dataset.serverName || ''}…`);
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            if (data.reboot_required) {
+                                setBanner(
+                                    'text-[var(--color-status-yellow)]',
+                                    `<i class="fa-solid fa-triangle-exclamation"></i> ${btn.dataset.serverName}: ${data.message}`,
+                                );
+                            } else {
+                                setBanner(
+                                    'text-[var(--color-status-green)]',
+                                    `<i class="fa-solid fa-circle-check"></i> ${btn.dataset.serverName}: ${data.message} Removing from list.`,
+                                );
+                                fadeOut(row);
+                            }
+                        } else {
+                            setBanner(
+                                'text-[var(--color-status-red)]',
+                                `<i class="fa-solid fa-circle-xmark"></i> ${btn.dataset.serverName}: ${data.message || 'Failed.'}`,
+                            );
+                        }
+                    } catch (e: any) {
+                        setBanner('text-[var(--color-status-red)]', `Network error: ${e?.message || 'unknown'}`);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = original;
+                    }
+                });
+            });
+
+            const queuedMarkup =
+                '<span class="text-[var(--color-primary-700)]"><i class="fa-solid fa-spinner"></i> queued</span>';
+            const markQueued = (ids: (number | string)[]) => {
+                ids.forEach((id) => {
+                    const row = document.querySelector(`#patches-list tr[data-server-id="${id}"]`);
+                    if (row) {
+                        const cell = row.querySelector('.patch-action-cell');
+                        if (cell) cell.innerHTML = queuedMarkup;
+                    }
+                });
+                const allBtn = document.getElementById('patches-install-all') as HTMLButtonElement | null;
+                if (allBtn) {
+                    const remaining = (allBtn.dataset.serverIds || '')
+                        .split(',')
+                        .filter(Boolean)
+                        .filter((id) => !ids.map(String).includes(String(id)));
+                    allBtn.dataset.serverIds = remaining.join(',');
+                    allBtn.innerHTML = `<i class="fa-solid fa-download"></i> Install updates on all ${remaining.length}`;
+                    allBtn.disabled = remaining.length === 0;
+                }
+            };
+
+            const queueUpdates = async (ids: number[], label: string, trigger: HTMLButtonElement) => {
+                const rebootAtInput = document.getElementById('patches-reboot-at') as HTMLInputElement | null;
+                const rebootAt = rebootAtInput?.value || '';
+                const ok = await (window as any).confirmModal?.({
+                    title: `Install updates on ${label}?`,
+                    details: `Runs apt-get upgrade over SSH, one server per minute, then ${rebootAt ? `reboots at ${rebootAt} server-local` : 'reboots right away'} if the upgrade requires it. Sites stay up during the upgrade; each reboot takes ~30–90 seconds.`,
+                    confirmText: 'Queue updates',
+                    variant: 'warning',
+                });
+                if (!ok) return;
+
+                trigger.disabled = true;
+                const original = trigger.innerHTML;
+                trigger.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Queueing…';
+                setBanner('text-[var(--color-ink-muted)]', `Queueing updates on ${label}…`);
+                try {
+                    const body: Record<string, any> = { server_ids: ids, reboot_immediate: rebootAt === '' };
+                    if (rebootAt) body.reboot_at = rebootAt;
+                    const r = await fetch(trigger.dataset.url || '', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrf,
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await r.json();
+                    if (data.ok) {
+                        markQueued(data.queued_ids || ids);
+                        const eta = Math.max(1, data.stats?.queued || ids.length);
+                        setBanner(
+                            'text-[var(--color-status-green)]',
+                            `<i class="fa-solid fa-circle-check"></i> ${data.message} The processor runs one server per minute, so allow roughly ${eta}–${eta * 4} minutes. Progress: <a class="underline" href="/operations/server-updates">Operations → Server updates</a>.`,
+                        );
+                    } else {
+                        setBanner(
+                            'text-[var(--color-status-red)]',
+                            `<i class="fa-solid fa-circle-xmark"></i> ${data.message || 'Nothing was queued.'}`,
+                        );
+                        trigger.disabled = false;
+                        trigger.innerHTML = original;
+                    }
+                } catch (e: any) {
+                    setBanner('text-[var(--color-status-red)]', `Network error: ${e?.message || 'unknown'}`);
+                    trigger.disabled = false;
+                    trigger.innerHTML = original;
+                }
+            };
+
+            document.querySelectorAll('.patch-now').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', () =>
+                    queueUpdates([parseInt(btn.dataset.serverId || '0', 10)], btn.dataset.serverName || '', btn),
+                );
+            });
+
+            const installAll = document.getElementById('patches-install-all') as HTMLButtonElement | null;
+            if (installAll) {
+                installAll.addEventListener('click', () => {
+                    const ids = (installAll.dataset.serverIds || '')
+                        .split(',')
+                        .filter(Boolean)
+                        .map((v) => parseInt(v, 10));
+                    if (ids.length === 0) return;
+                    queueUpdates(ids, `all ${ids.length} servers`, installAll);
+                });
+            }
+
+            document.querySelectorAll('.reboot-now').forEach((btnEl) => {
+                const btn = btnEl as HTMLButtonElement;
+                btn.addEventListener('click', async () => {
+                    const row = btn.closest('tr');
+                    const name = btn.dataset.serverName || '';
+                    const ok = await (window as any).confirmModal?.({
+                        title: `Reboot ${name} now?`,
+                        details: 'The box will go down momentarily and come back in ~30–90 seconds.',
+                        confirmText: 'Reboot Server',
+                        variant: 'warning',
+                    });
+                    if (!ok) return;
+
+                    btn.disabled = true;
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Issuing…';
+                    setBanner('text-[var(--color-ink-muted)]', `Issuing reboot on ${name}…`);
+                    try {
+                        const r = await fetch(btn.dataset.url || '', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': csrf,
+                                Accept: 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({}),
+                        });
+                        const data = await r.json();
+                        if (data.ok) {
+                            setBanner(
+                                'text-[var(--color-status-green)]',
+                                `<i class="fa-solid fa-circle-check"></i> ${name}: ${data.message}`,
+                            );
+                            if (row?.closest('#patches-list')) {
+                                const cell = row.querySelector('.patch-reboot-cell');
+                                if (cell)
+                                    cell.innerHTML =
+                                        '<span class="text-[var(--color-ink-soft)]"><i class="fa-solid fa-circle-check"></i> rebooting…</span>';
+                            } else {
+                                fadeOut(row);
+                            }
+                        } else {
+                            setBanner(
+                                'text-[var(--color-status-red)]',
+                                `<i class="fa-solid fa-circle-xmark"></i> ${name}: ${data.message || 'Reboot failed.'}`,
+                            );
+                        }
+                    } catch (e: any) {
+                        setBanner('text-[var(--color-status-red)]', `Network error: ${e?.message || 'unknown'}`);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = original;
+                    }
+                });
+            });
         },
 
         setTier(tier: string) {
