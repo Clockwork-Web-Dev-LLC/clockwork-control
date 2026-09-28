@@ -8,6 +8,8 @@
     batchLoading: false,
     batchPromptText: '',
     batchCount: {{ $stats['approved'] }},
+    approvedCount: {{ $stats['approved'] }},
+    openCount: {{ $stats['open'] }},
     batchStatus: 'approved',
     batchCopied: false,
     async openBatchModal(status = 'approved') {
@@ -52,7 +54,9 @@
                     title="Generate one big prompt for all approved items to paste into Claude/Grok">
                 <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
                 <span>Generate Approved Prompt</span>
-                <span class="px-1.5 py-0.2 rounded-full font-data text-xs {{ $stats['approved'] > 0 ? 'bg-white/25 text-white font-bold' : 'bg-white/10 text-white/70' }}">
+                <span class="px-1.5 py-0.2 rounded-full font-data text-xs"
+                      :class="approvedCount > 0 ? 'bg-white/25 text-white font-bold' : 'bg-white/10 text-white/70'"
+                      x-text="approvedCount">
                     {{ $stats['approved'] }}
                 </span>
             </button>
@@ -94,7 +98,7 @@
         <a href="{{ route('feedback.index', ['status' => 'open']) }}"
            class="card p-4 hover:border-amber-500 transition-all cursor-pointer {{ $currentStatus === 'open' ? 'border-amber-500 shadow-xs' : '' }}">
             <div class="text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">Open Issues</div>
-            <div class="text-2xl lg:text-3xl font-bold font-data text-amber-500">{{ $stats['open'] }}</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-amber-500" x-text="openCount">{{ $stats['open'] }}</div>
             <div class="text-[11px] text-[var(--color-ink-muted)] mt-1">awaiting review</div>
         </a>
 
@@ -111,7 +115,7 @@
                     <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i> Prompt
                 </button>
             </div>
-            <div class="text-2xl lg:text-3xl font-bold font-data text-emerald-600 dark:text-emerald-400">{{ $stats['approved'] }}</div>
+            <div class="text-2xl lg:text-3xl font-bold font-data text-emerald-600 dark:text-emerald-400" x-text="approvedCount">{{ $stats['approved'] }}</div>
             <div class="text-[11px] text-[var(--color-ink-muted)] mt-1 flex items-center justify-between">
                 <span>ready for Claude prompt</span>
                 <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Generate →</span>
@@ -219,11 +223,11 @@
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'open'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'open' ? 'bg-amber-500 text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
-                    Open ({{ $stats['open'] }})
+                    Open (<span x-text="openCount">{{ $stats['open'] }}</span>)
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'approved'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'approved' ? 'bg-emerald-600 text-white' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10' }}">
-                    Approved ({{ $stats['approved'] }})
+                    Approved (<span x-text="approvedCount">{{ $stats['approved'] }}</span>)
                 </a>
                 <a href="{{ route('feedback.index', array_merge(request()->query(), ['status' => 'in_progress'])) }}"
                    class="px-2.5 py-1 rounded-full font-medium transition-all {{ $currentStatus === 'in_progress' ? 'bg-blue-500 text-white' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]' }}">
@@ -287,7 +291,9 @@
                     title="Generate one big prompt for all approved items">
                 <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
                 <span>Prompt Approved</span>
-                <span class="px-1.5 py-0.2 rounded-full font-data text-[10px] {{ $stats['approved'] > 0 ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-neutral-500/10 text-[var(--color-ink-muted)]' }}">
+                <span class="px-1.5 py-0.2 rounded-full font-data text-[10px]"
+                      :class="approvedCount > 0 ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-neutral-500/10 text-[var(--color-ink-muted)]'"
+                      x-text="approvedCount">
                     {{ $stats['approved'] }}
                 </span>
             </button>
@@ -312,14 +318,90 @@
     @else
         <div class="space-y-4 mb-6">
             @foreach ($items as $item)
-                <div class="card p-5 hover:border-[var(--color-brand)]/40 transition-all text-xs" x-data="{ expanded: false, promptCopied: false }">
+                <div class="card p-5 hover:border-[var(--color-brand)]/40 transition-all text-xs"
+                     x-data="{
+                         expanded: false,
+                         promptCopied: false,
+                         itemStatus: '{{ $item->status }}',
+                         approving: false,
+                         async approveItem() {
+                             if (this.itemStatus === 'approved' || this.approving) return;
+                             this.approving = true;
+                             try {
+                                 const res = await fetch('{{ route('feedback.approve', $item) }}', {
+                                     method: 'POST',
+                                     headers: {
+                                         'Content-Type': 'application/json',
+                                         'Accept': 'application/json',
+                                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                     }
+                                 });
+                                 const data = await res.json();
+                                 if (data.ok) {
+                                     const prev = this.itemStatus;
+                                     this.itemStatus = 'approved';
+                                     approvedCount++;
+                                     batchCount = approvedCount;
+                                     if (prev === 'open' && openCount > 0) {
+                                         openCount--;
+                                     }
+                                 }
+                             } catch (e) {
+                                 console.error('Approve failed', e);
+                             } finally {
+                                 this.approving = false;
+                             }
+                         },
+                         async updateStatus(newStatus) {
+                             const prev = this.itemStatus;
+                             this.itemStatus = newStatus;
+                             try {
+                                 const res = await fetch('{{ route('feedback.update', $item) }}', {
+                                     method: 'PATCH',
+                                     headers: {
+                                         'Content-Type': 'application/json',
+                                         'Accept': 'application/json',
+                                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                     },
+                                     body: JSON.stringify({ status: newStatus })
+                                 });
+                                 const data = await res.json();
+                                 if (data.ok) {
+                                     if (prev === 'approved' && newStatus !== 'approved') {
+                                         approvedCount = Math.max(0, approvedCount - 1);
+                                     } else if (prev !== 'approved' && newStatus === 'approved') {
+                                         approvedCount++;
+                                     }
+                                     if (prev === 'open' && newStatus !== 'open') {
+                                         openCount = Math.max(0, openCount - 1);
+                                     } else if (prev !== 'open' && newStatus === 'open') {
+                                         openCount++;
+                                     }
+                                     batchCount = approvedCount;
+                                 } else {
+                                     this.itemStatus = prev;
+                                 }
+                             } catch (e) {
+                                 console.error('Status update failed', e);
+                                 this.itemStatus = prev;
+                             }
+                         }
+                     }">
                     {{-- Item Top Row: Badges, Path, Author, Date --}}
                     <div class="flex items-start justify-between flex-wrap gap-2 mb-2.5">
                         <div class="flex items-center gap-2 flex-wrap">
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-data {{ $item->typeBadgeClass() }}">
                                 {{ $item->formattedType() }}
                             </span>
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-data {{ $item->statusBadgeClass() }}">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold font-data transition-colors"
+                                  :class="{
+                                      'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30': itemStatus === 'approved',
+                                      'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30': itemStatus === 'open',
+                                      'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30': itemStatus === 'in_progress',
+                                      'bg-[var(--color-status-green)]/15 text-[var(--color-status-green)] border border-[var(--color-status-green)]/30': itemStatus === 'resolved',
+                                      'bg-neutral-500/15 text-[var(--color-ink-muted)] border border-neutral-500/30': itemStatus === 'dismissed'
+                                  }"
+                                  x-text="itemStatus.replace('_', ' ').toUpperCase()">
                                 {{ strtoupper(str_replace('_', ' ', $item->status)) }}
                             </span>
 
@@ -387,21 +469,22 @@
                                 <i class="fa-solid fa-location-dot text-[10px]"></i> View Pin
                             </a>
 
-                            {{-- 1-Click Approve Button --}}
-                            @if ($item->status !== 'approved')
-                                <form method="POST" action="{{ route('feedback.approve', $item) }}" class="inline">
-                                    @csrf
-                                    <button type="submit"
-                                            class="btn-pill-nav text-xs py-1 px-2.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1.5 cursor-pointer font-semibold"
-                                            title="Mark as Approved for the next Claude implementation batch">
-                                        <i class="fa-solid fa-check text-[10px]"></i> Approve
-                                    </button>
-                                </form>
-                            @else
+                            {{-- 1-Click Approve Button (AJAX) --}}
+                            <template x-if="itemStatus !== 'approved'">
+                                <button type="button"
+                                        @click="approveItem()"
+                                        :disabled="approving"
+                                        class="btn-pill-nav text-xs py-1 px-2.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1.5 cursor-pointer font-semibold disabled:opacity-50"
+                                        title="Mark as Approved without reloading the page">
+                                    <i class="fa-solid" :class="approving ? 'fa-spinner fa-spin text-[10px]' : 'fa-check text-[10px]'"></i>
+                                    <span x-text="approving ? 'Approving…' : 'Approve'">Approve</span>
+                                </button>
+                            </template>
+                            <template x-if="itemStatus === 'approved'">
                                 <span class="px-2.5 py-1 rounded-full text-xs font-semibold font-data bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                                     <i class="fa-solid fa-circle-check text-[10px]"></i> Approved
                                 </span>
-                            @endif
+                            </template>
 
                             {{-- Copy Prompt Button --}}
                             <button type="button"
@@ -428,17 +511,15 @@
 
                         {{-- Quick Status Changer & Delete --}}
                         <div class="flex items-center gap-2">
-                            <form method="POST" action="{{ route('feedback.update', $item) }}" class="inline">
-                                @csrf
-                                @method('PATCH')
-                                <select name="status" onchange="this.form.submit()" class="text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-1 px-2 text-[var(--color-ink-strong)] font-data cursor-pointer focus:outline-none focus:border-[var(--color-brand)]">
-                                    <option value="open" {{ $item->status === 'open' ? 'selected' : '' }}>Open</option>
-                                    <option value="approved" {{ $item->status === 'approved' ? 'selected' : '' }}>Approved</option>
-                                    <option value="in_progress" {{ $item->status === 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                                    <option value="resolved" {{ $item->status === 'resolved' ? 'selected' : '' }}>Resolved</option>
-                                    <option value="dismissed" {{ $item->status === 'dismissed' ? 'selected' : '' }}>Dismissed</option>
-                                </select>
-                            </form>
+                            <select x-model="itemStatus"
+                                    @change="updateStatus($event.target.value)"
+                                    class="text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface)] py-1 px-2 text-[var(--color-ink-strong)] font-data cursor-pointer focus:outline-none focus:border-[var(--color-brand)]">
+                                <option value="open">Open</option>
+                                <option value="approved">Approved</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="dismissed">Dismissed</option>
+                            </select>
 
                             <form method="POST" action="{{ route('feedback.destroy', $item) }}" class="inline" onsubmit="return confirm('Delete this feedback item?');">
                                 @csrf

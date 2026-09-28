@@ -55,8 +55,9 @@ describe('DashboardController', function () {
         $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
 
         $response->assertOk()
-            ->assertSee('Refresh from SpinupWP')
-            ->assertDontSee('Refresh from GridPane');
+            ->assertSee(route('servers.refreshFromSpinupWp'))
+            ->assertSee('Refresh Servers')
+            ->assertDontSee(route('servers.refreshFromGridPane'));
     });
 
     it('shows only the Refresh from GridPane fleet action when SpinupWP is disabled', function () {
@@ -68,8 +69,9 @@ describe('DashboardController', function () {
         $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
 
         $response->assertOk()
-            ->assertSee('Refresh from GridPane')
-            ->assertDontSee('Refresh from SpinupWP');
+            ->assertSee(route('servers.refreshFromGridPane'))
+            ->assertSee('Refresh Servers')
+            ->assertDontSee(route('servers.refreshFromSpinupWp'));
     });
 
     it('renders servers.show for each allowed tab', function (string $tab) {

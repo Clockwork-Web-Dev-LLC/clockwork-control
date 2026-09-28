@@ -408,11 +408,12 @@
                                 </td>
                                 <td class="px-5 py-2 text-right whitespace-nowrap site-actions-cell">
                                     <button type="button"
-                                            class="monitoring-recheck-btn btn-pill-nav text-[11px] py-0.5 px-2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] mr-1.5 cursor-pointer"
+                                            class="monitoring-recheck-btn btn-pill-nav text-[11px] py-1 px-2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] mr-1.5 cursor-pointer inline-flex items-center justify-center"
                                             data-url="{{ route('sites.uptime.recheck', $site) }}"
                                             data-domain="{{ $site->domain }}"
-                                            title="Run instant uptime probe for {{ $site->domain }}">
-                                        <i class="fa-solid fa-rotate text-[10px] mr-1"></i> Re-check
+                                            title="Run instant uptime probe for {{ $site->domain }}"
+                                            aria-label="Re-check uptime for {{ $site->domain }}">
+                                        <i class="fa-solid fa-rotate text-[10px]"></i>
                                     </button>
                                     @if ($isDown)
                                         @if ($isNotOurFault)

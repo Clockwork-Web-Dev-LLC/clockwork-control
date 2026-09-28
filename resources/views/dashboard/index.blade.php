@@ -74,23 +74,28 @@
     <!-- ================================================================= -->
     <x-page-header title="Servers" subtitle="Live infrastructure fleet monitor across provisioned clouds and host nodes.">
         <x-slot:actions>
-            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
+            @php
+                $hasSpinup = app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp');
+                $hasGridPane = app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane');
+                $multiProvider = $hasSpinup && $hasGridPane;
+            @endphp
+            @if ($hasSpinup)
                 <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="inline">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from SpinupWP API"
                             onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                        <i class="fa-solid fa-rotate"></i> <span>Refresh from SpinupWP</span>
+                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from SpinupWP' : 'Refresh Servers' }}</span>
                     </button>
                 </form>
             @endif
-            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane'))
+            @if ($hasGridPane)
                 <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="inline ml-1 sm:ml-2">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from GridPane API"
                             onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                        <i class="fa-solid fa-rotate"></i> <span>Refresh from GridPane</span>
+                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from GridPane' : 'Refresh Servers' }}</span>
                     </button>
                 </form>
             @endif
@@ -641,9 +646,10 @@
                                     default => ['label' => 'Healthy', 'class' => 'status-green'],
                                 };
                             @endphp
-                            <tr class="server-card"
+                            <tr class="server-card cursor-pointer hover:bg-[var(--color-surface-alt)]/50 transition-colors"
                                 data-server-id="{{ $server->id }}"
-                                data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}">
+                                data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}"
+                                onclick="if (!event.target.closest('a, button, form, input')) window.location.href = '{{ route('servers.show', $server) }}'">
                                 <td>
                                     <span class="status-pill {{ $cardPill['class'] }} text-[10px]">
                                         <span class="status-dot"></span>

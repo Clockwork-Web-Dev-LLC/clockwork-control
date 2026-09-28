@@ -398,13 +398,15 @@ export function monitoringPage() {
                     if (btn.disabled) return;
 
                     const origHtml = btn.innerHTML;
+                    const origTitle = btn.title;
                     const row = btn.closest('tr') as HTMLElement | null;
                     const stateCell = row?.querySelector('.site-state-cell');
                     const lastEventCell = row?.querySelector('.site-last-event-cell');
                     const actionsCell = row?.querySelector('.site-actions-cell');
 
                     btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i> Probing…';
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i>';
+                    btn.title = 'Probing uptime…';
 
                     try {
                         const url = btn.dataset.url || '';
@@ -419,7 +421,8 @@ export function monitoringPage() {
 
                         if (data.ok) {
                             if (data.state === 'up') {
-                                btn.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1"></i> Up (${data.status_code || 200})`;
+                                btn.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 text-[10px]"></i>';
+                                btn.title = `Probe passed: Up (${data.status_code || 200})`;
 
                                 if (stateCell) {
                                     stateCell.innerHTML =
@@ -457,31 +460,38 @@ export function monitoringPage() {
 
                                 setTimeout(() => {
                                     btn.innerHTML = origHtml;
+                                    btn.title = origTitle;
                                     btn.disabled = false;
                                 }, 2500);
                             } else {
                                 const code = data.status_code ? `HTTP ${data.status_code}` : 'Down';
-                                btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-500 text-[10px] mr-1"></i> ${code}`;
+                                btn.innerHTML =
+                                    '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-[10px]"></i>';
+                                btn.title = `Probe failed: ${code}`;
                                 if (lastEventCell) {
                                     lastEventCell.textContent = 'Down — checked just now';
                                 }
                                 setTimeout(() => {
                                     btn.innerHTML = origHtml;
+                                    btn.title = origTitle;
                                     btn.disabled = false;
                                 }, 3000);
                             }
                         } else {
-                            btn.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> ${data.message || 'Error'}`;
+                            btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px]"></i>';
+                            btn.title = data.message || 'Probe error';
                             setTimeout(() => {
                                 btn.innerHTML = origHtml;
+                                btn.title = origTitle;
                                 btn.disabled = false;
                             }, 3500);
                         }
                     } catch (_) {
-                        btn.innerHTML =
-                            '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1"></i> Failed';
+                        btn.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-500 text-[10px]"></i>';
+                        btn.title = 'Probe network error';
                         setTimeout(() => {
                             btn.innerHTML = origHtml;
+                            btn.title = origTitle;
                             btn.disabled = false;
                         }, 3500);
                     }
