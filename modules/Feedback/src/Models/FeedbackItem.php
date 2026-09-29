@@ -35,6 +35,10 @@ use Modules\Feedback\Services\FeedbackPromptBuilder;
  * @property Carbon $updated_at
  * @property-read ?User $user
  * @property-read Collection<int, FeedbackComment> $comments
+ *
+ * @method static Builder<FeedbackItem> forPath(string $path)
+ * @method static Builder<FeedbackItem> active()
+ * @method static Builder<FeedbackItem> approved()
  */
 class FeedbackItem extends Model
 {

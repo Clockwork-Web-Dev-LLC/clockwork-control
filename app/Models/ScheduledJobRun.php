@@ -21,6 +21,8 @@ use Illuminate\Support\Collection;
  * @property ?int $exit_code
  * @property ?string $output
  * @property Carbon $created_at
+ *
+ * @method static Builder<ScheduledJobRun> forCommand(string $command)
  */
 class ScheduledJobRun extends Model
 {
