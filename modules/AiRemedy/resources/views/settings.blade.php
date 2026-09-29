@@ -56,16 +56,16 @@
                 <div>
                     <h3 class="text-sm font-bold text-[var(--color-ink-strong)]">OpenRouter API Key</h3>
                     <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
-                        Your universal API key for Claude 3.5 Sonnet, GPT-4o, and DeepSeek. Stored encrypted at rest.
+                        Your universal API key for Claude 3.5 Sonnet, GPT-4o, and DeepSeek. Stored directly in your <code>.env</code> file (<code>OPENROUTER_API_KEY</code>). Never saved in the database.
                     </p>
                 </div>
                 @if($hasKey)
                     <span class="px-2 py-0.5 rounded-full font-data text-xs font-semibold bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
-                        <i class="fa-solid fa-check text-[10px]"></i> Key Configured
+                        <i class="fa-solid fa-shield-halved text-[10px]"></i> Saved in .env
                     </span>
                 @else
                     <span class="px-2 py-0.5 rounded-full font-data text-xs font-semibold bg-amber-500/15 text-amber-600 border border-amber-500/30 flex items-center gap-1">
-                        <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Key Required
+                        <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Key Required in .env
                     </span>
                 @endif
             </div>
@@ -75,8 +75,8 @@
                     <input type="password"
                            name="openrouter_api_key"
                            x-model="apiKey"
-                           placeholder="{{ $hasKey ? '•••••••••••••••••••••••••••••••• (leave blank to keep current)' : 'sk-or-v1-...' }}"
-                           class="input text-xs flex-1 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-[var(--color-ink-strong)] p-2.5">
+                           placeholder="{{ $hasKey ? '•••••••••••••••••••••••••••••••• (leave blank to keep current .env key)' : 'sk-or-v1-...' }}"
+                           class="input text-xs flex-1 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-[var(--color-ink-strong)] p-2.5 font-mono">
 
                     <button type="button"
                             @click="testConnection()"
@@ -97,7 +97,7 @@
                 </template>
 
                 <p class="text-[11px] text-[var(--color-ink-muted)]">
-                    Get an API key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-[var(--color-brand)] hover:underline">openrouter.ai/keys</a>. Average cost per incident diagnosis is ~$0.012 (1.2 cents).
+                    Get an API key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-[var(--color-brand)] hover:underline">openrouter.ai/keys</a>. You can also manually add <code>OPENROUTER_API_KEY=sk-or-v1-...</code> to your <code>.env</code> file. Average cost per incident diagnosis is ~$0.012 (1.2 cents).
                 </p>
             </div>
         </div>

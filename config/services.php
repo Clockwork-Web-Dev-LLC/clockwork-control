@@ -56,4 +56,8 @@ return [
         'hosted_domain' => env('GOOGLE_HD'),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+    ],
+
 ];

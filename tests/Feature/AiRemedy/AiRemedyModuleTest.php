@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\ActionLog;
+use App\Models\AppSetting;
 use App\Models\Server;
 use App\Models\User;
 use App\Services\Ssh\SshClient;
+use App\Support\EnvCredentialManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Modules\AiRemedy\AiRemedyServiceProvider;
@@ -249,7 +251,12 @@ test('remedy executor executes approved commands over ssh, updates run, and logs
     ]);
 });
 
-test('settings controller updates openrouter key and model preferences', function () {
+test('settings controller updates openrouter key in env and never saves in database', function () {
+    $tempEnv = (string) tempnam(sys_get_temp_dir(), 'env_test_');
+    file_put_contents($tempEnv, "APP_NAME=Clockwork\n");
+    $envManager = new EnvCredentialManager($tempEnv);
+    app()->instance(EnvCredentialManager::class, $envManager);
+
     $response = $this->actingAs($this->user)->post(route('ai-remedy.settings.update'), [
         'openrouter_api_key' => 'sk-or-v1-my-secret-key',
         'model' => 'openai/gpt-4o',
@@ -262,4 +269,13 @@ test('settings controller updates openrouter key and model preferences', functio
     $client = app(OpenRouterClient::class);
     expect($client->getApiKey())->toBe('sk-or-v1-my-secret-key');
     expect($client->getModel())->toBe('openai/gpt-4o');
+
+    // Confirm written to .env file
+    expect($envManager->getEnvValue('OPENROUTER_API_KEY'))->toBe('sk-or-v1-my-secret-key');
+
+    // Confirm database table NEVER holds the key
+    $dbKey = AppSetting::where('key', 'clockwork.ai_remedy.openrouter_api_key')->value('value');
+    expect($dbKey)->toBeEmpty();
+
+    @unlink($tempEnv);
 });

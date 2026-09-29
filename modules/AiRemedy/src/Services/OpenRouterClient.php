@@ -2,8 +2,8 @@
 
 namespace Modules\AiRemedy\Services;
 
+use App\Support\EnvCredentialManager;
 use App\Support\Settings;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -14,39 +14,61 @@ class OpenRouterClient
 
     public const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-    public function __construct(protected Settings $settings) {}
-
-    /**
-     * Retrieve the decrypted OpenRouter API key.
-     */
-    public function getApiKey(): ?string
-    {
-        $encrypted = (string) $this->settings->get('clockwork.ai_remedy.openrouter_api_key', '');
-
-        if ($encrypted === '') {
-            return config('services.openrouter.api_key');
-        }
-
-        try {
-            return Crypt::decryptString($encrypted);
-        } catch (Throwable) {
-            return $encrypted;
-        }
+    public function __construct(
+        protected Settings $settings,
+        protected ?EnvCredentialManager $envManager = null,
+    ) {
+        $this->envManager ??= app(EnvCredentialManager::class);
     }
 
     /**
-     * Store the encrypted OpenRouter API key.
+     * Retrieve the OpenRouter API key from .env (never the database).
+     */
+    public function getApiKey(): ?string
+    {
+        // 1. Check runtime configuration
+        $configKey = config('services.openrouter.api_key');
+        if (! empty($configKey)) {
+            return (string) $configKey;
+        }
+
+        // 2. Read directly from the .env file
+        $fileKey = $this->envManager?->getEnvValue('OPENROUTER_API_KEY');
+        if (! empty($fileKey)) {
+            return (string) $fileKey;
+        }
+
+        return null;
+    }
+
+    /**
+     * Store the OpenRouter API key directly in .env (never the database).
      */
     public function setApiKey(?string $apiKey): void
     {
         if (empty($apiKey)) {
+            $this->envManager?->removeEnv('OPENROUTER_API_KEY');
+            putenv('OPENROUTER_API_KEY=');
+            unset($_ENV['OPENROUTER_API_KEY'], $_SERVER['OPENROUTER_API_KEY']);
+            config(['services.openrouter.api_key' => null]);
+
+            // Ensure database is completely clean
             $this->settings->put('clockwork.ai_remedy.openrouter_api_key', '');
 
             return;
         }
 
-        $encrypted = Crypt::encryptString(trim($apiKey));
-        $this->settings->put('clockwork.ai_remedy.openrouter_api_key', $encrypted);
+        $trimmed = trim($apiKey);
+        $this->envManager?->writeEnv('OPENROUTER_API_KEY', $trimmed);
+
+        // Populate runtime environment and config for the current process/request
+        putenv("OPENROUTER_API_KEY={$trimmed}");
+        $_ENV['OPENROUTER_API_KEY'] = $trimmed;
+        $_SERVER['OPENROUTER_API_KEY'] = $trimmed;
+        config(['services.openrouter.api_key' => $trimmed]);
+
+        // Ensure database never holds the key
+        $this->settings->put('clockwork.ai_remedy.openrouter_api_key', '');
     }
 
     /**
