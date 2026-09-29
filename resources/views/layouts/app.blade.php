@@ -779,5 +779,9 @@
     @if (auth()->check() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
         @include('feedback::_overlay')
     @endif
+
+    @if (auth()->check() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+        @include('ai-remedy::_server_modal')
+    @endif
 </body>
 </html>

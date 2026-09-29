@@ -2,6 +2,7 @@
 
 use App\Providers\AppServiceProvider;
 use App\Providers\IntegrationServiceProvider;
+use Modules\AiRemedy\AiRemedyServiceProvider;
 use Modules\AuthGitHub\GitHubAuthServiceProvider;
 use Modules\AuthGoogle\GoogleAuthServiceProvider;
 use Modules\AuthMicrosoft\MicrosoftAuthServiceProvider;
@@ -82,6 +83,7 @@ return [
     ContactFormsServiceProvider::class,
     BackupRelayServiceProvider::class,
     FeedbackServiceProvider::class,
+    AiRemedyServiceProvider::class,
     // Authentication modules — each contributes an AuthProvider implementation
     // to ModuleRegistry for dynamic sign-in on /login and /setup.
     GoogleAuthServiceProvider::class,

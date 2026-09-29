@@ -62,7 +62,7 @@ class ModuleCatalog
             return 'security';
         }
 
-        if (in_array($id, ['contact-forms', 'backup-relay', 'feedback'], true)) {
+        if (in_array($id, ['contact-forms', 'backup-relay', 'feedback', 'ai-remedy'], true)) {
             return 'maintenance';
         }
 

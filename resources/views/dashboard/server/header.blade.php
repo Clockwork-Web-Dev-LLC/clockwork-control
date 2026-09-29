@@ -191,6 +191,16 @@
                     </button>
                 </form>
             @endif
+
+            @if ($moduleState->isEnabled('ai-remedy'))
+                <button type="button"
+                        @click="$dispatch('open-ai-remedy', { serverId: {{ $server->id }}, serverName: '{{ addslashes($server->name) }}', reason: 'Manual server health audit' })"
+                        class="btn-pill-nav text-xs mt-2 text-[var(--color-brand)] border-[var(--color-brand)]/30 hover:bg-[var(--color-brand)]/10 font-semibold cursor-pointer"
+                        title="Run an AI-powered diagnostic and fix performance issues with AiRemedy">
+                    <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                    <span>Diagnose with AiRemedy</span>
+                </button>
+            @endif
         </div>
     </div>
 
