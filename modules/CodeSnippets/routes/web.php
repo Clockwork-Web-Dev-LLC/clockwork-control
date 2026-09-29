@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\CodeSnippets\Http\Controllers\CodeSnippetsController;
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/snippets', [CodeSnippetsController::class, 'index'])->name('snippets.index');
 
     Route::middleware('admin')->group(function () {

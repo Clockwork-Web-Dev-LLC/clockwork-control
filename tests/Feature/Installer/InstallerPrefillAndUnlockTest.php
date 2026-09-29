@@ -91,6 +91,32 @@ describe('Installer Prefill and Unlock', function () {
         EnforceInstallerGate::$ignoreUnitTestBypass = false;
     });
 
+    it('auto-seals and 404s installer routes when active users exist in database without reopened sentinel', function () {
+        EnforceInstallerGate::fake(null);
+        EnforceInstallerGate::$ignoreUnitTestBypass = true;
+
+        User::factory()->create([
+            'email' => 'operator@agency.com',
+            'revoked_at' => null,
+        ]);
+
+        $sentinel = EnforceInstallerGate::sentinelPath();
+        @unlink($sentinel);
+        @unlink(storage_path('installer_reopened'));
+        expect(file_exists($sentinel))->toBeFalse();
+
+        $response = $this->get('/install');
+
+        $response->assertNotFound();
+        expect(file_exists($sentinel))->toBeTrue();
+
+        $data = json_decode((string) file_get_contents($sentinel), true);
+        expect($data['auto_healed'])->toBeTrue();
+
+        @unlink($sentinel);
+        EnforceInstallerGate::$ignoreUnitTestBypass = false;
+    });
+
     it('renders categorized hosting providers matching /setup without Forge, RunCloud, or Custom VPS', function () {
         $response = $this->get(route('install.hosting'));
 

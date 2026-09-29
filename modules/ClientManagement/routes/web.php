@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\ClientManagement\Http\Controllers\ClientsController;
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['web', 'auth', 'active'])->group(function () {
     // Clients management
     Route::resource('clients', ClientsController::class)->except(['create', 'edit']);
     Route::post('/clients/{client}/assign-site', [ClientsController::class, 'assignSite'])->name('clients.assign-site');

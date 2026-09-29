@@ -5,6 +5,7 @@
 # outbound-notification kill-switches for the test suite) and must ship
 # with the repo so CI and every contributor get the same safe test
 # behavior.
+.env
 .env*
 !.env.example
 !.env.testing

@@ -122,21 +122,11 @@ class EnforceInstallerGate
             return $next($request);
         }
 
-        // Pre-installation gate: allow installer wizard, health check, and static assets.
-        if (
-            $request->is('install') ||
-            $request->is('install/*') ||
-            $request->is('up') ||
-            $request->is('build/*') ||
-            $request->is('favicon.ico')
-        ) {
-            return $next($request);
-        }
-
-        // Auto-heal / unlock for existing installations accessing standard app routes:
-        // If an operator visits an app route (e.g. /login, /, /sites) and the database
-        // already has active users, automatically write the sentinel and let them in
-        // so they are never locked out of their existing system.
+        // Auto-heal / unlock for existing installations:
+        // If the database already has active users and the operator has not explicitly
+        // reopened the installer via the CLI sentinel (storage/installer_reopened),
+        // automatically seal the gate with the sentinel and deny unauthenticated access
+        // to the installer wizard.
         if (
             static::$fakeInstalled === null &&
             static::hasExistingDatabase() &&
@@ -146,6 +136,22 @@ class EnforceInstallerGate
                 'auto_healed' => true,
             ]);
 
+            // Resealed installation: installer routes must 404
+            if ($request->is('install') || $request->is('install/*')) {
+                abort(404);
+            }
+
+            return $next($request);
+        }
+
+        // Pre-installation gate: allow installer wizard, health check, and static assets.
+        if (
+            $request->is('install') ||
+            $request->is('install/*') ||
+            $request->is('up') ||
+            $request->is('build/*') ||
+            $request->is('favicon.ico')
+        ) {
             return $next($request);
         }
 

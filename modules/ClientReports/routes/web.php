@@ -5,8 +5,8 @@ use Modules\ClientReports\Http\Controllers\ClientReportsController;
 use Modules\ClientReports\Http\Controllers\SchedulesController;
 use Modules\ClientReports\Http\Controllers\TemplatesController;
 
-// Public client report link (accessible without login via unique secure token)
-Route::middleware(['web'])->group(function () {
+// Public client report link (accessible without login via unique secure token, rate limited against enumeration)
+Route::middleware(['web', 'throttle:60,1'])->group(function () {
     Route::get('/reports/view/{token}', [ClientReportsController::class, 'publicShow'])->name('client-reports.public');
 });
 
