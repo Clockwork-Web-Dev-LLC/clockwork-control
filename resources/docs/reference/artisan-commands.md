@@ -5,10 +5,10 @@ order: 50
 updated: 2026-09-28
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
-tracks: [app/Console/Commands/**, modules/*/src/Commands/**]
+tracks: [app/Console/Commands/**, modules/*/src/Commands/**, modules/*/src/Console/Commands/**]
 ---
 
-Every `clockwork:*` command, alphabetical, with a one-line summary and an example invocation. Commands provided by modules (`modules/*/src/Commands`) are registered automatically when their respective module is enabled. Most are also wired into the scheduler — see [Scheduled jobs](/docs/reference/scheduled-jobs) for cadence.
+Every `clockwork:*` command, alphabetical, with a one-line summary and an example invocation. Commands provided by modules (`modules/*/src/Commands` and `modules/*/src/Console/Commands`) are registered automatically when their respective module is enabled. Most are also wired into the scheduler — see [Scheduled jobs](/docs/reference/scheduled-jobs) for cadence.
 
 > [!NOTE]
 > **Environment & PATH**: On Linux, `php` and `composer` are installed in standard system paths (`/usr/bin/php`), so commands can be executed directly. On macOS using Laravel Herd, remember to export Herd's binary directory (`export PATH="$HOME/Library/Application Support/Herd/bin:$PATH"`).
@@ -43,7 +43,8 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 
 | Command | Purpose | Example |
 |---|---|---|
-| `clockwork:poll-servers` | Pull cloud-provider metrics (DO, Hetzner, Azure, Vultr, Linode) → `server_metrics`. Branches per row on `servers.provider`. | `php artisan clockwork:poll-servers` |
+| `clockwork:poll-servers` | Pull cloud-provider metrics (DO, Hetzner, Azure, Vultr, Linode) → `server_metrics`. Branches per row on `servers.provider`. Transitions into RED status or high CPU trigger AiRemedy spike triage. | `php artisan clockwork:poll-servers` |
+| `clockwork:watch-server-spikes` | Automated watchdog inspecting CPU spikes, load average, and RAM pressure across all servers (including custom VPS via SSH probe); dispatches AiRemedy in Shadow Mode or Auto-Heal. Supports `--force` to bypass cooldown. | `php artisan clockwork:watch-server-spikes` |
 | `clockwork:prune-server-metrics` | Drop rows older than 90 days. | `php artisan clockwork:prune-server-metrics` |
 | `clockwork:prune-threat-logs` | Chunked delete of `threat_logs` older than the saved retention window (default 30 days), or `DROP PARTITION` when the MySQL table is monthly-partitioned. `--days=` overrides. `--dry-run` counts only. | `php artisan clockwork:prune-threat-logs --dry-run` |
 | `clockwork:rebuild-threat-logs-partitions` | MySQL only. Copy the retention window into a new monthly-partitioned table, swap, drop the old `.ibd` so disk shrinks. | `php artisan clockwork:rebuild-threat-logs-partitions` |

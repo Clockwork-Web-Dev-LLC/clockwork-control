@@ -5,7 +5,7 @@ order: 30
 updated: 2026-09-28
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
-tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php]
+tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
 ---
 
 Every artisan command the scheduler runs, in chronological order through a UTC day. `php artisan schedule:list` is the actual source of truth — most entries are declared directly in `routes/console.php`, but as of Phase 7 of the modularization roadmap, a module can contribute its own via a `scheduledTasks()` override on its service provider (`clockwork:import-spinupwp` and the three `clockwork:pressable-*-report` commands below now live in `SpinupWpServiceProvider`/`PressableServiceProvider` this way; `routes/console.php` calls `ModuleRegistry::scheduleAll()` once, at the end, to pull all of them in). Their listed times and behavior are unchanged by the move. The scheduler not running is a load-bearing failure mode — if any of these stop firing, [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck) is your starting point. That runbook covers cron itself dying; for whether a *specific* job is actually succeeding tick-to-tick (not just that cron is alive), see [Scheduled Jobs Dashboard](/docs/features/scheduled-jobs-dashboard) at `/settings/scheduled-jobs`.
@@ -36,7 +36,8 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 
 | Command | What it does |
 |---|---|
-| `clockwork:poll-servers` | Cloud-provider metrics (DigitalOcean + Hetzner) → `server_metrics`. Branches per row on `servers.provider`. This is what turns a server "red." |
+| `clockwork:poll-servers` | Cloud-provider metrics (DigitalOcean + Hetzner) → `server_metrics`. Branches per row on `servers.provider`. Turns a server "red" and triggers AiRemedy spike triage on RED transition or high CPU. |
+| `clockwork:watch-server-spikes` | Automated watchdog evaluating CPU, load average, and RAM spikes across all servers (including unlinked VPS via SSH probe); dispatches AiRemedy in Shadow Mode or Auto-Heal (contributed by `AiRemedyServiceProvider`). |
 | `clockwork:tail-nginx-logs` | Pull new nginx log lines, inode-tracked to survive logrotate. |
 | `clockwork:check-site-uptime` | HTTP probe each monitored site, transition state, fire Mattermost on transitions. The `*/N` is configurable from `/monitoring/settings` (1/5/10/15). |
 | `clockwork:ensure-queue-worker` | Watchdog for the `com.clockwork.queue` launchd service — checks for a live PID and kickstarts the worker if it has crashed. Recovery gap ≤ 5 min. If the kickstart itself fails, alerts Mattermost/Slack — every queued job is stuck at that point. |

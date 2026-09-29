@@ -2,13 +2,13 @@
 title: Vultr
 section: Integrations
 order: 13
-updated: 2026-09-09
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [integrations, vultr, monitoring]
 tracks: [modules/Vultr/src/**, app/Console/Commands/PollServers.php, app/Console/Commands/ReconcileProvider.php]
 ---
 
-The fourth cloud provider Clockwork polls, alongside [DigitalOcean](/docs/integrations/digitalocean), [Hetzner](/docs/integrations/hetzner), and [Azure](/docs/integrations/azure). Same role: read-only, monitoring-only, never used for power actions. Unlike the other three, Vultr's public API has no metrics endpoint at all — this integration is alive/dead-state and IP-matching only.
+The fourth cloud provider Clockwork polls, alongside [DigitalOcean](/docs/integrations/digitalocean), [Hetzner](/docs/integrations/hetzner), and [Azure](/docs/integrations/azure). Same role: read-only, monitoring-only, never used for power actions. While Vultr's public API has no metrics time-series endpoint, servers on Vultr receive automated CPU, load, and RAM spike monitoring via the [AiRemedy](/docs/features/ai-remedy) SSH watchdog (`clockwork:watch-server-spikes`).
 
 > [!TIP]
 > **Looking for Testers!**

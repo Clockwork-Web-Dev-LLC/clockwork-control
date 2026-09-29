@@ -2,13 +2,13 @@
 title: Hetzner Cloud
 section: Integrations
 order: 11
-updated: 2026-09-09
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [integrations, hetzner, monitoring]
 tracks: [modules/Hetzner/src/**, app/Console/Commands/PollServers.php, app/Console/Commands/HetznerTest.php]
 ---
 
-The second cloud provider Clockwork pulls metrics from, alongside DigitalOcean and [Azure](/docs/integrations/azure). Same role: read-only, monitoring-only, never used for power actions.
+The second cloud provider Clockwork pulls metrics from, alongside DigitalOcean and [Azure](/docs/integrations/azure). Same role: read-only, monitoring-only, never used for power actions. When a Hetzner server turns RED or spikes past the CPU threshold, `clockwork:poll-servers` automatically hands off to [AiRemedy](/docs/features/ai-remedy) for continuous automated root-cause diagnosis.
 
 
 ## Why we use it

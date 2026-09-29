@@ -4,13 +4,38 @@ section: Features
 order: 86
 updated: 2026-09-28
 author: Aaron Reimann
-tags: [ai, openrouter, claude, diagnostics, self-healing, shadow-mode, remediation, ssh, modules]
-tracks: [modules/AiRemedy/**]
+tags: [ai, openrouter, claude, diagnostics, self-healing, shadow-mode, remediation, ssh, modules, monitoring]
+tracks: [modules/AiRemedy/**, app/Console/Commands/PollServers.php]
 ---
 
 **AiRemedy** turns Clockwork Control into an intelligent reliability engineer that monitors your fleet 24/7. Powered by OpenRouter (Claude 3.5 Sonnet, GPT-4o, and DeepSeek), it automatically investigates server performance spikes and website downtime, identifies the exact root cause in seconds, and provides targeted remediation.
 
 Best of all, you don't have to give AI blind access to execute commands on your servers. With **Shadow Mode** (Watch Mode), AiRemedy acts as a silent observer: it diagnoses issues, drafts the ideal fix, and logs **"What AiRemedy Would Have Done"** without touching a single file or running a single command on your servers.
+
+---
+
+## Continuous Server Spike Watchdog & Cooldown Engine
+
+Beyond passive site downtime hooks, AiRemedy constantly monitors all servers in your fleet for abnormal performance spikes through a two-layer watchdog:
+
+1. **Scheduled Fleet Watchdog (`clockwork:watch-server-spikes`)**:
+   - Runs every 5 minutes across **all active servers**, including bare metal and custom VPS boxes unlinked from cloud providers.
+   - For cloud servers, evaluates the newest recorded metrics from DigitalOcean, Hetzner, or Azure.
+   - For custom VPS or servers without cloud provider metrics, gathers live telemetry via read-only SSH (`ServerTelemetryCollector`).
+   - Dispatches automated triage when:
+     - **CPU Utilization** $\ge 85\%$ (or your custom threshold).
+     - **Load Average (1-minute)** $\ge 2\times$ the server's vCPU count.
+     - **RAM Pressure** $\ge 92\%$.
+2. **Cloud Provider Polling Hook (`clockwork:poll-servers`)**:
+   - When 5-minute cloud provider metric polling detects a server transitioning to `STATUS_RED` or crossing the CPU threshold, it automatically notifies `AiRemedyTriager`.
+3. **Intelligent Cooldown Protection**:
+   - High-load incidents often take time to settle. To prevent runaway token spending and repeated duplicate LLM calls every 5 minutes, AiRemedy enforces a **cooldown window** (default: **30 minutes**, configurable from 5 to 1440 minutes).
+   - If a server or site has been triaged within the window, subsequent watchdog ticks skip re-triaging until the cooldown expires. Operators can run `clockwork:watch-server-spikes --force` to bypass the cooldown.
+4. **Configuration Controls**:
+   - Available under **Settings → Integrations & Alerts → AiRemedy** (`/ai-remedy/settings`):
+     - **Enable Automated Server Spike Monitoring**: Toggle automated background dispatch on/off.
+     - **CPU Spike Trigger Threshold (%)**: Set custom trigger point (default: 85%).
+     - **Spike Cooldown Window (Minutes)**: Set suppression duration (default: 30 minutes).
 
 ---
 

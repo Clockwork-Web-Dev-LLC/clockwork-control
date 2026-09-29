@@ -2,13 +2,13 @@
 title: DigitalOcean
 section: Integrations
 order: 10
-updated: 2026-09-09
+updated: 2026-09-28
 author: Aaron Reimann
 tags: [integrations, digitalocean, monitoring]
 tracks: [modules/DigitalOcean/src/**, app/Services/DigitalOcean/SpacesClient.php, app/Services/Monitoring/CpuStatusClassifier.php, app/Console/Commands/PollServers.php, app/Console/Commands/DigitalOceanTest.php]
 ---
 
-We use DigitalOcean only for **monitoring metrics** — never for provisioning, never for power actions. CPU/memory/disk/load come from the DO API every 5 minutes; that's what turns a server "red" on the dashboard. This module is **verified** and in active production use across droplets.
+We use DigitalOcean only for **monitoring metrics** — never for provisioning, never for power actions. CPU/memory/disk/load come from the DO API every 5 minutes; that's what turns a server "red" on the dashboard. When a droplet crosses into RED status or spikes past the CPU threshold, `clockwork:poll-servers` automatically hands off to [AiRemedy](/docs/features/ai-remedy) for continuous automated root-cause diagnosis. This module is **verified** and in active production use across droplets.
 
 DO is one of three cloud providers Clockwork polls. The sister pages are [Hetzner Cloud](/docs/integrations/hetzner) and [Azure](/docs/integrations/azure) — which servers go through which API is decided per-row from `servers.provider`, populated during the SpinupWP import (or by `clockwork:reconcile-provider` for manually-added servers).
 

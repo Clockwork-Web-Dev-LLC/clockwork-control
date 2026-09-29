@@ -7,10 +7,12 @@ The **AiRemedy** module equips Clockwork Control with intelligent site outage tr
 ## Key Highlights
 
 - **Shadow Mode (Watch Mode — Default)**: Observe AI diagnostics with **zero server mutations**. Gathers read-only telemetry, diagnoses root causes, and logs **"What AiRemedy Would Have Done"** without running any mutating commands or modifying files.
+- **Continuous Spike Watchdog (`clockwork:watch-server-spikes`)**: Evaluates all fleet servers every 5 minutes (including unlinked VPS via SSH telemetry) for CPU $\ge 85\%$, load averages $\ge 2\times$ vCPU count, or memory pressure $\ge 92\%$.
+- **Intelligent Cooldown Protection**: Automatically suppresses duplicate automated AI triage within a configurable window (default: 30 minutes) to prevent token drain during prolonged load.
 - **Human-in-the-Loop or Autonomous Modes**: Switch between passive **Shadow Mode**, **Interactive Copilot** (operator approval required), and **Autonomous Self-Healing** (auto-executes non-destructive Tier 1 fixes).
 - **Multi-Model Support via OpenRouter**: Use Claude 3.5 Sonnet (recommended for systems engineering), GPT-4o, Claude 3.5 Haiku, or DeepSeek-V3 with transparent per-incident cost tracking.
 - **Strict API Key Hygiene**: OpenRouter API key is stored exclusively in `.env` (`OPENROUTER_API_KEY`). **Never stored in the database**.
-- **Automated Uptime Hook**: Automatically triggers non-destructive triage whenever a monitored site transitions to `down` in `UptimeStateUpdater`.
+- **Automated Uptime & Provider Hooks**: Automatically triggers non-destructive triage whenever a monitored site transitions to `down` in `UptimeStateUpdater`, or when cloud provider metrics in `clockwork:poll-servers` transition a server to RED status.
 - **On-Demand Safe Simulation**: Test AiRemedy against any connected server right from the settings page or dashboard with zero risk.
 - **Multi-Tier Command Safety Guard**: All commands pass through `CommandSafetyGuard` to prevent hallucinated or dangerous commands (blocking disk wipes, script piping, destructive SQL drops, etc.).
 

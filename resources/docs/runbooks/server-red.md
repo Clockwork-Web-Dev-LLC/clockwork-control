@@ -2,14 +2,21 @@
 title: A server is red — what now?
 section: Runbooks
 order: 20
-updated: 2026-08-29
+updated: 2026-09-28
 author: Aaron Reimann
-tags: [runbook, server, incident, monitoring, pressable]
+tags: [runbook, server, incident, monitoring, pressable, ai-remedy]
 ---
 
 A server card is red on the dashboard. That means CPU is over the red threshold (default 90%), or memory or disk are pinned. Triage path.
 
 This whole runbook is inherently SpinupWP/Azure/Hetzner-only — Pressable sites have no server, so there's no card to turn red and nothing here applies to them. A Pressable-hosted site behaving badly shows up as a slow/erroring uptime probe or a Companion resource-metrics anomaly instead, not a server incident.
+
+## 0. Check AiRemedy Incident Forensics (`/ai-remedy`)
+
+If the [AiRemedy](/docs/features/ai-remedy) module is active, Clockwork's continuous watchdog (`clockwork:watch-server-spikes`) or cloud provider poll has already captured SSH telemetry, analyzed top processes, and drafted a root-cause diagnosis.
+- Open `/ai-remedy` and click **[Forensics]** on the newest incident row.
+- Review the **Executive Summary**, culprit breakdown, and **"What AiRemedy Would Have Done"**.
+- If AiRemedy is in **Interactive Copilot** mode, you can inspect and approve the staged bash remediation directly.
 
 ## 1. Open the server detail page
 
