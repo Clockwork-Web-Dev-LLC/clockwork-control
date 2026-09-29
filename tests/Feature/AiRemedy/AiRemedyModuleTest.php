@@ -3,6 +3,7 @@
 use App\Models\ActionLog;
 use App\Models\AppSetting;
 use App\Models\Server;
+use App\Models\ServerMetric;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\Ssh\SshClient;
@@ -266,6 +267,9 @@ test('settings controller updates openrouter key in env and never saves in datab
         'openrouter_api_key' => 'sk-or-v1-my-secret-key',
         'model' => 'openai/gpt-4o',
         'mode' => 'auto_heal',
+        'auto_triage_spikes' => '1',
+        'cpu_spike_threshold' => 88,
+        'cooldown_minutes' => 45,
     ]);
 
     $response->assertRedirect();
@@ -281,6 +285,12 @@ test('settings controller updates openrouter key in env and never saves in datab
     // Confirm database table NEVER holds the key
     $dbKey = AppSetting::where('key', 'clockwork.ai_remedy.openrouter_api_key')->value('value');
     expect($dbKey)->toBeEmpty();
+
+    // Confirm spike settings saved
+    $settings = app(Settings::class);
+    expect($settings->get('clockwork.ai_remedy.auto_triage_spikes'))->toBeTrue();
+    expect($settings->get('clockwork.ai_remedy.cpu_spike_threshold'))->toBe(88);
+    expect($settings->get('clockwork.ai_remedy.cooldown_minutes'))->toBe(45);
 
     @unlink($tempEnv);
 });
@@ -456,4 +466,67 @@ test('uptime state updater invokes airemedy triager on site downtime transitions
     $updater->update($site, $probe);
 
     expect($site->fresh()->uptime_state)->toBe('down');
+});
+
+test('watch server spikes command detects spiking server from metrics and triggers triage', function () {
+    $server = Server::factory()->create([
+        'name' => 'spiking-box',
+        'hostname' => '10.0.0.50',
+        'is_ignored' => false,
+    ]);
+
+    // Create a metric indicating high CPU
+    ServerMetric::create([
+        'server_id' => $server->id,
+        'recorded_at' => now()->subMinutes(2),
+        'cpu_pct' => 91.5,
+        'memory_pct' => 65.0,
+        'disk_pct' => 45.0,
+        'load_1' => 4.2,
+    ]);
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+    });
+
+    $this->mock(AiRemedyTriager::class, function ($mock) use ($server) {
+        $mock->shouldReceive('getMode')->andReturn('watch');
+        $mock->shouldReceive('getCooldownMinutes')->andReturn(30);
+        $mock->shouldReceive('isServerInCooldown')->withArgs(fn ($s) => $s->id === $server->id)->andReturn(false);
+        $mock->shouldReceive('triageServerSpike')
+            ->once()
+            ->withArgs(fn ($s, $r) => $s->id === $server->id && str_contains($r, 'CPU spike to 91.5%'))
+            ->andReturn([
+                'ok' => true,
+                'run' => new AiRemedyRun(['id' => 999]),
+                'analysis' => [],
+                'telemetry' => [],
+            ]);
+    });
+
+    $this->artisan('clockwork:watch-server-spikes')
+        ->expectsOutputToContain('SPIKE DETECTED on spiking-box')
+        ->assertSuccessful();
+});
+
+test('watch server spikes command skips server in cooldown unless force is provided', function () {
+    $server = Server::factory()->create([
+        'name' => 'cooling-box',
+        'is_ignored' => false,
+    ]);
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+    });
+
+    $this->mock(AiRemedyTriager::class, function ($mock) use ($server) {
+        $mock->shouldReceive('getMode')->andReturn('watch');
+        $mock->shouldReceive('getCooldownMinutes')->andReturn(30);
+        $mock->shouldReceive('isServerInCooldown')->withArgs(fn ($s) => $s->id === $server->id)->andReturn(true);
+        $mock->shouldNotReceive('triageServerSpike');
+    });
+
+    $this->artisan('clockwork:watch-server-spikes')
+        ->expectsOutputToContain('in cooldown window')
+        ->assertSuccessful();
 });

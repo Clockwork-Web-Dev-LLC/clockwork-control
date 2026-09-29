@@ -23,6 +23,9 @@ class AiRemedySettingsController extends Controller
         $currentModel = $this->client->getModel();
         $hasKey = ! empty($this->client->getApiKey());
         $currentMode = (string) $this->settings->get('clockwork.ai_remedy.mode', AiRemedyTriager::MODE_WATCH);
+        $autoTriageSpikes = (bool) $this->settings->get('clockwork.ai_remedy.auto_triage_spikes', true);
+        $cpuSpikeThreshold = (int) $this->settings->get('clockwork.ai_remedy.cpu_spike_threshold', 85);
+        $cooldownMinutes = (int) $this->settings->get('clockwork.ai_remedy.cooldown_minutes', 30);
 
         $availableModels = [
             'anthropic/claude-3.5-sonnet' => 'Claude 3.5 Sonnet (Recommended - Best Systems & Code Reasoning)',
@@ -38,6 +41,9 @@ class AiRemedySettingsController extends Controller
             'hasKey' => $hasKey,
             'currentModel' => $currentModel,
             'currentMode' => $currentMode,
+            'autoTriageSpikes' => $autoTriageSpikes,
+            'cpuSpikeThreshold' => $cpuSpikeThreshold,
+            'cooldownMinutes' => $cooldownMinutes,
             'availableModels' => $availableModels,
             'servers' => $servers,
         ]);
@@ -49,6 +55,9 @@ class AiRemedySettingsController extends Controller
             'openrouter_api_key' => 'nullable|string',
             'model' => 'required|string',
             'mode' => 'required|string|in:watch,interactive,auto_heal',
+            'auto_triage_spikes' => 'nullable|boolean',
+            'cpu_spike_threshold' => 'required|integer|min:50|max:99',
+            'cooldown_minutes' => 'required|integer|min:5|max:1440',
         ]);
 
         if ($request->filled('openrouter_api_key')) {
@@ -58,6 +67,9 @@ class AiRemedySettingsController extends Controller
         $this->settings->put('clockwork.ai_remedy.model', $validated['model']);
         $this->settings->put('clockwork.ai_remedy.mode', $validated['mode']);
         $this->settings->put('clockwork.ai_remedy.auto_heal', $validated['mode'] === AiRemedyTriager::MODE_AUTO_HEAL);
+        $this->settings->put('clockwork.ai_remedy.auto_triage_spikes', $request->boolean('auto_triage_spikes'));
+        $this->settings->put('clockwork.ai_remedy.cpu_spike_threshold', (int) $validated['cpu_spike_threshold']);
+        $this->settings->put('clockwork.ai_remedy.cooldown_minutes', (int) $validated['cooldown_minutes']);
 
         return back()->with('status', 'AiRemedy settings updated successfully.');
     }

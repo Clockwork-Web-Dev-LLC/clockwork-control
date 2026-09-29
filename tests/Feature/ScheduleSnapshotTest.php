@@ -97,6 +97,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:test-contact-forms',
         'clockwork:verify-wp-core-checksums',
         'clockwork:warm-weird-stats',
+        'clockwork:watch-server-spikes',
     ];
 
     /**

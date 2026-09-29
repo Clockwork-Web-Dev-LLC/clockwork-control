@@ -2,6 +2,8 @@
 
 namespace Modules\AiRemedy;
 
+use Illuminate\Console\Scheduling\Schedule;
+use Modules\AiRemedy\Console\Commands\WatchServerSpikes;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
@@ -13,9 +15,28 @@ class AiRemedyServiceProvider extends ModuleServiceProvider
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'ai-remedy');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                WatchServerSpikes::class,
+            ]);
+        }
+
         if ($this->enabled()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
+    }
+
+    public function scheduledTasks(Schedule $schedule): void
+    {
+        if (! $this->enabled()) {
+            return;
+        }
+
+        $schedule->command('clockwork:watch-server-spikes')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10)
+            ->onOneServer()
+            ->runInBackground();
     }
 
     public function manifest(): ModuleManifest

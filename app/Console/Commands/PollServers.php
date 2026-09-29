@@ -6,11 +6,15 @@ use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use App\Services\Monitoring\CpuStatusClassifier;
+use App\Support\Settings;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\Core\Contracts\CloudProvider;
+use Modules\Core\ModuleStateResolver;
 
 #[Signature('clockwork:poll-servers')]
 #[Description('Poll cloud-provider metrics (DigitalOcean, Hetzner, and Azure) for every linked server and update its health status (green/yellow/red).')]
@@ -119,6 +123,7 @@ class PollServers extends Command
 
             if ($status === Server::STATUS_RED && $previous !== Server::STATUS_RED) {
                 $server->last_alert_at = $now;
+                $this->triggerAiRemedySpike($server, $sample['cpu_pct']);
             }
 
             $server->save();
@@ -168,5 +173,43 @@ class PollServers extends Command
             Server::STATUS_RED => '✗',
             default => '?',
         };
+    }
+
+    /**
+     * Trigger AiRemedy spike triage when a server status transitions to RED.
+     */
+    protected function triggerAiRemedySpike(Server $server, ?float $cpuPct): void
+    {
+        if (! class_exists(AiRemedyTriager::class)) {
+            return;
+        }
+
+        try {
+            $resolver = app(ModuleStateResolver::class);
+            if (! $resolver->isEnabled('ai-remedy')) {
+                return;
+            }
+
+            $settings = app(Settings::class);
+            if (! (bool) $settings->get('clockwork.ai_remedy.auto_triage_spikes', true)) {
+                return;
+            }
+
+            $triager = app(AiRemedyTriager::class);
+            if ($triager->isServerInCooldown($server)) {
+                return;
+            }
+
+            $formattedCpu = $cpuPct !== null ? round($cpuPct, 1).'%' : 'high';
+            $triager->triageServerSpike(
+                server: $server,
+                reason: "Cloud metrics reported CPU spike to {$formattedCpu} (Status: RED)",
+            );
+        } catch (\Throwable $e) {
+            Log::warning('poll_servers.ai_remedy_spike_failed', [
+                'server_id' => $server->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

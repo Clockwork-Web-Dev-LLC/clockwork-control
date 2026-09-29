@@ -6,6 +6,7 @@ use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Tag;
 use App\Services\CloudProvider\CloudProviderRegistry;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\Core\Contracts\CloudProvider;
 use Tests\Fixtures\FakeCloudProviderForPollServersTest;
 
@@ -181,5 +182,41 @@ describe('clockwork:poll-servers', function () {
         expect((float) $metric->cpu_pct)->toBe(15.0)
             ->and((float) $metric->memory_pct)->toBe(45.0)
             ->and((float) $metric->disk_pct)->toBe(25.0);
+    });
+
+    it('triggers airemedy spike triage on transition into red status', function () {
+        $fake = new FakeCloudProviderForPollServersTest('digitalocean', [
+            'cpu_pct' => 96.0,
+            'memory_pct' => 50.0,
+            'disk_pct' => 30.0,
+            'load_1' => 5.0,
+        ]);
+
+        $this->mock(CloudProviderRegistry::class, function ($mock) use ($fake) {
+            $mock->shouldReceive('all')->andReturn([$fake]);
+            $mock->shouldReceive('resolve')->andReturn($fake);
+        });
+
+        $this->mock(AiRemedyTriager::class, function ($mock) {
+            $mock->shouldReceive('isServerInCooldown')->andReturn(false);
+            $mock->shouldReceive('triageServerSpike')
+                ->once()
+                ->withArgs(fn ($server, $reason) => str_contains($reason, 'CPU spike to 96%') || str_contains($reason, 'Status: RED'))
+                ->andReturn(['ok' => true]);
+        });
+
+        $server = Server::factory()->create([
+            'provider' => 'digitalocean',
+            'provider_id' => '999',
+            'status' => Server::STATUS_GREEN,
+            'last_alert_at' => null,
+            'is_ignored' => false,
+        ]);
+
+        $this->artisan('clockwork:poll-servers')
+            ->assertSuccessful()
+            ->expectsOutputToContain('red=1');
+
+        expect($server->fresh()->status)->toBe(Server::STATUS_RED);
     });
 });

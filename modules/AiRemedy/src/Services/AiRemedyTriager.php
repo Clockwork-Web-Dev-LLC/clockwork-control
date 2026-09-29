@@ -34,6 +34,38 @@ class AiRemedyTriager
     }
 
     /**
+     * Get the configured cooldown window in minutes (default: 30).
+     */
+    public function getCooldownMinutes(): int
+    {
+        return (int) $this->settings->get('clockwork.ai_remedy.cooldown_minutes', 30);
+    }
+
+    /**
+     * Determine if a server has already been triaged within the cooldown window.
+     */
+    public function isServerInCooldown(Server $server, ?int $cooldownMinutes = null): bool
+    {
+        $cooldown = $cooldownMinutes ?? $this->getCooldownMinutes();
+
+        return AiRemedyRun::where('server_id', $server->id)
+            ->where('started_at', '>=', now()->subMinutes($cooldown))
+            ->exists();
+    }
+
+    /**
+     * Determine if a site has already been triaged within the cooldown window.
+     */
+    public function isSiteInCooldown(Site $site, ?int $cooldownMinutes = null): bool
+    {
+        $cooldown = $cooldownMinutes ?? $this->getCooldownMinutes();
+
+        return AiRemedyRun::where('site_id', $site->id)
+            ->where('started_at', '>=', now()->subMinutes($cooldown))
+            ->exists();
+    }
+
+    /**
      * Triage a site outage automatically. In watch mode, purely analyzes and logs without executing commands.
      *
      * @param  array<string, mixed>|null  $sshDiagnosis
@@ -41,6 +73,10 @@ class AiRemedyTriager
     public function triageSiteDowntime(Site $site, UptimeProbeResult $probe, ?array $sshDiagnosis = null): ?AiRemedyRun
     {
         if (empty($this->client->getApiKey())) {
+            return null;
+        }
+
+        if ($this->isSiteInCooldown($site)) {
             return null;
         }
 
@@ -123,6 +159,16 @@ class AiRemedyTriager
      */
     public function triageServerSpike(Server $server, string $reason, string $actor = 'watch_mode', bool $isSimulation = false): array
     {
+        if (! $isSimulation && $this->isServerInCooldown($server)) {
+            return [
+                'ok' => false,
+                'run' => null,
+                'analysis' => [],
+                'telemetry' => [],
+                'error' => "Server {$server->name} was recently triaged within the last {$this->getCooldownMinutes()} minutes (cooldown active).",
+            ];
+        }
+
         $mode = $this->getMode();
 
         if ($isSimulation) {

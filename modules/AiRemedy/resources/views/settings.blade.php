@@ -169,7 +169,69 @@
                 </div>
             </div>
 
-            {{-- 2. OpenRouter API Key --}}
+            {{-- 2. Continuous Spike Monitoring & Watchdog --}}
+            <div class="card p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold text-[var(--color-ink-strong)]">Automated Server Spike Monitoring</h3>
+                            <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                5-Min Watchdog
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
+                            Automatically triggers AiRemedy when a server experiences sustained CPU or load spikes, diagnosing root causes under your active mode (Shadow Mode or Auto-Heal).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="flex items-start gap-3 p-3.5 rounded-xl border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <input type="checkbox" name="auto_triage_spikes" value="1" {{ $autoTriageSpikes ? 'checked' : '' }}
+                               class="mt-1 rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
+                        <div class="flex-1">
+                            <span class="text-xs font-bold text-[var(--color-ink-strong)]">Enable Continuous Fleet Spike Watchdog</span>
+                            <span class="block text-[11px] text-[var(--color-ink-muted)] mt-0.5 leading-relaxed">
+                                When enabled, the scheduled watchdog (<code>clockwork:watch-server-spikes</code> & <code>clockwork:poll-servers</code>) actively evaluates CPU and load metrics every 5 minutes across cloud and unlinked VPS boxes. In <strong>Shadow Mode</strong>, it logs the full diagnosis and what it would have done with <strong>0 server mutations</strong>.
+                            </span>
+                        </div>
+                    </label>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        <div>
+                            <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">
+                                CPU Spike Trigger Threshold (%)
+                            </label>
+                            <input type="number"
+                                   name="cpu_spike_threshold"
+                                   value="{{ $cpuSpikeThreshold }}"
+                                   min="50"
+                                   max="99"
+                                   class="input text-xs w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] p-2.5 font-data">
+                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">
+                                Servers reaching or exceeding this CPU % will trigger automated root-cause analysis (default: 85%).
+                            </span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">
+                                Cooldown Window Between Triage (Minutes)
+                            </label>
+                            <input type="number"
+                                   name="cooldown_minutes"
+                                   value="{{ $cooldownMinutes }}"
+                                   min="5"
+                                   max="1440"
+                                   class="input text-xs w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] p-2.5 font-data">
+                            <span class="text-[11px] text-[var(--color-ink-soft)] mt-1 block">
+                                Prevents duplicate diagnoses and excessive token spend if a server stays hot while under review (default: 30 min).
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- 3. OpenRouter API Key --}}
             <div class="card p-6">
                 <div class="flex items-start justify-between mb-4">
                     <div>
