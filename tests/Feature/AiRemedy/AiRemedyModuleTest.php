@@ -530,3 +530,90 @@ test('watch server spikes command skips server in cooldown unless force is provi
         ->expectsOutputToContain('in cooldown window')
         ->assertSuccessful();
 });
+
+test('non-admin operators cannot access mutating or settings routes in ai-remedy', function () {
+    $operator = User::factory()->operator()->create();
+    $server = Server::factory()->create();
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SITE_DOWNTIME,
+        'status' => AiRemedyRun::STATUS_ANALYZED,
+        'server_id' => $server->id,
+        'actor' => 'interactive',
+        'proposed_commands' => ['sudo systemctl reload nginx'],
+        'started_at' => now(),
+    ]);
+
+    // Operators CAN view read-only index and show
+    $this->actingAs($operator)->get(route('ai-remedy.index'))->assertOk();
+    $this->actingAs($operator)->get(route('ai-remedy.show', $run))->assertOk();
+
+    // Operators CANNOT access settings, simulations, diagnoses, or execution
+    $this->actingAs($operator)->get(route('ai-remedy.settings'))->assertForbidden();
+    $this->actingAs($operator)->post(route('ai-remedy.settings.update'), [])->assertForbidden();
+    $this->actingAs($operator)->postJson(route('ai-remedy.simulate'), ['server_id' => $server->id])->assertForbidden();
+    $this->actingAs($operator)->postJson(route('ai-remedy.server.diagnose', $server))->assertForbidden();
+    $this->actingAs($operator)->postJson(route('ai-remedy.execute', $run))->assertForbidden();
+});
+
+test('command safety guard strictly rejects chained commands, subshells, and unapproved binaries', function () {
+    $guard = app(CommandSafetyGuard::class);
+
+    // Chaining with ; or && or |
+    expect($guard->evaluate('sudo systemctl reload nginx; rm -rf /')['allowed'])->toBeFalse();
+    expect($guard->evaluate('sudo nginx -t && cat /etc/shadow')['allowed'])->toBeFalse();
+    expect($guard->evaluate('sudo systemctl restart php8.3-fpm | bash')['allowed'])->toBeFalse();
+
+    // Subshells and backticks
+    expect($guard->evaluate('sudo systemctl reload $(whoami)')['allowed'])->toBeFalse();
+    expect($guard->evaluate('sudo systemctl reload `whoami`')['allowed'])->toBeFalse();
+
+    // Directory traversal
+    expect($guard->evaluate('rm -f /home/../etc/passwd/.maintenance')['allowed'])->toBeFalse();
+
+    // Arbitrary unallowlisted commands (default deny)
+    expect($guard->evaluate('useradd evil_user')['allowed'])->toBeFalse();
+    expect($guard->evaluate('cat /etc/shadow')['allowed'])->toBeFalse();
+    expect($guard->evaluate('echo "malware" > /tmp/bad.sh')['allowed'])->toBeFalse();
+});
+
+test('telemetry collector redacts passwords, tokens, and api keys from command outputs', function () {
+    $collector = app(ServerTelemetryCollector::class);
+
+    $fakeBearer = 'Bearer '.'test_token_sample';
+    $fakeKey = 'sk-or-'.'v1-dummy-openrouter-key-val';
+
+    $raw = "mysqldump -u root -pSecret123 production > dump.sql\n"
+        ."curl -H 'Authorization: {$fakeBearer}' https://api.com\n"
+        ."php artisan app:run --token=super_secret_token_value\n"
+        ."OPENROUTER_KEY={$fakeKey}";
+
+    $sanitized = $collector->sanitizeOutput($raw);
+
+    expect($sanitized)->not->toContain('Secret123')
+        ->and($sanitized)->toContain('-p[REDACTED_PASSWORD]')
+        ->and($sanitized)->not->toContain('test_token_sample')
+        ->and($sanitized)->toContain('Bearer [REDACTED_TOKEN]')
+        ->and($sanitized)->not->toContain('super_secret_token_value')
+        ->and($sanitized)->toContain('token=[REDACTED]')
+        ->and($sanitized)->not->toContain('dummy-openrouter-key')
+        ->and($sanitized)->toContain('[REDACTED_API_KEY]');
+});
+
+test('remedy executor strictly blocks autonomous execution of non-tier-1 commands', function () {
+    $server = Server::factory()->create();
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+        'status' => AiRemedyRun::STATUS_ANALYZED,
+        'server_id' => $server->id,
+        'actor' => 'autonomous',
+        'proposed_commands' => ['sudo kill -9 99999'], // Tier 2 Cautious
+        'started_at' => now(),
+    ]);
+
+    $executor = app(RemedyExecutor::class);
+    $result = $executor->execute($run);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['error'])->toContain('Autonomous execution blocked')
+        ->and($run->fresh()->status)->toBe(AiRemedyRun::STATUS_REJECTED);
+});

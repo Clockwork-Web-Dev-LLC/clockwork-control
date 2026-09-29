@@ -199,7 +199,7 @@ BASH;
             }
         }
 
-        $recentErrors = trim($sections['NGINX_ERR'] ?? '');
+        $recentErrors = $this->sanitizeOutput(trim($sections['NGINX_ERR'] ?? ''));
 
         return [
             'ok' => true,
@@ -214,8 +214,28 @@ BASH;
             'top_mem' => $topMem,
             'services' => $services,
             'recent_errors' => $recentErrors !== '' ? mb_strimwidth($recentErrors, 0, 1500, '…') : null,
-            'raw_output' => mb_strimwidth($raw, 0, 4000, '…'),
+            'raw_output' => $this->sanitizeOutput(mb_strimwidth($raw, 0, 4000, '…')),
         ];
+    }
+
+    /**
+     * Sanitize sensitive credentials and tokens from diagnostic strings before logging or sending to LLM.
+     */
+    public function sanitizeOutput(string $text): string
+    {
+        // Redact bearer tokens
+        $text = (string) preg_replace('/(bearer\s+)[a-zA-Z0-9_\-\.]{8,}/i', '$1[REDACTED_TOKEN]', $text);
+
+        // Redact CLI passwords e.g. -pMySecretPass or -p"MySecretPass"
+        $text = (string) preg_replace('/(-p)["\']?[^\s"\'&]+["\']?/i', '-p[REDACTED_PASSWORD]', $text);
+
+        // Redact query string / env key patterns (password=..., secret=..., api_key=...)
+        $text = (string) preg_replace('/((?:password|passwd|secret|token|api_key|app_key|auth)=)[^\s&]+/i', '$1[REDACTED]', $text);
+
+        // Redact OpenRouter / OpenAI / Anthropic API keys (sk-or-..., sk-...)
+        $text = (string) preg_replace('/sk-(?:or-)?[a-zA-Z0-9_\-]{16,}/i', '[REDACTED_API_KEY]', $text);
+
+        return $text;
     }
 
     /**
@@ -239,7 +259,7 @@ BASH;
                     'pid' => $cols[1],
                     'cpu_pct' => $cols[2],
                     'mem_pct' => $cols[3],
-                    'command' => $cols[10],
+                    'command' => $this->sanitizeOutput($cols[10]),
                 ];
             }
         }

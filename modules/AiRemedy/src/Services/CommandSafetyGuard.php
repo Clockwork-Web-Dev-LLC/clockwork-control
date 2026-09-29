@@ -27,16 +27,25 @@ class CommandSafetyGuard
     ];
 
     /**
-     * Safe patterns eligible for Tier 1 (Service reloads, cache clears, status checks).
+     * Strict end-to-end anchored patterns eligible for Tier 1 Safe auto-execution.
      */
     protected const SAFE_PATTERNS = [
-        '/^sudo\s+systemctl\s+(reload|restart|status)\s+([a-zA-Z0-9_\-\.]+)/i',
-        '/^sudo\s+service\s+([a-zA-Z0-9_\-\.]+)\s+(reload|restart|status)/i',
-        '/^sudo\s+nginx\s+-t/i',
+        '/^sudo\s+systemctl\s+(reload|restart|status)\s+([a-zA-Z0-9_\-\.]+)$/i',
+        '/^sudo\s+service\s+([a-zA-Z0-9_\-\.]+)\s+(reload|restart|status)$/i',
+        '/^sudo\s+nginx\s+-t$/i',
         '/^sudo\s+kill\s+(-15|-TERM)\s+\d+$/i',
-        '/^rm\s+(-f)?\s+([a-zA-Z0-9_\-\.\/]+)\/\.maintenance$/i',
-        '/^wp\s+(cache\s+flush|transient\s+delete)/i',
-        '/^sudo\s+logrotate/i',
+        '/^rm\s+(-f\s+)?([a-zA-Z0-9_\-\.\/]+)\/\.maintenance$/i',
+        '/^wp\s+(cache\s+flush|transient\s+delete(\s+--all)?)((\s+--path=|\s+--path=[\'"][a-zA-Z0-9_\-\.\/]+[\'"]|[a-zA-Z0-9_\-\.\/]+)?)$/i',
+        '/^sudo\s+logrotate(\s+-f)?(\s+\/etc\/logrotate\.d\/[a-zA-Z0-9_\-]+)?$/i',
+    ];
+
+    /**
+     * Strict end-to-end anchored patterns for Tier 2 Cautious commands (operator review required).
+     */
+    protected const CAUTIOUS_PATTERNS = [
+        '/^sudo\s+kill\s+(-9|-KILL)\s+\d+$/i',
+        '/^wp\s+plugin\s+(activate|deactivate|status)(\s+[a-zA-Z0-9_\-]+)?((\s+--path=|\s+--path=[\'"][a-zA-Z0-9_\-\.\/]+[\'"]|[a-zA-Z0-9_\-\.\/]+)?)$/i',
+        '/^sudo\s+systemctl\s+(stop|start)\s+([a-zA-Z0-9_\-\.]+)$/i',
     ];
 
     /**
@@ -52,6 +61,24 @@ class CommandSafetyGuard
             return ['allowed' => false, 'tier' => self::TIER_3_PROHIBITED, 'reason' => 'Empty command'];
         }
 
+        // Check for path traversal attempts
+        if (str_contains($trimmed, '..')) {
+            return [
+                'allowed' => false,
+                'tier' => self::TIER_3_PROHIBITED,
+                'reason' => 'Command contains directory traversal (..).',
+            ];
+        }
+
+        // Check for shell chaining, subshells, backticks, redirection, and pipes
+        if (preg_match('/[;&|`$><()]/', $trimmed) || str_contains($trimmed, "\n") || str_contains($trimmed, "\r")) {
+            return [
+                'allowed' => false,
+                'tier' => self::TIER_3_PROHIBITED,
+                'reason' => 'Command contains prohibited shell chaining, piping, redirection, or subshell characters.',
+            ];
+        }
+
         // Check against strictly prohibited patterns
         foreach (self::DANGEROUS_PATTERNS as $pattern) {
             if (preg_match($pattern, $trimmed)) {
@@ -63,7 +90,7 @@ class CommandSafetyGuard
             }
         }
 
-        // Check for safe patterns
+        // Check against Tier 1 Safe patterns (strictly anchored)
         foreach (self::SAFE_PATTERNS as $pattern) {
             if (preg_match($pattern, $trimmed)) {
                 return [
@@ -74,20 +101,22 @@ class CommandSafetyGuard
             }
         }
 
-        // Cautious actions (e.g. kill -9, custom app commands)
-        if (preg_match('/^sudo\s+kill\s+(-9|-KILL)\s+\d+$/i', $trimmed)) {
-            return [
-                'allowed' => true,
-                'tier' => self::TIER_2_CAUTIOUS,
-                'reason' => 'Force-killing process with SIGKILL requires caution.',
-            ];
+        // Check against Tier 2 Cautious patterns (strictly anchored)
+        foreach (self::CAUTIOUS_PATTERNS as $pattern) {
+            if (preg_match($pattern, $trimmed)) {
+                return [
+                    'allowed' => true,
+                    'tier' => self::TIER_2_CAUTIOUS,
+                    'reason' => 'Command matches cautious pattern requiring human confirmation.',
+                ];
+            }
         }
 
-        // Default to Tier 2 (Allowed with caution/human confirmation)
+        // Default-deny: Any command not on the approved allowlist is prohibited
         return [
-            'allowed' => true,
-            'tier' => self::TIER_2_CAUTIOUS,
-            'reason' => 'Standard non-destructive command.',
+            'allowed' => false,
+            'tier' => self::TIER_3_PROHIBITED,
+            'reason' => 'Command is not on the approved administrative allowlist.',
         ];
     }
 

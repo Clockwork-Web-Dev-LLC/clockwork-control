@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\AiRemedy\Services\AiRemedyTriager;
+use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
@@ -129,7 +130,16 @@ class AiRemedyController extends Controller
     {
         $customCommands = $request->input('commands');
         if (is_array($customCommands)) {
-            $customCommands = array_values(array_filter($customCommands));
+            $customCommands = array_values(array_filter($customCommands, 'is_string'));
+            $safety = app(CommandSafetyGuard::class)->evaluateBatch($customCommands);
+            if (! $safety['allowed']) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Custom commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']),
+                    'run' => $run,
+                    'output' => '',
+                ], 422);
+            }
         } else {
             $customCommands = null;
         }

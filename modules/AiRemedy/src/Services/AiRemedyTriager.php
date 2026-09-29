@@ -23,6 +23,7 @@ class AiRemedyTriager
         protected OpenRouterClient $client,
         protected ServerTelemetryCollector $collector,
         protected RemedyExecutor $executor,
+        protected CommandSafetyGuard $guard,
     ) {}
 
     /**
@@ -116,6 +117,9 @@ class AiRemedyTriager
             };
             $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
 
+            $safety = $this->guard->evaluateBatch($analysis['commands'] ?? []);
+            $effectiveTier = $safety['highest_tier'];
+
             $run = AiRemedyRun::create([
                 'trigger_type' => AiRemedyRun::TRIGGER_SITE_DOWNTIME,
                 'status' => $status,
@@ -130,14 +134,14 @@ class AiRemedyTriager
                 'telemetry_snapshot' => $telemetry,
                 'diagnosis_summary' => $analysis['summary'],
                 'root_cause' => $analysis['root_cause'],
-                'safety_tier' => $analysis['safety_tier'],
+                'safety_tier' => $effectiveTier,
                 'proposed_commands' => $analysis['commands'],
                 'before_metrics' => $telemetry,
                 'started_at' => now(),
             ]);
 
-            // In Auto-Heal mode ONLY: if Tier 1 safe, auto-execute
-            if ($mode === self::MODE_AUTO_HEAL && $analysis['is_fixable'] && $analysis['safety_tier'] === 'tier_1_safe') {
+            // In Auto-Heal mode ONLY: if Tier 1 safe verified by backend guard, auto-execute
+            if ($mode === self::MODE_AUTO_HEAL && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
                 $this->executor->execute($run);
             }
 
@@ -201,6 +205,9 @@ class AiRemedyTriager
         // Step 3: Create audit run
         $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
 
+        $safety = $this->guard->evaluateBatch($analysis['commands'] ?? []);
+        $effectiveTier = $safety['highest_tier'];
+
         $run = AiRemedyRun::create([
             'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
             'status' => $status,
@@ -214,14 +221,14 @@ class AiRemedyTriager
             'telemetry_snapshot' => $telemetry,
             'diagnosis_summary' => $analysis['summary'],
             'root_cause' => $analysis['root_cause'],
-            'safety_tier' => $analysis['safety_tier'],
+            'safety_tier' => $effectiveTier,
             'proposed_commands' => $analysis['commands'],
             'before_metrics' => $telemetry,
             'started_at' => now(),
         ]);
 
-        // Auto-heal only if explicitly set and not simulation
-        if (! $isSimulation && $mode === self::MODE_AUTO_HEAL && $actor === 'autonomous' && $analysis['is_fixable'] && $analysis['safety_tier'] === 'tier_1_safe') {
+        // Auto-heal only if explicitly set, not simulation, and verified Tier 1 Safe by backend guard
+        if (! $isSimulation && $mode === self::MODE_AUTO_HEAL && $actor === 'autonomous' && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
             $this->executor->execute($run);
         }
 

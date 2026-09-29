@@ -52,6 +52,17 @@ class RemedyExecutor
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $errMsg];
         }
 
+        // If autonomous (auto-heal), strictly forbid anything above Tier 1
+        if ($run->actor === 'autonomous' && $safety['highest_tier'] !== CommandSafetyGuard::TIER_1_SAFE) {
+            $errMsg = 'Autonomous execution blocked: commands require manual review (not Tier 1 safe).';
+            $run->update([
+                'status' => AiRemedyRun::STATUS_REJECTED,
+                'error_message' => $errMsg,
+            ]);
+
+            return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $errMsg];
+        }
+
         $run->update([
             'status' => AiRemedyRun::STATUS_EXECUTING,
             'approved_commands' => $commandsToRun,
