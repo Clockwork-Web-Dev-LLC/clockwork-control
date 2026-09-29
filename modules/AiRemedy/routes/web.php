@@ -9,6 +9,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/ai-remedy/settings', [AiRemedySettingsController::class, 'index'])->name('ai-remedy.settings');
     Route::post('/ai-remedy/settings', [AiRemedySettingsController::class, 'update'])->name('ai-remedy.settings.update');
     Route::post('/ai-remedy/test-connection', [AiRemedyController::class, 'testConnection'])->name('ai-remedy.test-connection');
+    Route::post('/ai-remedy/simulate', [AiRemedyController::class, 'simulateServer'])->name('ai-remedy.simulate');
     Route::get('/ai-remedy/runs/{run}', [AiRemedyController::class, 'show'])->name('ai-remedy.show');
     Route::post('/ai-remedy/servers/{server}/diagnose', [AiRemedyController::class, 'diagnoseServer'])->name('ai-remedy.server.diagnose');
     Route::post('/ai-remedy/runs/{run}/execute', [AiRemedyController::class, 'execute'])->name('ai-remedy.execute');

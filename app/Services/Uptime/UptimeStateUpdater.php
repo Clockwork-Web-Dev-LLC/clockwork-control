@@ -10,7 +10,9 @@ use App\Services\Chat\ChatNotifier;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\Core\Contracts\SmsNotifier;
+use Modules\Core\ModuleStateResolver;
 
 /**
  * State machine wrapping per-site uptime tracking.
@@ -198,6 +200,9 @@ class UptimeStateUpdater
 
             $this->recordEvent($site, SiteUptimeEvent::TYPE_DOWN, $probe, $now, $diagnosis);
 
+            // Trigger AiRemedy triage (in Watch Mode by default: safe passive diagnosis with zero mutations)
+            $this->triggerAiRemedyTriage($site, $probe, $diagnosis);
+
             // Suppress the alert if this site is being ignored. The ignore flag
             // is the operator saying "I know about this; don't page me." The
             // event log + state column still tell the story, the channel just
@@ -343,5 +348,31 @@ class UptimeStateUpdater
             elapsedMs: $probe->responseTimeMs,
             actor: 'scheduled',
         );
+    }
+
+    /**
+     * Trigger passive or autonomous AiRemedy triage when a site outage is confirmed.
+     *
+     * @param  ?array<string, mixed>  $diagnosis
+     */
+    private function triggerAiRemedyTriage(Site $site, UptimeProbeResult $probe, ?array $diagnosis = null): void
+    {
+        if (! class_exists(AiRemedyTriager::class)) {
+            return;
+        }
+
+        try {
+            $resolver = app(ModuleStateResolver::class);
+            if (! $resolver->isEnabled('ai-remedy')) {
+                return;
+            }
+
+            app(AiRemedyTriager::class)->triageSiteDowntime($site, $probe, $diagnosis);
+        } catch (\Throwable $e) {
+            Log::warning('uptime.ai_remedy_triage_failed', [
+                'site_id' => $site->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

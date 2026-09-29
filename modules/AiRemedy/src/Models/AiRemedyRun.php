@@ -164,6 +164,39 @@ class AiRemedyRun extends Model
         };
     }
 
+    public function isWatchMode(): bool
+    {
+        return in_array($this->actor, ['watch_mode', 'simulation'], true);
+    }
+
+    public function isSimulation(): bool
+    {
+        return $this->actor === 'simulation';
+    }
+
+    public function modeLabel(): string
+    {
+        return match ($this->actor) {
+            'watch_mode' => 'Watch Mode',
+            'simulation' => 'Simulation',
+            'autonomous' => 'Auto-Heal',
+            'interactive' => 'Interactive',
+            'manual' => 'Manual',
+            default => ucfirst(str_replace('_', ' ', $this->actor)),
+        };
+    }
+
+    public function modeBadgeClass(): string
+    {
+        return match ($this->actor) {
+            'watch_mode' => 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+            'simulation' => 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30',
+            'autonomous' => 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+            'interactive' => 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+            default => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
+        };
+    }
+
     public function summary_safe(): string
     {
         return $this->diagnosis_summary ?: $this->trigger_reason ?: 'Remedy execution';

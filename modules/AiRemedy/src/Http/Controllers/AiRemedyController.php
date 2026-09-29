@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\AiRemedy\Models\AiRemedyRun;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
@@ -149,6 +150,43 @@ class AiRemedyController extends Controller
             'message' => 'Remediation commands executed successfully.',
             'run' => $result['run'],
             'output' => $result['output'],
+        ]);
+    }
+
+    /**
+     * Run a safe diagnostic simulation in Watch Mode (zero commands executed).
+     */
+    public function simulateServer(Request $request, AiRemedyTriager $triager): JsonResponse
+    {
+        $validated = $request->validate([
+            'server_id' => 'required|exists:servers,id',
+            'scenario' => 'nullable|string|max:255',
+        ]);
+
+        $server = Server::findOrFail($validated['server_id']);
+        $scenario = (string) ($validated['scenario'] ?? 'Simulated Server Load & Service Spike');
+
+        $result = $triager->triageServerSpike(
+            server: $server,
+            reason: $scenario,
+            actor: 'simulation',
+            isSimulation: true,
+        );
+
+        if (! $result['ok']) {
+            return response()->json([
+                'ok' => false,
+                'message' => $result['error'] ?? 'Simulation failed to run.',
+                'telemetry' => $result['telemetry'] ?? null,
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Simulation completed safely in Watch Mode. Zero commands executed.',
+            'run' => $result['run'],
+            'analysis' => $result['analysis'],
+            'telemetry' => $result['telemetry'],
         ]);
     }
 

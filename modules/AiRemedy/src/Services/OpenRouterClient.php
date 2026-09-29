@@ -211,6 +211,75 @@ SYS;
     }
 
     /**
+     * Analyze a site downtime incident (e.g. 502 Bad Gateway, 503 Service Unavailable, timeout).
+     *
+     * @param  array<string, mixed>  $telemetry
+     * @return array{
+     *     ok: bool,
+     *     summary: string,
+     *     root_cause: string,
+     *     safety_tier: string,
+     *     is_fixable: bool,
+     *     commands: array<int, string>,
+     *     explanation: string,
+     *     unfixable_briefing: ?string,
+     *     prompt_tokens: int,
+     *     completion_tokens: int,
+     *     cost_usd: float,
+     *     error?: string
+     * }
+     */
+    public function diagnoseSiteDowntime(string $domain, int $statusCode, array $telemetry, ?string $errorMessage = null): array
+    {
+        $apiKey = $this->getApiKey();
+        if (empty($apiKey)) {
+            return [
+                'ok' => false,
+                'summary' => 'OpenRouter API key is missing.',
+                'root_cause' => 'API Key Unconfigured',
+                'safety_tier' => 'unfixable',
+                'is_fixable' => false,
+                'commands' => [],
+                'explanation' => 'Please configure an OpenRouter API key in Settings → AiRemedy.',
+                'unfixable_briefing' => null,
+                'prompt_tokens' => 0,
+                'completion_tokens' => 0,
+                'cost_usd' => 0.0,
+                'error' => 'API key missing',
+            ];
+        }
+
+        $systemPrompt = <<<'SYS'
+You are AiRemedy, a senior Linux systems engineer and site reliability specialist for Clockwork Control (managing WordPress sites on Ubuntu with Nginx, PHP-FPM, MySQL, and Redis).
+
+A monitored website is DOWN. Analyze the HTTP response code, SSH diagnostics (FPM socket, service state, server load, and error log excerpts) to determine the exact root cause.
+Determine if the issue can be safely remediated via bash commands or if it requires human developer intervention.
+
+CRITICAL RULES:
+1. ONLY propose non-destructive commands (e.g. reloading/restarting the specific PHP-FPM pool or Nginx, clearing stale `.maintenance` file, clearing cache).
+2. If the outage is caused by a fatal PHP parse error, missing database table, corrupted plugin, or external API timeout, mark `is_fixable: false` and `safety_tier: "unfixable"`, and provide a detailed `unfixable_briefing`.
+3. Categorize safety_tier: "tier_1_safe" | "tier_2_cautious" | "unfixable".
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "summary": "1-2 sentence executive overview of why the site is down.",
+  "root_cause": "The specific culprit causing the downtime.",
+  "safety_tier": "tier_1_safe" | "tier_2_cautious" | "unfixable",
+  "is_fixable": true | false,
+  "commands": ["bash command 1", "bash command 2"],
+  "explanation": "Clear markdown explanation of the root cause and why these commands fix it.",
+  "unfixable_briefing": null or "Markdown briefing with stack trace analysis and developer action items if unfixable."
+}
+SYS;
+
+        $userPrompt = "Target Site: {$domain}\nHTTP Status: {$statusCode}".($errorMessage ? " ({$errorMessage})" : '')."\n\nDiagnostic Snapshot:\n```json\n"
+            .json_encode($telemetry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            ."\n```\n\nDiagnose the site outage and return the remediation JSON.";
+
+        return $this->chatJson($systemPrompt, $userPrompt);
+    }
+
+    /**
      * Send chat completion request to OpenRouter requesting JSON.
      *
      * @return array{

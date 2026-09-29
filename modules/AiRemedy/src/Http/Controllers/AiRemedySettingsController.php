@@ -3,10 +3,12 @@
 namespace Modules\AiRemedy\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Server;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\AiRemedy\Services\OpenRouterClient;
 
 class AiRemedySettingsController extends Controller
@@ -20,7 +22,7 @@ class AiRemedySettingsController extends Controller
     {
         $currentModel = $this->client->getModel();
         $hasKey = ! empty($this->client->getApiKey());
-        $autoHeal = (bool) $this->settings->get('clockwork.ai_remedy.auto_heal', false);
+        $currentMode = (string) $this->settings->get('clockwork.ai_remedy.mode', AiRemedyTriager::MODE_WATCH);
 
         $availableModels = [
             'anthropic/claude-3.5-sonnet' => 'Claude 3.5 Sonnet (Recommended - Best Systems & Code Reasoning)',
@@ -30,11 +32,14 @@ class AiRemedySettingsController extends Controller
             'deepseek/deepseek-chat' => 'DeepSeek-V3 (Affordable & High Quality)',
         ];
 
+        $servers = Server::orderBy('name')->get(['id', 'name', 'hostname']);
+
         return view('ai-remedy::settings', [
             'hasKey' => $hasKey,
             'currentModel' => $currentModel,
-            'autoHeal' => $autoHeal,
+            'currentMode' => $currentMode,
             'availableModels' => $availableModels,
+            'servers' => $servers,
         ]);
     }
 
@@ -43,7 +48,7 @@ class AiRemedySettingsController extends Controller
         $validated = $request->validate([
             'openrouter_api_key' => 'nullable|string',
             'model' => 'required|string',
-            'auto_heal' => 'nullable|boolean',
+            'mode' => 'required|string|in:watch,interactive,auto_heal',
         ]);
 
         if ($request->filled('openrouter_api_key')) {
@@ -51,7 +56,8 @@ class AiRemedySettingsController extends Controller
         }
 
         $this->settings->put('clockwork.ai_remedy.model', $validated['model']);
-        $this->settings->put('clockwork.ai_remedy.auto_heal', $request->boolean('auto_heal'));
+        $this->settings->put('clockwork.ai_remedy.mode', $validated['mode']);
+        $this->settings->put('clockwork.ai_remedy.auto_heal', $validated['mode'] === AiRemedyTriager::MODE_AUTO_HEAL);
 
         return back()->with('status', 'AiRemedy settings updated successfully.');
     }

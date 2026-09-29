@@ -19,7 +19,7 @@
         subtitle="AI-powered server diagnostics, root-cause forensics, and self-healing remediation via OpenRouter.">
         <x-slot:actions>
             <a href="{{ route('ai-remedy.settings') }}"
-               class="btn-pill-nav text-xs md:text-sm py-1.5 px-3 flex items-center gap-2 cursor-pointer font-medium border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)]">
+               class="btn-pill-nav text-xs md:text-sm py-1.5 px-3 flex items-center gap-2 cursor-pointer font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
                 <i class="fa-solid fa-gear text-xs"></i>
                 <span>Configure Settings</span>
             </a>
@@ -65,23 +65,23 @@
     <div class="card p-3 mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-1.5 overflow-x-auto py-1">
             <a href="{{ route('ai-remedy.index', array_filter(['server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-bg-subtle)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 All Runs
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'resolved', 'server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'resolved' ? 'bg-emerald-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-bg-subtle)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'resolved' ? 'bg-emerald-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Resolved
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'analyzed', 'server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'analyzed' ? 'bg-blue-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-bg-subtle)]' }}">
-                Analyzed
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'analyzed' ? 'bg-blue-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                Analyzed (Watch/Pending)
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'unfixable', 'server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'unfixable' ? 'bg-purple-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-bg-subtle)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'unfixable' ? 'bg-purple-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Unfixable
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'failed', 'server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'failed' ? 'bg-rose-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-bg-subtle)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'failed' ? 'bg-rose-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Failed
             </a>
         </div>
@@ -92,7 +92,7 @@
                 <input type="hidden" name="status" value="{{ $activeStatus }}">
             @endif
             <select name="server_id" onchange="this.form.submit()"
-                    class="input text-xs py-1 px-2.5 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-[var(--color-ink-strong)]">
+                    class="input text-xs py-1 px-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
                 <option value="">All Servers</option>
                 @foreach($servers as $srv)
                     <option value="{{ $srv->id }}" {{ (string)$selectedServerId === (string)$srv->id ? 'selected' : '' }}>
@@ -109,17 +109,23 @@
             <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-40"></i>
             <h3 class="text-base font-semibold text-[var(--color-ink-strong)]">No AiRemedy records found</h3>
             <p class="text-xs mt-1 max-w-md mx-auto">
-                AiRemedy logs every server diagnosis, proposed command, and self-healing action. Run an audit on a spiking server to populate this log.
+                AiRemedy logs every server diagnosis, proposed command, and watch-mode audit. Run a test simulation in settings to verify.
             </p>
+            <div class="mt-4">
+                <a href="{{ route('ai-remedy.settings') }}" class="btn-primary text-xs py-2 px-4 inline-flex items-center gap-2">
+                    <i class="fa-solid fa-play text-xs"></i>
+                    <span>Run Simulation in Settings</span>
+                </a>
+            </div>
         </div>
     @else
         <div class="card overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
-                    <thead class="bg-[var(--color-bg-subtle)] border-b border-[var(--color-border-subtle)] text-[var(--color-ink-muted)] uppercase font-semibold">
+                    <thead class="bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-[var(--color-ink-muted)] uppercase font-semibold">
                         <tr>
-                            <th class="py-3 px-4">Time & Trigger</th>
-                            <th class="py-3 px-4">Target Server</th>
+                            <th class="py-3 px-4">Time & Mode</th>
+                            <th class="py-3 px-4">Target Server / Site</th>
                             <th class="py-3 px-4">Root Cause & Diagnosis</th>
                             <th class="py-3 px-4">Safety Tier</th>
                             <th class="py-3 px-4">Status</th>
@@ -127,16 +133,20 @@
                             <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-[var(--color-border-subtle)]">
+                    <tbody class="divide-y divide-[var(--color-border-light)]">
                         @foreach($runs as $run)
-                            <tr class="hover:bg-[var(--color-bg-subtle)]/50 transition-colors">
+                            <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
                                 <td class="py-3.5 px-4">
                                     <div class="font-data font-semibold text-[var(--color-ink-strong)]">
                                         {{ $run->started_at->format('M j, Y H:i') }}
                                     </div>
-                                    <div class="text-[11px] text-[var(--color-ink-muted)] capitalize flex items-center gap-1.5 mt-0.5">
-                                        <span class="w-1.5 h-1.5 rounded-full {{ $run->actor === 'autonomous' ? 'bg-purple-500' : 'bg-blue-500' }}"></span>
-                                        {{ str_replace('_', ' ', $run->trigger_type) }} · {{ $run->actor }}
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <span class="px-1.5 py-0.5 rounded font-data text-[10px] font-semibold border {{ $run->modeBadgeClass() }}">
+                                            {{ $run->modeLabel() }}
+                                        </span>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] capitalize">
+                                            {{ str_replace('_', ' ', $run->trigger_type) }}
+                                        </span>
                                     </div>
                                 </td>
 
@@ -146,11 +156,16 @@
                                             <i class="fa-solid fa-server text-[10px]"></i>
                                             <span>{{ $run->server->name }}</span>
                                         </a>
-                                        <div class="text-[11px] font-data text-[var(--color-ink-muted)]">
+                                        <div class="text-[11px] font-data text-[var(--color-ink-soft)]">
                                             {{ $run->server->hostname }}
                                         </div>
+                                    @elseif($run->site)
+                                        <div class="text-[var(--color-ink-strong)] font-semibold flex items-center gap-1.5">
+                                            <i class="fa-solid fa-globe text-[10px]"></i>
+                                            <span>{{ $run->site->domain }}</span>
+                                        </div>
                                     @else
-                                        <span class="text-[var(--color-ink-muted)]">—</span>
+                                        <span class="text-[var(--color-ink-soft)]">—</span>
                                     @endif
                                 </td>
 
@@ -182,7 +197,7 @@
                                 <td class="py-3.5 px-4 text-right">
                                     <button type="button"
                                             @click="openDrawer({{ json_encode($run) }})"
-                                            class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)] cursor-pointer">
+                                            class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer">
                                         <span>Forensics</span>
                                         <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i>
                                     </button>
@@ -194,23 +209,23 @@
             </div>
 
             @if($runs->hasPages())
-                <div class="p-3 border-t border-[var(--color-border-subtle)]">
+                <div class="p-3 border-t border-[var(--color-border-light)]">
                     {{ $runs->links() }}
                 </div>
             @endif
         </div>
     @endif
 
-    {{-- Slide-Over Drawer for Forensics & Commands --}}
+    {{-- Slide-Over Drawer for Forensics & What AiRemedy Would Have Done --}}
     <div x-cloak x-show="drawerOpen" class="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" @click="closeDrawer()"></div>
 
         <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div class="w-screen max-w-2xl bg-[var(--color-bg-surface)] border-l border-[var(--color-border-subtle)] shadow-2xl flex flex-col"
+            <div class="w-screen max-w-2xl bg-[var(--color-surface)] border-l border-[var(--color-border)] shadow-2xl flex flex-col"
                  @keydown.window.escape="closeDrawer()">
                 
                 {{-- Drawer Header --}}
-                <div class="p-5 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
+                <div class="p-5 border-b border-[var(--color-border)] flex items-center justify-between">
                     <div>
                         <div class="flex items-center gap-2">
                             <h2 class="text-base font-bold text-[var(--color-ink-strong)]">Incident Forensics & Remediation</h2>
@@ -219,7 +234,7 @@
                                   x-text="activeRun?.status?.toUpperCase()"></span>
                         </div>
                         <p class="text-xs text-[var(--color-ink-muted)] mt-1">
-                            Run #<span x-text="activeRun?.id"></span> · <span x-text="activeRun?.model_used"></span> · Cost: $<span x-text="Number(activeRun?.total_cost_usd || 0).toFixed(4)"></span>
+                            Run #<span x-text="activeRun?.id"></span> · <span x-text="activeRun?.model_used"></span> · Mode: <span class="font-semibold" x-text="activeRun?.actor"></span> · Cost: $<span x-text="Number(activeRun?.total_cost_usd || 0).toFixed(4)"></span>
                         </p>
                     </div>
                     <button type="button" @click="closeDrawer()" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] p-1.5 cursor-pointer">
@@ -229,10 +244,23 @@
 
                 {{-- Drawer Content --}}
                 <div class="p-6 overflow-y-auto flex-1 space-y-6 text-xs">
+                    {{-- Watch Mode / Simulation Banner --}}
+                    <template x-if="activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation'">
+                        <div class="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 space-y-1">
+                            <div class="flex items-center gap-1.5 font-bold text-xs">
+                                <i class="fa-solid fa-eye text-indigo-500"></i>
+                                <span>Watch Mode Active — Passive Observability</span>
+                            </div>
+                            <p class="text-[11px] leading-relaxed">
+                                AiRemedy ran read-only diagnostics and formulated remediation, but <strong>executed 0 commands</strong> on the server. Below is what AiRemedy would have done if autonomous healing were enabled.
+                            </p>
+                        </div>
+                    </template>
+
                     {{-- Executive Diagnosis --}}
                     <div>
                         <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)] mb-2">Executive Summary</h4>
-                        <div class="card p-3.5 bg-[var(--color-bg-subtle)] text-[var(--color-ink-strong)] text-sm leading-relaxed"
+                        <div class="card p-3.5 bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] text-sm leading-relaxed"
                              x-text="activeRun?.diagnosis_summary"></div>
                     </div>
 
@@ -250,7 +278,16 @@
 
                     {{-- Proposed / Approved Commands --}}
                     <div>
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)] mb-2">Remediation Commands</h4>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)]"
+                                x-text="(activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation') ? 'What AiRemedy Would Have Done' : 'Remediation Commands'"></h4>
+                            <template x-if="activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation'">
+                                <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                    <i class="fa-solid fa-ban mr-1"></i>Not executed (Watch Mode)
+                                </span>
+                            </template>
+                        </div>
+
                         <template x-if="activeRun?.approved_commands && activeRun.approved_commands.length > 0">
                             <div class="bg-neutral-950 text-emerald-400 p-3.5 rounded-lg font-mono text-xs overflow-x-auto space-y-1">
                                 <template x-for="cmd in activeRun.approved_commands" :key="cmd">
@@ -259,7 +296,7 @@
                             </div>
                         </template>
                         <template x-if="!activeRun?.approved_commands || activeRun.approved_commands.length === 0">
-                            <div class="bg-neutral-950 text-amber-400 p-3.5 rounded-lg font-mono text-xs overflow-x-auto space-y-1">
+                            <div class="bg-neutral-950 text-indigo-300 p-3.5 rounded-lg font-mono text-xs overflow-x-auto space-y-1">
                                 <template x-for="cmd in (activeRun?.proposed_commands || [])" :key="cmd">
                                     <div><span class="text-neutral-500">$</span> <span x-text="cmd"></span></div>
                                 </template>
@@ -267,7 +304,7 @@
                         </template>
                     </div>
 
-                    {{-- Terminal Execution Output --}}
+                    {{-- Terminal Execution Output (if executed) --}}
                     <template x-if="activeRun?.execution_output">
                         <div>
                             <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)] mb-2">Terminal Execution Log (SSH)</h4>

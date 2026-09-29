@@ -3,13 +3,18 @@
 use App\Models\ActionLog;
 use App\Models\AppSetting;
 use App\Models\Server;
+use App\Models\Site;
 use App\Models\User;
 use App\Services\Ssh\SshClient;
+use App\Services\Uptime\UptimeProbeResult;
+use App\Services\Uptime\UptimeStateUpdater;
 use App\Support\EnvCredentialManager;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Modules\AiRemedy\AiRemedyServiceProvider;
 use Modules\AiRemedy\Models\AiRemedyRun;
+use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
@@ -260,7 +265,7 @@ test('settings controller updates openrouter key in env and never saves in datab
     $response = $this->actingAs($this->user)->post(route('ai-remedy.settings.update'), [
         'openrouter_api_key' => 'sk-or-v1-my-secret-key',
         'model' => 'openai/gpt-4o',
-        'auto_heal' => '1',
+        'mode' => 'auto_heal',
     ]);
 
     $response->assertRedirect();
@@ -278,4 +283,177 @@ test('settings controller updates openrouter key in env and never saves in datab
     expect($dbKey)->toBeEmpty();
 
     @unlink($tempEnv);
+});
+
+test('watch mode is default and site downtime triage logs analysis with zero mutations', function () {
+    $server = Server::factory()->create(['name' => 'prod-server', 'hostname' => '10.0.0.1']);
+    $site = Site::factory()->create([
+        'server_id' => $server->id,
+        'domain' => 'client-outage.com',
+        'site_user' => 'clientoutage',
+        'wp_path' => '/home/clientoutage/web/client-outage.com/public_html',
+    ]);
+
+    $triager = app(AiRemedyTriager::class);
+    expect($triager->getMode())->toBe(AiRemedyTriager::MODE_WATCH);
+
+    // Mock OpenRouterClient key and response
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+        $mock->shouldReceive('getModel')->andReturn('anthropic/claude-3.5-sonnet');
+        $mock->shouldReceive('diagnoseSiteDowntime')->once()->andReturn([
+            'ok' => true,
+            'summary' => 'PHP-FPM socket dead for clientoutage pool.',
+            'root_cause' => 'PHP-FPM worker pool crashed',
+            'safety_tier' => 'tier_1_safe',
+            'is_fixable' => true,
+            'commands' => ['sudo systemctl restart php8.3-fpm'],
+            'explanation' => 'Restarting the service restores socket connection.',
+            'unfixable_briefing' => null,
+            'prompt_tokens' => 1100,
+            'completion_tokens' => 180,
+            'cost_usd' => 0.0055,
+        ]);
+    });
+
+    // Make sure RemedyExecutor is NEVER invoked in Watch Mode
+    $this->mock(RemedyExecutor::class, function ($mock) {
+        $mock->shouldNotReceive('execute');
+    });
+
+    $probe = UptimeProbeResult::badStatus(502, 340, 'HTTP 502 Bad Gateway');
+    $run = app(AiRemedyTriager::class)->triageSiteDowntime($site, $probe, ['fpm_status' => 'inactive']);
+
+    expect($run)->not->toBeNull();
+    expect($run->status)->toBe(AiRemedyRun::STATUS_ANALYZED);
+    expect($run->actor)->toBe('watch_mode');
+    expect($run->isWatchMode())->toBeTrue();
+    expect($run->proposed_commands)->toBe(['sudo systemctl restart php8.3-fpm']);
+    expect($run->approved_commands)->toBeNull();
+    expect($run->execution_output)->toBeNull();
+
+    $this->assertDatabaseHas('ai_remedy_runs', [
+        'id' => $run->id,
+        'site_id' => $site->id,
+        'actor' => 'watch_mode',
+        'status' => 'analyzed',
+    ]);
+});
+
+test('auto-heal mode executes safe tier 1 remediation on site outage', function () {
+    $server = Server::factory()->create(['name' => 'auto-heal-srv', 'hostname' => '10.0.0.2']);
+    $site = Site::factory()->create([
+        'server_id' => $server->id,
+        'domain' => 'autoheal.com',
+    ]);
+
+    // Set mode to auto_heal
+    app(Settings::class)->put('clockwork.ai_remedy.mode', AiRemedyTriager::MODE_AUTO_HEAL);
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+        $mock->shouldReceive('getModel')->andReturn('anthropic/claude-3.5-sonnet');
+        $mock->shouldReceive('diagnoseSiteDowntime')->once()->andReturn([
+            'ok' => true,
+            'summary' => 'Nginx fastcgi socket error.',
+            'root_cause' => 'FPM unresponsive',
+            'safety_tier' => 'tier_1_safe',
+            'is_fixable' => true,
+            'commands' => ['sudo systemctl reload php8.3-fpm'],
+            'explanation' => 'Pool reload fixes it.',
+            'unfixable_briefing' => null,
+            'prompt_tokens' => 1000,
+            'completion_tokens' => 150,
+            'cost_usd' => 0.004,
+        ]);
+    });
+
+    // In auto_heal mode, RemedyExecutor SHOULD be executed for Tier 1 safe
+    $this->mock(RemedyExecutor::class, function ($mock) {
+        $mock->shouldReceive('execute')->once()->andReturn(['ok' => true, 'run' => null, 'output' => 'Reloaded']);
+    });
+
+    $probe = UptimeProbeResult::badStatus(502, 400, 'HTTP 502 Bad Gateway');
+    $run = app(AiRemedyTriager::class)->triageSiteDowntime($site, $probe);
+
+    expect($run)->not->toBeNull();
+    expect($run->actor)->toBe('autonomous');
+});
+
+test('simulate endpoint performs safe triage under watch mode with zero mutations', function () {
+    $server = Server::factory()->create(['name' => 'sim-srv', 'hostname' => '192.168.1.50']);
+
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')->once()->withArgs(fn ($s) => $s->id === $server->id)->andReturn([
+            'ok' => true,
+            'server_id' => $server->id,
+            'hostname' => $server->hostname,
+            'loadavg' => [8.1, 6.2, 4.3],
+            'cores' => 4,
+            'memory' => ['total_mb' => 8192, 'used_mb' => 7500, 'used_percent' => 91.5],
+            'top_cpu' => [],
+            'services' => ['nginx' => 'active'],
+        ]);
+    });
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getModel')->andReturn('anthropic/claude-3.5-sonnet');
+        $mock->shouldReceive('diagnoseServerSpike')->once()->andReturn([
+            'ok' => true,
+            'summary' => 'Simulated CPU spike diagnosis.',
+            'root_cause' => 'Simulated rogue process',
+            'safety_tier' => 'tier_1_safe',
+            'is_fixable' => true,
+            'commands' => ['sudo systemctl reload nginx'],
+            'explanation' => 'Simulation only.',
+            'unfixable_briefing' => null,
+            'prompt_tokens' => 900,
+            'completion_tokens' => 120,
+            'cost_usd' => 0.003,
+        ]);
+    });
+
+    // Zero commands executed
+    $this->mock(RemedyExecutor::class, function ($mock) {
+        $mock->shouldNotReceive('execute');
+    });
+
+    $response = $this->actingAs($this->user)->postJson(route('ai-remedy.simulate'), [
+        'server_id' => $server->id,
+        'scenario' => 'Simulated Traffic Surge',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('ok', true);
+    $response->assertJsonPath('message', 'Simulation completed safely in Watch Mode. Zero commands executed.');
+    $response->assertJsonPath('run.actor', 'simulation');
+
+    $this->assertDatabaseHas('ai_remedy_runs', [
+        'server_id' => $server->id,
+        'actor' => 'simulation',
+        'status' => 'analyzed',
+    ]);
+});
+
+test('uptime state updater invokes airemedy triager on site downtime transitions', function () {
+    $server = Server::factory()->create();
+    $site = Site::factory()->create([
+        'server_id' => $server->id,
+        'domain' => 'uptime-down-test.com',
+        'uptime_state' => 'up',
+        'uptime_consecutive_failures' => 1, // Will hit threshold of 2 on next failure
+    ]);
+
+    $this->mock(AiRemedyTriager::class, function ($mock) use ($site) {
+        $mock->shouldReceive('triageSiteDowntime')
+            ->once()
+            ->withArgs(fn ($s, $p, $d) => $s->id === $site->id)
+            ->andReturn(null);
+    });
+
+    $probe = UptimeProbeResult::badStatus(500, 250, 'HTTP 500 Internal Server Error');
+    $updater = app(UptimeStateUpdater::class);
+    $updater->update($site, $probe);
+
+    expect($site->fresh()->uptime_state)->toBe('down');
 });

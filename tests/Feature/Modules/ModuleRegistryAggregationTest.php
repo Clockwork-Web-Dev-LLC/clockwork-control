@@ -48,11 +48,12 @@ describe('ModuleRegistry aggregation', function () {
     it('aggregates a manifest from every one of the 32 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(32);
+        expect($manifests)->toHaveCount(33);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
         expect($ids)->toEqualCanonicalizing([
+            'ai-remedy',
             'azure',
             'hetzner',
             'digitalocean',

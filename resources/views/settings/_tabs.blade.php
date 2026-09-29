@@ -28,7 +28,7 @@
             'label' => 'Integrations & Alerts',
             'icon' => 'fa-plug',
             'route' => 'settings.integrations.index',
-            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*') || request()->routeIs('feedback.*'),
+            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*') || request()->routeIs('feedback.*') || request()->routeIs('ai-remedy.settings'),
         ],
         [
             'key' => 'system',
@@ -58,6 +58,9 @@
         'integrations' => array_values(array_filter([
             ['label' => 'API Credentials', 'icon' => 'fa-solid fa-key', 'route' => 'settings.integrations.index', 'active' => request()->routeIs('settings.integrations.*')],
             ['label' => 'Module Directory', 'icon' => 'fa-solid fa-boxes-stacked', 'route' => 'settings.modules.index', 'active' => request()->routeIs('settings.modules.*')],
+            app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy')
+                ? ['label' => 'AiRemedy', 'icon' => 'fa-solid fa-wand-magic-sparkles', 'route' => 'ai-remedy.settings', 'active' => request()->routeIs('ai-remedy.settings')]
+                : null,
             app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback')
                 ? ['label' => 'Feedback Notes', 'icon' => 'fa-solid fa-comment-dots', 'route' => 'feedback.index', 'active' => request()->routeIs('feedback.*')]
                 : null,
