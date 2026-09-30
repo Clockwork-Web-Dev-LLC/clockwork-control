@@ -117,7 +117,8 @@
                         </button>
                     </div>
                 </div>
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'lockouts', defaultDir: 'desc' })">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm min-w-[620px]" x-data="sortableTable({ defaultKey: 'lockouts', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">
                         <tr>
                             <th class="w-8 px-4 py-2"></th>
@@ -166,6 +167,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             </div>
         </form>
     @endif
@@ -204,7 +206,8 @@
                         </button>
                     </div>
                 </div>
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'detected', defaultDir: 'desc' })">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm min-w-[550px]" x-data="sortableTable({ defaultKey: 'detected', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">
                         <tr>
                             <th class="w-8 px-4 py-2"></th>
@@ -244,6 +247,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             </div>
         </form>
     </details>

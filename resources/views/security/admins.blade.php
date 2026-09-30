@@ -53,7 +53,8 @@
     </div>
 
     <div class="card overflow-hidden">
-        <table class="w-full text-sm" x-data="sortableTable()">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[620px]" x-data="sortableTable()">
             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                 <tr>
                     <x-sort-th key="site" class="px-4 py-2">Site</x-sort-th>
@@ -132,5 +133,6 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </div>
 @endsection

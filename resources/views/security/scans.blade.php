@@ -112,7 +112,8 @@
             };
         @endphp
         <div class="card overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'sitecheck', defaultDir: 'asc' })">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm min-w-[640px]" x-data="sortableTable({ defaultKey: 'sitecheck', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -194,6 +195,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         </div>
     @endif
 

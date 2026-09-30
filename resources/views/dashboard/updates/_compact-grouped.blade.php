@@ -61,11 +61,11 @@
                         <span class="w-9 flex-shrink-0 inline-flex items-center justify-center h-6 px-1.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs font-data tabular-nums">{{ $group['count'] }}</span>
 
                         {{-- Slot 3: plugin/theme name (flex-1, takes the rest) --}}
-                        <span class="font-display font-medium text-[var(--color-ink-strong)] flex-1 truncate" title="{{ $group['name'] }}">{{ $group['name'] }}</span>
+                        <span class="font-display font-medium text-[var(--color-ink-strong)] flex-1 min-w-0 truncate" title="{{ $group['name'] }}">{{ $group['name'] }}</span>
 
                         {{-- Before → After (representative; opacity drops when sites diverge) --}}
                         @if ($first)
-                            <span class="text-sm font-data tabular-nums text-[var(--color-ink-strong)] {{ $versionsHomogeneous ? '' : 'opacity-50' }}"
+                            <span class="hidden sm:inline-flex items-center text-sm font-data tabular-nums text-[var(--color-ink-strong)] {{ $versionsHomogeneous ? '' : 'opacity-50' }}"
                                   title="{{ $versionsHomogeneous ? '' : 'Sites have mixed before-versions; expand to see per-site' }}">
                                 <span class="text-[var(--color-ink-soft)]">{{ $first['before_version'] }}</span>
                                 <i class="fa-solid fa-arrow-right text-[var(--color-ink-soft)] mx-1.5 text-xs"></i>
@@ -74,29 +74,29 @@
                         @endif
 
                         @if ($hasRunning)
-                            <i class="fa-solid fa-spinner fa-spin text-[var(--color-status-amber,#d97706)] text-sm" title="Update in progress"></i>
+                            <i class="fa-solid fa-spinner fa-spin text-[var(--color-status-amber,#d97706)] text-sm flex-shrink-0" title="Update in progress"></i>
                         @elseif ($hasLive)
-                            <i class="fa-solid fa-clock text-[var(--color-ink-soft)] text-sm" title="Update queued"></i>
+                            <i class="fa-solid fa-clock text-[var(--color-ink-soft)] text-sm flex-shrink-0" title="Update queued"></i>
                         @endif
 
                         @unless ($hasLive)
                             <button type="button" data-update-group="{{ $group['slug'] }}"
                                     onclick="event.stopPropagation(); event.preventDefault();"
-                                    class="text-xs font-medium px-2.5 py-1 rounded-md bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)]"
+                                    class="text-xs font-medium px-2.5 py-1 rounded-md bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)] flex-shrink-0"
                                     title="Update this {{ $kind }} on all {{ $group['count'] }} listed site{{ $group['count'] === 1 ? '' : 's' }}">
                                 <i class="fa-solid fa-arrow-up-from-bracket text-[10px]"></i>
-                                Update {{ $group['count'] === 1 ? '' : 'all ' . $group['count'] }}
+                                <span class="hidden sm:inline">Update </span>{{ $group['count'] === 1 ? '1' : 'all ' . $group['count'] }}
                             </button>
                         @endunless
 
                         <button type="button" data-ignore-group="{{ $group['slug'] }}"
                                 onclick="event.stopPropagation(); event.preventDefault();"
-                                class="text-[10px] text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] px-1.5 py-0.5 rounded hover:bg-[var(--color-surface-alt)]"
+                                class="text-[10px] text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] px-1.5 py-0.5 rounded hover:bg-[var(--color-surface-alt)] flex-shrink-0"
                                 title="Ignore this {{ $kind }} on all {{ $group['count'] }} listed site{{ $group['count'] === 1 ? '' : 's' }}">
-                            <i class="fa-solid fa-eye-slash"></i> Ignore everywhere
+                            <i class="fa-solid fa-eye-slash"></i> <span class="hidden md:inline">Ignore everywhere</span>
                         </button>
 
-                        <i class="fa-solid fa-chevron-down text-xs text-[var(--color-ink-soft)] transition-transform group-open:rotate-180"></i>
+                        <i class="fa-solid fa-chevron-down text-xs text-[var(--color-ink-soft)] transition-transform group-open:rotate-180 flex-shrink-0"></i>
                     </summary>
 
                     {{-- Per-site rows. Same px-5 / gap-3 / slot widths as the
@@ -127,7 +127,7 @@
                                        onclick="event.stopPropagation()"
                                        class="text-sm font-data text-[var(--color-ink-strong)] hover:underline truncate block">{{ $row['domain'] }}</a>
                                     @if ($row['server_id'])
-                                        <span class="text-[10px] text-[var(--color-ink-soft)]">
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] truncate block">
                                             {{ $row['server_name'] ?? '' }}@if ($row['server_tier']) · <span class="{{ $row['server_tier'] === 'Dedicated' ? 'text-[var(--color-primary-600)]' : '' }}">{{ $row['server_tier'] }}</span>@endif
                                         </span>
                                     @endif

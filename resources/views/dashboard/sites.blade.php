@@ -102,36 +102,47 @@
                                 default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
                             };
                         @endphp
-                        <li class="site-row relative px-5 py-3 flex items-center gap-3 hover:bg-[var(--color-surface-alt)] transition-colors"
+                        <li class="site-row relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors"
                             data-search="{{ strtolower($site->domain . ' ' . implode(' ', $site->aliasDomains()) . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
                             <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
 
                             @if ($site->is_wordpress)
-                                <i class="fa-brands fa-wordpress text-[var(--color-brand)] text-lg relative z-10 pointer-events-none"></i>
+                                <i class="fa-brands fa-wordpress text-[var(--color-brand)] text-lg relative z-10 pointer-events-none shrink-0"></i>
                             @else
-                                <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none"></i>
+                                <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none shrink-0"></i>
                             @endif
 
-                            <span class="font-medium text-[var(--color-ink-strong)] truncate flex-1 relative z-10 pointer-events-none">
-                                {{ $site->domain }}
-                            </span>
+                            <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
+                                <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug">
+                                    {{ $site->domain }}
+                                </div>
+                                <div class="text-[11px] text-[var(--color-ink-muted)] truncate flex items-center gap-1.5 mt-0.5 sm:hidden">
+                                    @if ($site->isPressable())
+                                        <i class="fa-solid fa-cloud text-[10px]"></i> Pressable
+                                    @elseif ($site->isCustom())
+                                        <i class="fa-solid fa-plug text-[10px]"></i> {{ $site->pluginOnlyHostLabel() }}
+                                    @elseif ($site->server)
+                                        <i class="fa-solid fa-server text-[10px]"></i> {{ $site->server->display_name ?? $site->server->name }}
+                                    @endif
+                                </div>
+                            </div>
 
-                            <div class="flex items-center gap-2 relative z-10">
+                            <div class="flex items-center gap-1.5 sm:gap-2 relative z-10 shrink-0">
                                 @if ($site->is_inactive)
                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Site Inactive">
                                         <i class="fa-solid fa-moon"></i>
                                     </span>
                                 @endif
                                 @if ($site->isPressable())
-                                    <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
+                                    <span class="hidden sm:inline-flex status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
                                          <i class="fa-solid fa-cloud"></i> Pressable
                                      </span>
                                  @elseif ($site->isCustom())
-                                     <span class="status-pill status-unknown cursor-default" data-tooltip="Host: Custom / {{ $site->pluginOnlyHostLabel() }}">
+                                     <span class="hidden sm:inline-flex status-pill status-unknown cursor-default" data-tooltip="Host: Custom / {{ $site->pluginOnlyHostLabel() }}">
                                          <i class="fa-solid fa-plug"></i> {{ $site->pluginOnlyHostLabel() }}
                                      </span>
                                  @elseif ($site->server)
-                                    <span class="status-pill status-unknown truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
+                                    <span class="hidden sm:inline-flex status-pill status-unknown truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
                                         <i class="fa-solid fa-server"></i> {{ $site->server->display_name ?? $site->server->name }}
                                     </span>
                                 @endif
@@ -216,7 +227,7 @@
                                 <div class="flex items-center justify-between text-[11px]">
                                     <span class="flex items-center gap-1.5 text-[var(--color-ink-muted)] truncate max-w-[75%]">
                                         <span class="w-1.5 h-1.5 rounded-full {{ $statusDotClass }} shrink-0"></span>
-                                        <span class="truncate text-[10px] font-data text-[var(--color-ink-soft)]">{{ $site->domain }}</span>
+                                        <span class="truncate text-[10px] font-data text-[var(--color-ink-soft)]">{{ $site->isPressable() ? 'Pressable' : ($site->server?->display_name ?? $site->server?->name ?? ($site->isCustom() ? $site->pluginOnlyHostLabel() : 'Custom')) }}</span>
                                     </span>
 
                                     <div class="flex items-center gap-1.5 shrink-0">

@@ -283,7 +283,7 @@
             <div class="p-5 text-sm text-[var(--color-ink-muted)]">No sites being monitored. Verify your servers aren't ignored and that sites have <code class="font-data">uptime_monitoring_enabled = true</code>.</div>
         @else
             <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+                <table class="w-full text-sm min-w-[680px]">
                     <thead class="text-[var(--color-ink-muted)] uppercase tracking-wide text-[10px]">
                         <tr class="border-b border-[var(--color-border-light)]">
                             <th class="text-left px-5 py-2">Site</th>

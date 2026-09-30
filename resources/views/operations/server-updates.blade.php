@@ -99,7 +99,8 @@
         <form method="POST" action="{{ route('operations.server-updates.queueBulk') }}" id="updates-bulk-form">
             @csrf
             <div class="card overflow-hidden">
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'updates', defaultDir: 'desc' })">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm min-w-[720px]" x-data="sortableTable({ defaultKey: 'updates', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
                             <th class="px-5 py-2 w-10">
@@ -237,6 +238,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {{-- Sticky bulk-action toolbar. --}}
