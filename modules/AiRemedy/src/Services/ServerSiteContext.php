@@ -22,13 +22,14 @@ class ServerSiteContext
      */
     public function sites(Server $server): array
     {
-        return $this->cache[$server->id] ??= $server->sites()
+        return $this->cache[$server->id] ??= Site::query()
+            ->where('server_id', $server->id)
             ->where('is_inactive', false)
             ->orderBy('domain')
             ->get(['id', 'domain', 'site_user', 'wp_path'])
             ->map(fn (Site $site) => [
                 'domain' => (string) $site->domain,
-                'site_user' => $site->site_user ?: null,
+                'site_user' => $site->site_user ? (string) $site->site_user : null,
                 // SpinupWP layout; same fallback the rest of Control uses.
                 'wp_path' => $this->normalize($site->wp_path ?: '/sites/'.$site->domain.'/files'),
             ])
