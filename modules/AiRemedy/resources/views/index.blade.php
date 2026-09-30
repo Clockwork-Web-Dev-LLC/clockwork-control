@@ -151,23 +151,24 @@
         </div>
     @else
         <div class="card overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
+            {{-- Desktop Table View: Large screens and up (lg:block) --}}
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[920px]">
                     <thead class="bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-[var(--color-ink-muted)] uppercase font-semibold">
                         <tr>
-                            <th class="py-3 px-4">Time & Mode</th>
-                            <th class="py-3 px-4">Target Server / Site</th>
-                            <th class="py-3 px-4">Root Cause & Diagnosis</th>
-                            <th class="py-3 px-4">Safety Tier</th>
-                            <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4 text-right">Cost</th>
-                            <th class="py-3 px-4 text-right">Actions</th>
+                            <th class="py-3 px-4 whitespace-nowrap">Time & Mode</th>
+                            <th class="py-3 px-4 whitespace-nowrap">Target Server / Site</th>
+                            <th class="py-3 px-4 min-w-[200px]">Root Cause & Diagnosis</th>
+                            <th class="py-3 px-4 whitespace-nowrap">Safety Tier</th>
+                            <th class="py-3 px-4 whitespace-nowrap">Status</th>
+                            <th class="py-3 px-4 text-right whitespace-nowrap">Cost</th>
+                            <th class="py-3 px-4 text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
                         @foreach($runs as $run)
                             <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
-                                <td class="py-3.5 px-4">
+                                <td class="py-3.5 px-4 whitespace-nowrap">
                                     <div class="font-data font-semibold text-[var(--color-ink-strong)]">
                                         {{ $run->started_at->format('M j, Y H:i') }}
                                     </div>
@@ -181,7 +182,7 @@
                                     </div>
                                 </td>
 
-                                <td class="py-3.5 px-4 font-medium">
+                                <td class="py-3.5 px-4 font-medium whitespace-nowrap">
                                     @if($run->server)
                                         <a href="{{ route('servers.show', $run->server) }}" class="text-[var(--color-brand)] hover:underline flex items-center gap-1.5">
                                             <i class="fa-solid fa-server text-[10px]"></i>
@@ -200,11 +201,11 @@
                                     @endif
                                 </td>
 
-                                <td class="py-3.5 px-4 max-w-md">
-                                    <div class="font-semibold text-[var(--color-ink-strong)] truncate" title="{{ $run->root_cause }}">
+                                <td class="py-3.5 px-4">
+                                    <div class="font-semibold text-[var(--color-ink-strong)] truncate max-w-xs xl:max-w-sm" title="{{ $run->root_cause }}">
                                         {{ $run->root_cause ?: 'Analysis completed' }}
                                     </div>
-                                    <div class="text-[11px] text-[var(--color-ink-muted)] line-clamp-1 mt-0.5" title="{{ $run->diagnosis_summary }}">
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] line-clamp-1 mt-0.5 max-w-xs xl:max-w-sm" title="{{ $run->diagnosis_summary }}">
                                         {{ $run->diagnosis_summary }}
                                     </div>
                                 </td>
@@ -221,22 +222,100 @@
                                     </span>
                                 </td>
 
-                                <td class="py-3.5 px-4 text-right font-data font-semibold text-[var(--color-ink-strong)]">
+                                <td class="py-3.5 px-4 text-right font-data font-semibold text-[var(--color-ink-strong)] whitespace-nowrap">
                                     ${{ number_format((float)$run->total_cost_usd, 4) }}
                                 </td>
 
-                                <td class="py-3.5 px-4 text-right">
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                     <button type="button"
                                             @click="openDrawer({{ json_encode($run) }})"
-                                            class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer">
+                                            class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center gap-1 flex-shrink-0">
                                         <span>Forensics</span>
-                                        <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i>
+                                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
                                     </button>
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+
+            {{-- Mobile & Tablet Stacked Card View: for smaller screens (< lg) --}}
+            <div class="block lg:hidden divide-y divide-[var(--color-border-light)]">
+                @foreach($runs as $run)
+                    <div class="p-4 space-y-3 hover:bg-[var(--color-surface-alt)]/30 transition-colors">
+                        {{-- Top line: Timestamp, Mode Badge, Status Badge & Cost --}}
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <div class="flex items-center gap-2">
+                                <div class="font-data font-semibold text-xs text-[var(--color-ink-strong)]">
+                                    {{ $run->started_at->format('M j, Y H:i') }}
+                                </div>
+                                <span class="px-1.5 py-0.5 rounded font-data text-[10px] font-semibold border {{ $run->modeBadgeClass() }}">
+                                    {{ $run->modeLabel() }}
+                                </span>
+                                <span class="text-[10px] text-[var(--color-ink-soft)] capitalize">
+                                    {{ str_replace('_', ' ', $run->trigger_type) }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-data text-xs font-semibold text-[var(--color-ink-strong)]">
+                                    ${{ number_format((float)$run->total_cost_usd, 4) }}
+                                </span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border whitespace-nowrap {{ $run->statusBadgeClass() }}">
+                                    {{ $run->statusLabel() }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {{-- Middle line: Target Server / Site & Safety Tier --}}
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <div>
+                                @if($run->server)
+                                    <a href="{{ route('servers.show', $run->server) }}" class="text-[var(--color-brand)] font-medium hover:underline inline-flex items-center gap-1.5 text-xs">
+                                        <i class="fa-solid fa-server text-[10px]"></i>
+                                        <span>{{ $run->server->name }}</span>
+                                        <span class="font-data text-[11px] text-[var(--color-ink-soft)]">({{ $run->server->hostname }})</span>
+                                    </a>
+                                @elseif($run->site)
+                                    <div class="text-[var(--color-ink-strong)] font-semibold inline-flex items-center gap-1.5 text-xs">
+                                        <i class="fa-solid fa-globe text-[10px]"></i>
+                                        <span>{{ $run->site->domain }}</span>
+                                    </div>
+                                @else
+                                    <span class="text-[var(--color-ink-soft)] text-xs">—</span>
+                                @endif
+                            </div>
+                            <div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-[10px] font-semibold border whitespace-nowrap {{ $run->safetyBadgeClass() }}">
+                                    {{ $run->safetyLabel() }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {{-- Root Cause & Diagnosis Box --}}
+                        <div class="bg-[var(--color-surface-alt)]/60 rounded-lg p-3 text-xs border border-[var(--color-border-light)]">
+                            <div class="font-semibold text-[var(--color-ink-strong)]">
+                                {{ $run->root_cause ?: 'Analysis completed' }}
+                            </div>
+                            @if($run->diagnosis_summary)
+                                <div class="text-[11px] text-[var(--color-ink-muted)] mt-1 leading-relaxed">
+                                    {{ $run->diagnosis_summary }}
+                                </div>
+                            @endif
+                        </div>
+
+                        {{-- Actions Button --}}
+                        <div class="flex items-center justify-end pt-1">
+                            <button type="button"
+                                    @click="openDrawer({{ json_encode($run) }})"
+                                    class="btn-pill-nav w-full sm:w-auto text-xs py-1.5 px-3.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-microscope text-[11px] text-[var(--color-brand)]"></i>
+                                <span>Forensics &amp; Remediation</span>
+                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                @endforeach
             </div>
 
             @if($runs->hasPages())
@@ -251,7 +330,7 @@
     <div x-cloak x-show="drawerOpen" class="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" @click="closeDrawer()"></div>
 
-        <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div class="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10">
             <div class="w-screen max-w-2xl bg-[var(--color-surface)] border-l border-[var(--color-border)] shadow-2xl flex flex-col"
                  @keydown.window.escape="closeDrawer()">
                 
