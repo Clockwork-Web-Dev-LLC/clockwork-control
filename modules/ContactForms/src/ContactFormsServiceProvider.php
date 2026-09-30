@@ -77,7 +77,7 @@ class ContactFormsServiceProvider extends ModuleServiceProvider
 
     protected function registerRoutes(): void
     {
-        Route::middleware(['web', 'auth'])->group(function () {
+        Route::middleware(['web', 'auth', 'active'])->group(function () {
             Route::get('/forms', [FormsController::class, 'index'])->name('forms.index');
             Route::post('/sites/{site}/form-tests', [FormsController::class, 'store'])->name('sites.forms.store');
             Route::patch('/sites/{site}/form-tests/{cft}', [FormsController::class, 'update'])->name('sites.forms.update');

@@ -25,6 +25,7 @@ use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\OperationsUpdatesController;
 use App\Http\Controllers\ReviewQueueController;
 use App\Http\Controllers\ScheduledJobsController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityAdminsController;
 use App\Http\Controllers\SecurityScansController;
 use App\Http\Controllers\SecurityScansSettingsController;
@@ -284,6 +285,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/companion/download', [CompanionDownloadController::class, 'downloadZip'])->name('companion.download');
     Route::get('/renegade/download', [CompanionDownloadController::class, 'downloadRenegadeZip'])->name('renegade.download');
     Route::get('/search/sites', [SitesController::class, 'search'])->name('sites.search');
+    Route::get('/search/global', [SearchController::class, 'global'])->name('search.global');
 
     // Tab-aware site detail. The {tab?} segment is constrained to known tab names so other
     // /sites/{site}/* routes (cert, bans, etc.) still resolve normally — Laravel falls

@@ -93,6 +93,10 @@ Standard Mattermost incoming-webhook payload:
 - `send($text, $attachments = [])` — generic.
 - `siteWentDown(Site, status, detail)` — formatted down alert.
 - `siteWentUp(Site, downtimeMinutes)` — formatted recovery.
+- `serverWentRed(Server, reason, cpuPct)` — formatted server alert when a node spikes over threshold into critical status.
+- `serverRecovered(Server)` — formatted notification when a previously red server recovers to normal green telemetry.
+- `aiRemedyTriaged(AiRemedyRun)` — delivers root cause and proposed remediation commands upon completing incident triage.
+- `aiRemedyExecuted(AiRemedyRun)` — broadcasts execution outcome (resolved/failed), mode, cost, and executed commands.
 - `ipBlocked(BlockedIp)` — manual or auto-approved ban.
 - `sslStateChanged(Site, fromState, toState)` — cert state transition.
 - `llarInstalled(Site)` — LLAR install event.

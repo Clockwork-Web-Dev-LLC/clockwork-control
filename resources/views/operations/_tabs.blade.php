@@ -25,6 +25,15 @@
             'active' => request()->routeIs('servers.credentials.*'),
         ],
     ];
+
+    if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy')) {
+        $tools[] = [
+            'label' => 'AiRemedy',
+            'icon' => 'fa-solid fa-wand-magic-sparkles',
+            'route' => 'ai-remedy.index',
+            'active' => request()->routeIs('ai-remedy.*'),
+        ];
+    }
 @endphp
 
 <div class="mb-6">

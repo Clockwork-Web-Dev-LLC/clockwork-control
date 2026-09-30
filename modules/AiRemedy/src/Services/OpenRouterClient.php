@@ -2,6 +2,7 @@
 
 namespace Modules\AiRemedy\Services;
 
+use App\Support\CredentialResolver;
 use App\Support\EnvCredentialManager;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Http;
@@ -10,7 +11,7 @@ use Throwable;
 
 class OpenRouterClient
 {
-    public const DEFAULT_MODEL = 'anthropic/claude-3.5-sonnet';
+    public const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
 
     public const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -22,7 +23,7 @@ class OpenRouterClient
     }
 
     /**
-     * Retrieve the OpenRouter API key from .env (never the database).
+     * Retrieve the OpenRouter API key from runtime config, .env, or CredentialResolver.
      */
     public function getApiKey(): ?string
     {
@@ -36,6 +37,17 @@ class OpenRouterClient
         $fileKey = $this->envManager?->getEnvValue('OPENROUTER_API_KEY');
         if (! empty($fileKey)) {
             return (string) $fileKey;
+        }
+
+        // 3. Fall back to IntegrationCredential via CredentialResolver
+        try {
+            $dbKey = app(CredentialResolver::class)->get('ai-remedy.openrouter_api_key')
+                ?: app(CredentialResolver::class)->get('ai_remedy.openrouter_api_key');
+            if (! empty($dbKey)) {
+                return (string) $dbKey;
+            }
+        } catch (Throwable) {
+            // Resolver not booted
         }
 
         return null;
@@ -187,14 +199,25 @@ CRITICAL SAFETY RULES:
 2. If restarting services, target the exact worker pool (e.g., `sudo systemctl reload php8.3-fpm` or `sudo systemctl reload nginx`).
 3. If killing runaway processes, provide exact PID-based commands (e.g., `sudo kill -15 <PID>` or `sudo kill -9 <PID>`).
 4. Categorize the safety_tier:
-   - "tier_1_safe": Service reload/restart, clearing caches, log rotation.
+   - "tier_1_safe": Service reload/restart, clearing caches, log rotation, deprioritizing CPU/IO (renice/ionice).
    - "tier_2_cautious": Killing rogue worker processes, restarting MySQL.
    - "unfixable": Hardware bottleneck, physical RAM exhaustion needing droplet resize, persistent DDoS, code bug in client script.
+5. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). E.g. use "sudo -u <user> wp cache flush --path=/var/www/<site>/htdocs" directly without trailing fallbacks.
+6. EXPECTED MAINTENANCE VS TRUE INCIDENTS:
+   - If the CPU/load spike is caused by scheduled or expected background maintenance (such as an rclone process uploading backups to S3, mysqldump, logrotate, or borgbackup):
+     - Set "is_maintenance": true
+     - Set "maintenance_type": "SpinupWP Backup" (or "Database Backup", "Log Rotation", etc.)
+     - DO NOT kill the backup process! Propose non-destructive prioritization adjustments so it yields CPU cycles to web traffic without failing the backup:
+       `sudo renice -n 19 -p <PID>`
+       `sudo ionice -c 3 -p <PID>`
+     - Or propose empty commands `[]` if the backup is running normally and should simply be allowed to complete.
 
 Return ONLY a valid JSON object with this exact schema:
 {
   "summary": "1-2 sentence executive overview of what is happening.",
   "root_cause": "The specific culprit causing the spike.",
+  "is_maintenance": true | false,
+  "maintenance_type": null | "SpinupWP Backup",
   "safety_tier": "tier_1_safe" | "tier_2_cautious" | "unfixable",
   "is_fixable": true | false,
   "commands": ["bash command 1", "bash command 2"],
@@ -259,6 +282,8 @@ CRITICAL RULES:
 1. ONLY propose non-destructive commands (e.g. reloading/restarting the specific PHP-FPM pool or Nginx, clearing stale `.maintenance` file, clearing cache).
 2. If the outage is caused by a fatal PHP parse error, missing database table, corrupted plugin, or external API timeout, mark `is_fixable: false` and `safety_tier: "unfixable"`, and provide a detailed `unfixable_briefing`.
 3. Categorize safety_tier: "tier_1_safe" | "tier_2_cautious" | "unfixable".
+4. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). E.g. use "sudo -u <user> wp cache flush --path=/var/www/<site>/htdocs" directly without trailing fallbacks.
+
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -374,6 +399,8 @@ SYS;
                 'ok' => true,
                 'summary' => (string) ($parsed['summary'] ?? 'Diagnosis complete.'),
                 'root_cause' => (string) ($parsed['root_cause'] ?? 'Unknown cause.'),
+                'is_maintenance' => (bool) ($parsed['is_maintenance'] ?? false),
+                'maintenance_type' => ! empty($parsed['maintenance_type']) ? (string) $parsed['maintenance_type'] : null,
                 'safety_tier' => (string) ($parsed['safety_tier'] ?? 'tier_1_safe'),
                 'is_fixable' => (bool) ($parsed['is_fixable'] ?? true),
                 'commands' => array_values(array_filter((array) ($parsed['commands'] ?? []))),

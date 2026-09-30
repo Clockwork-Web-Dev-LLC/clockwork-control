@@ -81,5 +81,9 @@ class QuickJumpTest extends TestCase
         $this->assertStringContainsString("code: 'GU', kbd: 'G U'", $content);
         $this->assertStringContainsString("code: 'GX', kbd: 'G X'", $content);
         $this->assertStringContainsString("code: 'GD', kbd: 'G D'", $content);
+        $this->assertStringContainsString("code: 'GA', kbd: 'G A'", $content);
+        $this->assertStringContainsString("'airemedy'", $content);
+        $this->assertStringContainsString("'shadow mode'", $content);
+        $this->assertStringContainsString('AiRemedy Triage & Forensics', $content);
     }
 }

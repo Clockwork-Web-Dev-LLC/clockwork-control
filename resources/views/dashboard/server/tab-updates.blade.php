@@ -4,10 +4,12 @@
     </div>
 @else
     @php
-        $hasUpdate = $server->upgrade_required;
+        $snapshot = $server->updateSnapshot;
+        $hasUpdate = ($snapshot && $snapshot->poll_status === \App\Models\ServerUpdateSnapshot::STATUS_OK)
+            ? ($snapshot->total_updates > 0)
+            : (bool) $server->upgrade_required;
         $needsReboot = $server->reboot_required;
         $jobActive = in_array($server->update_status, [\App\Models\Server::UPDATE_STATUS_QUEUED, \App\Models\Server::UPDATE_STATUS_RUNNING], true);
-        $snapshot = $server->updateSnapshot;
     @endphp
     <div class="card p-5 mb-6">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-4">
@@ -167,27 +169,32 @@
         @endif
 
         @unless ($jobActive)
-            {{-- Two-row form: label + (input + button) on one row so they share
-                 a baseline; helper text drops below the whole form so it doesn't
-                 push the button out of alignment with the input. --}}
             <form method="POST" action="{{ route('servers.update.queue', $server) }}"
                   data-confirm="Run apt-get update + upgrade + autoremove on {{ $server->name }}?"
-                  data-confirm-details="Takes 1–3 minutes."
+                  data-confirm-details="Takes 1–3 minutes. If updates require a reboot (e.g. kernel), the server will restart automatically or at the scheduled time."
                   data-confirm-btn="Run Updates"
-                  data-confirm-variant="warning">
+                  data-confirm-variant="warning"
+                  class="space-y-3">
                 @csrf
-                <label class="block text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">
-                    Schedule reboot at (optional, server-local)
-                </label>
-                <div class="flex items-stretch gap-3 flex-wrap">
-                    <input type="time" name="reboot_at"
-                           class="font-data border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                <div class="flex items-center gap-3 flex-wrap">
                     <button type="submit" class="btn-primary">
                         <i class="fa-solid fa-cube"></i>
-                        Run updates
+                        Run updates now
                     </button>
+
+                    <div class="flex items-center gap-2">
+                        <label for="reboot_at" class="text-xs text-[var(--color-ink-muted)] font-medium">
+                            Optional deferred reboot:
+                        </label>
+                        <input type="time" id="reboot_at" name="reboot_at"
+                               class="font-data text-xs border border-[var(--color-border)] rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]"
+                               placeholder="--:--">
+                    </div>
                 </div>
-                <p class="text-xs text-[var(--color-ink-soft)] mt-2">Leave blank for no reboot. A time in the past = tomorrow.</p>
+                <p class="text-xs text-[var(--color-ink-soft)] leading-relaxed">
+                    Executes <code class="font-data">apt-get update && upgrade && autoremove</code> over SSH.
+                    If a package (like a Linux kernel) requires a system restart, it will reboot automatically—or at your scheduled deferred time above.
+                </p>
             </form>
         @endunless
 

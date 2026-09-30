@@ -215,6 +215,15 @@
                         <i class="fa-solid fa-clock-rotate-left w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Maintenance</span>
                     </a>
+
+                    @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                        <a href="{{ route('ai-remedy.index') }}"
+                           class="cmd-nav-item {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}"
+                           :title="!sidebarOpen ? 'AiRemedy' : ''">
+                            <i class="fa-solid fa-wand-magic-sparkles w-4 text-center shrink-0"></i>
+                            <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">AiRemedy</span>
+                        </a>
+                    @endif
                 </div>
 
                 <!-- Configuration Navigation -->
@@ -537,7 +546,7 @@
                                 <i class="fa-solid fa-shield-halved"></i> Security
                             </a>
                             <a href="{{ route('capacity.index') }}"
-                               class="studio-nav-tab {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*')) ? 'is-active' : '' }}">
+                               class="studio-nav-tab {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-cube"></i> Operations
                             </a>
                             <a href="{{ route('settings.index') }}"
@@ -627,7 +636,7 @@
                             <span><i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security</span>
                         </a>
                         <a href="{{ route('capacity.index') }}"
-                           class="cw-mobile-nav-link {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*')) ? 'is-active' : '' }}">
+                           class="cw-mobile-nav-link {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
                             <span><i class="fa-solid fa-cube mr-2 text-[var(--color-brand)]"></i> Operations</span>
                         </a>
                         <a href="{{ route('settings.index') }}"
@@ -698,21 +707,44 @@
     <!-- ===================================================================== -->
     <script>
         window.cwQuickJumpItems = [
-            { id: 'servers', section: 'Quick Jump', label: 'Servers Fleet', code: 'GS', kbd: 'G S', icon: 'fa-solid fa-server text-[var(--color-brand)]', url: '{{ route('dashboard') }}' },
-            { id: 'sites', section: 'Quick Jump', label: 'Sites Directory', code: 'GT', kbd: 'G T', icon: 'fa-solid fa-globe text-[var(--color-brand)]', url: '{{ route('sites.index') }}' },
-            { id: 'issues', section: 'Quick Jump', label: 'Issues Console', code: 'GI', kbd: 'G I', icon: 'fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)]', url: '{{ route('issues.index') }}' },
-            { id: 'monitoring', section: 'Quick Jump', label: 'Uptime Monitoring', code: 'GM', kbd: 'G M', icon: 'fa-solid fa-heart-pulse text-[var(--color-status-green)]', url: '{{ route('monitoring.index') }}' },
-            { id: 'updates', section: 'Quick Jump', label: 'Updates Manager', code: 'GU', kbd: 'G U', icon: 'fa-solid fa-rotate text-[var(--color-brand)]', url: '{{ route('updates.index') }}' },
-            { id: 'security', section: 'Quick Jump', label: 'Security Scans', code: 'GX', kbd: 'G X', icon: 'fa-solid fa-shield-halved text-[var(--color-brand)]', url: '{{ route('security.scans') }}' },
-            { id: 'capacity', section: 'Operations', label: 'Capacity Dashboard', code: null, kbd: null, icon: 'fa-solid fa-gauge-high text-[var(--color-ink-muted)]', url: '{{ route('capacity.index') }}' },
-            { id: 'server-updates', section: 'Operations', label: 'Fleet OS Updates', code: null, kbd: null, icon: 'fa-solid fa-cube text-[var(--color-ink-muted)]', url: '{{ route('operations.server-updates.index') }}' },
-            { id: 'maintenance-history', section: 'Operations', label: 'Maintenance History', code: null, kbd: null, icon: 'fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]', url: '{{ route('maintenance-history.index') }}' },
-            { id: 'credentials', section: 'Operations', label: 'Bulk SSH Passwords', code: null, kbd: null, icon: 'fa-solid fa-key text-[var(--color-ink-muted)]', url: '{{ route('servers.credentials.bulk') }}' },
-            { id: 'settings', section: 'Configuration', label: 'Global Settings Hub', code: null, kbd: null, icon: 'fa-solid fa-sliders text-[var(--color-ink-muted)]', url: '{{ route('settings.index') }}' },
-            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
-                { id: 'feedback', section: 'Operations', label: 'Feedback & Bug Notes', code: 'GF', kbd: 'G F', icon: 'fa-solid fa-comment-dots text-purple-500', url: '{{ route('feedback.index') }}' },
+            { id: 'servers', section: 'Quick Jump', label: 'Servers Fleet', code: 'GS', kbd: 'G S', icon: 'fa-solid fa-server text-[var(--color-brand)]', url: '{{ route('dashboard') }}', keywords: ['servers', 'fleet', 'droplets', 'boxes', 'vps', 'host'] },
+            { id: 'sites', section: 'Quick Jump', label: 'Sites Directory', code: 'GT', kbd: 'G T', icon: 'fa-solid fa-globe text-[var(--color-brand)]', url: '{{ route('sites.index') }}', keywords: ['sites', 'domains', 'websites', 'wordpress'] },
+            { id: 'issues', section: 'Quick Jump', label: 'Issues Console', code: 'GI', kbd: 'G I', icon: 'fa-solid fa-triangle-exclamation text-[var(--color-status-yellow)]', url: '{{ route('issues.index') }}', keywords: ['issues', 'alerts', 'warnings', 'down', 'problems'] },
+            { id: 'monitoring', section: 'Quick Jump', label: 'Uptime Monitoring', code: 'GM', kbd: 'G M', icon: 'fa-solid fa-heart-pulse text-[var(--color-status-green)]', url: '{{ route('monitoring.index') }}', keywords: ['monitoring', 'uptime', 'status', 'health', 'response time'] },
+            { id: 'updates', section: 'Quick Jump', label: 'Updates Manager', code: 'GU', kbd: 'G U', icon: 'fa-solid fa-rotate text-[var(--color-brand)]', url: '{{ route('updates.index') }}', keywords: ['updates', 'plugins', 'themes', 'core', 'wordpress updates'] },
+            { id: 'security', section: 'Quick Jump', label: 'Security Scans', code: 'GX', kbd: 'G X', icon: 'fa-solid fa-shield-halved text-[var(--color-brand)]', url: '{{ route('security.scans') }}', keywords: ['security', 'scans', 'malware', 'checksums', 'blacklist', 'sucuri'] },
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                { id: 'ai-remedy', section: 'Operations', label: 'AiRemedy Triage & Forensics', code: 'GA', kbd: 'G A', icon: 'fa-solid fa-wand-magic-sparkles text-indigo-500', url: '{{ route('ai-remedy.index') }}', keywords: ['airemedy', 'ai remedy', 'ai', 'remedy', 'triage', 'incidents', 'forensics', 'shadow mode', 'spike', 'auto-heal', 'healing'] },
+                { id: 'ai-remedy-settings', section: 'Configuration', label: 'AiRemedy Settings (OpenRouter)', code: null, kbd: null, icon: 'fa-solid fa-brain text-indigo-400', url: '{{ route('ai-remedy.settings') }}', keywords: ['airemedy settings', 'openrouter', 'ai config', 'api key', 'claude', 'gpt'] },
             @endif
-            { id: 'docs', section: 'Configuration', label: 'Documentation & Runbooks', code: 'GD', kbd: 'G D', icon: 'fa-solid fa-book-bookmark text-[var(--color-brand)]', url: '{{ route('docs.index') }}' }
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gatekeeper'))
+                { id: 'gatekeeper', section: 'Security', label: 'Gatekeeper Login Protection', code: 'GG', kbd: 'G G', icon: 'fa-solid fa-user-shield text-emerald-500', url: '{{ route('settings.gatekeeper.index') }}', keywords: ['gatekeeper', 'llar', 'lockouts', 'login protection', 'brute force', 'ip bans'] },
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
+                { id: 'feedback', section: 'Operations', label: 'Feedback Backlog & Notes', code: 'GF', kbd: 'G F', icon: 'fa-solid fa-comment-dots text-purple-500', url: '{{ route('feedback.index') }}', keywords: ['feedback', 'bugs', 'tweaks', 'notes', 'claude prompt', 'pins', 'collaboration'] },
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('code-snippets'))
+                { id: 'snippets', section: 'Operations', label: 'Code Snippets', code: null, kbd: null, icon: 'fa-solid fa-code text-cyan-500', url: '{{ route('snippets.index') }}', keywords: ['snippets', 'code snippets', 'php', 'scripts'] },
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client-management'))
+                { id: 'clients', section: 'Operations', label: 'Clients Directory', code: 'GC', kbd: 'G C', icon: 'fa-solid fa-address-book text-sky-500', url: '{{ route('clients.index') }}', keywords: ['clients', 'customer', 'accounts', 'crm'] },
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('client_reports'))
+                { id: 'client-reports', section: 'Operations', label: 'Client Reports', code: null, kbd: null, icon: 'fa-solid fa-file-invoice text-sky-400', url: '{{ route('client-reports.index') }}', keywords: ['reports', 'client reports', 'monthly', 'pdf', 'executive'] },
+            @endif
+            { id: 'capacity', section: 'Operations', label: 'Capacity Dashboard', code: null, kbd: null, icon: 'fa-solid fa-gauge-high text-[var(--color-ink-muted)]', url: '{{ route('capacity.index') }}', keywords: ['capacity', 'ram', 'cpu', 'disk', 'resources', 'sizing'] },
+            { id: 'server-updates', section: 'Operations', label: 'Fleet OS Updates', code: null, kbd: null, icon: 'fa-solid fa-cube text-[var(--color-ink-muted)]', url: '{{ route('operations.server-updates.index') }}', keywords: ['server updates', 'os updates', 'apt', 'ubuntu', 'packages', 'reboot'] },
+            { id: 'maintenance-history', section: 'Operations', label: 'Maintenance History', code: null, kbd: null, icon: 'fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]', url: '{{ route('maintenance-history.index') }}', keywords: ['maintenance history', 'logs', 'audit', 'completed updates'] },
+            { id: 'credentials', section: 'Operations', label: 'Bulk SSH Passwords', code: null, kbd: null, icon: 'fa-solid fa-key text-[var(--color-ink-muted)]', url: '{{ route('servers.credentials.bulk') }}', keywords: ['credentials', 'ssh', 'passwords', 'keys'] },
+            { id: 'scheduled-jobs', section: 'Operations', label: 'Scheduled Jobs & Heartbeat', code: 'GJ', kbd: 'G J', icon: 'fa-solid fa-clock text-amber-500', url: '{{ route('settings.scheduled-jobs.index') }}', keywords: ['scheduled jobs', 'cron', 'heartbeat', 'scheduler', 'background tasks'] },
+            { id: 'review-queue', section: 'Security', label: 'Security Review Queue', code: 'GQ', kbd: 'G Q', icon: 'fa-solid fa-shield-virus text-rose-500', url: '{{ route('review-queue.index') }}', keywords: ['review queue', 'threats', 'security', 'blocked ips', 'bans', 'fail2ban'] },
+            { id: 'settings', section: 'Configuration', label: 'Global Settings Hub', code: null, kbd: null, icon: 'fa-solid fa-sliders text-[var(--color-ink-muted)]', url: '{{ route('settings.index') }}', keywords: ['settings', 'preferences', 'configuration', 'config'] },
+            { id: 'users', section: 'Configuration', label: 'Users & Access Control', code: null, kbd: null, icon: 'fa-solid fa-users text-[var(--color-ink-muted)]', url: '{{ route('settings.users.index') }}', keywords: ['users', 'team', 'roles', 'admin', 'operator', 'accounts', 'allowlist'] },
+            { id: 'modules', section: 'Configuration', label: 'Module Directory', code: null, kbd: null, icon: 'fa-solid fa-cubes text-[var(--color-ink-muted)]', url: '{{ route('settings.modules.index') }}', keywords: ['modules', 'plugins', 'directory', 'catalog', 'extensions', 'features'] },
+            { id: 'updates-platform', section: 'Configuration', label: 'Platform Version & Updates', code: null, kbd: null, icon: 'fa-solid fa-cloud-arrow-up text-[var(--color-ink-muted)]', url: '{{ route('settings.updates.index') }}', keywords: ['platform updates', 'version', 'release', 'upgrade', 'git pull'] },
+            { id: 'notifications', section: 'Configuration', label: 'Notification Channels', code: null, kbd: null, icon: 'fa-solid fa-bell text-[var(--color-ink-muted)]', url: '{{ route('settings.notifications.index') }}', keywords: ['notifications', 'alerts', 'slack', 'mattermost', 'twilio', 'channels'] },
+            { id: 'integrations', section: 'Configuration', label: 'Integration Credentials', code: null, kbd: null, icon: 'fa-solid fa-plug text-[var(--color-ink-muted)]', url: '{{ route('settings.integrations.index') }}', keywords: ['integrations', 'credentials', 'api keys', 'tokens', 'cloud', 'digitalocean', 'vultr', 'hetzner'] },
+            { id: 'docs', section: 'Configuration', label: 'Documentation & Runbooks', code: 'GD', kbd: 'G D', icon: 'fa-solid fa-book-bookmark text-[var(--color-brand)]', url: '{{ route('docs.index') }}', keywords: ['documentation', 'docs', 'runbooks', 'api', 'help', 'guides'] }
         ];
     </script>
     <div id="cw-quick-jump-modal"
@@ -735,9 +767,12 @@
                        @keydown.down.prevent="paletteDown()"
                        @keydown.up.prevent="paletteUp()"
                        @keydown.enter.prevent="selectCurrent()"
-                       class="h-12 w-full border-0 bg-transparent pl-11 pr-4 text-[var(--color-ink-strong)] placeholder:text-[var(--color-ink-soft)] focus:ring-0 text-sm font-sans"
-                       placeholder="Type a command or jump code (e.g. GS, GT)… (Esc to exit)"
+                       class="h-12 w-full border-0 bg-transparent pl-11 pr-10 text-[var(--color-ink-strong)] placeholder:text-[var(--color-ink-soft)] focus:ring-0 text-sm font-sans"
+                       placeholder="Search servers, sites, features, settings, or jump codes… (Esc to exit)"
                        x-ref="paletteInput">
+                <div x-show="searchLoading" class="absolute right-4 top-3.5 pointer-events-none text-xs text-[var(--color-brand)]">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </div>
             </div>
 
             <div class="border-t border-[var(--color-border-light)] max-h-80 overflow-y-auto p-2 text-xs divide-y divide-[var(--color-border-light)]">
@@ -751,20 +786,25 @@
                                @mouseenter="paletteSelectedIndex = getItemGlobalIndex(item)"
                                class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer select-none"
                                :class="paletteSelectedIndex === getItemGlobalIndex(item) ? 'bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] ring-1 ring-[var(--color-border-light)] font-medium' : 'text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)]'">
-                                <span class="flex items-center gap-2">
-                                    <i :class="item.icon" class="w-4 text-center"></i>
-                                    <span x-text="item.label"></span>
+                                <span class="flex items-center gap-2.5 truncate">
+                                    <i :class="item.icon" class="w-4 text-center shrink-0"></i>
+                                    <span class="truncate flex items-center gap-2">
+                                        <span x-text="item.label" class="truncate font-medium"></span>
+                                        <template x-if="item.sublabel">
+                                            <span class="text-[11px] text-[var(--color-ink-muted)] truncate" x-text="item.sublabel"></span>
+                                        </template>
+                                    </span>
                                 </span>
                                 <template x-if="item.kbd">
-                                    <kbd class="cmd-kbd" x-text="item.kbd"></kbd>
+                                    <kbd class="cmd-kbd shrink-0" x-text="item.kbd"></kbd>
                                 </template>
                             </a>
                         </template>
                     </div>
                 </template>
 
-                <div x-show="filteredPaletteItems.length === 0" class="py-8 text-center text-xs text-[var(--color-ink-muted)]">
-                    No destinations matching "<span class="font-medium text-[var(--color-ink-strong)]" x-text="paletteQuery"></span>"
+                <div x-show="filteredPaletteItems.length === 0 && !searchLoading" class="py-8 text-center text-xs text-[var(--color-ink-muted)]">
+                    No destinations, servers, or sites matching "<span class="font-medium text-[var(--color-ink-strong)]" x-text="paletteQuery"></span>"
                 </div>
             </div>
 

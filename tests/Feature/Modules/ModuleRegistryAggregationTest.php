@@ -3,6 +3,7 @@
 use App\Services\Diagnostics\Checks\GitHubOAuthCheck;
 use App\Services\Diagnostics\Checks\GoogleOAuthCheck;
 use App\Services\Diagnostics\Checks\MicrosoftOAuthCheck;
+use Modules\AiRemedy\AiRemedyCheck;
 use Modules\Azure\AzureCheck;
 use Modules\Azure\AzureCloudProvider;
 use Modules\BackupRelay\BackupRelayCheck;
@@ -133,12 +134,13 @@ describe('ModuleRegistry aggregation', function () {
         expect($names)->toEqualCanonicalizing(['Google', 'GitHub', 'Microsoft']);
     });
 
-    it('includes all 19 module-contributed diagnostic checks', function () {
+    it('includes all 20 module-contributed diagnostic checks', function () {
         $checks = $this->registry->diagnosticChecks();
 
         $classes = array_map(fn ($c) => get_class($c), $checks);
 
         expect($classes)->toEqualCanonicalizing([
+            AiRemedyCheck::class,
             AzureCheck::class,
             HetznerCheck::class,
             DigitalOceanCheck::class,

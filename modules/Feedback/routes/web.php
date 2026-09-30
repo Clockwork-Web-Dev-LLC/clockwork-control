@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Feedback\Http\Controllers\FeedbackController;
 
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/feedback', [FeedbackController::class, 'index'])->name('feedback.index');
     Route::get('/feedback/pins', [FeedbackController::class, 'pins'])->name('feedback.pins');
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');

@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use Illuminate\Support\Carbon;
+use Modules\AiRemedy\Models\AiRemedyRun;
 
 /**
  * Fans out every notification call to all configured chat channels in turn.
@@ -137,6 +138,26 @@ class ChatNotifierDispatcher implements ChatNotifier
     public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool
     {
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->pluginUpdateAutoIgnored($site, $job, $failures));
+    }
+
+    public function serverWentRed(Server $server, ?float $cpuPct = null, ?string $reason = null): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->serverWentRed($server, $cpuPct, $reason));
+    }
+
+    public function serverRecovered(Server $server): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->serverRecovered($server));
+    }
+
+    public function aiRemedyExecuted(AiRemedyRun $run): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->aiRemedyExecuted($run));
+    }
+
+    public function aiRemedyTriaged(AiRemedyRun $run): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->aiRemedyTriaged($run));
     }
 
     // malwareFindingDetected, siteWentDown/Up, and ipBlocked are deliberately

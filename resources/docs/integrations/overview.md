@@ -30,6 +30,7 @@ Every external service Clockwork talks to. Each gets its own page with auth, end
 | **Bill.com** | Billing | 🟢 Verified in Production | Active customer billing sync and care plan toggles. | [bill-com](/docs/integrations/bill-com) |
 | **Sucuri / Google / Spamhaus** | Security | 🟢 Verified in Production | Remote malware scans, Google Safe Browsing, DNS blacklists. | [sucuri-sitecheck](/docs/integrations/sucuri-sitecheck) |
 | **GTmetrix** | Performance | 🟢 Verified in Production | Nightly Lighthouse performance checks for care plan sites. | [gtmetrix](/docs/integrations/gtmetrix) |
+| **OpenRouter** | Cloud AI | 🟢 Verified in Production | Powers AiRemedy autonomous incident triage, root-cause forensics, and staged self-healing via Claude Sonnet 4.5 (default), Haiku 4.5, GPT-4o, and DeepSeek-V3. | [openrouter](/docs/integrations/openrouter) |
 | **Pressable** | Hosting | 🟢 Verified in Production | Managed WordPress hosting, site imports, backup history sync, async WP-CLI commands. | [pressable](/docs/integrations/pressable) |
 | **Twilio (SMS)** | Notifications | 🟢 Verified in Production | On-call SMS paging for care-plan site downtime with storm circuit-breaker. | [twilio](/docs/integrations/twilio) |
 | **GridPane** | Hosting | 🧪 Looking for Testers | Written for REST API v1, server & site import, SSH WP-CLI, and backup schedule inspection. | [gridpane](/docs/integrations/gridpane) |
@@ -119,4 +120,5 @@ The `HostingProvider` contract, keyed on `sites.hosting_provider` — *who manag
 
 | Service | What it does | Page |
 |---|---|---|
+| OpenRouter (cloud) | Cloud LLM gateway powering AiRemedy autonomous triage, root-cause forensics, and allowlisted remediation. Zero credentials stored in DB. | [openrouter](/docs/integrations/openrouter) |
 | LM Studio (local) | Local LLM for nginx-log threat analysis. Loopback only — no data leaves the box. | [lm-studio](/docs/integrations/lm-studio) |

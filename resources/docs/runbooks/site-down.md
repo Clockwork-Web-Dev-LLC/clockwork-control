@@ -49,6 +49,9 @@ Open `/servers/{id}`. Is the server card red? Yellow? Look at the sparklines:
 - **Disk full** — `df -h`. Most common cause: a runaway log file or an accumulated backup.
 - **Server unreachable over SSH** — DigitalOcean console, or contact SpinupWP support.
 
+> [!TIP]
+> **One-Click Triage with AiRemedy**: Click the **Diagnose with AiRemedy** button in the server header on `/servers/{id}`. AiRemedy will initiate an instant 3-step live radar probe (connectivity check, load telemetry collection, and root-cause AI triage) to analyze top CPU/RAM processes, journald crash traces, and suggest remediation without manual SSH investigation. See [Features → AiRemedy](/docs/features/ai-remedy).
+
 If the server is fine but multiple sites on it are down, check whether the fail2ban jail is misbehaving (banning too aggressively).
 
 ## 6. Cert problem?

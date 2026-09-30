@@ -39,14 +39,22 @@ class AiRemedyServiceProvider extends ModuleServiceProvider
             ->runInBackground();
     }
 
+    public function diagnosticCheck(): ?AiRemedyCheck
+    {
+        return new AiRemedyCheck;
+    }
+
     public function manifest(): ModuleManifest
     {
         return new ModuleManifest(
             id: 'ai-remedy',
             name: 'AiRemedy',
             description: 'AI-powered server diagnostics, interactive root-cause analysis, 1-click SSH remediation, and autonomous downtime self-healing via OpenRouter.',
+            credentialFields: [
+                'openrouter_api_key' => ['label' => 'OpenRouter API Key', 'secret' => true],
+            ],
             status: ModuleManifest::STATUS_VERIFIED,
-            statusNote: 'Diagnose and heal server performance spikes and site outages using Claude 3.5 Sonnet and GPT-4o via OpenRouter.',
+            statusNote: 'Diagnose and heal server performance spikes and site outages using any OpenRouter model (default: Claude Sonnet 4.5).',
         );
     }
 

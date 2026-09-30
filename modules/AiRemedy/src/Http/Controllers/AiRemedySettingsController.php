@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\AiRemedy\Services\AiRemedyTriager;
+use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 
 class AiRemedySettingsController extends Controller
@@ -16,6 +17,7 @@ class AiRemedySettingsController extends Controller
     public function __construct(
         protected Settings $settings,
         protected OpenRouterClient $client,
+        protected CommandSafetyGuard $guard,
     ) {}
 
     public function index(): View
@@ -26,10 +28,25 @@ class AiRemedySettingsController extends Controller
         $autoTriageSpikes = (bool) $this->settings->get('clockwork.ai_remedy.auto_triage_spikes', true);
         $cpuSpikeThreshold = (int) $this->settings->get('clockwork.ai_remedy.cpu_spike_threshold', 85);
         $cooldownMinutes = (int) $this->settings->get('clockwork.ai_remedy.cooldown_minutes', 30);
+        $autoMuteMaintenance = (bool) $this->settings->get('clockwork.ai_remedy.auto_mute_maintenance_alerts', true);
+
+        $allowedProcesses = $this->settings->get('clockwork.ai_remedy.allowed_maintenance_processes');
+        if (is_array($allowedProcesses)) {
+            $allowedProcessesString = implode(', ', $allowedProcesses);
+        } elseif (is_string($allowedProcesses) && trim($allowedProcesses) !== '') {
+            $allowedProcessesString = $allowedProcesses;
+        } else {
+            $allowedProcessesString = 'rclone, mysqldump, logrotate, borgbackup, borg, gpbup, restic, duplicity';
+        }
+
+        $actionsCatalog = $this->guard->getActionsCatalog();
+        $lockedGuards = CommandSafetyGuard::LOCKED_PROHIBITED;
+        $currentTierRules = $this->guard->getTierRules();
 
         $availableModels = [
-            'anthropic/claude-3.5-sonnet' => 'Claude 3.5 Sonnet (Recommended - Best Systems & Code Reasoning)',
-            'anthropic/claude-3.5-haiku' => 'Claude 3.5 Haiku (Fast & Ultra Cost-Effective)',
+            'anthropic/claude-sonnet-4.5' => 'Claude Sonnet 4.5 (Recommended - Best Systems & Code Reasoning)',
+            'anthropic/claude-haiku-4.5' => 'Claude Haiku 4.5 (Fast & Ultra Cost-Effective)',
+            'anthropic/claude-sonnet-4' => 'Claude Sonnet 4 (Balanced Performance)',
             'openai/gpt-4o' => 'OpenAI GPT-4o (High Performance General Intelligence)',
             'openai/gpt-4o-mini' => 'OpenAI GPT-4o Mini (Budget-Friendly Fast Model)',
             'deepseek/deepseek-chat' => 'DeepSeek-V3 (Affordable & High Quality)',
@@ -44,6 +61,11 @@ class AiRemedySettingsController extends Controller
             'autoTriageSpikes' => $autoTriageSpikes,
             'cpuSpikeThreshold' => $cpuSpikeThreshold,
             'cooldownMinutes' => $cooldownMinutes,
+            'autoMuteMaintenance' => $autoMuteMaintenance,
+            'allowedProcessesString' => $allowedProcessesString,
+            'actionsCatalog' => $actionsCatalog,
+            'lockedGuards' => $lockedGuards,
+            'currentTierRules' => $currentTierRules,
             'availableModels' => $availableModels,
             'servers' => $servers,
         ]);
@@ -58,6 +80,9 @@ class AiRemedySettingsController extends Controller
             'auto_triage_spikes' => 'nullable|boolean',
             'cpu_spike_threshold' => 'required|integer|min:50|max:99',
             'cooldown_minutes' => 'required|integer|min:5|max:1440',
+            'auto_mute_maintenance_alerts' => 'nullable|boolean',
+            'allowed_maintenance_processes' => 'nullable|string',
+            'safety_tier_rules' => 'nullable|string',
         ]);
 
         if ($request->filled('openrouter_api_key')) {
@@ -70,6 +95,27 @@ class AiRemedySettingsController extends Controller
         $this->settings->put('clockwork.ai_remedy.auto_triage_spikes', $request->boolean('auto_triage_spikes'));
         $this->settings->put('clockwork.ai_remedy.cpu_spike_threshold', (int) $validated['cpu_spike_threshold']);
         $this->settings->put('clockwork.ai_remedy.cooldown_minutes', (int) $validated['cooldown_minutes']);
+        $this->settings->put('clockwork.ai_remedy.auto_mute_maintenance_alerts', $request->boolean('auto_mute_maintenance_alerts'));
+
+        if ($request->has('allowed_maintenance_processes')) {
+            $rawProcesses = (string) $request->input('allowed_maintenance_processes');
+            $processesList = array_values(array_filter(array_map('trim', explode(',', strtolower($rawProcesses)))));
+            $this->settings->put('clockwork.ai_remedy.allowed_maintenance_processes', $processesList);
+        }
+
+        if ($request->filled('safety_tier_rules')) {
+            $decodedRules = json_decode((string) $request->input('safety_tier_rules'), true);
+            if (is_array($decodedRules)) {
+                $sanitizedRules = [];
+                $allowedTiers = [CommandSafetyGuard::TIER_1_SAFE, CommandSafetyGuard::TIER_2_CAUTIOUS, CommandSafetyGuard::TIER_3_PROHIBITED];
+                foreach ($decodedRules as $actionKey => $tier) {
+                    if (isset(CommandSafetyGuard::ACTIONS[$actionKey]) && in_array($tier, $allowedTiers, true)) {
+                        $sanitizedRules[$actionKey] = $tier;
+                    }
+                }
+                $this->settings->put('clockwork.ai_remedy.safety_tier_rules', $sanitizedRules);
+            }
+        }
 
         return back()->with('status', 'AiRemedy settings updated successfully.');
     }

@@ -11,7 +11,7 @@ Route::middleware(['web', 'throttle:60,1'])->group(function () {
 });
 
 // Authenticated operator routes
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/client-reports', [ClientReportsController::class, 'index'])->name('client-reports.index');
     Route::post('/client-reports/generate', [ClientReportsController::class, 'generate'])->name('client-reports.generate');
     // Templates CRUD

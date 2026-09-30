@@ -1,6 +1,6 @@
 # AiRemedy: AI Incident Diagnostics, Shadow Mode & Self-Healing
 
-The **AiRemedy** module equips Clockwork Control with intelligent site outage triage, server performance spike diagnostics, and safe self-healing automation powered by OpenRouter (Claude 3.5 Sonnet, GPT-4o, and DeepSeek).
+The **AiRemedy** module equips Clockwork Control with intelligent site outage triage, server performance spike diagnostics, and safe self-healing automation powered by OpenRouter (Claude Sonnet 4.5 by default; GPT-4o, DeepSeek and others selectable).
 
 ---
 
@@ -10,7 +10,7 @@ The **AiRemedy** module equips Clockwork Control with intelligent site outage tr
 - **Continuous Spike Watchdog (`clockwork:watch-server-spikes`)**: Evaluates all fleet servers every 5 minutes (including unlinked VPS via SSH telemetry) for CPU $\ge 85\%$, load averages $\ge 2\times$ vCPU count, or memory pressure $\ge 92\%$.
 - **Intelligent Cooldown Protection**: Automatically suppresses duplicate automated AI triage within a configurable window (default: 30 minutes) to prevent token drain during prolonged load.
 - **Human-in-the-Loop or Autonomous Modes**: Switch between passive **Shadow Mode**, **Interactive Copilot** (operator approval required), and **Autonomous Self-Healing** (auto-executes non-destructive Tier 1 fixes).
-- **Multi-Model Support via OpenRouter**: Use Claude 3.5 Sonnet (recommended for systems engineering), GPT-4o, Claude 3.5 Haiku, or DeepSeek-V3 with transparent per-incident cost tracking.
+- **Multi-Model Support via OpenRouter**: Use Claude Sonnet 4.5 (default, recommended for systems engineering), Claude Haiku 4.5, Claude Sonnet 4, GPT-4o, GPT-4o Mini, or DeepSeek-V3 with transparent per-incident cost tracking.
 - **Strict API Key Hygiene**: OpenRouter API key is stored exclusively in `.env` (`OPENROUTER_API_KEY`). **Never stored in the database**.
 - **Automated Uptime & Provider Hooks**: Automatically triggers non-destructive triage whenever a monitored site transitions to `down` in `UptimeStateUpdater`, or when cloud provider metrics in `clockwork:poll-servers` transition a server to RED status.
 - **On-Demand Safe Simulation**: Test AiRemedy against any connected server right from the settings page or dashboard with zero risk.
@@ -48,7 +48,7 @@ AiRemedy supports three modes configured via `clockwork.ai_remedy.mode`:
             ▼                                     ▼
 ┌───────────────────────────────┐ ┌────────────────────────────────┐
 │   ServerTelemetryCollector    │ │       OpenRouterClient         │
-│   (Read-only SSH snapshot:    │ │   (Claude 3.5 Sonnet / GPT-4o; │
+│   (Read-only SSH snapshot:    │ │   (Claude Sonnet 4.5 default;  │
 │   loadavg, top CPU, FPM, etc.)│ │   keys stored only in .env)    │
 └──────────────┬────────────────┘ └───────────────┬────────────────┘
                └──────────────────┬───────────────┘
@@ -108,7 +108,7 @@ Remediation execution at `src/Services/RemedyExecutor.php`:
 | `site_id` | `BIGINT UNSIGNED NULL` | Foreign key to `sites` |
 | `user_id` | `BIGINT UNSIGNED NULL` | Foreign key to `users` |
 | `actor` | `VARCHAR` | `watch_mode`, `simulation`, `autonomous`, `interactive`, or `manual` |
-| `model_used` | `VARCHAR` | e.g. `anthropic/claude-3.5-sonnet` |
+| `model_used` | `VARCHAR` | e.g. `anthropic/claude-sonnet-4.5` |
 | `prompt_tokens` | `INT` | Prompt token count |
 | `completion_tokens` | `INT` | Completion token count |
 | `total_cost_usd` | `DECIMAL(8,4)` | Estimated cost in USD (~$0.012) |

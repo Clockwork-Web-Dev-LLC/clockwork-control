@@ -15,13 +15,13 @@
             </div>
             <div class="flex items-center gap-3">
                 <h1 class="text-xl font-bold text-[var(--color-ink-strong)]">Incident Forensics #{{ $run->id }}</h1>
-                <span class="px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border {{ $run->statusBadgeClass() }}">
-                    {{ ucfirst($run->status) }}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border whitespace-nowrap {{ $run->statusBadgeClass() }}">
+                    {{ $run->statusLabel() }}
                 </span>
-                <span class="px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border {{ $run->safetyBadgeClass() }}">
-                    {{ strtoupper(str_replace(['tier_', '_'], ['', ' '], $run->safety_tier)) }}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border whitespace-nowrap {{ $run->safetyBadgeClass() }}">
+                    {{ $run->safetyLabel() }}
                 </span>
-                <span class="px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border {{ $run->modeBadgeClass() }}">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-xs font-semibold border whitespace-nowrap {{ $run->modeBadgeClass() }}">
                     {{ $run->modeLabel() }}
                 </span>
             </div>
@@ -40,8 +40,18 @@
         @endif
     </div>
 
-    {{-- Watch Mode / Passive Observability Banner --}}
-    @if($run->isWatchMode())
+    {{-- Allowed Maintenance or Watch Mode Banner --}}
+    @if($run->isAllowedMaintenance())
+        <div class="card p-4 border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200">
+            <div class="flex items-center gap-2 font-bold text-sm mb-1">
+                <i class="fa-solid fa-cloud-arrow-up text-sky-500"></i>
+                <span>Allowed Background Maintenance Detected</span>
+            </div>
+            <p class="text-xs leading-relaxed">
+                AiRemedy identified this resource spike as routine maintenance activity (e.g. SpinupWP S3 backup, database export, or log rotation). Safe deprioritization commands (like <code>renice</code> or <code>ionice</code>) are recommended rather than process termination, and alerting notifications were automatically muted.
+            </p>
+        </div>
+    @elseif($run->isWatchMode())
         <div class="card p-4 border-indigo-500/30 bg-indigo-500/10 text-indigo-950 dark:text-indigo-200">
             <div class="flex items-center gap-2 font-bold text-sm mb-1">
                 <i class="fa-solid fa-shield-halved text-indigo-500"></i>
@@ -80,21 +90,21 @@
         
         @if(!empty($run->approved_commands))
             <div>
-                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1">Executed Commands:</span>
-                <div class="bg-neutral-950 text-emerald-400 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-1">
+                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1.5">Executed Commands:</span>
+                <div class="bg-slate-950 border border-slate-800 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                     @foreach($run->approved_commands as $cmd)
-                        <div><span class="text-neutral-500">$</span> {{ $cmd }}</div>
+                        <div class="flex items-center gap-2"><span class="text-emerald-400 font-bold select-none">$</span> <span>{{ $cmd }}</span></div>
                     @endforeach
                 </div>
             </div>
         @elseif(!empty($run->proposed_commands))
             <div>
-                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1">
+                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1.5">
                     {{ $run->isWatchMode() ? 'Proposed Commands (Shadow Mode):' : 'Proposed Commands (Pending Human Review):' }}
                 </span>
-                <div class="bg-neutral-950 text-indigo-300 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-1">
+                <div class="bg-slate-950 border border-slate-800 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                     @foreach($run->proposed_commands as $cmd)
-                        <div><span class="text-neutral-500">$</span> {{ $cmd }}</div>
+                        <div class="flex items-center gap-2"><span class="text-indigo-400 font-bold select-none">$</span> <span>{{ $cmd }}</span></div>
                     @endforeach
                 </div>
             </div>
@@ -103,8 +113,8 @@
         {{-- Terminal Output (if executed) --}}
         @if($run->execution_output)
             <div>
-                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1">Terminal Output (stdout/stderr):</span>
-                <pre class="bg-neutral-950 text-neutral-200 p-4 rounded-xl font-mono text-xs overflow-x-auto max-h-72 whitespace-pre-wrap">{{ $run->execution_output }}</pre>
+                <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1.5">Terminal Output (stdout/stderr):</span>
+                <pre class="bg-slate-950 border border-slate-800 text-slate-200 p-4 rounded-xl font-mono text-xs overflow-x-auto max-h-72 whitespace-pre-wrap shadow-inner">{{ $run->execution_output }}</pre>
             </div>
         @endif
     </div>

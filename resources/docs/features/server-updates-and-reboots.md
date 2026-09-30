@@ -16,19 +16,33 @@ Both go over SSH (we don't use the DO API for power actions). Both queue rather 
 
 `/servers/{id}/updates` shows:
 
-- **Pending packages** — count from `apt-get -s upgrade`. Updated when you click "Refresh package list."
-- **Reboot required** flag — driven by `/var/run/reboot-required` on the server.
-- **Update queue state** — `idle`, `queued`, `running`, `done`.
-- **Scheduled reboot** — set time + cancel buttons.
-- **Last update log** — captured `apt-get` output from the last run.
+- **Pending packages & security count** — ground-truth package list pulled via SSH (`apt-get -s dist-upgrade`).
+- **Ground-Truth vs. Hosting Mirror**: When a local SSH snapshot exists and confirms 0 pending packages, the tab and header status pill report **Up to date**, preventing false-positive "Patches available" flags even if a third-party panel (like SpinupWP's API) is lagging behind.
+- **Reboot required flag** — driven by `/var/run/reboot-required` on the server.
+- **Update queue state** — `idle`, `queued`, `running`, `completed`, `failed`.
+- **Optional deferred reboot time** — schedule a maintenance window for a post-upgrade restart.
+- **Last update log** — captured `apt-get` stdout/stderr output from the last run.
 
 ## Queue an update
 
-Click **Queue apt-get upgrade**. The button POSTs to `/servers/{id}/update/queue`, sets `update_status='queued'`, and returns. The actual upgrade happens when `clockwork:process-server-updates` picks it up (every minute, one server per tick — long SSH sessions don't stack).
+Click **Run updates now**. The form POSTs to `/servers/{id}/update/queue`, sets `update_status='queued'`, and returns immediately. The actual upgrade runs asynchronously via `clockwork:process-server-updates` (executing every minute, one server per tick).
 
-The runner SSH-connects, runs `sudo apt-get update && sudo apt-get -y upgrade`, captures the output to `last_update_log`, and sets `update_status='done'`. If the upgrade flips `/var/run/reboot-required`, `reboot_required` is set on the server row. After the upgrade, `ServerUpdater` also captures nginx's service state (`systemctl is-active nginx`) so the Updates tab can surface "nginx stopped after apt upgrade" without a separate SSH round-trip.
+The runner connects via SSH and executes:
+```bash
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade
+apt-get -y autoremove
+```
 
-Cancel a queued update with the **Cancel** button before it picks up. Once it's running, you have to let it finish.
+### Auto-Reboot Behavior After Updates
+- **No reboot needed**: If the installed packages do not touch the kernel or core C libraries, the server does not restart.
+- **Kernel / Libc update installed (`/var/run/reboot-required` exists)**:
+  - *If a time was entered in "Optional deferred reboot" (e.g. `03:00`)*: The reboot is scheduled for that server-local hour (`shutdown -r 03:00`).
+  - *If left blank*: The server automatically reboots in +1 minute (`shutdown -r +1`), allowing SSH to exit cleanly while ensuring the new kernel is applied immediately.
+
+After the upgrade, `ServerUpdater` also validates Nginx's service state (`systemctl is-active nginx`) and self-heals by restarting Nginx if a major version bump stalled it.
+
+Cancel a queued update with the **Cancel** button before it picks up. Once running, it must complete.
 
 ## Issues page → "Patches available"
 

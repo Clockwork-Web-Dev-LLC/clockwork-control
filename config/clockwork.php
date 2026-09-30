@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.8.1',
+    'version' => '1.9.0',
 
     // Demo mode interlock for marketing screenshots and anonymized datasets.
     // Gates screenshot Dusk runs to prevent running against live production,
@@ -515,6 +515,11 @@ return [
     'telemetry' => [
         'enabled' => (bool) env('CLOCKWORK_TELEMETRY_ENABLED', true),
         'endpoint' => env('CLOCKWORK_TELEMETRY_ENDPOINT', 'https://telemetry.clockworkcontrol.com/v1/report'),
+    ],
+
+    // AiRemedy autonomous self-healing and server telemetry triage.
+    'ai_remedy' => [
+        'openrouter_api_key' => env('OPENROUTER_API_KEY'),
     ],
 
     // Security & outbound network restrictions.

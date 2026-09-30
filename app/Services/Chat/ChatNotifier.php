@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use Illuminate\Support\Carbon;
+use Modules\AiRemedy\Models\AiRemedyRun;
 
 /**
  * Contract for all chat/webhook notification channels.
@@ -135,6 +136,26 @@ interface ChatNotifier
             'description' => 'A site previously blocking search engines is now indexable again.',
             'default' => true,
         ],
+        'server_went_red' => [
+            'label' => 'Server status RED (CPU / Load Spike)',
+            'description' => 'A server entered RED status in cloud metrics due to elevated CPU or load.',
+            'default' => true,
+        ],
+        'server_recovered' => [
+            'label' => 'Server recovered (status GREEN)',
+            'description' => 'A server recovered from RED back to healthy GREEN status.',
+            'default' => true,
+        ],
+        'ai_remedy_executed' => [
+            'label' => 'AiRemedy remediation executed',
+            'description' => 'AiRemedy executed remediation commands via SSH (autonomous auto-heal or operator-triggered).',
+            'default' => true,
+        ],
+        'ai_remedy_triaged' => [
+            'label' => 'AiRemedy root-cause diagnosed',
+            'description' => 'AiRemedy analyzed telemetry and identified the culprit for a performance spike or outage.',
+            'default' => true,
+        ],
     ];
 
     public function send(string $text, array $attachments = []): bool;
@@ -178,6 +199,14 @@ interface ChatNotifier
     public function backupRelayRecovered(): bool;
 
     public function serverUpdateFailed(Server $server, string $reason): bool;
+
+    public function serverWentRed(Server $server, ?float $cpuPct = null, ?string $reason = null): bool;
+
+    public function serverRecovered(Server $server): bool;
+
+    public function aiRemedyExecuted(AiRemedyRun $run): bool;
+
+    public function aiRemedyTriaged(AiRemedyRun $run): bool;
 
     public function queueWorkerRestartFailed(string $reason): bool;
 
