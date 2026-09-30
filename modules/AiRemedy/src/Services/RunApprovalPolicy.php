@@ -28,6 +28,7 @@ class RunApprovalPolicy
 
     public function __construct(
         protected CommandSafetyGuard $guard,
+        protected SpinupWpServiceRoute $spinupWp,
     ) {}
 
     /**
@@ -76,13 +77,14 @@ class RunApprovalPolicy
      *     executable: bool,
      *     can_execute: bool,
      *     blocked_reason: ?string,
-     *     commands: list<array{index: int, command: string, tier: string, allowed: bool, reason: ?string}>
+     *     commands: list<array{index: int, command: string, tier: string, allowed: bool, reason: ?string, route: string}>
      * }
      */
     public function review(AiRemedyRun $run, ?User $user = null): array
     {
         $blocked = $this->blockedReason($run);
 
+        $server = $run->server;
         $commands = [];
         foreach (array_values($run->proposed_commands ?? []) as $index => $command) {
             $command = (string) $command;
@@ -93,6 +95,7 @@ class RunApprovalPolicy
                 'tier' => $result['tier'],
                 'allowed' => $result['allowed'],
                 'reason' => $result['reason'] ?? null,
+                'route' => $server && $this->spinupWp->applies($command, $server) ? 'spinupwp_api' : 'ssh',
             ];
         }
 

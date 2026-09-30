@@ -12,9 +12,11 @@ use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RunApprovalPolicy;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
+use Modules\AiRemedy\Services\SpinupWpServiceRoute;
 use Modules\Core\ModuleStateResolver;
 use Modules\Core\Support\WebhookChatNotifier;
 use Modules\Mattermost\MattermostNotifier;
+use Modules\SpinupWp\SpinupWpClient;
 use phpseclib3\Net\SSH2;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -309,4 +311,93 @@ test('triage alert links to the run and survives site runs without a server', fu
             && ($attachment['title_link'] ?? null) === route('ai-remedy.show', $run)
             && str_contains($attachment['text'] ?? '', route('ai-remedy.show', $run).'#review');
     });
+});
+
+test('sudo commands use the stored sudo password without it appearing in logs or output', function () {
+    $executed = [];
+    airFakeSsh($executed);
+    $this->server->forceFill(['ssh_password' => 'correct-horse-battery'])->save();
+    $run = airCopilotRun($this->server->fresh(), ['proposed_commands' => [AIR_TIER1_A, 'rm -f /sites/example.test/files/.maintenance']]);
+
+    $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
+        'selected' => [
+            ['index' => 0, 'command' => AIR_TIER1_A],
+            ['index' => 1, 'command' => 'rm -f /sites/example.test/files/.maintenance'],
+        ],
+    ])->assertOk();
+
+    // sudo command is wrapped: password via env var, fed to `sudo -S`, NOPASSWD fallback first.
+    expect($executed[0])->toStartWith("CW_SUDO_PW='correct-horse-battery' bash -c ");
+    expect($executed[0])->toContain('sudo -n true');
+    expect($executed[0])->toContain('sudo -S -p');
+    expect($executed[0])->toContain('systemctl reload php8.3-fpm');
+    // Non-sudo commands run as-is.
+    expect($executed[1])->toBe('rm -f /sites/example.test/files/.maintenance');
+
+    $run->refresh();
+    expect($run->execution_output)->not->toContain('correct-horse-battery');
+    expect(json_encode(ActionLog::sole()->details))->not->toContain('correct-horse-battery');
+    expect($run->approved_commands)->toBe([AIR_TIER1_A, 'rm -f /sites/example.test/files/.maintenance']);
+});
+
+test('without a stored password sudo commands are sent unchanged', function () {
+    $executed = [];
+    airFakeSsh($executed);
+    $this->server->forceFill(['ssh_password' => null])->save();
+    $run = airCopilotRun($this->server->fresh(), ['proposed_commands' => [AIR_TIER1_A]]);
+
+    $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
+        'selected' => [['index' => 0, 'command' => AIR_TIER1_A]],
+    ])->assertOk();
+
+    expect($executed)->toBe([AIR_TIER1_A]);
+});
+
+test('service restarts on SpinupWP servers go through the SpinupWP API, not SSH', function () {
+    Http::fake([
+        'api.spinupwp.test/*' => Http::response(['event_id' => 4242]),
+    ]);
+    app()->instance(SpinupWpClient::class, new SpinupWpClient(token: 'fake-token', baseUrl: 'https://api.spinupwp.test'));
+
+    $executed = [];
+    airFakeSsh($executed);
+    $this->server->forceFill(['spinupwp_id' => 987])->save();
+    $run = airCopilotRun($this->server->fresh(), ['proposed_commands' => ['sudo systemctl restart php8.3-fpm', 'sudo kill -15 4242']]);
+
+    $review = app(RunApprovalPolicy::class)->review($run, $this->admin);
+    expect(array_column($review['commands'], 'route'))->toBe(['spinupwp_api', 'ssh']);
+
+    $response = $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
+        'selected' => [
+            ['index' => 0, 'command' => 'sudo systemctl restart php8.3-fpm'],
+            ['index' => 1, 'command' => 'sudo kill -15 4242'],
+        ],
+    ]);
+
+    $response->assertOk();
+    Http::assertSent(fn ($r) => $r->method() === 'POST'
+        && $r->url() === 'https://api.spinupwp.test/servers/987/services/php/restart');
+    // Only the kill went over SSH.
+    expect($executed)->toHaveCount(1);
+    expect($executed[0])->toContain('kill -15 4242');
+    expect($response->json('results.0.route'))->toBe('spinupwp_api');
+    expect($response->json('results.0.output'))->toContain('event #4242');
+    expect($response->json('results.1.route'))->toBe('ssh');
+});
+
+test('reload commands and view-only SpinupWP stay on SSH', function () {
+    Http::fake();
+    app()->instance(SpinupWpClient::class, new SpinupWpClient(token: 'fake-token', baseUrl: 'https://api.spinupwp.test', viewOnly: true));
+    $this->server->forceFill(['spinupwp_id' => 987])->save();
+
+    $route = app(SpinupWpServiceRoute::class);
+    $server = $this->server->fresh();
+
+    // No reload endpoint in SpinupWP: never turn a graceful reload into a restart.
+    expect($route->serviceFor('sudo systemctl reload php8.3-fpm'))->toBeNull();
+    expect($route->serviceFor('sudo service nginx restart'))->toBe('nginx');
+    expect($route->serviceFor('sudo systemctl restart mariadb'))->toBe('mysql');
+    expect($route->serviceFor('sudo systemctl restart apache2'))->toBeNull();
+    // View-only mode disables the API route entirely.
+    expect($route->applies('sudo systemctl restart nginx', $server))->toBeFalse();
 });
