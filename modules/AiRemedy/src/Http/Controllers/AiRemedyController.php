@@ -12,6 +12,7 @@ use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
+use Modules\AiRemedy\Services\RunApprovalPolicy;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
 
 class AiRemedyController extends Controller
@@ -20,6 +21,7 @@ class AiRemedyController extends Controller
         protected OpenRouterClient $client,
         protected ServerTelemetryCollector $collector,
         protected RemedyExecutor $executor,
+        protected RunApprovalPolicy $policy,
     ) {}
 
     /**
@@ -50,8 +52,14 @@ class AiRemedyController extends Controller
 
         $servers = Server::orderBy('name')->get(['id', 'name', 'hostname']);
 
+        $reviews = [];
+        foreach ($runs as $run) {
+            $reviews[$run->id] = $this->policy->review($run, $request->user());
+        }
+
         return view('ai-remedy::index', [
             'runs' => $runs,
+            'reviews' => $reviews,
             'stats' => $stats,
             'servers' => $servers,
             'activeStatus' => $status,
@@ -65,12 +73,13 @@ class AiRemedyController extends Controller
     public function show(AiRemedyRun $run): View|JsonResponse
     {
         $run->load(['server', 'site', 'user']);
+        $review = $this->policy->review($run, request()->user());
 
         if (request()->wantsJson()) {
-            return response()->json(['ok' => true, 'run' => $run]);
+            return response()->json(['ok' => true, 'run' => $run, 'review' => $review]);
         }
 
-        return view('ai-remedy::show', ['run' => $run]);
+        return view('ai-remedy::show', ['run' => $run, 'review' => $review]);
     }
 
     /**
@@ -95,6 +104,10 @@ class AiRemedyController extends Controller
         // Step 3: Record initial audit log run
         $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
 
+        // Store the tier the backend guard will actually enforce, not the tier
+        // the LLM claimed, matching AiRemedyTriager.
+        $safety = app(CommandSafetyGuard::class)->evaluateBatch($analysis['commands'] ?? []);
+
         $run = AiRemedyRun::create([
             'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
             'status' => $status,
@@ -109,42 +122,54 @@ class AiRemedyController extends Controller
             'telemetry_snapshot' => $telemetry,
             'diagnosis_summary' => $analysis['summary'],
             'root_cause' => $analysis['root_cause'],
-            'safety_tier' => $analysis['safety_tier'],
+            'safety_tier' => $analysis['is_fixable'] ? $safety['highest_tier'] : AiRemedyRun::TIER_UNFIXABLE,
             'proposed_commands' => $analysis['commands'],
             'before_metrics' => $telemetry,
             'started_at' => now(),
         ]);
 
+        $run = $run->fresh() ?? $run;
+
         return response()->json([
             'ok' => true,
-            'run' => $run->fresh(),
+            'run' => $run,
+            'review' => $this->policy->review($run, $request->user()),
             'analysis' => $analysis,
             'telemetry' => $telemetry,
         ]);
     }
 
     /**
-     * Execute approved remediation commands on a server.
+     * Execute an operator-approved selection of a run's proposed commands.
+     *
+     * Body: `selected` — list of {index, command} for the proposed commands the
+     * operator ticked, in order (`command` may be an edited version). Proposed
+     * commands not listed are recorded as skipped. The legacy `commands` string
+     * list is still accepted and mapped by position.
      */
     public function execute(Request $request, AiRemedyRun $run): JsonResponse
     {
-        $customCommands = $request->input('commands');
-        if (is_array($customCommands)) {
-            $customCommands = array_values(array_filter($customCommands, 'is_string'));
-            $safety = app(CommandSafetyGuard::class)->evaluateBatch($customCommands);
-            if (! $safety['allowed']) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Custom commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']),
-                    'run' => $run,
-                    'output' => '',
-                ], 422);
-            }
-        } else {
-            $customCommands = null;
+        $blocked = $this->policy->blockedReason($run);
+        if ($blocked !== null) {
+            return $this->executeFailure($run, $blocked, 409);
         }
 
-        $result = $this->executor->execute($run, $customCommands);
+        $proposed = array_values(array_map('strval', $run->proposed_commands ?? []));
+        $selection = $this->parseSelection($request, count($proposed));
+        if (is_string($selection)) {
+            return $this->executeFailure($run, $selection, 422);
+        }
+
+        $commands = array_map(fn (array $s) => $s['command'], $selection);
+
+        $safety = app(CommandSafetyGuard::class)->evaluateBatch($commands);
+        if (! $safety['allowed']) {
+            return $this->executeFailure($run, 'Selected commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']), 422);
+        }
+
+        $decisions = $this->buildDecisions($proposed, $selection);
+
+        $result = $this->executor->execute($run, $commands, $decisions, $request->user());
 
         if (! $result['ok']) {
             return response()->json([
@@ -152,7 +177,8 @@ class AiRemedyController extends Controller
                 'message' => $result['error'] ?? 'Execution failed.',
                 'run' => $result['run'],
                 'output' => $result['output'],
-            ], 422);
+                'results' => $result['results'] ?? [],
+            ], ! empty($result['conflict']) ? 409 : 422);
         }
 
         return response()->json([
@@ -160,7 +186,105 @@ class AiRemedyController extends Controller
             'message' => 'Remediation commands executed successfully.',
             'run' => $result['run'],
             'output' => $result['output'],
+            'results' => $result['results'] ?? [],
         ]);
+    }
+
+    /**
+     * @return list<array{index: ?int, command: string}>|string Selection, or an error message
+     */
+    protected function parseSelection(Request $request, int $proposedCount): array|string
+    {
+        $raw = $request->input('selected');
+
+        if ($raw === null && is_array($request->input('commands'))) {
+            $raw = [];
+            foreach (array_values($request->input('commands')) as $i => $command) {
+                $raw[] = ['index' => $i < $proposedCount ? $i : null, 'command' => $command];
+            }
+        }
+
+        if (! is_array($raw) || $raw === []) {
+            return 'Select at least one command to run.';
+        }
+
+        $selection = [];
+        $seen = [];
+        foreach ($raw as $item) {
+            if (! is_array($item) || ! is_string($item['command'] ?? null)) {
+                return 'Each selected command must be a string.';
+            }
+
+            $command = trim($item['command']);
+            if ($command === '') {
+                return 'Blank commands cannot be executed. Untick the command or restore its text.';
+            }
+
+            $index = $item['index'] ?? null;
+            if ($index !== null) {
+                if (! is_int($index) && ! ctype_digit((string) $index)) {
+                    return 'Invalid command index.';
+                }
+                $index = (int) $index;
+                if ($index < 0 || $index >= $proposedCount || isset($seen[$index])) {
+                    return 'Invalid command index.';
+                }
+                $seen[$index] = true;
+            }
+
+            $selection[] = ['index' => $index, 'command' => $command];
+        }
+
+        return $selection;
+    }
+
+    /**
+     * One decision per proposed command (run / edited / skipped), plus any
+     * operator-added commands, for the audit trail.
+     *
+     * @param  list<string>  $proposed
+     * @param  list<array{index: ?int, command: string}>  $selection
+     * @return list<array<string, mixed>>
+     */
+    protected function buildDecisions(array $proposed, array $selection): array
+    {
+        $byIndex = [];
+        $added = [];
+        foreach ($selection as $item) {
+            if ($item['index'] === null) {
+                $added[] = $item['command'];
+            } else {
+                $byIndex[$item['index']] = $item['command'];
+            }
+        }
+
+        $decisions = [];
+        foreach ($proposed as $i => $original) {
+            if (! array_key_exists($i, $byIndex)) {
+                $decisions[] = ['index' => $i, 'decision' => 'skipped', 'command' => $original];
+            } elseif (trim($original) === $byIndex[$i]) {
+                $decisions[] = ['index' => $i, 'decision' => 'run', 'command' => $original];
+            } else {
+                $decisions[] = ['index' => $i, 'decision' => 'edited', 'command' => $byIndex[$i], 'original_command' => $original];
+            }
+        }
+
+        foreach ($added as $command) {
+            $decisions[] = ['index' => null, 'decision' => 'added', 'command' => $command];
+        }
+
+        return $decisions;
+    }
+
+    protected function executeFailure(AiRemedyRun $run, string $message, int $status): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+            'run' => $run,
+            'output' => '',
+            'results' => [],
+        ], $status);
     }
 
     /**

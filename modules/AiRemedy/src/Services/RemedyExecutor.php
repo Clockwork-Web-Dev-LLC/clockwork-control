@@ -2,11 +2,15 @@
 
 namespace Modules\AiRemedy\Services;
 
+use App\Models\Server;
+use App\Models\User;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
 use App\Services\Ssh\SshClient;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Modules\AiRemedy\Models\AiRemedyRun;
 use Throwable;
 
@@ -17,16 +21,23 @@ class RemedyExecutor
         protected CommandSafetyGuard $guard,
         protected ServerTelemetryCollector $collector,
         protected ActionLogger $actionLogger,
+        protected RunApprovalPolicy $policy,
     ) {}
 
     /**
      * Execute approved remediation commands on the target server.
      *
-     * @param  array<int, string>|null  $customCommands  Optional override of run's proposed commands
-     * @return array{ok: bool, output: string, run: AiRemedyRun, error?: string}
+     * @param  array<int, string>|null  $customCommands  Optional override of run's proposed commands (e.g. an operator-selected subset)
+     * @param  list<array<string, mixed>>  $decisions  Per-proposed-command operator decisions (run / edited / skipped) for the audit trail
+     * @return array{ok: bool, output: string, run: AiRemedyRun, error?: string, conflict?: bool}
      */
-    public function execute(AiRemedyRun $run, ?array $customCommands = null): array
+    public function execute(AiRemedyRun $run, ?array $customCommands = null, array $decisions = [], ?User $approvedBy = null): array
     {
+        $blocked = $this->policy->blockedReason($run);
+        if ($blocked !== null) {
+            return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $blocked, 'conflict' => true];
+        }
+
         $server = $run->server;
         if (! $server) {
             $run->update([
@@ -37,9 +48,15 @@ class RemedyExecutor
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => 'No server found.'];
         }
 
-        $commandsToRun = $customCommands ?: $run->proposed_commands ?: [];
+        $commandsToRun = array_values($customCommands ?: $run->proposed_commands ?: []);
         if (empty($commandsToRun)) {
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => 'No commands to execute.'];
+        }
+
+        foreach ($commandsToRun as $cmd) {
+            if (! is_string($cmd) || trim($cmd) === '') {
+                return ['ok' => false, 'output' => '', 'run' => $run, 'error' => 'Blank commands cannot be executed.'];
+            }
         }
 
         // Safety policy check
@@ -65,15 +82,48 @@ class RemedyExecutor
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $errMsg];
         }
 
-        $run->update([
-            'status' => AiRemedyRun::STATUS_EXECUTING,
-            'approved_commands' => $commandsToRun,
-        ]);
+        // One execution per server at a time: two fixes racing on the same box
+        // (or a double-click) must never interleave SSH commands.
+        $lock = Cache::lock("ai-remedy:execute:server:{$server->id}", 300);
+        if (! $lock->get()) {
+            return ['ok' => false, 'output' => '', 'run' => $run, 'error' => 'Another AiRemedy fix is already running on this server.', 'conflict' => true];
+        }
 
+        try {
+            // Atomically claim the run so it can only ever execute once, even if
+            // two requests pass the policy check at the same moment.
+            $claimed = AiRemedyRun::query()
+                ->whereKey($run->id)
+                ->whereIn('status', RunApprovalPolicy::EXECUTABLE_STATUSES)
+                ->update([
+                    'status' => AiRemedyRun::STATUS_EXECUTING,
+                    'approved_commands' => $commandsToRun,
+                ]);
+
+            if ($claimed === 0) {
+                return ['ok' => false, 'output' => '', 'run' => $run->fresh() ?? $run, 'error' => 'This fix is already running or has already been run.', 'conflict' => true];
+            }
+
+            $run->refresh();
+
+            return $this->runCommands($run, $server, $commandsToRun, $decisions, $approvedBy);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param  list<string>  $commandsToRun
+     * @param  list<array<string, mixed>>  $decisions
+     * @return array{ok: bool, output: string, run: AiRemedyRun, results: list<array<string, mixed>>, error?: string}
+     */
+    protected function runCommands(AiRemedyRun $run, Server $server, array $commandsToRun, array $decisions, ?User $approvedBy): array
+    {
         $start = microtime(true);
         $fullOutput = '';
         $hadError = false;
         $errorMessage = null;
+        $results = [];
 
         try {
             $session = $this->ssh->connect($server);
@@ -92,6 +142,12 @@ class RemedyExecutor
                     $exitStatus = 0;
                 }
 
+                $results[] = [
+                    'command' => $cmd,
+                    'exit_status' => $exitStatus,
+                    'output' => Str::limit($cmdOutput, 2000),
+                ];
+
                 if ($exitStatus !== 0) {
                     $hadError = true;
                     $errorMessage = "Command '{$cmd}' exited with non-zero status code {$exitStatus}.";
@@ -105,6 +161,11 @@ class RemedyExecutor
             $hadError = true;
             $errorMessage = $e->getMessage();
             $fullOutput .= "\n[Execution Exception]: ".$e->getMessage();
+        }
+
+        // Commands after a failure never ran; record that explicitly.
+        foreach (array_slice($commandsToRun, count($results)) as $notRun) {
+            $results[] = ['command' => $notRun, 'exit_status' => null, 'output' => null, 'not_run' => true];
         }
 
         $elapsedMs = (int) round((microtime(true) - $start) * 1000);
@@ -133,6 +194,9 @@ class RemedyExecutor
                 'run_id' => $run->id,
                 'model' => $run->model_used,
                 'commands' => $commandsToRun,
+                'decisions' => $decisions,
+                'results' => $results,
+                'approved_by_user_id' => $approvedBy?->id,
                 'cost_usd' => $run->total_cost_usd,
             ],
             ok: $isOk,
@@ -155,7 +219,8 @@ class RemedyExecutor
         return [
             'ok' => $isOk,
             'output' => $fullOutput,
-            'run' => $run->fresh(),
+            'run' => $run->fresh() ?? $run,
+            'results' => $results,
         ];
     }
 }

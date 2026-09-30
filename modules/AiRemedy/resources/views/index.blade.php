@@ -4,7 +4,10 @@
 
 @section('content')
 @include('operations._tabs')
-<div class="relative" x-data="{
+@include('ai-remedy::_review_script')
+<div class="relative"
+     @ai-remedy-executed.window="if (activeRun && $event.detail.run && activeRun.id === $event.detail.runId) { activeRun.status = $event.detail.run.status; }"
+     x-data="{
     activeRun: null,
     drawerOpen: false,
     openDrawer(run) {
@@ -228,7 +231,7 @@
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                     <button type="button"
-                                            @click="openDrawer({{ json_encode($run) }})"
+                                            @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
                                             class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center gap-1 flex-shrink-0">
                                         <span>Forensics</span>
                                         <i class="fa-solid fa-arrow-right text-[10px]"></i>
@@ -307,7 +310,7 @@
                         {{-- Actions Button --}}
                         <div class="flex items-center justify-end pt-1">
                             <button type="button"
-                                    @click="openDrawer({{ json_encode($run) }})"
+                                    @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
                                     class="btn-pill-nav w-full sm:w-auto text-xs py-1.5 px-3.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-microscope text-[11px] text-[var(--color-brand)]"></i>
                                 <span>Forensics &amp; Remediation</span>
@@ -420,7 +423,13 @@
                                 </template>
                             </div>
                         </template>
-                        <template x-if="!activeRun?.approved_commands || activeRun.approved_commands.length === 0">
+                        {{-- Copilot approval: re-created per run (keyed by id) so selections never leak between incidents --}}
+                        <template x-for="r in ((activeRun && activeRun.review && !(activeRun.approved_commands && activeRun.approved_commands.length) && activeRun.actor !== 'watch_mode' && activeRun.actor !== 'simulation' && (activeRun.proposed_commands || []).length) ? [activeRun] : [])" :key="r.id">
+                            <div>
+                                @include('ai-remedy::_review_panel', ['reviewExpr' => 'r.review', 'runIdExpr' => 'r.id'])
+                            </div>
+                        </template>
+                        <template x-if="(!activeRun?.approved_commands || activeRun.approved_commands.length === 0) && (activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation' || !activeRun?.review)">
                             <div class="bg-slate-950 border border-slate-800 text-slate-100 p-3.5 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                                 <template x-for="cmd in (activeRun?.proposed_commands || [])" :key="cmd">
                                     <div class="flex items-center gap-2"><span class="text-indigo-400 font-bold select-none">$</span> <span class="text-slate-100" x-text="cmd"></span></div>
