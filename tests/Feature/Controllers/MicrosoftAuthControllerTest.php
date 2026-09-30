@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceInstallerGate;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Modules\AuthMicrosoft\MicrosoftAuthProvider;
@@ -150,6 +151,9 @@ describe('callback (GET /auth/microsoft/callback)', function () {
     });
 
     it('is not configured in production without a pinned Entra tenant', function () {
+        // Leaving the testing env disables the installer gate's unit-test bypass,
+        // so without this the test depends on a real storage/ sentinel file.
+        EnforceInstallerGate::fake(true);
         $this->app['env'] = 'production';
         config([
             'services.microsoft.client_id' => 'test-client-id',

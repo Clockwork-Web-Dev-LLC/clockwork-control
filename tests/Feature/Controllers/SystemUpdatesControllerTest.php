@@ -217,8 +217,13 @@ it('falls back to a Clockwork-owned directory when HOME/COMPOSER_HOME are entire
 });
 
 it('aborts the apply action without touching git or composer when the working copy is dirty', function () {
+    // Fake everything and forbid strays: a partial fake lets unmatched commands
+    // run for real, so if the dirty check ever misfires this would otherwise
+    // execute a real `composer install --no-dev` against the test checkout.
+    Process::preventStrayProcesses();
     Process::fake([
         'git status --porcelain' => Process::result(' M app/Foo.php'),
+        '*' => Process::result(''),
     ]);
 
     $this->mockIssueCounterZero();
