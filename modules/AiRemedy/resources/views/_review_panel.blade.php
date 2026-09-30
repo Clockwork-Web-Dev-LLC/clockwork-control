@@ -49,6 +49,8 @@
                 </div>
                 <div class="flex items-center gap-2 flex-wrap pl-6 font-sans">
                     <span class="inline-flex items-center px-1.5 py-0.5 rounded font-data text-[10px] font-semibold border" :class="tierClass(item.tier)" x-text="tierLabel(item.tier)"></span>
+                    <span class="text-[10px] text-slate-400" x-show="item.allowed"
+                          x-text="item.route === 'spinupwp_api' && !isEdited(item) ? 'via SpinupWP API' : 'via SSH'"></span>
                     <template x-if="isEdited(item)">
                         <span class="text-[10px] text-sky-300">edited · safety re-checked when you run it</span>
                     </template>
@@ -79,7 +81,7 @@
         <div class="rounded-lg bg-rose-500/15 border border-rose-500/30 p-2.5 text-[11px] text-rose-900 dark:text-rose-200 flex items-start gap-2 leading-relaxed">
             <i class="fa-solid fa-key mt-0.5 text-xs shrink-0"></i>
             <div>
-                <strong>Passwordless sudo required:</strong> allow the SSH user non-interactive sudo in <code class="font-mono">/etc/sudoers</code> so remediation commands can run without a TTY.
+                <strong>sudo needs a password:</strong> save this server's SSH/sudo password in its credentials (Servers → the server → SSH credentials) so AiRemedy can use it, or allow the SSH user passwordless sudo in <code class="font-mono">/etc/sudoers</code>. If a password is already saved, it may have been changed on the server.
             </div>
         </div>
     </template>

@@ -215,6 +215,12 @@ The core Copilot approve-and-run fix ships in **1.9.1** (see the top of this fil
 - **Review queue:** a "Needs review" filter, a count badge on the AiRemedy nav item, and unreviewed Copilot runs auto-marked `expired` after 24 hours (new status and a scheduled command).
 - **`command_decisions` column:** structured per-command decisions on the run itself, replacing 1.9.1's action-log storage, plus a backfill.
 - **D7:** an operator-level approval permission and optional second confirmation for Tier 2.
+- **Sudo password hygiene (Aaron, 2026-09-30: "we'll have to reset them regularly").** 1.9.1 uses the stored `servers.ssh_password` for sudo. The SpinupWP API **can't** reset sudo passwords (no sudo-user endpoints), so rotation stays manual in the SpinupWP dashboard. Control should make it visible:
+  - add `ssh_password_updated_at`, set whenever the password is saved (ServersController, ServerCredentialsController bulk import);
+  - show password age on the server's SSH credentials screen, plus an Issues entry or reminder once a password is older than a configurable N days (default 90);
+  - when a sudo command fails with "Sorry, try again" or "incorrect password", flag the server's credential as stale, alert once, and link to the credentials screen;
+  - optionally a bulk "rotation checklist" view listing each server's password age.
+- **More SpinupWP API routing:** `POST /servers/{id}/reboot` for reboot proposals, and any site-level endpoints (e.g. cache purge) that can replace SSH commands.
 
 ### 4B. Accuracy report
 

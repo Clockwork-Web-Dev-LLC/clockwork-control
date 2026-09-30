@@ -22,6 +22,7 @@ class RemedyExecutor
         protected ServerTelemetryCollector $collector,
         protected ActionLogger $actionLogger,
         protected RunApprovalPolicy $policy,
+        protected SpinupWpServiceRoute $spinupWp,
     ) {}
 
     /**
@@ -113,6 +114,29 @@ class RemedyExecutor
     }
 
     /**
+     * SSH users on most fleet servers need a password for sudo. Mirror the
+     * ServerUpdater / Fail2banProvisioner pattern: pass the stored password via
+     * an env var and pipe it to `sudo -S`, using plain sudo when the user has
+     * NOPASSWD. The password never appears in the command text we log.
+     *
+     * Embedding $cmd in the script is safe: CommandSafetyGuard has already
+     * rejected shell metacharacters (; & | ` $ > < ( ) and newlines).
+     */
+    protected function wrapSudo(string $cmd, Server $server): string
+    {
+        $cmd = trim($cmd);
+        if (! str_starts_with($cmd, 'sudo ') || empty($server->ssh_password)) {
+            return $cmd;
+        }
+
+        $args = substr($cmd, strlen('sudo '));
+        $script = 'if sudo -n true 2>/dev/null; then sudo '.$args.'; '
+            .'else printf \'%s\\n\' "$CW_SUDO_PW" | sudo -S -p \'\' '.$args.'; fi';
+
+        return sprintf('CW_SUDO_PW=%s bash -c %s 2>&1', escapeshellarg((string) $server->ssh_password), escapeshellarg($script));
+    }
+
+    /**
      * @param  list<string>  $commandsToRun
      * @param  list<array<string, mixed>>  $decisions
      * @return array{ok: bool, output: string, run: AiRemedyRun, results: list<array<string, mixed>>, error?: string}
@@ -125,25 +149,48 @@ class RemedyExecutor
         $errorMessage = null;
         $results = [];
 
-        try {
-            $session = $this->ssh->connect($server);
-            $session->setTimeout(30);
+        $session = null;
 
+        try {
             foreach ($commandsToRun as $cmd) {
                 $fullOutput .= "$ {$cmd}\n";
-                $cmdOutput = (string) $session->exec($cmd);
-                $fullOutput .= $cmdOutput."\n";
 
-                $exitStatus = 0;
-                try {
-                    $status = $session->getExitStatus();
-                    $exitStatus = ($status !== false && $status !== null) ? (int) $status : 0;
-                } catch (\BadMethodCallException) {
+                if ($this->spinupWp->applies($cmd, $server)) {
+                    // Service restarts on SpinupWP servers go through the API: no sudo needed.
+                    $apiResult = $this->spinupWp->run($cmd, $server);
+                    $cmdOutput = $apiResult['output'];
+                    $exitStatus = $apiResult['exit_status'];
+                    $route = 'spinupwp_api';
+                } else {
+                    // Connect lazily so an all-API fix never needs SSH at all.
+                    if ($session === null) {
+                        $session = $this->ssh->connect($server);
+                        $session->setTimeout(30);
+                    }
+
+                    $cmdOutput = (string) $session->exec($this->wrapSudo($cmd, $server));
+                    $route = 'ssh';
+
                     $exitStatus = 0;
+                    try {
+                        $status = $session->getExitStatus();
+                        $exitStatus = ($status !== false && $status !== null) ? (int) $status : 0;
+                    } catch (\BadMethodCallException) {
+                        $exitStatus = 0;
+                    }
                 }
+
+                // Defense in depth: never persist or display the sudo password,
+                // even if a command's output somehow echoes it back.
+                if (! empty($server->ssh_password)) {
+                    $cmdOutput = str_replace((string) $server->ssh_password, '[redacted]', $cmdOutput);
+                }
+
+                $fullOutput .= $cmdOutput."\n";
 
                 $results[] = [
                     'command' => $cmd,
+                    'route' => $route,
                     'exit_status' => $exitStatus,
                     'output' => Str::limit($cmdOutput, 2000),
                 ];
@@ -156,7 +203,7 @@ class RemedyExecutor
                 }
             }
 
-            $session->disconnect();
+            $session?->disconnect();
         } catch (Throwable $e) {
             $hadError = true;
             $errorMessage = $e->getMessage();
