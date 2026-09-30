@@ -235,6 +235,9 @@ BASH;
         // Redact OpenRouter / OpenAI / Anthropic API keys (sk-or-..., sk-...)
         $text = (string) preg_replace('/sk-(?:or-)?[a-zA-Z0-9_\-]{16,}/i', '[REDACTED_API_KEY]', $text);
 
+        // Redact PEM private key blocks (RSA, OPENSSH, EC, DSA, PGP)
+        $text = (string) preg_replace('/-----BEGIN [A-Z0-9 ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]+PRIVATE KEY-----/i', '[REDACTED_PRIVATE_KEY]', $text);
+
         return $text;
     }
 

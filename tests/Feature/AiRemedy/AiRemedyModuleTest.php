@@ -597,7 +597,8 @@ test('telemetry collector redacts passwords, tokens, and api keys from command o
     $raw = "mysqldump -u root -pSecret123 production > dump.sql\n"
         ."curl -H 'Authorization: {$fakeBearer}' https://api.com\n"
         ."php artisan app:run --token=super_secret_token_value\n"
-        ."OPENROUTER_KEY={$fakeKey}";
+        ."OPENROUTER_KEY={$fakeKey}\n"
+        ."-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...private...data\n-----END RSA PRIVATE KEY-----";
 
     $sanitized = $collector->sanitizeOutput($raw);
 
@@ -608,7 +609,9 @@ test('telemetry collector redacts passwords, tokens, and api keys from command o
         ->and($sanitized)->not->toContain('super_secret_token_value')
         ->and($sanitized)->toContain('token=[REDACTED]')
         ->and($sanitized)->not->toContain('dummy-openrouter-key')
-        ->and($sanitized)->toContain('[REDACTED_API_KEY]');
+        ->and($sanitized)->toContain('[REDACTED_API_KEY]')
+        ->and($sanitized)->not->toContain('private...data')
+        ->and($sanitized)->toContain('[REDACTED_PRIVATE_KEY]');
 });
 
 test('remedy executor strictly blocks autonomous execution of non-tier-1 commands', function () {
