@@ -945,7 +945,7 @@ abstract class WebhookChatNotifier implements ChatNotifier
         }
 
         // Site-downtime runs can have no linked server.
-        $serverName = $run->server?->name ?? $run->site?->domain ?? 'unknown target';
+        $serverName = $run->server->name ?? $run->site->domain ?? 'unknown target';
         $title = sprintf(':mag: AiRemedy Forensics: %s on %s', $run->safetyLabel(), $serverName);
 
         $proposed = ! empty($run->proposed_commands)
