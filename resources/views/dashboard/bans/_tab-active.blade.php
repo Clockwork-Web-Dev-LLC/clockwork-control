@@ -33,7 +33,8 @@
     </div>
 
     @if ($active->isNotEmpty())
-        <table class="w-full text-sm" id="bans-table" x-data="sortableTable({ defaultKey: 'banned', defaultDir: 'desc' })">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[620px]" id="bans-table" x-data="sortableTable({ defaultKey: 'banned', defaultDir: 'desc' })">
             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                 <tr>
                     <x-sort-th key="ip"      class="px-5 py-3">IP</x-sort-th>
@@ -79,6 +80,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
         @if ($active->hasPages())
             <div class="px-5 py-3 border-t border-[var(--color-border-light)]" id="bans-pagination">
                 {{ $active->links() }}

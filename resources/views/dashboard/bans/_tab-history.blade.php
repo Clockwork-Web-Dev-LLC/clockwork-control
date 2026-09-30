@@ -33,7 +33,8 @@
             <div>No history yet.</div>
         </div>
     @else
-        <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'when', defaultDir: 'desc' })">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[620px]" x-data="sortableTable({ defaultKey: 'when', defaultDir: 'desc' })">
             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                 <tr>
                     <x-sort-th key="when"   class="px-5 py-3">When</x-sort-th>
@@ -87,5 +88,6 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     @endif
 </div>

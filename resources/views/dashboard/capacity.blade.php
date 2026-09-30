@@ -203,7 +203,8 @@
                         </div>
                     </div>
                 @else
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'rolling', defaultDir: 'desc' })">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[640px]" x-data="sortableTable({ defaultKey: 'rolling', defaultDir: 'desc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-3">Site</x-sort-th>
@@ -250,6 +251,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 @endif
             </div>
         </section>
@@ -270,7 +272,8 @@
                     <div class="text-sm text-[var(--color-ink-soft)]">{{ $trending->count() }} site(s)</div>
                 </div>
                 <div class="card overflow-hidden">
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'projected', defaultDir: 'desc' })">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[640px]" x-data="sortableTable({ defaultKey: 'projected', defaultDir: 'desc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-3">Site</x-sort-th>
@@ -317,6 +320,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </section>
         @endif
@@ -374,7 +378,8 @@
                             );
                         };
                     @endphp
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'cpu7avg', defaultDir: 'desc' })">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[800px]" x-data="sortableTable({ defaultKey: 'cpu7avg', defaultDir: 'desc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="server" class="px-5 py-3">Server</x-sort-th>
@@ -422,6 +427,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </section>
         @endif
@@ -509,7 +515,8 @@
                         Does <strong>not</strong> include MySQL, nginx, or Redis CPU — DB-heavy sites may rank lower than their real load.
                         Cross-reference the per-server leaderboard above for the fuller picture.
                     </div>
-                    <table class="w-full text-sm">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[640px]">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <th class="px-5 py-3 text-left">Site</th>
@@ -560,6 +567,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 </div>
                 @else
                     {{-- Empty state when collection is paused before any data
@@ -590,35 +598,37 @@
                             No shared servers under pressure right now.
                         </div>
                     @else
-                        <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
-                            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                                <tr>
-                                    <x-sort-th key="server">Server</x-sort-th>
-                                    <x-sort-th key="cpu" align="right">CPU</x-sort-th>
-                                    <x-sort-th key="mem" align="right">MEM</x-sort-th>
-                                    <x-sort-th key="dsk" align="right">DSK</x-sort-th>
-                                    <x-sort-th key="sites" align="right">Sites</x-sort-th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-[var(--color-border-light)]">
-                                @foreach ($pressure as $row)
-                                    <tr
-                                        data-sort-server="{{ $row['server']->name }}"
-                                        data-sort-cpu="{{ $row['avg_cpu'] ?? '' }}"
-                                        data-sort-mem="{{ $row['avg_memory'] ?? '' }}"
-                                        data-sort-dsk="{{ $row['avg_disk'] ?? '' }}"
-                                        data-sort-sites="{{ $row['site_count'] }}">
-                                        <td class="px-4 py-2">
-                                            <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
-                                        </td>
-                                        <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_cpu']) }}">{{ $fmtPct($row['avg_cpu']) }}</td>
-                                        <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_memory']) }}">{{ $fmtPct($row['avg_memory']) }}</td>
-                                        <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_disk']) }}">{{ $fmtPct($row['avg_disk']) }}</td>
-                                        <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ $row['site_count'] }}</td>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm min-w-[500px]" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
+                                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                                    <tr>
+                                        <x-sort-th key="server">Server</x-sort-th>
+                                        <x-sort-th key="cpu" align="right">CPU</x-sort-th>
+                                        <x-sort-th key="mem" align="right">MEM</x-sort-th>
+                                        <x-sort-th key="dsk" align="right">DSK</x-sort-th>
+                                        <x-sort-th key="sites" align="right">Sites</x-sort-th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-[var(--color-border-light)]">
+                                    @foreach ($pressure as $row)
+                                        <tr
+                                            data-sort-server="{{ $row['server']->name }}"
+                                            data-sort-cpu="{{ $row['avg_cpu'] ?? '' }}"
+                                            data-sort-mem="{{ $row['avg_memory'] ?? '' }}"
+                                            data-sort-dsk="{{ $row['avg_disk'] ?? '' }}"
+                                            data-sort-sites="{{ $row['site_count'] }}">
+                                            <td class="px-4 py-2">
+                                                <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
+                                            </td>
+                                            <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_cpu']) }}">{{ $fmtPct($row['avg_cpu']) }}</td>
+                                            <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_memory']) }}">{{ $fmtPct($row['avg_memory']) }}</td>
+                                            <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_disk']) }}">{{ $fmtPct($row['avg_disk']) }}</td>
+                                            <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ $row['site_count'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                     @endif
                 </div>
             </section>
@@ -636,35 +646,37 @@
                     @if ($headroom->isEmpty())
                         <div class="p-6 text-center text-sm text-[var(--color-ink-soft)]">No shared servers tagged.</div>
                     @else
-                        <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'mem', defaultDir: 'asc' })">
-                            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                                <tr>
-                                    <x-sort-th key="server">Server</x-sort-th>
-                                    <x-sort-th key="cpu" align="right">CPU</x-sort-th>
-                                    <x-sort-th key="mem" align="right">MEM</x-sort-th>
-                                    <x-sort-th key="sites" align="right">Sites</x-sort-th>
-                                    <x-sort-th key="visits" align="right">Visits {{ $rollingDays }}d</x-sort-th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-[var(--color-border-light)]">
-                                @foreach ($headroom as $row)
-                                    <tr
-                                        data-sort-server="{{ $row['server']->name }}"
-                                        data-sort-cpu="{{ $row['avg_cpu'] ?? '' }}"
-                                        data-sort-mem="{{ $row['avg_memory'] ?? '' }}"
-                                        data-sort-sites="{{ $row['site_count'] }}"
-                                        data-sort-visits="{{ $row['visits_rolling'] }}">
-                                        <td class="px-4 py-2">
-                                            <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
-                                        </td>
-                                        <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_cpu']) }}">{{ $fmtPct($row['avg_cpu']) }}</td>
-                                        <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_memory']) }}">{{ $fmtPct($row['avg_memory']) }}</td>
-                                        <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ $row['site_count'] }}</td>
-                                        <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ number_format($row['visits_rolling']) }}</td>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm min-w-[520px]" x-data="sortableTable({ defaultKey: 'mem', defaultDir: 'asc' })">
+                                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
+                                    <tr>
+                                        <x-sort-th key="server">Server</x-sort-th>
+                                        <x-sort-th key="cpu" align="right">CPU</x-sort-th>
+                                        <x-sort-th key="mem" align="right">MEM</x-sort-th>
+                                        <x-sort-th key="sites" align="right">Sites</x-sort-th>
+                                        <x-sort-th key="visits" align="right">Visits {{ $rollingDays }}d</x-sort-th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-[var(--color-border-light)]">
+                                    @foreach ($headroom as $row)
+                                        <tr
+                                            data-sort-server="{{ $row['server']->name }}"
+                                            data-sort-cpu="{{ $row['avg_cpu'] ?? '' }}"
+                                            data-sort-mem="{{ $row['avg_memory'] ?? '' }}"
+                                            data-sort-sites="{{ $row['site_count'] }}"
+                                            data-sort-visits="{{ $row['visits_rolling'] }}">
+                                            <td class="px-4 py-2">
+                                                <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
+                                            </td>
+                                            <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_cpu']) }}">{{ $fmtPct($row['avg_cpu']) }}</td>
+                                            <td class="px-4 py-2 text-right font-data {{ $pressureClass($row['avg_memory']) }}">{{ $fmtPct($row['avg_memory']) }}</td>
+                                            <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ $row['site_count'] }}</td>
+                                            <td class="px-4 py-2 text-right text-[var(--color-ink-muted)]">{{ number_format($row['visits_rolling']) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                     @endif
                 </div>
             </section>
@@ -799,32 +811,34 @@
                         <span><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Pressable Sites Exceeding Quota ({{ $pressableCapacity['overQuota']->count() }})</span>
                         <span>Calendar MTD &gt; {{ number_format($threshold) }}</span>
                     </div>
-                    <table class="w-full text-sm">
-                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                            <tr>
-                                <th class="px-5 py-2.5 text-left">Site</th>
-                                <th class="px-5 py-2.5 text-right">MTD</th>
-                                <th class="px-5 py-2.5 text-right">Over By</th>
-                                <th class="px-5 py-2.5 text-right">% Over</th>
-                                <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[var(--color-border-light)]">
-                            @foreach ($pressableCapacity['overQuota'] as $row)
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[640px]">
+                            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                                 <tr>
-                                    <td class="px-5 py-2.5 font-data">
-                                        <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
-                                            {{ $row['site']->domain }}
-                                        </a>
-                                    </td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['over_by']) }}</td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['pct_over'], 1) }}%</td>
-                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    <th class="px-5 py-2.5 text-left">Site</th>
+                                    <th class="px-5 py-2.5 text-right">MTD</th>
+                                    <th class="px-5 py-2.5 text-right">Over By</th>
+                                    <th class="px-5 py-2.5 text-right">% Over</th>
+                                    <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody class="divide-y divide-[var(--color-border-light)]">
+                                @foreach ($pressableCapacity['overQuota'] as $row)
+                                    <tr>
+                                        <td class="px-5 py-2.5 font-data">
+                                            <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                                {{ $row['site']->domain }}
+                                            </a>
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['over_by']) }}</td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-red)]">+{{ number_format($row['pct_over'], 1) }}%</td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             @endif
 
@@ -835,34 +849,36 @@
                         <span><i class="fa-solid fa-arrow-trend-up mr-1.5"></i> Pressable Sites Trending Toward Overage ({{ $pressableCapacity['trending']->count() }})</span>
                         <span>MTD pace projects past {{ number_format($threshold) }} by month-end</span>
                     </div>
-                    <table class="w-full text-sm">
-                        <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
-                            <tr>
-                                <th class="px-5 py-2.5 text-left">Site</th>
-                                <th class="px-5 py-2.5 text-right">MTD</th>
-                                <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
-                                <th class="px-5 py-2.5 text-right">Last 7d</th>
-                                <th class="px-5 py-2.5 text-right">Projected month-end</th>
-                                <th class="px-5 py-2.5 text-right">Projected Overage</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[var(--color-border-light)]">
-                            @foreach ($pressableCapacity['trending'] as $row)
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[680px]">
+                            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                                 <tr>
-                                    <td class="px-5 py-2.5 font-data">
-                                        <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
-                                            {{ $row['site']->domain }}
-                                        </a>
-                                    </td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
-                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
-                                    <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">{{ number_format($row['projected_30d']) }}</td>
-                                    <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">+{{ number_format($row['projected_over_by']) }} (+{{ $row['projected_pct_over'] }}%)</td>
+                                    <th class="px-5 py-2.5 text-left">Site</th>
+                                    <th class="px-5 py-2.5 text-right">MTD</th>
+                                    <th class="px-5 py-2.5 text-right">Visits {{ $rollingDays }}d</th>
+                                    <th class="px-5 py-2.5 text-right">Last 7d</th>
+                                    <th class="px-5 py-2.5 text-right">Projected month-end</th>
+                                    <th class="px-5 py-2.5 text-right">Projected Overage</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody class="divide-y divide-[var(--color-border-light)]">
+                                @foreach ($pressableCapacity['trending'] as $row)
+                                    <tr>
+                                        <td class="px-5 py-2.5 font-data">
+                                            <a href="{{ route('sites.show', $row['site']) }}" class="text-[var(--color-primary-600)] hover:underline">
+                                                {{ $row['site']->domain }}
+                                            </a>
+                                        </td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-ink-strong)]">{{ number_format($row['month_visits']) }}</td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['rolling_visits']) }}</td>
+                                        <td class="px-5 py-2.5 text-right text-[var(--color-ink-muted)]">{{ number_format($row['last_7d_visits']) }}</td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">{{ number_format($row['projected_30d']) }}</td>
+                                        <td class="px-5 py-2.5 text-right font-display text-[var(--color-status-yellow)]">+{{ number_format($row['projected_over_by']) }} (+{{ $row['projected_pct_over'] }}%)</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             @endif
 
@@ -882,7 +898,7 @@
                     </div>
                 @else
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
+                        <table class="w-full text-sm min-w-[680px]">
                             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                                 <tr>
                                     <th class="px-5 py-2.5 text-left">Site</th>
@@ -985,7 +1001,7 @@
                 </div>
             @else
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'status', defaultDir: 'asc' })">
+                    <table class="w-full text-sm min-w-[640px]" x-data="sortableTable({ defaultKey: 'status', defaultDir: 'asc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="site">Site</x-sort-th>
