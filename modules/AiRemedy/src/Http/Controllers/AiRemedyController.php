@@ -4,7 +4,9 @@ namespace Modules\AiRemedy\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use App\Services\ActionLog\ActionLogger;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\AiRemedy\Models\AiRemedyRun;
@@ -66,6 +68,42 @@ class AiRemedyController extends Controller
             'activeStatus' => $status,
             'selectedServerId' => $serverId,
         ]);
+    }
+
+    /**
+     * Delete selected runs from the incident log. A run that is executing
+     * right now is kept. Executed fixes keep their immutable `ai_remediation`
+     * action-log entry, so deleting a run never erases what ran on a server.
+     */
+    public function destroyMany(Request $request, ActionLogger $actionLogger): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $runs = AiRemedyRun::query()->whereIn('id', $validated['ids'])->get(['id', 'status', 'server_id']);
+        $executing = $runs->where('status', AiRemedyRun::STATUS_EXECUTING);
+        $deletable = $runs->reject(fn (AiRemedyRun $run) => $run->status === AiRemedyRun::STATUS_EXECUTING);
+        $ids = $deletable->pluck('id')->all();
+
+        if ($ids !== []) {
+            AiRemedyRun::query()->whereIn('id', $ids)->delete();
+
+            $actionLogger->record(
+                actionType: 'ai_remedy_runs_deleted',
+                summary: 'Deleted '.count($ids).' AiRemedy incident run'.(count($ids) === 1 ? '' : 's'),
+                target: 'ai-remedy',
+                details: ['run_ids' => $ids, 'user_id' => $request->user()?->id],
+            );
+        }
+
+        $message = count($ids).' run'.(count($ids) === 1 ? '' : 's').' deleted.';
+        if ($executing->isNotEmpty()) {
+            $message .= ' '.$executing->count().' still executing '.($executing->count() === 1 ? 'was' : 'were').' kept.';
+        }
+
+        return redirect()->back(fallback: route('ai-remedy.index'))->with('status', $message);
     }
 
     /**

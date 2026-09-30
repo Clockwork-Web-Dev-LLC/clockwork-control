@@ -5,11 +5,16 @@
 @section('content')
 @include('operations._tabs')
 @include('ai-remedy::_review_script')
+@php($canManageRuns = (bool) auth()->user()?->isAdmin())
 <div class="relative"
      @ai-remedy-executed.window="if (activeRun && $event.detail.run && activeRun.id === $event.detail.runId) { activeRun.status = $event.detail.run.status; }"
      x-data="{
     activeRun: null,
     drawerOpen: false,
+    selected: [],
+    pageIds: @js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()),
+    get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
+    toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
     openDrawer(run) {
         this.activeRun = run;
         this.drawerOpen = true;
@@ -153,12 +158,48 @@
             </div>
         </div>
     @else
+        @if(session('status'))
+            <div class="card p-3.5 mb-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>{{ session('status') }}</span>
+            </div>
+        @endif
+
+        @if($canManageRuns)
+            <form id="ai-remedy-bulk-delete" method="POST" action="{{ route('ai-remedy.runs.destroy') }}"
+                  @submit="if (!confirm(`Delete ${selected.length} selected run${selected.length === 1 ? '' : 's'}? Executed fixes stay in the action log.`)) $event.preventDefault()">
+                @csrf
+                @method('DELETE')
+                <template x-for="id in selected" :key="id">
+                    <input type="hidden" name="ids[]" :value="id">
+                </template>
+            </form>
+            <div x-cloak x-show="selected.length > 0"
+                 class="card mb-3 px-4 py-2.5 flex items-center justify-between gap-3 text-xs border-[var(--color-brand)]/30">
+                <span class="font-semibold text-[var(--color-ink-strong)]"><span x-text="selected.length"></span> selected</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="toggleAll()" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer" x-text="allSelected ? 'Unselect page' : 'Select page'"></button>
+                    <button type="button" @click="selected = []" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer">Clear</button>
+                    <button type="submit" form="ai-remedy-bulk-delete"
+                            class="text-xs py-1 px-3 rounded-full font-semibold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                        <span>Delete selected</span>
+                    </button>
+                </div>
+            </div>
+        @endif
+
         <div class="card overflow-hidden">
             {{-- Desktop Table View: Large screens and up (lg:block) --}}
             <div class="hidden lg:block overflow-x-auto">
                 <table class="w-full text-left text-xs min-w-[920px]">
                     <thead class="bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-[var(--color-ink-muted)] uppercase font-semibold">
                         <tr>
+                            @if($canManageRuns)
+                                <th class="py-3 pl-4 pr-0 w-8">
+                                    <input type="checkbox" class="rounded cursor-pointer" :checked="allSelected" @change="toggleAll()" aria-label="Select all runs on this page">
+                                </th>
+                            @endif
                             <th class="py-3 px-4 whitespace-nowrap">Time & Mode</th>
                             <th class="py-3 px-4 whitespace-nowrap">Target Server / Site</th>
                             <th class="py-3 px-4 min-w-[200px]">Root Cause & Diagnosis</th>
@@ -170,7 +211,13 @@
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
                         @foreach($runs as $run)
-                            <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                            <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors"
+                                :class="selected.includes('{{ $run->id }}') ? 'bg-[var(--color-brand)]/5' : ''">
+                                @if($canManageRuns)
+                                    <td class="py-3.5 pl-4 pr-0 w-8">
+                                        <input type="checkbox" class="rounded cursor-pointer" value="{{ $run->id }}" x-model="selected" aria-label="Select run #{{ $run->id }}">
+                                    </td>
+                                @endif
                                 <td class="py-3.5 px-4 whitespace-nowrap">
                                     <div class="font-data font-semibold text-[var(--color-ink-strong)]">
                                         {{ $run->started_at->format('M j, Y H:i') }}
@@ -250,6 +297,9 @@
                         {{-- Top line: Timestamp, Mode Badge, Status Badge & Cost --}}
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <div class="flex items-center gap-2">
+                                @if($canManageRuns)
+                                    <input type="checkbox" class="rounded cursor-pointer" value="{{ $run->id }}" x-model="selected" aria-label="Select run #{{ $run->id }}">
+                                @endif
                                 <div class="font-data font-semibold text-xs text-[var(--color-ink-strong)]">
                                     {{ $run->started_at->format('M j, Y H:i') }}
                                 </div>
