@@ -210,7 +210,12 @@ Running fixes is **admin-only**. Operators can view the panel and the tier break
 
 ## Cleaning up the incident log
 
-Admins can tick runs on `/ai-remedy` (the header checkbox or **Select page** selects the current page) and click **Delete selected**. A run that is executing right now is never deleted. Deleting a run removes it from the incident log and stats, but any fix that actually ran stays in the immutable action log (`ai_remediation`), and the deletion itself is recorded as `ai_remedy_runs_deleted`.
+Admins can tick runs on `/ai-remedy` (the header checkbox or **Select page** selects the current page), then:
+
+- **Hide selected**: dismisses them from the incident log but keeps everything. They move to the **Hidden** tab, where **Unhide selected** brings them back. The stats cards and total AI cost still count hidden runs.
+- **Delete selected**: removes them permanently (see below).
+
+For deleting: A run that is executing right now is never deleted. Deleting a run removes it from the incident log and stats, but any fix that actually ran stays in the immutable action log (`ai_remediation`), and the deletion itself is recorded as `ai_remedy_runs_deleted`.
 
 ---
 

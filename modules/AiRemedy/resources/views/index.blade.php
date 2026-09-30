@@ -100,7 +100,7 @@
     <div class="card p-3 mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-1.5 overflow-x-auto py-1">
             <a href="{{ route('ai-remedy.index', array_filter(['server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) && ! $showHidden ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 All Runs
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'resolved', 'server_id' => $selectedServerId])) }}"
@@ -123,12 +123,20 @@
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'failed' ? 'bg-rose-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Failed
             </a>
+            <a href="{{ route('ai-remedy.index', array_filter(['hidden' => 1, 'server_id' => $selectedServerId])) }}"
+               class="px-2.5 py-1 rounded-full font-medium transition-colors inline-flex items-center gap-1 {{ $showHidden ? 'bg-neutral-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                <i class="fa-regular fa-eye-slash text-[10px]"></i>
+                Hidden @if($hiddenCount)({{ $hiddenCount }})@endif
+            </a>
         </div>
 
         {{-- Server Dropdown Filter --}}
         <form method="GET" action="{{ route('ai-remedy.index') }}" class="flex items-center gap-2">
             @if($activeStatus)
                 <input type="hidden" name="status" value="{{ $activeStatus }}">
+            @endif
+            @if($showHidden)
+                <input type="hidden" name="hidden" value="1">
             @endif
             <select name="server_id" onchange="this.form.submit()"
                     class="input text-xs py-1 px-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
@@ -143,7 +151,20 @@
     </div>
 
     {{-- Audit Log Runs Table --}}
-    @if($runs->isEmpty())
+    @if(session('status'))
+        <div class="card p-3.5 mb-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>{{ session('status') }}</span>
+        </div>
+    @endif
+
+    @if($runs->isEmpty() && $showHidden)
+        <div class="card p-12 text-center text-[var(--color-ink-muted)]">
+            <i class="fa-regular fa-eye-slash text-4xl mb-3 opacity-40"></i>
+            <h3 class="text-base font-semibold text-[var(--color-ink-strong)]">No hidden runs</h3>
+            <p class="text-xs mt-1">Runs you hide from the incident log show up here, and can be unhidden any time.</p>
+        </div>
+    @elseif($runs->isEmpty())
         <div class="card p-12 text-center text-[var(--color-ink-muted)]">
             <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-40"></i>
             <h3 class="text-base font-semibold text-[var(--color-ink-strong)]">No AiRemedy records found</h3>
@@ -158,18 +179,17 @@
             </div>
         </div>
     @else
-        @if(session('status'))
-            <div class="card p-3.5 mb-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>{{ session('status') }}</span>
-            </div>
-        @endif
-
         @if($canManageRuns)
             <form id="ai-remedy-bulk-delete" method="POST" action="{{ route('ai-remedy.runs.destroy') }}"
                   @submit="if (!confirm(`Delete ${selected.length} selected run${selected.length === 1 ? '' : 's'}? Executed fixes stay in the action log.`)) $event.preventDefault()">
                 @csrf
                 @method('DELETE')
+                <template x-for="id in selected" :key="id">
+                    <input type="hidden" name="ids[]" :value="id">
+                </template>
+            </form>
+            <form id="ai-remedy-bulk-visibility" method="POST" action="{{ $showHidden ? route('ai-remedy.runs.unhide') : route('ai-remedy.runs.hide') }}">
+                @csrf
                 <template x-for="id in selected" :key="id">
                     <input type="hidden" name="ids[]" :value="id">
                 </template>
@@ -180,6 +200,11 @@
                 <div class="flex items-center gap-2">
                     <button type="button" @click="toggleAll()" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer" x-text="allSelected ? 'Unselect page' : 'Select page'"></button>
                     <button type="button" @click="selected = []" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer">Clear</button>
+                    <button type="submit" form="ai-remedy-bulk-visibility"
+                            class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-regular {{ $showHidden ? 'fa-eye' : 'fa-eye-slash' }} text-[10px]"></i>
+                        <span>{{ $showHidden ? 'Unhide selected' : 'Hide selected' }}</span>
+                    </button>
                     <button type="submit" form="ai-remedy-bulk-delete"
                             class="text-xs py-1 px-3 rounded-full font-semibold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-trash text-[10px]"></i>
