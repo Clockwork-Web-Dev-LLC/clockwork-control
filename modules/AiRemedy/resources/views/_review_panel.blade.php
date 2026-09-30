@@ -57,6 +57,13 @@
                     <template x-if="!item.allowed">
                         <span class="text-[10px] text-rose-300" x-text="item.reason"></span>
                     </template>
+                    <template x-if="!item.allowed && item.suggestion && review.can_execute && !done">
+                        <button type="button"
+                                @click="useSuggestion(item)"
+                                class="text-[10px] font-semibold text-sky-300 hover:text-sky-200 underline cursor-pointer">
+                            Use <span class="font-mono" x-text="item.suggestion"></span>
+                        </button>
+                    </template>
                     <template x-if="done && resultFor(item)">
                         <span class="text-[10px] font-data"
                               :class="resultFor(item).not_run ? 'text-slate-400' : (resultFor(item).exit_status === 0 ? 'text-emerald-400' : 'text-rose-400')"

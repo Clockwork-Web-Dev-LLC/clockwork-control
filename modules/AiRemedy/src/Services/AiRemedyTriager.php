@@ -287,6 +287,7 @@ class AiRemedyTriager
 
         // Step 2: OpenRouter AI Analysis
         $triggerReason = $isSimulation ? "[SIMULATION / WATCH MODE] {$reason}" : $reason;
+        $telemetry['wordpress_sites'] = app(ServerSiteContext::class)->sites($server);
         $analysis = $this->client->diagnoseServerSpike($telemetry, $triggerReason);
 
         // Step 3: Check for recognized benign maintenance activity
