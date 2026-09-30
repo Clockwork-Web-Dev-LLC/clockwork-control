@@ -13,6 +13,7 @@ use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
 use Modules\AiRemedy\Services\RunApprovalPolicy;
+use Modules\AiRemedy\Services\ServerSiteContext;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
 
 class AiRemedyController extends Controller
@@ -98,7 +99,9 @@ class AiRemedyController extends Controller
             ], 422);
         }
 
-        // Step 2: OpenRouter AI Analysis
+        // Step 2: OpenRouter AI Analysis — include the real sites so the model
+        // never has to guess docroots or SSH users.
+        $telemetry['wordpress_sites'] = app(ServerSiteContext::class)->sites($server);
         $analysis = $this->client->diagnoseServerSpike($telemetry, $reason);
 
         // Step 3: Record initial audit log run
@@ -165,6 +168,15 @@ class AiRemedyController extends Controller
         $safety = app(CommandSafetyGuard::class)->evaluateBatch($commands);
         if (! $safety['allowed']) {
             return $this->executeFailure($run, 'Selected commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']), 422);
+        }
+
+        if ($run->server) {
+            $sites = app(ServerSiteContext::class);
+            foreach ($commands as $command) {
+                if (($problem = $sites->problem($command, $run->server)) !== null) {
+                    return $this->executeFailure($run, "\"{$command}\": {$problem}", 422);
+                }
+            }
         }
 
         $decisions = $this->buildDecisions($proposed, $selection);

@@ -29,6 +29,7 @@ class RunApprovalPolicy
     public function __construct(
         protected CommandSafetyGuard $guard,
         protected SpinupWpServiceRoute $spinupWp,
+        protected ServerSiteContext $sites,
     ) {}
 
     /**
@@ -77,7 +78,7 @@ class RunApprovalPolicy
      *     executable: bool,
      *     can_execute: bool,
      *     blocked_reason: ?string,
-     *     commands: list<array{index: int, command: string, tier: string, allowed: bool, reason: ?string, route: string}>
+     *     commands: list<array{index: int, command: string, tier: string, allowed: bool, reason: ?string, route: string, suggestion: ?string}>
      * }
      */
     public function review(AiRemedyRun $run, ?User $user = null): array
@@ -89,13 +90,26 @@ class RunApprovalPolicy
         foreach (array_values($run->proposed_commands ?? []) as $index => $command) {
             $command = (string) $command;
             $result = $this->guard->evaluate($command);
+            $allowed = $result['allowed'];
+            $reason = $result['reason'] ?? null;
+            $suggestion = null;
+
+            // The guard only checks command shape; make sure site commands
+            // target a real site on this server (the LLM can guess paths).
+            if ($allowed && $server && ($problem = $this->sites->problem($command, $server)) !== null) {
+                $allowed = false;
+                $reason = $problem;
+                $suggestion = $this->sites->suggestion($command, $server);
+            }
+
             $commands[] = [
                 'index' => $index,
                 'command' => $command,
                 'tier' => $result['tier'],
-                'allowed' => $result['allowed'],
-                'reason' => $result['reason'] ?? null,
+                'allowed' => $allowed,
+                'reason' => $reason,
                 'route' => $server && $this->spinupWp->applies($command, $server) ? 'spinupwp_api' : 'ssh',
+                'suggestion' => $suggestion,
             ];
         }
 

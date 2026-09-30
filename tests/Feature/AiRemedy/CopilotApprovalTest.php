@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RunApprovalPolicy;
+use Modules\AiRemedy\Services\ServerSiteContext;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
 use Modules\AiRemedy\Services\SpinupWpServiceRoute;
 use Modules\Core\ModuleStateResolver;
@@ -317,6 +318,7 @@ test('sudo commands use the stored sudo password without it appearing in logs or
     $executed = [];
     airFakeSsh($executed);
     $this->server->forceFill(['ssh_password' => 'correct-horse-battery'])->save();
+    Site::factory()->create(['server_id' => $this->server->id, 'domain' => 'example.test', 'site_user' => 'example', 'wp_path' => null, 'is_inactive' => false]);
     $run = airCopilotRun($this->server->fresh(), ['proposed_commands' => [AIR_TIER1_A, 'rm -f /sites/example.test/files/.maintenance']]);
 
     $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
@@ -400,4 +402,79 @@ test('reload commands and view-only SpinupWP stay on SSH', function () {
     expect($route->serviceFor('sudo systemctl restart apache2'))->toBeNull();
     // View-only mode disables the API route entirely.
     expect($route->applies('sudo systemctl restart nginx', $server))->toBeFalse();
+});
+
+test('site commands must target a real site on the server, with a one-click correction', function () {
+    Site::factory()->create([
+        'server_id' => $this->server->id, 'domain' => 'www.acme-example.org',
+        'site_user' => 'acmeexample', 'wp_path' => '/sites/www.acme-example.org/files', 'is_inactive' => false,
+    ]);
+    $guessed = 'sudo -u acmeexample wp cache flush --path=/var/www/acmeexample/htdocs';
+    $run = airCopilotRun($this->server, ['proposed_commands' => [AIR_TIER1_A, $guessed]]);
+
+    $review = app(RunApprovalPolicy::class)->review($run, $this->admin);
+    expect($review['commands'][1]['allowed'])->toBeFalse();
+    expect($review['commands'][1]['reason'])->toContain("isn't a WordPress site");
+    expect($review['commands'][1]['suggestion'])
+        ->toBe('sudo -u acmeexample wp cache flush --path=/sites/www.acme-example.org/files');
+
+    // The backend refuses the guessed path even if the UI is bypassed…
+    $executed = [];
+    airFakeSsh($executed);
+    $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
+        'selected' => [['index' => 1, 'command' => $guessed]],
+    ])->assertStatus(422);
+    expect($executed)->toBe([]);
+
+    // …and accepts the corrected command, recorded as an edit.
+    $this->actingAs($this->admin)->postJson(route('ai-remedy.execute', $run), [
+        'selected' => [['index' => 1, 'command' => $review['commands'][1]['suggestion']]],
+    ])->assertOk();
+    expect($executed[0])->toContain('--path=/sites/www.acme-example.org/files');
+    expect(collect(ActionLog::sole()->details['decisions'])->firstWhere('index', 1)['decision'])->toBe('edited');
+});
+
+test('site command checks catch wrong users, missing paths, and unknown maintenance files', function () {
+    Site::factory()->create([
+        'server_id' => $this->server->id, 'domain' => 'www.acme-example.org',
+        'site_user' => 'acmeexample', 'wp_path' => null, 'is_inactive' => false,
+    ]);
+    $ctx = app(ServerSiteContext::class);
+    $server = $this->server->fresh();
+
+    expect($ctx->problem('sudo -u acmeexample wp cache flush --path=/sites/www.acme-example.org/files', $server))->toBeNull();
+    expect($ctx->problem('sudo -u acmeexample wp cache flush --path=/sites/www.acme-example.org/files/', $server))->toBeNull();
+    expect($ctx->problem('sudo -u root wp cache flush --path=/sites/www.acme-example.org/files', $server))->toContain('runs as acmeexample');
+    expect($ctx->problem('sudo -u acmeexample wp cache flush', $server))->toContain('--path');
+    expect($ctx->problem('rm -f /sites/www.acme-example.org/files/.maintenance', $server))->toBeNull();
+    expect($ctx->problem('rm -f /var/www/other/.maintenance', $server))->toContain("isn't a WordPress site");
+    // Not a site command: no opinion.
+    expect($ctx->problem(AIR_TIER1_A, $server))->toBeNull();
+});
+
+test('server spike diagnoses give the model the real site paths and users', function () {
+    Site::factory()->create([
+        'server_id' => $this->server->id, 'domain' => 'www.acme-example.org',
+        'site_user' => 'acmeexample', 'wp_path' => null, 'is_inactive' => false,
+    ]);
+    $this->mock(ServerTelemetryCollector::class, function ($mock) {
+        $mock->shouldReceive('collect')->andReturn(['ok' => true, 'loadavg' => [9, 8, 7], 'cores' => 2]);
+    });
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getModel')->andReturn('anthropic/claude-sonnet-4.5');
+        $mock->shouldReceive('diagnoseServerSpike')
+            ->withArgs(fn (array $telemetry) => ($telemetry['wordpress_sites'][0] ?? null) === [
+                'domain' => 'www.acme-example.org',
+                'site_user' => 'acmeexample',
+                'wp_path' => '/sites/www.acme-example.org/files',
+            ])
+            ->once()
+            ->andReturn([
+                'ok' => true, 'summary' => 's', 'root_cause' => 'r', 'is_fixable' => true, 'safety_tier' => 'tier_1_safe',
+                'commands' => [], 'explanation' => '', 'unfixable_briefing' => null,
+                'prompt_tokens' => 1, 'completion_tokens' => 1, 'cost_usd' => 0.0,
+            ]);
+    });
+
+    $this->actingAs($this->admin)->postJson(route('ai-remedy.server.diagnose', $this->server))->assertOk();
 });

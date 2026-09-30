@@ -56,6 +56,17 @@ function aiRemedyReview(review, runId) {
             }
         },
 
+        // Swap in Clockwork's corrected command (real site path/user). The server
+        // re-checks it on run like any other edit.
+        useSuggestion(item) {
+            if (!item.suggestion) return;
+            item.command = item.suggestion;
+            item.allowed = true;
+            item.reason = null;
+            item.suggestion = null;
+            item.selected = item.tier === 'tier_1_safe';
+        },
+
         resultFor(item) {
             return this.results.find((r) => r.command === item.command.trim()) || null;
         },
