@@ -17,5 +17,6 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
         Route::post('/ai-remedy/simulate', [AiRemedyController::class, 'simulateServer'])->middleware('throttle:10,1')->name('ai-remedy.simulate');
         Route::post('/ai-remedy/servers/{server}/diagnose', [AiRemedyController::class, 'diagnoseServer'])->middleware('throttle:15,1')->name('ai-remedy.server.diagnose');
         Route::post('/ai-remedy/runs/{run}/execute', [AiRemedyController::class, 'execute'])->middleware('throttle:10,1')->name('ai-remedy.execute');
+        Route::delete('/ai-remedy/runs', [AiRemedyController::class, 'destroyMany'])->name('ai-remedy.runs.destroy');
     });
 });

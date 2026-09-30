@@ -478,3 +478,31 @@ test('server spike diagnoses give the model the real site paths and users', func
 
     $this->actingAs($this->admin)->postJson(route('ai-remedy.server.diagnose', $this->server))->assertOk();
 });
+
+test('admins can bulk delete runs; executing runs are kept and the deletion is logged', function () {
+    $a = airCopilotRun($this->server);
+    $b = airCopilotRun($this->server, ['status' => AiRemedyRun::STATUS_RESOLVED]);
+    $running = airCopilotRun($this->server, ['status' => AiRemedyRun::STATUS_EXECUTING]);
+    $untouched = airCopilotRun($this->server);
+
+    $this->actingAs($this->admin)
+        ->from(route('ai-remedy.index'))
+        ->delete(route('ai-remedy.runs.destroy'), ['ids' => [$a->id, $b->id, $running->id]])
+        ->assertRedirect(route('ai-remedy.index'))
+        ->assertSessionHas('status', '2 runs deleted. 1 still executing was kept.');
+
+    expect(AiRemedyRun::pluck('id')->sort()->values()->all())->toBe([$running->id, $untouched->id]);
+    $log = ActionLog::where('action_type', 'ai_remedy_runs_deleted')->sole();
+    expect($log->details['run_ids'])->toBe([$a->id, $b->id]);
+});
+
+test('operators cannot delete runs and do not see the selection controls', function () {
+    $run = airCopilotRun($this->server);
+    $operator = User::factory()->operator()->create();
+
+    $this->actingAs($operator)->delete(route('ai-remedy.runs.destroy'), ['ids' => [$run->id]])->assertForbidden();
+    expect(AiRemedyRun::whereKey($run->id)->exists())->toBeTrue();
+
+    $this->actingAs($operator)->get(route('ai-remedy.index'))->assertOk()->assertDontSee('ai-remedy-bulk-delete', false);
+    $this->actingAs($this->admin)->get(route('ai-remedy.index'))->assertOk()->assertSee('ai-remedy-bulk-delete', false);
+});

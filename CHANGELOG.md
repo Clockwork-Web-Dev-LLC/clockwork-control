@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.9.1] - 2026-09-30
 
+### Added
+- **Bulk delete AiRemedy runs.** Admins can tick incidents on `/ai-remedy` (or "Select page") and **Delete selected** (`DELETE /ai-remedy/runs`). Runs that are executing right now are kept. Executed fixes keep their immutable `ai_remediation` action-log entry, and each deletion is logged as `ai_remedy_runs_deleted`.
+
 ### Fixed
 - **AiRemedy Copilot approvals now work.** 1.9.0 documented Interactive Copilot as "review the findings and click Approve & Execute", but incidents recorded in Copilot mode (from the spike watchdog, `PollServers`, or site-down detection) had no way to approve or run the fix. The incident drawer and run page only displayed commands, and the only way to execute was the on-demand Diagnose window, all-or-nothing.
   - New **Review & run** panel on the `/ai-remedy` incident drawer, the run page (`/ai-remedy/runs/{id}#review`), and the Diagnose window: per-command checkboxes with safety tiers (Tier 1 pre-ticked, Tier 2 unticked + confirmation, Tier 3 not selectable), inline editing re-checked by `CommandSafetyGuard`, and per-command exit codes.
