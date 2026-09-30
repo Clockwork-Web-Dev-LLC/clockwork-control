@@ -2,7 +2,7 @@
 title: AiRemedy (AI Incident Diagnostics, Shadow Mode & Self-Healing)
 section: Features
 order: 86
-updated: 2026-09-28
+updated: 2026-09-30
 author: Aaron Reimann
 tags: [ai, openrouter, claude, diagnostics, self-healing, shadow-mode, remediation, ssh, modules, monitoring]
 tracks: [modules/AiRemedy/**, app/Console/Commands/PollServers.php]
@@ -58,11 +58,11 @@ You can switch modes anytime under **Settings → Integrations & Alerts → AiRe
 | Operating Mode | Behavior | Server Mutations | Best For |
 |---|---|:---:|---|
 | **Shadow Mode** *(Watch Mode)* | Silently monitors site downtime and server spikes. Analyzes telemetry, diagnoses root causes, and logs **"What AiRemedy Would Have Done"** into the audit trail. | **0% (Zero)** | Recommended starting mode. Test reliability over weeks with zero risk. |
-| **Interactive Copilot** | Proactively diagnoses incidents and stages proposed remediation commands in the audit log. Operators review the findings and click **[Approve & Execute]**. | Manual Only | Teams that want AI analysis but require human sign-off on every terminal command. |
+| **Interactive Copilot** | Proactively diagnoses incidents and stages the proposed commands for review. An admin opens the incident (from the log or the chat alert's link), ticks which commands to run — some, all, or none — and clicks **Run**. See [Approving a Copilot fix](#approving-a-copilot-fix). | Admin-approved only | Teams that want AI analysis but require human sign-off on every terminal command. |
 | **Autonomous Self-Healing** | Safely auto-executes non-destructive **Tier 1** fixes (e.g., reloading a hung PHP-FPM pool, clearing stale `.maintenance` files) and verifies recovery immediately. | Tier 1 Only | Hands-free recovery for common transient WordPress & PHP-FPM glitches. |
 
 > [!TIP]
-> **Recommended Rollout Plan**: Keep AiRemedy in **Shadow Mode** for 2–4 weeks. Review the incident log whenever an alert fires to see how accurately the model diagnosed the issue. Once you're confident in the recommendations, switch to **Interactive** or **Autonomous Self-Healing**.
+> **Recommended Rollout Plan**: Keep AiRemedy in **Shadow Mode** for 2–4 weeks. Review the incident log whenever an alert fires to see how accurately the model diagnosed the issue. Once you're confident in the recommendations, switch to **Interactive Copilot** (you approve each fix) or **Autonomous Self-Healing**.
 
 ---
 
@@ -185,6 +185,25 @@ The **AiRemedy Audit Log** gives you total visibility over automated and simulat
 
 ---
 
+## Approving a Copilot fix
+
+Incidents recorded in **Interactive Copilot** mode (and fixes from **Diagnose with AiRemedy**) get a **Review & run** panel in the incident drawer on `/ai-remedy` and on the run page (`/ai-remedy/runs/{id}#review`). Copilot chat alerts link straight to it.
+
+- **Pick what runs.** Each proposed command has a checkbox and its safety tier. **Tier 1** commands start ticked, **Tier 2** commands start unticked (and ask for a confirmation when you run them), and **Tier 3** commands are shown struck through and can't be ticked. Anything you leave unticked is recorded as skipped.
+- **Edit before running.** You can adjust a command's text (for example a PHP version). Edited commands are re-checked by the safety guard on the server; an edit that turns into a prohibited command is refused before anything runs.
+- **Commands run in order and stop at the first failure.** Each command's exit code is shown; commands after a failure are marked *not run*.
+- **Everything is recorded.** The `ai_remediation` action-log entry stores who approved it, each command's decision (`run`, `edited` with the original text, `skipped`), and each command's exit code and output.
+
+The backend refuses (HTTP 409) to run a fix when:
+- the incident was recorded in **Shadow (Watch) Mode** or is a **simulation** — those never execute, even via a hand-crafted request;
+- the fix has already run (resolved or failed), is running, or was rejected — each diagnosis runs at most once;
+- the diagnosis is more than **2 hours** old — re-diagnose the server first;
+- another AiRemedy fix is already running on the same server.
+
+Running fixes is **admin-only**. Operators can view the panel and the tier breakdown but not run anything. In **Autonomous Self-Healing** mode, fixes that aren't all Tier 1 are left for an admin to approve the same way.
+
+---
+
 ## Server Header Modal & Live Telemetry Triage
 
 Every server detail view includes a direct **"Diagnose with AiRemedy"** button in its header. Clicking it opens the interactive triage modal:
@@ -193,7 +212,7 @@ Every server detail view includes a direct **"Diagnose with AiRemedy"** button i
    - *Phase 2*: Process table and error log inspection
    - *Phase 3*: LLM root-cause reasoning (Claude Sonnet 4.5 by default) and remediation synthesis
 2. **Executive Diagnosis & Safety Badges**: Displays a clear summary with an integrated safety tier pill (`Tier 1 · Safe`, `Tier 2 · Cautious`, or `Tier 3 · Prohibited`).
-3. **Developer Terminal Window**: Inspect proposed commands with syntax formatting, inline editing, and a 1-click **Copy Commands** button.
+3. **Review & run panel**: the same per-command checkboxes, tiers, and inline editing as [Approving a Copilot fix](#approving-a-copilot-fix), plus a 1-click **Copy commands** button.
 4. **Execution & Root-Cause Sudo Guidance**: When running fixes via SSH, the executor validates `$session->getExitStatus()`. If a command exits with code 1 due to password-protected sudo, AiRemedy provides an actionable diagnostic alert explaining how to configure `/etc/sudoers` for non-interactive execution.
 
 ---

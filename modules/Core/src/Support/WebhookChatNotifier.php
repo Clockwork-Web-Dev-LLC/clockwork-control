@@ -12,6 +12,7 @@ use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Modules\AiRemedy\Models\AiRemedyRun;
 
 /**
@@ -943,7 +944,8 @@ abstract class WebhookChatNotifier implements ChatNotifier
             return false;
         }
 
-        $serverName = $run->server->name;
+        // Site-downtime runs can have no linked server.
+        $serverName = $run->server?->name ?? $run->site?->domain ?? 'unknown target';
         $title = sprintf(':mag: AiRemedy Forensics: %s on %s', $run->safetyLabel(), $serverName);
 
         $proposed = ! empty($run->proposed_commands)
@@ -957,13 +959,24 @@ abstract class WebhookChatNotifier implements ChatNotifier
             ['title' => 'Model', 'value' => $run->model_used, 'short' => true],
         ];
 
+        $text = "**Root Cause**: {$run->root_cause}\n\n**Diagnosis**: {$run->diagnosis_summary}\n\n**Proposed Remediation**:\n```bash\n$ {$proposed}\n```";
+
+        $runUrl = Route::has('ai-remedy.show') ? route('ai-remedy.show', $run) : null;
+        if ($runUrl !== null && ! $run->isWatchMode() && ! empty($run->proposed_commands)) {
+            $text .= "\n\nReview & run this fix: {$runUrl}#review";
+        }
+
         $attachment = [
             'fallback' => $title,
             'color' => '#5c6bc0',
             'title' => $title,
-            'text' => "**Root Cause**: {$run->root_cause}\n\n**Diagnosis**: {$run->diagnosis_summary}\n\n**Proposed Remediation**:\n```bash\n$ {$proposed}\n```",
+            'text' => $text,
             'fields' => $fields,
         ];
+
+        if ($runUrl !== null) {
+            $attachment['title_link'] = $runUrl;
+        }
 
         return $this->send($title, [$attachment]);
     }
