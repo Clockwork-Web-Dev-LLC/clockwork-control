@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-30
+
+### Fixed
+- **AiRemedy Copilot approvals now work.** 1.9.0 documented Interactive Copilot as "review the findings and click Approve & Execute", but incidents recorded in Copilot mode (from the spike watchdog, `PollServers`, or site-down detection) had no way to approve or run the fix. The incident drawer and run page only displayed commands, and the only way to execute was the on-demand Diagnose window, all-or-nothing.
+  - New **Review & run** panel on the `/ai-remedy` incident drawer, the run page (`/ai-remedy/runs/{id}#review`), and the Diagnose window: per-command checkboxes with safety tiers (Tier 1 pre-ticked, Tier 2 unticked + confirmation, Tier 3 not selectable), inline editing re-checked by `CommandSafetyGuard`, and per-command exit codes.
+  - `POST /ai-remedy/runs/{run}/execute` accepts `selected: [{index, command}]` (legacy `commands` still accepted) and records each proposed command's decision (`run` / `edited` with the original / `skipped`), per-command results, and the approving admin in the `ai_remediation` action log.
+  - New `RunApprovalPolicy` shared by the endpoint, `RemedyExecutor`, and the views. The executor now refuses (409) Shadow/simulation runs even via hand-crafted requests, runs that already ran or are running (atomic claim — each diagnosis executes at most once), diagnoses older than 2 hours, and a second concurrent fix on the same server (per-server lock). Blank commands are rejected.
+  - Copilot chat alerts (`ai_remedy_triaged`) link to the run's review panel.
+- **AiRemedy triage alert crash for site-down incidents without a linked server** (`$run->server->name` on null).
+- **Manual Diagnose stored the LLM's self-reported safety tier** instead of the tier `CommandSafetyGuard` enforces, so tier badges could disagree with what the guard would allow.
+- **Mobile layouts**: site lists (`/sites`, server Sites tab) stack server/IP metadata under the domain and condense status pills; the Updates grouped view protects plugin/theme titles; dense tables (monitoring, server updates, issues, capacity, security, bans) scroll horizontally instead of compressing; AiRemedy incident runs and Forensics stack on small screens.
+
 ## [1.9.0] - 2026-09-29
 
 ### Added
