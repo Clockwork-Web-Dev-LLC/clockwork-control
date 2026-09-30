@@ -87,7 +87,9 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/sites/{site}/backups-history` | JSON backup history. Returns DigitalOcean Spaces backup runs, S3 Glacier Relay archives, and a `schedule` block (enabled / frequency / last / next) for the Backups widget. |
 | PATCH | `/sites/{site}/backup-relay` | Per-site Glacier backup toggle + cadence (`daily` / `twice_weekly` / `weekly`). Custom/standalone sites only. |
 | POST | `/sites/{site}/backup-relay/run-now` | Backup Now for one custom site (`clockwork:backup-relay-run --site={id} --force` in the background). |
+| GET | `/search/global` | Unified global search endpoint for Command Palette (`⌘K`), querying servers and sites with live status indicators. |
 | GET | `/search/sites` | JSON site search (focused with `/`). |
+
 | PATCH | `/sites/{site}/cert` · POST `/cert/recheck` | SSL source + recheck. |
 | POST | `/sites/{site}/uptime/recheck` | On-demand uptime probe for one site. |
 | PATCH | `/sites/{site}/uptime-keyword` | Optional homepage keyword the 5-minute probe must find. |
@@ -198,8 +200,15 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/settings/maintenance` | Operator-only page showing DB size + a download button. |
 | GET | `/settings/maintenance/backup` | Streams a gzipped `mysqldump` of Clockwork Control's own database straight to the browser (no temp file on the server). Contains every encrypted column ciphertext — SSH keys, per-site DB creds, Companion secrets — decryptable only by pairing the dump with `APP_KEY`. Treat downloaded copies with the same care as `.env`. |
 | GET | `/settings/weird-stats` | Pre-warmed threat-log stats. |
-| GET/POST/PATCH/DELETE | `/settings/tags[/{tag}]` | Server tier tag CRUD. |
 | GET | `/styleguide` | Developer design system styleguide (`StyleguideController`) — interactive workbench displaying color tokens, buttons, form controls, badges, and modal components. |
+| GET | `/search` | Global fuzzy search endpoint powering Quick Jump (`Cmd+K` / `Ctrl+K`). Returns categorized, ranked results for servers, sites, modules, settings, documentation, and runbooks. |
+| GET | `/ai-remedy` | AiRemedy audit log, incident history, filtering by status, and aggregate token cost metrics. |
+| GET | `/ai-remedy/settings` | AiRemedy configuration hub (model selection, automated spike watchdog toggle, CPU threshold %, and cooldown minutes). |
+| POST | `/ai-remedy/settings/test-connection` | Validates OpenRouter API key, balance, and latency (throttled: `10,1`). |
+| POST | `/ai-remedy/settings/simulate` | Executes safe read-only test simulation in Watch Mode (throttled: `10,1`). |
+| POST | `/ai-remedy/servers/{server}/diagnose` | Triggers live read-only SSH telemetry probe and OpenRouter root-cause triage (throttled: `15,1`). |
+| POST | `/ai-remedy/runs/{run}/execute` | Executes approved remediation commands via SSH with exit code validation (throttled: `10,1`). |
+| GET | `/ai-remedy/runs/{run}` | Dedicated incident forensics page: telemetry snapshot, top processes, root cause, and stdout/stderr log. |
 
 ### Docs (this site)
 

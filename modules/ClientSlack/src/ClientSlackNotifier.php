@@ -11,6 +11,7 @@ use App\Services\Chat\ChatNotifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Modules\AiRemedy\Models\AiRemedyRun;
 
 /**
  * Sends plain-English alerts to a per-site Slack webhook configured by the
@@ -208,6 +209,26 @@ class ClientSlackNotifier implements ChatNotifier
                 'text' => 'The site is responding normally again. No further action needed.',
             ],
         ]);
+    }
+
+    public function serverWentRed(Server $server, ?float $cpuPct = null, ?string $reason = null): bool
+    {
+        return false;
+    }
+
+    public function serverRecovered(Server $server): bool
+    {
+        return false;
+    }
+
+    public function aiRemedyExecuted(AiRemedyRun $run): bool
+    {
+        return false;
+    }
+
+    public function aiRemedyTriaged(AiRemedyRun $run): bool
+    {
+        return false;
     }
 
     private function webhookUrl(Site $site): string

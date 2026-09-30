@@ -4,6 +4,7 @@ namespace Modules\AiRemedy\Services;
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Services\Chat\ChatNotifier;
 use App\Services\Uptime\UptimeProbeResult;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Log;
@@ -143,6 +144,17 @@ class AiRemedyTriager
             // In Auto-Heal mode ONLY: if Tier 1 safe verified by backend guard, auto-execute
             if ($mode === self::MODE_AUTO_HEAL && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
                 $this->executor->execute($run);
+            } else {
+                try {
+                    if (app()->has(ChatNotifier::class)) {
+                        app(ChatNotifier::class)->aiRemedyTriaged($run->fresh());
+                    }
+                } catch (Throwable $e) {
+                    Log::warning('ai_remedy.triaged_notification_failed', [
+                        'run_id' => $run->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return $run;
@@ -154,6 +166,81 @@ class AiRemedyTriager
 
             return null;
         }
+    }
+
+    /**
+     * Get the configured allowed maintenance process patterns.
+     *
+     * @return array<int, string>
+     */
+    public function getAllowedMaintenanceProcesses(): array
+    {
+        $raw = $this->settings->get('clockwork.ai_remedy.allowed_maintenance_processes');
+
+        if (is_array($raw)) {
+            return array_values(array_filter(array_map('trim', $raw)));
+        }
+
+        if (is_string($raw) && trim($raw) !== '') {
+            return array_values(array_filter(array_map('trim', explode(',', strtolower($raw)))));
+        }
+
+        return ['rclone', 'mysqldump', 'logrotate', 'borgbackup', 'borg', 'gpbup', 'restic', 'duplicity'];
+    }
+
+    /**
+     * Check if telemetry or AI analysis indicates recognized background maintenance.
+     *
+     * @param  array<string, mixed>  $telemetry
+     * @param  array<string, mixed>  $analysis
+     * @return array{is_maintenance: bool, type: ?string}
+     */
+    public function detectMaintenance(array $telemetry, array $analysis): array
+    {
+        // 1. Check AI analysis flag
+        if (! empty($analysis['is_maintenance'])) {
+            return [
+                'is_maintenance' => true,
+                'type' => $analysis['maintenance_type'] ?? 'Scheduled Maintenance',
+            ];
+        }
+
+        // 2. Check top CPU processes against configured allowed maintenance processes
+        $allowedList = $this->getAllowedMaintenanceProcesses();
+        $topProcesses = $telemetry['top_cpu'] ?? [];
+
+        foreach ($topProcesses as $proc) {
+            $cmd = strtolower($proc['command'] ?? '');
+            $cpu = (float) ($proc['cpu_pct'] ?? 0);
+
+            if ($cpu < 40.0) {
+                continue;
+            }
+
+            foreach ($allowedList as $allowed) {
+                if ($allowed !== '' && str_contains($cmd, $allowed)) {
+                    $friendlyType = match ($allowed) {
+                        'rclone' => 'SpinupWP Backup',
+                        'mysqldump' => 'Database Backup',
+                        'logrotate' => 'System Log Rotation',
+                        'borg', 'borgbackup', 'gpbup' => 'GridPane Borg Backup',
+                        'restic' => 'Restic Backup',
+                        'duplicity' => 'Duplicity Backup',
+                        default => ucfirst($allowed).' Maintenance',
+                    };
+
+                    return [
+                        'is_maintenance' => true,
+                        'type' => $friendlyType,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'is_maintenance' => false,
+            'type' => null,
+        ];
     }
 
     /**
@@ -202,8 +289,18 @@ class AiRemedyTriager
         $triggerReason = $isSimulation ? "[SIMULATION / WATCH MODE] {$reason}" : $reason;
         $analysis = $this->client->diagnoseServerSpike($telemetry, $triggerReason);
 
-        // Step 3: Create audit run
-        $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
+        // Step 3: Check for recognized benign maintenance activity
+        $maintenance = $this->detectMaintenance($telemetry, $analysis);
+
+        if ($maintenance['is_maintenance']) {
+            $status = AiRemedyRun::STATUS_ALLOWED_MAINTENANCE;
+            $mType = $maintenance['type'] ?: 'Allowed Maintenance';
+            if (! str_contains($analysis['root_cause'], $mType)) {
+                $analysis['root_cause'] = "{$mType}: {$analysis['root_cause']}";
+            }
+        } else {
+            $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
+        }
 
         $safety = $this->guard->evaluateBatch($analysis['commands'] ?? []);
         $effectiveTier = $safety['highest_tier'];
@@ -230,6 +327,28 @@ class AiRemedyTriager
         // Auto-heal only if explicitly set, not simulation, and verified Tier 1 Safe by backend guard
         if (! $isSimulation && $mode === self::MODE_AUTO_HEAL && $actor === 'autonomous' && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
             $this->executor->execute($run);
+        } else {
+            $autoMuteMaintenance = (bool) $this->settings->get('clockwork.ai_remedy.auto_mute_maintenance_alerts', true);
+            $shouldNotify = ! ($maintenance['is_maintenance'] && $autoMuteMaintenance);
+
+            if ($shouldNotify) {
+                try {
+                    if (app()->has(ChatNotifier::class)) {
+                        app(ChatNotifier::class)->aiRemedyTriaged($run->fresh());
+                    }
+                } catch (Throwable $e) {
+                    Log::warning('ai_remedy.triaged_notification_failed', [
+                        'run_id' => $run->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            } else {
+                Log::info('ai_remedy.maintenance_spike_muted', [
+                    'run_id' => $run->id,
+                    'server_id' => $server->id,
+                    'maintenance_type' => $maintenance['type'],
+                ]);
+            }
         }
 
         return [

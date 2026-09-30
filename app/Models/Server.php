@@ -59,6 +59,7 @@ use Illuminate\Support\Carbon;
  * @property-read string $provider_label human label for `$provider` (e.g. "DigitalOcean droplet")
  *
  * @method static Builder<Server> monitored()
+ * @method static Builder<Server> eligibleForSystemUpdates()
  */
 class Server extends Model
 {

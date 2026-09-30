@@ -26,6 +26,8 @@ use Illuminate\Support\Str;
  * @property ?string $avatar_url
  * @property string $theme
  * @property string $role
+ *
+ * @method static Builder<User> active()
  */
 #[Fillable(['name', 'email', 'password', 'last_login_at', 'google_id', 'github_id', 'microsoft_id', 'avatar_url', 'theme', 'role'])]
 #[Hidden(['password', 'remember_token'])]

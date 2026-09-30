@@ -299,6 +299,12 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 | `CLOCKWORK_LM_STUDIO_API_KEY` | `lm-studio` | LM Studio doesn't enforce, but keep something here. |
 | `CLOCKWORK_LM_STUDIO_TIMEOUT` | `120` | |
 
+## OpenRouter (AiRemedy Cloud LLM Engine)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OPENROUTER_API_KEY` | unset | API key from openrouter.ai used by AiRemedy. Setting it from AiRemedy Settings (`/ai-remedy/settings`) writes it here; it is never stored in the database. The model is a setting, not an env var (default `anthropic/claude-sonnet-4.5`). |
+
 ## Companion mu-plugin
 
 | Variable | Default | Notes |

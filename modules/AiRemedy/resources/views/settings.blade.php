@@ -14,6 +14,39 @@
         simServerId: '{{ $servers->first()?->id ?? '' }}',
         simScenario: 'Simulated PHP-FPM pool exhaustion and 95% CPU spike',
         mode: '{{ $currentMode }}',
+        actionTiers: {
+            @foreach($actionsCatalog as $action)
+                '{{ $action['id'] }}': '{{ $action['tier'] }}',
+            @endforeach
+        },
+        actionsList: {{ Js::from(array_values($actionsCatalog)) }},
+        draggedActionId: null,
+        dragOverTier: null,
+        getActionsForTier(tier) {
+            return this.actionsList.filter(a => (this.actionTiers[a.id] || a.default_tier) === tier);
+        },
+        dragStart(actionId) {
+            this.draggedActionId = actionId;
+        },
+        dragEnd() {
+            this.draggedActionId = null;
+            this.dragOverTier = null;
+        },
+        dropAction(tier) {
+            if (this.draggedActionId) {
+                this.actionTiers[this.draggedActionId] = tier;
+                this.draggedActionId = null;
+                this.dragOverTier = null;
+            }
+        },
+        moveAction(actionId, tier) {
+            this.actionTiers[actionId] = tier;
+        },
+        resetToDefaults() {
+            this.actionsList.forEach(a => {
+                this.actionTiers[a.id] = a.default_tier;
+            });
+        },
         async testConnection() {
             this.testing = true;
             this.testResult = null;
@@ -158,7 +191,7 @@
                                 </span>
                             </div>
                             <p class="text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
-                                Autonomously executes safe, non-destructive Tier 1 remediations (PHP-FPM worker reload, removing stale <code>.maintenance</code> marker) and verifies recovery.
+                                Autonomously executes safe, non-destructive Tier 1 remediations (PHP-FPM worker reload, deprioritizing CPU priority, clearing stuck flags) and verifies recovery.
                             </p>
                         </div>
                         <div class="mt-3 pt-2.5 border-t border-[var(--color-border-light)] text-[10px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
@@ -169,7 +202,273 @@
                 </div>
             </div>
 
-            {{-- 2. Continuous Spike Monitoring & Watchdog --}}
+            {{-- 2. Configurable Remediation Safety Tier Matrix (Kanban Board) --}}
+            <div class="card p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold text-[var(--color-ink-strong)]">Remediation Safety Tier Policy Matrix</h3>
+                            <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                Drag & Drop Configurable
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
+                            Organize specific remediation actions into safety tiers. In <strong>Auto-Heal</strong> mode, Tier 1 actions run autonomously; Tier 2 actions always require human confirmation in <strong>Copilot</strong> mode; Tier 3 actions are blocked. Drag cards between columns or use the dropdown selectors.
+                        </p>
+                    </div>
+                    <button type="button"
+                            @click="resetToDefaults()"
+                            class="btn-pill-nav text-xs py-1.5 px-3 border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] flex items-center gap-1.5 self-start sm:self-auto cursor-pointer font-medium">
+                        <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                        <span>Reset to Defaults</span>
+                    </button>
+                </div>
+
+                {{-- Hidden input containing the JSON map of action_id => tier --}}
+                <input type="hidden" name="safety_tier_rules" :value="JSON.stringify(actionTiers)">
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {{-- Column 1: Tier 1 Safe / Autonomous --}}
+                    <div class="flex flex-col rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-emerald-700 dark:text-emerald-400">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span>Tier 1 · Safe (Autonomous)</span>
+                            </div>
+                            <span class="font-data text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300"
+                                  x-text="getActionsForTier('tier_1_safe').length"></span>
+                        </div>
+                        <p class="text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
+                            Non-destructive actions executed automatically when Auto-Heal is enabled. Zero disruption to active web traffic.
+                        </p>
+
+                        {{-- Drop Area --}}
+                        <div class="space-y-2 flex-1 min-h-[140px] p-2 rounded-lg transition-colors"
+                             :class="dragOverTier === 'tier_1_safe' ? 'bg-emerald-500/20 border-2 border-dashed border-emerald-500/60' : 'bg-[var(--color-surface)]/70 border border-emerald-500/20'"
+                             @dragover.prevent="dragOverTier = 'tier_1_safe'"
+                             @dragleave="if (dragOverTier === 'tier_1_safe') dragOverTier = null"
+                             @drop="dropAction('tier_1_safe')">
+                            
+                            <template x-for="action in getActionsForTier('tier_1_safe')" :key="action.id">
+                                <div draggable="true"
+                                     @dragstart="dragStart(action.id)"
+                                     @dragend="dragEnd()"
+                                     class="p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs hover:shadow-xs transition-all cursor-grab active:cursor-grabbing space-y-1.5 select-none">
+                                    <div class="flex items-start justify-between gap-1.5">
+                                        <div class="flex items-center gap-1.5 font-semibold text-xs text-[var(--color-ink-strong)]">
+                                            <i class="fa-solid fa-grip-vertical text-neutral-400 text-[10px]"></i>
+                                            <span x-text="action.label"></span>
+                                        </div>
+                                        <select @change="moveAction(action.id, $event.target.value)"
+                                                class="text-[10px] py-0.5 px-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] cursor-pointer">
+                                            <option value="tier_1_safe" selected>Tier 1</option>
+                                            <option value="tier_2_cautious">Tier 2</option>
+                                            <option value="tier_3_prohibited">Tier 3</option>
+                                        </select>
+                                    </div>
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] leading-snug" x-text="action.description"></div>
+                                    <div class="font-mono text-[10px] text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-1 rounded truncate border border-[var(--color-border-light)]"
+                                         :title="action.command_example"
+                                         x-text="action.command_example"></div>
+                                </div>
+                            </template>
+
+                            <template x-if="getActionsForTier('tier_1_safe').length === 0">
+                                <div class="h-24 flex items-center justify-center text-center text-[11px] text-[var(--color-ink-soft)] border border-dashed border-[var(--color-border)] rounded-lg">
+                                    Drop actions here for autonomous execution
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {{-- Column 2: Tier 2 Cautious / One-Click Approval --}}
+                    <div class="flex flex-col rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-amber-700 dark:text-amber-400">
+                                <i class="fa-solid fa-user-check"></i>
+                                <span>Tier 2 · Cautious (Human Approval)</span>
+                            </div>
+                            <span class="font-data text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300"
+                                  x-text="getActionsForTier('tier_2_cautious').length"></span>
+                        </div>
+                        <p class="text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
+                            Potentially disruptive actions (service restarts, process kills). Requires manual confirmation in Copilot mode; never run autonomously.
+                        </p>
+
+                        {{-- Drop Area --}}
+                        <div class="space-y-2 flex-1 min-h-[140px] p-2 rounded-lg transition-colors"
+                             :class="dragOverTier === 'tier_2_cautious' ? 'bg-amber-500/20 border-2 border-dashed border-amber-500/60' : 'bg-[var(--color-surface)]/70 border border-amber-500/20'"
+                             @dragover.prevent="dragOverTier = 'tier_2_cautious'"
+                             @dragleave="if (dragOverTier === 'tier_2_cautious') dragOverTier = null"
+                             @drop="dropAction('tier_2_cautious')">
+                            
+                            <template x-for="action in getActionsForTier('tier_2_cautious')" :key="action.id">
+                                <div draggable="true"
+                                     @dragstart="dragStart(action.id)"
+                                     @dragend="dragEnd()"
+                                     class="p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs hover:shadow-xs transition-all cursor-grab active:cursor-grabbing space-y-1.5 select-none">
+                                    <div class="flex items-start justify-between gap-1.5">
+                                        <div class="flex items-center gap-1.5 font-semibold text-xs text-[var(--color-ink-strong)]">
+                                            <i class="fa-solid fa-grip-vertical text-neutral-400 text-[10px]"></i>
+                                            <span x-text="action.label"></span>
+                                        </div>
+                                        <select @change="moveAction(action.id, $event.target.value)"
+                                                class="text-[10px] py-0.5 px-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] cursor-pointer">
+                                            <option value="tier_1_safe">Tier 1</option>
+                                            <option value="tier_2_cautious" selected>Tier 2</option>
+                                            <option value="tier_3_prohibited">Tier 3</option>
+                                        </select>
+                                    </div>
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] leading-snug" x-text="action.description"></div>
+                                    <div class="font-mono text-[10px] text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-1 rounded truncate border border-[var(--color-border-light)]"
+                                         :title="action.command_example"
+                                         x-text="action.command_example"></div>
+                                </div>
+                            </template>
+
+                            <template x-if="getActionsForTier('tier_2_cautious').length === 0">
+                                <div class="h-24 flex items-center justify-center text-center text-[11px] text-[var(--color-ink-soft)] border border-dashed border-[var(--color-border)] rounded-lg">
+                                    Drop actions here to require operator review
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {{-- Column 3: Tier 3 Prohibited / Blocked --}}
+                    <div class="flex flex-col rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-rose-700 dark:text-rose-400">
+                                <i class="fa-solid fa-ban"></i>
+                                <span>Tier 3 · Prohibited (Blocked)</span>
+                            </div>
+                            <span class="font-data text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-800 dark:text-rose-300"
+                                  x-text="getActionsForTier('tier_3_prohibited').length"></span>
+                        </div>
+                        <p class="text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
+                            Prohibited actions. The security engine will strictly block these commands from being proposed or executed.
+                        </p>
+
+                        {{-- Drop Area --}}
+                        <div class="space-y-2 p-2 rounded-lg transition-colors"
+                             :class="dragOverTier === 'tier_3_prohibited' ? 'bg-rose-500/20 border-2 border-dashed border-rose-500/60' : 'bg-[var(--color-surface)]/70 border border-rose-500/20'"
+                             @dragover.prevent="dragOverTier = 'tier_3_prohibited'"
+                             @dragleave="if (dragOverTier === 'tier_3_prohibited') dragOverTier = null"
+                             @drop="dropAction('tier_3_prohibited')">
+                            
+                            <template x-for="action in getActionsForTier('tier_3_prohibited')" :key="action.id">
+                                <div draggable="true"
+                                     @dragstart="dragStart(action.id)"
+                                     @dragend="dragEnd()"
+                                     class="p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs hover:shadow-xs transition-all cursor-grab active:cursor-grabbing space-y-1.5 select-none">
+                                    <div class="flex items-start justify-between gap-1.5">
+                                        <div class="flex items-center gap-1.5 font-semibold text-xs text-[var(--color-ink-strong)]">
+                                            <i class="fa-solid fa-grip-vertical text-neutral-400 text-[10px]"></i>
+                                            <span x-text="action.label"></span>
+                                        </div>
+                                        <select @change="moveAction(action.id, $event.target.value)"
+                                                class="text-[10px] py-0.5 px-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] cursor-pointer">
+                                            <option value="tier_1_safe">Tier 1</option>
+                                            <option value="tier_2_cautious">Tier 2</option>
+                                            <option value="tier_3_prohibited" selected>Tier 3</option>
+                                        </select>
+                                    </div>
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] leading-snug" x-text="action.description"></div>
+                                    <div class="font-mono text-[10px] text-neutral-600 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 px-1.5 py-1 rounded truncate border border-[var(--color-border-light)]"
+                                         :title="action.command_example"
+                                         x-text="action.command_example"></div>
+                                </div>
+                            </template>
+
+                            <template x-if="getActionsForTier('tier_3_prohibited').length === 0">
+                                <div class="py-4 text-center text-[11px] text-[var(--color-ink-soft)] border border-dashed border-[var(--color-border)] rounded-lg">
+                                    Drop actions here to forbid execution
+                                </div>
+                            </template>
+                        </div>
+
+                        {{-- Locked Guardrails Section (Permanent Security Floor) --}}
+                        <div class="pt-3 border-t border-rose-500/20 space-y-2">
+                            <div class="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 dark:text-rose-400">
+                                <i class="fa-solid fa-lock text-[10px]"></i>
+                                <span>Security Floor (Hardcoded & Unmovable)</span>
+                            </div>
+                            <div class="space-y-1.5">
+                                @foreach($lockedGuards as $locked)
+                                    <div class="p-2 rounded-lg border border-rose-500/20 bg-rose-500/5 text-[11px] space-y-0.5">
+                                        <div class="flex items-center justify-between font-semibold text-[var(--color-ink-strong)]">
+                                            <span>{{ $locked['label'] }}</span>
+                                            <span class="text-[9px] font-mono px-1 rounded bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/30 flex items-center gap-1">
+                                                <i class="fa-solid fa-lock text-[8px]"></i> LOCKED
+                                            </span>
+                                        </div>
+                                        <div class="font-mono text-[10px] text-rose-600 dark:text-rose-400 truncate" title="{{ $locked['pattern'] }}">
+                                            {{ $locked['pattern'] }}
+                                        </div>
+                                        <div class="text-[10px] text-[var(--color-ink-soft)]">{{ $locked['reason'] }}</div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- 3. Allowed Maintenance & Noise Filtering --}}
+            <div class="card p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold text-[var(--color-ink-strong)]">Allowed Maintenance & Noise Filtering</h3>
+                            <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                Smart Noise Reduction
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
+                            Classify predictable background system workloads (e.g. SpinupWP S3 backups, mysqldump, logrotate) so heavy CPU usage is recognized as expected and alert channels are not spammed.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="flex items-start gap-3 p-3.5 rounded-xl border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <input type="checkbox" name="auto_mute_maintenance_alerts" value="1" {{ $autoMuteMaintenance ? 'checked' : '' }}
+                               class="mt-1 rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
+                        <div class="flex-1">
+                            <span class="text-xs font-bold text-[var(--color-ink-strong)]">Mute Chat Notifications for Allowed Maintenance</span>
+                            <span class="block text-[11px] text-[var(--color-ink-muted)] mt-0.5 leading-relaxed">
+                                When enabled, server spikes identified as allowed background maintenance will be marked as <strong class="text-sky-600 dark:text-sky-400">Allowed Maintenance</strong> in the audit log and will suppress Slack and Mattermost alert notifications.
+                            </span>
+                        </div>
+                    </label>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">
+                            Allowed Maintenance Process Patterns (Comma-separated)
+                        </label>
+                        <input type="text"
+                               name="allowed_maintenance_processes"
+                               value="{{ $allowedProcessesString }}"
+                               class="input text-xs w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)] p-2.5 font-mono">
+                        <span class="text-[11px] text-[var(--color-ink-soft)] mt-1.5 block leading-relaxed">
+                            Processes matching these names (e.g. <code>rclone, mysqldump, logrotate, borgbackup, borg, gpbup, restic, duplicity</code>) will not be flagged as unfixable runaway incidents when they spike CPU.
+                        </span>
+                    </div>
+
+                    <div class="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/25 text-xs text-sky-950 dark:text-sky-200 flex items-start gap-3">
+                        <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="font-bold text-sky-900 dark:text-sky-200">How Cloud Backups (SpinupWP, GridPane, Borg & S3) are Handled</div>
+                            <div class="text-[11px] text-sky-800/90 dark:text-sky-300 leading-relaxed">
+                                Control panels run heavy automated backup tasks in the background: <strong>SpinupWP</strong> uses <code>rclone</code> to stream site snapshots to S3 / DigitalOcean Spaces, while <strong>GridPane</strong> runs <code>borg</code> (BorgBackup via <code>gpbup</code>), <code>duplicity</code>, or <code>restic</code>. On 1–2 vCPU servers, chunk hashing, gzip/zstd compression, and encryption naturally demand 100%+ CPU during backup windows. Instead of killing backup jobs, AiRemedy recommends deprioritizing the task with <code>sudo renice -n 19</code> and <code>sudo ionice -c 3</code> so backups proceed peacefully while web traffic receives immediate CPU priority.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- 4. Continuous Spike Monitoring & Watchdog --}}
             <div class="card p-6">
                 <div class="flex items-start justify-between mb-4">
                     <div>
@@ -237,7 +536,7 @@
                     <div>
                         <h3 class="text-sm font-bold text-[var(--color-ink-strong)]">OpenRouter API Key</h3>
                         <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
-                            Your universal API key for Claude 3.5 Sonnet, GPT-4o, and DeepSeek. Stored directly in your <code>.env</code> file (<code>OPENROUTER_API_KEY</code>). Never saved in the database.
+                            Your universal API key for Claude, GPT-4o, and DeepSeek models. Stored directly in your <code>.env</code> file (<code>OPENROUTER_API_KEY</code>). Never saved in the database.
                         </p>
                     </div>
                     @if($hasKey)

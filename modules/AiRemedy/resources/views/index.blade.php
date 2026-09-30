@@ -3,6 +3,7 @@
 @section('title', 'AiRemedy · AI Operations & Self-Healing')
 
 @section('content')
+@include('operations._tabs')
 <div class="relative" x-data="{
     activeRun: null,
     drawerOpen: false,
@@ -13,6 +14,32 @@
     closeDrawer() {
         this.drawerOpen = false;
         this.activeRun = null;
+    },
+    formatSafetyTier(tier) {
+        if (!tier) return 'Unknown';
+        switch (tier) {
+            case 'tier_1_safe': return 'Tier 1 · Safe';
+            case 'tier_2_cautious': return 'Tier 2 · Cautious';
+            case 'tier_3_prohibited': return 'Tier 3 · Prohibited';
+            case 'tier_unfixable':
+            case 'unfixable': return 'Unfixable';
+            default: return tier.replace(/^tier_/, 'Tier ').replace(/_/g, ' ');
+        }
+    },
+    safetyBadgeClass(tier) {
+        if (!tier) return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+        switch (tier) {
+            case 'tier_1_safe':
+                return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+            case 'tier_2_cautious':
+                return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
+            case 'tier_3_prohibited':
+            case 'tier_unfixable':
+            case 'unfixable':
+                return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
+            default:
+                return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+        }
     }
 }">
     <x-page-header title="AiRemedy"
@@ -79,6 +106,10 @@
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'unfixable', 'server_id' => $selectedServerId])) }}"
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'unfixable' ? 'bg-purple-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Unfixable
+            </a>
+            <a href="{{ route('ai-remedy.index', array_filter(['status' => 'allowed_maintenance', 'server_id' => $selectedServerId])) }}"
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'allowed_maintenance' ? 'bg-sky-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                Allowed Maint.
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'failed', 'server_id' => $selectedServerId])) }}"
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'failed' ? 'bg-rose-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
@@ -178,15 +209,15 @@
                                     </div>
                                 </td>
 
-                                <td class="py-3.5 px-4">
-                                    <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border {{ $run->safetyBadgeClass() }}">
-                                        {{ strtoupper(str_replace(['tier_', '_'], ['', ' '], $run->safety_tier)) }}
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-[10px] font-semibold border whitespace-nowrap {{ $run->safetyBadgeClass() }}">
+                                        {{ $run->safetyLabel() }}
                                     </span>
                                 </td>
 
-                                <td class="py-3.5 px-4">
-                                    <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border {{ $run->statusBadgeClass() }}">
-                                        {{ ucfirst($run->status) }}
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border whitespace-nowrap {{ $run->statusBadgeClass() }}">
+                                        {{ $run->statusLabel() }}
                                     </span>
                                 </td>
 
@@ -230,8 +261,8 @@
                         <div class="flex items-center gap-2">
                             <h2 class="text-base font-bold text-[var(--color-ink-strong)]">Incident Forensics & Remediation</h2>
                             <span class="px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border"
-                                  :class="activeRun?.status === 'resolved' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' : 'bg-blue-500/15 text-blue-600 border-blue-500/30'"
-                                  x-text="activeRun?.status?.toUpperCase()"></span>
+                                  :class="activeRun?.status === 'resolved' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' : (activeRun?.status === 'allowed_maintenance' ? 'bg-sky-500/15 text-sky-600 border-sky-500/30' : 'bg-blue-500/15 text-blue-600 border-blue-500/30')"
+                                  x-text="activeRun?.status === 'allowed_maintenance' ? 'ALLOWED MAINTENANCE' : activeRun?.status?.toUpperCase()"></span>
                         </div>
                         <p class="text-xs text-[var(--color-ink-muted)] mt-1">
                             Run #<span x-text="activeRun?.id"></span> · <span x-text="activeRun?.model_used"></span> · Mode: <span class="font-semibold" x-text="activeRun?.actor"></span> · Cost: $<span x-text="Number(activeRun?.total_cost_usd || 0).toFixed(4)"></span>
@@ -244,8 +275,21 @@
 
                 {{-- Drawer Content --}}
                 <div class="p-6 overflow-y-auto flex-1 space-y-6 text-xs">
+                    {{-- Allowed Maintenance Banner --}}
+                    <template x-if="activeRun?.status === 'allowed_maintenance'">
+                        <div class="p-3.5 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200 space-y-1">
+                            <div class="flex items-center gap-1.5 font-bold text-xs">
+                                <i class="fa-solid fa-cloud-arrow-up text-sky-500"></i>
+                                <span>Allowed Background Maintenance Detected</span>
+                            </div>
+                            <p class="text-[11px] leading-relaxed">
+                                AiRemedy identified this resource spike as routine maintenance activity (e.g. SpinupWP S3 backup, database export, or log rotation). Safe deprioritization commands (like <code>renice</code> or <code>ionice</code>) are recommended rather than process termination, and alerting notifications were automatically muted.
+                            </p>
+                        </div>
+                    </template>
+
                     {{-- Watch Mode / Simulation Banner --}}
-                    <template x-if="activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation'">
+                    <template x-if="activeRun?.status !== 'allowed_maintenance' && (activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation')">
                         <div class="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-900 dark:text-indigo-200 space-y-1">
                             <div class="flex items-center gap-1.5 font-bold text-xs">
                                 <i class="fa-solid fa-eye text-indigo-500"></i>
@@ -272,7 +316,9 @@
                         </div>
                         <div class="card p-3">
                             <span class="text-[11px] text-[var(--color-ink-muted)] font-semibold block mb-1">Safety Tier</span>
-                            <span class="font-data font-semibold text-xs" x-text="activeRun?.safety_tier"></span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full font-data font-semibold text-[11px] border whitespace-nowrap"
+                                  :class="safetyBadgeClass(activeRun?.safety_tier)"
+                                  x-text="formatSafetyTier(activeRun?.safety_tier)"></span>
                         </div>
                     </div>
 
@@ -289,16 +335,16 @@
                         </div>
 
                         <template x-if="activeRun?.approved_commands && activeRun.approved_commands.length > 0">
-                            <div class="bg-neutral-950 text-emerald-400 p-3.5 rounded-lg font-mono text-xs overflow-x-auto space-y-1">
+                            <div class="bg-slate-950 border border-slate-800 text-slate-100 p-3.5 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                                 <template x-for="cmd in activeRun.approved_commands" :key="cmd">
-                                    <div><span class="text-neutral-500">$</span> <span x-text="cmd"></span></div>
+                                    <div class="flex items-center gap-2"><span class="text-emerald-400 font-bold select-none">$</span> <span class="text-slate-100" x-text="cmd"></span></div>
                                 </template>
                             </div>
                         </template>
                         <template x-if="!activeRun?.approved_commands || activeRun.approved_commands.length === 0">
-                            <div class="bg-neutral-950 text-indigo-300 p-3.5 rounded-lg font-mono text-xs overflow-x-auto space-y-1">
+                            <div class="bg-slate-950 border border-slate-800 text-slate-100 p-3.5 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                                 <template x-for="cmd in (activeRun?.proposed_commands || [])" :key="cmd">
-                                    <div><span class="text-neutral-500">$</span> <span x-text="cmd"></span></div>
+                                    <div class="flex items-center gap-2"><span class="text-indigo-400 font-bold select-none">$</span> <span class="text-slate-100" x-text="cmd"></span></div>
                                 </template>
                             </div>
                         </template>
@@ -308,7 +354,7 @@
                     <template x-if="activeRun?.execution_output">
                         <div>
                             <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)] mb-2">Terminal Execution Log (SSH)</h4>
-                            <pre class="bg-neutral-950 text-neutral-200 p-4 rounded-lg font-mono text-xs overflow-x-auto max-h-64 whitespace-pre-wrap"
+                            <pre class="bg-slate-950 border border-slate-800 text-slate-200 p-4 rounded-xl font-mono text-xs overflow-x-auto max-h-64 whitespace-pre-wrap shadow-inner"
                                  x-text="activeRun?.execution_output"></pre>
                         </div>
                     </template>

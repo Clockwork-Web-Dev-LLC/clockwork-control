@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @method static Builder<PluginUpdateFailureStreak> ignored()
+ * @method static Builder<PluginUpdateFailureStreak> activeStreak()
+ */
 class PluginUpdateFailureStreak extends Model
 {
     use HasFactory;

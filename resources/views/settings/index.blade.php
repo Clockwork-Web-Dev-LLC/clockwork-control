@@ -389,7 +389,7 @@
 
         {{-- 3. Operations & Tools --}}
         <div class="card p-5 flex flex-col justify-between"
-             x-show="matches('operations tools capacity server updates maintenance history ssh credentials weird stats')">
+             x-show="matches('operations tools capacity server updates maintenance history ssh credentials weird stats ai remedy airemedy')">
             <div>
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-light)]">
                     <div class="flex items-center gap-2.5">
@@ -474,6 +474,21 @@
                         </div>
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
                     </a>
+
+                    @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                        <a href="{{ route('ai-remedy.index') }}"
+                           x-show="matches('airemedy ai remedy operations triage forensics self healing spikes diagnosis openrouter')"
+                           class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
+                                <div class="min-w-0">
+                                    <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">AiRemedy Triage &amp; Self-Healing</div>
+                                    <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Autonomous incident diagnosis, root-cause forensics, and staged SSH remediation</div>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
+                        </a>
+                    @endif
 
                     <a href="{{ route('settings.weird-stats.index') }}"
                        x-show="matches('weird stats fleet analytics records anomalies numbers')"

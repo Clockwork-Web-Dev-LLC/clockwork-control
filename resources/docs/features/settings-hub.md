@@ -42,6 +42,7 @@ Outbound API credentials, ecosystem modules, and alerting channels:
 * **Slack Alerts** (`/settings/slack`) — Webhook integration and granular per-event notification toggles.
 * **Mattermost Alerts** (`/settings/mattermost`) — Self-hosted chatops integration and webhook channels.
 * **Bill.com Sync** (`/settings/bill-com`) — Automated recurring invoice synchronization and care plan reconciliation.
+* **AiRemedy Autonomous Healing** (`/ai-remedy/settings` / `/ai-remedy`) — OpenRouter API keys, model selection (Claude Sonnet 4.5 default, Haiku 4.5, Sonnet 4, GPT-4o, GPT-4o Mini, DeepSeek-V3), execution safety threshold (Passive Observation vs Auto-Heal), cooldown window, and rate limiting. See [AiRemedy Autonomous Healing](/docs/features/ai-remedy).
 * **Feedback & Visual Annotations** (`/settings/feedback` / `/feedback`) — In-app point-and-click comment pins, threaded team discussions, AI prompt generation for Claude/Grok, and module on/off controls. See [Visual Feedback & Collaboration](/docs/features/feedback).
 
 ### 5. System & Workspace

@@ -23,21 +23,42 @@ Layout preferences are saved locally in the browser (`localStorage.getItem('cw_l
 
 On viewports below `lg` (1024px) there is one chrome: top bar + hamburger **Menu** sheet (overlay, current-route highlight, badge counts, font stepper). The Command Center / Modern Studio switcher is hidden and the toggle is a no-op — the rail only exists at `lg+`. Below `md`, the studio tab strip is also hidden so the sheet is the only primary nav.
 
-## ⌘K Quick Jump Palette & Jump Codes
+## ⌘K Global Command Palette & Unified Search
 
-Operators can press **⌘K** (macOS) or **Ctrl+K** (Windows/Linux), or click the **Jump** button in the top navigation bar to open the Quick Jump command palette.
+Operators can press **⌘K** (macOS) or **Ctrl+K** (Windows/Linux), or click the **"Search fleet, commands, servers…"** bar / **Jump** button in the top navigation header to open the unified Command Palette.
 
-- **Instant Jump Codes**: Typing a two-letter jump code (case-insensitive, spaces optional) navigates immediately without requiring a mouse click:
+The palette serves as both an instant keyboard navigator and a dynamic global search engine across your entire fleet:
+
+- **Unified Fleet & Site Search**:
+  - Typing 2 or more characters triggers an asynchronous, debounced (120ms) backend query against `GET /search/global?q=...`.
+  - **Servers**: Matches server display name, internal name, hostname, and IP address (e.g., searching `web-01` or `203.0` immediately surfaces the matching server with live health status badges and provider metadata).
+  - **Sites**: Matches domain names (e.g., `acme` or `example`), displaying the parent server and WordPress application badges.
+- **Two-Letter Jump Codes**: Typing two letters (case-insensitive, spaces optional) navigates immediately without touching the mouse:
   - `GS` or `G S`: Servers Fleet (`/`)
   - `GT` or `G T`: Sites Directory (`/sites`)
   - `GI` or `G I`: Issues Console (`/issues`)
   - `GM` or `G M`: Uptime Monitoring (`/monitoring`)
   - `GU` or `G U`: Updates Manager (`/updates`)
   - `GX` or `G X`: Security Scans (`/security/scans`)
+  - `GA` or `G A`: AiRemedy Triage & Forensics (`/ai-remedy`)
+  - `GG` or `G G`: Gatekeeper Login Protection (`/settings/gatekeeper`)
+  - `GF` or `G F`: Feedback Backlog & Notes (`/feedback`)
+  - `GC` or `G C`: Clients Directory (`/clients`)
+  - `GJ` or `G J`: Scheduled Jobs & Heartbeat (`/settings/scheduled-jobs`)
+  - `GQ` or `G Q`: Security Review Queue (`/review-queue`)
   - `GD` or `G D`: Documentation & Runbooks (`/docs`)
-- **Fuzzy & Substring Filtering**: Typing other terms (such as `capacity`, `credentials`, `settings`) filters visible rows in real-time.
-- **Keyboard Navigation**: Pressing `↑` / `↓` moves the selection highlight, and pressing `Enter` navigates to the highlighted destination.
-- **Dismissal**: Pressing `Esc` or clicking outside dismisses the palette and resets the search query.
+- **Rich Synonym & Keyword Matching**: Destinations match common aliases, operations, and modules in real-time. For example:
+  - Searching `airemedy`, `shadow mode`, `spike`, or `auto-heal` matches AiRemedy.
+  - Searching `openrouter`, `claude`, or `api key` surfaces AiRemedy Settings.
+  - Searching `lockouts`, `brute force`, or `ip bans` surfaces Gatekeeper.
+  - Searching `cron`, `scheduler`, or `heartbeat` surfaces Scheduled Jobs.
+  - Searching `crm` or `accounts` surfaces Clients Directory.
+- **Keyboard Navigation & Feedback**:
+  - Pressing `↑` / `↓` cycles selection highlight with active ring styling.
+  - Pressing `Enter` navigates to the highlighted destination, server, or site.
+  - An inline spin-loader indicates active background search requests.
+  - Pressing `Esc` or clicking the backdrop dismisses the palette and resets the query.
+
 
 ## What you see
 
@@ -86,9 +107,16 @@ The dashboard is divided:
 
 A server flips to ignored either manually (the Toggle ignore button) or auto-flagged on first import via `CLOCKWORK_AUTO_IGNORE_PATTERNS` (empty by default — comma-separated substrings, case-insensitive; set your own per-operator). Auto-flag only sets the bit on **first creation** — manual changes survive subsequent imports.
 
-## Search
+## Search & Discovery
 
-Press `/` from anywhere on the dashboard (or any page) to focus the site search at the top right. Returns matching sites as you type. Endpoint: `GET /search/sites?q=`.
+Clockwork Control provides two integrated search flows:
+
+1. **Global Fleet Search (`⌘K` or `Ctrl+K`)**:
+   - The primary command bar in the top navigation header (`GET /search/global?q=...`).
+   - Searches across servers (by name, hostname, IP address), WordPress sites (by domain name), feature modules (AiRemedy, Gatekeeper, Scheduled Jobs), system settings, and jump codes in real time.
+2. **Dedicated Sites Quick-Search (`/`)**:
+   - Pressing `/` from anywhere in the application immediately focuses the site search field at the top right (`GET /search/sites?q=...`), allowing fast one-keystroke site navigation.
+
 
 ## What's NOT on the dashboard
 

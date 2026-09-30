@@ -12,6 +12,7 @@ use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Modules\AiRemedy\Models\AiRemedyRun;
 
 /**
  * Shared behavior for a simple incoming-webhook chat channel (Mattermost,
@@ -847,6 +848,121 @@ abstract class WebhookChatNotifier implements ChatNotifier
             'color' => '#33aa33',
             'title' => $title,
             'text' => '`schedule:run` is ticking again. Uptime, ingest, and updates will catch up on their next due times.',
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    public function serverWentRed(Server $server, ?float $cpuPct = null, ?string $reason = null): bool
+    {
+        if (! $this->isEventEnabled('server_went_red')) {
+            return false;
+        }
+
+        $cpuLabel = $cpuPct !== null ? round($cpuPct, 1).'%' : 'elevated';
+        $title = sprintf(':rotating_light: Server RED: %s (%s CPU)', $server->name, $cpuLabel);
+
+        $fields = [
+            ['title' => 'Server', 'value' => $server->name, 'short' => true],
+            ['title' => 'Hostname / IP', 'value' => $server->hostname, 'short' => true],
+            ['title' => 'CPU', 'value' => $cpuLabel, 'short' => true],
+            ['title' => 'Provider', 'value' => $server->provider_label, 'short' => true],
+        ];
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#cc3333',
+            'title' => $title,
+            'text' => $reason ?: 'Server entered RED status in cloud metrics. CPU or system load is exceeding safety thresholds.',
+            'fields' => $fields,
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    public function serverRecovered(Server $server): bool
+    {
+        if (! $this->isEventEnabled('server_recovered')) {
+            return false;
+        }
+
+        $title = sprintf(':white_check_mark: Server recovered: %s', $server->name);
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#33aa33',
+            'title' => $title,
+            'text' => "Server {$server->name} ({$server->hostname}) metrics returned to normal (status: GREEN).",
+            'fields' => [
+                ['title' => 'Server', 'value' => $server->name, 'short' => true],
+                ['title' => 'Provider', 'value' => $server->provider_label, 'short' => true],
+            ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    public function aiRemedyExecuted(AiRemedyRun $run): bool
+    {
+        if (! $this->isEventEnabled('ai_remedy_executed')) {
+            return false;
+        }
+
+        $isOk = $run->status === AiRemedyRun::STATUS_RESOLVED;
+        $serverName = $run->server->name;
+        $mode = $run->modeLabel();
+
+        $emoji = $isOk ? ':sparkles:' : ':warning:';
+        $title = sprintf('%s AiRemedy %s: %s on %s', $emoji, $mode, $isOk ? 'Remediated' : 'Encountered Issues', $serverName);
+
+        $commandsText = ! empty($run->approved_commands)
+            ? implode("\n$ ", $run->approved_commands)
+            : 'None';
+
+        $fields = [
+            ['title' => 'Server', 'value' => $serverName, 'short' => true],
+            ['title' => 'Mode', 'value' => $mode, 'short' => true],
+            ['title' => 'Safety Tier', 'value' => $run->safetyLabel(), 'short' => true],
+            ['title' => 'Cost', 'value' => '$'.number_format((float) $run->total_cost_usd, 4), 'short' => true],
+        ];
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => $isOk ? '#33aa33' : '#cc3333',
+            'title' => $title,
+            'text' => "**Root Cause**: {$run->root_cause}\n\n**Executed Commands**:\n```bash\n$ {$commandsText}\n```",
+            'fields' => $fields,
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    public function aiRemedyTriaged(AiRemedyRun $run): bool
+    {
+        if (! $this->isEventEnabled('ai_remedy_triaged')) {
+            return false;
+        }
+
+        $serverName = $run->server->name;
+        $title = sprintf(':mag: AiRemedy Forensics: %s on %s', $run->safetyLabel(), $serverName);
+
+        $proposed = ! empty($run->proposed_commands)
+            ? implode("\n$ ", $run->proposed_commands)
+            : 'None';
+
+        $fields = [
+            ['title' => 'Server', 'value' => $serverName, 'short' => true],
+            ['title' => 'Mode', 'value' => $run->modeLabel(), 'short' => true],
+            ['title' => 'Safety Tier', 'value' => $run->safetyLabel(), 'short' => true],
+            ['title' => 'Model', 'value' => $run->model_used, 'short' => true],
+        ];
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#5c6bc0',
+            'title' => $title,
+            'text' => "**Root Cause**: {$run->root_cause}\n\n**Diagnosis**: {$run->diagnosis_summary}\n\n**Proposed Remediation**:\n```bash\n$ {$proposed}\n```",
+            'fields' => $fields,
         ];
 
         return $this->send($title, [$attachment]);

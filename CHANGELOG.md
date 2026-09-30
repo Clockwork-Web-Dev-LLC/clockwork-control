@@ -7,21 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-29
+
 ### Added
 - **AiRemedy Autonomous Healing & Incident Triage Module (`modules/AiRemedy`)**:
-  - Built an AI-driven server triage and self-healing engine powered by OpenRouter (Claude 3.5 Sonnet / Haiku / GPT-4o) with zero database storage of credentials (written strictly to `.env`).
+  - Built an AI-driven server triage and self-healing engine powered by OpenRouter (Claude Sonnet 4.5 default; Haiku 4.5 / GPT-4o / DeepSeek selectable) with zero database storage of credentials (written strictly to `.env`).
   - **Shadow Mode (`watch_mode`)**: Passive observability default that logs complete incident forensics, root cause analyses, and suggested remediation commands without executing anything on production infrastructure.
-  - **Continuous Spike Watchdog Monitoring**: Added `clockwork:monitor-server-spikes` scheduled console command that monitors 5-minute rolling averages for CPU (>85%), RAM (>90%), and disk (>95%) saturation across the entire server fleet.
+  - **Continuous Spike Watchdog Monitoring**: Added `clockwork:watch-server-spikes` scheduled console command that monitors 5-minute rolling averages for CPU (>85%), RAM (>90%), and disk (>95%) saturation across the entire server fleet.
+  - **Allowed Maintenance Classification & Noise Filtering**: Automatically recognizes routine background maintenance workloads (such as SpinupWP `rclone` S3 backups, `mysqldump`, `logrotate`, `borgbackup`, `restic`, `duplicity`). Displays an **Allowed Maintenance** status badge and provides an option to automatically mute chat notification spam in Slack and Mattermost.
+  - **Gentle Resource Priority Tuning (`renice` & `ionice`)**: Formulates non-destructive process deprioritization (`sudo renice -n 19 -p <PID>` and `sudo ionice -c 3 -p <PID>`) for heavy maintenance tasks rather than corrupting backups or exports with abrupt process kills.
+  - **Configurable Remediation Safety Tier Matrix**: Interactive Kanban-style 3-column drag-and-drop board under Settings (`/ai-remedy/settings`) allowing operators to organize 13 standard remediation actions into **Tier 1 (Safe / Autonomous)**, **Tier 2 (Cautious / One-Click Approval)**, and **Tier 3 (Prohibited / Blocked)** via drag-and-drop or instant dropdown selectors.
+  - **Permanent Security Floor**: Non-negotiable security guardrails permanently locked in Tier 3 with 🔒 indicators (`rm -rf /`, `mkfs`, `fdisk`, `DROP DATABASE`, `curl | bash`, `chmod 777 /`, `/etc/sudoers` modifications) that can never be moved or bypassed.
   - **Cooldown & Denial-of-Wallet Guardrails**: Implemented an automated cooldown engine (`clockwork.ai_remedy.cooldown_minutes`, default 30 min) to prevent repeated triage loops and runaway API token spend during sustained incidents.
   - **Allowlist-Guarded SSH Self-Healing**: Implemented deterministic backend validation (`CommandSafetyGuard`) with strict `^...$` regex anchors, metacharacter bans (`;`, `&`, `|`, `$`, `` ` ``, `>`, `<`, `\n`), independent backend safety tier calculation (eliminating LLM self-certification trust inversion), and restricting autonomous execution strictly to Tier 1 Safe actions.
   - **Incident Simulation & Diagnostic Studio**: Built web and CLI tools to simulate high-load incidents (OOM, Disk Pressure, PHP-FPM Saturation, Nginx Failure) against real server telemetry to evaluate triage recommendations safely.
   - **Forensic Telemetry Redaction**: Added automated regex scrubber in `ServerTelemetryCollector` stripping passwords, bearer tokens, private keys, and sensitive query strings before telemetry is stored or sent to the LLM.
-  - **In-App Documentation**: Added complete operator and runbook guide at `/docs/features/ai-remedy` and `/docs/integrations/ai-remedy`.
+  - **Operations Navigation & Tabs Integration**: Positioned AiRemedy as a first-class feature in the main application navigation and Operations tab bar (`/operations`) alongside Fleet Updates, Maintenance History, and Capacity Planning.
+  - **In-App Documentation**: Added complete operator and runbook guide at `/docs/features/ai-remedy` and `/docs/integrations/openrouter`.
+- **Fleet Updates, Server Patching & Reboot Engine**:
+  - Resolved counter ambiguity between "Patches Available" and "Reboot Required" across server headers and fleet updates views.
+  - Added full package update inspection and batch patching with scheduled reboots and automated health verification.
+  - Dedicated Maintenance History log tracking update runs and reboot timelines.
+- **Universal QuickJump & Global Search**:
+  - Implemented ⌘K global command palette indexing servers, sites, modules, settings, diagnostics, and tools with instant keyboard navigation.
 - **Fleet-Wide Security Hardening**:
   - **Module CSRF & Session Protection**: Attached `web` and `active` middleware groups to all routes in `modules/CodeSnippets`, `modules/ClientManagement`, `modules/SiteMaintenance`, and `modules/CommentModeration`, ensuring `ValidateCsrfToken` and `EnsureUserIsActive` are strictly enforced across all modular POST/PUT/DELETE actions.
   - **Installer Gate Auto-Sealing**: Hardened `EnforceInstallerGate.php` so unauthenticated visitors cannot access setup wizard routes (`/install/*`) if active user accounts exist in the database, automatically resealing the gate sentinel unless explicitly unlocked via `php artisan installer:reopen`.
   - **Public Report Token Rate Limiting**: Added `throttle:60,1` on `GET /reports/view/{token}` in `modules/ClientReports` to prevent token enumeration.
-  - **Automated Security Architecture Tests**: Created `ModuleSecurityMiddlewareTest.php` asserting that all module routes permanently register the `web` middleware group and enforce administrator authorization on sensitive actions.
+  - **Automated Security Architecture Tests**: Created `tests/Feature/Security/ModuleSecurityMiddlewareTest.php` asserting that all module routes permanently register the `web` middleware group and enforce administrator authorization on sensitive actions.
 - **Visual Feedback & In-App Collaboration Module (`modules/Feedback`)**:
   - Built a first-class, toggleable feedback module enabling operators and team members to right-click any UI element across the control panel to create contextual notes and bug reports.
   - Automatically captures deep technical context in the background: route name, controller action, target Blade view, CSS selector path, HTML tag, element text snippet, viewport dimensions, user info, and theme mode.

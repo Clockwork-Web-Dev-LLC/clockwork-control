@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
  * @property bool $is_default
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
+ *
+ * @method static Builder<ClientReportTemplate> default()
  */
 class ClientReportTemplate extends Model
 {

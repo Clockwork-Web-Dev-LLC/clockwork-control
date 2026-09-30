@@ -5,6 +5,7 @@ namespace Tests\Feature\Console;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Tag;
+use App\Services\Chat\ChatNotifier;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\Core\Contracts\CloudProvider;
@@ -218,5 +219,60 @@ describe('clockwork:poll-servers', function () {
             ->expectsOutputToContain('red=1');
 
         expect($server->fresh()->status)->toBe(Server::STATUS_RED);
+    });
+
+    it('alerts ChatNotifier when a server transitions to RED and recovers to GREEN', function () {
+        $fakeRed = new FakeCloudProviderForPollServersTest('digitalocean', [
+            'cpu_pct' => 95.0,
+            'memory_pct' => 80.0,
+            'disk_pct' => 30.0,
+            'load_1' => 6.0,
+        ]);
+
+        $this->mock(CloudProviderRegistry::class, function ($mock) use ($fakeRed) {
+            $mock->shouldReceive('all')->andReturn([$fakeRed]);
+            $mock->shouldReceive('resolve')->andReturn($fakeRed);
+        });
+
+        $server = Server::factory()->create([
+            'provider' => 'digitalocean',
+            'provider_id' => '1001',
+            'status' => Server::STATUS_GREEN,
+            'last_alert_at' => null,
+            'is_ignored' => false,
+        ]);
+
+        $this->mock(ChatNotifier::class, function ($mock) use ($server) {
+            $mock->shouldReceive('serverWentRed')
+                ->once()
+                ->withArgs(fn ($s, $cpu) => $s->id === $server->id && $cpu === 95.0)
+                ->andReturn(true);
+        });
+
+        $this->artisan('clockwork:poll-servers')->assertSuccessful();
+        expect($server->fresh()->status)->toBe(Server::STATUS_RED);
+
+        // Now test recovery to GREEN
+        $fakeGreen = new FakeCloudProviderForPollServersTest('digitalocean', [
+            'cpu_pct' => 12.0,
+            'memory_pct' => 40.0,
+            'disk_pct' => 30.0,
+            'load_1' => 0.5,
+        ]);
+
+        $this->mock(CloudProviderRegistry::class, function ($mock) use ($fakeGreen) {
+            $mock->shouldReceive('all')->andReturn([$fakeGreen]);
+            $mock->shouldReceive('resolve')->andReturn($fakeGreen);
+        });
+
+        $this->mock(ChatNotifier::class, function ($mock) use ($server) {
+            $mock->shouldReceive('serverRecovered')
+                ->once()
+                ->withArgs(fn ($s) => $s->id === $server->id)
+                ->andReturn(true);
+        });
+
+        $this->artisan('clockwork:poll-servers')->assertSuccessful();
+        expect($server->fresh()->status)->toBe(Server::STATUS_GREEN);
     });
 });

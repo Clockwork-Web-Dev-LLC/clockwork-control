@@ -47,7 +47,8 @@ class SystemUpdateService
     public function getGitInfo(): array
     {
         $basePath = base_path();
-        if (! is_dir($basePath.'/.git')) {
+        // file_exists, not is_dir: in a git worktree `.git` is a file.
+        if (! file_exists($basePath.'/.git')) {
             return [
                 'is_git' => false,
                 'branch' => null,
@@ -694,7 +695,8 @@ class SystemUpdateService
     public function getCurrentCommitHash(): ?string
     {
         $basePath = base_path();
-        if (! is_dir($basePath.'/.git')) {
+        // file_exists, not is_dir: in a git worktree `.git` is a file.
+        if (! file_exists($basePath.'/.git')) {
             return null;
         }
 

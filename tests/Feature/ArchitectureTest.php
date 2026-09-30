@@ -96,6 +96,7 @@ arch('every module service provider extends the shared base')
         'Modules\Gatekeeper\GatekeeperServiceProvider',
         'Modules\BackupRelay\BackupRelayServiceProvider',
         'Modules\Feedback\FeedbackServiceProvider',
+        'Modules\AiRemedy\AiRemedyServiceProvider',
         'Modules\CommentModeration\CommentModerationServiceProvider',
         'Modules\CodeSnippets\CodeSnippetsServiceProvider',
         'Modules\SiteMaintenance\SiteMaintenanceServiceProvider',

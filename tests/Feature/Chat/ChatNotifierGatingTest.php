@@ -10,6 +10,7 @@ use App\Models\SiteSecurityScan;
 use App\Services\Chat\ChatNotifier;
 use App\Services\Chat\ChatNotifierDispatcher;
 use Illuminate\Support\Carbon;
+use Modules\AiRemedy\Models\AiRemedyRun;
 
 /*
 |--------------------------------------------------------------------------
@@ -226,6 +227,34 @@ function fakeChatNotifier(bool $returns): ChatNotifier
         }
 
         public function schedulerRecovered(): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function serverWentRed(Server $server, ?float $cpuPct = null, ?string $reason = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function serverRecovered(Server $server): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function aiRemedyExecuted(AiRemedyRun $run): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function aiRemedyTriaged(AiRemedyRun $run): bool
         {
             $this->calls[] = __FUNCTION__;
 

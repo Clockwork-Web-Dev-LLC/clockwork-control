@@ -3,8 +3,10 @@
 namespace Modules\AiRemedy\Services;
 
 use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
 use App\Services\Ssh\SshClient;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Modules\AiRemedy\Models\AiRemedyRun;
 use Throwable;
 
@@ -71,6 +73,7 @@ class RemedyExecutor
         $start = microtime(true);
         $fullOutput = '';
         $hadError = false;
+        $errorMessage = null;
 
         try {
             $session = $this->ssh->connect($server);
@@ -80,11 +83,27 @@ class RemedyExecutor
                 $fullOutput .= "$ {$cmd}\n";
                 $cmdOutput = (string) $session->exec($cmd);
                 $fullOutput .= $cmdOutput."\n";
+
+                $exitStatus = 0;
+                try {
+                    $status = $session->getExitStatus();
+                    $exitStatus = ($status !== false && $status !== null) ? (int) $status : 0;
+                } catch (\BadMethodCallException) {
+                    $exitStatus = 0;
+                }
+
+                if ($exitStatus !== 0) {
+                    $hadError = true;
+                    $errorMessage = "Command '{$cmd}' exited with non-zero status code {$exitStatus}.";
+                    $fullOutput .= "[Process exited with code {$exitStatus}]\n";
+                    break;
+                }
             }
 
             $session->disconnect();
         } catch (Throwable $e) {
             $hadError = true;
+            $errorMessage = $e->getMessage();
             $fullOutput .= "\n[Execution Exception]: ".$e->getMessage();
         }
 
@@ -101,7 +120,7 @@ class RemedyExecutor
             'execution_output' => $fullOutput,
             'after_metrics' => $afterTelemetry['ok'] ? $afterTelemetry : null,
             'completed_at' => Carbon::now(),
-            'error_message' => $hadError ? 'SSH execution failed.' : null,
+            'error_message' => $hadError ? ($errorMessage ?? 'SSH execution failed.') : null,
         ]);
 
         // Record in Clockwork ActionLogger
@@ -120,6 +139,18 @@ class RemedyExecutor
             elapsedMs: $elapsedMs,
             actor: $run->actor,
         );
+
+        // Notify chat channels (Slack, Mattermost)
+        try {
+            if (app()->has(ChatNotifier::class)) {
+                app(ChatNotifier::class)->aiRemedyExecuted($run->fresh());
+            }
+        } catch (Throwable $e) {
+            Log::warning('ai_remedy.notification_failed', [
+                'run_id' => $run->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return [
             'ok' => $isOk,

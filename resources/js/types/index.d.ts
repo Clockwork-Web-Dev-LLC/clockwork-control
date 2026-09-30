@@ -50,5 +50,6 @@ declare global {
         monitoringFilterSearch?: (term: string) => void;
         monitoringOpenClassify?: (siteId: number, domain: string, reason?: string, notes?: string) => void;
         monitoringCloseClassify?: () => void;
+        cwQuickJumpItems?: Array<Record<string, unknown>>;
     }
 }

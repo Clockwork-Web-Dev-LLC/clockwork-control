@@ -59,6 +59,8 @@ class AiRemedyRun extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_ALLOWED_MAINTENANCE = 'allowed_maintenance';
+
     public const TIER_1_SAFE = 'tier_1_safe';
 
     public const TIER_2_CAUTIOUS = 'tier_2_cautious';
@@ -146,12 +148,32 @@ class AiRemedyRun extends Model
         return match ($this->status) {
             self::STATUS_RESOLVED => 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
             self::STATUS_ANALYZED => 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+            self::STATUS_ALLOWED_MAINTENANCE => 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
             self::STATUS_EXECUTING => 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse',
             self::STATUS_UNFIXABLE => 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
             self::STATUS_REJECTED => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
             self::STATUS_FAILED => 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
             default => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
         };
+    }
+
+    public function statusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_ALLOWED_MAINTENANCE => 'Allowed Maintenance',
+            self::STATUS_RESOLVED => 'Resolved',
+            self::STATUS_ANALYZED => 'Analyzed',
+            self::STATUS_EXECUTING => 'Executing',
+            self::STATUS_UNFIXABLE => 'Unfixable',
+            self::STATUS_REJECTED => 'Rejected',
+            self::STATUS_FAILED => 'Failed',
+            default => ucfirst(str_replace('_', ' ', (string) $this->status)),
+        };
+    }
+
+    public function isAllowedMaintenance(): bool
+    {
+        return $this->status === self::STATUS_ALLOWED_MAINTENANCE;
     }
 
     public function safetyBadgeClass(): string
@@ -161,6 +183,17 @@ class AiRemedyRun extends Model
             self::TIER_2_CAUTIOUS => 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
             self::TIER_3_PROHIBITED, self::TIER_UNFIXABLE => 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
             default => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
+        };
+    }
+
+    public function safetyLabel(): string
+    {
+        return match ($this->safety_tier) {
+            self::TIER_1_SAFE => 'Tier 1 · Safe',
+            self::TIER_2_CAUTIOUS => 'Tier 2 · Cautious',
+            self::TIER_3_PROHIBITED => 'Tier 3 · Prohibited',
+            self::TIER_UNFIXABLE => 'Unfixable',
+            default => ucfirst(str_replace(['tier_', '_'], ['', ' '], (string) $this->safety_tier)),
         };
     }
 

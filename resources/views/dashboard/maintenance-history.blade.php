@@ -7,6 +7,8 @@
 @endphp
 
 @section('content')
+    @include('operations._tabs')
+
     <x-page-header title="Maintenance history"
         subtitle="Audit log of plugin updates, cache purges, security scans, and system maintenance across the fleet.">
         <x-slot:actions>

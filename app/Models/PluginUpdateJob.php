@@ -18,6 +18,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Pair with `action_logs` (the audit-trail archive) — these rows are the
  * live progress substrate. See AbstractRunUpdate for the worker that drives
  * transitions.
+ *
+ * @method static Builder<PluginUpdateJob> live()
+ * @method static Builder<PluginUpdateJob> forBatch(string $batchId)
  */
 class PluginUpdateJob extends Model
 {

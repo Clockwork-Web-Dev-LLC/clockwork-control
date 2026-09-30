@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Server;
 use App\Models\ServerMetric;
+use App\Services\Chat\ChatNotifier;
 use App\Services\CloudProvider\CloudProviderRegistry;
 use App\Services\Monitoring\CpuStatusClassifier;
 use App\Support\Settings;
@@ -20,8 +21,12 @@ use Modules\Core\ModuleStateResolver;
 #[Description('Poll cloud-provider metrics (DigitalOcean, Hetzner, and Azure) for every linked server and update its health status (green/yellow/red).')]
 class PollServers extends Command
 {
-    public function handle(CloudProviderRegistry $registry, CpuStatusClassifier $classifier): int
-    {
+    public function handle(
+        CloudProviderRegistry $registry,
+        CpuStatusClassifier $classifier,
+        ?ChatNotifier $notifier = null
+    ): int {
+        $notifier ??= app()->has(ChatNotifier::class) ? app(ChatNotifier::class) : null;
         $providers = $registry->all();
 
         // We poll any server that has a provider_id (regardless of which
@@ -124,6 +129,9 @@ class PollServers extends Command
             if ($status === Server::STATUS_RED && $previous !== Server::STATUS_RED) {
                 $server->last_alert_at = $now;
                 $this->triggerAiRemedySpike($server, $sample['cpu_pct']);
+                $notifier?->serverWentRed($server, $sample['cpu_pct'], "Cloud metrics reported CPU spike to {$sample['cpu_pct']}% (status: RED)");
+            } elseif ($status === Server::STATUS_GREEN && $previous === Server::STATUS_RED) {
+                $notifier?->serverRecovered($server);
             }
 
             $server->save();

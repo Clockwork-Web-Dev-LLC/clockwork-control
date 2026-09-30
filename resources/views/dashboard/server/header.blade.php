@@ -139,7 +139,12 @@
             </a>
             {{-- Patch / reboot indicators — link to Updates tab so the user can act. --}}
             @unless ($server->is_ignored)
-                @if ($server->upgrade_required)
+                @php
+                    $hasPatches = ($server->updateSnapshot && $server->updateSnapshot->poll_status === \App\Models\ServerUpdateSnapshot::STATUS_OK)
+                        ? ($server->updateSnapshot->total_updates > 0)
+                        : (bool) $server->upgrade_required;
+                @endphp
+                @if ($hasPatches)
                     <a href="{{ route('servers.show', ['server' => $server, 'tab' => 'updates']) }}"
                        class="status-pill status-yellow text-[10px]"
                        title="Patches available — click to run updates">
