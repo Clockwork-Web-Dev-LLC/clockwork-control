@@ -32,8 +32,11 @@ class AiRemedyController extends Controller
      */
     public function index(Request $request): View
     {
+        $showHidden = $request->boolean('hidden');
+
         $query = AiRemedyRun::query()
             ->with(['server', 'site', 'user'])
+            ->when($showHidden, fn ($q) => $q->whereNotNull('hidden_at'), fn ($q) => $q->whereNull('hidden_at'))
             ->latest('id');
 
         if ($status = $request->input('status')) {
@@ -67,6 +70,8 @@ class AiRemedyController extends Controller
             'servers' => $servers,
             'activeStatus' => $status,
             'selectedServerId' => $serverId,
+            'showHidden' => $showHidden,
+            'hiddenCount' => AiRemedyRun::whereNotNull('hidden_at')->count(),
         ]);
     }
 
@@ -104,6 +109,45 @@ class AiRemedyController extends Controller
         }
 
         return redirect()->back(fallback: route('ai-remedy.index'))->with('status', $message);
+    }
+
+    /**
+     * Hide selected runs from the incident log without deleting them.
+     */
+    public function hideMany(Request $request): RedirectResponse
+    {
+        $ids = $this->validatedRunIds($request);
+        $count = AiRemedyRun::query()->whereIn('id', $ids)->whereNull('hidden_at')
+            ->update(['hidden_at' => now(), 'hidden_by_user_id' => $request->user()?->id]);
+
+        return redirect()->back(fallback: route('ai-remedy.index'))
+            ->with('status', $count.' run'.($count === 1 ? '' : 's').' hidden. See the Hidden tab to bring them back.');
+    }
+
+    /**
+     * Put hidden runs back in the incident log.
+     */
+    public function unhideMany(Request $request): RedirectResponse
+    {
+        $ids = $this->validatedRunIds($request);
+        $count = AiRemedyRun::query()->whereIn('id', $ids)->whereNotNull('hidden_at')
+            ->update(['hidden_at' => null, 'hidden_by_user_id' => null]);
+
+        return redirect()->back(fallback: route('ai-remedy.index', ['hidden' => 1]))
+            ->with('status', $count.' run'.($count === 1 ? '' : 's').' restored to the incident log.');
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function validatedRunIds(Request $request): array
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        return array_values(array_map('intval', $validated['ids']));
     }
 
     /**

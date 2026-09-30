@@ -209,6 +209,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/ai-remedy/servers/{server}/diagnose` | Triggers live read-only SSH telemetry probe and OpenRouter root-cause triage (throttled: `15,1`). |
 | POST | `/ai-remedy/runs/{run}/execute` | Admin-only. Runs the operator-selected subset of a run's proposed commands (`selected: [{index, command}]`) via SSH with exit code validation; records per-command decisions; 409 for Shadow/simulation, already-run, stale (>2h) runs, or a server with a fix already running (throttled: `10,1`). |
 | DELETE | `/ai-remedy/runs` | Admin-only. Bulk-deletes the given run `ids[]` from the incident log (executing runs are kept); logs `ai_remedy_runs_deleted`. |
+| POST | `/ai-remedy/runs/hide` | Admin-only. Hides the given run `ids[]` from the incident log (sets `hidden_at`). |
+| POST | `/ai-remedy/runs/unhide` | Admin-only. Restores hidden runs to the incident log. |
 | GET | `/ai-remedy/runs/{run}` | Dedicated incident forensics page: telemetry snapshot, top processes, root cause, and stdout/stderr log. |
 
 ### Docs (this site)

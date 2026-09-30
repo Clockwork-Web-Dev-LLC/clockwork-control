@@ -506,3 +506,32 @@ test('operators cannot delete runs and do not see the selection controls', funct
     $this->actingAs($operator)->get(route('ai-remedy.index'))->assertOk()->assertDontSee('ai-remedy-bulk-delete', false);
     $this->actingAs($this->admin)->get(route('ai-remedy.index'))->assertOk()->assertSee('ai-remedy-bulk-delete', false);
 });
+
+test('admins can hide runs from the log and unhide them from the Hidden tab', function () {
+    $keep = airCopilotRun($this->server, ['root_cause' => 'Visible incident']);
+    $noise = airCopilotRun($this->server, ['root_cause' => 'Noisy incident']);
+
+    $this->actingAs($this->admin)->from(route('ai-remedy.index'))
+        ->post(route('ai-remedy.runs.hide'), ['ids' => [$noise->id]])
+        ->assertRedirect(route('ai-remedy.index'))
+        ->assertSessionHas('status', '1 run hidden. See the Hidden tab to bring them back.');
+
+    expect($noise->fresh()->hidden_at)->not->toBeNull();
+    expect($noise->fresh()->hidden_by_user_id)->toBe($this->admin->id);
+
+    $this->actingAs($this->admin)->get(route('ai-remedy.index'))
+        ->assertOk()->assertSee('Visible incident')->assertDontSee('Noisy incident')->assertSee('Hidden (1)');
+    $this->actingAs($this->admin)->get(route('ai-remedy.index', ['hidden' => 1]))
+        ->assertOk()->assertSee('Noisy incident')->assertDontSee('Visible incident')->assertSee('Unhide selected');
+
+    $this->actingAs($this->admin)->post(route('ai-remedy.runs.unhide'), ['ids' => [$noise->id]])->assertRedirect();
+    expect($noise->fresh()->hidden_at)->toBeNull();
+    expect(AiRemedyRun::count())->toBe(2);
+});
+
+test('operators cannot hide runs', function () {
+    $run = airCopilotRun($this->server);
+    $this->actingAs(User::factory()->operator()->create())
+        ->post(route('ai-remedy.runs.hide'), ['ids' => [$run->id]])->assertForbidden();
+    expect($run->fresh()->hidden_at)->toBeNull();
+});

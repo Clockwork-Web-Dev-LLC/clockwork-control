@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.1] - 2026-09-30
 
 ### Added
+- **Hide AiRemedy runs.** Tick runs on `/ai-remedy` and **Hide selected** to dismiss them from the incident log without deleting anything; a **Hidden (N)** tab lists them with **Unhide selected**. Stats and total cost still include hidden runs. Adds nullable `ai_remedy_runs.hidden_at` / `hidden_by_user_id` (migration `2026_09_30_000001`).
 - **Bulk delete AiRemedy runs.** Admins can tick incidents on `/ai-remedy` (or "Select page") and **Delete selected** (`DELETE /ai-remedy/runs`). Runs that are executing right now are kept. Executed fixes keep their immutable `ai_remediation` action-log entry, and each deletion is logged as `ai_remedy_runs_deleted`.
 
 ### Fixed
