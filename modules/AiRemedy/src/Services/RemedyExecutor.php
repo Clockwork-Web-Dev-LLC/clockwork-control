@@ -83,6 +83,16 @@ class RemedyExecutor
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $errMsg];
         }
 
+        // Autonomous runs also get the review panel's per-command checks (e.g.
+        // a wp-cli/.maintenance command aimed at a guessed site path). Leave
+        // the run reviewable rather than rejected so an operator can apply
+        // the panel's suggested correction.
+        if ($run->actor === 'autonomous' && ($reason = $this->policy->autoExecuteBlockedReason($run)) !== null) {
+            $run->update(['error_message' => 'Autonomous execution held for review: '.$reason]);
+
+            return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $reason];
+        }
+
         // One execution per server at a time: two fixes racing on the same box
         // (or a double-click) must never interleave SSH commands.
         $lock = Cache::lock("ai-remedy:execute:server:{$server->id}", 300);
