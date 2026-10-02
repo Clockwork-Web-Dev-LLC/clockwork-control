@@ -72,6 +72,37 @@ class RunApprovalPolicy
     }
 
     /**
+     * Why this run can't execute without a human reviewing it first, or null
+     * when Auto-Heal may run it. Stricter than blockedReason(): every command
+     * must be Tier 1 AND pass the same per-command checks the review panel
+     * applies (including targeting a real site on the server), since nobody
+     * sees an autonomous run's commands before they execute.
+     */
+    public function autoExecuteBlockedReason(AiRemedyRun $run): ?string
+    {
+        if ($run->actor !== 'autonomous') {
+            return 'Only Autonomous Self-Healing runs execute without review.';
+        }
+
+        $review = $this->review($run);
+        if (! $review['executable']) {
+            return $review['blocked_reason'];
+        }
+
+        foreach ($review['commands'] as $command) {
+            if (! $command['allowed']) {
+                return "Needs review: `{$command['command']}`: {$command['reason']}";
+            }
+
+            if ($command['tier'] !== CommandSafetyGuard::TIER_1_SAFE) {
+                return "Needs review: `{$command['command']}` is not Tier 1.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Review payload for the approval panel.
      *
      * @return array{
