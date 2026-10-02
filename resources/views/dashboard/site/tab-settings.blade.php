@@ -722,6 +722,132 @@
                     @endif
                 </button>
             </form>
+
+            {{-- Alert Subscribers (Client Contacts) --}}
+            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)]">
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[11px] font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                        <i class="fa-solid fa-users text-sky-500"></i>
+                        Alert Subscribers ({{ $siteSubscribers->count() }})
+                    </label>
+                    <a href="{{ route('settings.notifications.index') }}" class="text-[10px] text-[var(--color-primary-600)] hover:underline">
+                        Manage all &rarr;
+                    </a>
+                </div>
+                <p class="text-[10px] text-[var(--color-ink-muted)] mb-2.5">
+                    Client contacts who receive non-technical outage and recovery notices for this site.
+                </p>
+
+                @if ($siteSubscribers->isEmpty())
+                    <div class="p-2.5 rounded bg-[var(--color-surface-alt)]/50 text-[11px] text-[var(--color-ink-soft)] text-center mb-2.5">
+                        No client contacts subscribed to alerts for this site yet.
+                    </div>
+                @else
+                    <ul class="space-y-1.5 mb-2.5">
+                        @foreach ($siteSubscribers as $sub)
+                            <li class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--color-surface-alt)]/50 border border-[var(--color-border-light)] text-xs">
+                                <div class="min-w-0">
+                                    <div class="font-medium text-[var(--color-ink-strong)] truncate">
+                                        {{ $sub->name }}
+                                        @if ($sub->company)
+                                            <span class="text-[10px] text-[var(--color-ink-soft)] font-normal">({{ $sub->company }})</span>
+                                        @endif
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[10px] text-[var(--color-ink-muted)] font-data mt-0.5">
+                                        @if ($sub->notify_sms && $sub->phone)
+                                            <span title="SMS enabled" class="inline-flex items-center gap-1">
+                                                <i class="fa-solid fa-mobile-screen text-sky-500"></i> {{ $sub->phone }}
+                                            </span>
+                                        @endif
+                                        @if ($sub->notify_email && $sub->resolvedEmail())
+                                            <span title="Email enabled" class="inline-flex items-center gap-1">
+                                                <i class="fa-solid fa-envelope text-violet-500"></i> {{ $sub->resolvedEmail() }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="shrink-0"
+                                      data-confirm="Unsubscribe {{ $sub->name }} from {{ $site->domain }}?"
+                                      data-confirm-btn="Unsubscribe"
+                                      data-confirm-variant="danger">
+                                    @csrf
+                                    @foreach ($siteSubscribers as $otherSub)
+                                        @if ($otherSub->id !== $sub->id)
+                                            <input type="hidden" name="recipient_ids[]" value="{{ $otherSub->id }}">
+                                        @endif
+                                    @endforeach
+                                    <button type="submit" class="text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] text-xs p-1" title="Unsubscribe {{ $sub->name }}">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </form>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                {{-- Attach Existing Subscriber --}}
+                @php
+                    $unattached = $availableClientRecipients->whereNotIn('id', $siteSubscribers->pluck('id'));
+                @endphp
+                @if ($unattached->isNotEmpty())
+                    <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="flex items-center gap-1.5 mb-2">
+                        @csrf
+                        @foreach ($siteSubscribers as $existing)
+                            <input type="hidden" name="recipient_ids[]" value="{{ $existing->id }}">
+                        @endforeach
+                        <select name="recipient_ids[]" class="text-xs px-2 py-1 rounded border border-[var(--color-border)] flex-1 bg-[var(--color-surface)] text-[var(--color-ink-strong)]" required>
+                            <option value="">Attach existing contact...</option>
+                            @foreach ($unattached as $avail)
+                                <option value="{{ $avail->id }}">
+                                    {{ $avail->name }} {{ $avail->company ? "({$avail->company})" : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn-pill-nav text-xs shrink-0 font-medium">
+                            <i class="fa-solid fa-plus text-[10px]"></i> Attach
+                        </button>
+                    </form>
+                @endif
+
+                {{-- Quick Add New Client Contact --}}
+                <details class="text-xs">
+                    <summary class="text-[11px] text-[var(--color-primary-600)] hover:underline cursor-pointer flex items-center gap-1">
+                        <i class="fa-solid fa-user-plus text-[10px]"></i> Quick add new contact
+                    </summary>
+                    <form method="POST" action="{{ route('sites.notifications.store', $site) }}" class="mt-2 p-2.5 rounded border border-[var(--color-border-light)] bg-[var(--color-surface)] space-y-2">
+                        @csrf
+                        <div>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Contact Name</span>
+                            <input type="text" name="name" placeholder="e.g. John Doe" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full" required>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Company (optional)</span>
+                            <input type="text" name="company" placeholder="e.g. Acme Corp" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Phone (E.164)</span>
+                            <input type="text" name="phone" placeholder="+1..." class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full font-data" pattern="\+\d{8,15}">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Email Address</span>
+                            <input type="email" name="email" placeholder="contact@example.com" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full font-data">
+                        </div>
+                        <div class="space-y-1 pt-1 border-t border-[var(--color-border-light)] text-[11px]">
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" name="notify_sms" value="1" checked>
+                                <span class="text-[var(--color-ink)]">Send SMS alerts</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" name="notify_email" value="1" checked>
+                                <span class="text-[var(--color-ink)]">Send Email alerts</span>
+                            </label>
+                        </div>
+                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center">
+                            Save &amp; Subscribe to {{ $site->domain }}
+                        </button>
+                    </form>
+                </details>
+            </div>
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">

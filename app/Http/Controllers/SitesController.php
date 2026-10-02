@@ -9,6 +9,7 @@ use App\Jobs\PurgeSiteCacheJob;
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
+use App\Models\NotificationRecipient;
 use App\Models\PluginUpdateIgnore;
 use App\Models\Server;
 use App\Models\Site;
@@ -442,10 +443,14 @@ class SitesController extends Controller
         $pusher = app(GatekeeperSettingsPusher::class);
         $fleetGatekeeper = $pusher->buildPayload();
         $siteGatekeeper = is_array($site->gatekeeper_settings) ? $site->gatekeeper_settings : [];
+        $siteSubscribers = $site->notificationRecipients()->get();
+        $availableClientRecipients = NotificationRecipient::client()->orderBy('name')->get();
 
         return [
             'fleetGatekeeper' => $fleetGatekeeper,
             'siteGatekeeper' => $siteGatekeeper,
+            'siteSubscribers' => $siteSubscribers,
+            'availableClientRecipients' => $availableClientRecipients,
         ];
     }
 
@@ -1781,6 +1786,56 @@ class SitesController extends Controller
         );
 
         return back()->with('status', "Uptime alerts re-enabled for {$site->domain}.");
+    }
+
+    /**
+     * Sync notification recipients (subscribers) for a specific site.
+     */
+    public function syncNotificationRecipients(Request $request, Site $site): RedirectResponse
+    {
+        $validated = $request->validate([
+            'recipient_ids' => ['nullable', 'array'],
+            'recipient_ids.*' => ['integer', 'exists:notification_recipients,id'],
+        ]);
+
+        $site->notificationRecipients()->sync($validated['recipient_ids'] ?? []);
+
+        return back()->with('status', "Updated alert subscribers for {$site->domain}.");
+    }
+
+    /**
+     * Quick-add a new client notification recipient directly attached to this site.
+     */
+    public function storeNotificationRecipient(Request $request, Site $site): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'company' => ['nullable', 'string', 'max:120'],
+            'phone' => ['nullable', 'string', 'regex:/^\+\d{8,15}$/'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'boolean'],
+        ]);
+
+        if (empty($validated['phone']) && empty($validated['email'])) {
+            return back()->with('status_error', 'Please provide either a phone number or an email address.');
+        }
+
+        $recipient = NotificationRecipient::create([
+            'type' => NotificationRecipient::TYPE_CLIENT,
+            'name' => $validated['name'],
+            'company' => $validated['company'] ?? null,
+            'phone' => $validated['phone'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'email_fallback' => $validated['email'] ?? null,
+            'notify_sms' => (bool) ($request->has('notify_sms') ? $request->boolean('notify_sms') : ! empty($validated['phone'])),
+            'notify_email' => (bool) ($request->has('notify_email') ? $request->boolean('notify_email') : ! empty($validated['email'])),
+            'enabled' => true,
+        ]);
+
+        $site->notificationRecipients()->attach($recipient->id);
+
+        return back()->with('status', "Added {$recipient->name} as an alert contact for {$site->domain}.");
     }
 
     /**

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
@@ -803,6 +804,13 @@ class Site extends Model
     public function ingestExclusions(): HasMany
     {
         return $this->hasMany(SiteIngestExclusion::class);
+    }
+
+    /** @return BelongsToMany<NotificationRecipient, $this> */
+    public function notificationRecipients(): BelongsToMany
+    {
+        return $this->belongsToMany(NotificationRecipient::class, 'site_notification_recipient')
+            ->withTimestamps();
     }
 
     public function consolidatedInto(): BelongsTo

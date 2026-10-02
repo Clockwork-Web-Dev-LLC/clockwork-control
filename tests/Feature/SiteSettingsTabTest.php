@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\NotificationRecipient;
 use App\Models\Site;
 use App\Models\User;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -107,4 +108,22 @@ it('does not put a backups card on the settings tab', function () {
         ->assertOk()
         ->assertDontSee('Save backup schedule')
         ->assertDontSee('id="backup-relay-card"', false);
+});
+
+it('renders alert subscribers on the settings tab', function () {
+    $site = Site::factory()->spinupwp()->create(['domain' => 'subscribed-site.test']);
+    $recipient = NotificationRecipient::factory()->client()->create([
+        'name' => 'Jane Subscriber',
+        'company' => 'Jane Co',
+        'phone' => '+15555550199',
+    ]);
+    $site->notificationRecipients()->attach($recipient->id);
+
+    $this->actingAs($this->user)
+        ->get(route('sites.show', ['site' => $site, 'tab' => 'settings']))
+        ->assertOk()
+        ->assertSee('Alert Subscribers (1)')
+        ->assertSee('Jane Subscriber')
+        ->assertSee('(Jane Co)')
+        ->assertSee('+15555550199');
 });

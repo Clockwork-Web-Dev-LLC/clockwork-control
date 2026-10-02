@@ -2,6 +2,7 @@
 
 use App\Models\NotificationOffWindow;
 use App\Models\NotificationRecipient;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Modules\Core\Contracts\SmsNotifier;
@@ -83,6 +84,27 @@ describe('NotificationSettingsController', function () {
 
             $response->assertOk()->assertSee('Nobody');
         });
+
+        it('renders client contacts with their company and subscribed sites', function () {
+            $site = Site::factory()->create(['domain' => 'clientdomain.test']);
+            $client = NotificationRecipient::factory()->client()->create([
+                'name' => 'Client VIP',
+                'company' => 'VIP Corp',
+                'phone' => '+15559998888',
+                'email' => 'vip@example.test',
+            ]);
+            $client->sites()->attach($site->id);
+
+            $response = $this->actingAs(User::factory()->create())
+                ->get(route('settings.notifications.index'));
+
+            $response->assertOk()
+                ->assertSee('Client VIP')
+                ->assertSee('(VIP Corp)')
+                ->assertSee('+15559998888')
+                ->assertSee('vip@example.test')
+                ->assertSee('clientdomain.test');
+        });
     });
 
     describe('storeRecipient', function () {
@@ -123,6 +145,68 @@ describe('NotificationSettingsController', function () {
                 ]);
 
             $response->assertSessionHasErrors('name');
+        });
+
+        it('creates a client recipient with company, email, phone, and assigns sites', function () {
+            $site = Site::factory()->create();
+
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.notifications.recipients.store'), [
+                    'type' => 'client',
+                    'name' => 'Alice Client',
+                    'company' => 'Acme Holdings',
+                    'phone' => '+15555551212',
+                    'email' => 'alice@example.test',
+                    'notify_sms' => '1',
+                    'notify_email' => '1',
+                    'enabled' => '1',
+                    'site_ids' => [$site->id],
+                ]);
+
+            $response->assertRedirect()->assertSessionHas('status', 'Added Alice Client.');
+
+            $recipient = NotificationRecipient::where('name', 'Alice Client')->first();
+            expect($recipient)->not->toBeNull();
+            expect($recipient->type)->toBe(NotificationRecipient::TYPE_CLIENT);
+            expect($recipient->company)->toBe('Acme Holdings');
+            expect($recipient->phone)->toBe('+15555551212');
+            expect($recipient->email)->toBe('alice@example.test');
+            expect($recipient->notify_sms)->toBeTrue();
+            expect($recipient->notify_email)->toBeTrue();
+            expect($recipient->sites->pluck('id')->all())->toBe([$site->id]);
+        });
+
+        it('creates a client recipient with email only and no phone', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.notifications.recipients.store'), [
+                    'type' => 'client',
+                    'name' => 'Email Only Contact',
+                    'email' => 'emailonly@example.test',
+                    'notify_email' => '1',
+                    'enabled' => '1',
+                ]);
+
+            $response->assertRedirect()->assertSessionHas('status', 'Added Email Only Contact.');
+
+            $this->assertDatabaseHas('notification_recipients', [
+                'name' => 'Email Only Contact',
+                'type' => NotificationRecipient::TYPE_CLIENT,
+                'email' => 'emailonly@example.test',
+                'phone' => null,
+            ]);
+        });
+
+        it('rejects a client recipient if neither phone nor email is provided', function () {
+            $response = $this->actingAs(User::factory()->create())
+                ->post(route('settings.notifications.recipients.store'), [
+                    'type' => 'client',
+                    'name' => 'No Contact Info',
+                ]);
+
+            $response->assertRedirect()->assertSessionHas('status_error');
+            $this->assertDatabaseMissing('notification_recipients', [
+                'name' => 'No Contact Info',
+            ]);
         });
     });
 
@@ -165,6 +249,36 @@ describe('NotificationSettingsController', function () {
                 ]);
 
             $response->assertNotFound();
+        });
+
+        it('updates a client recipient and syncs their subscribed sites', function () {
+            $siteA = Site::factory()->create();
+            $siteB = Site::factory()->create();
+
+            $client = NotificationRecipient::factory()->client()->create([
+                'name' => 'Initial Client',
+                'company' => 'Old Co',
+            ]);
+            $client->sites()->attach($siteA->id);
+
+            $response = $this->actingAs(User::factory()->create())
+                ->patch(route('settings.notifications.recipients.update', $client), [
+                    'type' => 'client',
+                    'name' => 'Updated Client',
+                    'company' => 'New Co',
+                    'email' => 'newclient@example.test',
+                    'notify_email' => '1',
+                    'enabled' => '1',
+                    'site_ids' => [$siteB->id],
+                ]);
+
+            $response->assertRedirect()->assertSessionHas('status', 'Updated Updated Client.');
+
+            $client->refresh();
+            expect($client->name)->toBe('Updated Client');
+            expect($client->company)->toBe('New Co');
+            expect($client->email)->toBe('newclient@example.test');
+            expect($client->sites->pluck('id')->all())->toBe([$siteB->id]);
         });
     });
 

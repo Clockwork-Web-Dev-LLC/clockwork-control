@@ -335,6 +335,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/auto-updates/toggle', [SitesController::class, 'togglePauseAutoUpdates'])->name('sites.auto-updates.toggle');
     Route::post('/sites/{site}/uptime-monitoring', [SitesController::class, 'toggleUptimeMonitoring'])->name('sites.uptime-monitoring.toggle');
     Route::post('/sites/{site}/uptime-ignore', [SitesController::class, 'toggleUptimeIgnore'])->name('sites.uptime-ignore.toggle');
+    Route::post('/sites/{site}/notifications/subscribers', [SitesController::class, 'syncNotificationRecipients'])->name('sites.notifications.sync');
+    Route::post('/sites/{site}/notifications/subscribers/create', [SitesController::class, 'storeNotificationRecipient'])->name('sites.notifications.store');
     Route::post('/sites/{site}/inactive', [SitesController::class, 'toggleInactive'])->name('sites.inactive.toggle');
     Route::post('/sites/{site}/refresh-wp-plugins', [SitesController::class, 'refreshWpPlugins'])->name('sites.wp-plugins.refresh');
     Route::post('/sites/{site}/fetch-db-creds', [SitesController::class, 'fetchDbCreds'])->name('sites.fetch-db-creds');

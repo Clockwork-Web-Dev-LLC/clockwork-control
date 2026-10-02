@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\NotificationLog;
 use App\Models\NotificationOffWindow;
 use App\Models\NotificationRecipient;
+use App\Models\Site;
 use App\Services\Twilio\OnCallResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,11 @@ class NotificationSettingsController extends Controller
     {
         $recipients = NotificationRecipient::with([
             'offWindows' => fn ($q) => $q->orderBy('start_dow')->orderBy('start_time'),
+            'sites',
         ])->orderBy('name')->get();
+
+        $teamRecipients = $recipients->where('type', NotificationRecipient::TYPE_TEAM)->values();
+        $clientRecipients = $recipients->where('type', NotificationRecipient::TYPE_CLIENT)->values();
 
         $onCall = $this->resolver->activeAt(Carbon::now());
         $recentLogs = NotificationLog::with('recipient', 'site')
@@ -37,8 +42,13 @@ class NotificationSettingsController extends Controller
             ->limit(20)
             ->get();
 
+        $allSites = Site::orderBy('domain')->get(['id', 'domain']);
+
         return view('settings.notifications', [
             'recipients' => $recipients,
+            'teamRecipients' => $teamRecipients,
+            'clientRecipients' => $clientRecipients,
+            'allSites' => $allSites,
             'onCall' => $onCall,
             'twilioConfigured' => $this->sms->isConfigured(),
             'twilioFrom' => $this->sms->fromNumber(),
@@ -48,38 +58,100 @@ class NotificationSettingsController extends Controller
 
     public function storeRecipient(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'phone' => ['required', 'string', 'regex:/^\+\d{8,15}$/'],
-            'email_fallback' => ['nullable', 'email', 'max:255'],
-            'enabled' => ['nullable', 'boolean'],
-        ]);
+        $type = $request->input('type', NotificationRecipient::TYPE_TEAM);
 
-        NotificationRecipient::create([
+        $rules = [
+            'type' => ['nullable', 'string', 'in:team,client'],
+            'name' => ['required', 'string', 'max:120'],
+            'company' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'email_fallback' => ['nullable', 'email', 'max:255'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'boolean'],
+            'enabled' => ['nullable', 'boolean'],
+            'site_ids' => ['nullable', 'array'],
+            'site_ids.*' => ['integer', 'exists:sites,id'],
+        ];
+
+        if ($type === NotificationRecipient::TYPE_TEAM) {
+            $rules['phone'] = ['required', 'string', 'regex:/^\+\d{8,15}$/'];
+        } else {
+            $rules['phone'] = ['nullable', 'string', 'regex:/^\+\d{8,15}$/'];
+        }
+
+        $data = $request->validate($rules);
+
+        if ($type === NotificationRecipient::TYPE_CLIENT && empty($data['phone']) && empty($data['email']) && empty($data['email_fallback'])) {
+            return back()->with('status_error', 'Client contacts require at least a phone number or an email address.')->withInput();
+        }
+
+        $email = $data['email'] ?? $data['email_fallback'] ?? null;
+
+        $recipient = NotificationRecipient::create([
+            'type' => $type,
             'name' => $data['name'],
-            'phone' => $data['phone'],
-            'email_fallback' => $data['email_fallback'] ?? null,
+            'company' => $data['company'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'email' => $email,
+            'email_fallback' => $data['email_fallback'] ?? $email,
+            'notify_sms' => (bool) ($request->has('notify_sms') ? $request->boolean('notify_sms') : ! empty($data['phone'])),
+            'notify_email' => (bool) ($request->has('notify_email') ? $request->boolean('notify_email') : ! empty($email)),
             'enabled' => (bool) ($data['enabled'] ?? true),
         ]);
+
+        if ($type === NotificationRecipient::TYPE_CLIENT && isset($data['site_ids'])) {
+            $recipient->sites()->sync($data['site_ids']);
+        }
 
         return back()->with('status', "Added {$data['name']}.");
     }
 
     public function updateRecipient(Request $request, NotificationRecipient $recipient): RedirectResponse
     {
-        $data = $request->validate([
+        $type = $request->input('type', $recipient->type ?? NotificationRecipient::TYPE_TEAM);
+
+        $rules = [
+            'type' => ['nullable', 'string', 'in:team,client'],
             'name' => ['required', 'string', 'max:120'],
-            'phone' => ['required', 'string', 'regex:/^\+\d{8,15}$/'],
+            'company' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
             'email_fallback' => ['nullable', 'email', 'max:255'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'boolean'],
             'enabled' => ['nullable', 'boolean'],
-        ]);
+            'site_ids' => ['nullable', 'array'],
+            'site_ids.*' => ['integer', 'exists:sites,id'],
+        ];
+
+        if ($type === NotificationRecipient::TYPE_TEAM) {
+            $rules['phone'] = ['required', 'string', 'regex:/^\+\d{8,15}$/'];
+        } else {
+            $rules['phone'] = ['nullable', 'string', 'regex:/^\+\d{8,15}$/'];
+        }
+
+        $data = $request->validate($rules);
+
+        if ($type === NotificationRecipient::TYPE_CLIENT && empty($data['phone']) && empty($data['email']) && empty($data['email_fallback'])) {
+            return back()->with('status_error', 'Client contacts require at least a phone number or an email address.')->withInput();
+        }
+
+        $email = $data['email'] ?? $data['email_fallback'] ?? $recipient->email;
 
         $recipient->update([
+            'type' => $type,
             'name' => $data['name'],
-            'phone' => $data['phone'],
-            'email_fallback' => $data['email_fallback'] ?? null,
+            'company' => $data['company'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'email' => $email,
+            'email_fallback' => $data['email_fallback'] ?? $email,
+            'notify_sms' => (bool) ($request->has('notify_sms') ? $request->boolean('notify_sms') : ! empty($data['phone'])),
+            'notify_email' => (bool) ($request->has('notify_email') ? $request->boolean('notify_email') : ! empty($email)),
             'enabled' => (bool) ($data['enabled'] ?? false),
         ]);
+
+        if ($type === NotificationRecipient::TYPE_CLIENT && isset($data['site_ids'])) {
+            $recipient->sites()->sync($data['site_ids']);
+        }
 
         return back()->with('status', "Updated {$recipient->name}.");
     }
