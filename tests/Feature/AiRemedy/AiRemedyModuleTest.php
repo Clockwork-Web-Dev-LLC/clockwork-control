@@ -543,6 +543,69 @@ test('watch server spikes command skips server in cooldown unless force is provi
         ->assertSuccessful();
 });
 
+test('watch server spikes command skips triage when live telemetry confirms spike was transient and cleared', function () {
+    $server = Server::factory()->create([
+        'name' => 'transient-box',
+        'is_ignored' => false,
+        'vcpus' => 2,
+    ]);
+
+    // Historical metric indicating a past spike
+    ServerMetric::create([
+        'server_id' => $server->id,
+        'recorded_at' => now()->subMinutes(2),
+        'cpu_pct' => 95.0,
+        'load_1' => 6.0,
+    ]);
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+    });
+
+    // Mock collector returning completely healthy live metrics
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')
+            ->withArgs(fn ($s) => $s->id === $server->id)
+            ->andReturn([
+                'ok' => true,
+                'server_id' => $server->id,
+                'hostname' => $server->hostname,
+                'cores' => 2,
+                'loadavg' => [0.25, 0.40, 0.50],
+                'memory' => ['used_percent' => 30.0],
+                'top_cpu' => [['command' => 'php-fpm', 'cpu_pct' => 5.0]],
+            ]);
+    });
+
+    // Triager must NOT receive triageServerSpike
+    $this->mock(AiRemedyTriager::class, function ($mock) {
+        $mock->shouldReceive('getMode')->andReturn('watch');
+        $mock->shouldReceive('getCooldownMinutes')->andReturn(30);
+        $mock->shouldReceive('isServerInCooldown')->andReturn(false);
+        $mock->shouldNotReceive('triageServerSpike');
+    });
+
+    $this->artisan('clockwork:watch-server-spikes')
+        ->expectsOutputToContain('transient spike cleared naturally')
+        ->assertSuccessful();
+});
+
+test('graceful_kill command is classified as tier 1 safe and accepts single or multiple PIDs', function () {
+    $guard = app(CommandSafetyGuard::class);
+
+    $single = $guard->evaluate('sudo kill -15 12345');
+    expect($single['allowed'])->toBeTrue()
+        ->and($single['tier'])->toBe(CommandSafetyGuard::TIER_1_SAFE);
+
+    $multiple = $guard->evaluate('sudo kill -15 12345 67890 23456');
+    expect($multiple['allowed'])->toBeTrue()
+        ->and($multiple['tier'])->toBe(CommandSafetyGuard::TIER_1_SAFE);
+
+    $term = $guard->evaluate('sudo kill -TERM 9999');
+    expect($term['allowed'])->toBeTrue()
+        ->and($term['tier'])->toBe(CommandSafetyGuard::TIER_1_SAFE);
+});
+
 test('non-admin operators cannot access mutating or settings routes in ai-remedy', function () {
     $operator = User::factory()->operator()->create();
     $server = Server::factory()->create();

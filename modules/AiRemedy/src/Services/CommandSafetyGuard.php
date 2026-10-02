@@ -104,7 +104,7 @@ class CommandSafetyGuard
             'label' => 'Graceful Process Termination (kill -15 / SIGTERM)',
             'command_example' => 'sudo kill -15 <PID>',
             'description' => 'Requests a runaway or looping worker process to shut down cleanly.',
-            'pattern' => '/^sudo\s+kill\s+(-15|-TERM)\s+\d+$/i',
+            'pattern' => '/^sudo\s+kill\s+(-15|-TERM)\s+\d+(\s+\d+)*$/i',
             'default_tier' => self::TIER_1_SAFE,
         ],
         'restart_database' => [

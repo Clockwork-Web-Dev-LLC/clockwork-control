@@ -14,7 +14,7 @@ use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
 use Modules\Core\ModuleStateResolver;
 
-#[Signature('clockwork:watch-server-spikes {--force : Bypass cooldown}')]
+#[Signature('clockwork:watch-server-spikes {--force : Bypass cooldown} {--no-debounce : Skip transient spike debounce}')]
 #[Description('Audit servers for CPU, load, and memory spikes and trigger automated AiRemedy triage (Shadow Mode or Auto-Heal).')]
 class WatchServerSpikes extends Command
 {
@@ -63,6 +63,7 @@ class WatchServerSpikes extends Command
 
         $spikesDetected = 0;
         $cooldownSkipped = 0;
+        $transientSkipped = 0;
 
         foreach ($servers as $server) {
             if (! $isForce && $triager->isServerInCooldown($server)) {
@@ -75,6 +76,19 @@ class WatchServerSpikes extends Command
             $spikeReason = $this->detectSpike($server, $collector, $cpuThreshold);
 
             if ($spikeReason !== null) {
+                // Debounce check: verify whether the spike was transient and has already cleared
+                if (! $this->option('no-debounce') && $this->isTransientCleared($server, $collector, $cpuThreshold)) {
+                    $transientSkipped++;
+                    $this->line("  ↷ {$server->name}: transient spike cleared naturally. Skipping triage.");
+                    Log::info('ai_remedy.transient_spike_cleared', [
+                        'server_id' => $server->id,
+                        'server_name' => $server->name,
+                        'reason' => $spikeReason,
+                    ]);
+
+                    continue;
+                }
+
                 $spikesDetected++;
                 $this->warn("  ⚡ SPIKE DETECTED on {$server->name}: {$spikeReason}");
 
@@ -99,9 +113,10 @@ class WatchServerSpikes extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            'Watchdog sweep complete. servers=%d spikes=%d in_cooldown=%d',
+            'Watchdog sweep complete. servers=%d spikes=%d transient_cleared=%d in_cooldown=%d',
             $servers->count(),
             $spikesDetected,
+            $transientSkipped,
             $cooldownSkipped,
         ));
 
@@ -173,5 +188,65 @@ class WatchServerSpikes extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Check if a detected spike was transient and has already resolved before invoking LLM triage.
+     */
+    protected function isTransientCleared(Server $server, ServerTelemetryCollector $collector, int $cpuThreshold): bool
+    {
+        // 1. Initial live telemetry check
+        $telemetry = $collector->collect($server);
+        if (! ($telemetry['ok'] ?? false)) {
+            return false;
+        }
+
+        $cores = (int) ($telemetry['cores'] ?? ($server->vcpus ?: 1));
+        $load1 = (float) ($telemetry['loadavg'][0] ?? 0);
+        $topCpu = (float) ($telemetry['top_cpu'][0]['cpu_pct'] ?? 0);
+        $memPct = (float) ($telemetry['memory']['used_percent'] ?? 0);
+
+        // If the server is STILL actively elevated right now, it is a real active incident
+        $isElevated = ($load1 >= ($cores * 1.5))
+            || ($topCpu >= $cpuThreshold)
+            || ($memPct >= 92);
+
+        if ($isElevated) {
+            return false;
+        }
+
+        // 2. Initial live metrics are within normal bounds. Debounce to confirm stability.
+        $debounceSec = $this->getDebounceSeconds();
+        if ($debounceSec > 0) {
+            $this->line("  ⏳ {$server->name}: initial check healthy, debouncing for {$debounceSec}s to confirm stability...");
+            sleep($debounceSec);
+
+            $recheck = $collector->collect($server);
+            if (! ($recheck['ok'] ?? false)) {
+                return false;
+            }
+
+            $recheckLoad1 = (float) ($recheck['loadavg'][0] ?? 0);
+            $recheckTopCpu = (float) ($recheck['top_cpu'][0]['cpu_pct'] ?? 0);
+            $recheckMemPct = (float) ($recheck['memory']['used_percent'] ?? 0);
+
+            if (($recheckLoad1 >= ($cores * 1.5)) || ($recheckTopCpu >= $cpuThreshold) || ($recheckMemPct >= 92)) {
+                return false; // Resurged during debounce window
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the debounce delay in seconds (0 during automated unit tests).
+     */
+    protected function getDebounceSeconds(): int
+    {
+        if (app()->runningUnitTests()) {
+            return 0;
+        }
+
+        return (int) config('clockwork.ai_remedy.debounce_seconds', 15);
     }
 }

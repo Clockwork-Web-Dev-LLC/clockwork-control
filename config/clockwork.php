@@ -520,6 +520,7 @@ return [
     // AiRemedy autonomous self-healing and server telemetry triage.
     'ai_remedy' => [
         'openrouter_api_key' => env('OPENROUTER_API_KEY'),
+        'debounce_seconds' => (int) env('CLOCKWORK_AI_REMEDY_DEBOUNCE_SECONDS', 15),
     ],
 
     // Security & outbound network restrictions.
