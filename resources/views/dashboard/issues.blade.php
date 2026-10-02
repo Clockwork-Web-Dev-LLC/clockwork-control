@@ -655,7 +655,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('scheduler_stale') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('scheduler_stale')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('scheduler_stale')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
         </div>
         </section>
     @endif
@@ -678,8 +678,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('malware') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('malware')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm">
+            <div x-show="!isSectionCollapsed('malware')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="text-left px-5 py-2">Site</th>
@@ -732,8 +732,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('companion_malware') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('companion_malware')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm">
+            <div x-show="!isSectionCollapsed('companion_malware')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="text-left px-5 py-2">Site</th>
@@ -783,8 +783,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('tampering') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('tampering')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm">
+            <div x-show="!isSectionCollapsed('tampering')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="text-left px-5 py-2">Site</th>
@@ -834,8 +834,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('down_sites') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('down_sites')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm">
+            <div x-show="!isSectionCollapsed('down_sites')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="px-5 py-2 text-left">Site</th>
@@ -895,8 +895,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('stuck_maintenance') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('stuck_maintenance')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm">
+            <div x-show="!isSectionCollapsed('stuck_maintenance')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="px-5 py-2 text-left">Site</th>
@@ -944,8 +944,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('health') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('health')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('health')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1000,8 +1000,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('forms_failing') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('forms_failing')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
+            <div x-show="!isSectionCollapsed('forms_failing')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -1073,8 +1073,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('ssl') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('ssl')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('ssl')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <th class="w-8 px-3 py-2"></th>
@@ -1188,7 +1188,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('seo-indexability') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('seo-indexability')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('seo-indexability')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
 
             {{-- ACTIVE SEO ISSUES TABLE --}}
             <div x-show="activeTab === 'active'">
@@ -1203,7 +1203,7 @@
                         @endif
                     </div>
                 @else
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                    <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -1290,7 +1290,7 @@
                         No SEO indexability issues are currently ignored.
                     </div>
                 @else
-                    <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                    <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -1469,8 +1469,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('hot') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('hot')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
+            <div x-show="!isSectionCollapsed('hot')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1530,8 +1530,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('domain-expiration') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('domain-expiration')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('domain-expiration')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -1608,8 +1608,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('cf') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('cf')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('cf')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -1668,7 +1668,7 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('patches') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @php
                 $patchQueueable = $patchesAvailable->filter(fn ($s) => ! in_array($s->update_status, [\App\Models\Server::UPDATE_STATUS_QUEUED, \App\Models\Server::UPDATE_STATUS_RUNNING], true)
                     && ! $s->reboot_required
@@ -1693,7 +1693,7 @@
                     <i class="fa-solid fa-download"></i> Install updates on all {{ $patchQueueable->count() }}
                 </button>
             </div>
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="patches-list">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="patches-list">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1775,8 +1775,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('reboot') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('reboot')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="reboot-list">
+            <div x-show="!isSectionCollapsed('reboot')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="reboot-list">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1837,8 +1837,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_ssh') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_ssh')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('no_ssh')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1913,8 +1913,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_jail') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_jail')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('no_jail')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
@@ -1952,8 +1952,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_companion') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_companion')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('no_companion')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -2008,8 +2008,8 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('orphans') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('orphans')" class="rounded-b-[var(--radius-card)] overflow-hidden">
-            <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+            <div x-show="!isSectionCollapsed('orphans')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
+            <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
                         <x-sort-th key="site" class="px-5 py-2">Domain</x-sort-th>
@@ -2101,9 +2101,9 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_db') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('no_db')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('no_db')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <div class="max-h-96 overflow-y-auto">
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
+                <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
                             <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -2174,9 +2174,9 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_outdated') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('plugins_outdated')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('plugins_outdated')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <div class="max-h-[32rem] overflow-y-auto">
-                <table class="w-full text-sm" x-data="sortableTable({ defaultKey: 'security', defaultDir: 'desc' })">
+                <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'security', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
                             <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
@@ -2508,9 +2508,9 @@
                     </button>
                 </div>
             </div>
-            <div x-show="!isSectionCollapsed('auto_ignored_updates')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('auto_ignored_updates')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
                 <div class="max-h-[28rem] overflow-y-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full text-sm min-w-[560px]">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <th class="px-5 py-2 text-left">Site</th>
@@ -2582,10 +2582,10 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_closed') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('plugins_closed')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('plugins_closed')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @if ($closedPluginSites->isNotEmpty())
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full text-sm min-w-[560px]">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
                                 <th class="px-5 py-2.5 text-left">Site</th>
@@ -2690,9 +2690,9 @@
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('wp_admins') ? 'rotate-180' : ''"></i>
                     </button>
             </div>
-            <div x-show="!isSectionCollapsed('wp_admins')" class="rounded-b-[var(--radius-card)] overflow-hidden">
+            <div x-show="!isSectionCollapsed('wp_admins')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @if ($flaggedAdminSites->isNotEmpty())
-                <table class="w-full text-sm">
+                <table class="w-full text-sm min-w-[560px]">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
                             <th class="px-5 py-2 text-left">Site</th>

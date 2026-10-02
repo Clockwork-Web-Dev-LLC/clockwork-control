@@ -97,6 +97,12 @@
                     @endforeach
                 </div>
             </div>
+        @elseif(!empty($run->proposed_commands) && ! $run->isWatchMode())
+            {{-- Copilot approval: pick which proposed commands to run --}}
+            @include('ai-remedy::_review_panel', [
+                'reviewExpr' => \Illuminate\Support\Js::from($review),
+                'runIdExpr' => (int) $run->id,
+            ])
         @elseif(!empty($run->proposed_commands))
             <div>
                 <span class="text-xs font-semibold text-[var(--color-ink-muted)] block mb-1.5">
@@ -118,6 +124,8 @@
             </div>
         @endif
     </div>
+
+    @include('ai-remedy::_review_script')
 
     {{-- Telemetry Snapshot --}}
     @if(!empty($run->telemetry_snapshot))

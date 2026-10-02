@@ -35,6 +35,8 @@ use Illuminate\Support\Carbon;
  * @property ?string $error_message
  * @property Carbon $started_at
  * @property ?Carbon $completed_at
+ * @property ?Carbon $hidden_at
+ * @property ?int $hidden_by_user_id
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read ?Server $server
@@ -101,11 +103,14 @@ class AiRemedyRun extends Model
         'error_message',
         'started_at',
         'completed_at',
+        'hidden_at',
+        'hidden_by_user_id',
     ];
 
     protected function casts(): array
     {
         return [
+            'hidden_at' => 'datetime',
             'telemetry_snapshot' => 'array',
             'proposed_commands' => 'array',
             'approved_commands' => 'array',

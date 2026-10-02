@@ -2,17 +2,19 @@
 title: Twilio (SMS)
 section: Integrations
 order: 75
-updated: 2026-09-28
+updated: 2026-10-02
 author: Aaron Reimann
-tags: [integrations, twilio, notifications, sms, on-call]
-tracks: [modules/Twilio/src/**, app/Services/Twilio/OnCallResolver.php, app/Http/Controllers/NotificationSettingsController.php, resources/views/settings/notifications.blade.php]
+tags: [integrations, twilio, notifications, sms, on-call, subscribers]
+tracks: [modules/Twilio/src/**, app/Services/Twilio/OnCallResolver.php, app/Http/Controllers/NotificationSettingsController.php, resources/views/settings/notifications.blade.php, app/Models/SiteNotificationSubscriber.php, app/Mail/SiteDownClientMail.php, app/Mail/SiteUpClientMail.php]
 ---
 
-> **Status: verified & production-ready.** The full SMS infrastructure is implemented — recipients, off-windows, on-call resolver, storm circuit-breaker, fallback email + Mattermost, and A2P 10DLC support. Set `TWILIO_ENABLED=true` and the three `TWILIO_*` env vars (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`) to turn on SMS downtime paging.
+> **Status: verified & production-ready.** The full SMS infrastructure is implemented — internal team on-call recipients, off-windows, on-call resolver, per-site client alert subscribers, storm circuit-breaker, fallback email + Mattermost, and A2P 10DLC support. Set `TWILIO_ENABLED=true` and the three `TWILIO_*` env vars (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`) to turn on SMS downtime paging.
 
-We use Twilio to send **SMS alerts** when a care-plan site goes down or recovers. Mattermost still fires for every monitored site (unchanged); SMS is an additional channel layered on top, gated to care-plan customers and the human(s) currently on-call.
+We use Twilio to send **SMS alerts** when a care-plan site goes down or recovers. Mattermost and Slack fire for ops monitoring; SMS is layered on top for both internal engineering on-call escalation and client-friendly notifications to subscribed client contacts.
 
-The on-call rotation is database-backed at `/settings/notifications` — recipients (the primary operator, plus optional backups) are 24/7 by default and use **off-windows** to opt out of recurring time periods (religious observance, vacations, etc.). When nobody is on-call, alerts fall through to email + a Mattermost yelp so they're never silently dropped.
+The notification hub at `/settings/notifications` manages two recipient types:
+1. **Team On-Call Rotation**: Internal engineers on a 24/7 rotation using **off-windows** to opt out of recurring time periods (e.g. weekends, religious observance). When nobody is on call, alerts fall through to email + Mattermost warning.
+2. **Client Alert Contacts**: External client stakeholders subscribed to specific sites. They receive clean, reassuring SMS texts (via Twilio) and/or transactional emails (via Laravel Mail) without internal operational jargon.
 
 ## Why we use it
 
@@ -59,18 +61,27 @@ Twilio is a real, independently installable module (`modules/Twilio/`, package `
 
 Visit `/settings/notifications`:
 
-1. Click **+ Add recipient** for each phone number that should be paged.
+#### A. Team on-call engineers
+1. In the **Team On-Call Rotation** section, click **+ Add team recipient**:
    - Name (display only)
-   - Phone in E.164 (`+1...`)
-   - Optional email fallback (used if SMS to this person fails)
-   - Enabled = receive SMS immediately
-2. For a recurring religious observance: open the recipient's row → **+ Add off-window**:
-   - Label: `Shabbat`
-   - Start day Friday, start time 17:00
-   - End day Saturday, end time 20:00
-   - Timezone: `America/New_York`
-3. The "Currently on-call" widget at the top updates immediately — confirm who'd be paged right now.
-4. Click **Test SMS** on each recipient row. The text arrives within a few seconds; if it doesn't, check the Notification Log section at the bottom of the same page for the Twilio error.
+   - Phone in E.164 (`+15555550100`)
+   - Optional email fallback (used if SMS to this engineer fails)
+   - Enabled = active in rotation
+2. For recurring off-call periods: open the recipient's row → **+ Add off-window**:
+   - Label: `Shabbat` or `Vacation`
+   - Start day & time, end day & time
+   - Timezone (e.g. `America/New_York`)
+3. The "Currently on-call" card updates immediately.
+4. Click **Test SMS** on any recipient row to send a test text.
+
+#### B. Client alert contacts
+1. In the **Client Alert Contacts** section (or directly on any site's Settings tab in Card 6 **Alert Subscribers**), click **+ Add client recipient**:
+   - Name (e.g. `Client Admin`)
+   - Channel toggles: **SMS Alerts** (`notify_sms`) and **Email Alerts** (`notify_email`)
+   - Phone (required if SMS alerts enabled)
+   - Email (required if Email alerts enabled)
+   - Subscribed Sites: Select which care-plan sites this contact should receive outage notices for.
+2. Client contacts do not participate in internal on-call rotations or off-windows. They receive personalized, reassuring notices for their subscribed sites only.
 
 ## How it works
 
@@ -85,24 +96,32 @@ Visit `/settings/notifications`:
 `TwilioSmsNotifier::siteWentDown` then:
 
 1. Returns false early if `! $site->care_plan_enabled`.
-2. Returns false early if Twilio is not configured (`TWILIO_ENABLED=false` or missing creds).
-3. Resolves on-call recipients via `OnCallResolver::activeAt(now())`.
-4. If empty: fires the email + chat fallback (see below).
-5. Otherwise: sends one SMS per recipient via `TwilioClient::sms`. Each attempt records a row in `notification_log` (success or failure).
+2. Dispatches client notifications:
+   - Queries `OnCallResolver::clientRecipientsForSite($site->id)`.
+   - Sends client-friendly SMS via `TwilioSmsNotifier::dispatchClients()` to subscribers with `notify_sms = true`:
+     `"{Name}, the website {domain} is currently unreachable. Our team has been notified and is investigating."`
+     (records `notification_log` entries with event type `client_site_went_down`).
+   - Sends transactional email via `SiteDownClientMail` to subscribers with `notify_email = true`.
+3. Resolves on-call team engineers via `OnCallResolver::activeAt(now())`:
+   - If empty: fires the email + chat fallback (see below).
+   - Otherwise: sends internal engineering SMS per recipient with technical details. Each attempt records a row in `notification_log`.
 
-`TwilioSmsNotifier::siteWentUp` is the recovery path — same shape, different body text ("recovered after 12m").
+`TwilioSmsNotifier::siteWentUp` is the recovery path:
+- Dispatches recovery SMS to client subscribers: `"{Name}, the website {domain} is back online and responding normally."` (`client_site_went_up`).
+- Sends recovery transactional email via `SiteUpClientMail`.
+- Sends internal recovery SMS to on-call team engineers with downtime duration.
 
 ### How "on-call" is computed
 
 `OnCallResolver::activeAt(Carbon $now)`:
 
-1. Loads every recipient with `enabled = true`.
+1. Loads every internal team recipient (`is_client = false`) with `enabled = true`.
 2. For each, checks every off-window with `enabled = true`.
 3. An off-window matches when `now` (in the window's timezone) falls inside the span between (`start_dow`, `start_time`) and (`end_dow`, `end_time`). Spans cross midnight and day boundaries cleanly — a weekly religious observance can be modeled as a single row covering the full ~27 hours.
 4. Recipients with at least one matching off-window are excluded.
 5. The remainder is the on-call set.
 
-A recipient with zero off-windows is on-call 24/7.
+A team recipient with zero off-windows is on-call 24/7.
 
 ### Storm circuit-breaker
 
@@ -112,7 +131,7 @@ This exists for the mass-outage case — a DNS provider blip or a shared-server 
 
 ### Fallback when nobody is on-call
 
-If the on-call set is empty (everyone in a break) OR every Twilio send fails (account suspended, all numbers invalid), we fall through to:
+If the team on-call set is empty (everyone in a break) OR every Twilio send fails (account suspended, all numbers invalid), we fall through to:
 
 1. **Email** to `clockwork.alerts.email` (`CLOCKWORK_ALERTS_EMAIL` in `.env`). Subject: `[Clockwork on-call fallback] site_down — domain.com`.
 2. **Mattermost** `@channel` warning: "🔕 No on-call SMS recipient available for site_event=`site_down` on **domain.com**. Email fallback sent to ..."
@@ -123,17 +142,20 @@ Both events get their own row in `notification_log` so the audit trail captures 
 
 - `modules/Twilio/composer.json` — real, independently installable Composer package (`clockwork/twilio`).
 - `modules/Twilio/src/TwilioClient.php` — thin wrapper around the official `twilio/sdk` package. Throws `RuntimeException` on transport / API failure.
-- `modules/Twilio/src/TwilioSmsNotifier.php` — implements `Modules\Core\Contracts\SmsNotifier`; the high-level dispatcher (`siteWentDown`, `siteWentUp`, `test`, plus `isConfigured()`/`fromNumber()` pass-throughs to `TwilioClient`).
+- `modules/Twilio/src/TwilioSmsNotifier.php` — implements `Modules\Core\Contracts\SmsNotifier`; the high-level dispatcher (`siteWentDown`, `siteWentUp`, `dispatchClients`, `test`).
 - `modules/Twilio/src/TwilioCheck.php` — the `/settings/diagnostics` connectivity check, contributed via `ModuleRegistry::diagnosticChecks()`.
 - `modules/Twilio/src/TwilioServiceProvider.php` — binds `TwilioClient` (credential-resolved), contributes `smsNotifier()`, `diagnosticCheck()`, and a nav link.
 - `modules/Core/src/Contracts/SmsNotifier.php` — the contract; `modules/Core/src/NullSmsNotifier.php` — the no-SMS-module-installed fallback every method safely no-ops on.
-- `app/Services/Twilio/OnCallResolver.php` — stays in core app (vendor-agnostic on-call schedule matching, not Twilio-specific) — `activeAt(Carbon)` + the wraparound `isWindowActive` math.
-- `app/Http/Controllers/NotificationSettingsController.php` — recipient + off-window CRUD + per-recipient Test SMS. Depends on `OnCallResolver` and the `SmsNotifier` contract only — no concrete Twilio class.
-- `resources/views/settings/notifications.blade.php` — the settings page (stays in core app; module views aren't required to move, per the same pattern `modules/BillCom` established).
-- `app/Models/NotificationRecipient.php`, `NotificationOffWindow.php`, `NotificationLog.php`.
+- `app/Services/Twilio/OnCallResolver.php` — stays in core app (vendor-agnostic on-call schedule matching, not Twilio-specific) — `activeAt(Carbon)` and `clientRecipientsForSite(int $siteId)`.
+- `app/Http/Controllers/NotificationSettingsController.php` — recipient + off-window CRUD + subscriber management + per-recipient Test SMS.
+- `app/Http/Controllers/SitesController.php` — per-site subscriber management (`syncNotificationRecipients`, `storeNotificationRecipient`).
+- `resources/views/settings/notifications.blade.php` — the settings page with dual Team and Client sections.
+- `resources/views/sites/tabs/settings.blade.php` — site settings tab with Card 6 Alert Subscribers.
+- `app/Models/NotificationRecipient.php`, `NotificationOffWindow.php`, `NotificationLog.php`, `SiteNotificationSubscriber.php`.
+- `app/Mail/SiteDownClientMail.php`, `app/Mail/SiteUpClientMail.php` — client transactional email mailables.
 - Hook into uptime: `app/Services/Uptime/UptimeStateUpdater.php` `fireDownNotification` + `fireRecoveryNotification` — depends on the `SmsNotifier` contract, not a concrete Twilio class.
 - Config: `config/clockwork.php` → `twilio` key.
-- Migrations: `2026_05_09_190000`, `_190100`, `_190200` (recipients, off-windows, log).
+- Migrations: `2026_05_09_190000`, `_190100`, `_190200`, and `2026_10_02_100000_add_client_fields_to_notification_recipients_table`.
 
 ## Costs
 

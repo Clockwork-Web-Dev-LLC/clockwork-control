@@ -4,9 +4,17 @@
 
 @section('content')
 @include('operations._tabs')
-<div class="relative" x-data="{
+@include('ai-remedy::_review_script')
+@php($canManageRuns = (bool) auth()->user()?->isAdmin())
+<div class="relative"
+     @ai-remedy-executed.window="if (activeRun && $event.detail.run && activeRun.id === $event.detail.runId) { activeRun.status = $event.detail.run.status; }"
+     x-data="{
     activeRun: null,
     drawerOpen: false,
+    selected: [],
+    pageIds: @js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()),
+    get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
+    toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
     openDrawer(run) {
         this.activeRun = run;
         this.drawerOpen = true;
@@ -92,7 +100,7 @@
     <div class="card p-3 mb-6 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-1.5 overflow-x-auto py-1">
             <a href="{{ route('ai-remedy.index', array_filter(['server_id' => $selectedServerId])) }}"
-               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+               class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) && ! $showHidden ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 All Runs
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'resolved', 'server_id' => $selectedServerId])) }}"
@@ -115,12 +123,20 @@
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'failed' ? 'bg-rose-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Failed
             </a>
+            <a href="{{ route('ai-remedy.index', array_filter(['hidden' => 1, 'server_id' => $selectedServerId])) }}"
+               class="px-2.5 py-1 rounded-full font-medium transition-colors inline-flex items-center gap-1 {{ $showHidden ? 'bg-neutral-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                <i class="fa-regular fa-eye-slash text-[10px]"></i>
+                Hidden @if($hiddenCount)({{ $hiddenCount }})@endif
+            </a>
         </div>
 
         {{-- Server Dropdown Filter --}}
         <form method="GET" action="{{ route('ai-remedy.index') }}" class="flex items-center gap-2">
             @if($activeStatus)
                 <input type="hidden" name="status" value="{{ $activeStatus }}">
+            @endif
+            @if($showHidden)
+                <input type="hidden" name="hidden" value="1">
             @endif
             <select name="server_id" onchange="this.form.submit()"
                     class="input text-xs py-1 px-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
@@ -135,7 +151,20 @@
     </div>
 
     {{-- Audit Log Runs Table --}}
-    @if($runs->isEmpty())
+    @if(session('status'))
+        <div class="card p-3.5 mb-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>{{ session('status') }}</span>
+        </div>
+    @endif
+
+    @if($runs->isEmpty() && $showHidden)
+        <div class="card p-12 text-center text-[var(--color-ink-muted)]">
+            <i class="fa-regular fa-eye-slash text-4xl mb-3 opacity-40"></i>
+            <h3 class="text-base font-semibold text-[var(--color-ink-strong)]">No hidden runs</h3>
+            <p class="text-xs mt-1">Runs you hide from the incident log show up here, and can be unhidden any time.</p>
+        </div>
+    @elseif($runs->isEmpty())
         <div class="card p-12 text-center text-[var(--color-ink-muted)]">
             <i class="fa-solid fa-clipboard-check text-4xl mb-3 opacity-40"></i>
             <h3 class="text-base font-semibold text-[var(--color-ink-strong)]">No AiRemedy records found</h3>
@@ -150,12 +179,52 @@
             </div>
         </div>
     @else
+        @if($canManageRuns)
+            <form id="ai-remedy-bulk-delete" method="POST" action="{{ route('ai-remedy.runs.destroy') }}"
+                  @submit="if (!confirm(`Delete ${selected.length} selected run${selected.length === 1 ? '' : 's'}? Executed fixes stay in the action log.`)) $event.preventDefault()">
+                @csrf
+                @method('DELETE')
+                <template x-for="id in selected" :key="id">
+                    <input type="hidden" name="ids[]" :value="id">
+                </template>
+            </form>
+            <form id="ai-remedy-bulk-visibility" method="POST" action="{{ $showHidden ? route('ai-remedy.runs.unhide') : route('ai-remedy.runs.hide') }}">
+                @csrf
+                <template x-for="id in selected" :key="id">
+                    <input type="hidden" name="ids[]" :value="id">
+                </template>
+            </form>
+            <div x-cloak x-show="selected.length > 0"
+                 class="card mb-3 px-4 py-2.5 flex items-center justify-between gap-3 text-xs border-[var(--color-brand)]/30">
+                <span class="font-semibold text-[var(--color-ink-strong)]"><span x-text="selected.length"></span> selected</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="toggleAll()" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer" x-text="allSelected ? 'Unselect page' : 'Select page'"></button>
+                    <button type="button" @click="selected = []" class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] cursor-pointer">Clear</button>
+                    <button type="submit" form="ai-remedy-bulk-visibility"
+                            class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)] font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-regular {{ $showHidden ? 'fa-eye' : 'fa-eye-slash' }} text-[10px]"></i>
+                        <span>{{ $showHidden ? 'Unhide selected' : 'Hide selected' }}</span>
+                    </button>
+                    <button type="submit" form="ai-remedy-bulk-delete"
+                            class="text-xs py-1 px-3 rounded-full font-semibold bg-rose-600 hover:bg-rose-700 text-white inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                        <span>Delete selected</span>
+                    </button>
+                </div>
+            </div>
+        @endif
+
         <div class="card overflow-hidden">
             {{-- Desktop Table View: Large screens and up (lg:block) --}}
             <div class="hidden lg:block overflow-x-auto">
                 <table class="w-full text-left text-xs min-w-[920px]">
                     <thead class="bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-[var(--color-ink-muted)] uppercase font-semibold">
                         <tr>
+                            @if($canManageRuns)
+                                <th class="py-3 pl-4 pr-0 w-8">
+                                    <input type="checkbox" class="rounded cursor-pointer" :checked="allSelected" @change="toggleAll()" aria-label="Select all runs on this page">
+                                </th>
+                            @endif
                             <th class="py-3 px-4 whitespace-nowrap">Time & Mode</th>
                             <th class="py-3 px-4 whitespace-nowrap">Target Server / Site</th>
                             <th class="py-3 px-4 min-w-[200px]">Root Cause & Diagnosis</th>
@@ -167,7 +236,13 @@
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
                         @foreach($runs as $run)
-                            <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
+                            <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors"
+                                :class="selected.includes('{{ $run->id }}') ? 'bg-[var(--color-brand)]/5' : ''">
+                                @if($canManageRuns)
+                                    <td class="py-3.5 pl-4 pr-0 w-8">
+                                        <input type="checkbox" class="rounded cursor-pointer" value="{{ $run->id }}" x-model="selected" aria-label="Select run #{{ $run->id }}">
+                                    </td>
+                                @endif
                                 <td class="py-3.5 px-4 whitespace-nowrap">
                                     <div class="font-data font-semibold text-[var(--color-ink-strong)]">
                                         {{ $run->started_at->format('M j, Y H:i') }}
@@ -228,7 +303,7 @@
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                     <button type="button"
-                                            @click="openDrawer({{ json_encode($run) }})"
+                                            @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
                                             class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center gap-1 flex-shrink-0">
                                         <span>Forensics</span>
                                         <i class="fa-solid fa-arrow-right text-[10px]"></i>
@@ -247,6 +322,9 @@
                         {{-- Top line: Timestamp, Mode Badge, Status Badge & Cost --}}
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <div class="flex items-center gap-2">
+                                @if($canManageRuns)
+                                    <input type="checkbox" class="rounded cursor-pointer" value="{{ $run->id }}" x-model="selected" aria-label="Select run #{{ $run->id }}">
+                                @endif
                                 <div class="font-data font-semibold text-xs text-[var(--color-ink-strong)]">
                                     {{ $run->started_at->format('M j, Y H:i') }}
                                 </div>
@@ -307,7 +385,7 @@
                         {{-- Actions Button --}}
                         <div class="flex items-center justify-end pt-1">
                             <button type="button"
-                                    @click="openDrawer({{ json_encode($run) }})"
+                                    @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
                                     class="btn-pill-nav w-full sm:w-auto text-xs py-1.5 px-3.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-microscope text-[11px] text-[var(--color-brand)]"></i>
                                 <span>Forensics &amp; Remediation</span>
@@ -420,7 +498,13 @@
                                 </template>
                             </div>
                         </template>
-                        <template x-if="!activeRun?.approved_commands || activeRun.approved_commands.length === 0">
+                        {{-- Copilot approval: re-created per run (keyed by id) so selections never leak between incidents --}}
+                        <template x-for="r in ((activeRun && activeRun.review && !(activeRun.approved_commands && activeRun.approved_commands.length) && activeRun.actor !== 'watch_mode' && activeRun.actor !== 'simulation' && (activeRun.proposed_commands || []).length) ? [activeRun] : [])" :key="r.id">
+                            <div>
+                                @include('ai-remedy::_review_panel', ['reviewExpr' => 'r.review', 'runIdExpr' => 'r.id'])
+                            </div>
+                        </template>
+                        <template x-if="(!activeRun?.approved_commands || activeRun.approved_commands.length === 0) && (activeRun?.actor === 'watch_mode' || activeRun?.actor === 'simulation' || !activeRun?.review)">
                             <div class="bg-slate-950 border border-slate-800 text-slate-100 p-3.5 rounded-xl font-mono text-xs overflow-x-auto space-y-1.5 shadow-sm">
                                 <template x-for="cmd in (activeRun?.proposed_commands || [])" :key="cmd">
                                     <div class="flex items-center gap-2"><span class="text-indigo-400 font-bold select-none">$</span> <span class="text-slate-100" x-text="cmd"></span></div>

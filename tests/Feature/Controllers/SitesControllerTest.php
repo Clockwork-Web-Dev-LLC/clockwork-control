@@ -3,6 +3,7 @@
 use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
+use App\Models\NotificationRecipient;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteIngestExclusion;
@@ -1117,5 +1118,66 @@ describe('unarchive', function () {
         $response = $this->actingAs(User::factory()->create())->post(route('sites.unarchive', ['siteId' => $site->id]));
 
         $response->assertSessionHas('status', "{$site->domain} is not archived.");
+    });
+});
+
+describe('syncNotificationRecipients', function () {
+    it('syncs alert subscriber recipients to a site', function () {
+        [, $site] = spinupSite();
+        $recipientA = NotificationRecipient::factory()->client()->create();
+        $recipientB = NotificationRecipient::factory()->client()->create();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('sites.notifications.sync', $site), [
+                'recipient_ids' => [$recipientA->id, $recipientB->id],
+            ]);
+
+        $response->assertRedirect()->assertSessionHas('status', "Updated alert subscribers for {$site->domain}.");
+        expect($site->notificationRecipients->pluck('id')->all())->toEqualCanonicalizing([$recipientA->id, $recipientB->id]);
+
+        // Remove recipientA
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('sites.notifications.sync', $site), [
+                'recipient_ids' => [$recipientB->id],
+            ]);
+
+        $response->assertRedirect();
+        expect($site->fresh()->notificationRecipients->pluck('id')->all())->toBe([$recipientB->id]);
+    });
+});
+
+describe('storeNotificationRecipient', function () {
+    it('creates a new client recipient and attaches it to the site', function () {
+        [, $site] = spinupSite();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('sites.notifications.store', $site), [
+                'name' => 'Bob Builder',
+                'company' => 'Acme Builders',
+                'phone' => '+15555557777',
+                'email' => 'bob@example.test',
+                'notify_sms' => '1',
+                'notify_email' => '1',
+            ]);
+
+        $response->assertRedirect()->assertSessionHas('status', "Added Bob Builder as an alert contact for {$site->domain}.");
+
+        $recipient = NotificationRecipient::where('name', 'Bob Builder')->first();
+        expect($recipient)->not->toBeNull();
+        expect($recipient->company)->toBe('Acme Builders');
+        expect($recipient->isClient())->toBeTrue();
+        expect($site->fresh()->notificationRecipients->pluck('id')->all())->toBe([$recipient->id]);
+    });
+
+    it('rejects creating a recipient without phone or email', function () {
+        [, $site] = spinupSite();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('sites.notifications.store', $site), [
+                'name' => 'Nameless Contact',
+            ]);
+
+        $response->assertRedirect()->assertSessionHas('status_error');
+        $this->assertDatabaseMissing('notification_recipients', ['name' => 'Nameless Contact']);
     });
 });

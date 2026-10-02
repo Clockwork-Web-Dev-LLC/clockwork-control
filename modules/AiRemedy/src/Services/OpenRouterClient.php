@@ -202,8 +202,9 @@ CRITICAL SAFETY RULES:
    - "tier_1_safe": Service reload/restart, clearing caches, log rotation, deprioritizing CPU/IO (renice/ionice).
    - "tier_2_cautious": Killing rogue worker processes, restarting MySQL.
    - "unfixable": Hardware bottleneck, physical RAM exhaustion needing droplet resize, persistent DDoS, code bug in client script.
-5. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). E.g. use "sudo -u <user> wp cache flush --path=/var/www/<site>/htdocs" directly without trailing fallbacks.
-6. EXPECTED MAINTENANCE VS TRUE INCIDENTS:
+5. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). Write each command plainly, with no trailing fallbacks.
+6. SITE COMMANDS: the telemetry's "wordpress_sites" list is the only source of truth for sites on this server. For any wp-cli or site-file command, use that site's exact "wp_path" and run as its "site_user", e.g. "sudo -u <site_user> wp cache flush --path=<wp_path>". NEVER guess or invent paths (such as /var/www/... or htdocs). If the site you need isn't listed, don't propose a site command.
+7. EXPECTED MAINTENANCE VS TRUE INCIDENTS:
    - If the CPU/load spike is caused by scheduled or expected background maintenance (such as an rclone process uploading backups to S3, mysqldump, logrotate, or borgbackup):
      - Set "is_maintenance": true
      - Set "maintenance_type": "SpinupWP Backup" (or "Database Backup", "Log Rotation", etc.)
@@ -282,7 +283,8 @@ CRITICAL RULES:
 1. ONLY propose non-destructive commands (e.g. reloading/restarting the specific PHP-FPM pool or Nginx, clearing stale `.maintenance` file, clearing cache).
 2. If the outage is caused by a fatal PHP parse error, missing database table, corrupted plugin, or external API timeout, mark `is_fixable: false` and `safety_tier: "unfixable"`, and provide a detailed `unfixable_briefing`.
 3. Categorize safety_tier: "tier_1_safe" | "tier_2_cautious" | "unfixable".
-4. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). E.g. use "sudo -u <user> wp cache flush --path=/var/www/<site>/htdocs" directly without trailing fallbacks.
+4. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). Write each command plainly, with no trailing fallbacks.
+5. SITE COMMANDS: use the telemetry's exact "wp_path" and "site_user" for this site, e.g. "sudo -u <site_user> wp cache flush --path=<wp_path>". NEVER guess or invent paths (such as /var/www/... or htdocs).
 
 
 Return ONLY a valid JSON object matching this schema:

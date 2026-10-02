@@ -25,6 +25,7 @@ class AiRemedyTriager
         protected ServerTelemetryCollector $collector,
         protected RemedyExecutor $executor,
         protected CommandSafetyGuard $guard,
+        protected RunApprovalPolicy $policy,
     ) {}
 
     /**
@@ -141,8 +142,10 @@ class AiRemedyTriager
                 'started_at' => now(),
             ]);
 
-            // In Auto-Heal mode ONLY: if Tier 1 safe verified by backend guard, auto-execute
-            if ($mode === self::MODE_AUTO_HEAL && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
+            // In Auto-Heal mode ONLY: if Tier 1 safe verified by backend guard and every
+            // command passes the review panel's checks (real site paths), auto-execute;
+            // otherwise it falls through to the triaged notification for a human.
+            if ($mode === self::MODE_AUTO_HEAL && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed'] && $this->policy->autoExecuteBlockedReason($run) === null) {
                 $this->executor->execute($run);
             } else {
                 try {
@@ -287,6 +290,7 @@ class AiRemedyTriager
 
         // Step 2: OpenRouter AI Analysis
         $triggerReason = $isSimulation ? "[SIMULATION / WATCH MODE] {$reason}" : $reason;
+        $telemetry['wordpress_sites'] = app(ServerSiteContext::class)->sites($server);
         $analysis = $this->client->diagnoseServerSpike($telemetry, $triggerReason);
 
         // Step 3: Check for recognized benign maintenance activity
@@ -325,7 +329,7 @@ class AiRemedyTriager
         ]);
 
         // Auto-heal only if explicitly set, not simulation, and verified Tier 1 Safe by backend guard
-        if (! $isSimulation && $mode === self::MODE_AUTO_HEAL && $actor === 'autonomous' && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed']) {
+        if (! $isSimulation && $mode === self::MODE_AUTO_HEAL && $actor === 'autonomous' && $analysis['is_fixable'] && $effectiveTier === CommandSafetyGuard::TIER_1_SAFE && $safety['allowed'] && $this->policy->autoExecuteBlockedReason($run) === null) {
             $this->executor->execute($run);
         } else {
             $autoMuteMaintenance = (bool) $this->settings->get('clockwork.ai_remedy.auto_mute_maintenance_alerts', true);

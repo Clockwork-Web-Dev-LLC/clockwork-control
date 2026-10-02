@@ -105,6 +105,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/care-plan[/clear-override]` | Toggle / un-pin care plan. |
 | POST | `/sites/{site}/auto-updates/toggle` | Per-site nightly auto-update opt-in/out. |
 | POST | `/sites/{site}/uptime-monitoring` · `/uptime-ignore` | Per-site uptime opt-out / mute-alerts-but-keep-probing toggle (two different things — see [Features → Uptime monitoring](/documentation/features/uptime-monitoring)). |
+| POST | `/sites/{site}/notifications/subscribers` | Sync alert subscriber recipients for this site. |
+| POST | `/sites/{site}/notifications/subscribers/create` | Create and attach a new client alert recipient for this site. |
 | POST | `/sites/{site}/inactive` | Fleet-wide inactive toggle — site stays visible everywhere, excluded from Issues/nav badge/routine-maintenance alerts. See [Features → Inactive sites](/documentation/features/inactive-sites). |
 | POST | `/sites/{site}/fetch-db-creds` | Fetch WP DB credentials over SSH for a single site. |
 | POST | `/sites/{site}/refresh-wp-plugins` | Re-probe via SSH. |
@@ -207,7 +209,10 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/ai-remedy/settings/test-connection` | Validates OpenRouter API key, balance, and latency (throttled: `10,1`). |
 | POST | `/ai-remedy/settings/simulate` | Executes safe read-only test simulation in Watch Mode (throttled: `10,1`). |
 | POST | `/ai-remedy/servers/{server}/diagnose` | Triggers live read-only SSH telemetry probe and OpenRouter root-cause triage (throttled: `15,1`). |
-| POST | `/ai-remedy/runs/{run}/execute` | Executes approved remediation commands via SSH with exit code validation (throttled: `10,1`). |
+| POST | `/ai-remedy/runs/{run}/execute` | Admin-only. Runs the operator-selected subset of a run's proposed commands (`selected: [{index, command}]`) via SSH with exit code validation; records per-command decisions; 409 for Shadow/simulation, already-run, stale (>2h) runs, or a server with a fix already running (throttled: `10,1`). |
+| DELETE | `/ai-remedy/runs` | Admin-only. Bulk-deletes the given run `ids[]` from the incident log (executing runs are kept); logs `ai_remedy_runs_deleted`. |
+| POST | `/ai-remedy/runs/hide` | Admin-only. Hides the given run `ids[]` from the incident log (sets `hidden_at`). |
+| POST | `/ai-remedy/runs/unhide` | Admin-only. Restores hidden runs to the incident log. |
 | GET | `/ai-remedy/runs/{run}` | Dedicated incident forensics page: telemetry snapshot, top processes, root cause, and stdout/stderr log. |
 
 ### Docs (this site)

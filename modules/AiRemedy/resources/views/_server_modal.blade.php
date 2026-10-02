@@ -1,13 +1,13 @@
+@include('ai-remedy::_review_script')
 <div x-data="{
     open: false,
     serverId: null,
     serverName: '',
     loading: false,
-    executing: false,
     errorMessage: null,
     diagnosis: null,
     run: null,
-    executionOutput: null,
+    review: null,
     executedSuccess: false,
     commands: [],
     copiedCommands: false,
@@ -20,6 +20,11 @@
         window.addEventListener('open-ai-remedy', (e) => {
             this.startDiagnosis(e.detail.serverId, e.detail.serverName, e.detail.reason);
         });
+        window.addEventListener('ai-remedy-executed', (e) => {
+            if (this.run && e.detail.runId === this.run.id && e.detail.ok) {
+                this.executedSuccess = true;
+            }
+        });
     },
 
     async startDiagnosis(serverId, serverName, reason = 'Server performance spike detected') {
@@ -27,11 +32,10 @@
         this.serverName = serverName;
         this.open = true;
         this.loading = true;
-        this.executing = false;
         this.errorMessage = null;
         this.diagnosis = null;
         this.run = null;
-        this.executionOutput = null;
+        this.review = null;
         this.executedSuccess = false;
         this.commands = [];
         this.copiedCommands = false;
@@ -64,6 +68,7 @@
             if (data.ok) {
                 this.diagnosis = data.analysis;
                 this.run = data.run;
+                this.review = data.review || null;
                 this.commands = [...(data.analysis.commands || [])];
             } else {
                 this.errorMessage = data.message || 'Diagnosis failed.';
@@ -74,36 +79,6 @@
             this.loading = false;
             if (this.stepTimer1) clearTimeout(this.stepTimer1);
             if (this.stepTimer2) clearTimeout(this.stepTimer2);
-        }
-    },
-
-    async runRemedy() {
-        if (!this.run || this.commands.length === 0) return;
-        this.executing = true;
-        this.errorMessage = null;
-
-        try {
-            const res = await fetch(`/ai-remedy/runs/${this.run.id}/execute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content') || ''
-                },
-                body: JSON.stringify({ commands: this.commands })
-            });
-
-            const data = await res.json();
-            this.executionOutput = data.output;
-            if (data.ok) {
-                this.executedSuccess = true;
-            } else {
-                this.errorMessage = data.message || 'Execution encountered an error.';
-            }
-        } catch (e) {
-            this.errorMessage = 'Execution request failed: ' + e.message;
-        } finally {
-            this.executing = false;
         }
     },
 
@@ -118,13 +93,6 @@
         navigator.clipboard.writeText(this.commands.join('\n'));
         this.copiedCommands = true;
         setTimeout(() => { this.copiedCommands = false; }, 2000);
-    },
-
-    copyOutput() {
-        if (!this.executionOutput) return;
-        navigator.clipboard.writeText(this.executionOutput);
-        this.copiedOutput = true;
-        setTimeout(() => { this.copiedOutput = false; }, 2000);
     },
 
     formatSafetyTier(tier) {
@@ -265,7 +233,7 @@
             </template>
 
             {{-- Error State --}}
-            <template x-if="!loading && errorMessage && !executionOutput">
+            <template x-if="!loading && errorMessage">
                 <div class="py-6">
                     <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 space-y-1">
                         <div class="font-bold flex items-center gap-2 text-xs">
@@ -317,42 +285,18 @@
                              x-text="diagnosis.root_cause"></div>
                     </div>
 
-                    {{-- Proposed Remediation Commands --}}
-                    <template x-if="commands.length > 0">
+                    {{-- Proposed Remediation Commands: pick which to run --}}
+                    <template x-if="review && review.commands && review.commands.length > 0">
                         <div class="space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-[11px] font-bold uppercase tracking-wider text-[var(--color-ink-muted)] flex items-center gap-1.5">
-                                    <i class="fa-solid fa-terminal text-[10px]"></i>
-                                    <span>Proposed Remediation Commands (SSH)</span>
-                                </span>
+                            <div class="flex items-center justify-end">
                                 <button type="button"
                                         @click="copyCommands()"
                                         class="text-[11px] font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] flex items-center gap-1.5 transition-colors px-2 py-0.5 rounded-md hover:bg-[var(--color-surface-alt)] cursor-pointer">
                                     <i class="fa-regular" :class="copiedCommands ? 'fa-check text-emerald-500' : 'fa-copy'"></i>
-                                    <span x-text="copiedCommands ? 'Copied' : 'Copy'"></span>
+                                    <span x-text="copiedCommands ? 'Copied' : 'Copy commands'"></span>
                                 </button>
                             </div>
-
-                            {{-- Terminal Window --}}
-                            <div class="rounded-xl bg-slate-950 border border-slate-800 text-slate-100 overflow-hidden shadow-sm font-mono text-xs">
-                                <div class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800/80 text-[10px] text-slate-400 select-none">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
-                                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
-                                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
-                                        <span class="ml-2 font-mono text-[10px] text-slate-400">ssh-remedy</span>
-                                    </div>
-                                    <span class="text-[10px] text-slate-500">editable</span>
-                                </div>
-                                <div class="p-3 space-y-1.5 font-mono text-xs">
-                                    <template x-for="(cmd, idx) in commands" :key="idx">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-emerald-400 font-bold select-none">$</span>
-                                            <input type="text" x-model="commands[idx]" class="bg-transparent border-none p-0 text-slate-100 focus:text-white focus:outline-none focus:ring-0 flex-1 font-mono text-xs w-full tracking-wide">
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
+                            @include('ai-remedy::_review_panel', ['reviewExpr' => 'review', 'runIdExpr' => 'run.id'])
                         </div>
                     </template>
 
@@ -367,58 +311,6 @@
                         </div>
                     </template>
 
-                    {{-- Terminal Output (After Run) --}}
-                    <template x-if="executionOutput">
-                        <div class="space-y-2 pt-2 border-t border-[var(--color-border-light)]">
-                            {{-- Outcome Banner --}}
-                            <template x-if="executedSuccess">
-                                <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
-                                    <div class="flex items-center gap-2 font-semibold">
-                                        <i class="fa-solid fa-circle-check text-sm text-emerald-600 dark:text-emerald-400"></i>
-                                        <span>Remediation Successfully Applied</span>
-                                    </div>
-                                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-500/30">Exit Code 0</span>
-                                </div>
-                            </template>
-
-                            <template x-if="!executedSuccess">
-                                <div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-2 text-xs">
-                                    <div class="flex items-center justify-between text-rose-700 dark:text-rose-300 font-semibold">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fa-solid fa-circle-exclamation text-sm text-rose-600 dark:text-rose-400"></i>
-                                            <span>Remediation Encountered an Issue</span>
-                                        </div>
-                                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/30">Non-zero exit</span>
-                                    </div>
-
-                                    {{-- Sudo password guidance --}}
-                                    <template x-if="executionOutput && (executionOutput.includes('sudo: a password is required') || executionOutput.includes('terminal is required to read the password'))">
-                                        <div class="rounded-lg bg-rose-500/15 border border-rose-500/30 p-2.5 text-[11px] text-rose-900 dark:text-rose-200 flex items-start gap-2 leading-relaxed">
-                                            <i class="fa-solid fa-key mt-0.5 text-xs text-rose-600 dark:text-rose-400 shrink-0"></i>
-                                            <div>
-                                                <strong>Passwordless Sudo Privilege Required:</strong> This server requires a password for sudo. In your server's <code class="font-mono bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded">/etc/sudoers</code>, allow the SSH user passwordless command execution (e.g. <code class="font-mono bg-black/10 dark:bg-black/30 px-1 py-0.5 rounded">%sudo ALL=(ALL) NOPASSWD: ALL</code>) so non-interactive remediation commands can run without a TTY.
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-
-                            {{-- Raw stdout/stderr terminal box --}}
-                            <div class="space-y-1">
-                                <div class="flex items-center justify-between text-[11px]">
-                                    <span class="font-bold uppercase tracking-wider text-[var(--color-ink-muted)]">SSH Execution Log:</span>
-                                    <button type="button"
-                                            @click="copyOutput()"
-                                            class="text-[11px] font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] flex items-center gap-1 transition-colors px-2 py-0.5 rounded hover:bg-[var(--color-surface-alt)] cursor-pointer">
-                                        <i class="fa-regular" :class="copiedOutput ? 'fa-check text-emerald-500' : 'fa-copy'"></i>
-                                        <span x-text="copiedOutput ? 'Copied' : 'Copy Log'"></span>
-                                    </button>
-                                </div>
-                                <pre class="bg-slate-950 text-slate-200 p-3.5 rounded-xl font-mono text-[11px] max-h-48 overflow-y-auto whitespace-pre-wrap border border-slate-800 shadow-inner"
-                                     x-text="executionOutput"></pre>
-                            </div>
-                        </div>
-                    </template>
                 </div>
             </template>
 
@@ -440,15 +332,6 @@
                         <span x-text="executedSuccess ? 'Close' : 'Cancel'"></span>
                     </button>
 
-                    <template x-if="!loading && diagnosis && diagnosis.is_fixable && commands.length > 0 && !executedSuccess">
-                        <button type="button"
-                                @click="runRemedy()"
-                                :disabled="executing"
-                                class="btn-primary text-xs py-2 px-5 font-semibold flex items-center gap-2 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid" :class="executing ? 'fa-circle-notch fa-spin' : 'fa-play text-[10px]'"></i>
-                            <span x-text="executing ? 'Executing via SSH...' : 'Execute Fix via SSH'"></span>
-                        </button>
-                    </template>
                 </div>
             </div>
         </div>

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-02
+
+### Added
+- **Per-site alert subscribers and multi-channel client notifications**:
+  - Support subscribing client contacts to individual care-plan sites (`site_notification_subscribers` pivot table; migration `2026_10_02_100000_add_client_fields_to_notification_recipients_table`).
+  - Added dual notification channels with granular toggles per recipient: SMS (`notify_sms`) and Email (`notify_email`).
+  - Reassuring, non-technical SMS messaging formatted specifically for client contacts (`TwilioSmsNotifier::dispatchClients()`) without operational jargon, stack traces, or server internals.
+  - Transactional HTML & plain-text client email notifications for site outages and recoveries (`SiteDownClientMail` and `SiteUpClientMail`).
+  - Reorganized `/settings/notifications` into distinct **Team On-Call Rotation** (schedule + off-windows) and **Client Alert Contacts** (site subscriptions + channel toggles) sections.
+  - Added inline **Alert Subscribers** management card (Card 6) directly on the per-site Settings tab (`/sites/{site}?tab=settings`), allowing one-click subscriber assignment and inline client contact creation.
+- **AiRemedy unknown site path protection**:
+  - Held autonomous fixes that target unknown or mismatched site paths on fleet servers (`ServerSiteContext`).
+
+### Changed
+- Bumped `vite` from 8.3.0 to 8.3.1.
+- Bumped `league/commonmark` to 2.10.3.
+
+## [1.9.1] - 2026-09-30
+
+### Added
+- **Hide AiRemedy runs.** Tick runs on `/ai-remedy` and **Hide selected** to dismiss them from the incident log without deleting anything; a **Hidden (N)** tab lists them with **Unhide selected**. Stats and total cost still include hidden runs. Adds nullable `ai_remedy_runs.hidden_at` / `hidden_by_user_id` (migration `2026_09_30_000001`).
+- **Bulk delete AiRemedy runs.** Admins can tick incidents on `/ai-remedy` (or "Select page") and **Delete selected** (`DELETE /ai-remedy/runs`). Runs that are executing right now are kept. Executed fixes keep their immutable `ai_remediation` action-log entry, and each deletion is logged as `ai_remedy_runs_deleted`.
+
+### Fixed
+- **AiRemedy Copilot approvals now work.** 1.9.0 documented Interactive Copilot as "review the findings and click Approve & Execute", but incidents recorded in Copilot mode (from the spike watchdog, `PollServers`, or site-down detection) had no way to approve or run the fix. The incident drawer and run page only displayed commands, and the only way to execute was the on-demand Diagnose window, all-or-nothing.
+  - New **Review & run** panel on the `/ai-remedy` incident drawer, the run page (`/ai-remedy/runs/{id}#review`), and the Diagnose window: per-command checkboxes with safety tiers (Tier 1 pre-ticked, Tier 2 unticked + confirmation, Tier 3 not selectable), inline editing re-checked by `CommandSafetyGuard`, and per-command exit codes.
+  - `POST /ai-remedy/runs/{run}/execute` accepts `selected: [{index, command}]` (legacy `commands` still accepted) and records each proposed command's decision (`run` / `edited` with the original / `skipped`), per-command results, and the approving admin in the `ai_remediation` action log.
+  - New `RunApprovalPolicy` shared by the endpoint, `RemedyExecutor`, and the views. The executor now refuses (409) Shadow/simulation runs even via hand-crafted requests, runs that already ran or are running (atomic claim — each diagnosis executes at most once), diagnoses older than 2 hours, and a second concurrent fix on the same server (per-server lock). Blank commands are rejected.
+  - Copilot chat alerts (`ai_remedy_triaged`) link to the run's review panel.
+  - **sudo now works on servers without passwordless sudo.** AiRemedy sent `sudo …` as-is, so on most fleet servers every sudo command failed with "a terminal is required to read the password". It now uses the server's stored SSH/sudo password the same way Server Updates does (`CW_SUDO_PW` → `sudo -S`, NOPASSWD first). The password never appears in the command text and is scrubbed from saved output.
+  - **Service restarts go through the SpinupWP API** on SpinupWP-managed servers (`POST /servers/{id}/services/{php|nginx|mysql|redis}/restart`), with no SSH or sudo; the panel shows each command's route. `reload` commands stay on SSH (SpinupWP has no reload endpoint), and view-only SpinupWP disables the API route.
+  - **Site commands used made-up paths.** The AI prompts' own example taught `wp … --path=/var/www/<site>/htdocs`, and server-spike diagnoses were never told the real sites. Spike telemetry now includes each site's domain, SSH user, and docroot (`wordpress_sites`); both prompts require those exact values. `ServerSiteContext` also checks every `wp … --path=` and `.maintenance` command (proposed or edited) against the server's real sites and users. Mismatches can't be ticked or run (422), and the panel offers a one-click corrected command when the intended site is clear.
+- **AiRemedy triage alert crash for site-down incidents without a linked server** (`$run->server->name` on null).
+- **Manual Diagnose stored the LLM's self-reported safety tier** instead of the tier `CommandSafetyGuard` enforces, so tier badges could disagree with what the guard would allow.
+- **Mobile layouts**: site lists (`/sites`, server Sites tab) stack server/IP metadata under the domain and condense status pills; the Updates grouped view protects plugin/theme titles; dense tables (monitoring, server updates, issues, capacity, security, bans) scroll horizontally instead of compressing; AiRemedy incident runs and Forensics stack on small screens.
+
 ## [1.9.0] - 2026-09-29
 
 ### Added

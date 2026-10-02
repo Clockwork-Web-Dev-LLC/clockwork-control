@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.9.0',
+    'version' => '1.9.2',
 
     // Demo mode interlock for marketing screenshots and anonymized datasets.
     // Gates screenshot Dusk runs to prevent running against live production,

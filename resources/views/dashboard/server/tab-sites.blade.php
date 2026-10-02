@@ -109,7 +109,7 @@
                         : [];
                     $ssoFirstAdmin = $ssoAdmins[0]['login'] ?? null;
                 @endphp
-                <li class="relative px-5 py-3 flex items-center gap-3 hover:bg-[var(--color-surface-alt)] transition-colors">
+                <li class="relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors">
                     <a href="{{ route('sites.show', $site) }}"
                        class="absolute inset-0 z-0"
                        aria-label="Open {{ $site->domain }}"></a>
@@ -118,17 +118,34 @@
                          row-link. pointer-events-none lets clicks fall through
                          to the <a> underneath so the whole row navigates. --}}
                     @if ($site->is_wordpress)
-                        <i class="fa-brands fa-wordpress text-[var(--color-brand)] text-lg relative z-10 pointer-events-none" title="WordPress site"></i>
+                        <i class="fa-brands fa-wordpress text-[var(--color-brand)] text-lg relative z-10 pointer-events-none shrink-0" title="WordPress site"></i>
                     @else
-                        <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none" title="Non-WordPress site"></i>
+                        <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none shrink-0" title="Non-WordPress site"></i>
                     @endif
 
-                    <span class="font-medium text-[var(--color-ink-strong)] truncate flex-1 relative z-10 pointer-events-none">{{ $site->domain }}</span>
+                    <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
+                        <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug">
+                            {{ $site->domain }}
+                        </div>
+                        @if ($pool || $reqCount > 0)
+                            <div class="text-[11px] text-[var(--color-ink-muted)] truncate flex items-center gap-2 mt-0.5 sm:hidden font-data">
+                                @if ($pool && $pool['cpu'] !== null)
+                                    <span><span class="text-[var(--color-ink-soft)]">cpu</span> <span class="@if ($pool['cpu'] >= 80) text-[var(--color-status-red)] @elseif ($pool['cpu'] >= 40) text-[var(--color-status-yellow)] @endif">{{ number_format($pool['cpu'], 0) }}%</span></span>
+                                @endif
+                                @if ($pool && $pool['mem'] !== null)
+                                    <span><span class="text-[var(--color-ink-soft)]">mem</span> {{ number_format($pool['mem'], 1) }}%</span>
+                                @endif
+                                @if ($reqCount > 0)
+                                    <span><span class="text-[var(--color-ink-soft)]">1h</span> {{ number_format($reqCount) }}</span>
+                                @endif
+                            </div>
+                        @endif
+                    </div>
 
-                    <div class="flex items-center gap-2 relative z-10">
+                    <div class="flex items-center gap-1.5 sm:gap-2 relative z-10 shrink-0">
                         @if ($pool)
                             @php $cronCount = $pool['cron_workers'] ?? 0; @endphp
-                            <span class="text-xs font-data tabular-nums text-[var(--color-ink-muted)]"
+                            <span class="hidden sm:inline-flex items-center gap-1 text-xs font-data tabular-nums text-[var(--color-ink-muted)]"
                                   title="{{ $pool['workers'] }} PHP-FPM {{ Str::plural('worker', $pool['workers']) }}@if ($cronCount > 0) + {{ $cronCount }} wp-cron {{ Str::plural('process', $cronCount) }}@endif for '{{ $site->site_user }}'">
                                 <span class="text-[var(--color-ink-soft)]">cpu</span>
                                 <span class="@if ($pool['cpu'] >= 80) text-[var(--color-status-red)] @elseif ($pool['cpu'] >= 40) text-[var(--color-status-yellow)] @endif">{{ number_format($pool['cpu'], 0) }}%</span>
@@ -136,15 +153,15 @@
                                     <span class="text-[var(--color-status-yellow)]" title="wp-cron running scheduled jobs">⏱</span>
                                 @endif
                             </span>
-                            <span class="text-xs font-data tabular-nums text-[var(--color-ink-muted)]" title="memory used by this pool">
+                            <span class="hidden sm:inline-flex items-center gap-1 text-xs font-data tabular-nums text-[var(--color-ink-muted)]" title="memory used by this pool">
                                 <span class="text-[var(--color-ink-soft)]">mem</span> {{ number_format($pool['mem'], 1) }}%
                             </span>
                         @elseif ($hasLiveData)
-                            <span class="text-xs font-data text-[var(--color-ink-soft)]" title="No PHP-FPM workers active for this site (idle)">idle</span>
+                            <span class="hidden sm:inline-flex text-xs font-data text-[var(--color-ink-soft)]" title="No PHP-FPM workers active for this site (idle)">idle</span>
                         @endif
 
                         @if ($reqCount > 0)
-                            <span class="text-xs font-data tabular-nums text-[var(--color-ink-muted)]" title="Requests last hour (from nginx threat_logs)">
+                            <span class="hidden sm:inline-flex items-center gap-1 text-xs font-data tabular-nums text-[var(--color-ink-muted)]" title="Requests last hour (from nginx threat_logs)">
                                 <span class="text-[var(--color-ink-soft)]">1h</span> {{ number_format($reqCount) }}
                             </span>
                         @endif
@@ -155,16 +172,16 @@
                         @if ($sslMeta)
                             <span class="status-pill {{ $sslMeta['class'] }} text-[10px]" title="{{ $sslTitle }}">
                                 <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
-                                {{ $sslMeta['label'] }}
+                                <span class="hidden sm:inline">{{ $sslMeta['label'] }}</span>
                             </span>
                         @endif
                         @if ($site->wordfence_enabled)
-                            <span class="status-pill status-green text-[10px]">Wordfence</span>
+                            <span class="hidden md:inline-flex status-pill status-green text-[10px]">Wordfence</span>
                         @endif
                         @if ($site->gatekeeperEnabled())
-                            <span class="status-pill status-green text-[10px]">Gatekeeper</span>
+                            <span class="hidden md:inline-flex status-pill status-green text-[10px]">Gatekeeper</span>
                         @elseif ($site->llar_enabled)
-                            <span class="status-pill status-green text-[10px]">LLAR</span>
+                            <span class="hidden md:inline-flex status-pill status-green text-[10px]">LLAR</span>
                         @endif
                         @unless ($site->is_wordpress)
                             <span class="text-xs text-[var(--color-ink-soft)] uppercase tracking-wide">non-WP</span>

@@ -4,7 +4,9 @@ namespace Modules\AiRemedy\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use App\Services\ActionLog\ActionLogger;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\AiRemedy\Models\AiRemedyRun;
@@ -12,6 +14,8 @@ use Modules\AiRemedy\Services\AiRemedyTriager;
 use Modules\AiRemedy\Services\CommandSafetyGuard;
 use Modules\AiRemedy\Services\OpenRouterClient;
 use Modules\AiRemedy\Services\RemedyExecutor;
+use Modules\AiRemedy\Services\RunApprovalPolicy;
+use Modules\AiRemedy\Services\ServerSiteContext;
 use Modules\AiRemedy\Services\ServerTelemetryCollector;
 
 class AiRemedyController extends Controller
@@ -20,6 +24,7 @@ class AiRemedyController extends Controller
         protected OpenRouterClient $client,
         protected ServerTelemetryCollector $collector,
         protected RemedyExecutor $executor,
+        protected RunApprovalPolicy $policy,
     ) {}
 
     /**
@@ -27,8 +32,11 @@ class AiRemedyController extends Controller
      */
     public function index(Request $request): View
     {
+        $showHidden = $request->boolean('hidden');
+
         $query = AiRemedyRun::query()
             ->with(['server', 'site', 'user'])
+            ->when($showHidden, fn ($q) => $q->whereNotNull('hidden_at'), fn ($q) => $q->whereNull('hidden_at'))
             ->latest('id');
 
         if ($status = $request->input('status')) {
@@ -50,13 +58,96 @@ class AiRemedyController extends Controller
 
         $servers = Server::orderBy('name')->get(['id', 'name', 'hostname']);
 
+        $reviews = [];
+        foreach ($runs as $run) {
+            $reviews[$run->id] = $this->policy->review($run, $request->user());
+        }
+
         return view('ai-remedy::index', [
             'runs' => $runs,
+            'reviews' => $reviews,
             'stats' => $stats,
             'servers' => $servers,
             'activeStatus' => $status,
             'selectedServerId' => $serverId,
+            'showHidden' => $showHidden,
+            'hiddenCount' => AiRemedyRun::whereNotNull('hidden_at')->count(),
         ]);
+    }
+
+    /**
+     * Delete selected runs from the incident log. A run that is executing
+     * right now is kept. Executed fixes keep their immutable `ai_remediation`
+     * action-log entry, so deleting a run never erases what ran on a server.
+     */
+    public function destroyMany(Request $request, ActionLogger $actionLogger): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $runs = AiRemedyRun::query()->whereIn('id', $validated['ids'])->get(['id', 'status', 'server_id']);
+        $executing = $runs->where('status', AiRemedyRun::STATUS_EXECUTING);
+        $deletable = $runs->reject(fn (AiRemedyRun $run) => $run->status === AiRemedyRun::STATUS_EXECUTING);
+        $ids = $deletable->pluck('id')->all();
+
+        if ($ids !== []) {
+            AiRemedyRun::query()->whereIn('id', $ids)->delete();
+
+            $actionLogger->record(
+                actionType: 'ai_remedy_runs_deleted',
+                summary: 'Deleted '.count($ids).' AiRemedy incident run'.(count($ids) === 1 ? '' : 's'),
+                target: 'ai-remedy',
+                details: ['run_ids' => $ids, 'user_id' => $request->user()?->id],
+            );
+        }
+
+        $message = count($ids).' run'.(count($ids) === 1 ? '' : 's').' deleted.';
+        if ($executing->isNotEmpty()) {
+            $message .= ' '.$executing->count().' still executing '.($executing->count() === 1 ? 'was' : 'were').' kept.';
+        }
+
+        return redirect()->back(fallback: route('ai-remedy.index'))->with('status', $message);
+    }
+
+    /**
+     * Hide selected runs from the incident log without deleting them.
+     */
+    public function hideMany(Request $request): RedirectResponse
+    {
+        $ids = $this->validatedRunIds($request);
+        $count = AiRemedyRun::query()->whereIn('id', $ids)->whereNull('hidden_at')
+            ->update(['hidden_at' => now(), 'hidden_by_user_id' => $request->user()?->id]);
+
+        return redirect()->back(fallback: route('ai-remedy.index'))
+            ->with('status', $count.' run'.($count === 1 ? '' : 's').' hidden. See the Hidden tab to bring them back.');
+    }
+
+    /**
+     * Put hidden runs back in the incident log.
+     */
+    public function unhideMany(Request $request): RedirectResponse
+    {
+        $ids = $this->validatedRunIds($request);
+        $count = AiRemedyRun::query()->whereIn('id', $ids)->whereNotNull('hidden_at')
+            ->update(['hidden_at' => null, 'hidden_by_user_id' => null]);
+
+        return redirect()->back(fallback: route('ai-remedy.index', ['hidden' => 1]))
+            ->with('status', $count.' run'.($count === 1 ? '' : 's').' restored to the incident log.');
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function validatedRunIds(Request $request): array
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        return array_values(array_map('intval', $validated['ids']));
     }
 
     /**
@@ -65,12 +156,13 @@ class AiRemedyController extends Controller
     public function show(AiRemedyRun $run): View|JsonResponse
     {
         $run->load(['server', 'site', 'user']);
+        $review = $this->policy->review($run, request()->user());
 
         if (request()->wantsJson()) {
-            return response()->json(['ok' => true, 'run' => $run]);
+            return response()->json(['ok' => true, 'run' => $run, 'review' => $review]);
         }
 
-        return view('ai-remedy::show', ['run' => $run]);
+        return view('ai-remedy::show', ['run' => $run, 'review' => $review]);
     }
 
     /**
@@ -89,11 +181,17 @@ class AiRemedyController extends Controller
             ], 422);
         }
 
-        // Step 2: OpenRouter AI Analysis
+        // Step 2: OpenRouter AI Analysis — include the real sites so the model
+        // never has to guess docroots or SSH users.
+        $telemetry['wordpress_sites'] = app(ServerSiteContext::class)->sites($server);
         $analysis = $this->client->diagnoseServerSpike($telemetry, $reason);
 
         // Step 3: Record initial audit log run
         $status = $analysis['is_fixable'] ? AiRemedyRun::STATUS_ANALYZED : AiRemedyRun::STATUS_UNFIXABLE;
+
+        // Store the tier the backend guard will actually enforce, not the tier
+        // the LLM claimed, matching AiRemedyTriager.
+        $safety = app(CommandSafetyGuard::class)->evaluateBatch($analysis['commands'] ?? []);
 
         $run = AiRemedyRun::create([
             'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
@@ -109,42 +207,63 @@ class AiRemedyController extends Controller
             'telemetry_snapshot' => $telemetry,
             'diagnosis_summary' => $analysis['summary'],
             'root_cause' => $analysis['root_cause'],
-            'safety_tier' => $analysis['safety_tier'],
+            'safety_tier' => $analysis['is_fixable'] ? $safety['highest_tier'] : AiRemedyRun::TIER_UNFIXABLE,
             'proposed_commands' => $analysis['commands'],
             'before_metrics' => $telemetry,
             'started_at' => now(),
         ]);
 
+        $run = $run->fresh() ?? $run;
+
         return response()->json([
             'ok' => true,
-            'run' => $run->fresh(),
+            'run' => $run,
+            'review' => $this->policy->review($run, $request->user()),
             'analysis' => $analysis,
             'telemetry' => $telemetry,
         ]);
     }
 
     /**
-     * Execute approved remediation commands on a server.
+     * Execute an operator-approved selection of a run's proposed commands.
+     *
+     * Body: `selected` — list of {index, command} for the proposed commands the
+     * operator ticked, in order (`command` may be an edited version). Proposed
+     * commands not listed are recorded as skipped. The legacy `commands` string
+     * list is still accepted and mapped by position.
      */
     public function execute(Request $request, AiRemedyRun $run): JsonResponse
     {
-        $customCommands = $request->input('commands');
-        if (is_array($customCommands)) {
-            $customCommands = array_values(array_filter($customCommands, 'is_string'));
-            $safety = app(CommandSafetyGuard::class)->evaluateBatch($customCommands);
-            if (! $safety['allowed']) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Custom commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']),
-                    'run' => $run,
-                    'output' => '',
-                ], 422);
-            }
-        } else {
-            $customCommands = null;
+        $blocked = $this->policy->blockedReason($run);
+        if ($blocked !== null) {
+            return $this->executeFailure($run, $blocked, 409);
         }
 
-        $result = $this->executor->execute($run, $customCommands);
+        $proposed = array_values(array_map('strval', $run->proposed_commands ?? []));
+        $selection = $this->parseSelection($request, count($proposed));
+        if (is_string($selection)) {
+            return $this->executeFailure($run, $selection, 422);
+        }
+
+        $commands = array_map(fn (array $s) => $s['command'], $selection);
+
+        $safety = app(CommandSafetyGuard::class)->evaluateBatch($commands);
+        if (! $safety['allowed']) {
+            return $this->executeFailure($run, 'Selected commands rejected by safety policy: '.implode('; ', $safety['rejected_commands']), 422);
+        }
+
+        if ($run->server) {
+            $sites = app(ServerSiteContext::class);
+            foreach ($commands as $command) {
+                if (($problem = $sites->problem($command, $run->server)) !== null) {
+                    return $this->executeFailure($run, "\"{$command}\": {$problem}", 422);
+                }
+            }
+        }
+
+        $decisions = $this->buildDecisions($proposed, $selection);
+
+        $result = $this->executor->execute($run, $commands, $decisions, $request->user());
 
         if (! $result['ok']) {
             return response()->json([
@@ -152,7 +271,8 @@ class AiRemedyController extends Controller
                 'message' => $result['error'] ?? 'Execution failed.',
                 'run' => $result['run'],
                 'output' => $result['output'],
-            ], 422);
+                'results' => $result['results'] ?? [],
+            ], ! empty($result['conflict']) ? 409 : 422);
         }
 
         return response()->json([
@@ -160,7 +280,105 @@ class AiRemedyController extends Controller
             'message' => 'Remediation commands executed successfully.',
             'run' => $result['run'],
             'output' => $result['output'],
+            'results' => $result['results'] ?? [],
         ]);
+    }
+
+    /**
+     * @return list<array{index: ?int, command: string}>|string Selection, or an error message
+     */
+    protected function parseSelection(Request $request, int $proposedCount): array|string
+    {
+        $raw = $request->input('selected');
+
+        if ($raw === null && is_array($request->input('commands'))) {
+            $raw = [];
+            foreach (array_values($request->input('commands')) as $i => $command) {
+                $raw[] = ['index' => $i < $proposedCount ? $i : null, 'command' => $command];
+            }
+        }
+
+        if (! is_array($raw) || $raw === []) {
+            return 'Select at least one command to run.';
+        }
+
+        $selection = [];
+        $seen = [];
+        foreach ($raw as $item) {
+            if (! is_array($item) || ! is_string($item['command'] ?? null)) {
+                return 'Each selected command must be a string.';
+            }
+
+            $command = trim($item['command']);
+            if ($command === '') {
+                return 'Blank commands cannot be executed. Untick the command or restore its text.';
+            }
+
+            $index = $item['index'] ?? null;
+            if ($index !== null) {
+                if (! is_int($index) && ! ctype_digit((string) $index)) {
+                    return 'Invalid command index.';
+                }
+                $index = (int) $index;
+                if ($index < 0 || $index >= $proposedCount || isset($seen[$index])) {
+                    return 'Invalid command index.';
+                }
+                $seen[$index] = true;
+            }
+
+            $selection[] = ['index' => $index, 'command' => $command];
+        }
+
+        return $selection;
+    }
+
+    /**
+     * One decision per proposed command (run / edited / skipped), plus any
+     * operator-added commands, for the audit trail.
+     *
+     * @param  list<string>  $proposed
+     * @param  list<array{index: ?int, command: string}>  $selection
+     * @return list<array<string, mixed>>
+     */
+    protected function buildDecisions(array $proposed, array $selection): array
+    {
+        $byIndex = [];
+        $added = [];
+        foreach ($selection as $item) {
+            if ($item['index'] === null) {
+                $added[] = $item['command'];
+            } else {
+                $byIndex[$item['index']] = $item['command'];
+            }
+        }
+
+        $decisions = [];
+        foreach ($proposed as $i => $original) {
+            if (! array_key_exists($i, $byIndex)) {
+                $decisions[] = ['index' => $i, 'decision' => 'skipped', 'command' => $original];
+            } elseif (trim($original) === $byIndex[$i]) {
+                $decisions[] = ['index' => $i, 'decision' => 'run', 'command' => $original];
+            } else {
+                $decisions[] = ['index' => $i, 'decision' => 'edited', 'command' => $byIndex[$i], 'original_command' => $original];
+            }
+        }
+
+        foreach ($added as $command) {
+            $decisions[] = ['index' => null, 'decision' => 'added', 'command' => $command];
+        }
+
+        return $decisions;
+    }
+
+    protected function executeFailure(AiRemedyRun $run, string $message, int $status): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+            'run' => $run,
+            'output' => '',
+            'results' => [],
+        ], $status);
     }
 
     /**

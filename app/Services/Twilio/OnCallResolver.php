@@ -4,6 +4,7 @@ namespace App\Services\Twilio;
 
 use App\Models\NotificationOffWindow;
 use App\Models\NotificationRecipient;
+use App\Models\Site;
 use DateTimeZone;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -24,7 +25,7 @@ use Illuminate\Support\Carbon;
 class OnCallResolver
 {
     /**
-     * Returns the recipients on-call at $now (default: now).
+     * Returns the team recipients on-call at $now (default: now).
      *
      * @return Collection<int, NotificationRecipient>
      */
@@ -33,6 +34,7 @@ class OnCallResolver
         $now ??= Carbon::now();
 
         $recipients = NotificationRecipient::query()
+            ->team()
             ->where('enabled', true)
             ->with(['offWindows' => fn ($q) => $q->where('enabled', true)])
             ->orderBy('name')
@@ -41,6 +43,20 @@ class OnCallResolver
         return $recipients->reject(fn (NotificationRecipient $r) => $r->offWindows->contains(
             fn (NotificationOffWindow $w) => $this->isWindowActive($w, $now)
         ))->values();
+    }
+
+    /**
+     * Returns the client recipients actively subscribed to a specific site.
+     *
+     * @return Collection<int, NotificationRecipient>
+     */
+    public function clientRecipientsForSite(Site $site): Collection
+    {
+        return $site->notificationRecipients()
+            ->where('enabled', true)
+            ->where('type', NotificationRecipient::TYPE_CLIENT)
+            ->orderBy('name')
+            ->get();
     }
 
     /**

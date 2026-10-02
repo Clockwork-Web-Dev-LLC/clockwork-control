@@ -2,6 +2,8 @@
 
 namespace Modules\Twilio;
 
+use App\Mail\SiteDownClientMail;
+use App\Mail\SiteUpClientMail;
 use App\Models\NotificationLog;
 use App\Models\NotificationRecipient;
 use App\Models\Site;
@@ -49,24 +51,104 @@ class TwilioSmsNotifier implements SmsNotifier
 
     public function siteWentDown(Site $site, ?int $statusCode, ?string $error): bool
     {
-        if (! $site->care_plan_enabled) {
-            return false;
+        $teamSent = false;
+        if ($site->care_plan_enabled) {
+            $body = $this->formatDownBody($site, $statusCode, $error);
+            $teamSent = $this->dispatch($site, NotificationLog::EVENT_SITE_DOWN, $body);
         }
 
-        $body = $this->formatDownBody($site, $statusCode, $error);
+        $clientSent = $this->dispatchClients($site, NotificationLog::EVENT_SITE_DOWN, $statusCode, $error);
 
-        return $this->dispatch($site, NotificationLog::EVENT_SITE_DOWN, $body);
+        return $teamSent || $clientSent;
     }
 
     public function siteWentUp(Site $site, ?int $downtimeSec): bool
     {
-        if (! $site->care_plan_enabled) {
+        $teamSent = false;
+        if ($site->care_plan_enabled) {
+            $body = $this->formatUpBody($site, $downtimeSec);
+            $teamSent = $this->dispatch($site, NotificationLog::EVENT_SITE_UP, $body);
+        }
+
+        $clientSent = $this->dispatchClients($site, NotificationLog::EVENT_SITE_UP, $downtimeSec);
+
+        return $teamSent || $clientSent;
+    }
+
+    /**
+     * Dispatch notifications to active client recipients explicitly subscribed to this site.
+     */
+    protected function dispatchClients(Site $site, string $event, ?int $statusCodeOrDowntime, ?string $error = null): bool
+    {
+        $clientRecipients = $this->resolver->clientRecipientsForSite($site);
+
+        if ($clientRecipients->isEmpty()) {
             return false;
         }
 
-        $body = $this->formatUpBody($site, $downtimeSec);
+        $anySuccess = false;
 
-        return $this->dispatch($site, NotificationLog::EVENT_SITE_UP, $body);
+        foreach ($clientRecipients as $recipient) {
+            // SMS channel
+            if ($recipient->notify_sms && ! empty($recipient->phone) && $this->twilio->isConfigured()) {
+                $clientSmsBody = $event === NotificationLog::EVENT_SITE_DOWN
+                    ? $this->formatClientDownBody($site)
+                    : $this->formatClientUpBody($site, $statusCodeOrDowntime);
+
+                try {
+                    $result = $this->twilio->sms($recipient->phone, $clientSmsBody);
+                    $this->logAttempt($recipient, $site, $event, $clientSmsBody, true, null, $result['sid'] ?? null);
+                    $anySuccess = true;
+                } catch (Throwable $e) {
+                    $this->logAttempt($recipient, $site, $event, $clientSmsBody, false, $e->getMessage(), null);
+                    Log::warning('sms.client_send_failed', [
+                        'recipient_id' => $recipient->id,
+                        'site_id' => $site->id,
+                        'event' => $event,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Email channel
+            $email = $recipient->resolvedEmail();
+            if ($recipient->notify_email && ! empty($email)) {
+                try {
+                    if ($event === NotificationLog::EVENT_SITE_DOWN) {
+                        Mail::to($email)->send(new SiteDownClientMail($site, Carbon::now()));
+                    } else {
+                        Mail::to($email)->send(new SiteUpClientMail($site, $statusCodeOrDowntime, Carbon::now()));
+                    }
+                    $this->logAttempt($recipient, $site, $event.'_email', "Email alert sent to {$email}", true, null, null, $email);
+                    $anySuccess = true;
+                } catch (Throwable $e) {
+                    $this->logAttempt($recipient, $site, $event.'_email', "Email alert to {$email} failed", false, $e->getMessage(), null, $email);
+                    Log::warning('email.client_send_failed', [
+                        'recipient_id' => $recipient->id,
+                        'site_id' => $site->id,
+                        'email' => $email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return $anySuccess;
+    }
+
+    public function formatClientDownBody(Site $site): string
+    {
+        $line = "Clockwork Alert: https://{$site->domain} is temporarily unreachable. Our team has been notified and is investigating.";
+
+        return mb_strimwidth($line, 0, 320, '…');
+    }
+
+    public function formatClientUpBody(Site $site, ?int $downtimeSec): string
+    {
+        $duration = $downtimeSec !== null ? ' after '.$this->humanize($downtimeSec) : '';
+        $line = "Clockwork Notice: https://{$site->domain} is back online{$duration}.";
+
+        return mb_strimwidth($line, 0, 320, '…');
     }
 
     /**
