@@ -341,7 +341,7 @@
         },
         {
             "name": "clockwork/auth-github",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/AuthGitHub",
@@ -369,7 +369,7 @@
         },
         {
             "name": "clockwork/auth-google",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/AuthGoogle",
@@ -397,7 +397,7 @@
         },
         {
             "name": "clockwork/auth-microsoft",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/AuthMicrosoft",
@@ -424,7 +424,7 @@
         },
         {
             "name": "clockwork/azure",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Azure",
@@ -451,7 +451,7 @@
         },
         {
             "name": "clockwork/backup-relay",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/BackupRelay",
@@ -475,7 +475,7 @@
         },
         {
             "name": "clockwork/bill-com",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/BillCom",
@@ -502,7 +502,7 @@
         },
         {
             "name": "clockwork/client-slack",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/ClientSlack",
@@ -529,7 +529,7 @@
         },
         {
             "name": "clockwork/cloudways",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Cloudways",
@@ -556,7 +556,7 @@
         },
         {
             "name": "clockwork/contact-forms",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/ContactForms",
@@ -583,7 +583,7 @@
         },
         {
             "name": "clockwork/core",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Core",
@@ -609,7 +609,7 @@
         },
         {
             "name": "clockwork/digitalocean",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/DigitalOcean",
@@ -636,7 +636,7 @@
         },
         {
             "name": "clockwork/gridpane",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/GridPane",
@@ -663,7 +663,7 @@
         },
         {
             "name": "clockwork/gtmetrix",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/GTmetrix",
@@ -690,7 +690,7 @@
         },
         {
             "name": "clockwork/hetzner",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Hetzner",
@@ -717,7 +717,7 @@
         },
         {
             "name": "clockwork/kinsta",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Kinsta",
@@ -744,7 +744,7 @@
         },
         {
             "name": "clockwork/linode",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Linode",
@@ -771,7 +771,7 @@
         },
         {
             "name": "clockwork/llar",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Llar",
@@ -798,7 +798,7 @@
         },
         {
             "name": "clockwork/mattermost",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Mattermost",
@@ -825,7 +825,7 @@
         },
         {
             "name": "clockwork/pagespeed-insights",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/PageSpeedInsights",
@@ -852,7 +852,7 @@
         },
         {
             "name": "clockwork/pressable",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Pressable",
@@ -879,7 +879,7 @@
         },
         {
             "name": "clockwork/slack",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Slack",
@@ -906,7 +906,7 @@
         },
         {
             "name": "clockwork/spinupwp",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/SpinupWp",
@@ -933,7 +933,7 @@
         },
         {
             "name": "clockwork/sucuri",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Sucuri",
@@ -960,7 +960,7 @@
         },
         {
             "name": "clockwork/twilio",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Twilio",
@@ -987,7 +987,7 @@
         },
         {
             "name": "clockwork/vultr",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/Vultr",
@@ -1014,7 +1014,7 @@
         },
         {
             "name": "clockwork/wpengine",
-            "version": "dev-fix/ai-remedy-autonomous-site-paths",
+            "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "modules/WPEngine",
