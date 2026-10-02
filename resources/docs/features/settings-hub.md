@@ -38,7 +38,7 @@ Policies, fleet-wide plugins, and automated maintenance cadences:
 Outbound API credentials, ecosystem modules, and alerting channels:
 * **API Credentials** (`/settings/integrations`) — Store and validate cloud provider (DigitalOcean, Hetzner, Azure, Vultr, Linode) and hosting provider API tokens (encrypted at rest, never echoed back).
 * **Module Directory** (`/settings/modules`) — Browse bundled and community extensions with trust tiers (`official`, `verified`, `community`).
-* **Notifications (SMS / Twilio)** (`/settings/notifications`) — On-call emergency dispatch lists, off-hours quiet windows, and phone number verification.
+* **Notifications & Alert Routing** (`/settings/notifications`) — Internal on-call emergency dispatch lists, off-hours quiet windows, phone verification, and client alert subscriber contacts with multi-channel routing (SMS & Email).
 * **Slack Alerts** (`/settings/slack`) — Webhook integration and granular per-event notification toggles.
 * **Mattermost Alerts** (`/settings/mattermost`) — Self-hosted chatops integration and webhook channels.
 * **Bill.com Sync** (`/settings/bill-com`) — Automated recurring invoice synchronization and care plan reconciliation.

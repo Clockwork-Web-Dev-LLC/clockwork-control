@@ -105,6 +105,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/sites/{site}/care-plan[/clear-override]` | Toggle / un-pin care plan. |
 | POST | `/sites/{site}/auto-updates/toggle` | Per-site nightly auto-update opt-in/out. |
 | POST | `/sites/{site}/uptime-monitoring` · `/uptime-ignore` | Per-site uptime opt-out / mute-alerts-but-keep-probing toggle (two different things — see [Features → Uptime monitoring](/documentation/features/uptime-monitoring)). |
+| POST | `/sites/{site}/notifications/subscribers` | Sync alert subscriber recipients for this site. |
+| POST | `/sites/{site}/notifications/subscribers/create` | Create and attach a new client alert recipient for this site. |
 | POST | `/sites/{site}/inactive` | Fleet-wide inactive toggle — site stays visible everywhere, excluded from Issues/nav badge/routine-maintenance alerts. See [Features → Inactive sites](/documentation/features/inactive-sites). |
 | POST | `/sites/{site}/fetch-db-creds` | Fetch WP DB credentials over SSH for a single site. |
 | POST | `/sites/{site}/refresh-wp-plugins` | Re-probe via SSH. |

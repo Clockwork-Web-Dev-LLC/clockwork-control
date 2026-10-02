@@ -2,10 +2,10 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-09-28
+updated: 2026-10-02
 author: Aaron Reimann
-tags: [monitoring, uptime, alerts, hosting, pressable, slack]
-tracks: [app/Services/Uptime/**, app/Support/Monitoring/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php]
+tags: [monitoring, uptime, alerts, hosting, pressable, slack, twilio, subscribers]
+tracks: [app/Services/Uptime/**, app/Support/Monitoring/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php, app/Services/Twilio/OnCallResolver.php, app/Mail/SiteDownClientMail.php, app/Mail/SiteUpClientMail.php]
 ---
 
 Every site we host gets probed every 5 minutes — SpinupWP or Pressable, doesn't matter, it's a plain HTTP probe against the public URL either way (`Site::hostMonitored()` is the scope covering both). If a site stops answering for two probes in a row, you get a chat alert. When it recovers, you get another alert. That's the whole feature in one sentence — the rest is detail.
@@ -17,6 +17,8 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 - **`/monitoring`** — fleet-wide status board. Big "ALL UP" / "X DOWN" / "X EXCUSED" hero, currently-up/currently-down counts, fleet-wide average uptime headline cards for both **7d** and **30d** (`MonitoringController::index()` computes `avg7d`/`avg30d` from `UptimeStatsCalculator::bulkUptime()`), a per-site table with uptime % over 24h / 7d / 30d, and a latest-events feed. **Re-probe all sites** (`POST /monitoring/refresh`) launches `clockwork:check-site-uptime` in the background (~2–3 min for ~150 sites) — it does not run inside the HTTP request.
 - **`/monitoring/settings`** — global probe interval (1 / 5 / 10 / 15 min), failure threshold (1–6 failures), and the domain ignore list (wildcard patterns like `*.mystagingwebsite.com`). Changes here apply to every monitored site.
 - **`/sites/<id>/overview`** — the Status card on the per-site Overview tab. Shows current state plus how long it's been that way.
+- **`/sites/<id>?tab=settings`** — Alert Subscribers (Card 6) lets you attach client contacts to this site and configure whether they receive SMS, Email, or both.
+- **`/settings/notifications`** — global notifications hub managing the internal Team On-Call rotation and the fleet-wide directory of Client Alert Contacts.
 - **Companion → `Tools → Clockwork → Uptime`** — the client-visible version. Same data, friendlier copy. Clients see this in their wp-admin.
 
 ## What "down" means
@@ -115,15 +117,32 @@ How: per-site **Settings** tab → "Ignore uptime alerts" section. There's a rea
 - **Failure threshold** — how many failures in a row trigger the down transition. Default 2. Lower values = more sensitive (1 = alert on first miss, you'll get noise). Higher values = fewer alerts (6 = ~30 minutes at default cadence before you hear about it). Threshold changes apply on the next probe — no restart needed.
 - **Ignored domains** — wildcard patterns that remove matching sites from uptime monitoring entirely (see the section above). Applies on the next probe — no restart needed.
 
-## Mattermost / Slack / client alerts
+## Alert channels & dispatch
 
-Every transition fires through `App\Services\Chat\ChatNotifier` — a fan-out dispatcher, not a single channel. `UptimeStateUpdater` type-hints the interface and doesn't know or care which concrete channels are active underneath it. Today that's up to three:
+Every transition fires through `App\Services\Chat\ChatNotifier` and the notification routing pipeline. Different audiences receive different tiers of notification:
 
+### 1. Operations chat channels (Mattermost & Slack)
 - **Mattermost** (`MattermostNotifier`) — ops channel, on by default. 🔴 **Down**: site name, HTTP code or transport error, server, the **auto-diagnosis** (see below) when available, links to the site and its Clockwork detail page. 🟢 **Recovered**: site name, downtime duration, server, link. Channel is set in `.env`: `CLOCKWORK_MATTERMOST_CHANNEL`. Lowercase channel slug — uppercase names are silently rejected by Mattermost.
 - **Slack** (`SlackNotifier`) — same event set, an ops-facing alternative/addition to Mattermost. See [Integrations → Slack](/docs/integrations/slack).
+
+### 2. Client-facing Slack
 - **Client-facing Slack** (`ClientSlackNotifier`) — only for `site_went_down`/`site_went_up` (plus contact-form events), posted to a per-site webhook the client configures themselves in Companion's wp-admin. Silent no-op for every other event type. See [Integrations → Slack](/docs/integrations/slack).
 
-Each channel gates itself on its own `enabled` config/settings — safe to have all three active at once. `SmsNotifier` (Twilio) also fires independently, gated on `care_plan_enabled` — see [Integrations → Twilio](/docs/integrations/twilio).
+### 3. Internal on-call emergency SMS (Twilio)
+- **On-Call Engineering SMS** (`TwilioSmsNotifier`) — fires strictly for care-plan enabled sites (`care_plan_enabled = true`) to team engineers currently on call (filtered by off-windows). Paging message includes site domain, error code, and brief diagnosis. See [Integrations → Twilio](/docs/integrations/twilio).
+
+### 4. Per-site alert subscribers & client notifications (SMS & Email)
+In addition to internal engineering paging, care-plan sites can have specific **Alert Subscribers** attached (`site_notification_subscribers` pivot). These contacts receive client-friendly, reassuring notifications with zero operational jargon or server internals:
+
+- **Client Channels**:
+  - **SMS** (`notify_sms`): Delivered instantly via Twilio to the contact's phone.
+    - *Down*: `"{Name}, the website {domain} is currently unreachable. Our team has been notified and is investigating."`
+    - *Up*: `"{Name}, the website {domain} is back online and responding normally."`
+  - **Email** (`notify_email`): Transactional HTML & plain text email sent via Laravel Mail (`SiteDownClientMail` / `SiteUpClientMail`). Contains a clean status indicator, downtime details, and reassurance that the engineering team is handling the incident.
+- **Subscriber Management**:
+  - Manage all contacts and site assignments centrally at `/settings/notifications` under **Client Alert Contacts**.
+  - Or manage subscribers for any specific site directly from its Settings tab (`/sites/{site}?tab=settings` → Card 6 **Alert Subscribers**). You can toggle existing client contacts on/off for that site, or quickly add a new client contact on the fly.
+- **Safety**: Client contacts never participate in the internal on-call rotation or off-windows. They only receive notifications for the exact sites they are subscribed to, and only when those sites are on an active care plan.
 
 ## Down-event auto-diagnosis
 
@@ -148,7 +167,6 @@ This used to be a 30-minute SSH-and-grep session every time a site went down. Th
 
 ## What it's not (yet)
 
-- **No content keyword check.** ManageWP lets you say "alert if the response body doesn't contain 'WordPress'". Marginal value for our fleet; defer.
 - **No multi-region probing.** Everything probes from the operator's own machine. If you need an outside-the-agency-network viewpoint, that's a v2 feature.
 - **No per-site cadence override.** All sites use the global interval. If a client wants 1-min checks while everyone else stays at 5, we'd add nullable `uptime_interval_minutes` columns. Defer until someone actually asks.
 - **No SLA report PDF.** The data is in `site_uptime_events` — the report-generation feature is a separate plan.

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-02
+
+### Added
+- **Per-site alert subscribers and multi-channel client notifications**:
+  - Support subscribing client contacts to individual care-plan sites (`site_notification_subscribers` pivot table; migration `2026_10_02_100000_add_client_fields_to_notification_recipients_table`).
+  - Added dual notification channels with granular toggles per recipient: SMS (`notify_sms`) and Email (`notify_email`).
+  - Reassuring, non-technical SMS messaging formatted specifically for client contacts (`TwilioSmsNotifier::dispatchClients()`) without operational jargon, stack traces, or server internals.
+  - Transactional HTML & plain-text client email notifications for site outages and recoveries (`SiteDownClientMail` and `SiteUpClientMail`).
+  - Reorganized `/settings/notifications` into distinct **Team On-Call Rotation** (schedule + off-windows) and **Client Alert Contacts** (site subscriptions + channel toggles) sections.
+  - Added inline **Alert Subscribers** management card (Card 6) directly on the per-site Settings tab (`/sites/{site}?tab=settings`), allowing one-click subscriber assignment and inline client contact creation.
+- **AiRemedy unknown site path protection**:
+  - Held autonomous fixes that target unknown or mismatched site paths on fleet servers (`ServerSiteContext`).
+
+### Changed
+- Bumped `vite` from 8.3.0 to 8.3.1.
+- Bumped `league/commonmark` to 2.10.3.
+
 ## [1.9.1] - 2026-09-30
 
 ### Added
