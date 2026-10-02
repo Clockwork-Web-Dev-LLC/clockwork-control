@@ -933,3 +933,106 @@ test('settings page displays kanban safety matrix, locked guardrails, and saves 
     expect($rules['restart_web_services'])->toBe(CommandSafetyGuard::TIER_2_CAUTIOUS);
     expect($rules['force_kill'])->toBe(CommandSafetyGuard::TIER_3_PROHIBITED);
 });
+
+function autoHealSiteOutageAnalysis(string $command): array
+{
+    return [
+        'ok' => true,
+        'summary' => 'Stale object cache.',
+        'root_cause' => 'Corrupt cache entries',
+        'safety_tier' => 'tier_1_safe',
+        'is_fixable' => true,
+        'commands' => [$command],
+        'explanation' => 'Flush the cache.',
+        'unfixable_briefing' => null,
+        'prompt_tokens' => 100,
+        'completion_tokens' => 20,
+        'cost_usd' => 0.001,
+    ];
+}
+
+test('auto-heal only executes tier 1 site commands that target a real site on the server', function (string $command, bool $executes) {
+    $server = Server::factory()->create();
+    $site = Site::factory()->create([
+        'server_id' => $server->id,
+        'domain' => 'realsite.com',
+        'site_user' => 'realsite',
+        'wp_path' => '/sites/realsite.com/files',
+    ]);
+
+    app(Settings::class)->put('clockwork.ai_remedy.mode', AiRemedyTriager::MODE_AUTO_HEAL);
+
+    $this->mock(OpenRouterClient::class, function ($mock) use ($command) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+        $mock->shouldReceive('getModel')->andReturn('test-model');
+        $mock->shouldReceive('diagnoseSiteDowntime')->once()->andReturn(autoHealSiteOutageAnalysis($command));
+    });
+    $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('aiRemedyTriaged')->andReturn(true));
+    $this->mock(RemedyExecutor::class, function ($mock) use ($executes) {
+        $executes
+            ? $mock->shouldReceive('execute')->once()->andReturn(['ok' => true, 'run' => null, 'output' => ''])
+            : $mock->shouldNotReceive('execute');
+    });
+
+    $run = app(AiRemedyTriager::class)->triageSiteDowntime($site, UptimeProbeResult::badStatus(500, 300, 'HTTP 500'));
+
+    expect($run->actor)->toBe('autonomous')
+        ->and($run->safety_tier)->toBe(CommandSafetyGuard::TIER_1_SAFE)
+        ->and($run->status)->toBe(AiRemedyRun::STATUS_ANALYZED);
+})->with([
+    'real site path' => ['sudo -u realsite wp cache flush --path=/sites/realsite.com/files', true],
+    'guessed site path' => ['sudo -u realsite wp cache flush --path=/var/www/realsite/htdocs', false],
+    'wrong site user' => ['sudo -u www-data wp cache flush --path=/sites/realsite.com/files', false],
+    'maintenance flag outside any site' => ['rm -f /var/www/html/.maintenance', false],
+]);
+
+test('auto-heal server spike holds a tier 1 fix aimed at a guessed site path for review', function () {
+    $server = Server::factory()->create();
+    Site::factory()->create(['server_id' => $server->id, 'domain' => 'realsite.com', 'wp_path' => '/sites/realsite.com/files']);
+
+    app(Settings::class)->put('clockwork.ai_remedy.mode', AiRemedyTriager::MODE_AUTO_HEAL);
+
+    $this->mock(ServerTelemetryCollector::class, fn ($mock) => $mock->shouldReceive('collect')->once()->andReturn(['ok' => true, 'server_id' => $server->id]));
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getModel')->andReturn('test-model');
+        $mock->shouldReceive('diagnoseServerSpike')->once()->andReturn([
+            'is_fixable' => true,
+            'safety_tier' => 'tier_1_safe',
+            'summary' => 'Stuck maintenance flag.',
+            'root_cause' => 'Interrupted update',
+            'commands' => ['rm -f /home/forge/realsite/.maintenance'],
+            'prompt_tokens' => 100,
+            'completion_tokens' => 20,
+            'cost_usd' => 0.001,
+        ]);
+    });
+    $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('aiRemedyTriaged')->once()->andReturn(true));
+    $this->mock(RemedyExecutor::class, fn ($mock) => $mock->shouldNotReceive('execute'));
+
+    $result = app(AiRemedyTriager::class)->triageServerSpike($server, 'Spike test');
+
+    expect($result['run']->actor)->toBe('autonomous')
+        ->and($result['run']->status)->toBe(AiRemedyRun::STATUS_ANALYZED);
+});
+
+test('remedy executor holds an autonomous run with a guessed site path without connecting', function () {
+    $server = Server::factory()->create();
+    Site::factory()->create(['server_id' => $server->id, 'domain' => 'realsite.com', 'wp_path' => '/sites/realsite.com/files']);
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+        'status' => AiRemedyRun::STATUS_ANALYZED,
+        'server_id' => $server->id,
+        'actor' => 'autonomous',
+        'proposed_commands' => ['wp cache flush --path=/var/www/realsite'],
+        'started_at' => now(),
+    ]);
+
+    $this->mock(SshClient::class, fn ($mock) => $mock->shouldNotReceive('connect'));
+
+    $result = app(RemedyExecutor::class)->execute($run);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['error'])->toContain("isn't a WordPress site Clockwork knows")
+        ->and($run->fresh()->status)->toBe(AiRemedyRun::STATUS_ANALYZED)
+        ->and($run->fresh()->error_message)->toContain('held for review');
+});
