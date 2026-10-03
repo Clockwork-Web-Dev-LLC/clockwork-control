@@ -864,7 +864,7 @@ class SitesController extends Controller
             ->with('status', 'Cert details updated.');
     }
 
-    public function updateGatekeeperSettings(Request $request, Site $site, GatekeeperSettingsPusher $pusher): RedirectResponse
+    public function updateGatekeeperSettings(Request $request, Site $site, GatekeeperSettingsPusher $pusher): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'enabled' => ['nullable', 'in:default,1,0'],
@@ -885,61 +885,75 @@ class SitesController extends Controller
             'ignore_cidrs' => ['nullable', 'string'],
         ]);
 
-        $overrides = [];
-        if (isset($validated['enabled']) && $validated['enabled'] !== 'default') {
-            $overrides['enabled'] = $validated['enabled'] === '1';
-        }
-        if (! empty($validated['threshold'])) {
-            $overrides['threshold'] = (int) $validated['threshold'];
-        }
-        if (! empty($validated['window_seconds'])) {
-            $overrides['window_seconds'] = (int) $validated['window_seconds'];
-        }
-        if (! empty($validated['lockout_seconds'])) {
-            $overrides['lockout_seconds'] = (int) $validated['lockout_seconds'];
-        }
-        if (! empty($validated['consecutive_lockouts_for_extended'])) {
-            $overrides['consecutive_lockouts_for_extended'] = (int) $validated['consecutive_lockouts_for_extended'];
-        }
-        if (! empty($validated['extended_lockout_seconds'])) {
-            $overrides['extended_lockout_seconds'] = (int) $validated['extended_lockout_seconds'];
-        }
-        if (! empty(trim((string) ($validated['headline'] ?? '')))) {
-            $overrides['headline'] = trim((string) $validated['headline']);
-        }
-        if (! empty(trim((string) ($validated['body'] ?? '')))) {
-            $overrides['body'] = trim((string) $validated['body']);
-        }
-        if (! empty(trim((string) ($validated['support_label'] ?? '')))) {
-            $overrides['support_label'] = trim((string) $validated['support_label']);
-        }
-        if (! empty(trim((string) ($validated['support_email'] ?? '')))) {
-            $overrides['support_email'] = trim((string) $validated['support_email']);
-        }
-        if (! empty(trim((string) ($validated['support_url'] ?? '')))) {
-            $overrides['support_url'] = trim((string) $validated['support_url']);
-        }
-        if (isset($validated['show_ip']) && $validated['show_ip'] !== 'default') {
-            $overrides['show_ip'] = $validated['show_ip'] === '1';
-        }
-        if (isset($validated['show_unlock_link']) && $validated['show_unlock_link'] !== 'default') {
-            $overrides['show_unlock_link'] = $validated['show_unlock_link'] === '1';
-        }
-        if (! empty(trim((string) ($validated['unlock_url'] ?? '')))) {
-            $overrides['unlock_url'] = trim((string) $validated['unlock_url']);
-        }
+        $existing = is_array($site->gatekeeper_settings) ? $site->gatekeeper_settings : [];
+        $isQuickToggle = ! $request->has('threshold') && ! $request->has('headline') && ! $request->has('body') && ! $request->has('support_label');
 
-        if (! empty($validated['ignore_ips'])) {
-            $overrides['ignore_ips'] = array_values(array_filter(
-                array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_ips']) ?: []),
-                fn ($ip) => filter_var($ip, FILTER_VALIDATE_IP)
-            ));
-        }
-        if (! empty($validated['ignore_cidrs'])) {
-            $overrides['ignore_cidrs'] = array_values(array_filter(
-                array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_cidrs']) ?: []),
-                fn ($cidr) => str_contains($cidr, '/')
-            ));
+        if ($isQuickToggle) {
+            $overrides = $existing;
+            if (isset($validated['enabled'])) {
+                if ($validated['enabled'] === 'default') {
+                    unset($overrides['enabled']);
+                } else {
+                    $overrides['enabled'] = $validated['enabled'] === '1';
+                }
+            }
+        } else {
+            $overrides = [];
+            if (isset($validated['enabled']) && $validated['enabled'] !== 'default') {
+                $overrides['enabled'] = $validated['enabled'] === '1';
+            }
+            if (! empty($validated['threshold'])) {
+                $overrides['threshold'] = (int) $validated['threshold'];
+            }
+            if (! empty($validated['window_seconds'])) {
+                $overrides['window_seconds'] = (int) $validated['window_seconds'];
+            }
+            if (! empty($validated['lockout_seconds'])) {
+                $overrides['lockout_seconds'] = (int) $validated['lockout_seconds'];
+            }
+            if (! empty($validated['consecutive_lockouts_for_extended'])) {
+                $overrides['consecutive_lockouts_for_extended'] = (int) $validated['consecutive_lockouts_for_extended'];
+            }
+            if (! empty($validated['extended_lockout_seconds'])) {
+                $overrides['extended_lockout_seconds'] = (int) $validated['extended_lockout_seconds'];
+            }
+            if (! empty(trim((string) ($validated['headline'] ?? '')))) {
+                $overrides['headline'] = trim((string) $validated['headline']);
+            }
+            if (! empty(trim((string) ($validated['body'] ?? '')))) {
+                $overrides['body'] = trim((string) $validated['body']);
+            }
+            if (! empty(trim((string) ($validated['support_label'] ?? '')))) {
+                $overrides['support_label'] = trim((string) $validated['support_label']);
+            }
+            if (! empty(trim((string) ($validated['support_email'] ?? '')))) {
+                $overrides['support_email'] = trim((string) $validated['support_email']);
+            }
+            if (! empty(trim((string) ($validated['support_url'] ?? '')))) {
+                $overrides['support_url'] = trim((string) $validated['support_url']);
+            }
+            if (isset($validated['show_ip']) && $validated['show_ip'] !== 'default') {
+                $overrides['show_ip'] = $validated['show_ip'] === '1';
+            }
+            if (isset($validated['show_unlock_link']) && $validated['show_unlock_link'] !== 'default') {
+                $overrides['show_unlock_link'] = $validated['show_unlock_link'] === '1';
+            }
+            if (! empty(trim((string) ($validated['unlock_url'] ?? '')))) {
+                $overrides['unlock_url'] = trim((string) $validated['unlock_url']);
+            }
+
+            if (! empty($validated['ignore_ips'])) {
+                $overrides['ignore_ips'] = array_values(array_filter(
+                    array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_ips']) ?: []),
+                    fn ($ip) => filter_var($ip, FILTER_VALIDATE_IP)
+                ));
+            }
+            if (! empty($validated['ignore_cidrs'])) {
+                $overrides['ignore_cidrs'] = array_values(array_filter(
+                    array_map('trim', preg_split('/[\r\n,]+/', (string) $validated['ignore_cidrs']) ?: []),
+                    fn ($cidr) => str_contains($cidr, '/')
+                ));
+            }
         }
 
         $site->gatekeeper_settings = empty($overrides) ? null : $overrides;
@@ -948,7 +962,22 @@ class SitesController extends Controller
         // Best-effort push to site
         $pushed = $pusher->maybePush($site);
 
-        $msg = 'Gatekeeper site settings saved'.($pushed ? ' and synced to WordPress.' : '.');
+        $actionText = match ($validated['enabled'] ?? null) {
+            '1' => 'Gatekeeper enabled on this site',
+            '0' => 'Gatekeeper disabled on this site',
+            'default' => 'Gatekeeper reset to fleet default',
+            default => 'Gatekeeper site settings saved',
+        };
+        $msg = ($isQuickToggle ? $actionText : 'Gatekeeper site settings saved').($pushed ? ' and synced to WordPress.' : '.');
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $msg,
+                'pushed' => $pushed,
+                'enabled' => $site->gatekeeperEnabled(),
+            ]);
+        }
 
         return redirect()->route('sites.show', ['site' => $site, 'tab' => 'settings'])
             ->with('status', $msg);

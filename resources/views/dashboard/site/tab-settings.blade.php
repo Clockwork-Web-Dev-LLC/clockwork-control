@@ -201,7 +201,6 @@
                             : (($site->wordfence_enabled || $lockoutActive)
                                 ? ['class' => 'status-yellow', 'text' => 'Partial']
                                 : ['class' => 'status-unknown', 'text' => 'Unconfigured']);
-                        $llarModuleEnabled = app(\Modules\Core\ModuleStateResolver::class)->isEnabled('llar');
                     @endphp
                     <span class="status-pill {{ $secPill['class'] }} text-[10px]">
                         <span class="status-dot"></span> {{ $secPill['text'] }}
@@ -223,39 +222,61 @@
                     @if ($site->gatekeeperEnabled())
                         <div class="flex items-center justify-between text-[11px]">
                             <span class="text-[var(--color-ink-muted)]">Gatekeeper:</span>
-                            <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
-                                <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> Active
+                                </span>
+                                <a href="#gatekeeper-card" class="btn-pill-nav text-[10px] py-0.5 px-2" title="View or edit Gatekeeper settings">
+                                    <i class="fa-solid fa-sliders text-[9px]"></i> Settings
+                                </a>
+                            </div>
                         </div>
                     @elseif ($site->llar_enabled)
                         <div class="flex items-center justify-between text-[11px]">
                             <span class="text-[var(--color-ink-muted)]">Limit Login Attempts:</span>
-                            <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
-                                <i class="fa-solid fa-circle-check text-[10px]"></i> Enabled
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-amber-600 font-medium text-[11px] flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Active (Legacy)
+                                </span>
+                                @if ($site->companion_installed)
+                                    <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="enabled" value="1">
+                                        <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-blue-600 font-medium" title="Switch from legacy LLAR to native Gatekeeper">
+                                            <i class="fa-solid fa-arrow-up text-[9px]"></i> Switch to Gatekeeper
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
                         </div>
                     @else
                         <div class="flex items-center justify-between text-[11px]">
-                            <span class="text-[var(--color-ink-muted)]">Login Lockouts:</span>
-                            <div id="llar-state">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[var(--color-ink-soft)] text-[11px]">Not enabled</span>
-                                    @if ($llarModuleEnabled && ! $site->isPressable())
-                                        <button type="button"
-                                                id="llar-install-btn"
-                                                class="btn-pill-nav text-[10px] py-0.5 px-2"
-                                                data-url="{{ route('sites.llar.install', $site) }}"
-                                                title="Install LLAR via wp-cli over SSH">
-                                            <i class="fa-solid fa-download text-[9px]"></i> Install LLAR
+                            <span class="text-[var(--color-ink-muted)]">Gatekeeper:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[var(--color-ink-soft)] text-[11px]">Disabled</span>
+                                @if ($site->companion_installed)
+                                    <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="enabled" value="1">
+                                        <button type="submit"
+                                                class="btn-pill-nav text-[10px] py-0.5 px-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-medium"
+                                                title="Enable native Gatekeeper login brute-force lockouts on this site">
+                                            <i class="fa-solid fa-shield-halved text-[9px]"></i> Enable Gatekeeper
                                         </button>
-                                    @endif
-                                </div>
+                                    </form>
+                                @else
+                                    <a href="#companion-card"
+                                       class="btn-pill-nav text-[10px] py-0.5 px-2 text-violet-600 hover:text-violet-700 flex items-center gap-1 font-medium"
+                                       title="Install Clockwork Companion to enable Gatekeeper and security tools">
+                                        <i class="fa-solid fa-puzzle-piece text-[9px]"></i> Install Companion
+                                    </a>
+                                @endif
                             </div>
                         </div>
                     @endif
                 </div>
-
-                <div id="llar-install-result" class="hidden text-xs mb-2"></div>
 
                 <div class="text-[11px] text-[var(--color-ink-soft)] flex items-start gap-1.5 leading-tight">
                     <i class="fa-solid fa-database text-[10px] mt-0.5 shrink-0"></i>
@@ -272,7 +293,7 @@
 
             <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
                 <span class="text-[var(--color-ink-muted)]">Brute-force Protection</span>
-                <span class="text-[var(--color-ink-soft)] font-mono text-[10px]">wp-cli / SSH</span>
+                <span class="text-[var(--color-ink-soft)] font-mono text-[10px]">Companion / Gatekeeper</span>
             </div>
         </div>
     @endif
@@ -912,7 +933,7 @@
     </div>
 
     {{-- Card 8: Companion Plugin --}}
-    <div class="card p-5 flex flex-col justify-between h-full">
+    <div class="card p-5 flex flex-col justify-between h-full" id="companion-card">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -951,6 +972,62 @@
                 </div>
             </div>
 
+            @if ($site->companion_installed)
+                <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-[var(--color-ink-muted)] flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-blue-600 text-[10px]"></i> Gatekeeper:
+                        </span>
+                        <div class="flex items-center gap-2">
+                            @if ($site->gatekeeperEnabled())
+                                <span class="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-[10px]"></i> On
+                                </span>
+                                <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                    @csrf
+                                    @method('PATCH')
+                                    <input type="hidden" name="enabled" value="0">
+                                    <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-[var(--color-ink-muted)] hover:text-rose-600" title="Turn Gatekeeper off for this site">
+                                        Disable
+                                    </button>
+                                </form>
+                            @else
+                                <span class="text-[var(--color-ink-soft)] text-[11px]">Off</span>
+                                <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                    @csrf
+                                    @method('PATCH')
+                                    <input type="hidden" name="enabled" value="1">
+                                    <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-emerald-600 hover:text-emerald-700 font-medium" title="Turn Gatekeeper on for this site">
+                                        <i class="fa-solid fa-power-off text-[9px]"></i> Enable
+                                    </button>
+                                </form>
+                            @endif
+                            <a href="#gatekeeper-card" class="text-[10px] text-blue-600 hover:underline" title="Configure Gatekeeper">
+                                Settings &rarr;
+                            </a>
+                        </div>
+                    </div>
+
+                    @php
+                        $caps = is_array($site->companion_capabilities) ? $site->companion_capabilities : [];
+                        $hasSso = in_array('sso', $caps, true);
+                    @endphp
+                    @if ($hasSso)
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-[var(--color-ink-muted)] flex items-center gap-1.5">
+                                <i class="fa-solid fa-key text-amber-600 text-[10px]"></i> Admin SSO:
+                            </span>
+                            <form method="POST" action="{{ route('sites.companion.sso', $site) }}" target="_blank" class="inline">
+                                @csrf
+                                <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-indigo-600 hover:text-indigo-800 flex items-center gap-1" title="Log directly into WordPress admin as an administrator">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Launch SSO
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+                </div>
+            @endif
+
             <div class="space-y-2">
                 @if ($site->companion_installed)
                     <button type="button"
@@ -983,8 +1060,10 @@
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
-            <span class="text-[var(--color-ink-muted)]">Tools & SSO Plugin</span>
-            <span class="text-[var(--color-ink-soft)]">mu-plugin</span>
+            <a href="{{ route('settings.companion.index') }}" class="text-[11px] text-[var(--color-ink-muted)] hover:text-violet-600 flex items-center gap-1" title="Fleet Companion branding, reports, and email settings">
+                <i class="fa-solid fa-gear text-[10px]"></i> Companion Settings
+            </a>
+            <span class="text-[var(--color-ink-soft)] font-mono text-[10px]">mu-plugin</span>
         </div>
     </div>
 
@@ -1085,6 +1164,42 @@
                         </div>
                     @endif
                 </div>
+
+                {{-- Quick Policy Action Bar --}}
+                <div class="flex items-center justify-between pt-1 pb-1">
+                    <span class="text-[11px] text-[var(--color-ink-muted)]">Quick toggle:</span>
+                    <div class="flex items-center gap-1.5">
+                        @if ($effectiveEnabled)
+                            <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="enabled" value="0">
+                                <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-rose-600 hover:text-rose-700" title="Force-disable Gatekeeper on this site">
+                                    <i class="fa-solid fa-power-off text-[9px]"></i> Force Disable
+                                </button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="enabled" value="1">
+                                <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-emerald-600 hover:text-emerald-700 font-medium" title="Force-enable Gatekeeper on this site">
+                                    <i class="fa-solid fa-shield-halved text-[9px]"></i> Force Enable
+                                </button>
+                            </form>
+                        @endif
+                        @if ($isOverriddenEnabled)
+                            <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="enabled" value="default">
+                                <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]" title="Reset site to inherit fleet default ({{ ($fleetGatekeeper['enabled'] ?? false) ? 'Enabled' : 'Disabled' }})">
+                                    Inherit Fleet
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
             </div>
 
             <form id="gatekeeper-form" method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="hidden space-y-2.5 text-xs">
@@ -1159,13 +1274,18 @@
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between">
-            <form method="POST" action="{{ route('sites.gatekeeper.push', $site) }}">
-                @csrf
-                <button type="submit" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] flex items-center gap-1"
-                        title="Push current effective Gatekeeper settings to this site immediately">
-                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i> Push to site
-                </button>
-            </form>
+            <div class="flex items-center gap-3">
+                <form method="POST" action="{{ route('sites.gatekeeper.push', $site) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] flex items-center gap-1"
+                            title="Push current effective Gatekeeper settings to this site immediately">
+                        <i class="fa-solid fa-arrows-rotate text-[10px]"></i> Push to site
+                    </button>
+                </form>
+                <a href="{{ route('settings.gatekeeper.index') }}" class="text-[11px] text-[var(--color-ink-soft)] hover:text-blue-600 flex items-center gap-1" title="Fleet-wide Gatekeeper policy settings">
+                    <i class="fa-solid fa-globe text-[10px]"></i> Fleet Policy
+                </a>
+            </div>
             <button type="button" id="gatekeeper-edit-toggle" class="btn-pill-nav text-xs flex items-center gap-1">
                 <i class="fa-solid fa-pen-to-square text-[10px]"></i> Edit Overrides
             </button>
@@ -1267,50 +1387,6 @@
             }
         });
 
-        // LLAR Install
-        const llarBtn = document.getElementById('llar-install-btn');
-        const llarResult = document.getElementById('llar-install-result');
-        llarBtn?.addEventListener('click', async () => {
-            const ok = await window.confirmModal({
-                title: 'Install Limit Login Attempts Reloaded?',
-                message: 'Install LLAR on this site?',
-                details: 'Email-on-lockout will be turned off automatically.',
-                confirmText: 'Install Plugin',
-                variant: 'primary'
-            });
-            if (!ok) {
-                return;
-            }
-            llarBtn.disabled = true;
-            const original = llarBtn.innerHTML;
-            llarBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing…';
-            llarResult.className = 'text-xs mb-2 text-[var(--color-ink-muted)]';
-            llarResult.textContent = 'Connecting over SSH and running wp-cli…';
-            llarResult.classList.remove('hidden');
-            try {
-                const r = await fetch(llarBtn.dataset.url, {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                });
-                const data = await r.json();
-                if (data.ok) {
-                    const colorClass = data.result === 'installed' ? 'status-green' : 'status-yellow';
-                    const icon = data.result === 'installed' ? 'fa-circle-check' : 'fa-circle-info';
-                    llarResult.className = 'text-xs mb-2 status-pill ' + colorClass + ' inline-block';
-                    llarResult.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + data.message + ' Reloading…';
-                    setTimeout(() => location.reload(), 1200);
-                } else {
-                    llarResult.className = 'text-xs mb-2 status-pill status-red inline-block';
-                    llarResult.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
-                }
-            } catch (e) {
-                llarResult.className = 'text-xs mb-2 status-pill status-red inline-block';
-                llarResult.textContent = 'Network error: ' + e.message;
-            } finally {
-                llarBtn.disabled = false;
-                llarBtn.innerHTML = original;
-            }
-        });
 
         // Companion Push Update
         const companionPushBtn = document.getElementById('companion-push-update-btn');
