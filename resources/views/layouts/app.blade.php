@@ -493,7 +493,9 @@
                                     </button>
                                 </form>
                             </div>
-                                      <!-- Mobile Menu Button -->
+                        </div>
+
+                        <!-- Mobile Menu Button -->
                         <button type="button"
                                 @click="mobileNavOpen = !mobileNavOpen"
                                 class="md:hidden relative p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
@@ -563,7 +565,7 @@
                             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
                                 <a href="{{ route('ai-remedy.index') }}"
                                    class="studio-nav-tab {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}">
-                                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> AiRemedy
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> AiRemedy
                                     @isset($aiRemedyReviewCount)
                                         @if ($aiRemedyReviewCount > 0)
                                             <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
