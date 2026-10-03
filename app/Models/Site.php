@@ -1030,6 +1030,29 @@ class Site extends Model
         return $this->hasMany(SitePerformanceScan::class);
     }
 
+    public function fieldMetrics(): HasMany
+    {
+        return $this->hasMany(SiteFieldMetric::class);
+    }
+
+    public function latestFieldMetricPhone(): HasOne
+    {
+        return $this->hasOne(SiteFieldMetric::class)
+            ->ofMany(
+                ['collected_at' => 'max', 'id' => 'max'],
+                fn ($query) => $query->where('form_factor', SiteFieldMetric::FORM_FACTOR_PHONE),
+            );
+    }
+
+    public function latestFieldMetricDesktop(): HasOne
+    {
+        return $this->hasOne(SiteFieldMetric::class)
+            ->ofMany(
+                ['collected_at' => 'max', 'id' => 'max'],
+                fn ($query) => $query->where('form_factor', SiteFieldMetric::FORM_FACTOR_DESKTOP),
+            );
+    }
+
     /**
      * Latest mobile-strategy performance scan. Mobile is Google's authoritative
      * SEO ranking surface — it's the "headline" score on the per-site tab.

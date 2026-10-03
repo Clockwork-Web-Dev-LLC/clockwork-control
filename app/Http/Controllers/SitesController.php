@@ -203,6 +203,7 @@ class SitesController extends Controller
         // 2. Performance widget data
         $latestPerfMobile = $site->latestPerformanceScanMobile;
         $latestPerfDesktop = $site->latestPerformanceScanDesktop;
+        $latestFieldMetricPhone = $site->latestFieldMetricPhone;
 
         // 3. Security widget data
         $latestSiteCheck = $site->latestSiteCheckScan;
@@ -236,6 +237,7 @@ class SitesController extends Controller
             'recentUptimeEvents',
             'latestPerfMobile',
             'latestPerfDesktop',
+            'latestFieldMetricPhone',
             'latestSiteCheck',
             'latestChecksumScan',
             'traffic7d',
@@ -301,6 +303,8 @@ class SitesController extends Controller
     {
         $latestPerfMobile = $site->latestPerformanceScanMobile;
         $latestPerfDesktop = $site->latestPerformanceScanDesktop;
+        $latestFieldMetricPhone = $site->latestFieldMetricPhone;
+        $latestFieldMetricDesktop = $site->latestFieldMetricDesktop;
 
         $perfHistory = $site->performanceScans()
             ->orderByDesc('scanned_at')
@@ -329,7 +333,7 @@ class SitesController extends Controller
             }
         }
 
-        return compact('latestPerfMobile', 'latestPerfDesktop', 'perfHistory', 'perfTrend');
+        return compact('latestPerfMobile', 'latestPerfDesktop', 'latestFieldMetricPhone', 'latestFieldMetricDesktop', 'perfHistory', 'perfTrend');
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
 use App\Models\Site;
+use App\Models\SiteFieldMetric;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
@@ -233,8 +234,15 @@ class ClientReportCompiler
             ->orderByDesc('scanned_at')
             ->first();
 
+        $latestField = SiteFieldMetric::query()
+            ->where('site_id', $site->id)
+            ->where('form_factor', SiteFieldMetric::FORM_FACTOR_PHONE)
+            ->where('status', SiteFieldMetric::STATUS_OK)
+            ->orderByDesc('collected_at')
+            ->first();
+
         return [
-            'has_performance' => $latestMobile !== null || $latestDesktop !== null,
+            'has_performance' => $latestMobile !== null || $latestDesktop !== null || $latestField !== null,
             'desktop' => $latestDesktop ? [
                 'score' => $latestDesktop->performance_score,
                 'lcp_ms' => $latestDesktop->lcp_ms,
@@ -244,6 +252,15 @@ class ClientReportCompiler
                 'score' => $latestMobile->performance_score,
                 'lcp_ms' => $latestMobile->lcp_ms,
                 'scanned_at' => $latestMobile->scanned_at?->toDateString(),
+            ] : null,
+            'field_data' => $latestField ? [
+                'cwv_pass' => $latestField->cwv_pass,
+                'lcp_ms' => $latestField->lcp_p75_ms,
+                'inp_ms' => $latestField->inp_p75_ms,
+                'cls_x1000' => $latestField->cls_p75_x1000,
+                'ttfb_ms' => $latestField->ttfb_p75_ms,
+                'period_start' => $latestField->period_start?->toDateString(),
+                'period_end' => $latestField->period_end?->toDateString(),
             ] : null,
         ];
     }
