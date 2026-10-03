@@ -21,9 +21,7 @@ use Illuminate\Support\Facades\Log;
 */
 
 describe('WarmWeirdStats', function () {
-    it('busts the four threat_logs-derived cache keys and recomputes them via the aggregator', function () {
-        Cache::put('weird_stats:most_attacked_paths', ['stale'], now()->addMinutes(30));
-        Cache::put('weird_stats:hour_histogram', ['stale'], now()->addMinutes(30));
+    it('busts the threat_logs-derived cache keys and recomputes them via the aggregator', function () {
         Cache::put('weird_stats:attacks_7d_count', 999, now()->addMinutes(30));
         Cache::put('weird_stats:cf_attack_reduction', ['stale'], now()->addMinutes(30));
 
@@ -31,8 +29,6 @@ describe('WarmWeirdStats', function () {
             $mock->shouldReceive('summaryTiles')->once()->andReturn([
                 'total_sites' => 5, 'attacks_7d' => 10, 'active_bans' => 1, 'unprotected_count' => 0,
             ]);
-            $mock->shouldReceive('mostAttackedPaths')->once()->andReturn([]);
-            $mock->shouldReceive('attackHourHistogram')->once()->andReturn(['labels' => [], 'attacks' => [], 'approvals' => []]);
             $mock->shouldReceive('settlingPointStats')->once()->andReturn([
                 'cf_attack_reduction' => null, 'auto_ban_speedup' => null, 'tier_density' => [], 'self_ban_prevention' => [],
             ]);
@@ -48,25 +44,21 @@ describe('WarmWeirdStats', function () {
 
         // Cache::forget runs unconditionally before recomputing (the mocked
         // aggregator never repopulates these keys itself), so they're gone.
-        expect(Cache::has('weird_stats:most_attacked_paths'))->toBeFalse()
-            ->and(Cache::has('weird_stats:hour_histogram'))->toBeFalse()
-            ->and(Cache::has('weird_stats:attacks_7d_count'))->toBeFalse()
+        expect(Cache::has('weird_stats:attacks_7d_count'))->toBeFalse()
             ->and(Cache::has('weird_stats:cf_attack_reduction'))->toBeFalse();
     });
 
     it('still forgets the cache keys and calls every aggregator method with --force', function () {
-        Cache::put('weird_stats:most_attacked_paths', ['stale'], now()->addMinutes(30));
+        Cache::put('weird_stats:attacks_7d_count', 999, now()->addMinutes(30));
 
         $this->mock(WeirdStatsAggregator::class, function ($mock) {
             $mock->shouldReceive('summaryTiles')->once()->andReturn([]);
-            $mock->shouldReceive('mostAttackedPaths')->once()->andReturn([]);
-            $mock->shouldReceive('attackHourHistogram')->once()->andReturn([]);
             $mock->shouldReceive('settlingPointStats')->once()->andReturn([]);
         });
 
         $this->artisan('clockwork:warm-weird-stats', ['--force' => true])->assertSuccessful();
 
-        expect(Cache::has('weird_stats:most_attacked_paths'))->toBeFalse();
+        expect(Cache::has('weird_stats:attacks_7d_count'))->toBeFalse();
     });
 
     it('propagates a failure from the aggregator instead of silently succeeding', function () {

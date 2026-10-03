@@ -173,9 +173,7 @@ class WeirdStatsAggregator
     }
 
     /**
-     * Top 10 most-hit request paths fleet-wide over the last 7 days.
-     * Status code mix surfaces whether the path is mostly 404 (scanner probe)
-     * or mostly 200/302 (something legit getting heavy traffic).
+     * Retired: query on 40M-row threat_logs was timing out and crashing /settings/weird-stats.
      *
      * @return array<int, array{
      *     rank: int,
@@ -188,70 +186,7 @@ class WeirdStatsAggregator
      */
     public function mostAttackedPaths(): array
     {
-        return Cache::remember(
-            'weird_stats:most_attacked_paths',
-            now()->addMinutes(self::CACHE_TTL_MINUTES),
-            function () {
-                $since = Carbon::now()->subDays(7);
-
-                // USE INDEX hint forces MySQL to use the
-                // (event_at, request_path(64)) compound — without the hint the
-                // optimizer picks a full table scan + filesort and the query
-                // takes 30+ seconds on 2.7M+ rows. With the hint, ~5 seconds
-                // cold (then cached for an hour). See the migration at
-                // 2026_05_02_080000_add_request_path_index_to_threat_logs.
-                $top = DB::table(DB::raw('threat_logs USE INDEX (threat_logs_event_at_request_path_index)'))
-                    ->where('event_at', '>=', $since)
-                    ->whereNotNull('request_path')
-                    ->where('request_path', '!=', '')
-                    ->groupBy('request_path')
-                    ->select([
-                        'request_path',
-                        DB::raw('COUNT(*) AS hits'),
-                        DB::raw('COUNT(DISTINCT site_id) AS sites'),
-                        DB::raw('COUNT(DISTINCT ip) AS ips'),
-                    ])
-                    ->orderByDesc('hits')
-                    ->limit(10)
-                    ->get();
-
-                if ($top->isEmpty()) {
-                    return [];
-                }
-
-                $paths = $top->pluck('request_path')->all();
-                $statusBuckets = DB::table('threat_logs')
-                    ->where('event_at', '>=', $since)
-                    ->whereIn('request_path', $paths)
-                    ->groupBy(['request_path', DB::raw('FLOOR(status_code / 100)')])
-                    ->select([
-                        'request_path',
-                        DB::raw('FLOOR(status_code / 100) AS status_class'),
-                        DB::raw('COUNT(*) AS c'),
-                    ])
-                    ->get()
-                    ->groupBy('request_path');
-
-                $rows = [];
-                foreach ($top as $i => $row) {
-                    $codes = [];
-                    foreach ($statusBuckets->get($row->request_path, collect()) as $bucket) {
-                        $codes[((int) $bucket->status_class).'xx'] = (int) $bucket->c;
-                    }
-                    ksort($codes);
-                    $rows[] = [
-                        'rank' => $i + 1,
-                        'path' => (string) $row->request_path,
-                        'hits' => (int) $row->hits,
-                        'sites' => (int) $row->sites,
-                        'ips' => (int) $row->ips,
-                        'status_codes' => $codes,
-                    ];
-                }
-
-                return $rows;
-            },
-        );
+        return [];
     }
 
     /**
@@ -319,9 +254,7 @@ class WeirdStatsAggregator
     }
 
     /**
-     * 24-bin hour-of-day histogram of attacks (threat_logs) and operator
-     * approvals (review_queue → queued_for_ban) over the last 7 days.
-     * Gap between the two series is the 'I got around to it later' signal.
+     * Retired: query on 40M-row threat_logs was timing out and panel was removed from UI.
      *
      * @return array{
      *     labels: array<int, int>,
@@ -331,43 +264,11 @@ class WeirdStatsAggregator
      */
     public function attackHourHistogram(): array
     {
-        return Cache::remember(
-            'weird_stats:hour_histogram',
-            now()->addMinutes(self::CACHE_TTL_MINUTES),
-            function () {
-                $since = Carbon::now()->subDays(7);
-
-                $attacks = DB::table('threat_logs')
-                    ->where('event_at', '>=', $since)
-                    ->groupBy(DB::raw('HOUR(event_at)'))
-                    ->select([
-                        DB::raw('HOUR(event_at) AS h'),
-                        DB::raw('COUNT(*) AS c'),
-                    ])
-                    ->pluck('c', 'h');
-
-                $approvals = DB::table('review_queue')
-                    ->where('decided_at', '>=', $since)
-                    ->whereNotNull('decided_at')
-                    ->whereIn('status', ['queued_for_ban', 'banned'])
-                    ->groupBy(DB::raw('HOUR(decided_at)'))
-                    ->select([
-                        DB::raw('HOUR(decided_at) AS h'),
-                        DB::raw('COUNT(*) AS c'),
-                    ])
-                    ->pluck('c', 'h');
-
-                $labels = range(0, 23);
-                $attackSeries = array_map(fn ($h) => (int) ($attacks[$h] ?? 0), $labels);
-                $approvalSeries = array_map(fn ($h) => (int) ($approvals[$h] ?? 0), $labels);
-
-                return [
-                    'labels' => $labels,
-                    'attacks' => $attackSeries,
-                    'approvals' => $approvalSeries,
-                ];
-            },
-        );
+        return [
+            'labels' => [],
+            'attacks' => [],
+            'approvals' => [],
+        ];
     }
 
     /**

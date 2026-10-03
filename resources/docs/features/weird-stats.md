@@ -24,7 +24,6 @@ Everything else in Clockwork is scoped to a site, a server, or a single issue. W
 | `settlingPointStats()` | Four sub-stats below (CF reduction, auto-ban speedup, tier density, self-ban prevention) | mixed |
 | `pluginCoverageMatrix()` | LLAR/Wordfence coverage broken down by Cloudflare state | live |
 | `topSitesByVisits()` | Top 10 sites by visits, with concentration framing (top-10 % of fleet, 1st:10th ratio) | 30d |
-| `mostAttackedPaths()` | Top 10 request paths fleet-wide, with status-code mix (404-heavy = scanner probe, 200/302-heavy = legitimate load) | 7d |
 | `worstRepeatOffenders()` | Top 10 banned IPs ranked by **distinct servers hit**, not raw ban count — the "this attacker is everywhere" framing | all-time |
 | `unprotectedSitesByTraffic()` | Sites with both LLAR and Wordfence off, sorted by 30-day visits so the highest-traffic exposure sorts to the top | 30d |
 
@@ -46,9 +45,9 @@ Two known biases the page itself documents in a `<details>` disclosure, worth re
 
 ## Caching
 
-Stats sourced from `threat_logs` (millions of rows/day: `mostAttackedPaths()`, `attackHourHistogram()`, the `attacks_7d` tile, `cfAttackReduction()`) are cached for 60 minutes under `weird_stats:*` keys. Everything else (sites, blocked_ips, site_traffic_daily — all small or already pre-rolled-up) runs live on every page load; v1 doesn't cache those.
+Stats sourced from `threat_logs` (the `attacks_7d` tile and `cfAttackReduction()`) are cached for 60 minutes under `weird_stats:*` keys. Everything else (sites, blocked_ips, site_traffic_daily — all small or already pre-rolled-up) runs live on every page load; v1 doesn't cache those. Heavy aggregation queries that previously scanned tens of millions of raw `threat_logs` rows (`mostAttackedPaths()` and `attackHourHistogram()`) were retired to prevent web timeouts and page crashes.
 
-`clockwork:warm-weird-stats` runs every 9 minutes (`*/9 * * * *`, `withoutOverlapping(15)`, backgrounded) specifically to keep the cache from ever expiring under a real page visit — cold compute on the `threat_logs`-derived stats is ~30 seconds on a 2M+ row table, past PHP-FPM's typical `max_execution_time`. The 60-minute TTL is deliberately far longer than the 9-minute warm cadence: if the warmer itself dies for an hour, a visitor still sees slightly-stale cached data instead of a 30-second hang. The most-attacked-paths query specifically needs a `USE INDEX` hint (`threat_logs_event_at_request_path_index`, from the `2026_05_02_080000_add_request_path_index_to_threat_logs` migration) — without it MySQL's optimizer picks a full table scan + filesort and the query takes 30+ seconds even warm.
+`clockwork:warm-weird-stats` runs every 9 minutes (`*/9 * * * *`, `withoutOverlapping(15)`, backgrounded) to keep the cache warm. The 60-minute TTL is deliberately far longer than the 9-minute warm cadence: if the warmer itself dies for an hour, a visitor still sees slightly-stale cached data instead of a cold cache miss.
 
 ## Security note
 
