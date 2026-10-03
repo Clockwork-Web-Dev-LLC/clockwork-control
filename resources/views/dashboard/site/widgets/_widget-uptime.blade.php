@@ -15,7 +15,7 @@
     <div>
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-heart-pulse text-emerald-600"></i>
+                <i class="fa-solid fa-heart-pulse text-[var(--color-ink-muted)]"></i>
                 Uptime Monitor
             </h3>
             @if (! $monitoringEnabled)
@@ -23,8 +23,8 @@
                     <span class="status-dot"></span> Disabled
                 </span>
             @elseif ($isNotOurFault)
-                <span class="status-pill text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                    <i class="fa-solid fa-shield-halved text-[9px] mr-1"></i> Not Our Fault
+                <span class="status-pill status-orange text-[10px]">
+                    <span class="status-dot"></span> Not Our Fault
                 </span>
             @elseif ($isDown)
                 <span class="status-pill status-red text-[10px]">
@@ -32,7 +32,7 @@
                 </span>
             @elseif ($isMaintenance)
                 <span class="status-pill status-yellow text-[10px]">
-                    <i class="fa-solid fa-wrench text-[9px] mr-0.5"></i> Maintenance
+                    <span class="status-dot"></span> Maintenance
                 </span>
             @else
                 <span class="status-pill status-green text-[10px]">

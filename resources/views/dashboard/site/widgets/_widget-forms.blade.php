@@ -39,10 +39,10 @@
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                 @if ($hasForms)
-                    <i class="fa-solid fa-envelope-circle-check text-indigo-600"></i>
+                    <i class="fa-solid fa-envelope-circle-check text-[var(--color-ink-muted)]"></i>
                     Form Dispatch &amp; Leads
                 @else
-                    <i class="fa-solid fa-server text-[var(--color-brand)]"></i>
+                    <i class="fa-solid fa-server text-[var(--color-ink-muted)]"></i>
                     Environment &amp; SSL
                 @endif
             </h3>
@@ -163,7 +163,7 @@
                         {{-- Modal Header --}}
                         <div class="flex items-center justify-between pb-4 border-b border-[var(--color-border-light)] mb-4">
                             <div class="flex items-center gap-2.5">
-                                <div class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[var(--color-brand)] flex items-center justify-center shrink-0">
+                                <div class="w-9 h-9 rounded-xl bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] flex items-center justify-center shrink-0">
                                     <i class="fa-solid fa-server text-base"></i>
                                 </div>
                                 <div>
@@ -188,7 +188,7 @@
                             {{-- Section 1: Runtime & Web Stack --}}
                             <div>
                                 <h4 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)] mb-2 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-microchip text-[11px] text-[var(--color-brand)]"></i> Runtime &amp; Web Stack
+                                    <i class="fa-solid fa-microchip text-[11px] text-[var(--color-ink-muted)]"></i> Runtime &amp; Web Stack
                                 </h4>
                                 <div class="p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
                                     <div class="flex items-center justify-between">
@@ -236,7 +236,7 @@
                             {{-- Section 2: Database & Caching --}}
                             <div>
                                 <h4 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)] mb-2 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-database text-[11px] text-amber-500"></i> Database &amp; Caching
+                                    <i class="fa-solid fa-database text-[11px] text-[var(--color-ink-muted)]"></i> Database &amp; Caching
                                 </h4>
                                 <div class="p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
                                     <div class="flex items-center justify-between">
@@ -265,7 +265,7 @@
                             {{-- Section 3: SSL / HTTPS Certificate --}}
                             <div>
                                 <h4 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)] mb-2 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-shield-halved text-[11px] text-emerald-600"></i> SSL Certificate
+                                    <i class="fa-solid fa-shield-halved text-[11px] text-[var(--color-ink-muted)]"></i> SSL Certificate
                                 </h4>
                                 <div class="p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
                                     <div class="flex items-center justify-between">
@@ -323,7 +323,7 @@
                             {{-- Section 4: Host & Infrastructure --}}
                             <div>
                                 <h4 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)] mb-2 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-network-wired text-[11px] text-violet-500"></i> Host &amp; Infrastructure
+                                    <i class="fa-solid fa-network-wired text-[11px] text-[var(--color-ink-muted)]"></i> Host &amp; Infrastructure
                                 </h4>
                                 <div class="p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
                                     <div class="flex items-center justify-between">

@@ -6,7 +6,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-certificate text-emerald-600"></i>
+                    <i class="fa-solid fa-certificate text-[var(--color-ink-muted)]"></i>
                     Cert details
                 </h3>
                 @php
@@ -134,7 +134,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-brands fa-cloudflare text-orange-500 text-base"></i>
+                    <i class="fa-brands fa-cloudflare text-[var(--color-ink-muted)] text-base"></i>
                     Cloudflare
                 </h3>
                 @php
@@ -191,7 +191,7 @@
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                        <i class="fa-solid fa-shield-halved text-purple-600"></i>
+                        <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)]"></i>
                         WordPress security
                     </h3>
                     @php
@@ -345,7 +345,7 @@
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                        <i class="fa-solid fa-server text-blue-600"></i>
+                        <i class="fa-solid fa-server text-[var(--color-ink-muted)]"></i>
                         Pressable tools
                     </h3>
                     <span class="status-pill status-green text-[10px]">
@@ -460,7 +460,7 @@
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                        <i class="fa-solid fa-shield-heart text-emerald-600"></i>
+                        <i class="fa-solid fa-shield-heart text-[var(--color-ink-muted)]"></i>
                         Care plan
                     </h3>
                     @if ($site->care_plan_enabled)
@@ -565,7 +565,7 @@
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                        <i class="fa-solid fa-moon text-indigo-500"></i>
+                        <i class="fa-solid fa-moon text-[var(--color-ink-muted)]"></i>
                         Nightly auto-updates
                     </h3>
                     @php $autoOn = ! $site->auto_updates_paused; @endphp
@@ -605,7 +605,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-heart-pulse text-rose-500"></i>
+                    <i class="fa-solid fa-heart-pulse text-[var(--color-ink-muted)]"></i>
                     Uptime monitoring
                 </h3>
                 @if (! $site->uptime_monitoring_enabled)
@@ -713,7 +713,7 @@
                         {{-- Modal Header --}}
                         <div class="flex items-center justify-between pb-4 border-b border-[var(--color-border-light)] mb-4">
                             <div class="flex items-center gap-2.5">
-                                <div class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center shrink-0">
+                                <div class="w-9 h-9 rounded-xl bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] flex items-center justify-center shrink-0">
                                     <i class="fa-solid fa-heart-pulse text-base"></i>
                                 </div>
                                 <div>
@@ -1054,7 +1054,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-circle-nodes text-sky-600"></i>
+                    <i class="fa-solid fa-circle-nodes text-[var(--color-ink-muted)]"></i>
                     Site status
                 </h3>
                 @if ($site->is_inactive)
@@ -1109,7 +1109,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-puzzle-piece text-violet-600"></i>
+                    <i class="fa-solid fa-puzzle-piece text-[var(--color-ink-muted)]"></i>
                     {{ $site->isRenegade() ? 'Clockwork Renegade' : 'Companion mu-plugin' }}
                 </h3>
                 @if ($site->companion_installed)
@@ -1245,7 +1245,7 @@
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                        <i class="fa-solid fa-envelope-circle-check text-indigo-600"></i>
+                        <i class="fa-solid fa-envelope-circle-check text-[var(--color-ink-muted)]"></i>
                         Contact forms
                     </h3>
                     <span class="status-pill status-green text-[10px]">
@@ -1288,7 +1288,7 @@
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-shield-halved text-blue-600"></i>
+                    <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)]"></i>
                     Login lockouts (Gatekeeper)
                 </h3>
                 @if ($hasCustomOverrides)

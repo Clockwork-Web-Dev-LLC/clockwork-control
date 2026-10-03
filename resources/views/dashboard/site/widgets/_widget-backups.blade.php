@@ -303,7 +303,7 @@
     <div>
         <div class="flex items-center justify-between mb-4 pr-6">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-box-archive text-emerald-600"></i>
+                <i class="fa-solid fa-box-archive text-[var(--color-ink-muted)]"></i>
                 Backups
             </h3>
             @if ($isCustom)

@@ -17,7 +17,7 @@
     <div>
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-gauge-high text-amber-500"></i>
+                <i class="fa-solid fa-gauge-high text-[var(--color-ink-muted)]"></i>
                 Performance &amp; Speed
             </h3>
             @if (! $site->isCarePlanActive())
@@ -29,7 +29,7 @@
                     <span class="status-dot"></span> Optimized
                 </span>
             @else
-                <span class="status-pill status-yellow text-[10px]">
+                <span class="status-pill status-orange text-[10px]">
                     <span class="status-dot"></span> Needs Review
                 </span>
             @endif
