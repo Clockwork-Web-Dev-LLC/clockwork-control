@@ -46,6 +46,20 @@
             </label>
 
             @if ($server->ssh_password)
+                <div class="mt-2 text-xs text-[var(--color-ink-muted)] flex flex-wrap items-center gap-2">
+                    <span>Password age:</span>
+                    @if ($server->ssh_password_updated_at)
+                        <span class="font-medium text-[var(--color-ink-strong)]">{{ $server->ssh_password_updated_at->diffForHumans() }} ({{ $server->ssh_password_updated_at->format('M j, Y') }})</span>
+                        @if ($server->ssh_password_updated_at->diffInDays(now()) >= 90)
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                <i class="fa-solid fa-triangle-exclamation mr-1"></i> Over 90 days old — rotation recommended
+                            </span>
+                        @endif
+                    @else
+                        <span class="italic text-[var(--color-ink-soft)]">Update date not recorded</span>
+                    @endif
+                </div>
+
                 <label class="flex items-center gap-2 mt-3 text-sm text-[var(--color-ink-muted)]">
                     <input type="checkbox" name="clear_password" value="1" class="rounded border-[var(--color-border)]">
                     Clear the stored password

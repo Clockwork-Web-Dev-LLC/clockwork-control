@@ -4,6 +4,8 @@ namespace Modules\AiRemedy;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Modules\AiRemedy\Console\Commands\WatchServerSpikes;
+use Modules\AiRemedy\Console\EvaluateOutcomes;
+use Modules\AiRemedy\Console\ExpireUnreviewedRuns;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
@@ -18,6 +20,8 @@ class AiRemedyServiceProvider extends ModuleServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 WatchServerSpikes::class,
+                EvaluateOutcomes::class,
+                ExpireUnreviewedRuns::class,
             ]);
         }
 
@@ -34,6 +38,18 @@ class AiRemedyServiceProvider extends ModuleServiceProvider
 
         $schedule->command('clockwork:watch-server-spikes')
             ->everyFiveMinutes()
+            ->withoutOverlapping(10)
+            ->onOneServer()
+            ->runInBackground();
+
+        $schedule->command('clockwork:ai-remedy-evaluate-outcomes')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping(10)
+            ->onOneServer()
+            ->runInBackground();
+
+        $schedule->command('clockwork:ai-remedy-expire-unreviewed')
+            ->hourly()
             ->withoutOverlapping(10)
             ->onOneServer()
             ->runInBackground();

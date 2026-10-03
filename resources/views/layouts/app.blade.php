@@ -222,6 +222,11 @@
                            :title="!sidebarOpen ? 'AiRemedy' : ''">
                             <i class="fa-solid fa-wand-magic-sparkles w-4 text-center shrink-0"></i>
                             <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">AiRemedy</span>
+                            @isset($aiRemedyReviewCount)
+                                @if ($aiRemedyReviewCount > 0)
+                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                @endif
+                            @endisset
                         </a>
                     @endif
                 </div>

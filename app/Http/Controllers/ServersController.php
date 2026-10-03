@@ -120,6 +120,7 @@ class ServersController extends Controller
 
         if (! empty($validated['ssh_password'])) {
             $server->ssh_password = $validated['ssh_password'];
+            $server->ssh_password_updated_at = now();
         }
 
         $server->save();

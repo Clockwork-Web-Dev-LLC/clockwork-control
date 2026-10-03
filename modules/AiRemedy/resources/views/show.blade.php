@@ -63,6 +63,74 @@
         </div>
     @endif
 
+    {{-- Operator Verdict & Outcome Evaluation --}}
+    <div class="card p-6 space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)]">Operator Verdict & Outcome Evaluation</h3>
+            @if($run->outcome)
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-data font-semibold border
+                    {{ $run->outcome === 'self_resolved' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' : ($run->outcome === 'escalated' ? 'bg-rose-500/15 text-rose-600 border-rose-500/30' : 'bg-slate-500/15 text-slate-600 border-slate-500/30') }}">
+                    Outcome: {{ strtoupper(str_replace('_', ' ', $run->outcome)) }}
+                </span>
+            @endif
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] space-y-2">
+                <span class="font-bold text-[var(--color-ink-strong)] block">60-Minute Telemetry Outcome</span>
+                @if($run->outcome)
+                    <div class="space-y-1">
+                        <p class="text-[var(--color-ink-muted)]">
+                            Status: <strong class="text-[var(--color-ink-strong)]">{{ ucwords(str_replace('_', ' ', $run->outcome)) }}</strong>
+                            @if($run->outcome_evaluated_at)
+                                · Evaluated {{ $run->outcome_evaluated_at->diffForHumans() }}
+                            @endif
+                        </p>
+                        @if(!empty($run->outcome_details['summary']))
+                            <p class="text-xs font-mono text-[var(--color-ink-soft)]">{{ $run->outcome_details['summary'] }}</p>
+                        @endif
+                    </div>
+                @else
+                    <p class="text-[var(--color-ink-muted)] italic">
+                        Pending 60-minute evaluation window. Automatically evaluated by scheduler.
+                    </p>
+                @endif
+            </div>
+
+            <div class="p-4 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] space-y-3">
+                <span class="font-bold text-[var(--color-ink-strong)] block">Operator Verdict</span>
+                <form method="POST" action="{{ route('ai-remedy.verdict', $run) }}" class="space-y-3">
+                    @csrf
+                    <div class="flex flex-wrap gap-2">
+                        @foreach(['correct' => 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10', 'partial' => 'text-amber-600 border-amber-500/40 bg-amber-500/10', 'wrong' => 'text-rose-600 border-rose-500/40 bg-rose-500/10', 'unsure' => 'text-slate-600 border-slate-500/40 bg-slate-500/10'] as $vKey => $vClass)
+                            <label class="cursor-pointer">
+                                <input type="radio" name="verdict" value="{{ $vKey }}" class="sr-only peer" {{ $run->verdict === $vKey ? 'checked' : '' }}>
+                                <span class="px-3 py-1 rounded-lg border text-xs font-semibold peer-checked:ring-2 peer-checked:ring-offset-1 peer-checked:ring-indigo-500 block {{ $vClass }}">
+                                    {{ ucfirst($vKey) }}
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <div>
+                        <input type="text" name="note" value="{{ old('note', $run->verdict_note) }}" placeholder="Optional operator feedback note..." class="w-full text-xs font-data border border-[var(--color-border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-[var(--color-surface)]">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        @if($run->verdict)
+                            <span class="text-[11px] text-[var(--color-ink-muted)]">
+                                Set by {{ $run->verdictByUser?->name ?? 'Operator' }} {{ $run->verdict_at?->diffForHumans() }}
+                            </span>
+                        @else
+                            <span></span>
+                        @endif
+                        <button type="submit" class="btn-primary text-xs py-1 px-3">
+                            <i class="fa-solid fa-check mr-1"></i> Save Verdict
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     {{-- Executive Summary Card --}}
     <div class="card p-6 space-y-3">
         <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-muted)]">Executive Summary & Culprit</h3>
