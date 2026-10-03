@@ -493,16 +493,17 @@
                                     </button>
                                 </form>
                             </div>
-                        </div>
-
-                        <!-- Mobile Menu Button -->
+                                      <!-- Mobile Menu Button -->
                         <button type="button"
                                 @click="mobileNavOpen = !mobileNavOpen"
-                                class="md:hidden p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
+                                class="md:hidden relative p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
                                 :aria-expanded="mobileNavOpen.toString()"
                                 aria-controls="cw-mobile-drawer"
                                 aria-label="Toggle navigation drawer">
                             <i :class="mobileNavOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars'"></i>
+                            @if (($aiRemedyReviewCount ?? 0) > 0 || ($issueCount ?? 0) > 0)
+                                <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--color-brand-cyan)] ring-2 ring-[var(--color-surface)]"></span>
+                            @endif
                         </button>
                     </div>
                 </div>
@@ -553,7 +554,23 @@
                             <a href="{{ route('capacity.index') }}"
                                class="studio-nav-tab {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-cube"></i> Operations
+                                @isset($aiRemedyReviewCount)
+                                    @if ($aiRemedyReviewCount > 0)
+                                        <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                    @endif
+                                @endisset
                             </a>
+                            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                                <a href="{{ route('ai-remedy.index') }}"
+                                   class="studio-nav-tab {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> AiRemedy
+                                    @isset($aiRemedyReviewCount)
+                                        @if ($aiRemedyReviewCount > 0)
+                                            <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                        @endif
+                                    @endisset
+                                </a>
+                            @endif
                             <a href="{{ route('settings.index') }}"
                                class="studio-nav-tab {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-sliders"></i> Settings
@@ -600,58 +617,116 @@
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
-                    <div class="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-                        <a href="{{ route('dashboard') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('dashboard') || (request()->routeIs('servers.*') && ! request()->routeIs('servers.credentials.*') && ! request()->routeIs('servers.create')) ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-server mr-2 text-[var(--color-brand)]"></i> Servers</span>
-                        </a>
-                        <a href="{{ route('sites.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('sites.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-globe mr-2 text-[var(--color-brand)]"></i> Sites</span>
-                        </a>
-                        <a href="{{ route('issues.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('issues.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues</span>
-                            @isset($issueCount)
-                                @if ($issueCount > 0)
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
-                                @endif
-                            @endisset
-                        </a>
-                        <a href="{{ route('updates.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('updates.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-rotate mr-2 text-[var(--color-brand)]"></i> Updates</span>
-                            @isset($updatesPendingCount)
-                                @if ($updatesPendingCount > 0)
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">{{ $updatesPendingCount }}</span>
-                                @endif
-                            @endisset
-                        </a>
-                        <a href="{{ route('monitoring.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('monitoring.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-status-green)]"></i> Monitoring</span>
-                            @isset($monitoringDownCount)
-                                @if ($monitoringDownCount > 0)
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $monitoringDownCount }}</span>
-                                @endif
-                            @endisset
-                        </a>
-                        <a href="{{ route('security.scans') }}"
-                           class="cw-mobile-nav-link {{ (request()->routeIs('security.*') || request()->routeIs('bans.*')) ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security</span>
-                        </a>
-                        <a href="{{ route('capacity.index') }}"
-                           class="cw-mobile-nav-link {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-cube mr-2 text-[var(--color-brand)]"></i> Operations</span>
-                        </a>
-                        <a href="{{ route('settings.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings</span>
-                        </a>
-                        <a href="{{ route('docs.index') }}"
-                           class="cw-mobile-nav-link {{ request()->routeIs('docs.*') ? 'is-active' : '' }}">
-                            <span><i class="fa-solid fa-book-bookmark mr-2 text-[var(--color-brand)]"></i> Docs</span>
-                        </a>
+                    <div class="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+                        <!-- Workspaces Navigation -->
+                        <div class="space-y-1">
+                            <div class="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                                Workspaces
+                            </div>
+                            <a href="{{ route('dashboard') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('dashboard') || (request()->routeIs('servers.*') && ! request()->routeIs('servers.credentials.*') && ! request()->routeIs('servers.create')) ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-server mr-2 text-[var(--color-brand)]"></i> Servers</span>
+                            </a>
+                            <a href="{{ route('sites.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('sites.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-globe mr-2 text-[var(--color-brand)]"></i> Sites</span>
+                            </a>
+                            <a href="{{ route('issues.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('issues.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues</span>
+                                @isset($issueCount)
+                                    @if ($issueCount > 0)
+                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
+                                    @endif
+                                @endisset
+                            </a>
+                            <a href="{{ route('updates.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('updates.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-rotate mr-2 text-[var(--color-brand)]"></i> Updates</span>
+                                @isset($updatesPendingCount)
+                                    @if ($updatesPendingCount > 0)
+                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-yellow)] text-white">{{ $updatesPendingCount }}</span>
+                                    @endif
+                                @endisset
+                            </a>
+                            <a href="{{ route('monitoring.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('monitoring.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-status-green)]"></i> Monitoring</span>
+                                @isset($monitoringDownCount)
+                                    @if ($monitoringDownCount > 0)
+                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $monitoringDownCount }}</span>
+                                    @endif
+                                @endisset
+                            </a>
+                            <a href="{{ route('security.scans') }}"
+                               class="cw-mobile-nav-link {{ (request()->routeIs('security.*') || request()->routeIs('bans.*')) ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security</span>
+                            </a>
+                        </div>
+
+                        <!-- Operations Navigation -->
+                        <div class="space-y-1">
+                            <div class="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                                Operations
+                            </div>
+                            <a href="{{ route('capacity.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('capacity.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-gauge-high mr-2 text-[var(--color-brand)]"></i> Capacity</span>
+                            </a>
+                            <a href="{{ route('operations.server-updates.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('operations.server-updates.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-cube mr-2 text-[var(--color-brand)]"></i> Fleet Updates</span>
+                            </a>
+                            <a href="{{ route('maintenance-history.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('maintenance-history.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-clock-rotate-left mr-2 text-[var(--color-brand)]"></i> Maintenance</span>
+                            </a>
+                            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                                <a href="{{ route('ai-remedy.index') }}"
+                                   class="cw-mobile-nav-link {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}">
+                                    <span><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i> AiRemedy</span>
+                                    @isset($aiRemedyReviewCount)
+                                        @if ($aiRemedyReviewCount > 0)
+                                            <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                        @endif
+                                    @endisset
+                                </a>
+                            @endif
+                        </div>
+
+                        <!-- Configuration Navigation -->
+                        <div class="space-y-1">
+                            <div class="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                                Configuration
+                            </div>
+                            <a href="{{ route('settings.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings</span>
+                            </a>
+                            <a href="{{ route('docs.index') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('docs.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-book-bookmark mr-2 text-[var(--color-brand)]"></i> Docs</span>
+                            </a>
+                        </div>
+
+                        @php
+                            $mobileModuleNavItems = app(\Modules\Core\ModuleRegistry::class)->navItems();
+                        @endphp
+                        @if (! empty($mobileModuleNavItems))
+                            <div class="space-y-1">
+                                <div class="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                                    Modules
+                                </div>
+                                @foreach ($mobileModuleNavItems as $moduleNavItem)
+                                    @if ($moduleNavItem->isVisible() && $moduleNavItem->route !== 'ai-remedy.index')
+                                        <a href="{{ route($moduleNavItem->route) }}"
+                                           class="cw-mobile-nav-link {{ request()->routeIs($moduleNavItem->route) ? 'is-active' : '' }}">
+                                            <span><i class="{{ $moduleNavItem->icon }} mr-2 text-[var(--color-brand)]"></i> {{ $moduleNavItem->label }}</span>
+                                        </a>
+                                    @endif
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                     <div class="px-4 py-3 border-t border-[var(--color-border-light)] shrink-0 flex items-center justify-between gap-3">
                         <span class="text-xs font-semibold text-[var(--color-ink-muted)]">Font size</span>
@@ -665,6 +740,31 @@
                             </button>
                         </div>
                     </div>
+
+                    @if (auth()->check())
+                        <div class="px-4 py-3 border-t border-[var(--color-border-light)] shrink-0 flex items-center justify-between gap-3 text-xs bg-[var(--color-surface-alt)]/50">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-7 h-7 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center font-bold text-[11px] text-[var(--color-ink-strong)] shrink-0 overflow-hidden">
+                                    <img src="{{ auth()->user()->avatarUrl(56) }}"
+                                         alt="{{ auth()->user()->name }}"
+                                         class="w-full h-full object-cover rounded-full"
+                                         loading="lazy"
+                                         referrerpolicy="no-referrer"
+                                         onerror="this.onerror=null; this.classList.add('hidden'); if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                                    <span class="hidden font-bold text-[11px] text-[var(--color-ink-strong)]">
+                                        {{ auth()->user()->initials() }}
+                                    </span>
+                                </div>
+                                <span class="font-semibold text-[var(--color-ink-strong)] truncate">{{ auth()->user()->name }}</span>
+                            </div>
+                            <form method="POST" action="{{ route('logout') }}" class="shrink-0">
+                                @csrf
+                                <button type="submit" class="text-[var(--color-status-red)] hover:underline cursor-pointer font-medium flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i> Sign out
+                                </button>
+                            </form>
+                        </div>
+                    @endif
                 </nav>
             </div>
 
