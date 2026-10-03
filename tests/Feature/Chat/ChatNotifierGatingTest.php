@@ -260,6 +260,13 @@ function fakeChatNotifier(bool $returns): ChatNotifier
 
             return $this->returns;
         }
+
+        public function emailAuthDegraded(string $domain, array $findings, ?string $previousStatus = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
     };
 }
 

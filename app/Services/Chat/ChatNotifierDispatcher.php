@@ -160,6 +160,11 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatch(fn (ChatNotifier $n) => $n->aiRemedyTriaged($run));
     }
 
+    public function emailAuthDegraded(string $domain, array $findings, ?string $previousStatus = null): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->emailAuthDegraded($domain, $findings, $previousStatus));
+    }
+
     // malwareFindingDetected, siteWentDown/Up, and ipBlocked are deliberately
     // NOT gated on is_inactive — those are active-incident signals (a real
     // compromise, a real outage, a real attacker at the firewall) on

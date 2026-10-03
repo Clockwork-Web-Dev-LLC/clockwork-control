@@ -231,6 +231,11 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function emailAuthDegraded(string $domain, array $findings, ?string $previousStatus = null): bool
+    {
+        return false;
+    }
+
     private function webhookUrl(Site $site): string
     {
         $snapshot = $site->companion_snapshot;

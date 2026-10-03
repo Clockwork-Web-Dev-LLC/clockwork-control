@@ -18,6 +18,7 @@ use Modules\CommentModeration\CommentModerationServiceProvider;
 use Modules\ContactForms\ContactFormsServiceProvider;
 use Modules\Core\CoreServiceProvider;
 use Modules\DigitalOcean\DigitalOceanServiceProvider;
+use Modules\EmailAuth\EmailAuthServiceProvider;
 use Modules\Feedback\FeedbackServiceProvider;
 use Modules\Gatekeeper\GatekeeperServiceProvider;
 use Modules\GridPane\GridPaneServiceProvider;
@@ -79,6 +80,7 @@ return [
     SucuriServiceProvider::class,
     LlarServiceProvider::class,
     GatekeeperServiceProvider::class,
+    EmailAuthServiceProvider::class,
     // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay, in-app visual feedback)
     ContactFormsServiceProvider::class,
     BackupRelayServiceProvider::class,
