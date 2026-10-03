@@ -601,7 +601,7 @@
     @endif
 
     {{-- Card 6: Uptime Monitoring & Alerts --}}
-    <div class="card p-5 flex flex-col justify-between h-full">
+    <div class="card p-5 flex flex-col justify-between h-full" id="uptime-card" x-data="{ uptimeModalOpen: false, uptimeActiveTab: 'probe' }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -617,7 +617,7 @@
                 @endif
             </div>
 
-            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
+            <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 mb-3">
                 <div class="flex items-center justify-between text-[11px]">
                     <span class="text-[var(--color-ink-muted)]">5-min Probe:</span>
                     <span class="font-medium text-[var(--color-ink-strong)]">
@@ -634,14 +634,42 @@
                     <span class="font-medium">
                         @if ($site->isUptimeIgnored())
                             @if ($site->isUptimeSlaExempt())
-                                <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-shield-halved text-[10px]"></i> Not Our Fault (SLA Exempt)</span>
+                                <button type="button" @click="uptimeActiveTab = 'outage'; uptimeModalOpen = true" class="text-amber-600 flex items-center gap-1 hover:underline cursor-pointer" title="{{ $site->uptime_ignore_reason }}">
+                                    <i class="fa-solid fa-shield-halved text-[10px]"></i> SLA Exempt
+                                </button>
                             @else
-                                <span class="text-amber-600 flex items-center gap-1"><i class="fa-solid fa-bell-slash text-[10px]"></i> Silenced (Legit Outage)</span>
+                                <button type="button" @click="uptimeActiveTab = 'outage'; uptimeModalOpen = true" class="text-amber-600 flex items-center gap-1 hover:underline cursor-pointer" title="{{ $site->uptime_ignore_reason }}">
+                                    <i class="fa-solid fa-bell-slash text-[10px]"></i> Silenced
+                                </button>
                             @endif
                         @else
-                            <span class="text-emerald-600 flex items-center gap-1"><i class="fa-solid fa-bell text-[10px]"></i> Active</span>
+                            <span class="text-emerald-600 flex items-center gap-1">
+                                <i class="fa-solid fa-bell text-[10px]"></i> Active
+                            </span>
                         @endif
                     </span>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Keyword check:</span>
+                    <span class="font-medium text-[var(--color-ink-strong)] truncate max-w-[140px]" title="{{ $site->uptime_require_keyword ?: 'None' }}">
+                        {{ $site->uptime_require_keyword ?: 'None' }}
+                    </span>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Body check:</span>
+                    <span class="font-medium {{ $site->uptime_skip_body_check ? 'text-amber-600' : 'text-emerald-600' }}">
+                        {{ $site->uptime_skip_body_check ? 'Skipped' : 'Enforced' }}
+                    </span>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-[var(--color-ink-muted)]">Alert subscribers:</span>
+                    <button type="button" @click="uptimeActiveTab = 'subscribers'; uptimeModalOpen = true" class="font-medium text-[var(--color-primary-600)] hover:underline flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-users text-[10px]"></i>
+                        {{ $siteSubscribers->count() }} {{ \Illuminate\Support\Str::plural('contact', $siteSubscribers->count()) }}
+                    </button>
                 </div>
             </div>
 
@@ -657,224 +685,368 @@
                         @endif
                     </button>
                 </form>
-
-                <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="space-y-2">
-                    @csrf
-                    @if ($site->isUptimeIgnored())
-                        <input type="hidden" name="ignore" value="0">
-                        <div class="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
-                            <div class="font-semibold flex items-center gap-1">
-                                <i class="fa-solid fa-shield-halved text-[11px]"></i>
-                                {{ $site->isUptimeSlaExempt() ? 'SLA Protected (Not Our Fault)' : 'Alerts Silenced' }}
-                            </div>
-                            @if ($site->uptime_ignore_reason)
-                                <div class="text-[11px] mt-0.5 text-amber-600 dark:text-amber-400">{{ $site->uptime_ignore_reason }}</div>
-                            @endif
-                        </div>
-                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
-                            <i class="fa-solid fa-bell text-emerald-600"></i> Stop ignoring & reset SLA exemption
-                        </button>
-                    @else
-                        <input type="hidden" name="ignore" value="1">
-                        <div class="p-2.5 rounded border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/50 space-y-2 text-xs">
-                            <div class="font-semibold text-[var(--color-ink-strong)]">Outage Classification</div>
-                            <label class="flex items-start gap-2 cursor-pointer">
-                                <input type="radio" name="is_sla_exempt" value="1" checked class="mt-0.5">
-                                <div>
-                                    <span class="font-medium text-amber-600 dark:text-amber-400">Not Our Fault (SLA Exempt)</span>
-                                    <p class="text-[10px] text-[var(--color-ink-muted)]">Exclude downtime from uptime ratings and fleet SLA (client DNS, expired domain, etc.)</p>
-                                </div>
-                            </label>
-                            <label class="flex items-start gap-2 cursor-pointer">
-                                <input type="radio" name="is_sla_exempt" value="0" class="mt-0.5">
-                                <div>
-                                    <span class="font-medium text-[var(--color-ink-strong)]">Legit Outage</span>
-                                    <p class="text-[10px] text-[var(--color-ink-muted)]">Silence alerts only; downtime still counts against uptime record</p>
-                                </div>
-                            </label>
-                            <div class="space-y-1.5 pt-1.5 border-t border-[var(--color-border-light)]">
-                                <select name="exemption_reason" class="w-full px-2 py-1 rounded border border-[var(--color-border)] text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
-                                    <option value="client_dns">Client DNS / Nameserver change</option>
-                                    <option value="domain_expired">Domain expired / Registrar hold</option>
-                                    <option value="third_party">Third-party / Upstream outage</option>
-                                    <option value="client_requested">Client requested downtime</option>
-                                    <option value="other">Other (not our fault)</option>
-                                </select>
-                                <div class="flex items-center gap-1">
-                                    <input type="text" name="reason" maxlength="255" placeholder="Reason / notes (optional)"
-                                           class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 focus:outline-none focus:border-[var(--color-brand)] bg-[var(--color-surface)]">
-                                    <button type="submit" class="btn-pill-nav text-xs shrink-0 font-medium" title="Silence alerts">
-                                        <i class="fa-solid fa-shield-halved text-amber-500"></i> Silence
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-                </form>
-            </div>
-
-            <form method="POST" action="{{ route('sites.uptime-keyword.update', $site) }}" class="mt-3 space-y-1.5">
-                @csrf
-                @method('PATCH')
-                <label class="block text-[11px] font-medium text-[var(--color-ink-strong)]">Required homepage keyword</label>
-                <p class="text-[10px] text-[var(--color-ink-muted)]">Optional. A 200 OK that does not contain this string is treated as down.</p>
-                <div class="flex items-center gap-1.5">
-                    <input type="text" name="uptime_require_keyword" maxlength="120" value="{{ $site->uptime_require_keyword }}"
-                           placeholder="e.g. Acme Corp"
-                           class="px-2 py-1 rounded border border-[var(--color-border)] text-xs flex-1 bg-[var(--color-surface)]">
-                    <button type="submit" class="btn-pill-nav text-xs shrink-0">Save</button>
-                </div>
-            </form>
-
-            <form method="POST" action="{{ route('sites.uptime-body-check.toggle', $site) }}" class="mt-3 space-y-1.5">
-                @csrf
-                <input type="hidden" name="skip" value="{{ $site->uptime_skip_body_check ? '0' : '1' }}">
-                <label class="block text-[11px] font-medium text-[var(--color-ink-strong)]">White-screen body check</label>
-                <p class="text-[10px] text-[var(--color-ink-muted)]">
-                    A 200 OK with near-empty visible text is normally treated as down. Disable this for sites that are
-                    legitimately near-blank on a logged-out request — a static parked page, a JS-rendered SPA shell, a
-                    gated/private homepage.
-                </p>
-                <button type="submit" class="btn-pill-nav text-xs w-full justify-center flex items-center gap-1.5">
-                    @if ($site->uptime_skip_body_check)
-                        <i class="fa-solid fa-toggle-on text-amber-600"></i> Body check skipped &mdash; re-enable
-                    @else
-                        <i class="fa-solid fa-toggle-off text-gray-400"></i> Skip body check for this site
-                    @endif
-                </button>
-            </form>
-
-            {{-- Alert Subscribers (Client Contacts) --}}
-            <div class="mt-4 pt-3 border-t border-[var(--color-border-light)]">
-                <div class="flex items-center justify-between mb-1.5">
-                    <label class="text-[11px] font-medium text-[var(--color-ink-strong)] flex items-center gap-1.5">
-                        <i class="fa-solid fa-users text-sky-500"></i>
-                        Alert Subscribers ({{ $siteSubscribers->count() }})
-                    </label>
-                    <a href="{{ route('settings.notifications.index') }}" class="text-[10px] text-[var(--color-primary-600)] hover:underline">
-                        Manage all &rarr;
-                    </a>
-                </div>
-                <p class="text-[10px] text-[var(--color-ink-muted)] mb-2.5">
-                    Client contacts who receive non-technical outage and recovery notices for this site.
-                </p>
-
-                @if ($siteSubscribers->isEmpty())
-                    <div class="p-2.5 rounded bg-[var(--color-surface-alt)]/50 text-[11px] text-[var(--color-ink-soft)] text-center mb-2.5">
-                        No client contacts subscribed to alerts for this site yet.
-                    </div>
-                @else
-                    <ul class="space-y-1.5 mb-2.5">
-                        @foreach ($siteSubscribers as $sub)
-                            <li class="flex items-center justify-between gap-2 p-1.5 rounded bg-[var(--color-surface-alt)]/50 border border-[var(--color-border-light)] text-xs">
-                                <div class="min-w-0">
-                                    <div class="font-medium text-[var(--color-ink-strong)] truncate">
-                                        {{ $sub->name }}
-                                        @if ($sub->company)
-                                            <span class="text-[10px] text-[var(--color-ink-soft)] font-normal">({{ $sub->company }})</span>
-                                        @endif
-                                    </div>
-                                    <div class="flex items-center gap-2 text-[10px] text-[var(--color-ink-muted)] font-data mt-0.5">
-                                        @if ($sub->notify_sms && $sub->phone)
-                                            <span title="SMS enabled" class="inline-flex items-center gap-1">
-                                                <i class="fa-solid fa-mobile-screen text-sky-500"></i> {{ $sub->phone }}
-                                            </span>
-                                        @endif
-                                        @if ($sub->notify_email && $sub->resolvedEmail())
-                                            <span title="Email enabled" class="inline-flex items-center gap-1">
-                                                <i class="fa-solid fa-envelope text-violet-500"></i> {{ $sub->resolvedEmail() }}
-                                            </span>
-                                        @endif
-                                    </div>
-                                </div>
-                                <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="shrink-0"
-                                      data-confirm="Unsubscribe {{ $sub->name }} from {{ $site->domain }}?"
-                                      data-confirm-btn="Unsubscribe"
-                                      data-confirm-variant="danger">
-                                    @csrf
-                                    @foreach ($siteSubscribers as $otherSub)
-                                        @if ($otherSub->id !== $sub->id)
-                                            <input type="hidden" name="recipient_ids[]" value="{{ $otherSub->id }}">
-                                        @endif
-                                    @endforeach
-                                    <button type="submit" class="text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] text-xs p-1" title="Unsubscribe {{ $sub->name }}">
-                                        <i class="fa-solid fa-xmark"></i>
-                                    </button>
-                                </form>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-
-                {{-- Attach Existing Subscriber --}}
-                @php
-                    $unattached = $availableClientRecipients->whereNotIn('id', $siteSubscribers->pluck('id'));
-                @endphp
-                @if ($unattached->isNotEmpty())
-                    <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="flex items-center gap-1.5 mb-2">
-                        @csrf
-                        @foreach ($siteSubscribers as $existing)
-                            <input type="hidden" name="recipient_ids[]" value="{{ $existing->id }}">
-                        @endforeach
-                        <select name="recipient_ids[]" class="text-xs px-2 py-1 rounded border border-[var(--color-border)] flex-1 bg-[var(--color-surface)] text-[var(--color-ink-strong)]" required>
-                            <option value="">Attach existing contact...</option>
-                            @foreach ($unattached as $avail)
-                                <option value="{{ $avail->id }}">
-                                    {{ $avail->name }} {{ $avail->company ? "({$avail->company})" : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <button type="submit" class="btn-pill-nav text-xs shrink-0 font-medium">
-                            <i class="fa-solid fa-plus text-[10px]"></i> Attach
-                        </button>
-                    </form>
-                @endif
-
-                {{-- Quick Add New Client Contact --}}
-                <details class="text-xs">
-                    <summary class="text-[11px] text-[var(--color-primary-600)] hover:underline cursor-pointer flex items-center gap-1">
-                        <i class="fa-solid fa-user-plus text-[10px]"></i> Quick add new contact
-                    </summary>
-                    <form method="POST" action="{{ route('sites.notifications.store', $site) }}" class="mt-2 p-2.5 rounded border border-[var(--color-border-light)] bg-[var(--color-surface)] space-y-2">
-                        @csrf
-                        <div>
-                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Contact Name</span>
-                            <input type="text" name="name" placeholder="e.g. John Doe" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full" required>
-                        </div>
-                        <div>
-                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Company (optional)</span>
-                            <input type="text" name="company" placeholder="e.g. Acme Corp" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
-                        </div>
-                        <div>
-                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Phone (E.164)</span>
-                            <input type="text" name="phone" placeholder="+1..." class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full font-data" pattern="\+\d{8,15}">
-                        </div>
-                        <div>
-                            <span class="text-[10px] text-[var(--color-ink-soft)] block">Email Address</span>
-                            <input type="email" name="email" placeholder="contact@example.com" class="text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full font-data">
-                        </div>
-                        <div class="space-y-1 pt-1 border-t border-[var(--color-border-light)] text-[11px]">
-                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" name="notify_sms" value="1" checked>
-                                <span class="text-[var(--color-ink)]">Send SMS alerts</span>
-                            </label>
-                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" name="notify_email" value="1" checked>
-                                <span class="text-[var(--color-ink)]">Send Email alerts</span>
-                            </label>
-                        </div>
-                        <button type="submit" class="btn-pill-nav text-xs w-full justify-center">
-                            Save &amp; Subscribe to {{ $site->domain }}
-                        </button>
-                    </form>
-                </details>
             </div>
         </div>
 
         <div class="mt-4 pt-3 border-t border-[var(--color-border-light)] flex items-center justify-between text-[11px]">
-            <span class="text-[var(--color-ink-muted)]">Current: <strong class="text-[var(--color-ink-strong)]">{{ $site->uptime_state ?? 'UP' }}</strong></span>
-            <span class="text-[var(--color-ink-soft)]">Mattermost & Issues</span>
+            <span class="text-[var(--color-ink-muted)]">Current: <strong class="text-[var(--color-ink-strong)] uppercase">{{ $site->uptime_state ?? 'UP' }}</strong></span>
+            <button type="button" @click="uptimeModalOpen = true" class="btn-pill-nav text-xs flex items-center gap-1 cursor-pointer">
+                <i class="fa-solid fa-sliders text-[10px]"></i> Configure
+            </button>
         </div>
+
+        {{-- Uptime Configuration Modal --}}
+        <template x-teleport="body">
+            <div x-show="uptimeModalOpen"
+                 x-cloak
+                 @keydown.escape.window="uptimeModalOpen = false"
+                 class="fixed inset-0 z-50 overflow-y-auto"
+                 role="dialog"
+                 aria-modal="true"
+                 style="display: none;">
+                <div class="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+                     @click="uptimeModalOpen = false"></div>
+
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="relative w-full max-w-2xl rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl p-6 transition-all"
+                         @click.stop>
+                        {{-- Modal Header --}}
+                        <div class="flex items-center justify-between pb-4 border-b border-[var(--color-border-light)] mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-heart-pulse text-base"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-display font-semibold text-base text-[var(--color-ink-strong)]">
+                                        Uptime Monitoring &amp; Alerts
+                                    </h3>
+                                    <p class="text-xs text-[var(--color-ink-muted)] font-data">
+                                        {{ $site->domain }}
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button"
+                                    @click="uptimeModalOpen = false"
+                                    class="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
+                                    aria-label="Close modal">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        {{-- Tab Navigation --}}
+                        <div class="flex items-center gap-1.5 border-b border-[var(--color-border-light)] pb-2 mb-4 text-xs">
+                            <button type="button"
+                                    @click="uptimeActiveTab = 'probe'"
+                                    class="px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    :class="uptimeActiveTab === 'probe' ? 'bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'">
+                                <i class="fa-solid fa-satellite-dish text-[10px]"></i>
+                                Probe &amp; Checks
+                            </button>
+                            <button type="button"
+                                    @click="uptimeActiveTab = 'outage'"
+                                    class="px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    :class="uptimeActiveTab === 'outage' ? 'bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'">
+                                <i class="fa-solid fa-shield-halved text-[10px]"></i>
+                                Outage &amp; SLA
+                                @if ($site->isUptimeIgnored())
+                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                @endif
+                            </button>
+                            <button type="button"
+                                    @click="uptimeActiveTab = 'subscribers'"
+                                    class="px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    :class="uptimeActiveTab === 'subscribers' ? 'bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)] font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'">
+                                <i class="fa-solid fa-users text-[10px]"></i>
+                                Alert Subscribers
+                                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] font-mono font-medium">
+                                    {{ $siteSubscribers->count() }}
+                                </span>
+                            </button>
+                        </div>
+
+                        {{-- Tab 1: Probe & Checks --}}
+                        <div x-show="uptimeActiveTab === 'probe'" class="space-y-4">
+                            <div class="p-3.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-3 text-xs">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-semibold text-xs text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                                            <i class="fa-solid fa-satellite-dish text-emerald-600"></i>
+                                            5-Minute Health Probe
+                                        </div>
+                                        <div class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">
+                                            Periodic automated HTTP GET requests to verify site responsiveness.
+                                        </div>
+                                    </div>
+                                    <form method="POST" action="{{ route('sites.uptime-monitoring.toggle', $site) }}">
+                                        @csrf
+                                        <input type="hidden" name="enabled" value="{{ $site->uptime_monitoring_enabled ? '0' : '1' }}">
+                                        <button type="submit" class="btn-pill-nav text-xs flex items-center gap-1.5">
+                                            @if ($site->uptime_monitoring_enabled)
+                                                <i class="fa-solid fa-toggle-on text-emerald-600"></i> Enabled
+                                            @else
+                                                <i class="fa-solid fa-toggle-off text-gray-400"></i> Disabled
+                                            @endif
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <form method="POST" action="{{ route('sites.uptime-keyword.update', $site) }}" class="p-3.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
+                                @csrf
+                                @method('PATCH')
+                                <div>
+                                    <label class="block text-xs font-semibold text-[var(--color-ink-strong)]">Required homepage keyword</label>
+                                    <p class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">Optional text verification. A 200 OK that does not contain this string is treated as down.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" name="uptime_require_keyword" maxlength="120" value="{{ $site->uptime_require_keyword }}"
+                                           placeholder="e.g. Acme Corp"
+                                           class="px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs flex-1 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)]">
+                                    <button type="submit" class="btn-primary text-xs py-1.5 px-3">Save Keyword</button>
+                                </div>
+                            </form>
+
+                            <form method="POST" action="{{ route('sites.uptime-body-check.toggle', $site) }}" class="p-3.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 space-y-2 text-xs">
+                                @csrf
+                                <input type="hidden" name="skip" value="{{ $site->uptime_skip_body_check ? '0' : '1' }}">
+                                <div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="font-semibold text-xs text-[var(--color-ink-strong)]">White-screen body check</div>
+                                        <span class="status-pill {{ $site->uptime_skip_body_check ? 'status-yellow' : 'status-green' }} text-[10px]">
+                                            {{ $site->uptime_skip_body_check ? 'Skipped' : 'Enforced' }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[11px] text-[var(--color-ink-muted)] mt-1 leading-relaxed">
+                                        A 200 OK with near-empty visible text is normally treated as down. Disable this for sites that are
+                                        legitimately near-blank on a logged-out request — a static parked page, a JS-rendered SPA shell, or a
+                                        gated/private homepage.
+                                    </p>
+                                </div>
+                                <div class="pt-1">
+                                    <button type="submit" class="btn-pill-nav text-xs flex items-center gap-1.5">
+                                        @if ($site->uptime_skip_body_check)
+                                            <i class="fa-solid fa-toggle-on text-amber-600"></i> Body check skipped &mdash; re-enable enforcement
+                                        @else
+                                            <i class="fa-solid fa-toggle-off text-gray-400"></i> Skip body check for this site
+                                        @endif
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {{-- Tab 2: Outage Classification & Silencing --}}
+                        <div x-show="uptimeActiveTab === 'outage'" class="space-y-4" style="display: none;">
+                            <form method="POST" action="{{ route('sites.uptime-ignore.toggle', $site) }}" class="space-y-3">
+                                @csrf
+                                @if ($site->isUptimeIgnored())
+                                    <input type="hidden" name="ignore" value="0">
+                                    <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                                        <div class="font-semibold flex items-center gap-1.5 text-sm">
+                                            <i class="fa-solid fa-shield-halved text-amber-500"></i>
+                                            {{ $site->isUptimeSlaExempt() ? 'SLA Protected (Not Our Fault)' : 'Alerts Silenced' }}
+                                        </div>
+                                        @if ($site->uptime_ignore_reason)
+                                            <div class="text-xs mt-1 text-amber-600 dark:text-amber-400 font-data">{{ $site->uptime_ignore_reason }}</div>
+                                        @endif
+                                        <p class="text-[11px] text-[var(--color-ink-muted)] mt-2">
+                                            Outage alerting is currently suppressed for this site. Click below to resume normal alert routing.
+                                        </p>
+                                    </div>
+                                    <button type="submit" class="btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                                        <i class="fa-solid fa-bell"></i> Stop ignoring &amp; reset SLA exemption
+                                    </button>
+                                @else
+                                    <input type="hidden" name="ignore" value="1">
+                                    <div class="p-3.5 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/50 space-y-3 text-xs">
+                                        <div>
+                                            <div class="font-semibold text-xs text-[var(--color-ink-strong)]">Outage Classification</div>
+                                            <p class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">
+                                                Select how current downtime should be treated for alert dispatch and SLA metrics.
+                                            </p>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <label class="flex items-start gap-2.5 p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] cursor-pointer">
+                                                <input type="radio" name="is_sla_exempt" value="1" checked class="mt-0.5">
+                                                <div>
+                                                    <span class="font-semibold text-amber-600 dark:text-amber-400">Not Our Fault (SLA Exempt)</span>
+                                                    <p class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">Exclude downtime from uptime ratings and fleet SLA (client DNS, expired domain, client request, etc.)</p>
+                                                </div>
+                                            </label>
+                                            <label class="flex items-start gap-2.5 p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border-light)] cursor-pointer">
+                                                <input type="radio" name="is_sla_exempt" value="0" class="mt-0.5">
+                                                <div>
+                                                    <span class="font-semibold text-[var(--color-ink-strong)]">Legit Outage</span>
+                                                    <p class="text-[11px] text-[var(--color-ink-muted)] mt-0.5">Silence alerts only; downtime still counts against uptime record</p>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <div class="space-y-2 pt-2 border-t border-[var(--color-border-light)]">
+                                            <label class="block text-[11px] font-medium text-[var(--color-ink-soft)] uppercase tracking-wide">Exemption Reason</label>
+                                            <select name="exemption_reason" class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                                                <option value="client_dns">Client DNS / Nameserver change</option>
+                                                <option value="domain_expired">Domain expired / Registrar hold</option>
+                                                <option value="third_party">Third-party / Upstream outage</option>
+                                                <option value="client_requested">Client requested downtime</option>
+                                                <option value="other">Other (not our fault)</option>
+                                            </select>
+                                            <div>
+                                                <input type="text" name="reason" maxlength="255" placeholder="Reason / notes (optional)"
+                                                       class="w-full px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs focus:outline-none focus:border-[var(--color-brand)] bg-[var(--color-surface)] text-[var(--color-ink-strong)]">
+                                            </div>
+                                            <div class="pt-1">
+                                                <button type="submit" class="btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                                                    <i class="fa-solid fa-shield-halved text-amber-300"></i> Silence Alerts &amp; Apply Exemption
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+                            </form>
+                        </div>
+
+                        {{-- Tab 3: Alert Subscribers --}}
+                        <div x-show="uptimeActiveTab === 'subscribers'" class="space-y-4" style="display: none;">
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <div class="font-semibold text-xs text-[var(--color-ink-strong)]">
+                                        Client Alert Subscribers ({{ $siteSubscribers->count() }})
+                                    </div>
+                                    <a href="{{ route('settings.notifications.index') }}" class="text-[11px] text-[var(--color-primary-600)] hover:underline flex items-center gap-1" target="_blank">
+                                        Manage all recipients &rarr;
+                                    </a>
+                                </div>
+                                <p class="text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
+                                    Client contacts who receive non-technical outage and recovery notices for this site.
+                                </p>
+                            </div>
+
+                            @if ($siteSubscribers->isEmpty())
+                                <div class="p-4 rounded-xl bg-[var(--color-surface-alt)]/50 border border-[var(--color-border-light)] text-xs text-[var(--color-ink-soft)] text-center">
+                                    No client contacts subscribed to alerts for this site yet.
+                                </div>
+                            @else
+                                <ul class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                    @foreach ($siteSubscribers as $sub)
+                                        <li class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-[var(--color-surface-alt)]/50 border border-[var(--color-border-light)] text-xs">
+                                            <div class="min-w-0">
+                                                <div class="font-semibold text-[var(--color-ink-strong)] truncate">
+                                                    {{ $sub->name }}
+                                                    @if ($sub->company)
+                                                        <span class="text-[11px] text-[var(--color-ink-soft)] font-normal">({{ $sub->company }})</span>
+                                                    @endif
+                                                </div>
+                                                <div class="flex items-center gap-3 text-[11px] text-[var(--color-ink-muted)] font-data mt-0.5">
+                                                    @if ($sub->notify_sms && $sub->phone)
+                                                        <span title="SMS enabled" class="inline-flex items-center gap-1">
+                                                            <i class="fa-solid fa-mobile-screen text-sky-500"></i> {{ $sub->phone }}
+                                                        </span>
+                                                    @endif
+                                                    @if ($sub->notify_email && $sub->resolvedEmail())
+                                                        <span title="Email enabled" class="inline-flex items-center gap-1">
+                                                            <i class="fa-solid fa-envelope text-violet-500"></i> {{ $sub->resolvedEmail() }}
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="shrink-0"
+                                                  data-confirm="Unsubscribe {{ $sub->name }} from {{ $site->domain }}?"
+                                                  data-confirm-btn="Unsubscribe"
+                                                  data-confirm-variant="danger">
+                                                @csrf
+                                                @foreach ($siteSubscribers as $otherSub)
+                                                    @if ($otherSub->id !== $sub->id)
+                                                        <input type="hidden" name="recipient_ids[]" value="{{ $otherSub->id }}">
+                                                    @endif
+                                                @endforeach
+                                                <button type="submit" class="text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] text-xs p-1 cursor-pointer" title="Unsubscribe {{ $sub->name }}">
+                                                    <i class="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </form>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+
+                            {{-- Attach Existing Subscriber --}}
+                            @php
+                                $unattached = $availableClientRecipients->whereNotIn('id', $siteSubscribers->pluck('id'));
+                            @endphp
+                            @if ($unattached->isNotEmpty())
+                                <form method="POST" action="{{ route('sites.notifications.sync', $site) }}" class="flex items-center gap-2 pt-2 border-t border-[var(--color-border-light)]">
+                                    @csrf
+                                    @foreach ($siteSubscribers as $existing)
+                                        <input type="hidden" name="recipient_ids[]" value="{{ $existing->id }}">
+                                    @endforeach
+                                    <select name="recipient_ids[]" class="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] flex-1 bg-[var(--color-surface)] text-[var(--color-ink-strong)]" required>
+                                        <option value="">Attach existing contact...</option>
+                                        @foreach ($unattached as $avail)
+                                            <option value="{{ $avail->id }}">
+                                                {{ $avail->name }} {{ $avail->company ? "({$avail->company})" : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <button type="submit" class="btn-primary text-xs py-1.5 px-3 shrink-0 font-medium">
+                                        <i class="fa-solid fa-plus text-[10px]"></i> Attach Contact
+                                    </button>
+                                </form>
+                            @endif
+
+                            {{-- Quick Add New Client Contact --}}
+                            <details class="text-xs pt-2 border-t border-[var(--color-border-light)]">
+                                <summary class="text-xs text-[var(--color-primary-600)] hover:underline cursor-pointer flex items-center gap-1 font-medium">
+                                    <i class="fa-solid fa-user-plus text-[10px]"></i> Quick add new contact
+                                </summary>
+                                <form method="POST" action="{{ route('sites.notifications.store', $site) }}" class="mt-2.5 p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/50 space-y-2.5">
+                                    @csrf
+                                    <div>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] block uppercase font-medium mb-0.5">Contact Name</span>
+                                        <input type="text" name="name" placeholder="e.g. John Doe" class="text-xs px-2.5 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full text-[var(--color-ink-strong)]" required>
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] block uppercase font-medium mb-0.5">Company (optional)</span>
+                                        <input type="text" name="company" placeholder="e.g. Acme Corp" class="text-xs px-2.5 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full text-[var(--color-ink-strong)]">
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] block uppercase font-medium mb-0.5">Phone (E.164)</span>
+                                        <input type="text" name="phone" placeholder="+1..." class="text-xs px-2.5 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full font-data text-[var(--color-ink-strong)]" pattern="\+\d{8,15}">
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] text-[var(--color-ink-soft)] block uppercase font-medium mb-0.5">Email Address</span>
+                                        <input type="email" name="email" placeholder="contact@example.com" class="text-xs px-2.5 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg w-full font-data text-[var(--color-ink-strong)]">
+                                    </div>
+                                    <div class="space-y-1.5 pt-1.5 border-t border-[var(--color-border-light)] text-[11px]">
+                                        <label class="flex items-center gap-1.5 cursor-pointer">
+                                            <input type="checkbox" name="notify_sms" value="1" checked>
+                                            <span class="text-[var(--color-ink)]">Send SMS alerts</span>
+                                        </label>
+                                        <label class="flex items-center gap-1.5 cursor-pointer">
+                                            <input type="checkbox" name="notify_email" value="1" checked>
+                                            <span class="text-[var(--color-ink)]">Send Email alerts</span>
+                                        </label>
+                                    </div>
+                                    <button type="submit" class="btn-primary text-xs w-full justify-center py-1.5">
+                                        Save &amp; Subscribe to {{ $site->domain }}
+                                    </button>
+                                </form>
+                            </details>
+                        </div>
+
+                        {{-- Modal Footer --}}
+                        <div class="mt-6 pt-4 border-t border-[var(--color-border-light)] flex items-center justify-between">
+                            <span class="text-xs text-[var(--color-ink-muted)]">
+                                Probe: <strong class="{{ $site->uptime_monitoring_enabled ? 'text-emerald-600' : 'text-[var(--color-ink-soft)]' }}">{{ $site->uptime_monitoring_enabled ? 'Probing' : 'Disabled' }}</strong>
+                            </span>
+                            <button type="button"
+                                    @click="uptimeModalOpen = false"
+                                    class="btn-primary text-xs py-1.5 px-4 cursor-pointer">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
     </div>
 
     {{-- Card 7: Site Status (Active / Inactive) --}}
