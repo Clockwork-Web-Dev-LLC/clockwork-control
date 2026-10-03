@@ -13,7 +13,7 @@
                     :class="screenOptionsOpen ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-xs' : ''"
                     class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer text-xs md:text-sm font-medium transition-all"
                     title="Customize monitoring pagination and display settings">
-                <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-brand)]'"></i>
+                <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-ink-muted)]'"></i>
                 <span>Screen Options</span>
                 <i class="fa-solid fa-chevron-down text-[10px] opacity-70 transition-transform duration-200"
                    :class="screenOptionsOpen ? 'rotate-180' : ''"></i>
@@ -109,7 +109,7 @@
             </div>
             <div>
                 <h4 class="font-semibold text-xs text-[var(--color-ink-strong)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
+                    <i class="fa-solid fa-circle-info text-[var(--color-ink-muted)]"></i>
                     Display Notes
                 </h4>
                 <ul class="space-y-1.5 text-[var(--color-ink-muted)]">
@@ -273,7 +273,7 @@
     <div class="card mb-6" id="monitoring-sites-card">
         <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-3">
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-list text-[var(--color-ink-soft)] mr-1"></i>
+                <i class="fa-solid fa-list text-[var(--color-ink-muted)] mr-1"></i>
                 Sites
             </h2>
             <span class="text-xs text-[var(--color-ink-muted)]" id="monitoring-sites-count">{{ $sites->count() }} monitored</span>

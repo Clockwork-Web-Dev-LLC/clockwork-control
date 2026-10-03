@@ -2,7 +2,7 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-ban text-[var(--color-ink-soft)] mr-1"></i>
+                <i class="fa-solid fa-ban text-[var(--color-ink-muted)] mr-1"></i>
                 Banned IPs
             </h2>
             <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
@@ -25,8 +25,8 @@
     </div>
 
     @if ($bannedIps->isEmpty())
-        <div class="text-center py-6 text-sm text-[var(--color-ink-soft)]">
-            <i class="fa-solid fa-shield-halved text-2xl mb-2 block"></i>
+        <div class="text-center py-6 text-sm text-[var(--color-ink-muted)]">
+            <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)] text-2xl mb-2 block"></i>
             No active bans for this site.
         </div>
     @else

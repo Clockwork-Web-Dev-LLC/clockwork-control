@@ -2,7 +2,7 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-chart-line text-[var(--color-ink-soft)] mr-1"></i>
+                <i class="fa-solid fa-chart-line text-[var(--color-ink-muted)] mr-1"></i>
                 Traffic
             </h2>
             <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
@@ -54,7 +54,7 @@
         <div class="mt-8 mb-2 flex items-end justify-between flex-wrap gap-2">
             <div>
                 <h3 class="font-display text-base font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-regular fa-calendar text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-regular fa-calendar text-[var(--color-ink-muted)] mr-1"></i>
                     365-day activity
                 </h3>
                 <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">

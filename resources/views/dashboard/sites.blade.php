@@ -8,7 +8,7 @@
             :subtitle="$counts['all'] . ' sites across all hosting providers'">
             <x-slot:actions>
                 <a href="{{ route('downloads.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-surface-alt)] hover:bg-[var(--color-border-light)] border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors" title="Download WordPress Plugins (Companion & Renegade)">
-                    <i class="fa-solid fa-download text-[11px] text-[var(--color-brand)]"></i>
+                    <i class="fa-solid fa-download text-[11px] text-[var(--color-ink-muted)]"></i>
                     <span>Download Plugins</span>
                 </a>
                 <button type="button" @click="showAddModal = true" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] shadow-xs transition-colors cursor-pointer">
@@ -107,9 +107,9 @@
                             <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
 
                             @if ($site->is_wordpress)
-                                <i class="fa-brands fa-wordpress text-[var(--color-brand)] text-lg relative z-10 pointer-events-none shrink-0"></i>
+                                <i class="fa-brands fa-wordpress text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
                             @else
-                                <i class="fa-solid fa-globe text-[var(--color-ink-soft)] text-lg relative z-10 pointer-events-none shrink-0"></i>
+                                <i class="fa-solid fa-globe text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
                             @endif
 
                             <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
@@ -156,7 +156,7 @@
                                 </span>
 
                                 @if ($site->companion_installed)
-                                    <span class="status-pill status-green cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
+                                    <span class="status-pill status-unknown cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
                                         <i class="fa-solid fa-plug"></i>
                                     </span>
                                 @endif
@@ -269,7 +269,7 @@
                  @click.stop>
                 <div class="px-6 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-4 sticky top-0 bg-[var(--color-surface)] z-10">
                     <div class="flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-[var(--color-brand)]/10 text-[var(--color-brand)] flex items-center justify-center font-bold text-base">
+                        <div class="w-8 h-8 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)] flex items-center justify-center font-bold text-base">
                             <i class="fa-solid fa-plus"></i>
                         </div>
                         <div>
@@ -287,7 +287,7 @@
                     <div class="p-4 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)]">
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <span class="font-bold text-[var(--color-ink-strong)] flex items-center gap-1.5">
-                                <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
+                                <i class="fa-solid fa-circle-info text-[var(--color-ink-muted)]"></i>
                                 <span>Need the Companion plugin?</span>
                             </span>
                             <a href="{{ route('downloads.index') }}" class="text-[var(--color-brand)] font-semibold hover:underline flex items-center gap-1" target="_blank">

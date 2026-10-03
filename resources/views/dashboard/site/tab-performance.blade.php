@@ -79,7 +79,7 @@
         <div class="flex items-start justify-between mb-4 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-mobile-screen-button text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-mobile-screen-button text-[var(--color-ink-muted)] mr-1"></i>
                     Mobile
                 </h2>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
@@ -130,7 +130,7 @@
         <div class="flex items-start justify-between mb-4 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-display text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-display text-[var(--color-ink-muted)] mr-1"></i>
                     Desktop
                 </h2>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
@@ -179,7 +179,7 @@
     <div class="flex items-start justify-between mb-4 gap-3">
         <div>
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-users text-[var(--color-ink-soft)]"></i>
+                <i class="fa-solid fa-users text-[var(--color-ink-muted)]"></i>
                 Real Users (Core Web Vitals)
                 @if ($fieldPhone && $fieldPhone->status === 'ok')
                     @if ($fieldPhone->cwv_pass)
@@ -270,7 +270,7 @@
 @if (count($perfTrend['mobile']) + count($perfTrend['desktop']) > 0)
     <div class="card p-5 mb-6" x-data="performanceTrendChart({{ json_encode($perfTrend) }})">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-3">
-            <i class="fa-solid fa-chart-line text-[var(--color-ink-soft)] mr-1"></i>
+            <i class="fa-solid fa-chart-line text-[var(--color-ink-muted)] mr-1"></i>
             30-day score trend
         </h2>
         <div id="perf-trend-chart" style="height: 240px;"></div>
@@ -280,7 +280,7 @@
 {{-- History table --}}
 <div class="card p-5">
     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-3">
-        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-soft)] mr-1"></i>
+        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)] mr-1"></i>
         Recent scans
     </h2>
     @if ($perfHistory->isEmpty())

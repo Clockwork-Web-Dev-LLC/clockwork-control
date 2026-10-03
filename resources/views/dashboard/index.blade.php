@@ -116,7 +116,7 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Fleet Health</span>
-                <i class="fa-solid fa-heart-pulse text-xs text-emerald-500"></i>
+                <i class="fa-solid fa-heart-pulse text-xs text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $healthPct }}%</span>
@@ -148,7 +148,7 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Managed Sites</span>
-                <i class="fa-solid fa-globe text-sky-500 text-xs"></i>
+                <i class="fa-solid fa-globe text-xs text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalSites }}</span>
@@ -167,14 +167,14 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Total Nodes</span>
-                <i class="fa-solid fa-server text-[var(--color-brand)] text-sm"></i>
+                <i class="fa-solid fa-server text-sm text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalCount }}</span>
                 <span class="text-xs text-[var(--color-ink-soft)]">Monitored Hosts</span>
             </div>
             <div class="flex items-center gap-2 mt-1 text-xs text-[var(--color-ink-muted)] font-data">
-                <span><i class="fa-solid fa-microchip text-[var(--color-brand)] text-xs mr-1"></i>SSH Polled</span>
+                <span><i class="fa-solid fa-microchip text-xs mr-1 text-[var(--color-ink-muted)]"></i>SSH Polled</span>
             </div>
         </div>
 
@@ -394,14 +394,14 @@
                         <!-- Staging, Patches, SpinupWP/GridPane & Tags -->
                         <div class="flex items-center gap-1.5 flex-wrap mb-3">
                             @if ($server->spinupwp_id)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="SpinupWP server #{{ $server->spinupwp_id }}">
-                                    <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]"></i>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]" title="SpinupWP server #{{ $server->spinupwp_id }}">
+                                    <i class="fa-solid fa-bolt text-[10px] text-[var(--color-ink-muted)]"></i>
                                     <span>SpinupWP</span>
                                 </span>
                             @endif
                             @if ($server->isGridPane())
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
-                                    <i class="fa-solid fa-table-cells text-[10px] text-emerald-500"></i>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
+                                    <i class="fa-solid fa-table-cells text-[10px] text-[var(--color-ink-muted)]"></i>
                                     <span>GridPane</span>
                                 </span>
                             @endif
@@ -676,10 +676,10 @@
                                             <span class="text-[var(--color-ink-soft)] italic">Manual</span>
                                         @endif
                                         @if ($server->spinupwp_id)
-                                            <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
+                                            <i class="fa-solid fa-bolt text-[10px] text-[var(--color-ink-muted)]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
                                         @endif
                                         @if ($server->isGridPane())
-                                            <i class="fa-solid fa-table-cells text-[10px] text-emerald-500" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
+                                            <i class="fa-solid fa-table-cells text-[10px] text-[var(--color-ink-muted)]" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
                                         @endif
                                     </div>
                                 </td>
