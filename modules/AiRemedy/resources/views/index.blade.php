@@ -5,82 +5,114 @@
 @section('content')
 @include('operations._tabs')
 @include('ai-remedy::_review_script')
-@php($canManageRuns = (bool) auth()->user()?->isAdmin())
+@php
+    $canManageRuns = (bool) auth()->user()?->isAdmin();
+    $runsPayload = [];
+    foreach ($runs as $r) {
+        $runsPayload[$r->id] = $r->toArray() + ['review' => $reviews[$r->id] ?? null];
+    }
+@endphp
+
+<script id="ai-remedy-runs-data" type="application/json">
+    {!! json_encode($runsPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!}
+</script>
+
+<script>
+function aiRemedyIndex(pageIds) {
+    let runsMap = {};
+    try {
+        const el = document.getElementById('ai-remedy-runs-data');
+        if (el) {
+            runsMap = JSON.parse(el.textContent || '{}');
+        }
+    } catch (e) {
+        console.error('Failed to parse runs data:', e);
+    }
+
+    return {
+        activeRun: null,
+        drawerOpen: false,
+        selected: [],
+        pageIds: pageIds || [],
+        runsData: runsMap,
+        get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
+        toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
+        verdictNote: '',
+        verdictSubmitting: false,
+        verdictSaved: false,
+        openDrawer(runOrId) {
+            const run = typeof runOrId === 'object' && runOrId !== null
+                ? runOrId
+                : (this.runsData[runOrId] || null);
+            if (!run) return;
+            this.activeRun = run;
+            this.verdictNote = run.verdict_note || '';
+            this.verdictSaved = false;
+            this.drawerOpen = true;
+        },
+        closeDrawer() {
+            this.drawerOpen = false;
+            this.activeRun = null;
+        },
+        formatSafetyTier(tier) {
+            if (!tier) return 'Unknown';
+            switch (tier) {
+                case 'tier_1_safe': return 'Tier 1 · Safe';
+                case 'tier_2_cautious': return 'Tier 2 · Cautious';
+                case 'tier_3_prohibited': return 'Tier 3 · Prohibited';
+                case 'tier_unfixable':
+                case 'unfixable': return 'Unfixable';
+                default: return tier.replace(/^tier_/, 'Tier ').replace(/_/g, ' ');
+            }
+        },
+        safetyBadgeClass(tier) {
+            if (!tier) return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+            switch (tier) {
+                case 'tier_1_safe':
+                    return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+                case 'tier_2_cautious':
+                    return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
+                case 'tier_3_prohibited':
+                case 'tier_unfixable':
+                case 'unfixable':
+                    return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
+                default:
+                    return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+            }
+        },
+        async submitVerdict(verdict) {
+            if (!this.activeRun) return;
+            this.verdictSubmitting = true;
+            this.verdictSaved = false;
+            try {
+                const res = await fetch(`/ai-remedy/runs/${this.activeRun.id}/verdict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content') || '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ verdict: verdict, note: this.verdictNote })
+                });
+                if (res.ok) {
+                    this.activeRun.verdict = verdict;
+                    this.activeRun.verdict_note = this.verdictNote;
+                    this.verdictSaved = true;
+                    setTimeout(() => this.verdictSaved = false, 3500);
+                }
+            } catch (e) {
+                console.error('Failed to submit verdict:', e);
+            } finally {
+                this.verdictSubmitting = false;
+            }
+        }
+    };
+}
+</script>
+
 <div class="relative"
      @ai-remedy-executed.window="if (activeRun && $event.detail.run && activeRun.id === $event.detail.runId) { activeRun.status = $event.detail.run.status; }"
-     x-data="{
-    activeRun: null,
-    drawerOpen: false,
-    selected: [],
-    pageIds: @js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()),
-    get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
-    toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
-    verdictNote: '',
-    verdictSubmitting: false,
-    verdictSaved: false,
-    openDrawer(run) {
-        this.activeRun = run;
-        this.verdictNote = run.verdict_note || '';
-        this.verdictSaved = false;
-        this.drawerOpen = true;
-    },
-    closeDrawer() {
-        this.drawerOpen = false;
-        this.activeRun = null;
-    },
-    formatSafetyTier(tier) {
-        if (!tier) return 'Unknown';
-        switch (tier) {
-            case 'tier_1_safe': return 'Tier 1 · Safe';
-            case 'tier_2_cautious': return 'Tier 2 · Cautious';
-            case 'tier_3_prohibited': return 'Tier 3 · Prohibited';
-            case 'tier_unfixable':
-            case 'unfixable': return 'Unfixable';
-            default: return tier.replace(/^tier_/, 'Tier ').replace(/_/g, ' ');
-        }
-    },
-    safetyBadgeClass(tier) {
-        if (!tier) return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
-        switch (tier) {
-            case 'tier_1_safe':
-                return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
-            case 'tier_2_cautious':
-                return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
-            case 'tier_3_prohibited':
-            case 'tier_unfixable':
-            case 'unfixable':
-                return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
-            default:
-                return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
-        }
-    },
-    async submitVerdict(verdict) {
-        if (!this.activeRun) return;
-        this.verdictSubmitting = true;
-        this.verdictSaved = false;
-        try {
-            const res = await fetch(`/ai-remedy/runs/${this.activeRun.id}/verdict`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({ verdict: verdict, note: this.verdictNote })
-            });
-            if (res.ok) {
-                this.activeRun.verdict = verdict;
-                this.activeRun.verdict_note = this.verdictNote;
-                this.verdictSaved = true;
-                setTimeout(() => this.verdictSaved = false, 3500);
-            }
-        } catch (e) {
-            console.error('Failed to submit verdict:', e);
-        } finally {
-            this.verdictSubmitting = false;
-        }
-    }
-}">
+     x-data="aiRemedyIndex(@js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()))">
     <x-page-header title="AiRemedy"
         subtitle="AI-powered server diagnostics, root-cause forensics, and self-healing remediation via OpenRouter.">
         <x-slot:actions>
@@ -346,7 +378,7 @@
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                     <button type="button"
-                                            @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
+                                            @click="openDrawer({{ $run->id }})"
                                             class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center gap-1 flex-shrink-0">
                                         <span>Forensics</span>
                                         <i class="fa-solid fa-arrow-right text-[10px]"></i>
@@ -428,7 +460,7 @@
                         {{-- Actions Button --}}
                         <div class="flex items-center justify-end pt-1">
                             <button type="button"
-                                    @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
+                                    @click="openDrawer({{ $run->id }})"
                                     class="btn-pill-nav w-full sm:w-auto text-xs py-1.5 px-3.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-microscope text-[11px] text-[var(--color-brand)]"></i>
                                 <span>Forensics &amp; Remediation</span>
