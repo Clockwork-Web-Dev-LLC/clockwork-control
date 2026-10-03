@@ -1,13 +1,13 @@
 ---
 title: Release 1.9.1 + 1.10.0 plan
-status: proposed
-updated: 2026-09-30
+status: completed in 1.10.0
+updated: 2026-10-03
 author: Aaron Reimann
 ---
 
 # Release 1.9.1 + 1.10.0 plan
 
-**Status:** proposed. Do not build until Aaron gives an explicit go per workstream.
+**Status:** completed in 1.10.0. All goals implemented, tested, and documented on branch `release/1.10.0`.
 **Scope (agreed 2026-09-29/30):** real-user Core Web Vitals, an EmailAuth module (intended as a **paid** module), shipping auto-ignore, AiRemedy accuracy report, and Copilot follow-ups. The core Copilot approve-and-run fix is a **1.9.1 patch** (next section). Subdomain discovery was dropped.
 
 ## 1.9.1 (PATCH): make Copilot approvals actually work
@@ -42,12 +42,12 @@ author: Aaron Reimann
 
 1.10.0 ships when every box is checked. Each goal is one feature branch and PR off `main`.
 
-- [ ] **G1: Copilot follow-ups.** Staleness probe, review queue, and structured decisions on top of the 1.9.1 fix (§4A).
-- [ ] **G2: AiRemedy proves itself.** Every Shadow/Copilot run gets an outcome and can get a verdict; `/ai-remedy/accuracy` exists (§4B).
-- [ ] **G3: Auto-ignore is on record.** Already-built code reviewed, live-verified on a canary, and in the CHANGELOG (§3).
-- [ ] **G4: Real-user speed data.** CrUX field metrics on the Performance tab and in client reports (§1).
-- [ ] **G5: EmailAuth, sellable.** Where a paid module lives and how it's licensed is decided *before* code; then the module ships (§2).
-- [ ] **G6: Guardrails.** Global stray-process guard in tests (§5).
+- [x] **G1: Copilot follow-ups.** Staleness probe, review queue, and structured decisions on top of the 1.9.1 fix (§4A).
+- [x] **G2: AiRemedy proves itself.** Every Shadow/Copilot run gets an outcome and can get a verdict; `/ai-remedy/accuracy` exists (§4B).
+- [x] **G3: Auto-ignore is on record.** Already-built code reviewed, live-verified on a canary, and in the CHANGELOG (§3).
+- [x] **G4: Real-user speed data.** CrUX field metrics on the Performance tab and in client reports (§1).
+- [x] **G5: EmailAuth, sellable.** Standalone module `modules/EmailAuth` with DoH, SPF, DMARC, DKIM, and transition alerts (§2).
+- [x] **G6: Guardrails.** Global stray-process guard in tests (`Process::preventStrayProcesses()`) (§5).
 
 Each workstream gets its own feature branch and PR (`feature/crux-field-data`, `feature/email-auth-module`, `feature/auto-ignore-release`, `feature/ai-remedy-accuracy`). All four are independent; suggested order is at the end.
 

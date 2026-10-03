@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -20,7 +20,7 @@ One row per managed host. Natural key: `spinupwp_id`. Notable columns:
 
 - Identity: `name`, `hostname`, `spinupwp_id`.
 - Cloud provider: `provider` (`digitalocean|hetzner|…`), `provider_id`, `size_slug`, `vcpus`, `memory_mb`, `disk_gb`. Populated daily by `clockwork:import-spinupwp` from SpinupWP's `provider_name` field, cross-referenced against the matching cloud's API.
-- SSH: `ssh_user`, `ssh_port`, `ssh_private_key` (encrypted), `ssh_password` (encrypted).
+- SSH: `ssh_user`, `ssh_port`, `ssh_private_key` (encrypted), `ssh_password` (encrypted), `ssh_password_updated_at` (tracked for sudo password 90-day hygiene).
 - Monitoring state: `status` (`green|yellow|red|unknown`), `last_polled_at`, `last_alert_at`, `last_ssh_ok_at`, `provider_missing_since` (nullable timestamp — set the first time `clockwork:poll-servers` finds `CloudProvider::isDeletedAtProvider()` true, a precise "genuinely gone from the cloud provider's own inventory" signal distinct from a generic polling error; drives a red "Remove from Clockwork" banner on the server show page and is cleared automatically the next time a poll succeeds).
 - Provisioning: `clockwork_jail_provisioned_at`, `last_provision_log`.
 - Operations: `is_ignored`, `ignore_reason`, `auto_ban_llar`, `auto_ban_wordfence`, `last_llar_pull_at`, `last_wordfence_pull_at`, `upgrade_required`, `reboot_required`, `update_status`, `scheduled_reboot_at`.
@@ -132,7 +132,15 @@ Polymorphic by `scan_type` ∈ `sitecheck|core_checksums|blacklist|companion_mal
 
 One row per Lighthouse run. Stores Performance score + LCP/FCP/TBT/SI/CLS + page weight + request count, plus `engine` (`gtmetrix` / `psi` / `psi-fallback` / `pressable`) — GTmetrix is primary, PSI only fills in when GTmetrix errors; `pressable` is Pressable's own always-available report (no fallback chain). **CLS is stored ×1000 as integer** to avoid float drift in MySQL — divide on read.
 
-`accessibility_score` / `best_practices_score` / `seo_score` (nullable) — currently populated for `pressable` rows only; GTmetrix/PSI clients weren't wired up to extract them yet. `source_generated_at` (nullable) — the report's own generation time, distinct from poll time; null for GTmetrix/PSI (every call is a fresh scan), set for Pressable (whose report only regenerates ~monthly). `PerformanceScanRecorder` uses it to skip inserting a duplicate row when Pressable's underlying report hasn't actually changed since the last poll — see [Features → Performance scans](/docs/features/performance-scans).
+`accessibility_score` / `best_practices_score` / `seo_score` (nullable) — extracted for `pressable` and `psi`/`psi-fallback` rows (`PageSpeedInsightsClient` and `PressableLighthouseClient` extract them, while GTmetrix's current tier focuses primarily on Performance metrics). `source_generated_at` (nullable) — the report's own generation time, distinct from poll time; null for GTmetrix/PSI (every call is a fresh scan), set for Pressable (whose report only regenerates ~monthly). `PerformanceScanRecorder` uses it to skip inserting a duplicate row when Pressable's underlying report hasn't actually changed since the last poll — see [Features → Performance scans](/docs/features/performance-scans).
+
+### `site_field_metrics`
+
+One row per site × form factor (`phone`/`desktop`) × scope (`origin`/`url`) × collection period. Stores real-user Core Web Vitals measured from Chrome browsers over rolling 28-day windows from Google's Chrome UX Report (CrUX) API. Columns: `lcp_p75_ms`, `inp_p75_ms`, `cls_p75_x1000`, `fcp_p75_ms`, `ttfb_p75_ms`, `cwv_pass` (bool pass assessment), `good_pct` (JSON distribution of "good" bucket per metric), `status` (`ok`/`no_data`/`failed`), `period_start`, `period_end`. Unique on `(site_id, form_factor, scope, period_end)`.
+
+### `email_auth_checks` + `email_auth_domains`
+
+Modular email security posture verification (`modules/EmailAuth`). `email_auth_checks` stores historical DNS validation runs per apex domain (180-day retention): overall status (`pass`/`warn`/`fail`/`unknown`), SPF record & 10-lookup count, DMARC policy & record, DKIM probed selectors found, MX presence, and advisory findings JSON. `email_auth_domains` stores per-domain settings (custom DKIM selectors, ignore status) and tracks `last_overall_status` for state-transition alerting (`email_auth_degraded`).
 
 ### `contact_form_tests` + `contact_form_test_runs`
 
@@ -157,6 +165,10 @@ Local cache of the daily Bill.com sync. Customers PK is Bill.com's own ID (`0cu.
 ### `ignored_issues`
 
 Suppresses one specific issue type on an active, fully-monitored site or server without archiving it or flipping `is_inactive` — see [Features → Inactive sites](/docs/features/inactive-sites) for how this compares to the other "quiet down" mechanisms. Columns: `issue_type` (indexed string, e.g. `IgnoredIssue::TYPE_SEO_INDEXABILITY` = `seo_indexability`), `site_id` (nullable FK to `sites`, cascades on delete), `server_id` (nullable FK to `servers`, cascades on delete), `reason` (nullable, operator's free-text note), `ignored_by_user_id` (nullable FK to `users`, null on delete). A unique constraint on `(issue_type, site_id)` means re-ignoring the same issue on the same site updates the existing row instead of duplicating it. Written and read by `IssuesController::ignore()`/`unignore()`; `IssueCounter` and the `/issues` index both exclude matching rows from their active counts.
+
+### `ai_remedy_runs`
+
+Audit trail and diagnostic state for AiRemedy incident diagnoses (`modules/AiRemedy`). Stores incident trigger telemetry, prompt parameters, root cause diagnosis, proposed and approved remediation bash commands, execution outputs, and token costs. Columns include `actor` (`watch_mode`/`interactive`/`autonomous`/`simulation`/`manual`), `status` (`pending`/`analyzed`/`resolved`/`failed`/`rejected`/`expired`), `safety_tier` (1–3), `verdict` (`correct`/`partial`/`wrong`/`unsure`), `verdict_note`, `verdict_by_user_id`, `verdict_at`, `outcome` (`self_resolved`/`human_resolved`/`persisted`/`escalated`/`unknown`), `outcome_details` JSON, `outcome_evaluated_at`, `is_fixable`, `is_maintenance`, `maintenance_type`, `hidden_at`, and `hidden_by_user_id`. Automatically classified by `clockwork:ai-remedy-evaluate-outcomes` at +60 minutes.
 
 ## Encrypted columns
 

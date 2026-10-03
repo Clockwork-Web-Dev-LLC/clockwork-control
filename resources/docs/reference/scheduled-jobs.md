@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
@@ -55,7 +55,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | `clockwork:pull-llar-lockouts` | Ingest active login lockouts from Gatekeeper (via Companion HMAC REST) with legacy LLAR direct-DB fallback. Gated by `IngestScheduleGate` (per-source enable + window + cadence). |
 | `clockwork:pull-wordfence-blocks` | Same for Wordfence blocks. |
 | `clockwork:pull-site-metrics` | Per-site CPU/memory rollups from Companion sites advertising `resource-sampler`. Feeds `/capacity`. Pausable via `monitoring.site_metrics_enabled`. |
-
+| `clockwork:ai-remedy-evaluate-outcomes` | Classifies 60-minute resolution outcomes (`self_resolved`, `human_resolved`, `persisted`, `escalated`, `unknown`) for past AiRemedy incident diagnoses by analyzing `server_metrics`, `site_uptime_events`, and human `action_logs` (contributed by `AiRemedyServiceProvider`). |
 
 ## Hourly
 
@@ -64,6 +64,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | `clockwork:rollup-traffic --backfill=2` | Refresh today's + yesterday's per-site traffic rollups. Day-boundary catch-up is the `--backfill=2`. |
 | `clockwork:reap-stale-update-jobs` | Flip Updates-page jobs stuck `running` >10 min to `failed`. Safety net for worker crashes. Now also pings Mattermost/Slack for any reaped nightly-batch row — reaped jobs bypass the normal live-failure alert path entirely. |
 | `clockwork:reap-stale-server-updates` | Same for fleet system-update runs stuck past 2h (web47 once sat "running" for 4 weeks). Now also pings Mattermost/Slack (`server_update_failed`) for every reaped row — no nightly/manual distinction to gate on here, unlike the plugin-update reaper, so it always alerts. |
+| `clockwork:ai-remedy-expire-unreviewed` | Marks unreviewed Interactive Copilot incidents older than 24 hours as `expired` so pending review queues remain fresh and actionable (contributed by `AiRemedyServiceProvider`). |
 
 ## Daily — Bill.com window (01:00 UTC)
 
@@ -139,12 +140,14 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 
 | Day / time | Command | What it does |
 |---|---|---|
-| Mon 03:30 | `clockwork:refresh-closed-plugins` | Check WordPress.org plugin directory status for closed/zombieware plugins across unique fleet slugs. Surfaced on `/issues`. |
-| Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's `upgrade_required` gate entirely. Now a safety net for SpinupWP servers whose mirrored flag is stale or wrong — the daily job above already polls non-SpinupWP-managed servers unconditionally, so this sweep is no longer their only path to being polled. |
 | Sun 05:15 | `clockwork:cleanup-spam-comments` | Purge stale spam and trash comments across Companion-equipped sites, via `CommentModerationServiceProvider::scheduledTasks()`. |
+| Sun 05:30 | `clockwork:collect-field-metrics` | Query Google Chrome UX Report (CrUX) API for 28-day rolling real-user Core Web Vitals (LCP, INP, CLS, FCP, TTFB) for care-plan sites. |
 | Sun 05:30 | `clockwork:refresh-fail2ban-ignoreip` | Refresh CF ranges + fleet IPs in every server's jail. |
 | Sun 05:30 | `clockwork:scan-wp7-truncation --repair` | Sweep + auto-repair WP 7.0 upgrades that left `wp-includes/php-ai-client/` files with truncated names. |
 | Sun 05:45 | `clockwork:refresh-cloudflare-real-ip` | Push the nginx CF-Connecting-IP snippet **and its sites-enabled bridge** — the conf.d file alone is inert on SpinupWP boxes. See [Integrations → Cloudflare](/docs/integrations/cloudflare). |
+| Mon 03:30 | `clockwork:refresh-closed-plugins` | Check WordPress.org plugin directory status for closed/zombieware plugins across unique fleet slugs. Surfaced on `/issues`. |
+| Mon 04:00 | `clockwork:check-email-auth` | Inspect SPF 10-lookup limits, loop detection, DMARC policies, and DKIM selector probing via DNS-over-HTTPS across unique client apex domains, via `EmailAuthServiceProvider::scheduledTasks()`. |
+| Mon 04:30 | `clockwork:poll-system-updates --all` | Full-fleet apt-update sweep, bypassing the daily job's `upgrade_required` gate entirely. Now a safety net for SpinupWP servers whose mirrored flag is stale or wrong — the daily job above already polls non-SpinupWP-managed servers unconditionally, so this sweep is no longer their only path to being polled. |
 | Mon 06:00 | `clockwork:composer-audit` | Composer dependency vulnerability scan. |
 | Mon 06:15 | `clockwork:send-telemetry` | Anonymous usage report to the project maintainer. On by default (`CLOCKWORK_TELEMETRY_ENABLED=true`); disable in Settings → Maintenance or via env. See [Reference → env vars](/docs/reference/env-vars). |
 | Mon 06:30 | `clockwork:security-check --ssh --quiet-ok` | System security audit. |

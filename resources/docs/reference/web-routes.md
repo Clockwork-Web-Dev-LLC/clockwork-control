@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -205,15 +205,26 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/styleguide` | Developer design system styleguide (`StyleguideController`) — interactive workbench displaying color tokens, buttons, form controls, badges, and modal components. |
 | GET | `/search` | Global fuzzy search endpoint powering Quick Jump (`Cmd+K` / `Ctrl+K`). Returns categorized, ranked results for servers, sites, modules, settings, documentation, and runbooks. |
 | GET | `/ai-remedy` | AiRemedy audit log, incident history, filtering by status, and aggregate token cost metrics. |
+| GET | `/ai-remedy/accuracy` | AiRemedy diagnosis accuracy report, operator verdict statistics, automated 60-minute outcome distributions, and readiness scorecard. |
 | GET | `/ai-remedy/settings` | AiRemedy configuration hub (model selection, automated spike watchdog toggle, CPU threshold %, and cooldown minutes). |
 | POST | `/ai-remedy/settings/test-connection` | Validates OpenRouter API key, balance, and latency (throttled: `10,1`). |
 | POST | `/ai-remedy/settings/simulate` | Executes safe read-only test simulation in Watch Mode (throttled: `10,1`). |
 | POST | `/ai-remedy/servers/{server}/diagnose` | Triggers live read-only SSH telemetry probe and OpenRouter root-cause triage (throttled: `15,1`). |
 | POST | `/ai-remedy/runs/{run}/execute` | Admin-only. Runs the operator-selected subset of a run's proposed commands (`selected: [{index, command}]`) via SSH with exit code validation; records per-command decisions; 409 for Shadow/simulation, already-run, stale (>2h) runs, or a server with a fix already running (throttled: `10,1`). |
+| POST | `/ai-remedy/runs/{run}/verdict` | Authenticated operators submit diagnosis verdict (`correct`, `partial`, `wrong`, `unsure`) and optional feedback notes. |
 | DELETE | `/ai-remedy/runs` | Admin-only. Bulk-deletes the given run `ids[]` from the incident log (executing runs are kept); logs `ai_remedy_runs_deleted`. |
 | POST | `/ai-remedy/runs/hide` | Admin-only. Hides the given run `ids[]` from the incident log (sets `hidden_at`). |
 | POST | `/ai-remedy/runs/unhide` | Admin-only. Restores hidden runs to the incident log. |
 | GET | `/ai-remedy/runs/{run}` | Dedicated incident forensics page: telemetry snapshot, top processes, root cause, and stdout/stderr log. |
+
+### Email Authentication
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/email-auth` | Email authentication fleet overview table: SPF lookup counts, DMARC policies, DKIM status, and detailed slide-over inspector. |
+| POST | `/email-auth/scan` | Trigger on-demand background DNS verification scan across all fleet domains. |
+| POST | `/email-auth/domains/{domain}/ignore` | Toggle advisory ignore state for a domain (silences degradation alerts for externally-managed client DNS). |
+| POST | `/email-auth/domains/{domain}/selectors` | Update custom DKIM selector probing list for a specific client domain. |
 
 ### Docs (this site)
 

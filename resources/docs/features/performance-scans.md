@@ -2,7 +2,7 @@
 title: Performance scans
 section: Features
 order: 50
-updated: 2026-09-14
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [performance, lighthouse, gtmetrix, psi, care-plan, pressable]
 tracks: [app/Services/Performance/**, app/Console/Commands/RunPerformanceScans.php, modules/Pressable/src/PressableLighthouseClient.php, modules/Pressable/src/PressableClient.php]
@@ -131,6 +131,36 @@ ManageWP's "Performance Check" feature. We get a more authoritative number (Chro
 - **Doesn't optimize anything.** Performance scans are diagnostic. The remediation work (image compression, lazy loading, etc.) happens elsewhere.
 - **Doesn't gate any feature.** A 12 / 100 score won't stop a deploy. It'll show up red on the dashboard and in the client's Companion view, and that's the signal to do something about it.
 
+## Real-User Core Web Vitals (Chrome UX Report / CrUX)
+
+While GTmetrix and Lighthouse measure simulated lab conditions from a single server location, **Google's Chrome UX Report (CrUX)** records actual user experiences from real Chrome browsers navigating client sites over a rolling 28-day window.
+
+Clockwork queries the CrUX API directly (via `ChromeUxReportClient`) independent of which lab engine a site uses:
+
+### What gets stored (`site_field_metrics`)
+- **LCP (Largest Contentful Paint)** at p75 (ms).
+- **INP (Interaction to Next Paint)** at p75 (ms) — Google's real-user responsiveness metric replacing FID.
+- **CLS (Cumulative Layout Shift)** at p75 (stored as `cls_p75_x1000`).
+- **FCP (First Contentful Paint)** and **TTFB (Time to First Byte)** at p75 (ms).
+- **Core Web Vitals Pass Assessment (`cwv_pass`)**: `true` when LCP (≤ 2500ms), INP (≤ 200ms), and CLS (≤ 0.1) all meet Google's "Good" threshold at the 75th percentile.
+- **Histogram Buckets (`good_pct`)**: The percentage of user visits categorized as "Good" for each metric.
+- **Collection Window**: `period_start` and `period_end` date bounds.
+
+### Handling small client sites (`no_data`)
+Many small or niche client websites do not receive enough Chrome visitor traffic for Google to meet privacy and statistical thresholds. In those cases, the CrUX API returns HTTP 404. Clockwork records this as a first-class `status = no_data` state:
+- It displays gracefully in the UI as *"Not enough Chrome traffic for Google to report real-user data."*
+- **It is never treated as a scan failure** and never trips the circuit breaker or alerts operators.
+
+### Where it appears
+- **Site Performance Tab (`/sites/{id}?tab=performance`)**: A dedicated **"Real users, last 28 days"** card rendered alongside the lab performance cards. Color-coded pills show Google's official thresholds (Good / Needs Improvement / Poor) for LCP, INP, and CLS.
+- **Site Overview Performance Widget**: Displays the CWV Pass badge.
+- **Monthly Client Reports (`ClientReportCompiler::compilePerformance`)**: Automatically incorporates real-user Core Web Vitals and TTFB into client-facing performance reports.
+
+### Cadence and Configuration
+- **Scheduled Weekly**: `clockwork:collect-field-metrics` runs every Sunday at 05:30 UTC for all active care-plan sites. Because CrUX represents a rolling 28-day window, weekly querying captures fresh data without wasting API quota.
+- **API Key**: Requires the **Chrome UX Report API** to be enabled on your Google Cloud Console project. Configured with `CLOCKWORK_CRUX_API_KEY` in `.env`, falling back to `CLOCKWORK_PSI_API_KEY`.
+- **Toggle**: Gated by the `performance_scans.field_data_enabled` setting or `CLOCKWORK_CRUX_ENABLED=true`.
+
 ## Gotchas
 
 - **Paid GTmetrix plan required.** The free tier is 5 tests/day — nowhere near a 50-site care-plan run.
@@ -141,3 +171,5 @@ ManageWP's "Performance Check" feature. We get a more authoritative number (Chro
 - **GTmetrix credits refill daily and don't bank.** A full-fleet manual run right before the ~04:27 UTC refill can starve the scheduled 04:45 run onto the PSI fallback. Prefer `--site=X` for one-offs.
 - **Keys are optional.** With neither engine key set, the scheduled command short-circuits without erroring.
 - **Circuit-breaker trips at 3 consecutive failures.** Check `sites.psi_unavailable_reason` on the Performance tab and force a retry with `php artisan clockwork:run-performance-scans --site=domain.com`.
+- **CrUX 404s are normal.** Do not treat a missing CrUX row as an error — low-traffic sites simply lack Chrome data.
+

@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-03
+
+### Added
+- **EmailAuth Module (`modules/EmailAuth`)**:
+  - Standalone modular package categorized under `security` in `ModuleCatalog` (`clockwork/email-auth`).
+  - **DNS-over-HTTPS (DoH)**: Resolves TXT and MX records via Cloudflare (`cloudflare-dns.com`) with automatic fallback to Google Public DNS (`dns.google`), bypassing host resolver caching, preventing transient false positives, and providing deterministic test fixtures. Includes `NativeDnsTxtResolver` alternative.
+  - **SPF Validation (`SpfValidator`)**:
+    - Strict RFC 7208 single `v=spf1` record enforcement (duplicate SPF records flagged as hard failures).
+    - Recursive expansion of `include:` and `redirect=` mechanisms with lookup counter enforcing the 10-DNS-lookup limit (warns at 8–10, fails at >10).
+    - Circular include loop detection and void lookup counter (>2 flagged).
+    - Qualifier grading (`-all` / `~all` pass; `?all` warn; `+all` or missing qualifiers fail).
+    - Flags deprecated `ptr` lookups.
+  - **DMARC Validation (`DmarcValidator`)**:
+    - Queries `_dmarc.{apex}` for RFC 7489 policy records.
+    - Policy enforcement grading (`p=reject` / `p=quarantine` pass; `p=none` advisory warning).
+    - Validates `rua` aggregate report destination tag presence; records `pct` and `sp` tags.
+  - **DKIM Selector Probing (`DkimValidator`)**:
+    - Probes standard industry selectors (`google`, `selector1`, `selector2`, `k1`, `s1`, `s2`, `mx`, `smtp`, `pm`, `mandrill`, `default`, `dkim`).
+    - Configurable per-domain custom DKIM selectors via UI.
+    - Missing probes produce advisory `unknown`/`warn`, never false negatives.
+  - **Parked / Non-Sending Domain Evaluation**: Recognizes absent or null MX (`0 .`), adjusting recommendations to `v=spf1 -all` and `p=reject`.
+  - **Fleet Hub (`/email-auth`) & Slide-Over Inspector**:
+    - Fleet overview table with search, status filtering, and apex domain aggregation across sites.
+    - Slide-over drawer with one-click copyable raw records, plain-English findings, suggested fix records, custom selector management, and per-domain ignore toggles.
+  - **State-Transition Chat Alert (`email_auth_degraded`)**:
+    - Fires to Slack and Mattermost ops channels exclusively when a domain degrades from pass/warn to fail.
+  - **Weekly Scanning**: `clockwork:check-email-auth` scheduled Mondays at 04:00 UTC.
+- **Real-User Core Web Vitals (Chrome UX Report / CrUX Field Data)**:
+  - Direct integration with Google's Chrome UX Report API (`ChromeUxReportClient`) independent of lab scan engines.
+  - Storage in `site_field_metrics` table tracking 75th percentile values for LCP, INP, CLS (`cls_p75_x1000`), FCP, and TTFB across `phone` and `desktop` form factors over rolling 28-day windows.
+  - Core Web Vitals overall pass status (`cwv_pass`) and histogram distribution buckets (`good_pct`).
+  - First-class `no_data` state for low-traffic sites (HTTP 404 from CrUX API), rendered informatively without triggering scan failures or circuit breakers.
+  - UI integration: "Real users, last 28 days" card on `/sites/{id}?tab=performance` with Google threshold badges, and CWV pass badge on the Site Overview widget.
+  - Client reports: `ClientReportCompiler::compilePerformance()` now populates real-user Core Web Vitals and TTFB in monthly client reports.
+  - Weekly collection command `clockwork:collect-field-metrics` scheduled Sundays at 05:30 UTC.
+- **AiRemedy Accuracy Reporting, Outcomes & Review Queue (G1 & G2)**:
+  - **Accuracy Report (`/ai-remedy/accuracy`)**: Complete diagnostic performance reporting displaying operator verdict distributions, percent correct, cost metrics (cost per run, cost per correct diagnosis), allowed-maintenance precision, and a deployment readiness scorecard.
+  - **Operator Verdicts**: Authenticated operators can review incidents on the drawer or `/ai-remedy/runs/{id}` and submit verdicts (`correct`, `partial`, `wrong`, `unsure`) with optional notes, logged immutably in `action_logs`.
+  - **Automated 60-Minute Resolution Outcomes (`OutcomeClassifier`)**:
+    - Evaluates incidents 60 minutes post-diagnosis using `server_metrics` for server spikes and `site_uptime_events` for site outages, cross-referencing human operator interventions in `action_logs`.
+    - Classifies runs into `self_resolved`, `human_resolved`, `persisted`, `escalated`, or `unknown`.
+    - Calculates "would have acted, but self-resolved" to highlight unnecessary remediation proposals.
+    - Scheduled command `clockwork:ai-remedy-evaluate-outcomes` running every 15 minutes.
+  - **Review Queue & Auto-Expiration**:
+    - "Needs review" filter on `/ai-remedy` incident log.
+    - Real-time unreviewed run count badge on the main navigation AiRemedy link.
+    - Scheduled command `clockwork:ai-remedy-expire-unreviewed` running hourly to expire unreviewed Copilot incidents after 24 hours.
+  - **Sudo Password Age Tracking**:
+    - Added `servers.ssh_password_updated_at` tracking when passwords are set or imported.
+    - Prominent password age indicator and 90-day rotation warning on `/servers/{id}/credentials`.
+- **Auto-Ignore Plugins on Repeated Update Failures (Phases 1–2)**:
+  - Consecutive nightly update failure tracking per site and plugin slug (`plugin_update_failure_streaks`).
+  - Automatic insertion into `plugin_update_ignores` with machine-generated audit note once streak reaches threshold (default 5).
+  - Synchronized exception pushing to Companion and Renegade (`clockwork:push-update-exceptions`), rendering update coverage notices and paused update indicators in WordPress `wp-admin`.
+  - State transition alerts via `plugin_update_auto_ignored` chat event.
+  - One-click "Resume Management" in Control to unignore, reset streak counter, and clear wp-admin notices.
+- **Global Stray-Process Test Guardrail**:
+  - Global `Process::preventStrayProcesses()` in `tests/TestCase.php` ensuring no test can spawn unmocked CLI commands or background child processes.
+
 ## [1.9.2] - 2026-10-02
 
 ### Added
