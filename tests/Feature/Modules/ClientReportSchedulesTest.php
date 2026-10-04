@@ -4,6 +4,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
@@ -502,5 +503,46 @@ describe('Console Command: clockwork:send-client-reports', function () {
         /** @var Event $event */
         $event = $scheduledCommands->first();
         expect($event->expression)->toBe('0 6 * * *'); // daily at 06:00
+    });
+});
+
+describe('ClientReportSchedule next-run cadence', function () {
+    it('snaps monthly runs to the 1st at midnight so the 06:00 tick never slips a day', function () {
+        $schedule = new ClientReportSchedule(['frequency' => ClientReportSchedule::FREQUENCY_MONTHLY]);
+
+        // A batch that finishes a few minutes after the 06:00 tick on Nov 1.
+        $next = $schedule->computeNextRun(Carbon::parse('2026-11-01 06:04:37', 'UTC'));
+
+        expect($next->toDateTimeString())->toBe('2026-12-01 00:00:00');
+    });
+
+    it('does not overflow past short months', function () {
+        $schedule = new ClientReportSchedule(['frequency' => ClientReportSchedule::FREQUENCY_MONTHLY]);
+
+        expect($schedule->computeNextRun(Carbon::parse('2027-01-31 06:01:00', 'UTC'))->toDateTimeString())
+            ->toBe('2027-02-01 00:00:00');
+    });
+
+    it('snaps weekly runs to midnight seven days out', function () {
+        $schedule = new ClientReportSchedule(['frequency' => ClientReportSchedule::FREQUENCY_WEEKLY]);
+
+        expect($schedule->computeNextRun(Carbon::parse('2026-11-02 06:03:00', 'UTC'))->toDateTimeString())
+            ->toBe('2026-11-09 00:00:00');
+    });
+
+    it('is due again at the next month\'s 06:00 tick after a slow send', function () {
+        $this->travelTo(Carbon::parse('2026-11-01 06:04:37', 'UTC'));
+        $schedule = ClientReportSchedule::create([
+            'site_id' => Site::factory()->create()->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_DRAFT,
+            'recipients' => [],
+            'is_enabled' => true,
+        ]);
+        $schedule->advanceNextRun();
+
+        $this->travelTo(Carbon::parse('2026-12-01 06:00:00', 'UTC'));
+
+        expect($schedule->fresh()->isDue())->toBeTrue();
     });
 });

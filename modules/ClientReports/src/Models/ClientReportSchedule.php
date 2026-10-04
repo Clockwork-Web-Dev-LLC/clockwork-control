@@ -77,9 +77,14 @@ class ClientReportSchedule extends Model
     {
         $base = ($from ?? now())->copy();
 
+        // Snap to midnight so the next run is due before the 06:00 scheduler tick.
+        // Using the send time itself (e.g. 06:03 after a long batch) meant the next
+        // tick at 06:00:00 saw it as not-yet-due and slipped a day every cycle.
+        // Monthly always lands on the 1st, which matches the report period
+        // (previous calendar month).
         return match ($this->frequency) {
-            self::FREQUENCY_WEEKLY => $base->addWeek(),
-            default => $base->addMonth(),
+            self::FREQUENCY_WEEKLY => $base->addWeek()->startOfDay(),
+            default => $base->addMonthNoOverflow()->startOfMonth(),
         };
     }
 
