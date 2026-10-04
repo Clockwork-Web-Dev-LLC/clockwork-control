@@ -24,6 +24,11 @@
     $backups = $data['backups'] ?? [];
     $workLog = $data['work_log'] ?? [];
 
+    // Gmail/Apple Mail auto-link bare domains and paint them blue — unreadable on the
+    // purple header. A zero-width non-joiner before each dot defeats the detection.
+    $plainDomain = str_replace('.', '&zwnj;.', e($domain));
+    $headerText = '#DCD8EA';
+
     $period = $report->period_start->format('F Y');
     $range = $report->period_start->format('M j').' – '.$report->period_end->format('M j, Y');
 
@@ -63,11 +68,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light only">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no, url=no">
+    <style>
+        a[x-apple-data-detectors], .cw-nolink a { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-weight: inherit !important; }
+    </style>
     <title>{{ $period }} website report — {{ $domain }}</title>
 </head>
 <body style="margin:0; padding:0; background:#f1f5f9; font-family:{{ $font }}; color:{{ $ink }};">
 <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
-    {{ $period }} for {{ $domain }}: {{ $updateCount }} {{ \Illuminate\Support\Str::plural('update', $updateCount) }}{{ $showUptime ? ', '.$uptimeLabel.' uptime' : '' }} — full details inside.
+    {{ $period }} for {!! $plainDomain !!}: {{ $updateCount }} {{ \Illuminate\Support\Str::plural('update', $updateCount) }}{{ $showUptime ? ', '.$uptimeLabel.' uptime' : '' }} — full details inside.
 </div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;">
 <tr><td align="center" style="padding:24px 12px;">
@@ -83,14 +92,14 @@
             <div style="color:#ffffff; font-size:20px; font-weight:800;">{{ $branding['company_name'] }}</div>
         @endif
         <div style="color:#ffffff; font-size:24px; font-weight:800; margin-top:20px; line-height:1.25;">Website Care Report</div>
-        <div style="color:#ffffff; opacity:0.8; font-size:14px; margin-top:6px;">{{ $domain }} &nbsp;·&nbsp; {{ $range }}</div>
+        <div class="cw-nolink" style="color:{{ $headerText }}; font-size:14px; margin-top:6px;"><span style="color:{{ $headerText }}; text-decoration:none;">{!! $plainDomain !!}</span> &nbsp;·&nbsp; {{ $range }}</div>
     </td></tr>
     <tr><td style="background:{{ $accent }}; height:4px; line-height:4px; font-size:0;" bgcolor="{{ $accent }}">&nbsp;</td></tr>
 
     {{-- Intro --}}
     <tr><td style="padding:28px 32px 8px 32px; font-size:15px; line-height:1.6; color:#334155;">
         <p style="margin:0 0 12px 0;">Hi{{ $contactName ? ' '.$contactName : '' }},</p>
-        <p style="margin:0;">Here's your website care summary for <strong style="color:{{ $ink }};">{{ $domain }}</strong> for {{ $period }} — what we updated, how the site performed, and how we kept it secure.</p>
+        <p style="margin:0;">Here's your website care summary for <strong class="cw-nolink" style="color:{{ $ink }}; text-decoration:none;">{!! $plainDomain !!}</strong> for {{ $period }} — what we updated, how the site performed, and how we kept it secure.</p>
     </td></tr>
 
     @if (! empty($meta['custom_notes']))
@@ -267,7 +276,7 @@
     </td></tr>
 
     <tr><td style="background:{{ $soft }}; border-top:1px solid {{ $line }}; padding:16px 32px; font-size:11px; line-height:1.5; color:#94a3b8;">
-        Report period {{ $range }} · {{ $domain }} · Prepared by {{ $branding['company_name'] }}
+        <span class="cw-nolink">Report period {{ $range }} · <span style="color:#94a3b8; text-decoration:none;">{!! $plainDomain !!}</span> · Prepared by {{ $branding['company_name'] }}</span>
     </td></tr>
 </table>
 </td></tr>

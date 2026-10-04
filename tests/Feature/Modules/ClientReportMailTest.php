@@ -76,6 +76,11 @@ it('renders the full report in the email body with no links out', function () {
 it('uses the brand purple behind the header so a white logo is visible', function () {
     $html = (new ClientReportMail(clientReportMailFixture()))->render();
 
+    // Domain text is protected from mail-client auto-linking (blue-on-purple).
+    expect($html)->toContain('example-client&zwnj;.org')
+        ->toContain('format-detection')
+        ->toContain('x-apple-data-detectors');
+
     expect($html)->toMatch('/background:#2D2062;[^"]*padding:28px 32px 24px 32px/')
         ->toContain('bgcolor="#2D2062"');
 });
