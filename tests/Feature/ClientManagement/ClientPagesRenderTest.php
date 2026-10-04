@@ -23,7 +23,8 @@ describe('Client pages', function () {
         $this->actingAs(User::factory()->create())
             ->get(route('clients.index'))
             ->assertOk()
-            ->assertSee('Aslan Example');
+            ->assertSee('Aslan Example')
+            ->assertDontSee('&amp;amp;', false);
     });
 
     it('renders a client detail page', function () {
