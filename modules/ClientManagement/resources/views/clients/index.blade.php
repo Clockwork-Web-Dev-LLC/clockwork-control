@@ -7,7 +7,7 @@
     clients: {{ json_encode($clients->items()) }},
     allSites: {{ json_encode($allSites) }}
 })">
-    <x-page-header title="Clients &amp; Recipients"
+    <x-page-header title="Clients & Recipients"
                    subtitle="Manage client accounts, contact emails, assigned website fleets, and automated report recipients.">
         <x-slot:actions>
             <button type="button" @click="openCreateModal()" class="btn-pill-primary">
