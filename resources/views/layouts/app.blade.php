@@ -547,26 +547,78 @@
                                class="studio-nav-tab {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-shield-halved"></i> Security
                             </a>
-                            <a href="{{ route('capacity.index') }}"
-                               class="studio-nav-tab {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
-                                <i class="fa-solid fa-cube"></i> Operations
-                                @isset($aiRemedyReviewCount)
+                            {{-- Operations dropdown — same grouping as the mobile drawer. Teleported to <body>
+                                 because this nav is overflow-x-auto and would clip an absolutely positioned menu. --}}
+                            <div x-data="{
+                                    open: false,
+                                    top: 0,
+                                    left: 0,
+                                    place() {
+                                        const r = this.$refs.opsBtn.getBoundingClientRect();
+                                        this.top = r.bottom + 6;
+                                        this.left = Math.max(8, Math.min(r.left, window.innerWidth - 232));
+                                    },
+                                    toggle() {
+                                        if (this.open) { this.open = false; return; }
+                                        this.place();
+                                        this.open = true;
+                                    },
+                                 }"
+                                 class="shrink-0"
+                                 @keydown.escape.window="open = false"
+                                 @resize.window="open && place()"
+                                 @scroll.window="open && place()">
+                                <button type="button"
+                                        x-ref="opsBtn"
+                                        @click="toggle()"
+                                        :aria-expanded="open.toString()"
+                                        aria-haspopup="menu"
+                                        aria-controls="cw-ops-menu"
+                                        class="studio-nav-tab cursor-pointer {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
+                                    <i class="fa-solid fa-cube"></i> Operations
+                                    @isset($aiRemedyReviewCount)
                                     @if ($aiRemedyReviewCount > 0)
                                         <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
                                     @endif
                                 @endisset
-                            </a>
-                            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
-                                <a href="{{ route('ai-remedy.index') }}"
-                                   class="studio-nav-tab {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}">
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i> AiRemedy
-                                    @isset($aiRemedyReviewCount)
-                                        @if ($aiRemedyReviewCount > 0)
-                                            <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                    <i class="fa-solid fa-chevron-down text-[9px] ml-0.5 transition-transform" :class="open && 'rotate-180'"></i>
+                                </button>
+                                <template x-teleport="body">
+                                    <div id="cw-ops-menu"
+                                         x-show="open"
+                                         x-cloak
+                                         x-transition.opacity.duration.100ms
+                                         @click.outside="if (! $refs.opsBtn.contains($event.target)) open = false"
+                                         role="menu"
+                                         :style="`top: ${top}px; left: ${left}px`"
+                                         class="fixed z-[70] w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl py-1 text-xs">
+                                        <a href="{{ route('capacity.index') }}" role="menuitem"
+                                           class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('capacity.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
+                                            <i class="fa-solid fa-gauge-high w-4 text-center text-[var(--color-brand)]"></i> Capacity
+                                        </a>
+                                        <a href="{{ route('operations.server-updates.index') }}" role="menuitem"
+                                           class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('operations.server-updates.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
+                                            <i class="fa-solid fa-cube w-4 text-center text-[var(--color-brand)]"></i> Fleet Updates
+                                        </a>
+                                        <a href="{{ route('maintenance-history.index') }}" role="menuitem"
+                                           class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('maintenance-history.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
+                                            <i class="fa-solid fa-clock-rotate-left w-4 text-center text-[var(--color-brand)]"></i> Maintenance
+                                        </a>
+                                        @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
+                                            <a href="{{ route('ai-remedy.index') }}" role="menuitem"
+                                               class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('ai-remedy.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
+                                                <i class="fa-solid fa-wand-magic-sparkles w-4 text-center text-[var(--color-brand)]"></i>
+                                                <span class="flex-1">AiRemedy</span>
+                                                @isset($aiRemedyReviewCount)
+                                                    @if ($aiRemedyReviewCount > 0)
+                                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                                                    @endif
+                                                @endisset
+                                            </a>
                                         @endif
-                                    @endisset
-                                </a>
-                            @endif
+                                    </div>
+                                </template>
+                            </div>
                             <a href="{{ route('settings.index') }}"
                                class="studio-nav-tab {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-sliders"></i> Settings
