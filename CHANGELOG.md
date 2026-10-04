@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-10-04
+
+### Changed
+- **Command Center rail — collapsible groups**: Operations, Configuration and Modules are now collapsible and **closed by default** (Workspaces stays open). A group opens automatically when it contains the current page, remembers each operator's open/closed choice, and is ignored when the rail is shrunk to icons so every icon stays reachable. The Operations heading shows the AiRemedy review badge while closed.
+
+### Fixed
+- **`/clients` heading** rendered as "Clients &amp;amp; Recipients" — the page header component escapes its title, so the view's pre-escaped `&amp;` showed literally.
+
 ## [1.10.2] - 2026-10-04
 
 ### Added
