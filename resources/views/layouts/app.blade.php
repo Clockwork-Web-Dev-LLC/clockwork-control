@@ -189,11 +189,26 @@
                     </a>
                 </div>
 
-                <!-- Operations Navigation -->
-                <div class="space-y-1">
-                    <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
-                        Operations
-                    </div>
+                <!-- Operations Navigation — collapsible, closed by default (see railGroup) -->
+                @php
+                    $railOpsActive = request()->routeIs('capacity.*', 'operations.server-updates.*', 'maintenance-history.*', 'ai-remedy.*');
+                @endphp
+                <div class="space-y-1" x-data="railGroup('operations', @js($railOpsActive))">
+                    <button type="button"
+                            x-show="sidebarOpen"
+                            @click="toggleGroup()"
+                            :aria-expanded="open.toString()"
+                            class="w-full flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer">
+                        <span class="flex-1 text-left">Operations</span>
+                        @isset($aiRemedyReviewCount)
+                            @if ($aiRemedyReviewCount > 0)
+                                <span x-show="!open" class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold normal-case tracking-normal bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
+                            @endif
+                        @endisset
+                        <i class="fa-solid fa-chevron-right text-[8px] transition-transform duration-150" :class="open && 'rotate-90'"></i>
+                    </button>
+
+                    <div class="space-y-1" x-show="!sidebarOpen || open" @unless ($railOpsActive) style="display: none" @endunless>
 
                     <a href="{{ route('capacity.index') }}"
                        class="cmd-nav-item {{ request()->routeIs('capacity.*') ? 'is-active' : '' }}"
@@ -229,13 +244,24 @@
                             @endisset
                         </a>
                     @endif
+                    </div>
                 </div>
 
-                <!-- Configuration Navigation -->
-                <div class="space-y-1">
-                    <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
-                        Configuration
-                    </div>
+                <!-- Configuration Navigation — collapsible, closed by default -->
+                @php
+                    $railConfigActive = request()->routeIs('settings.*', 'docs.*');
+                @endphp
+                <div class="space-y-1" x-data="railGroup('configuration', @js($railConfigActive))">
+                    <button type="button"
+                            x-show="sidebarOpen"
+                            @click="toggleGroup()"
+                            :aria-expanded="open.toString()"
+                            class="w-full flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer">
+                        <span class="flex-1 text-left">Configuration</span>
+                        <i class="fa-solid fa-chevron-right text-[8px] transition-transform duration-150" :class="open && 'rotate-90'"></i>
+                    </button>
+
+                    <div class="space-y-1" x-show="!sidebarOpen || open" @unless ($railConfigActive) style="display: none" @endunless>
 
                     <a href="{{ route('settings.index') }}"
                        class="cmd-nav-item {{ request()->routeIs('settings.*') ? 'is-active' : '' }}"
@@ -250,6 +276,7 @@
                         <i class="fa-solid fa-book-bookmark w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Docs &amp; Runbooks</span>
                     </a>
+                    </div>
                 </div>
 
                 <!-- Modules Navigation — same list as the mobile drawer's Modules group. AiRemedy
@@ -259,12 +286,20 @@
                         app(\Modules\Core\ModuleRegistry::class)->navItems(),
                         fn ($item) => $item->isVisible() && $item->route !== 'ai-remedy.index',
                     );
+                    $railModulesActive = collect($railModuleNavItems)->contains(fn ($item) => request()->routeIs($item->route));
                 @endphp
                 @if (! empty($railModuleNavItems))
-                    <div class="space-y-1">
-                        <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
-                            Modules
-                        </div>
+                    <div class="space-y-1" x-data="railGroup('modules', @js($railModulesActive))">
+                        <button type="button"
+                            x-show="sidebarOpen"
+                            @click="toggleGroup()"
+                            :aria-expanded="open.toString()"
+                            class="w-full flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer">
+                        <span class="flex-1 text-left">Modules</span>
+                        <i class="fa-solid fa-chevron-right text-[8px] transition-transform duration-150" :class="open && 'rotate-90'"></i>
+                    </button>
+
+                        <div class="space-y-1" x-show="!sidebarOpen || open" @unless ($railModulesActive) style="display: none" @endunless>
 
                         @foreach ($railModuleNavItems as $moduleNavItem)
                             <a href="{{ route($moduleNavItem->route) }}"
@@ -274,6 +309,7 @@
                                 <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">{{ $moduleNavItem->label }}</span>
                             </a>
                         @endforeach
+                        </div>
                     </div>
                 @endif
             </div>

@@ -15,6 +15,7 @@ import { docsSearch, docsSidebar } from './components/docs.js';
 import { feedbackOverlay } from './components/feedback-overlay.js';
 import { issuesDashboard } from './components/issues-dashboard.js';
 import { monitoringPage } from './components/monitoring-page.js';
+import { railGroup } from './components/rail-group.js';
 import { siteDashboardReorder } from './components/site-dashboard-reorder.js';
 import { siteSettingsCardManager } from './components/site-settings-reorder.js';
 import { sitesPage } from './components/sites-page.js';
@@ -48,6 +49,7 @@ Alpine.data('performanceTrendChart', performanceTrendChart);
 Alpine.data('serverMetricsChart', serverMetricsChart);
 Alpine.data('wpPluginsManager', wpPluginsManager);
 Alpine.data('appChrome', appChrome);
+Alpine.data('railGroup', railGroup);
 
 // Initialize System Services
 initThemeSystem(Alpine);
