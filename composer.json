@@ -39,7 +39,6 @@
         "clockwork/hetzner": "@dev",
         "clockwork/kinsta": "@dev",
         "clockwork/linode": "@dev",
-        "clockwork/llar": "@dev",
         "clockwork/mattermost": "@dev",
         "clockwork/pagespeed-insights": "@dev",
         "clockwork/pressable": "@dev",
