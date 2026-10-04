@@ -29,12 +29,13 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         'resolved_a_record' => '192.0.2.1',
         'resolved_ns_record' => 'ns1.cloudflare.com',
         'wordfence_enabled' => true,
-        'llar_enabled' => true,
+        'gatekeeper_settings' => ['enabled' => true],
         'care_plan_enabled' => true,
         'uptime_monitoring_enabled' => true,
         'is_inactive' => false,
         'companion_installed' => true,
         'companion_version' => '1.4.2',
+        'companion_capabilities' => ['gatekeeper'],
     ]);
 
     $response = $this->actingAs($this->user)
@@ -55,7 +56,7 @@ it('renders the redesigned settings tab with modular 3-column cards', function (
         // WordPress security card
         ->assertSee('WordPress security')
         ->assertSee('Hardened')
-        ->assertSee('Limit Login Attempts:')
+        ->assertSee('Gatekeeper:')
         // Care plan card
         ->assertSee('Care plan')
         ->assertSee('On care plan')
@@ -126,4 +127,65 @@ it('renders alert subscribers on the settings tab', function () {
         ->assertSee('Jane Subscriber')
         ->assertSee('(Jane Co)')
         ->assertSee('+15555550199');
+});
+
+it('passes settingsLayout and reorder manager to settings tab view', function () {
+    $customOrder = ['gatekeeper', 'uptime', 'cert', 'cloudflare', 'security', 'server_tools', 'care_plan', 'status', 'companion', 'forms'];
+    $site = Site::factory()->spinupwp()->create([
+        'settings_layout' => $customOrder,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->get(route('sites.show', ['site' => $site, 'tab' => 'settings']));
+
+    $response->assertOk()
+        ->assertViewHas('settingsLayout', $customOrder)
+        ->assertSee('siteSettingsCardManager', false)
+        ->assertSee('id="site-settings-cards-grid"', false)
+        ->assertSee('data-card-id="gatekeeper"', false)
+        ->assertSee('data-card-id="uptime"', false);
+});
+
+it('persists a custom settings card layout via patch', function () {
+    $site = Site::factory()->spinupwp()->create([
+        'settings_layout' => null,
+    ]);
+
+    $newLayout = ['gatekeeper', 'uptime', 'cert', 'cloudflare', 'security', 'server_tools', 'care_plan', 'status', 'companion', 'forms'];
+
+    $response = $this->actingAs($this->user)
+        ->patchJson(route('sites.settings-layout.update', $site), [
+            'layout' => $newLayout,
+        ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'message' => 'Settings card layout updated successfully.',
+            'layout' => $newLayout,
+        ]);
+
+    expect($site->fresh()->settings_layout)->toBe($newLayout);
+    expect($site->fresh()->resolvedSettingsLayout())->toBe($newLayout);
+});
+
+it('resets settings card layout to default via patch', function () {
+    $site = Site::factory()->spinupwp()->create([
+        'settings_layout' => ['gatekeeper', 'uptime', 'cert'],
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->patchJson(route('sites.settings-layout.update', $site), [
+            'layout' => null,
+        ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'message' => 'Settings card layout reset to default.',
+            'layout' => Site::DEFAULT_SETTINGS_LAYOUT,
+        ]);
+
+    expect($site->fresh()->settings_layout)->toBeNull();
+    expect($site->fresh()->resolvedSettingsLayout())->toBe(Site::DEFAULT_SETTINGS_LAYOUT);
 });

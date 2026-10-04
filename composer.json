@@ -39,7 +39,6 @@
         "clockwork/hetzner": "@dev",
         "clockwork/kinsta": "@dev",
         "clockwork/linode": "@dev",
-        "clockwork/llar": "@dev",
         "clockwork/mattermost": "@dev",
         "clockwork/pagespeed-insights": "@dev",
         "clockwork/pressable": "@dev",
@@ -232,13 +231,6 @@
             "options": {
                 "symlink": true
             }
-        },
-        {
-            "type": "path",
-            "url": "modules/Llar",
-            "options": {
-                "symlink": true
-            }
         }
     ],
     "require-dev": {
@@ -259,7 +251,6 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
-            "Modules\\Llar\\": "modules/Llar/src/",
             "Modules\\Gatekeeper\\": "modules/Gatekeeper/src/",
             "Modules\\BackupRelay\\": "modules/BackupRelay/src/",
             "Modules\\CommentModeration\\": "modules/CommentModeration/src/",

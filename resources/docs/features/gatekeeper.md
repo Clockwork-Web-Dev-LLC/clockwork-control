@@ -2,7 +2,7 @@
 title: Gatekeeper (Native Login Protection)
 section: Features
 order: 22
-updated: 2026-09-27
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [gatekeeper, brute-force, security, login-protection, companion, fail2ban, pressable, modules]
 tracks: [modules/Gatekeeper/**, app/Services/Gatekeeper/**, app/Console/Commands/PushGatekeeperSettings.php, app/Console/Commands/GatekeeperRollout.php, app/Console/Commands/PullLlarLockouts.php, app/Http/Controllers/GatekeeperSettingsController.php, resources/views/settings/gatekeeper.blade.php, resources/views/dashboard/site/tab-settings.blade.php]
@@ -115,7 +115,7 @@ This immediately disables Gatekeeper gate checks across all login pathways witho
 
 ### What "protected" means
 
-`Site::gatekeeperEnabled()` / the `gatekeeperProtected()` scope is the login-protection test alongside `llar_enabled` (legacy) and `wordfence_enabled`: Companion installed, `gatekeeper` capability advertised, and either a per-site `enabled: true` override or the fleet default. Weird Stats' coverage matrix, "Unprotected sites", the WordPress Plugins page tiles and filters, and `clockwork:install-llar` all use it — so a Gatekeeper site with no LLAR reads as protected, not as a gap to re-fill.
+`Site::gatekeeperEnabled()` / the `gatekeeperProtected()` scope is the login-protection test alongside `llar_enabled` (legacy) and `wordfence_enabled`: Companion installed, `gatekeeper` capability advertised, and either a per-site `enabled: true` override or the fleet default. Weird Stats' coverage matrix, "Unprotected sites", and the WordPress Plugins page tiles and filters all use it — so a Gatekeeper site with no LLAR reads as protected, not as a gap to re-fill. Since 1.10.1 Control can no longer install LLAR at all (the `modules/Llar` package, `clockwork:install-llar`, and the per-site install endpoint are gone); `llar_enabled` survives only as a detected-state column so any straggler that still has LLAR active shows up in Weird Stats.
 
 ## fail2ban & Review Queue Integration
 

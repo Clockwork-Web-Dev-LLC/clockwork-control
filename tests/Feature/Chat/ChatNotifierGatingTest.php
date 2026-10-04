@@ -28,7 +28,7 @@ use Modules\AiRemedy\Models\AiRemedyRun;
 |
 | Gated via dispatchForSite() — "routine maintenance" events, silenced for
 | an inactive site:
-|   sslStateChanged, llarInstalled, contactFormTestFailed,
+|   sslStateChanged, contactFormTestFailed,
 |   contactFormTestRecovered, companionUnreachable, companionReachable,
 |   pluginUpdateFailed
 |
@@ -101,13 +101,6 @@ function fakeChatNotifier(bool $returns): ChatNotifier
         }
 
         public function seoIndexabilityRecovered(Site $site): bool
-        {
-            $this->calls[] = __FUNCTION__;
-
-            return $this->returns;
-        }
-
-        public function llarInstalled(Site $site): bool
         {
             $this->calls[] = __FUNCTION__;
 
@@ -279,7 +272,6 @@ dataset('gatedMethods', [
     'domainExpirationStateChanged' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->domainExpirationStateChanged($s, 'green', 'yellow')],
     'seoIndexabilityBlocked' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->seoIndexabilityBlocked($s, 'meta_noindex', '<meta name="robots" content="noindex">')],
     'seoIndexabilityRecovered' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->seoIndexabilityRecovered($s)],
-    'llarInstalled' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->llarInstalled($s)],
     'contactFormTestFailed' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->contactFormTestFailed($s, 'timeout', 3)],
     'contactFormTestRecovered' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->contactFormTestRecovered($s)],
     'companionUnreachable' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->companionUnreachable($s, 'HMAC probe timed out')],

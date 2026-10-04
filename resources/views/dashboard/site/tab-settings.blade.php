@@ -1,8 +1,43 @@
-{{-- 3-Column Settings Grid — styled consistently with Overview Command Center cards --}}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+<div x-data="siteSettingsCardManager(@js($settingsLayout), @js(\App\Models\Site::DEFAULT_SETTINGS_LAYOUT), '{{ route('sites.settings-layout.update', $site) }}', '{{ csrf_token() }}')">
+    {{-- Reorder helper and controls bar --}}
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-4 px-1 text-xs text-[var(--color-ink-muted)]">
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 font-medium text-[var(--color-ink-strong)]">
+                <i class="fa-solid fa-grip-vertical text-gray-400"></i> Settings Modules
+            </span>
+            <span class="text-[var(--color-border)]">|</span>
+            <span class="text-[11px] text-[var(--color-ink-soft)] flex items-center gap-1">
+                <i class="fa-solid fa-arrows-up-down-left-right text-[10px]"></i> Drag handle or use arrows on any card to customize layout
+            </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span x-show="savedToast" x-cloak class="text-emerald-600 dark:text-emerald-400 font-medium text-xs flex items-center gap-1.5 transition-opacity">
+                <i class="fa-solid fa-circle-check text-[11px]"></i> <span x-text="savedMessage || 'Layout saved'"></span>
+            </span>
+            <button type="button"
+                    x-show="isCustom"
+                    x-cloak
+                    @click="resetOrder()"
+                    class="text-[11px] text-[var(--color-ink-muted)] hover:text-rose-600 dark:hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-arrow-rotate-left text-[10px]"></i> Reset default layout
+            </button>
+        </div>
+    </div>
+
+    {{-- 3-Column Settings Grid — styled consistently with Overview Command Center cards --}}
+    <div id="site-settings-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
 
     {{-- Card 1: Cert Details --}}
-    <div class="card p-5 flex flex-col justify-between h-full" id="cert-detail">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200" id="cert-detail"
+         data-card-id="cert"
+         @dragover.prevent="onDragOver($event, 'cert')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'cert')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'cert',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'cert' && draggedCard !== 'cert'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -32,9 +67,37 @@
                         }
                     }
                 @endphp
-                <span class="status-pill {{ $certStatusClass }} text-[10px]">
-                    <span class="status-dot"></span> {{ $certStatusText }}
-                </span>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <span class="status-pill {{ $certStatusClass }} text-[10px]">
+                        <span class="status-dot"></span> {{ $certStatusText }}
+                    </span>
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('cert', -1)"
+                                :disabled="order.indexOf('cert') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('cert', 1)"
+                                :disabled="order.indexOf('cert') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'cert')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="cert-recheck-result" class="hidden mb-3 text-xs"></div>
@@ -130,7 +193,15 @@
     </div>
 
     {{-- Card 2: Cloudflare --}}
-    <div class="card p-5 flex flex-col justify-between h-full">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+         data-card-id="cloudflare"
+         @dragover.prevent="onDragOver($event, 'cloudflare')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'cloudflare')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'cloudflare',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'cloudflare' && draggedCard !== 'cloudflare'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -145,9 +216,37 @@
                         default => ['class' => 'status-unknown', 'text' => 'Unchecked'],
                     };
                 @endphp
-                <span class="status-pill {{ $cfPill['class'] }} text-[10px]">
-                    <span class="status-dot"></span> {{ $cfPill['text'] }}
-                </span>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <span class="status-pill {{ $cfPill['class'] }} text-[10px]">
+                        <span class="status-dot"></span> {{ $cfPill['text'] }}
+                    </span>
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('cloudflare', -1)"
+                                :disabled="order.indexOf('cloudflare') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('cloudflare', 1)"
+                                :disabled="order.indexOf('cloudflare') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'cloudflare')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             @php
@@ -187,7 +286,15 @@
 
     {{-- Card 3: WordPress Security --}}
     @if ($site->is_wordpress)
-        <div class="card p-5 flex flex-col justify-between h-full">
+        <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+             data-card-id="security"
+             @dragover.prevent="onDragOver($event, 'security')"
+             @dragleave="onDragLeave($event)"
+             @drop="onDrop($event, 'security')"
+             :class="{
+                 'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'security',
+                 'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'security' && draggedCard !== 'security'
+             }">
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -195,16 +302,44 @@
                         WordPress security
                     </h3>
                     @php
-                        $lockoutActive = $site->gatekeeperEnabled() || $site->llar_enabled;
+                        $lockoutActive = $site->gatekeeperEnabled();
                         $secPill = ($site->wordfence_enabled && $lockoutActive)
                             ? ['class' => 'status-green', 'text' => 'Hardened']
                             : (($site->wordfence_enabled || $lockoutActive)
                                 ? ['class' => 'status-yellow', 'text' => 'Partial']
                                 : ['class' => 'status-unknown', 'text' => 'Unconfigured']);
                     @endphp
-                    <span class="status-pill {{ $secPill['class'] }} text-[10px]">
-                        <span class="status-dot"></span> {{ $secPill['text'] }}
-                    </span>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="status-pill {{ $secPill['class'] }} text-[10px]">
+                            <span class="status-dot"></span> {{ $secPill['text'] }}
+                        </span>
+                        <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                            <button type="button"
+                                    @click="moveCard('security', -1)"
+                                    :disabled="order.indexOf('security') === 0"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card earlier"
+                                    aria-label="Move card earlier">
+                                <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                            </button>
+                            <button type="button"
+                                    @click="moveCard('security', 1)"
+                                    :disabled="order.indexOf('security') === order.length - 1"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card later"
+                                    aria-label="Move card later">
+                                <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                            </button>
+                            <div draggable="true"
+                                 @dragstart.stop="onDragStart($event, 'security')"
+                                 @dragend="onDragEnd()"
+                                 class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                                 title="Drag to reorder"
+                                 aria-label="Drag to reorder">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
@@ -229,25 +364,6 @@
                                 <a href="#gatekeeper-card" class="btn-pill-nav text-[10px] py-0.5 px-2" title="View or edit Gatekeeper settings">
                                     <i class="fa-solid fa-sliders text-[9px]"></i> Settings
                                 </a>
-                            </div>
-                        </div>
-                    @elseif ($site->llar_enabled)
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="text-[var(--color-ink-muted)]">Limit Login Attempts:</span>
-                            <div class="flex items-center gap-2">
-                                <span class="text-amber-600 font-medium text-[11px] flex items-center gap-1">
-                                    <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Active (Legacy)
-                                </span>
-                                @if ($site->companion_installed)
-                                    <form method="POST" action="{{ route('sites.gatekeeper.update', $site) }}" class="inline">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="enabled" value="1">
-                                        <button type="submit" class="btn-pill-nav text-[10px] py-0.5 px-2 text-blue-600 font-medium" title="Switch from legacy LLAR to native Gatekeeper">
-                                            <i class="fa-solid fa-arrow-up text-[9px]"></i> Switch to Gatekeeper
-                                        </button>
-                                    </form>
-                                @endif
                             </div>
                         </div>
                     @else
@@ -300,7 +416,11 @@
 
     {{-- Card 4: Pressable Server Tools --}}
     @if ($site->isPressable())
-        <div class="card p-5 flex flex-col justify-between h-full"
+        <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+             data-card-id="server_tools"
+             @dragover.prevent="onDragOver($event, 'server_tools')"
+             @dragleave="onDragLeave($event)"
+             @drop="onDrop($event, 'server_tools')"
              x-data="{
                 flushing: false,
                 flushResult: null,
@@ -341,16 +461,47 @@
                     }
                 },
              }"
-             :class="metricsLoaded ? 'md:col-span-2 lg:col-span-3' : ''">
+             :class="[metricsLoaded ? 'md:col-span-2 lg:col-span-3' : '', {
+                 'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'server_tools',
+                 'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'server_tools' && draggedCard !== 'server_tools'
+             }]">
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                         <i class="fa-solid fa-server text-[var(--color-ink-muted)]"></i>
                         Pressable tools
                     </h3>
-                    <span class="status-pill status-green text-[10px]">
-                        <span class="status-dot"></span> Connected
-                    </span>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="status-pill status-green text-[10px]">
+                            <span class="status-dot"></span> Connected
+                        </span>
+                        <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                            <button type="button"
+                                    @click="moveCard('server_tools', -1)"
+                                    :disabled="order.indexOf('server_tools') === 0"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card earlier"
+                                    aria-label="Move card earlier">
+                                <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                            </button>
+                            <button type="button"
+                                    @click="moveCard('server_tools', 1)"
+                                    :disabled="order.indexOf('server_tools') === order.length - 1"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card later"
+                                    aria-label="Move card later">
+                                <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                            </button>
+                            <div draggable="true"
+                                 @dragstart.stop="onDragStart($event, 'server_tools')"
+                                 @dragend="onDragEnd()"
+                                 class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                                 title="Drag to reorder"
+                                 aria-label="Drag to reorder">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <p class="text-xs text-[var(--color-ink-muted)] mb-3">
@@ -456,22 +607,58 @@
 
     @if (\App\Models\Site::areCarePlansEnabled())
         {{-- Card 5: Care Plan --}}
-        <div class="card p-5 flex flex-col justify-between h-full">
+        <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+             data-card-id="care_plan"
+             @dragover.prevent="onDragOver($event, 'care_plan')"
+             @dragleave="onDragLeave($event)"
+             @drop="onDrop($event, 'care_plan')"
+             :class="{
+                 'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'care_plan',
+                 'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'care_plan' && draggedCard !== 'care_plan'
+             }">
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                         <i class="fa-solid fa-shield-heart text-[var(--color-ink-muted)]"></i>
                         Care plan
                     </h3>
-                    @if ($site->care_plan_enabled)
-                        <span class="status-pill status-green text-[10px]">
-                            <span class="status-dot"></span> On care plan
-                        </span>
-                    @else
-                        <span class="status-pill status-unknown text-[10px]">
-                            <span class="status-dot"></span> No care plan
-                        </span>
-                    @endif
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        @if ($site->care_plan_enabled)
+                            <span class="status-pill status-green text-[10px]">
+                                <span class="status-dot"></span> On care plan
+                            </span>
+                        @else
+                            <span class="status-pill status-unknown text-[10px]">
+                                <span class="status-dot"></span> No care plan
+                            </span>
+                        @endif
+                        <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                            <button type="button"
+                                    @click="moveCard('care_plan', -1)"
+                                    :disabled="order.indexOf('care_plan') === 0"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card earlier"
+                                    aria-label="Move card earlier">
+                                <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                            </button>
+                            <button type="button"
+                                    @click="moveCard('care_plan', 1)"
+                                    :disabled="order.indexOf('care_plan') === order.length - 1"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card later"
+                                    aria-label="Move card later">
+                                <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                            </button>
+                            <div draggable="true"
+                                 @dragstart.stop="onDragStart($event, 'care_plan')"
+                                 @dragend="onDragEnd()"
+                                 class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                                 title="Drag to reorder"
+                                 aria-label="Drag to reorder">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 mb-3">
@@ -561,7 +748,15 @@
         </div>
     @else
         {{-- Card 5: Nightly Auto-Updates (when Care Plans are disabled globally) --}}
-        <div class="card p-5 flex flex-col justify-between h-full">
+        <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+             data-card-id="care_plan"
+             @dragover.prevent="onDragOver($event, 'care_plan')"
+             @dragleave="onDragLeave($event)"
+             @drop="onDrop($event, 'care_plan')"
+             :class="{
+                 'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'care_plan',
+                 'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'care_plan' && draggedCard !== 'care_plan'
+             }">
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -569,9 +764,37 @@
                         Nightly auto-updates
                     </h3>
                     @php $autoOn = ! $site->auto_updates_paused; @endphp
-                    <span class="status-pill {{ $autoOn ? 'status-green' : 'status-yellow' }} text-[10px]">
-                        <span class="status-dot"></span> {{ $autoOn ? 'Active' : 'Paused' }}
-                    </span>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="status-pill {{ $autoOn ? 'status-green' : 'status-yellow' }} text-[10px]">
+                            <span class="status-dot"></span> {{ $autoOn ? 'Active' : 'Paused' }}
+                        </span>
+                        <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                            <button type="button"
+                                    @click="moveCard('care_plan', -1)"
+                                    :disabled="order.indexOf('care_plan') === 0"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card earlier"
+                                    aria-label="Move card earlier">
+                                <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                            </button>
+                            <button type="button"
+                                    @click="moveCard('care_plan', 1)"
+                                    :disabled="order.indexOf('care_plan') === order.length - 1"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card later"
+                                    aria-label="Move card later">
+                                <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                            </button>
+                            <div draggable="true"
+                                 @dragstart.stop="onDragStart($event, 'care_plan')"
+                                 @dragend="onDragEnd()"
+                                 class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                                 title="Drag to reorder"
+                                 aria-label="Drag to reorder">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
@@ -601,20 +824,58 @@
     @endif
 
     {{-- Card 6: Uptime Monitoring & Alerts --}}
-    <div class="card p-5 flex flex-col justify-between h-full" id="uptime-card" x-data="{ uptimeModalOpen: false, uptimeActiveTab: 'probe' }">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+         id="uptime-card"
+         data-card-id="uptime"
+         x-data="{ uptimeModalOpen: false, uptimeActiveTab: 'probe' }"
+         @dragover.prevent="onDragOver($event, 'uptime')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'uptime')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'uptime',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'uptime' && draggedCard !== 'uptime'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                     <i class="fa-solid fa-heart-pulse text-[var(--color-ink-muted)]"></i>
                     Uptime monitoring
                 </h3>
-                @if (! $site->uptime_monitoring_enabled)
-                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Off</span>
-                @elseif ($site->isUptimeIgnored())
-                    <span class="status-pill status-yellow text-[10px]"><span class="status-dot"></span> Ignored</span>
-                @else
-                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
-                @endif
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    @if (! $site->uptime_monitoring_enabled)
+                        <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Off</span>
+                    @elseif ($site->isUptimeIgnored())
+                        <span class="status-pill status-yellow text-[10px]"><span class="status-dot"></span> Ignored</span>
+                    @else
+                        <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
+                    @endif
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('uptime', -1)"
+                                :disabled="order.indexOf('uptime') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('uptime', 1)"
+                                :disabled="order.indexOf('uptime') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'uptime')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 mb-3">
@@ -1050,18 +1311,55 @@
     </div>
 
     {{-- Card 7: Site Status (Active / Inactive) --}}
-    <div class="card p-5 flex flex-col justify-between h-full">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+         id="status-card"
+         data-card-id="status"
+         @dragover.prevent="onDragOver($event, 'status')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'status')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'status',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'status' && draggedCard !== 'status'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                     <i class="fa-solid fa-circle-nodes text-[var(--color-ink-muted)]"></i>
                     Site status
                 </h3>
-                @if ($site->is_inactive)
-                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Inactive</span>
-                @else
-                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
-                @endif
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    @if ($site->is_inactive)
+                        <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Inactive</span>
+                    @else
+                        <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> Active</span>
+                    @endif
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('status', -1)"
+                                :disabled="order.indexOf('status') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('status', 1)"
+                                :disabled="order.indexOf('status') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'status')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
@@ -1105,18 +1403,55 @@
     </div>
 
     {{-- Card 8: Companion Plugin --}}
-    <div class="card p-5 flex flex-col justify-between h-full" id="companion-card">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+         id="companion-card"
+         data-card-id="companion"
+         @dragover.prevent="onDragOver($event, 'companion')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'companion')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'companion',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'companion' && draggedCard !== 'companion'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                     <i class="fa-solid fa-puzzle-piece text-[var(--color-ink-muted)]"></i>
                     {{ $site->isRenegade() ? 'Clockwork Renegade' : 'Companion mu-plugin' }}
                 </h3>
-                @if ($site->companion_installed)
-                    <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> v{{ $site->companion_version }}</span>
-                @else
-                    <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Not installed</span>
-                @endif
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    @if ($site->companion_installed)
+                        <span class="status-pill status-green text-[10px]"><span class="status-dot"></span> v{{ $site->companion_version }}</span>
+                    @else
+                        <span class="status-pill status-unknown text-[10px]"><span class="status-dot"></span> Not installed</span>
+                    @endif
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('companion', -1)"
+                                :disabled="order.indexOf('companion') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('companion', 1)"
+                                :disabled="order.indexOf('companion') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'companion')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-1.5 mb-3">
@@ -1241,16 +1576,53 @@
 
     {{-- Card 9: Contact Form Testing --}}
     @if ($site->isCarePlanActive() && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('contact-forms'))
-        <div class="card p-5 flex flex-col justify-between h-full">
+        <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+             id="forms-card"
+             data-card-id="forms"
+             @dragover.prevent="onDragOver($event, 'forms')"
+             @dragleave="onDragLeave($event)"
+             @drop="onDrop($event, 'forms')"
+             :class="{
+                 'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'forms',
+                 'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'forms' && draggedCard !== 'forms'
+             }">
             <div>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                         <i class="fa-solid fa-envelope-circle-check text-[var(--color-ink-muted)]"></i>
                         Contact forms
                     </h3>
-                    <span class="status-pill status-green text-[10px]">
-                        <span class="status-dot"></span> Dedicated Tab
-                    </span>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="status-pill status-green text-[10px]">
+                            <span class="status-dot"></span> Dedicated Tab
+                        </span>
+                        <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                            <button type="button"
+                                    @click="moveCard('forms', -1)"
+                                    :disabled="order.indexOf('forms') === 0"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card earlier"
+                                    aria-label="Move card earlier">
+                                <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                            </button>
+                            <button type="button"
+                                    @click="moveCard('forms', 1)"
+                                    :disabled="order.indexOf('forms') === order.length - 1"
+                                    class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    title="Move card later"
+                                    aria-label="Move card later">
+                                <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                            </button>
+                            <div draggable="true"
+                                 @dragstart.stop="onDragStart($event, 'forms')"
+                                 @dragend="onDragEnd()"
+                                 class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                                 title="Drag to reorder"
+                                 aria-label="Drag to reorder">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
@@ -1284,20 +1656,57 @@
         $effectiveSupportLabel = $siteOverrides['support_label'] ?? $fleetGatekeeper['support_label'] ?? 'IT Helpdesk';
         $effectiveSupportEmail = $siteOverrides['support_email'] ?? $fleetGatekeeper['support_email'] ?? '';
     @endphp
-    <div class="card p-5 flex flex-col justify-between h-full" id="gatekeeper-card">
+    <div class="card p-5 flex flex-col justify-between h-full transition-all duration-200"
+         id="gatekeeper-card"
+         data-card-id="gatekeeper"
+         @dragover.prevent="onDragOver($event, 'gatekeeper')"
+         @dragleave="onDragLeave($event)"
+         @drop="onDrop($event, 'gatekeeper')"
+         :class="{
+             'opacity-40 scale-[0.99] border-dashed border-2 border-[var(--color-brand)] shadow-lg': draggedCard === 'gatekeeper',
+             'ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-surface)]': dragOverCard === 'gatekeeper' && draggedCard !== 'gatekeeper'
+         }">
         <div>
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
                     <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)]"></i>
                     Login lockouts (Gatekeeper)
                 </h3>
-                @if ($hasCustomOverrides)
-                    <span class="status-pill status-blue text-[10px]"><span class="status-dot"></span> Custom override</span>
-                @else
-                    <span class="status-pill {{ $effectiveEnabled ? 'status-green' : 'status-unknown' }} text-[10px]">
-                        <span class="status-dot"></span> Inherit fleet ({{ $effectiveEnabled ? 'On' : 'Off' }})
-                    </span>
-                @endif
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    @if ($hasCustomOverrides)
+                        <span class="status-pill status-blue text-[10px]"><span class="status-dot"></span> Custom override</span>
+                    @else
+                        <span class="status-pill {{ $effectiveEnabled ? 'status-green' : 'status-unknown' }} text-[10px]">
+                            <span class="status-dot"></span> Inherit fleet ({{ $effectiveEnabled ? 'On' : 'Off' }})
+                        </span>
+                    @endif
+                    <div class="flex items-center gap-0.5 pl-1.5 border-l border-[var(--color-border-light)] text-[var(--color-ink-muted)]">
+                        <button type="button"
+                                @click="moveCard('gatekeeper', -1)"
+                                :disabled="order.indexOf('gatekeeper') === 0"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card earlier"
+                                aria-label="Move card earlier">
+                            <i class="fa-solid fa-arrow-up text-[9px]"></i>
+                        </button>
+                        <button type="button"
+                                @click="moveCard('gatekeeper', 1)"
+                                :disabled="order.indexOf('gatekeeper') === order.length - 1"
+                                class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move card later"
+                                aria-label="Move card later">
+                            <i class="fa-solid fa-arrow-down text-[9px]"></i>
+                        </button>
+                        <div draggable="true"
+                             @dragstart.stop="onDragStart($event, 'gatekeeper')"
+                             @dragend="onDragEnd()"
+                             class="w-5 h-5 rounded flex items-center justify-center text-xs hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-ink-strong)] cursor-grab active:cursor-grabbing transition-colors"
+                             title="Drag to reorder"
+                             aria-label="Drag to reorder">
+                            <i class="fa-solid fa-grip-vertical text-gray-400 text-[10px]"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <p class="text-xs text-[var(--color-ink-muted)] mb-3 leading-relaxed">
@@ -1463,7 +1872,7 @@
             </button>
         </div>
     </div>
-
+</div>
 </div>
 
 {{-- Danger Zone: Remove from Monitoring --}}

@@ -36,6 +36,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $screenshot_path
  * @property ?Carbon $screenshot_captured_at
  * @property ?array $dashboard_layout
+ * @property ?array $settings_layout
  * @property ?string $site_user
  * @property ?string $wp_path
  * @property ?string $db_host
@@ -263,6 +264,7 @@ class Site extends Model
         'screenshot_path',
         'screenshot_captured_at',
         'dashboard_layout',
+        'settings_layout',
         'site_user',
         'wp_path',
         'db_host',
@@ -403,6 +405,7 @@ class Site extends Model
             'gatekeeper_settings' => 'array',
             'companion_secret' => 'encrypted',
             'dashboard_layout' => 'array',
+            'settings_layout' => 'array',
             'domain_expires_at' => 'datetime',
             'domain_rdap_checked_at' => 'datetime',
             'domain_expiration_state_changed_at' => 'datetime',
@@ -1333,6 +1336,38 @@ class Site extends Model
 
         // Append any default widgets that weren't in the saved list
         $missing = array_diff(self::DEFAULT_DASHBOARD_LAYOUT, $ordered);
+
+        return array_values(array_merge($ordered, $missing));
+    }
+
+    public const DEFAULT_SETTINGS_LAYOUT = [
+        'cert',
+        'cloudflare',
+        'security',
+        'server_tools',
+        'care_plan',
+        'uptime',
+        'status',
+        'companion',
+        'forms',
+        'gatekeeper',
+    ];
+
+    /**
+     * Return the ordered list of card keys for this site's Settings tab.
+     * Appends any newly introduced default cards if missing from a saved custom layout.
+     *
+     * @return array<string>
+     */
+    public function resolvedSettingsLayout(): array
+    {
+        $saved = is_array($this->settings_layout) ? $this->settings_layout : [];
+        if (empty($saved)) {
+            return self::DEFAULT_SETTINGS_LAYOUT;
+        }
+
+        $ordered = array_values(array_intersect($saved, self::DEFAULT_SETTINGS_LAYOUT));
+        $missing = array_diff(self::DEFAULT_SETTINGS_LAYOUT, $ordered);
 
         return array_values(array_merge($ordered, $missing));
     }

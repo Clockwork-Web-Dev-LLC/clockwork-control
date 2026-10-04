@@ -2,7 +2,7 @@
 title: Mattermost
 section: Integrations
 order: 60
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [integrations, mattermost, notifications, alerts, slack]
 tracks: [modules/Mattermost/src/**, app/Console/Commands/MattermostTest.php, app/Services/Chat/**]
@@ -43,7 +43,7 @@ $this->app->singleton(ChatNotifier::class, fn ($app) => new ChatNotifierDispatch
 
 (The tag array was a single hardcoded literal in `AppServiceProvider` before Phase 7 of the modularization roadmap — now each module's own service provider contributes its channel by tagging itself the same way it contributes a `CloudProvider` or `DiagnosticCheck`. An agency that doesn't want Mattermost at all can simply not require `clockwork/mattermost` in `composer.json` — no code to comment out, no dead settings page.)
 
-`ChatNotifier::EVENTS` is the canonical registry of notification types (site down/up, SSL state changed, plugin update failed, IP blocked, LLAR installed, contact form failed/recovered, Companion unreachable/recovered, malware finding detected, backup relay silent/recovered, server update failed, queue worker restart failed, scheduler stale/recovered) — both `MattermostNotifier` and `SlackNotifier` implement the full set and gate each method on its own per-event setting. `companion_unreachable`/`companion_reachable` have two independent callers: `ContactFormTester` (form testing enabled but no response) and the daily `clockwork:detect-stuck-companion-state` sweep (a failed install never retried, or an installed Companion gone silent for days) — see [Reference → Scheduled jobs](/docs/reference/scheduled-jobs). Fleet-level events with no `Site` involved: `backup_relay_stale`/`backup_relay_recovered`, `queue_worker_restart_failed`, `scheduler_stale`/`scheduler_recovered`. `ClientSlackNotifier` implements the interface too but only actually sends for a handful of client-relevant events (see [Integrations → Slack](/docs/integrations/slack)); everything else is a silent no-op for that channel. Each channel independently no-ops when unconfigured, so having all three registered is always safe — a channel with no webhook URL simply never sends.
+`ChatNotifier::EVENTS` is the canonical registry of notification types (site down/up, SSL state changed, plugin update failed, IP blocked, contact form failed/recovered, Companion unreachable/recovered, malware finding detected, backup relay silent/recovered, server update failed, queue worker restart failed, scheduler stale/recovered) — both `MattermostNotifier` and `SlackNotifier` implement the full set and gate each method on its own per-event setting. `companion_unreachable`/`companion_reachable` have two independent callers: `ContactFormTester` (form testing enabled but no response) and the daily `clockwork:detect-stuck-companion-state` sweep (a failed install never retried, or an installed Companion gone silent for days) — see [Reference → Scheduled jobs](/docs/reference/scheduled-jobs). Fleet-level events with no `Site` involved: `backup_relay_stale`/`backup_relay_recovered`, `queue_worker_restart_failed`, `scheduler_stale`/`scheduler_recovered`. `ClientSlackNotifier` implements the interface too but only actually sends for a handful of client-relevant events (see [Integrations → Slack](/docs/integrations/slack)); everything else is a silent no-op for that channel. Each channel independently no-ops when unconfigured, so having all three registered is always safe — a channel with no webhook URL simply never sends.
 
 Adding a fourth channel means: implement `ChatNotifier`, gate each method with an `isEventEnabled()`-style check, and tag the class `clockwork.notifiers` (in `AppServiceProvider`, or in a module's own service provider). Callers never change.
 
@@ -99,7 +99,6 @@ Standard Mattermost incoming-webhook payload:
 - `aiRemedyExecuted(AiRemedyRun)` — broadcasts execution outcome (resolved/failed), mode, cost, and executed commands.
 - `ipBlocked(BlockedIp)` — manual or auto-approved ban.
 - `sslStateChanged(Site, fromState, toState)` — cert state transition.
-- `llarInstalled(Site)` — LLAR install event.
 - `contactFormFailed(ContactFormTest)` / `contactFormRecovered(ContactFormTest)` — form test alert/recovery.
 - `companionUnreachable(Site, reason)` / `companionReachable(Site, stuckForSeconds)` — Companion gone silent (a failed install never retried, or an installed site not heard from in days — see [Reference → Scheduled jobs](/docs/reference/scheduled-jobs)'s `clockwork:detect-stuck-companion-state` entry) and its recovery counterpart.
 - `pluginUpdateFailed(Site, PluginUpdateJob)` — nightly auto-update failure (manual bulk-update runs stay silent; only `nightly-*` batches page). Also fires from `clockwork:reap-stale-update-jobs` for a `nightly-*` job that got stuck and reaped, not just a live failure.

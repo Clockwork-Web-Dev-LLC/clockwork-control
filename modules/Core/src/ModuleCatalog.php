@@ -58,7 +58,7 @@ class ModuleCatalog
             return 'performance';
         }
 
-        if (in_array($id, ['sucuri', 'llar', 'gatekeeper', 'email-auth'], true)) {
+        if (in_array($id, ['sucuri', 'gatekeeper', 'email-auth'], true)) {
             return 'security';
         }
 

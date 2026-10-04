@@ -101,7 +101,7 @@
                             When enabled, Companion and Renegade enforce native IP lockouts on WordPress login attempts before password verification runs. When disabled, Gatekeeper stays dormant unless explicitly enabled on an individual site.
                         </p>
                         <p class="text-xs text-[var(--color-ink-soft)] mt-2 leading-relaxed">
-                            <strong>Note:</strong> During the transition phase, legacy LLAR continues to coexist safely. Gatekeeper and LLAR will not double-enforce; once Gatekeeper is enabled for a site, LLAR calls are suppressed.
+                            <strong>Note:</strong> Gatekeeper is the sole native login lockout provider fleet-wide, providing silent IP lockouts with zero client-facing attack counters and full ingest visibility.
                         </p>
                     </div>
                 </label>

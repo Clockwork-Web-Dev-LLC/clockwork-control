@@ -55,11 +55,6 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->seoIndexabilityRecovered($site));
     }
 
-    public function llarInstalled(Site $site): bool
-    {
-        return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->llarInstalled($site));
-    }
-
     public function contactFormTestFailed(Site $site, string $reason, int $streak, ?string $formId = null): bool
     {
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->contactFormTestFailed($site, $reason, $streak, $formId));

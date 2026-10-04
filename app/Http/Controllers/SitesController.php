@@ -27,7 +27,6 @@ use App\Services\Gatekeeper\GatekeeperSettingsPusher;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Security\PluginVulnerabilityMatcher;
-use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
 use App\Services\Sites\WpPluginDetector;
 use App\Services\Ssl\LiveCertProbe;
@@ -492,12 +491,14 @@ class SitesController extends Controller
         $siteGatekeeper = is_array($site->gatekeeper_settings) ? $site->gatekeeper_settings : [];
         $siteSubscribers = $site->notificationRecipients()->get();
         $availableClientRecipients = NotificationRecipient::client()->orderBy('name')->get();
+        $settingsLayout = $site->resolvedSettingsLayout();
 
         return [
             'fleetGatekeeper' => $fleetGatekeeper,
             'siteGatekeeper' => $siteGatekeeper,
             'siteSubscribers' => $siteSubscribers,
             'availableClientRecipients' => $availableClientRecipients,
+            'settingsLayout' => $settingsLayout,
         ];
     }
 
@@ -730,46 +731,39 @@ class SitesController extends Controller
         }
     }
 
-    public function installLlar(Site $site, LlarInstaller $installer): JsonResponse
+    public function updateSettingsLayout(Request $request, Site $site): JsonResponse|RedirectResponse
     {
-        if (! app(ModuleStateResolver::class)->isEnabled('llar')) {
-            return response()->json([
-                'ok' => false,
-                'result' => 'disabled',
-                'message' => 'The Limit Login Attempts Reloaded module is currently disabled in Clockwork Control.',
-            ], 403);
+        if ($request->boolean('reset') || ($request->has('layout') && $request->input('layout') === null)) {
+            $site->update(['settings_layout' => null]);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'ok' => true,
+                    'layout' => Site::DEFAULT_SETTINGS_LAYOUT,
+                    'message' => 'Settings card layout reset to default.',
+                ]);
+            }
+
+            return back()->with('status', 'Settings card layout reset to default.');
         }
 
-        try {
-            $result = $installer->process($site);
-        } catch (Throwable $e) {
+        $validated = $request->validate([
+            'layout' => ['required', 'array'],
+            'layout.*' => ['string', 'in:'.implode(',', Site::DEFAULT_SETTINGS_LAYOUT)],
+        ]);
+
+        $ordered = array_values(array_unique($validated['layout']));
+        $site->update(['settings_layout' => $ordered]);
+
+        if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'ok' => false,
-                'result' => 'failed',
-                'message' => $e->getMessage(),
-            ], 500);
+                'ok' => true,
+                'layout' => $site->resolvedSettingsLayout(),
+                'message' => 'Settings card layout updated successfully.',
+            ]);
         }
 
-        $ok = in_array($result['result'], [
-            LlarInstaller::RESULT_INSTALLED,
-            LlarInstaller::RESULT_ALREADY_PRESENT,
-        ], true);
-
-        // Declining to install on a Gatekeeper site is the correct outcome,
-        // not an error — 409 so the button's failure path doesn't fire.
-        $status = match (true) {
-            $ok => 200,
-            $result['result'] === LlarInstaller::RESULT_SKIPPED_GATEKEEPER => 409,
-            default => 422,
-        };
-
-        return response()->json([
-            'ok' => $ok,
-            'result' => $result['result'],
-            'message' => $result['message'],
-            'output' => $result['output'] ?? null,
-            'llar_enabled' => $site->fresh()->llar_enabled,
-        ], $status);
+        return back()->with('status', 'Settings card layout updated.');
     }
 
     public function search(Request $request): JsonResponse

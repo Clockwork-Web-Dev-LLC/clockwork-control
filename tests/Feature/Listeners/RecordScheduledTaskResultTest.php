@@ -2,13 +2,14 @@
 
 use App\Listeners\Scheduling\RecordScheduledTaskResult;
 use App\Models\ScheduledJobRun;
+use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Scheduling\CacheEventMutex;
 use Illuminate\Console\Scheduling\Event;
 
-function makeScheduleEvent(string $command, int $exitCode = 0): Event
+function makeScheduleEvent(string $command, ?int $exitCode = 0): Event
 {
     $event = new Event(new CacheEventMutex(app('cache')), $command);
     $event->exitCode = $exitCode;
@@ -39,6 +40,56 @@ test('a finished event with a non-zero exit code records failed', function () {
         'command' => 'clockwork:refresh-closed-plugins',
         'status' => ScheduledJobRun::STATUS_FAILED,
     ]);
+});
+
+test('a finished event for a background job with null exit code records success', function () {
+    $listener = new RecordScheduledTaskResult;
+    $event = makeScheduleEvent("'/usr/bin/php' 'artisan' clockwork:check-site-uptime", null);
+    $event->runInBackground = true;
+
+    $listener->handleFinished(new ScheduledTaskFinished($event, 0.05));
+
+    $this->assertDatabaseHas('scheduled_job_runs', [
+        'command' => 'clockwork:check-site-uptime',
+        'status' => ScheduledJobRun::STATUS_SUCCESS,
+        'exit_code' => null,
+    ]);
+});
+
+test('a background finished event updates the pending row with exit code and status', function () {
+    $listener = new RecordScheduledTaskResult;
+    $event = makeScheduleEvent("'/usr/bin/php' 'artisan' clockwork:check-site-uptime", null);
+    $event->runInBackground = true;
+
+    $listener->handleFinished(new ScheduledTaskFinished($event, 0.05));
+
+    $event->exitCode = 0;
+    $listener->handleBackgroundTaskFinished(new ScheduledBackgroundTaskFinished($event));
+
+    $this->assertDatabaseHas('scheduled_job_runs', [
+        'command' => 'clockwork:check-site-uptime',
+        'status' => ScheduledJobRun::STATUS_SUCCESS,
+        'exit_code' => 0,
+    ]);
+    expect(ScheduledJobRun::query()->forCommand('clockwork:check-site-uptime')->count())->toBe(1);
+});
+
+test('a background finished event with non-zero exit code updates status to failed', function () {
+    $listener = new RecordScheduledTaskResult;
+    $event = makeScheduleEvent("'/usr/bin/php' 'artisan' clockwork:check-site-uptime", null);
+    $event->runInBackground = true;
+
+    $listener->handleFinished(new ScheduledTaskFinished($event, 0.05));
+
+    $event->exitCode = 1;
+    $listener->handleBackgroundTaskFinished(new ScheduledBackgroundTaskFinished($event));
+
+    $this->assertDatabaseHas('scheduled_job_runs', [
+        'command' => 'clockwork:check-site-uptime',
+        'status' => ScheduledJobRun::STATUS_FAILED,
+        'exit_code' => 1,
+    ]);
+    expect(ScheduledJobRun::query()->forCommand('clockwork:check-site-uptime')->count())->toBe(1);
 });
 
 test('a failed event updates the row Finished just wrote with the exception message', function () {

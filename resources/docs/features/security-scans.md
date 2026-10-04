@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php, app/Http/Controllers/SitesController.php]
@@ -149,7 +149,7 @@ A handful of things on the per-site pages are pure SSH/nginx-log artifacts with 
 
 - Overview's "Recent threat log" / "Top IPs (24h)" cards and the active-bans card — nginx-tailer-sourced.
 - The Traffic tab (this app's own tab, not Companion's — see [Features → Traffic + capacity](/docs/features/traffic-and-capacity)) and the Bans tab.
-- Settings tab's "Install LLAR" button and cert "Recheck now" button — both would hard-fail without SSH.
+- Settings tab's cert "Recheck now" button — would hard-fail without SSH.
 - Overview's SpinupWP-inventory WP-update pills (`wp_core_update` etc.) — always false for Pressable regardless of real update state; the real numbers live on `/updates`, sourced from Companion's snapshot instead.
 
 `$site->isPressable()` gates all of these in the relevant Blade templates (`tab-nav.blade.php`, `tab-overview.blade.php`, `tab-settings.blade.php`) and `SitesController::show()` falls back a direct/bookmarked `?tab=traffic` or `?tab=bans` hit to Overview for Pressable sites.

@@ -2,7 +2,7 @@
 title: Weird Stats
 section: Features
 order: 140
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [stats, analytics, security, traffic, dashboard]
 tracks: [app/Http/Controllers/WeirdStatsController.php, app/Services/Stats/WeirdStatsAggregator.php, app/Console/Commands/WarmWeirdStats.php, resources/views/settings/weird-stats.blade.php, resources/views/settings/weird-stats/**]
@@ -22,10 +22,10 @@ Everything else in Clockwork is scoped to a site, a server, or a single issue. W
 |---|---|---|
 | `summaryTiles()` | Total sites, attacks (7d), active bans, unprotected-site count | 7d / live |
 | `settlingPointStats()` | Four sub-stats below (CF reduction, auto-ban speedup, tier density, self-ban prevention) | mixed |
-| `pluginCoverageMatrix()` | LLAR/Wordfence coverage broken down by Cloudflare state | live |
+| `pluginCoverageMatrix()` | Gatekeeper/LLAR/Wordfence coverage broken down by Cloudflare state (LLAR is a detected-state count only — Control no longer installs it) | live |
 | `topSitesByVisits()` | Top 10 sites by visits, with concentration framing (top-10 % of fleet, 1st:10th ratio) | 30d |
 | `worstRepeatOffenders()` | Top 10 banned IPs ranked by **distinct servers hit**, not raw ban count — the "this attacker is everywhere" framing | all-time |
-| `unprotectedSitesByTraffic()` | Sites with both LLAR and Wordfence off, sorted by 30-day visits so the highest-traffic exposure sorts to the top | 30d |
+| `unprotectedSitesByTraffic()` | Sites with no Gatekeeper, LLAR, or Wordfence, sorted by 30-day visits so the highest-traffic exposure sorts to the top | 30d |
 
 `settlingPointStats()` in turn covers four sub-stats meant to quantify the value of specific operator setup choices rather than surface a problem:
 

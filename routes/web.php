@@ -302,13 +302,13 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/sites/{site}/uptime-body-check', [SitesController::class, 'toggleUptimeBodyCheck'])->name('sites.uptime-body-check.toggle');
     Route::post('/sites/{site}/cache/purge', [SitesController::class, 'purgeCache'])->name('sites.cache.purge');
     Route::patch('/sites/{site}/layout', [SitesController::class, 'updateLayout'])->name('sites.layout.update');
+    Route::patch('/sites/{site}/settings-layout', [SitesController::class, 'updateSettingsLayout'])->name('sites.settings-layout.update');
     Route::post('/sites/{site}/cert/recheck', [SitesController::class, 'recheckCert'])->name('sites.cert.recheck');
     Route::post('/sites/{site}/uptime/recheck', [SitesController::class, 'recheckUptime'])->name('sites.uptime.recheck');
     Route::post('/sites/{site}/domain/recheck', [DomainExpirationController::class, 'recheck'])->name('sites.domain.recheck');
     Route::post('/sites/{site}/seo/pre-flight-check', [SeoPreflightController::class, 'preflight'])->name('sites.seo.preflight');
     Route::post('/sites/{site}/bans/{blockedIp}/unban', [SitesController::class, 'unbanIp'])->name('sites.bans.unban');
     Route::post('/sites/{site}/bans/unban-all', [SitesController::class, 'unbanAll'])->name('sites.bans.unban-all');
-    Route::post('/sites/{site}/install-llar', [SitesController::class, 'installLlar'])->name('sites.llar.install');
     // Cleaner alias for the Companion installer — same controller method as the
     // contact-form-named route below, but reachable from any page that needs it
     // (e.g. the WordPress plugins fleet inventory).

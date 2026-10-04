@@ -6,7 +6,6 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionProtectedPlugins;
-use App\Services\Sites\LlarInstaller;
 use App\Services\Stats\WeirdStatsAggregator;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Http;
@@ -153,33 +152,6 @@ describe('CompanionProtectedPlugins guard', function () {
 
         expect($response['ok'])->toBeTrue();
         Http::assertSentCount(1);
-    });
-});
-
-describe('LlarInstaller refuses Gatekeeper sites', function () {
-    it('returns RESULT_SKIPPED_GATEKEEPER without touching SSH', function () {
-        $site = gatekeeperSite();
-
-        $result = app(LlarInstaller::class)->process($site);
-
-        expect($result['result'])->toBe(LlarInstaller::RESULT_SKIPPED_GATEKEEPER)
-            ->and($result['message'])->toContain('Gatekeeper');
-    });
-
-    it('--all-missing skips Gatekeeper-protected sites', function () {
-        gatekeeperSite(['domain' => 'gk.example']);
-        $bare = Site::factory()->create(['domain' => 'bare.example', 'is_wordpress' => true, 'llar_enabled' => false]);
-
-        $this->mock(LlarInstaller::class, function ($mock) use ($bare) {
-            $mock->shouldReceive('process')
-                ->once()
-                ->withArgs(fn (Site $s) => $s->is($bare))
-                ->andReturn(['result' => LlarInstaller::RESULT_INSTALLED, 'message' => 'ok']);
-        });
-
-        $this->artisan('clockwork:install-llar', ['--all-missing' => true])
-            ->assertSuccessful()
-            ->expectsOutputToContain('installed=1');
     });
 });
 

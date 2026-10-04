@@ -2,7 +2,7 @@
 title: Server, Site, Care plan, Hosting tier
 section: Concepts
 order: 10
-updated: 2026-09-10
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [concepts, mental-model, care-plan, hosting, pressable, wpengine, kinsta, cloudways]
 ---
@@ -35,7 +35,7 @@ Concretely:
 - **WP Engine sites**: `server_id` null, `wpengine_install_name` set.
 - **Kinsta sites**: `server_id` null, `kinsta_environment_id` set.
 
-A handful of features are genuinely SSH/server-row-only and have no path for the three server-less providers — the per-site Traffic tab, the Bans tab, LLAR install, and the cert "Recheck now" button are hidden rather than shown broken for Pressable/WP Engine/Kinsta sites (all three declare `HostingProvider::CAP_SSH === false`, tied specifically to `server_id` being populated — see the contract's own docblock — even though WP Engine and Kinsta both have real per-site/per-environment SSH under the hood; it's just never routed through a tracked `Server` row). Full breakdown in [Integrations → Pressable](/docs/integrations/pressable), [WP Engine](/docs/integrations/wp-engine), [Kinsta](/docs/integrations/kinsta), and [Cloudways](/docs/integrations/cloudways).
+A handful of features are genuinely SSH/server-row-only and have no path for the three server-less providers — the per-site Traffic tab, the Bans tab, and the cert "Recheck now" button are hidden rather than shown broken for Pressable/WP Engine/Kinsta sites (all three declare `HostingProvider::CAP_SSH === false`, tied specifically to `server_id` being populated — see the contract's own docblock — even though WP Engine and Kinsta both have real per-site/per-environment SSH under the hood; it's just never routed through a tracked `Server` row). Full breakdown in [Integrations → Pressable](/docs/integrations/pressable), [WP Engine](/docs/integrations/wp-engine), [Kinsta](/docs/integrations/kinsta), and [Cloudways](/docs/integrations/cloudways).
 
 ### Two independent axes: hosting provider and cloud provider
 

@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToCheckExistence;
 use Modules\Pressable\PressableClient;
 
 /*
@@ -288,6 +289,25 @@ describe('clockwork:pressable-backups-report — skip and failure handling', fun
         $this->artisan('clockwork:pressable-backups-report')->assertSuccessful();
 
         Log::shouldHaveReceived('warning')->with('companion.pressable_backups_report.push_failed', \Mockery::type('array'));
+    });
+
+    it('handles S3 existence check exceptions gracefully by falling back to empty manifest', function () {
+        $site = pbrSite();
+
+        pbrMockPressable(function ($mock) {
+            $mock->shouldReceive('siteFilesystemBackups')->once()->andReturn([]);
+            $mock->shouldReceive('siteDatabaseBackups')->once()->andReturn([]);
+        });
+
+        $mockDisk = \Mockery::mock();
+        $mockDisk->shouldReceive('exists')->andThrow(new UnableToCheckExistence('Forbidden'));
+        Storage::shouldReceive('disk')->with('s3')->andReturn($mockDisk);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:pressable-backups-report')->assertSuccessful();
     });
 });
 

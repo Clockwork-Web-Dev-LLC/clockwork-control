@@ -2,7 +2,7 @@
 title: SSH + fail2ban
 section: Integrations
 order: 120
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [integrations, ssh, fail2ban, security, bans, pressable]
 tracks: [app/Services/Ssh/**, app/Services/Fail2ban/**, app/Http/Controllers/ServerProvisionController.php, app/Console/Commands/ProcessPendingBans.php, app/Console/Commands/RefreshFail2banIgnoreip.php, app/Console/Commands/SweepCfBans.php, app/Services/Sites/SiteMySqlClient.php]
@@ -66,7 +66,7 @@ A non-exhaustive sample of what we run remotely:
 - `tail -n1000 /var/log/nginx/access.log` — log tailing.
 - `wp plugin list --format=json` — plugin inventory.
 - `wp core verify-checksums` — security checksums.
-- `mysql --defaults-file=...` — LLAR / Wordfence direct-DB pulls (where Companion isn't installed).
+- `mysql --defaults-file=...` — Gatekeeper `clockwork_lockouts` / Wordfence direct-DB fallback pulls (when Companion REST fails).
 - `sudo -n fail2ban-client set clockwork banip <ip>` — bans.
 - `sudo apt-get update && apt-get -y upgrade` — system updates queue.
 - `sudo shutdown -r +1` — scheduled reboot (the `+1` lets the SSH command return cleanly).
@@ -80,7 +80,7 @@ A non-exhaustive sample of what we run remotely:
 
 - `app/Services/Ssh/SshClient.php` — the main client.
 - `app/Services/Ssh/SshCommandRunner.php` — thin `Modules\Core\Contracts\SiteCommandRunner` adapter over `SshClient::exec()`, used by `SpinupWpHostingProvider::commandRunner()` (part of the modularization roadmap's HostingProvider abstraction; `modules/Pressable/src/PressableApiCommandRunner.php` is the equivalent for Pressable).
-- `app/Services/Sites/SiteMySqlClient.php` — executes remote MySQL queries and pings via `SshClient` with safe temporary credential files; used for direct-DB fallbacks (LLAR lockouts and Wordfence blocks pullers).
+- `app/Services/Sites/SiteMySqlClient.php` — executes remote MySQL queries and pings via `SshClient` with safe temporary credential files; used for direct-DB fallbacks (Gatekeeper lockouts and Wordfence blocks pullers).
 - `app/Services/Ssh/CredentialFeedParser.php` — paste-from-vault flow.
 - `app/Services/Fail2ban/Fail2banProvisioner.php`
 - `app/Services/Fail2ban/Fail2banClient.php` — `banIp`, `unbanIp`, `unbanIps`, `status`.
@@ -95,7 +95,7 @@ A non-exhaustive sample of what we run remotely:
 | every minute | `clockwork:process-pending-bans` — drain `queued_for_ban` → `fail2ban-client banip` over SSH. |
 | every minute | `clockwork:process-server-updates` — drain queued apt upgrades. |
 | every 5 min | `clockwork:tail-nginx-logs` — pull new lines, inode-tracked. |
-| every 15 min | `clockwork:pull-llar-lockouts` / `pull-wordfence-blocks` — direct-DB fallback when Companion isn't installed. |
+| every 15 min | `clockwork:pull-llar-lockouts` / `pull-wordfence-blocks` — Companion REST first, direct-DB fallback when it fails. |
 | Sun 05:30 | `clockwork:refresh-fail2ban-ignoreip` — refresh CF + fleet IPs in every jail. |
 | Sun 05:45 | `clockwork:refresh-cloudflare-real-ip` — push the nginx CF-Connecting-IP snippet. |
 

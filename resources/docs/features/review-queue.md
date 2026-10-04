@@ -2,13 +2,13 @@
 title: Review queue
 section: Features
 order: 20
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [bans, review-queue, security, fail2ban, pressable]
 tracks: [app/Http/Controllers/{BansController,ReviewQueueController,BlockedIpsController,SitesController}.php, app/Console/Commands/{AutoApproveRepeats,ProcessPendingBans,PruneExpiredBans}.php, app/Services/Fail2ban/BanRetention.php, app/Support/BanHistoryRow.php, database/migrations/2026_09_14_210000_backfill_review_queue_and_blocked_ips_server_id.php, resources/views/dashboard/bans/**, resources/views/settings/index.blade.php]
 ---
 
-Suspicious IPs from Gatekeeper / LLAR / Wordfence / nginx land in the review queue at `/bans/queue`. You scan, click Approve or Dismiss, and approved IPs go to fail2ban via SSH within ~60 seconds (or auto-ban immediately if the server has `auto_ban_llar` enabled). Auto-approve-repeats can short-circuit the human step for IPs sighted 2+ times across the fleet.
+Suspicious IPs from Gatekeeper / Wordfence / nginx land in the review queue at `/bans/queue`. You scan, click Approve or Dismiss, and approved IPs go to fail2ban via SSH within ~60 seconds (or auto-ban immediately if the server has `auto_ban_llar` enabled). Auto-approve-repeats can short-circuit the human step for IPs sighted 2+ times across the fleet.
 
 **fail2ban SSH execution is SpinupWP-only.** Host-level kernel blocking (`fail2ban-client` over SSH via iptables/nftables) requires server access that Pressable does not grant. However, with **Gatekeeper** in Companion 1.39.0+, Pressable sites now stream their active login lockouts directly into the Review Queue over HMAC REST for fleet-wide visibility and repeat-offender tracking, while enforcing HTTP 429 backoff blocks directly in WordPress.
 
@@ -55,7 +55,7 @@ Linux fail2ban jails automatically lift kernel iptables blocks after 24 hours (`
 
 Three sources feed the queue:
 
-- **Gatekeeper Companion REST pull** every 15 min (`clockwork:pull-llar-lockouts`). Queries `GET /wp-json/clockwork/v1/lockouts` directly over HMAC-signed HTTPS. Legacy LLAR MySQL direct queries remain as an active fallback for sites not yet migrated. Gated by `IngestScheduleGate`.
+- **Gatekeeper Companion REST pull** every 15 min (`clockwork:pull-llar-lockouts`). Queries `GET /wp-json/clockwork/v1/lockouts` directly over HMAC-signed HTTPS. If REST fails on a site with MySQL creds, it falls back to reading the native `<prefix>clockwork_lockouts` table directly. LLAR's own tables/options are no longer scraped (removed in 1.10.1). Gated by `IngestScheduleGate`.
 - **Wordfence direct-DB pull** every 15 min (`clockwork:pull-wordfence-blocks`). Same gate.
 - **nginx tailing** every 5 min (`clockwork:tail-nginx-logs`). Continuous.
 

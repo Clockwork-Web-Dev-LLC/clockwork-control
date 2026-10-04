@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\BackupRelayRun;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToCheckExistence;
 
 /*
 |--------------------------------------------------------------------------
@@ -64,6 +65,18 @@ describe('clockwork:pull-backup-relay-report — malformed/invalid payload handl
         ]));
 
         $this->artisan('clockwork:pull-backup-relay-report')->assertFailed();
+
+        expect(BackupRelayRun::query()->count())->toBe(0);
+    });
+
+    it('exits FAILURE gracefully when S3 throws an exception checking existence', function () {
+        $mockDisk = \Mockery::mock();
+        $mockDisk->shouldReceive('exists')->andThrow(new UnableToCheckExistence('Forbidden'));
+        Storage::shouldReceive('disk')->with('s3')->andReturn($mockDisk);
+
+        $this->artisan('clockwork:pull-backup-relay-report')
+            ->expectsOutputToContain('Failed to read/parse report at s3://')
+            ->assertFailed();
 
         expect(BackupRelayRun::query()->count())->toBe(0);
     });

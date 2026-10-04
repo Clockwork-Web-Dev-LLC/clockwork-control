@@ -2,7 +2,7 @@
 title: WordPress plugin inventory
 section: Features
 order: 80
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [wordpress, plugins, inventory, updates, pressable]
 tracks: [app/Services/Sites/WpPluginDetector.php, app/Console/Commands/{DetectWpPlugins,RefreshCompanionSnapshot}.php, app/Http/Controllers/WordPressPluginsController.php]
@@ -12,7 +12,7 @@ A fleet-wide view of which WordPress plugins are installed, which need updates, 
 
 ## Where to look
 
-- **`/settings/wordpress-plugins`** — fleet inventory. Per-site rows with LLAR + Wordfence active state, SpinupWP update flags, install-LLAR action. **Pressable sites don't appear on this page at all** — `WordPressPluginsController` still queries `whereHas('server', ...)`, which no Pressable site ever matches (no `server` row). Unlike the other fleet-wide monitoring commands, this controller wasn't switched to `Site::hostMonitored()` during the Pressable rollout, so this looks like an overlooked gap rather than a deliberate exclusion — worth revisiting if Pressable plugin inventory needs to show up here too.
+- **`/settings/wordpress-plugins`** — fleet inventory. Per-site rows with Companion, Gatekeeper (Active/Inactive, from `Site::gatekeeperEnabled()`) and Wordfence state, plus SpinupWP update flags. Summary tiles count Companion, Gatekeeper, Wordfence, and "No Wordfence or Gatekeeper"; filter tabs include **Missing Companion**, **Companion installed**, and **Missing Gatekeeper**. **Pressable sites don't appear on this page at all** — `WordPressPluginsController` still queries `whereHas('server', ...)`, which no Pressable site ever matches (no `server` row). Unlike the other fleet-wide monitoring commands, this controller wasn't switched to `Site::hostMonitored()` during the Pressable rollout, so this looks like an overlooked gap rather than a deliberate exclusion — worth revisiting if Pressable plugin inventory needs to show up here too.
 - **`/sites/{id}/updates`** — per-site Updates tab. Reads from `companion_snapshot.plugins`. Shows outdated plugins, lets you tick which to update.
 - **Issues page → "WordPress plugins out of date"** — counts sites with `companion_snapshot.plugins.counts.updates_available > 0`.
 
@@ -41,20 +41,14 @@ Updates are **synchronous** — the user watches them happen. No background job,
 
 The Updates tab shows a banner: "Care Plan Active" (care plan) or "Hosting Tier" (standard hosting). The `care_plan_enabled` flag is purely informational here — it doesn't gate manual updates. Anyone on the team can update plugins on any site; the banner simply denotes tier coverage.
 
-## LLAR install
+## Gatekeeper replaced LLAR
 
-The fleet inventory at `/settings/wordpress-plugins` has an "Install LLAR" button per site without it (moot for Pressable sites today, since they don't appear on this page at all — see above). POSTs to `/sites/{id}/install-llar`, runs `App\Services\Sites\LlarInstaller` over SSH:
-
-1. `wp plugin install limit-login-attempts-reloaded`
-2. `wp plugin activate ...`
-3. Suppress notification emails (otherwise the client gets a flood of lockout notifications during the first day).
-
-LLAR install is deliberately **per-site, not fleet-wide**. The bulk version exists as a CLI flag for one-off rollouts.
+Through 1.10.0 this page had an LLAR column and a per-site "Install LLAR" button. Both are gone as of 1.10.1, along with `POST /sites/{id}/install-llar`, `App\Services\Sites\LlarInstaller`, `clockwork:install-llar`, the `modules/Llar` package, and the `llar_installed` chat event. Login brute-force protection is Gatekeeper, built into Companion — to protect a site, install Companion and make sure Gatekeeper is enabled (fleet default or per-site override, see [Features → Gatekeeper](/docs/features/gatekeeper)). The SSH probe still records `llar_enabled` so any site that still has LLAR active is visible in Weird Stats.
 
 ## Manual probe
 
 ```bash
-# SSH-based probe (LLAR + Wordfence active state):
+# SSH-based probe (LLAR + Wordfence active-state flags):
 php artisan clockwork:detect-wp-plugins
 
 # Per-site Companion-based snapshot refresh:

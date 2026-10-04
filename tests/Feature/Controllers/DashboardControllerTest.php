@@ -60,7 +60,7 @@ describe('DashboardController', function () {
 
         $response->assertOk()
             ->assertSee(route('servers.refreshFromSpinupWp'))
-            ->assertSee('Refresh Servers')
+            ->assertSee('Refresh')
             ->assertDontSee(route('servers.refreshFromGridPane'));
     });
 
@@ -74,7 +74,7 @@ describe('DashboardController', function () {
 
         $response->assertOk()
             ->assertSee(route('servers.refreshFromGridPane'))
-            ->assertSee('Refresh Servers')
+            ->assertSee('Refresh')
             ->assertDontSee(route('servers.refreshFromSpinupWp'));
     });
 
@@ -324,7 +324,7 @@ describe('DashboardController', function () {
             ->assertSee('5 days ago');
     });
 
-    it('has Add Server in the layout header and the page header', function () {
+    it('has Add Server only on /servers page header and not in the global layout header', function () {
         $server = Server::factory()->create(['name' => 'node1.example.com']);
         Site::factory()->spinupwp()->create(['server_id' => $server->id]);
 
@@ -333,7 +333,11 @@ describe('DashboardController', function () {
         $response->assertOk()
             ->assertDontSee('Fleet sync active');
         $html = $response->getContent();
-        expect(substr_count($html, route('servers.create')))->toBe(2);
+        expect(substr_count($html, route('servers.create')))->toBe(1);
+
+        $sitesResponse = $this->actingAs(User::factory()->create())->get(route('sites.index'));
+        $sitesResponse->assertOk()
+            ->assertDontSee(route('servers.create'));
     });
 
     it('renders delete server actions in the header, ignored banner, and empty sites state for disconnected servers', function () {

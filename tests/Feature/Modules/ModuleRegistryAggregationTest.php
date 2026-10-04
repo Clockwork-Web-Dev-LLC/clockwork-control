@@ -46,10 +46,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 34 registered modules', function () {
+    it('aggregates a manifest from every one of the 33 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(34);
+        expect($manifests)->toHaveCount(33);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -76,7 +76,6 @@ describe('ModuleRegistry aggregation', function () {
             'psi',
             'sucuri',
             'gatekeeper',
-            'llar',
             'contact-forms',
             'backup-relay',
             'feedback',

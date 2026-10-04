@@ -85,7 +85,7 @@
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from SpinupWP API"
                             onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from SpinupWP' : 'Refresh Servers' }}</span>
+                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from SpinupWP' : 'Refresh' }}</span>
                     </button>
                 </form>
             @endif
@@ -95,12 +95,12 @@
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from GridPane API"
                             onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from GridPane' : 'Refresh Servers' }}</span>
+                        <i class="fa-solid fa-rotate"></i> <span>{{ $multiProvider ? 'Refresh from GridPane' : 'Refresh' }}</span>
                     </button>
                 </form>
             @endif
             <a href="{{ route('settings.tags.index') }}" class="btn-pill-nav text-xs ml-1 sm:ml-2" title="Manage server environment tags">
-                <i class="fa-solid fa-tags"></i> <span>Manage Tags</span>
+                <i class="fa-solid fa-tags"></i> <span>Tags</span>
             </a>
             <a href="{{ route('servers.create') }}" class="btn-primary text-xs ml-1 sm:ml-2">
                 <i class="fa-solid fa-plus"></i> <span>Add Server</span>
@@ -288,7 +288,7 @@
                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors border border-dashed border-[var(--color-border)]"
                title="Manage or add server tags">
                 <i class="fa-solid fa-tags text-[10px]"></i>
-                <span>Manage Tags</span>
+                <span>Tags</span>
             </a>
         </div>
 
@@ -306,7 +306,7 @@
                     class="px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all text-xs font-medium cursor-pointer"
                     :class="viewMode === 'table' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-2xs font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'">
                 <i class="fa-solid fa-list text-xs"></i>
-                <span class="hidden sm:inline">Data Grid</span>
+                <span class="hidden sm:inline">Grid</span>
             </button>
         </div>
     </div>

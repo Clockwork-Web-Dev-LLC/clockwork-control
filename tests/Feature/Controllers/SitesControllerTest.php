@@ -14,7 +14,6 @@ use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
 use App\Services\HostingProvider\HostingProviderRegistry;
 use App\Services\Security\PluginVulnerabilityMatcher;
-use App\Services\Sites\LlarInstaller;
 use App\Services\Sites\WpConfigExtractor;
 use App\Services\Sites\WpPluginDetector;
 use App\Services\Ssl\LiveCertProbe;
@@ -94,6 +93,38 @@ describe('index', function () {
         $searched = $this->actingAs(User::factory()->create())
             ->get(route('sites.index', ['q' => 'alpha-site']));
         $searched->assertOk()->assertSee('alpha-site.test')->assertDontSee('beta-pressable.test');
+    });
+
+    it('renders companion status pill as status-green when installed and active', function () {
+        $site = Site::factory()->spinupwp()->create([
+            'domain' => 'companion-green.test',
+            'companion_installed' => true,
+        ]);
+        $renegadeSite = Site::factory()->create([
+            'domain' => 'renegade-green.test',
+            'companion_installed' => true,
+            'companion_variant' => 'renegade',
+        ]);
+        $stuckSite = Site::factory()->spinupwp()->create([
+            'domain' => 'companion-stuck.test',
+            'companion_installed' => true,
+            'companion_stuck_since' => now()->subDays(4),
+            'companion_stuck_reason' => 'snapshot_stale',
+        ]);
+        $plainSite = Site::factory()->spinupwp()->create([
+            'domain' => 'plain-site.test',
+            'companion_installed' => false,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index'));
+
+        $response->assertOk();
+        $response->assertSee('data-tooltip="Companion Plugin Active"', false);
+        $response->assertSee('data-tooltip="Renegade Plugin Active"', false);
+        $response->assertSee('status-pill status-green cursor-default', false);
+        $response->assertSee('data-tooltip="Companion Plugin Unreachable"', false);
+        $response->assertSee('status-pill status-yellow cursor-default', false);
     });
 
     it('finds parent site when searching by consolidated alias domain', function () {
@@ -495,31 +526,50 @@ describe('fetchDbCreds', function () {
     });
 });
 
-describe('installLlar', function () {
-    it('reports installed on success', function () {
+describe('updateSettingsLayout', function () {
+    it('persists a custom layout order for a site', function () {
         [, $site] = spinupSite();
+        $user = User::factory()->create();
 
-        $this->mock(LlarInstaller::class)
-            ->shouldReceive('process')
-            ->once()
-            ->andReturn(['result' => LlarInstaller::RESULT_INSTALLED, 'message' => 'Installed.']);
+        $customLayout = ['gatekeeper', 'uptime', 'cert', 'forms', 'companion', 'status', 'security', 'cloudflare', 'server_tools', 'care_plan'];
 
-        $response = $this->actingAs(User::factory()->create())->post(route('sites.llar.install', $site));
+        $response = $this->actingAs($user)->patchJson(route('sites.settings-layout.update', $site), [
+            'layout' => $customLayout,
+        ]);
 
-        $response->assertOk()->assertJsonPath('ok', true)->assertJsonPath('result', LlarInstaller::RESULT_INSTALLED);
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('layout', $customLayout);
+
+        expect($site->fresh()->settings_layout)->toBe($customLayout);
     });
 
-    it('returns 422 on failure', function () {
+    it('resets layout to default when reset is passed', function () {
         [, $site] = spinupSite();
+        $user = User::factory()->create();
+        $site->update(['settings_layout' => ['uptime', 'cert']]);
 
-        $this->mock(LlarInstaller::class)
-            ->shouldReceive('process')
-            ->once()
-            ->andReturn(['result' => LlarInstaller::RESULT_FAILED, 'message' => 'Site has no linked server.']);
+        $response = $this->actingAs($user)->patchJson(route('sites.settings-layout.update', $site), [
+            'reset' => true,
+        ]);
 
-        $response = $this->actingAs(User::factory()->create())->post(route('sites.llar.install', $site));
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('layout', Site::DEFAULT_SETTINGS_LAYOUT);
 
-        $response->assertStatus(422)->assertJsonPath('ok', false);
+        expect($site->fresh()->settings_layout)->toBeNull();
+    });
+
+    it('rejects invalid card identifiers', function () {
+        [, $site] = spinupSite();
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->patchJson(route('sites.settings-layout.update', $site), [
+            'layout' => ['cert', 'invalid_card_id'],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['layout.1']);
     });
 });
 

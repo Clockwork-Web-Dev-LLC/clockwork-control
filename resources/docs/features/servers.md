@@ -3,7 +3,7 @@ title: Servers (inventory + credentials)
 section: Features
 order: 12
 author: Aaron Reimann
-updated: 2026-09-28
+updated: 2026-10-04
 tags: [servers, ssh, credentials, inventory, fleet]
 tracks: [app/Http/Controllers/ServersController.php, app/Http/Controllers/ServerCredentialsController.php, resources/views/dashboard/server/header.blade.php, resources/views/dashboard/server-create.blade.php, resources/views/dashboard/credentials-bulk.blade.php, resources/views/dashboard/credentials-edit.blade.php, resources/views/dashboard/credentials-feed.blade.php]
 ---
@@ -39,7 +39,7 @@ To make server removal seamless when cleaning up decommissioned or disconnected 
 
 ## Auto-ban toggles
 
-`toggleAutoBanLlar` / `toggleAutoBanWordfence` (`POST /servers/{server}/auto-ban-llar` and `.../auto-ban-wordfence`) flip `auto_ban_llar` / `auto_ban_wordfence` on the server row. When on, login lockouts from Gatekeeper (and legacy LLAR) or Wordfence blocks from that server skip the human review step in the [Review queue](/docs/features/review-queue) and go straight to fail2ban over SSH (`fail2ban-client set clockwork banip <ip>`). When off, they land in the queue like any other source.
+`toggleAutoBanLlar` / `toggleAutoBanWordfence` (`POST /servers/{server}/auto-ban-llar` and `.../auto-ban-wordfence`) flip `auto_ban_llar` / `auto_ban_wordfence` on the server row. When on, Gatekeeper login lockouts or Wordfence blocks blocks from that server skip the human review step in the [Review queue](/docs/features/review-queue) and go straight to fail2ban over SSH (`fail2ban-client set clockwork banip <ip>`). When off, they land in the queue like any other source.
 
 
 ## Recheck health

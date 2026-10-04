@@ -70,7 +70,7 @@ class EmailAuthServiceProvider extends ModuleServiceProvider
         return [
             new NavItem(
                 label: 'Email Auth',
-                icon: 'fa-solid fa-envelope-shield',
+                icon: 'fa-solid fa-envelope-circle-check',
                 route: 'email-auth.index',
             ),
         ];

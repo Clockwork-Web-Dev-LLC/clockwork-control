@@ -2,10 +2,10 @@
 title: Sites (fleet view)
 section: Features
 order: 15
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [sites, fleet, pressable, spinupwp, hosting, standalone, companion]
-tracks: [app/Http/Controllers/SitesController.php, resources/views/sites/create.blade.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
+tracks: [app/Http/Controllers/SitesController.php, resources/views/dashboard/site/tab-settings.blade.php, resources/js/components/site-settings-reorder.ts, resources/views/sites/create.blade.php, resources/views/dashboard/sites.blade.php, app/Services/HostingProvider/HostingProviderRegistry.php]
 ---
 
 `/sites` is the fleet-wide site list that works across every hosting provider you have enabled. It exists because [the main dashboard](/docs/features/dashboard) is server-first — every card is a server — and Pressable or standalone custom sites have no server to hang a card off of.
@@ -61,6 +61,18 @@ The dashboard's whole layout is "one card per server, health-sorted." Pressable 
 The per-site Settings tab's "Install Companion" button routes through `SitesController::installCompanion()`, which dispatches via `$site->host()->companionInstaller()` — the `HostingProvider` contract, not a direct `Site::isPressable()` branch — so it works the same way regardless of which of the 6 hosting-provider modules (SpinupWP, Pressable, Cloudways, Kinsta, WP Engine, GridPane) the site is on. All installers converge on the same result shape (`companion_installed`, `companion_version`, error detail on failure).
 
 `companionInstaller()` is nullable by contract: a provider client in **View-Only mode** (GridPane/Cloudways/Kinsta/WP Engine default to this until an operator confirms live write access under `/settings/integrations`; SpinupWP/Pressable default to write-enabled) returns no installer at all, since installing Companion is a write operation. The button itself checks `supports(HostingProvider::CAP_COMPANION)` and doesn't render for a View-Only site — it shows an explanatory "Install unavailable (View-Only)" note instead. The controller also guards the null case directly (422, not a crash) as a backstop for any other caller that skips the capability check.
+
+## Reorderable Settings tab cards
+
+The per-site Settings tab (`/sites/{site}?tab=settings`) lays out up to 10 cards — `cert`, `cloudflare`, `security`, `server_tools`, `care_plan`, `uptime`, `status`, `companion`, `forms`, `gatekeeper` — in an order you can change per site. A card that doesn't apply to a site isn't rendered (for example `forms` appears only on care-plan sites with the contact-forms module enabled), but it keeps its slot in the saved order:
+
+- **Drag** a card by its grip handle (HTML5 drag-and-drop), or use the **up/down arrow buttons** on each card on keyboard or touch.
+- Each change is saved right away, without a page reload, via `PATCH /sites/{site}/settings-layout` (`layout[]` of card keys, validated against `Site::DEFAULT_SETTINGS_LAYOUT`) into the nullable JSON column `sites.settings_layout`. A toast confirms the save.
+- **Reset default layout** sends `reset=1`, which nulls the column so the site goes back to the default order.
+- Cards are moved as existing DOM nodes, not re-rendered, so open forms, modals (probe subscribers, cert editor, Gatekeeper override editor), and their event listeners keep working after a move.
+- `Site::resolvedSettingsLayout()` drops unknown keys from a saved layout and appends any card added since it was saved, so a new card never disappears from a site with a custom order. Add new cards to `DEFAULT_SETTINGS_LAYOUT` or the endpoint will reject their key.
+
+The order is saved per **site**, not per user — everyone sees the same layout for a given site.
 
 ## Site-detail pages are null-server-safe
 

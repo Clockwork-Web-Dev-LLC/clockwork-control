@@ -77,6 +77,20 @@ describe('clockwork:detect-wp-plugins — real detection through a mocked SSH bo
 
         expect($site->refresh()->wp_plugins_detected_at)->toBeNull();
     });
+
+    it('handles SSH connection exceptions gracefully as failed without crashing', function () {
+        $site = wpPluginSite();
+
+        $this->mock(SshClient::class)->shouldReceive('exec')->once()->andThrow(
+            new RuntimeException('TCP connect failed in 2s (Operation timed out)')
+        );
+
+        $this->artisan('clockwork:detect-wp-plugins')
+            ->expectsOutputToContain('detected=0, changes=0, skipped=0, failed=1')
+            ->assertFailed();
+
+        expect($site->refresh()->wp_plugins_detected_at)->toBeNull();
+    });
 });
 
 describe('clockwork:detect-wp-plugins — site selection', function () {

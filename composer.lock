@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "067dcb4bd8c4d2541ac3df7f137fecda",
+    "content-hash": "dffaddf1e3ea07a83ec80f42ecd915f3",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -764,33 +764,6 @@
                 "MIT"
             ],
             "description": "Linode (Akamai) CloudProvider module for Clockwork Control Panel — instance metrics, size tiers, IP matching.",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "clockwork/llar",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "modules/Llar",
-                "reference": "83d74bd2bfa21674d799f0a6f58b3faaae6af81e"
-            },
-            "require": {
-                "clockwork/core": "@dev",
-                "php": "^8.4"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Modules\\Llar\\": "src/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "Limit Login Attempts Reloaded brute-force login attack protection and lockout log ingest module for Clockwork Control Panel",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -11819,7 +11792,6 @@
         "clockwork/hetzner": 20,
         "clockwork/kinsta": 20,
         "clockwork/linode": 20,
-        "clockwork/llar": 20,
         "clockwork/mattermost": 20,
         "clockwork/pagespeed-insights": 20,
         "clockwork/pressable": 20,

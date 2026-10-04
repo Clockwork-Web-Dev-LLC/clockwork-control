@@ -52,4 +52,23 @@ class MobileChromeTest extends TestCase
         $response->assertSee('cw-subnav-tier hidden md:block', false);
         $response->assertSee('cw-layout-switcher-btn hidden lg:inline-flex', false);
     }
+
+    public function test_mobile_drawer_renders_uniform_brand_icons_and_email_auth_icon(): void
+    {
+        Server::create([
+            'name' => 'test.example.com',
+            'hostname' => '203.0.113.10',
+            'ssh_user' => 'clockwork-deploy',
+            'provider' => Server::PROVIDER_DIGITALOCEAN,
+        ]);
+        $this->mockIssueCounterZero();
+
+        $response = $this->actingAs(User::factory()->create())->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('fa-triangle-exclamation mr-2 text-[var(--color-brand)]', false);
+        $response->assertSee('fa-heart-pulse mr-2 text-[var(--color-brand)]', false);
+        $response->assertSee('fa-sliders mr-2 text-[var(--color-brand)]', false);
+        $response->assertSee('fa-envelope-circle-check', false);
+    }
 }
