@@ -848,7 +848,7 @@
                                 <x-color-picker 
                                     name="primary_color" 
                                     model="reportsPrimaryColor" 
-                                    label="Primary Brand Color (Header &amp; Card Accents)"
+                                    label="Primary Brand Color (Email Header Background &amp; Accents)"
                                     help="Used for cover banner backgrounds, major titles, and metric cards."
                                     presetType="primary"
                                     masterModel="masterPrimaryColor"
@@ -919,29 +919,20 @@
 
                                 {{-- Styled Report Document Paper Mockup --}}
                                 <div class="bg-white text-slate-900 rounded-lg overflow-hidden border border-slate-200 shadow-md">
-                                    {{-- Accent Top Bar --}}
-                                    <div :style="'height: 6px; background:' + (reportsPrimaryColor || '#2D2062')"></div>
+                                    {{-- Header — mirrors the emailed report: brand-colour band so a white logo stays visible --}}
+                                    <div class="px-4 pt-4 pb-3" :style="'background:' + (reportsPrimaryColor || '#2D2062')">
+                                        <template x-if="logoUrl">
+                                            <img :src="logoUrl" alt="Report Logo" class="h-6 object-contain mb-2">
+                                        </template>
+                                        <template x-if="!logoUrl">
+                                            <div class="font-extrabold text-sm text-white mb-1" x-text="reportsCompanyName || companyName || 'Clockwork Web Dev'"></div>
+                                        </template>
+                                        <h4 class="text-base font-bold text-white">Website Care Report</h4>
+                                        <p class="text-[11px] text-white/80 mt-0.5">acme-store.com &middot; Aug 1 &ndash; Aug 31, 2026</p>
+                                    </div>
                                     <div :style="'height: 3px; background:' + (reportsAccentColor || '#7EFF83')"></div>
 
                                     <div class="p-4 space-y-4">
-                                        {{-- Header with Brand Logo/Title --}}
-                                        <div class="border-b border-slate-200 pb-3 flex items-start justify-between">
-                                            <div>
-                                                <template x-if="logoUrl">
-                                                    <img :src="logoUrl" alt="Report Logo" class="h-6 object-contain mb-1.5">
-                                                </template>
-                                                <template x-if="!logoUrl">
-                                                    <div class="font-extrabold text-sm text-slate-900 mb-1" x-text="reportsCompanyName || companyName || 'Clockwork Web Dev'"></div>
-                                                </template>
-                                                <h4 class="text-base font-bold text-slate-900">Website Care &amp; Maintenance Report</h4>
-                                                <p class="text-[11px] text-slate-500 mt-0.5">Prepared for <span class="font-semibold text-slate-800">acme-store.com</span></p>
-                                            </div>
-                                            <div class="text-right text-[10px] text-slate-400">
-                                                <div>Monthly Executive Summary</div>
-                                                <div class="font-semibold text-slate-700">August 2026</div>
-                                            </div>
-                                        </div>
-
                                         {{-- Metric Highlights --}}
                                         <div class="grid grid-cols-3 gap-2">
                                             <div class="p-2 rounded bg-slate-50 border border-slate-100 text-center">

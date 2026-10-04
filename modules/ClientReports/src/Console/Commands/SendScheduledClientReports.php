@@ -98,10 +98,8 @@ class SendScheduledClientReports extends Command
                 ]);
 
                 if ($isAuto) {
-                    $reportUrl = route('client-reports.public', ['token' => $report->public_token]);
-
                     foreach ($recipients as $email) {
-                        Mail::to($email)->send(new ClientReportMail($report, $reportUrl));
+                        Mail::to($email)->send(new ClientReportMail($report));
                     }
 
                     $report->update([

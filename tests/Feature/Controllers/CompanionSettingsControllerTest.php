@@ -322,7 +322,8 @@ describe('CompanionSettingsController', function () {
                 ->assertSee('Enable Custom Reports Styling')
                 ->assertSee('Primary Brand Color')
                 ->assertSee('Accent Strip')
-                ->assertSee('Executive Summary');
+                ->assertSee('Website Care Report')
+                ->assertSee('Email Header Background', false);
         });
 
         it('saves custom reports branding and redirects to reports tab', function () {

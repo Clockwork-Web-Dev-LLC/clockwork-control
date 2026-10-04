@@ -130,6 +130,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
  * @property-read ?Server $server
+ * @property-read ?Client $client
  * @property-read Collection<int, ThreatLog> $threatLogs
  * @property-read Collection<int, NginxLogCursor> $nginxLogCursors
  * @property-read Collection<int, BlockedIp> $blockedIps
@@ -789,6 +790,7 @@ class Site extends Model
         return $this->belongsTo(BillComCustomer::class, 'bill_com_customer_id');
     }
 
+    /** @return BelongsTo<Client, $this> */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
