@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **DigitalOcean CPU Metrics Post-Reboot Resilience**:
+  - Enhanced `DigitalOceanMetricsParser::percentCpuUsed()` to detect Linux counter resets (`/proc/stat` jiffies) when droplets reboot mid-polling window. Utilization is now calculated across the synchronized post-reboot data points instead of discarding the entire window and reporting an "Unknown" status for 15 minutes.
+
 ## [1.10.1] - 2026-10-04
 
 ### Added
-- **Reorderable Site Settings Modules (`/sites/{site}?tab=settings`)**:
+- **Reorderable Site Settings Modules (`/sites/{site}/settings`)**:
   - Full drag-and-drop handles and accessible keyboard/mobile up/down arrow buttons on all 10 site settings cards (`Cert details`, `Cloudflare`, `WordPress security`, `Server tools`, `Care plan`, `Uptime monitoring`, `Site status`, `Companion mu-plugin`, `Contact forms`, and `Gatekeeper`).
   - Asynchronous database persistence per-site via `PATCH /sites/{site}/settings-layout` saving to `sites.settings_layout` (JSON column).
   - DOM-preserving node reordering ensuring all existing forms, inputs, modals (probe subscriber modal, cert editor, gatekeeper override editor), and event listeners remain fully interactive when rearranged.
