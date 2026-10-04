@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-10-04
+
+### Added
+- **Command Center rail — Modules group**: the desktop left rail now lists every enabled module's page (Code Snippets, Clients, Client reports, Mattermost/SMS notifications, Email Auth, Feedback, Bill.com sync, …) under a **Modules** heading — the same list as the mobile Menu sheet. Collapsed-rail tooltips and current-page highlighting included.
+- **Modern Studio top bar — Operations dropdown**: the Operations tab opens a menu with Capacity, Fleet Updates, Maintenance and AiRemedy (the separate AiRemedy tab is folded in; its review badge stays on the tab).
+
+### Fixed
+- **`/clients` and `/clients/{id}` returned HTTP 500 on every request** — both pages included a `client-reports::_tabs` partial that never existed. Removed; render tests added.
+
 ## [1.10.1] - 2026-10-04
 
 ### Added
-- **Reorderable Site Settings Modules (`/sites/{site}?tab=settings`)**:
+- **Reorderable Site Settings Modules (`/sites/{site}/settings`)**:
   - Full drag-and-drop handles and accessible keyboard/mobile up/down arrow buttons on all 10 site settings cards (`Cert details`, `Cloudflare`, `WordPress security`, `Server tools`, `Care plan`, `Uptime monitoring`, `Site status`, `Companion mu-plugin`, `Contact forms`, and `Gatekeeper`).
   - Asynchronous database persistence per-site via `PATCH /sites/{site}/settings-layout` saving to `sites.settings_layout` (JSON column).
   - DOM-preserving node reordering ensuring all existing forms, inputs, modals (probe subscriber modal, cert editor, gatekeeper override editor), and event listeners remain fully interactive when rearranged.
@@ -137,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reassuring, non-technical SMS messaging formatted specifically for client contacts (`TwilioSmsNotifier::dispatchClients()`) without operational jargon, stack traces, or server internals.
   - Transactional HTML & plain-text client email notifications for site outages and recoveries (`SiteDownClientMail` and `SiteUpClientMail`).
   - Reorganized `/settings/notifications` into distinct **Team On-Call Rotation** (schedule + off-windows) and **Client Alert Contacts** (site subscriptions + channel toggles) sections.
-  - Added inline **Alert Subscribers** management card (Card 6) directly on the per-site Settings tab (`/sites/{site}?tab=settings`), allowing one-click subscriber assignment and inline client contact creation.
+  - Added inline **Alert Subscribers** management card (Card 6) directly on the per-site Settings tab (`/sites/{site}/settings`), allowing one-click subscriber assignment and inline client contact creation.
 - **AiRemedy unknown site path protection**:
   - Held autonomous fixes that target unknown or mismatched site paths on fleet servers (`ServerSiteContext`).
 
