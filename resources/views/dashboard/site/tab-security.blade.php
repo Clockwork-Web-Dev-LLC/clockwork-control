@@ -66,7 +66,7 @@
         <div class="flex items-start justify-between mb-3 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-globe text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-globe text-[var(--color-ink-muted)] mr-1"></i>
                     Sucuri SiteCheck
                 </h2>
                 <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Remote malware + blacklist scan (replaces ManageWP).</p>
@@ -139,7 +139,7 @@
         <div class="flex items-start justify-between mb-3 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-shield-halved text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)] mr-1"></i>
                     Core file integrity
                 </h2>
                 <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">SSH wp-cli core checksum verification (catches what Sucuri can't).</p>
@@ -286,7 +286,7 @@
 {{-- Recent scan history --}}
 <div class="card p-5">
     <h3 class="font-display text-base font-semibold text-[var(--color-ink-strong)] mb-3">
-        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-soft)] mr-1"></i>
+        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)] mr-1"></i>
         Recent scans
     </h3>
 

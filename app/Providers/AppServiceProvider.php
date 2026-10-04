@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\Core\ModuleStateResolver;
 use Throwable;
 
@@ -54,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
                 'activeBansCount' => 0,
                 'updatesPendingCount' => 0,
                 'failingFormsCount' => 0,
+                'aiRemedyReviewCount' => 0,
             ];
 
             try {
@@ -98,6 +100,17 @@ class AppServiceProvider extends ServiceProvider
                         ->whereHas('site', fn ($q) => $q->when(Site::areCarePlansEnabled(), fn ($q) => $q->where('care_plan_enabled', true)))
                         ->count()
                     : 0;
+            } catch (Throwable) {
+            }
+
+            try {
+                if (app(ModuleStateResolver::class)->isEnabled('ai-remedy')) {
+                    $data['aiRemedyReviewCount'] = AiRemedyRun::query()
+                        ->where('actor', 'interactive')
+                        ->whereIn('status', [AiRemedyRun::STATUS_ANALYZED, AiRemedyRun::STATUS_PENDING])
+                        ->where('started_at', '>=', now()->subHours(24))
+                        ->count();
+                }
             } catch (Throwable) {
             }
 

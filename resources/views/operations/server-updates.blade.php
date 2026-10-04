@@ -11,7 +11,23 @@
     @include('operations._tabs')
 
     <x-page-header title="Fleet server updates"
-        subtitle="Apt-update snapshot for every non-ignored server. Pick servers to queue one-by-one or all at once. Per-server details on each row link to the server's Updates tab." />
+        subtitle="Apt-update snapshot for every non-ignored server. Pick servers to queue one-by-one or all at once. Per-server details on each row link to the server's Updates tab.">
+        <x-slot:actions>
+            <form method="POST" action="{{ route('operations.server-updates.refresh') }}" class="inline"
+                  data-confirm="Re-poll every non-ignored server now?"
+                  data-confirm-details="Runs in the background — takes a few minutes."
+                  data-confirm-btn="Re-poll Fleet"
+                  data-confirm-variant="warning">
+                @csrf
+                <button type="submit"
+                        class="btn-pill-nav text-xs md:text-sm cursor-pointer @if($pollInProgress) opacity-50 cursor-not-allowed @endif"
+                        @if($pollInProgress) disabled @endif>
+                    <i class="fa-solid @if($pollInProgress) fa-spinner fa-spin @else fa-rotate @endif text-xs"></i>
+                    <span>{{ $pollInProgress ? 'Polling in background…' : 'Re-poll Fleet' }}</span>
+                </button>
+            </form>
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('status'))
         <div class="mb-4 px-4 py-2 rounded-md bg-[var(--color-status-green)]/10 text-[var(--color-status-green)] text-sm">
@@ -59,26 +75,6 @@
     @if ($pollInProgress)
         <meta http-equiv="refresh" content="10">
     @endif
-
-    {{-- Toolbar --}}
-    <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
-        <form method="POST" action="{{ route('operations.server-updates.refresh') }}" class="flex items-center gap-2"
-              data-confirm="Re-poll every non-ignored server now?"
-              data-confirm-details="Runs in the background — takes a few minutes."
-              data-confirm-btn="Re-poll Fleet"
-              data-confirm-variant="warning">
-            @csrf
-            <button type="submit"
-                    class="btn-pill-nav text-sm @if($pollInProgress) opacity-50 cursor-not-allowed @endif"
-                    @if($pollInProgress) disabled @endif>
-                <i class="fa-solid @if($pollInProgress) fa-spinner fa-spin @else fa-rotate @endif"></i>
-                {{ $pollInProgress ? 'Polling in background…' : 'Re-poll fleet now' }}
-            </button>
-        </form>
-        <div class="text-xs text-[var(--color-ink-soft)]">
-            Or wait — <code class="font-data">clockwork:poll-system-updates</code> runs daily at 04:15 UTC.
-        </div>
-    </div>
 
     @if ($pollInProgress)
         <div class="card p-4 mb-4 border-l-4 border-amber-500">

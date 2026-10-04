@@ -41,19 +41,19 @@ Every feedback item supports back-and-forth discussion threads:
 
 The working list at **`/feedback`** aggregates all feedback across the application:
 
-* Filterable by status (Open, Approved, In Progress, Resolved) and by page/route.
-* Shows submitter, timestamp, target page, and comment excerpt.
+* **Clean Header Actions**: Primary **Generate Approved Prompt** button with live item count badge, **Download .md**, and **Batch Actions** dropdown (`Mark In Progress`, `Mark All Resolved`).
+* Filterable by status pills (All, Open, Approved, In Progress, Resolved) and by page/route category.
 * Direct link back to the target page to view the pin in its live context.
-* Detail view with the full threaded discussion history.
-* 1-click **Approve** and **Resolve** action buttons on every card (with instantaneous status update without full-page refreshes).
-* Batch action buttons to **Mark In Progress** or **Mark All Resolved** in a single operation.
+* Detail view with full threaded discussion history.
+* **Streamlined Card Footers**: A clean 2-sided action bar with thread toggle and View Pin link on the left, and 1-click **Approve** (for open items), status selector dropdown, **Copy Prompt**, and delete on the right.
+* **Automatic Overlay Suppression**: The floating bottom-right feedback widget is suppressed on `/feedback` itself to avoid obscuring card controls and filters.
 
 ### 4. Claude / AI Batch Prompt Generator & Scheduled Exports
 
-Each feedback item includes an automatic **Generate Claude Prompt** action. Furthermore, all currently approved items are automatically bundled into an **Implementation Batch**:
+Each feedback item includes a **Copy Prompt** button in its card footer. Furthermore, all currently approved items are automatically bundled into an **Implementation Batch** via the page header:
 
-* **One-Click Copy**: Copy the entire aggregated master prompt for all approved items to clipboard.
-* **Direct File Download (`.md`)**: Download `clockwork-claude-approved-prompt-YYYY-MM-DD.md` straight from the browser (or download an individual item's markdown file).
+* **One-Click Generate & Copy**: Generate the complete master prompt for all approved items directly from the header action button.
+* **Direct File Download (`.md`)**: Download `clockwork-claude-approved-prompt-YYYY-MM-DD.md` straight from the header actions (or download an individual item's markdown file).
 * **Batch State Advancement**: Clicking "Mark in Progress" immediately moves all approved items to `in_progress` once handed off to Claude.
 * **Scheduled Generation (`clockwork:feedback-prompt`)**: The scheduler automatically runs `clockwork:feedback-prompt` daily at 09:00 UTC, compiling all approved items into `storage/app/prompts/latest-feedback-prompt.md`.
 

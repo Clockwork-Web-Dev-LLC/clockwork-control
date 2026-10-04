@@ -4,6 +4,7 @@ namespace Tests;
 
 use App\Support\SsrfGuard;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Process;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -19,5 +20,10 @@ abstract class TestCase extends BaseTestCase
         // real rejection logic live in tests/Unit/Support/SsrfGuardTest.php,
         // which never boots the app and is unaffected by this.
         SsrfGuard::fake();
+
+        Process::preventStrayProcesses();
+        Process::fake([
+            'git *' => Process::result(output: 'main', exitCode: 0),
+        ]);
     }
 }

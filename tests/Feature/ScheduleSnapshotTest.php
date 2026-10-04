@@ -23,16 +23,20 @@ class ScheduleSnapshotTest extends TestCase
      * different flags) appears twice, matching schedule:list's own output.
      */
     private const EXPECTED_COMMANDS = [
+        'clockwork:ai-remedy-evaluate-outcomes',
+        'clockwork:ai-remedy-expire-unreviewed',
         'clockwork:auto-approve-repeats',
         'clockwork:backup-relay-run',
         'clockwork:capture-site-screenshots',
         'clockwork:check-blacklists',
         'clockwork:check-cloudflare',
         'clockwork:check-domain-expirations',
+        'clockwork:check-email-auth',
         'clockwork:check-robots-txt',
         'clockwork:check-site-uptime',
         'clockwork:check-ssl-certs',
         'clockwork:cleanup-spam-comments',
+        'clockwork:collect-field-metrics',
         'clockwork:composer-audit',
         'clockwork:detect-contact-forms',
         'clockwork:detect-stuck-companion-state',

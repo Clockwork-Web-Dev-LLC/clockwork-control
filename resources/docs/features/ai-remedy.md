@@ -2,7 +2,7 @@
 title: AiRemedy (AI Incident Diagnostics, Shadow Mode & Self-Healing)
 section: Features
 order: 86
-updated: 2026-09-30
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [ai, openrouter, claude, diagnostics, self-healing, shadow-mode, remediation, ssh, modules, monitoring]
 tracks: [modules/AiRemedy/**, app/Console/Commands/PollServers.php]
@@ -241,10 +241,60 @@ AiRemedy hooks directly into Clockwork's `ChatNotifier` system, fanning out inci
 
 ---
 
+---
+
+## Accuracy Reporting & Operator Verdicts
+
+Before promoting any server from **Shadow Mode** to **Interactive Copilot** or **Autonomous Self-Healing**, Clockwork provides real data on how often AiRemedy's diagnoses were correct and whether its proposed fixes were actually needed.
+
+Navigate to **AiRemedy → Accuracy Report** (`/ai-remedy/accuracy`):
+- **Operator Verdicts**: Any authenticated operator can evaluate an incident directly from the run drawer or show page (`/ai-remedy/runs/{id}`) by selecting **Correct**, **Partial**, **Wrong**, or **Unsure**, with an optional feedback note. All verdict changes are logged to `action_logs`.
+- **Verdict Breakdown**: View the percentage and count of correct, partial, wrong, and unsure verdicts across all reviewed runs, filterable by date range, trigger type, and AI model.
+- **Cost Metrics**: Tracks total token spend alongside cost per run and cost per correct diagnosis.
+- **Rollout Readiness Scorecard**: A plain-English evaluation (e.g., *"40 verdicts recorded, 88% correct, 0 wrong Tier 1 proposals in the last 30 days"*) to guide confidence before switching modes.
+
+---
+
+## 60-Minute Automated Outcome Evaluations
+
+AiRemedy doesn't just rely on human grading. A scheduled background classifier (`clockwork:ai-remedy-evaluate-outcomes`, running every 15 minutes) automatically evaluates the real-world resolution of incidents 60 minutes after diagnosis:
+
+| Outcome | Server Spikes (via `server_metrics`) | Site Downtime (via `site_uptime_events`) |
+|---|---|---|
+| `self_resolved` | CPU/load/RAM dropped back below alert thresholds within 60 min with **no human actions** in `action_logs`. | Site transitioned to `up` within 60 min with **no human actions**. |
+| `human_resolved` | Server returned to normal, but an operator performed actions on that server or its sites during the window. | Site recovered after operator intervention. |
+| `persisted` | Server remains saturated above alert thresholds at the 60-minute mark. | Site is still down at the 60-minute mark. |
+| `escalated` | Server reached critical red status after diagnosis. | N/A |
+| `unknown` | Server is not cloud-linked or metrics are unavailable. | No uptime events logged. |
+
+### "Would Have Acted, But Self-Resolved"
+The accuracy report highlights runs where **Tier 1 autonomous commands were proposed, yet the incident resolved itself completely without human or AI action**. This metric prevents false-positive over-intervention and tunes safety thresholds.
+
+---
+
+## Copilot Review Queue & Expiration
+
+To keep pending incidents actionable:
+- **Review Queue Filter**: The `/ai-remedy` incident log includes a **Needs review** filter showing unreviewed Copilot incidents.
+- **Navigation Badge**: The main navigation displays a dynamic badge showing the count of pending runs requiring human review.
+- **24-Hour Expiration**: `clockwork:ai-remedy-expire-unreviewed` runs hourly and automatically marks unreviewed Copilot incidents as `expired` after 24 hours, preventing stale actions from lingering.
+
+---
+
+## Sudo Password Hygiene & Age Tracking
+
+AiRemedy relies on the server's stored SSH/sudo password (`servers.ssh_password`) to execute privileged Tier 1 and Tier 2 commands on servers without passwordless sudo.
+
+- **Password Age Tracking**: Whenever an SSH password is saved or bulk-imported, Clockwork records `servers.ssh_password_updated_at`.
+- **90-Day Rotation Reminder**: The server credentials screen (`/servers/{id}/credentials`) displays the exact age of the password and displays an alert if the password has not been rotated in 90 days.
+
+---
+
 ## Security, Rate Limiting & Diagnostic Health Checks
 
 * **Session Gating**: Protected with the `['web', 'auth', 'active']` middleware pipeline to ensure deactivated user sessions cannot access or trigger AI operations.
 * **Abuse & Cost Rate Limiting**: AI and SSH routes are throttled (`throttle:10,1` on simulation/execute; `throttle:15,1` on diagnosis) to prevent rapid-click token waste.
 * **Integration Diagnostics**: Contributes `AiRemedyCheck` to **Settings → Integrations**, allowing operators to test API latency, token balance, and key validity on demand.
+
 
 

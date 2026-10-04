@@ -7,7 +7,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 describe('ServiceRateLimitRegistry', function () {
-    it('contains all 24 supported service integrations with complete metadata', function () {
+    it('contains all 25 supported service integrations with complete metadata', function () {
         $registry = app(ServiceRateLimitRegistry::class);
         $services = $registry->all();
 
@@ -36,9 +36,10 @@ describe('ServiceRateLimitRegistry', function () {
             'auth_microsoft',
             'client_slack',
             'backup-relay',
+            'ai-remedy',
         ];
 
-        expect(count($services))->toBe(24);
+        expect(count($services))->toBe(25);
 
         foreach ($expectedServices as $serviceId) {
             expect($services)->toHaveKey($serviceId);
@@ -76,7 +77,9 @@ describe('ServiceRateLimitRegistry', function () {
         expect($registry->hasRateLimits('digitalocean'))->toBeTrue()
             ->and($registry->getType('digitalocean'))->toBe('api')
             ->and($registry->hasRateLimits('spinupwp'))->toBeTrue()
-            ->and($registry->getType('spinupwp'))->toBe('api');
+            ->and($registry->getType('spinupwp'))->toBe('api')
+            ->and($registry->hasRateLimits('ai-remedy'))->toBeTrue()
+            ->and($registry->getType('ai-remedy'))->toBe('api');
 
         // Webhooks
         expect($registry->hasRateLimits('mattermost'))->toBeFalse()

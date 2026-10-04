@@ -127,6 +127,14 @@
     <div class="{{ $class }} rounded-lg bg-rose-50 text-rose-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-rose-950/40 dark:text-rose-400">
         <i class="fa-solid fa-user-shield"></i>
     </div>
+@elseif ($id === 'ai-remedy' || $id === 'airemedy' || $id === 'openrouter')
+    <div class="{{ $class }} rounded-lg bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-indigo-950/40 dark:text-indigo-400">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+    </div>
+@elseif ($id === 'email-auth' || $id === 'email_auth')
+    <div class="{{ $class }} rounded-lg bg-sky-50 text-sky-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-sky-950/40 dark:text-sky-400">
+        <i class="fa-solid fa-envelope-shield"></i>
+    </div>
 @else
     <div class="{{ $class }} text-[var(--color-ink-muted)] flex items-center justify-center text-base">
         <i class="fa-solid fa-layer-group"></i>

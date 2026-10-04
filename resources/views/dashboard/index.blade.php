@@ -116,7 +116,7 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Fleet Health</span>
-                <i class="fa-solid fa-heart-pulse text-xs text-emerald-500"></i>
+                <i class="fa-solid fa-heart-pulse text-xs text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $healthPct }}%</span>
@@ -148,7 +148,7 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Managed Sites</span>
-                <i class="fa-solid fa-globe text-sky-500 text-xs"></i>
+                <i class="fa-solid fa-globe text-xs text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalSites }}</span>
@@ -167,44 +167,48 @@
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
                 <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Total Nodes</span>
-                <i class="fa-solid fa-server text-[var(--color-brand)] text-sm"></i>
+                <i class="fa-solid fa-server text-sm text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalCount }}</span>
                 <span class="text-xs text-[var(--color-ink-soft)]">Monitored Hosts</span>
             </div>
             <div class="flex items-center gap-2 mt-1 text-xs text-[var(--color-ink-muted)] font-data">
-                <span><i class="fa-solid fa-microchip text-[var(--color-brand)] text-xs mr-1"></i>SSH Polled</span>
+                <span><i class="fa-solid fa-microchip text-xs mr-1 text-[var(--color-ink-muted)]"></i>SSH Polled</span>
             </div>
         </div>
 
-        <!-- Metric 4: Operations & Sync -->
+        <!-- Metric 4: OS Maintenance -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
-                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Operations &amp; Sync</span>
-                <i class="fa-solid fa-rotate text-xs text-[var(--color-ink-muted)]"></i>
+                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">OS Maintenance</span>
+                <i class="fa-solid fa-cube text-xs text-[var(--color-ink-muted)]"></i>
             </div>
-            <div class="flex items-center gap-2 mt-2 flex-wrap">
-                @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('spinupwp'))
-                    <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="inline flex-1">
-                        @csrf
-                        <button type="submit" class="w-full text-center px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] transition-all cursor-pointer"
-                                title="Re-pull from SpinupWP API"
-                                onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>SpinupWP</span>
-                        </button>
-                    </form>
-                @endif
-                @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gridpane'))
-                    <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="inline flex-1">
-                        @csrf
-                        <button type="submit" class="w-full text-center px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] text-xs font-medium text-[var(--color-ink-strong)] transition-all cursor-pointer"
-                                title="Re-pull from GridPane API"
-                                onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
-                            <i class="fa-solid fa-rotate text-[10px] mr-1"></i> <span>GridPane</span>
-                        </button>
-                    </form>
-                @endif
+            @php
+                $pendingUpdates = ($patchCounts['patches'] ?? 0) + ($patchCounts['reboots'] ?? 0);
+            @endphp
+            <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-3xl font-display font-bold font-data {{ $pendingUpdates > 0 ? 'text-[var(--color-status-yellow)]' : 'text-[var(--color-status-green)]' }}">
+                    {{ $pendingUpdates }}
+                </span>
+                <span class="text-xs text-[var(--color-ink-soft)]">{{ $pendingUpdates > 0 ? 'Pending Tasks' : 'All Up to Date' }}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-[var(--color-ink-muted)] mt-2">
+                <div class="flex items-center gap-1.5 font-data text-[11px]">
+                    <span class="{{ ($patchCounts['patches'] ?? 0) > 0 ? 'text-[var(--color-status-yellow)] font-semibold' : 'text-[var(--color-ink-soft)]' }}">
+                        {{ $patchCounts['patches'] ?? 0 }} {{ Str::plural('patch', $patchCounts['patches'] ?? 0) }}
+                    </span>
+                    @if (($patchCounts['reboots'] ?? 0) > 0)
+                        <span class="text-[var(--color-ink-soft)]">·</span>
+                        <span class="text-[var(--color-status-yellow)] font-semibold">
+                            {{ $patchCounts['reboots'] }} {{ Str::plural('reboot', $patchCounts['reboots']) }}
+                        </span>
+                    @endif
+                </div>
+                <a href="{{ route('operations.server-updates.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1 text-[11px]">
+                    <span>Fleet Updates</span>
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                </a>
             </div>
         </div>
     </div>
@@ -372,9 +376,10 @@
                         default => ['label' => 'Healthy', 'class' => 'status-green'],
                     };
                 @endphp
-                <div class="cw-server-card flex flex-col justify-between server-card relative group {{ $cardStatusClass }}"
+                <div class="cw-server-card flex flex-col justify-between server-card relative group cursor-pointer {{ $cardStatusClass }}"
                      data-server-id="{{ $server->id }}"
-                     data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}">
+                     data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}"
+                     onclick="if (!event.target.closest('a, button, form, input')) { if (event.metaKey || event.ctrlKey) { window.open('{{ route('servers.show', $server) }}', '_blank'); } else { window.location.href = '{{ route('servers.show', $server) }}'; } }">
 
                     <!-- Card Header -->
                     <div>
@@ -394,14 +399,14 @@
                         <!-- Staging, Patches, SpinupWP/GridPane & Tags -->
                         <div class="flex items-center gap-1.5 flex-wrap mb-3">
                             @if ($server->spinupwp_id)
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="SpinupWP server #{{ $server->spinupwp_id }}">
-                                    <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]"></i>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]" title="SpinupWP server #{{ $server->spinupwp_id }}">
+                                    <i class="fa-solid fa-bolt text-[10px] text-[var(--color-ink-muted)]"></i>
                                     <span>SpinupWP</span>
                                 </span>
                             @endif
                             @if ($server->isGridPane())
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
-                                    <i class="fa-solid fa-table-cells text-[10px] text-emerald-500"></i>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}">
+                                    <i class="fa-solid fa-table-cells text-[10px] text-[var(--color-ink-muted)]"></i>
                                     <span>GridPane</span>
                                 </span>
                             @endif
@@ -649,7 +654,7 @@
                             <tr class="server-card cursor-pointer hover:bg-[var(--color-surface-alt)]/50 transition-colors"
                                 data-server-id="{{ $server->id }}"
                                 data-search="{{ strtolower($server->name . ' ' . $server->hostname) }}"
-                                onclick="if (!event.target.closest('a, button, form, input')) window.location.href = '{{ route('servers.show', $server) }}'">
+                                onclick="if (!event.target.closest('a, button, form, input')) { if (event.metaKey || event.ctrlKey) { window.open('{{ route('servers.show', $server) }}', '_blank'); } else { window.location.href = '{{ route('servers.show', $server) }}'; } }">
                                 <td>
                                     <span class="status-pill {{ $cardPill['class'] }} text-[10px]">
                                         <span class="status-dot"></span>
@@ -676,10 +681,10 @@
                                             <span class="text-[var(--color-ink-soft)] italic">Manual</span>
                                         @endif
                                         @if ($server->spinupwp_id)
-                                            <i class="fa-solid fa-bolt text-[10px] text-[#00C2A8]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
+                                            <i class="fa-solid fa-bolt text-[10px] text-[var(--color-ink-muted)]" title="SpinupWP #{{ $server->spinupwp_id }}"></i>
                                         @endif
                                         @if ($server->isGridPane())
-                                            <i class="fa-solid fa-table-cells text-[10px] text-emerald-500" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
+                                            <i class="fa-solid fa-table-cells text-[10px] text-[var(--color-ink-muted)]" title="GridPane server{{ $server->provider_id ? ' #' . $server->provider_id : '' }}"></i>
                                         @endif
                                     </div>
                                 </td>

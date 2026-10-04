@@ -36,7 +36,7 @@
     <div>
         <div class="flex items-center justify-between mb-3">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-note-sticky text-amber-500"></i>
+                <i class="fa-solid fa-note-sticky text-[var(--color-ink-muted)]"></i>
                 Site Notes
             </h3>
             <div class="flex items-center gap-1.5 text-xs">

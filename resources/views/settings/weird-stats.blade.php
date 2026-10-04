@@ -42,7 +42,6 @@
         @include('settings.weird-stats._selling-points', ['sellingPoints' => $sellingPoints])
         @include('settings.weird-stats._plugin-coverage', ['rows' => $pluginCoverage])
         @include('settings.weird-stats._top-sites', ['top' => $topSites])
-        @include('settings.weird-stats._attacked-paths', ['rows' => $attackedPaths])
         @include('settings.weird-stats._repeat-offenders', ['rows' => $repeatOffenders])
         @include('settings.weird-stats._unprotected-sites', ['sites' => $unprotectedSites])
     </div>

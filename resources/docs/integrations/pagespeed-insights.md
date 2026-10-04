@@ -2,7 +2,7 @@
 title: Google PageSpeed Insights
 section: Integrations
 order: 80
-updated: 2026-09-14
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, google, care-plan, pressable, modularization]
 tracks: [modules/PageSpeedInsights/src/PageSpeedInsightsClient.php, modules/PageSpeedInsights/src/PageSpeedInsightsServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
@@ -31,17 +31,21 @@ php artisan clockwork:run-performance-scans --site=42 --engine=psi
 ## Setup
 
 1. Google Cloud Console → enable "PageSpeed Insights API" on your project.
-2. Credentials → Create API key.
-3. Put in `.env`:
+2. Google Cloud Console → enable "Chrome UX Report API" on the same project (required for real-user field data).
+3. Credentials → Create API key.
+4. Put in `.env`:
 
    ```
    CLOCKWORK_PSI_API_KEY=AIzaSy...
+   # Optional: specify a distinct key for CrUX, otherwise falls back to CLOCKWORK_PSI_API_KEY
+   CLOCKWORK_CRUX_API_KEY=AIzaSy...
    ```
 
-No key required strictly speaking — the Google API permits anonymous calls at a lower rate limit, but the key avoids shared-IP throttling on busy agency networks.
+No key required strictly speaking for basic PSI — the Google API permits anonymous calls at a lower rate limit, but the key avoids shared-IP throttling on busy agency networks. The Chrome UX Report API requires an enabled key.
 
 ## Endpoints we call
 
+### PageSpeed Insights v5 (Lab Data)
 `GET https://www.googleapis.com/pagespeedonline/v5/runPagespeed`
 
 Query params: `url`, `key`, `strategy=mobile` (or `desktop`), repeating `category=performance&category=accessibility&category=best-practices&category=seo`.
@@ -53,13 +57,28 @@ Response is parsed via `PageSpeedInsightsClient`. We extract:
 - Core Web Vitals: LCP, FCP, TBT, Speed Index, CLS
 - Page weight (bytes), network request count
 
+### Chrome UX Report API (Real-User Field Data)
+`POST https://chromeuxreport.googleapis.com/v1/records:queryRecord?key={key}`
+
+Payload JSON: `{"origin": "https://{domain}", "formFactor": "PHONE"}` (and `DESKTOP`).
+
+Response is parsed via `ChromeUxReportClient`. We extract:
+- 75th percentile values for LCP, INP, FCP, TTFB, and CLS
+- Histogram distribution buckets (`good_pct`)
+- Rolling 28-day collection period bounds (`period_start`, `period_end`)
+- Core Web Vitals overall pass status (`cwv_pass`)
+- HTTP 404 responses are classified as `no_data` (insufficient Chrome traffic) rather than errors.
+
 ## Scheduled jobs that depend on it
 
-None directly — the daily 03:30 `clockwork:run-performance-scans` entry is GTmetrix-primary and only reaches PSI on GTmetrix failure.
+- `clockwork:run-performance-scans` (daily 04:45 UTC, 1/7th rotation) is GTmetrix-primary and only reaches PSI on GTmetrix failure.
+- `clockwork:collect-field-metrics` (weekly Sundays 05:30 UTC) queries the Chrome UX Report API for all active care-plan sites.
 
 ## Storage
 
-`site_performance_scans` — one row per run. Columns: `site_id`, `scanned_at`, `status` (`ok|failed`), `strategy`, `engine` (`gtmetrix|psi|psi-fallback`), `performance_score` (0-100), `lcp_ms`, `fcp_ms`, `tbt_ms`, `si_ms`, **`cls_x1000`** (CLS × 1000 to avoid float drift in MySQL — divide on read), `page_weight_bytes`, `request_count`, `page_url`, `region`, `error`, `elapsed_ms`.
+- `site_performance_scans` — one row per lab run. Columns: `site_id`, `scanned_at`, `status` (`ok|failed`), `strategy`, `engine` (`gtmetrix|psi|psi-fallback`), `performance_score` (0-100), `lcp_ms`, `fcp_ms`, `tbt_ms`, `si_ms`, **`cls_x1000`** (CLS × 1000 to avoid float drift in MySQL — divide on read), `accessibility_score`, `best_practices_score`, `seo_score`, `page_weight_bytes`, `request_count`, `page_url`, `region`, `error`, `elapsed_ms`.
+- `site_field_metrics` — one row per site × form factor × scope × collection period. Columns: `site_id`, `form_factor` (`phone|desktop`), `scope` (`origin|url`), `status` (`ok|no_data|failed`), `lcp_p75_ms`, `inp_p75_ms`, `fcp_p75_ms`, `ttfb_p75_ms`, `cls_p75_x1000`, `good_pct`, `cwv_pass`, `period_start`, `period_end`, `collected_at`, `error`. Unique on `(site_id, form_factor, scope, period_end)`.
+
 
 Each scan also writes a summary row to `action_logs` (`TYPE_PERFORMANCE_SCAN`), which auto-pushes to Companion's Performance admin page so the client sees the same numbers we do.
 

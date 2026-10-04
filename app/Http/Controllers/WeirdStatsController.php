@@ -19,7 +19,6 @@ class WeirdStatsController extends Controller
             'sellingPoints' => $stats->settlingPointStats(),
             'pluginCoverage' => $stats->pluginCoverageMatrix(),
             'topSites' => $stats->topSitesByVisits(),
-            'attackedPaths' => $stats->mostAttackedPaths(),
             'repeatOffenders' => $stats->worstRepeatOffenders(),
             'unprotectedSites' => $stats->unprotectedSitesByTraffic(),
         ]);

@@ -3,11 +3,14 @@
 namespace Modules\AiRemedy\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionLog;
 use App\Models\Server;
 use App\Services\ActionLog\ActionLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\AiRemedy\Services\AiRemedyTriager;
@@ -40,7 +43,12 @@ class AiRemedyController extends Controller
             ->latest('id');
 
         if ($status = $request->input('status')) {
-            $query->where('status', $status);
+            if ($status === 'needs_review') {
+                $query->where('actor', 'interactive')
+                    ->whereIn('status', [AiRemedyRun::STATUS_ANALYZED, AiRemedyRun::STATUS_PENDING]);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         if ($serverId = $request->input('server_id')) {
@@ -63,6 +71,12 @@ class AiRemedyController extends Controller
             $reviews[$run->id] = $this->policy->review($run, $request->user());
         }
 
+        $needsReviewCount = AiRemedyRun::query()
+            ->where('actor', 'interactive')
+            ->whereIn('status', [AiRemedyRun::STATUS_ANALYZED, AiRemedyRun::STATUS_PENDING])
+            ->whereNull('hidden_at')
+            ->count();
+
         return view('ai-remedy::index', [
             'runs' => $runs,
             'reviews' => $reviews,
@@ -72,6 +86,7 @@ class AiRemedyController extends Controller
             'selectedServerId' => $serverId,
             'showHidden' => $showHidden,
             'hiddenCount' => AiRemedyRun::whereNotNull('hidden_at')->count(),
+            'needsReviewCount' => $needsReviewCount,
         ]);
     }
 
@@ -208,6 +223,9 @@ class AiRemedyController extends Controller
             'diagnosis_summary' => $analysis['summary'],
             'root_cause' => $analysis['root_cause'],
             'safety_tier' => $analysis['is_fixable'] ? $safety['highest_tier'] : AiRemedyRun::TIER_UNFIXABLE,
+            'is_fixable' => (bool) ($analysis['is_fixable'] ?? true),
+            'is_maintenance' => (bool) ($analysis['is_maintenance'] ?? false),
+            'maintenance_type' => $analysis['maintenance_type'] ?? null,
             'proposed_commands' => $analysis['commands'],
             'before_metrics' => $telemetry,
             'started_at' => now(),
@@ -427,5 +445,52 @@ class AiRemedyController extends Controller
         $result = $this->client->testConnection($key);
 
         return response()->json($result);
+    }
+
+    /**
+     * Record an operator evaluation verdict on an AiRemedy run.
+     */
+    public function setVerdict(Request $request, AiRemedyRun $run): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'verdict' => ['required', 'string', Rule::in([
+                AiRemedyRun::VERDICT_CORRECT,
+                AiRemedyRun::VERDICT_PARTIAL,
+                AiRemedyRun::VERDICT_WRONG,
+                AiRemedyRun::VERDICT_UNSURE,
+            ])],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $run->update([
+            'verdict' => $validated['verdict'],
+            'verdict_note' => $validated['note'] ?? null,
+            'verdict_by_user_id' => $request->user()?->id,
+            'verdict_at' => Carbon::now(),
+        ]);
+
+        ActionLog::create([
+            'server_id' => $run->server_id,
+            'site_id' => $run->site_id,
+            'action_type' => 'ai_remedy_verdict',
+            'summary' => "Recorded verdict '{$validated['verdict']}' on AiRemedy run #{$run->id}",
+            'actor' => $request->user()->name ?? 'operator',
+            'ran_at' => Carbon::now(),
+            'details' => [
+                'run_id' => $run->id,
+                'verdict' => $validated['verdict'],
+                'note' => $validated['note'] ?? null,
+            ],
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'verdict' => $run->verdict,
+                'message' => 'Verdict recorded successfully.',
+            ]);
+        }
+
+        return back()->with('status', 'Verdict recorded successfully.');
     }
 }

@@ -542,6 +542,15 @@ Schedule::command('clockwork:run-performance-scans --strategy=mobile --weekly-ro
     ->onOneServer()
     ->runInBackground();
 
+// Collect Google Chrome UX Report (CrUX) real-user Core Web Vitals metrics.
+// CrUX aggregates over a 28-day rolling window, so weekly collection captures fresh data.
+Schedule::command('clockwork:collect-field-metrics')
+    ->weeklyOn(0, '05:30')
+    ->when(fn () => (bool) app(Settings::class)->get('performance_scans.field_data_enabled', config('clockwork.crux.enabled', true)))
+    ->withoutOverlapping(60)
+    ->onOneServer()
+    ->runInBackground();
+
 // Fetch software runtime lifecycle data from endoflife.date for PHP and WordPress.
 // Caches cycle tables in app_settings so the Capacity dashboard and site tech
 // stack widgets can track EOL / security-only versions without blocking on HTTP.

@@ -1,13 +1,16 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\AiRemedy\Http\Controllers\AiRemedyAccuracyController;
 use Modules\AiRemedy\Http\Controllers\AiRemedyController;
 use Modules\AiRemedy\Http\Controllers\AiRemedySettingsController;
 
 Route::middleware(['web', 'auth', 'active'])->group(function () {
     // Read-only audit log & incident forensics accessible to all active authenticated team members
     Route::get('/ai-remedy', [AiRemedyController::class, 'index'])->name('ai-remedy.index');
+    Route::get('/ai-remedy/accuracy', [AiRemedyAccuracyController::class, 'index'])->name('ai-remedy.accuracy');
     Route::get('/ai-remedy/runs/{run}', [AiRemedyController::class, 'show'])->name('ai-remedy.show');
+    Route::post('/ai-remedy/runs/{run}/verdict', [AiRemedyController::class, 'setVerdict'])->name('ai-remedy.verdict');
 
     // Admin-only: settings, simulations, diagnoses, and server command execution
     Route::middleware('admin')->group(function () {

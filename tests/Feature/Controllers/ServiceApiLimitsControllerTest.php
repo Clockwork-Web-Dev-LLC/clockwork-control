@@ -539,6 +539,36 @@ describe('.env credential management', function () {
             ->and($envManager->getEnvValue('GOOGLE_CLIENT_SECRET'))->toBe('goog_secret_xyz')
             ->and($envManager->getEnvValue('GOOGLE_HD'))->toBe('myagency.com');
     });
+
+    it('loads and updates credentials and tunables for ai-remedy via modal endpoint', function () {
+        $user = User::factory()->create();
+        $envManager = app(EnvCredentialManager::class);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('settings.integrations.limits', 'ai-remedy'));
+
+        $response->assertOk()
+            ->assertJsonPath('service.id', 'ai-remedy')
+            ->assertJsonPath('service.name', 'AiRemedy')
+            ->assertJsonPath('testable', true)
+            ->assertJsonPath('tunables.rate_limit', 200)
+            ->assertJsonPath('tunables.timeout', 45);
+
+        $this->actingAs($user)
+            ->patchJson(route('settings.integrations.limits.update', 'ai-remedy'), [
+                'timeout' => 60,
+                'credentials' => [
+                    'openrouter_api_key' => 'sk-or-v1-test-openrouter-key-12345',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        expect($envManager->getEnvValue('OPENROUTER_API_KEY'))->toBe('sk-or-v1-test-openrouter-key-12345');
+
+        $registry = app(ServiceRateLimitRegistry::class);
+        expect($registry->getTunables('ai-remedy')['timeout'])->toBe(60);
+    });
 });
 
 describe('cloud instance discovery & actions', function () {

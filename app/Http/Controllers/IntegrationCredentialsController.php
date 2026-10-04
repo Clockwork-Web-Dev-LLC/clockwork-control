@@ -200,6 +200,7 @@ class IntegrationCredentialsController extends Controller
             'google' => 'auth_google',
             'github' => 'auth_github',
             'microsoft' => 'auth_microsoft',
+            'airemedy', 'ai_remedy', 'openrouter' => 'ai-remedy',
             default => $integration,
         };
 

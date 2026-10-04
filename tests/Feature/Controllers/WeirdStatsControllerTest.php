@@ -41,7 +41,6 @@ function mockWeirdStatsAggregator(): void
             'top10_pct_of_fleet' => 0.0,
             'ratio_first_to_tenth' => null,
         ]);
-        $mock->shouldReceive('mostAttackedPaths')->andReturn([]);
         $mock->shouldReceive('worstRepeatOffenders')->andReturn([]);
         $mock->shouldReceive('unprotectedSitesByTraffic')->andReturn(collect());
     });
@@ -64,6 +63,7 @@ describe('WeirdStatsController', function () {
 
         $response->assertOk()
             ->assertSee('Weird Stats')
-            ->assertDontSee('Attack hour-of-day');
+            ->assertDontSee('Attack hour-of-day')
+            ->assertDontSee('Most-attacked request paths');
     });
 });

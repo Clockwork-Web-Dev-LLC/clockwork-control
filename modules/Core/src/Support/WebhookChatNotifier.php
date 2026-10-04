@@ -981,6 +981,48 @@ abstract class WebhookChatNotifier implements ChatNotifier
         return $this->send($title, [$attachment]);
     }
 
+    public function emailAuthDegraded(string $domain, array $findings, ?string $previousStatus = null): bool
+    {
+        if (! $this->isEventEnabled('email_auth_degraded')) {
+            return false;
+        }
+
+        $title = sprintf(':warning: Email Authentication Degraded: %s', $domain);
+
+        $failFindings = array_values(array_filter($findings, fn ($f) => ($f['severity'] ?? '') === 'fail'));
+        $summary = count($failFindings) > 0
+            ? implode("\n• ", array_map(fn ($f) => $f['message'] ?? $f['code'] ?? 'Misconfigured', $failFindings))
+            : 'Email authentication posture degraded to FAIL.';
+
+        $fields = [
+            ['title' => 'Apex Domain', 'value' => $domain, 'short' => true],
+            ['title' => 'Previous Posture', 'value' => strtoupper($previousStatus ?? 'UNKNOWN'), 'short' => true],
+            ['title' => 'New Status', 'value' => 'FAIL', 'short' => true],
+            ['title' => 'Critical Issues', 'value' => (string) count($failFindings), 'short' => true],
+        ];
+
+        $text = "**Critical Issues Detected**:\n• {$summary}";
+
+        $url = Route::has('email-auth.index') ? route('email-auth.index', ['search' => $domain]) : null;
+        if ($url !== null) {
+            $text .= "\n\nInspect DNS records: {$url}";
+        }
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#ef4444',
+            'title' => $title,
+            'text' => $text,
+            'fields' => $fields,
+        ];
+
+        if ($url !== null) {
+            $attachment['title_link'] = $url;
+        }
+
+        return $this->send($title, [$attachment]);
+    }
+
     private function formatDowntime(int $seconds): string
     {
         if ($seconds < 60) {

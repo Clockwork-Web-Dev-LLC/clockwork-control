@@ -27,8 +27,6 @@ class WarmWeirdStats extends Command
         // would no-op if the keys still exist — we want to replace them with
         // fresh values on every scheduled tick so the page never gets staler
         // than the warm cadence (9 min).
-        Cache::forget('weird_stats:most_attacked_paths');
-        Cache::forget('weird_stats:hour_histogram');
         Cache::forget('weird_stats:attacks_7d_count');
         Cache::forget('weird_stats:cf_attack_reduction');
 
@@ -37,8 +35,6 @@ class WarmWeirdStats extends Command
         // Touch each cached method. The aggregator handles the Cache::remember
         // wrapping internally — we just call the methods.
         $stats->summaryTiles();
-        $stats->mostAttackedPaths();
-        $stats->attackHourHistogram();
         $stats->settlingPointStats();
 
         $elapsed = round((microtime(true) - $start) * 1000);

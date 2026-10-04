@@ -47,6 +47,7 @@ class ServerCredentialsController extends Controller
             }
 
             $server->ssh_password = $password;
+            $server->ssh_password_updated_at = now();
             if ($server->ssh_user === '' || $server->ssh_user === null) {
                 $server->ssh_user = $defaultUser;
             }
@@ -86,8 +87,10 @@ class ServerCredentialsController extends Controller
 
         if (! empty($validated['clear_password'])) {
             $server->ssh_password = null;
+            $server->ssh_password_updated_at = null;
         } elseif (! empty($validated['ssh_password'])) {
             $server->ssh_password = $validated['ssh_password'];
+            $server->ssh_password_updated_at = now();
             $credentialsChanged = true;
         }
 

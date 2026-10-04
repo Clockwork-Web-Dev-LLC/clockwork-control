@@ -10,11 +10,22 @@
 
     @include('security._tabs')
 
-    <div class="mb-6">
-        <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-1">Fleet scan inventory</h2>
-        <p class="text-[var(--color-ink-muted)] text-sm">
-            Latest results from Sucuri SiteCheck (remote malware + blacklist) and <code class="font-data">wp core verify-checksums</code> (server-side core-file integrity). Sucuri runs weekly on Mondays at 02:00; checksums run daily at 02:30. <strong>Scheduled scans only target sites with a care plan enabled</strong> — sites without one are shown for visibility but skipped. <em>Re-scan</em> on any row runs both immediately regardless of care plan state (manual override).
-        </p>
+    <div x-data="{ showInfo: false }" class="mb-5">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] flex items-center gap-2">
+                <span>Fleet scan inventory</span>
+                <button type="button"
+                        @click="showInfo = !showInfo"
+                        class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] cursor-pointer inline-flex items-center gap-1 transition-colors"
+                        :title="showInfo ? 'Hide schedule details' : 'Show schedule and coverage details'">
+                    <i class="fa-solid fa-circle-info text-[11px]"></i>
+                    <span class="text-[11px]" x-text="showInfo ? 'Hide details' : 'Schedule & details'"></span>
+                </button>
+            </h2>
+        </div>
+        <div x-show="showInfo" x-cloak class="mt-2 p-3.5 rounded-xl bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-xs text-[var(--color-ink-muted)] leading-relaxed">
+            Latest results from Sucuri SiteCheck (remote malware + blacklist) and <code class="font-data text-[11px]">wp core verify-checksums</code> (server-side core-file integrity). Sucuri runs weekly on Mondays at 02:00; checksums run daily at 02:30. <strong>Scheduled scans only target sites with a care plan enabled</strong> — sites without one are shown for visibility but skipped. <em>Re-scan</em> on any row runs both immediately regardless of care plan state (manual override).
+        </div>
     </div>
 
     @if (session('flash'))

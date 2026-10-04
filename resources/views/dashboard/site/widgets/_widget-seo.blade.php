@@ -8,7 +8,7 @@
     <div>
         <div class="flex items-center justify-between mb-4">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-magnifying-glass-chart text-indigo-600"></i>
+                <i class="fa-solid fa-magnifying-glass-chart text-[var(--color-ink-muted)]"></i>
                 SEO &amp; Domain
             </h3>
             @if ($isIndexable === false)
@@ -28,16 +28,20 @@
             {{-- Domain Registration --}}
             <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs">
                 <div class="flex items-center justify-between">
-                    <span class="text-[var(--color-ink-muted)] flex items-center gap-1.5">
-                        <i class="fa-solid fa-globe text-gray-500"></i> Domain Registration
+                    <span class="text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                        <i class="fa-solid fa-globe text-[var(--color-ink-muted)]"></i> Domain Registration
                     </span>
                     @if ($domainExpiresAt)
-                        @if ($daysRemaining !== null && $daysRemaining < 30)
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800">
+                        @if ($daysRemaining !== null && $daysRemaining < 14)
+                            <span class="status-pill status-red text-[10px] font-semibold">
+                                Expires in {{ $daysRemaining }}d
+                            </span>
+                        @elseif ($daysRemaining !== null && $daysRemaining < 30)
+                            <span class="status-pill status-yellow text-[10px] font-semibold">
                                 Expires in {{ $daysRemaining }}d
                             </span>
                         @else
-                            <span class="text-[10px] text-emerald-700 font-medium">
+                            <span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
                                 {{ $daysRemaining }} days remaining
                             </span>
                         @endif
@@ -58,11 +62,11 @@
             {{-- Robots & Indexability --}}
             <div class="p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs">
                 <div class="flex items-center justify-between">
-                    <span class="text-[var(--color-ink-muted)] flex items-center gap-1.5">
-                        <i class="fa-solid fa-robot text-gray-500"></i> Search Engine Access
+                    <span class="text-[var(--color-ink-strong)] flex items-center gap-1.5">
+                        <i class="fa-solid fa-robot text-[var(--color-ink-muted)]"></i> Search Engine Access
                     </span>
                     @if ($isIndexable === true)
-                        <span class="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                             <i class="fa-solid fa-check text-[9px]"></i> Public (Allowed)
                         </span>
                     @elseif ($isIndexable === false)

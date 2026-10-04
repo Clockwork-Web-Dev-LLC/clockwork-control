@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**, modules/*/src/Console/Commands/**]
@@ -58,6 +58,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:check-domain-expirations` | Check domain registration expiration dates via ICANN RDAP and alert on impending expiration. | `php artisan clockwork:check-domain-expirations` |
 | `clockwork:check-robots-txt` | Check `/robots.txt` directives across monitored sites for search-engine disallow rules. | `php artisan clockwork:check-robots-txt` |
 | `clockwork:capture-site-screenshots` | Capture/refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `--site=` targets one site (domain or ID), `--force` re-captures even if recent, `--limit=` caps the batch (default 50), `--sync` runs synchronously instead of queueing. | `php artisan clockwork:capture-site-screenshots --site=example.com --force` |
+| `clockwork:collect-field-metrics` | Query Google Chrome UX Report (CrUX) API for 28-day rolling real-user Core Web Vitals (LCP, INP, CLS, FCP, TTFB) across care-plan sites. `--site=` targets one site, `--force` overrides the weekly interval. | `php artisan clockwork:collect-field-metrics --site=example.com` |
 
 ## Logs + ingest
 
@@ -137,6 +138,14 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:composer-audit` | Composer dependency CVE scan. | `php artisan clockwork:composer-audit` |
 | `clockwork:security-check` | System-wide audit (`--ssh` runs SSH-side checks). | `php artisan clockwork:security-check --ssh --quiet-ok` |
 | `clockwork:run-performance-scans` | Lighthouse run per care-plan site — GTmetrix primary, PSI fallback. `--engine=` forces one engine; `--weekly-rotation` (what the scheduler passes) scans only tonight's 1/7th fleet slice to fit the GTmetrix credit budget. | `php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix` |
+| `clockwork:check-email-auth` | Inspect SPF (10-lookup limits, loop detection, void lookups), DMARC policies, and DKIM selector probing via DNS-over-HTTPS across unique client apex domains. `--domain=` checks a single domain. | `php artisan clockwork:check-email-auth --domain=example.com` |
+
+## AiRemedy operations
+
+| Command | Purpose | Example |
+|---|---|---|
+| `clockwork:ai-remedy-evaluate-outcomes` | Classify 60-minute resolution outcomes (`self_resolved`, `human_resolved`, `persisted`, `escalated`, `unknown`) for past AiRemedy diagnoses by analyzing `server_metrics`, `site_uptime_events`, and human `action_logs`. | `php artisan clockwork:ai-remedy-evaluate-outcomes` |
+| `clockwork:ai-remedy-expire-unreviewed` | Mark unreviewed Interactive Copilot incident runs older than 24 hours as `expired` to keep pending review queues fresh. | `php artisan clockwork:ai-remedy-expire-unreviewed` |
 
 ## Server ops
 

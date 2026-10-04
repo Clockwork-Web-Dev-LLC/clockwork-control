@@ -1,13 +1,13 @@
 ---
 title: Auto-ignore plugins after repeated update failures
-status: proposed
-updated: 2026-09-19
+status: Phases 1–2 shipped in 1.10.0
+updated: 2026-10-03
 author: Aaron Reimann
 ---
 
 # Auto-ignore plugins after repeated update failures
 
-**Status:** proposed — do not build until Aaron approves.  
+**Status:** Phases 1–2 shipped in 1.10.0 (Phase 3 client email drafts deferred).  
 **Repos:** Clockwork Control (this repo), Clockwork Companion (`~/Projects/clockwork-companion`), Clockwork Renegade (`~/Projects/clockwork-renegade`).  
 **Why:** After we keep trying the same plugin on the same site and it keeps failing, we should stop putting it in the nightly queue, record why, and **show the client in Companion/Renegade** so they can see which plugins are still on automatic updates and which ones we paused. That beats silently skipping the same update every night.
 

@@ -34,9 +34,9 @@
     <div class="min-w-0">
         <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] mb-1 break-all">
             @if ($site->is_wordpress)
-                <i class="fa-brands fa-wordpress text-[var(--color-brand)] mr-2"></i>
+                <i class="fa-brands fa-wordpress text-[var(--color-ink-muted)] mr-2"></i>
             @else
-                <i class="fa-solid fa-globe text-[var(--color-ink-soft)] mr-2"></i>
+                <i class="fa-solid fa-globe text-[var(--color-ink-muted)] mr-2"></i>
             @endif
             <a href="https://{{ $site->domain }}"
                target="_blank"

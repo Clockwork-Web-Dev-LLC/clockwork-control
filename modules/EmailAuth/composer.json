@@ -1,0 +1,23 @@
+{
+    "name": "clockwork/email-auth",
+    "description": "Email authentication posture monitoring (SPF 10-lookup validation, loop detection, DMARC policies, and DKIM selector probing) for Clockwork Control.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Clockwork Control Team"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Modules\\EmailAuth\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\EmailAuth\\EmailAuthServiceProvider"
+            ]
+        }
+    }
+}

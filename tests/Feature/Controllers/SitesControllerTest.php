@@ -186,6 +186,75 @@ describe('index', function () {
             ->assertSee('Renegade Only')
             ->assertDontSee('Companion Only');
     });
+
+    it('sorts sites by domain asc and desc', function () {
+        Site::factory()->spinupwp()->create(['domain' => 'zebra.test']);
+        Site::factory()->spinupwp()->create(['domain' => 'alpha.test']);
+
+        $asc = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'domain', 'dir' => 'asc']));
+        $asc->assertOk();
+        $ascSites = $asc->viewData('sites');
+        expect($ascSites->first()->domain)->toBe('alpha.test')
+            ->and($ascSites->last()->domain)->toBe('zebra.test');
+
+        $desc = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'domain', 'dir' => 'desc']));
+        $desc->assertOk();
+        $descSites = $desc->viewData('sites');
+        expect($descSites->first()->domain)->toBe('zebra.test')
+            ->and($descSites->last()->domain)->toBe('alpha.test');
+    });
+
+    it('sorts sites by server / host', function () {
+        $serverA = Server::factory()->create(['name' => 'aaa-server.test']);
+        $serverZ = Server::factory()->create(['name' => 'zzz-server.test']);
+        Site::factory()->spinupwp()->create(['domain' => 'site-on-z.test', 'server_id' => $serverZ->id]);
+        Site::factory()->spinupwp()->create(['domain' => 'site-on-a.test', 'server_id' => $serverA->id]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'server', 'dir' => 'asc']));
+        $response->assertOk();
+        $sites = $response->viewData('sites');
+        expect($sites->first()->domain)->toBe('site-on-a.test')
+            ->and($sites->last()->domain)->toBe('site-on-z.test');
+    });
+
+    it('sorts sites by uptime status', function () {
+        Site::factory()->spinupwp()->create(['domain' => 'healthy.test', 'uptime_state' => Site::UPTIME_STATE_UP]);
+        Site::factory()->spinupwp()->create(['domain' => 'down.test', 'uptime_state' => Site::UPTIME_STATE_DOWN]);
+
+        // Default asc puts issues (down) first
+        $asc = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'status', 'dir' => 'asc']));
+        $asc->assertOk();
+        $ascSites = $asc->viewData('sites');
+        expect($ascSites->first()->domain)->toBe('down.test')
+            ->and($ascSites->last()->domain)->toBe('healthy.test');
+
+        // Desc puts healthy first
+        $desc = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'status', 'dir' => 'desc']));
+        $desc->assertOk();
+        $descSites = $desc->viewData('sites');
+        expect($descSites->first()->domain)->toBe('healthy.test')
+            ->and($descSites->last()->domain)->toBe('down.test');
+    });
+
+    it('renders sort toolbar dropdown and column header links', function () {
+        Site::factory()->spinupwp()->create(['domain' => 'sortable-demo.test']);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('sites.index', ['sort' => 'domain', 'dir' => 'asc']));
+
+        $response->assertOk()
+            ->assertSee('id="sites-sort-select"', false)
+            ->assertSee('id="sites-sort-filter"', false)
+            ->assertSee('id="sites-dir-filter"', false)
+            ->assertSee('title="Sort by Domain (Z–A)"', false)
+            ->assertSee('title="Sort by Host / Server"', false)
+            ->assertSee('Sort by Health', false);
+    });
 });
 
 describe('search', function () {

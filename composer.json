@@ -270,7 +270,8 @@
             "Modules\\ClientManagement\\Database\\Factories\\": "modules/ClientManagement/database/factories/",
             "Modules\\ClientReports\\": "modules/ClientReports/src/",
             "Modules\\Feedback\\": "modules/Feedback/src/",
-            "Modules\\AiRemedy\\": "modules/AiRemedy/src/"
+            "Modules\\AiRemedy\\": "modules/AiRemedy/src/",
+            "Modules\\EmailAuth\\": "modules/EmailAuth/src/"
         }
     },
     "autoload-dev": {
@@ -301,6 +302,9 @@
         ],
         "pint": [
             "vendor/bin/pint"
+        ],
+        "screenshots": [
+            "./private/marketing-screenshot-tool/bin/screenshots.sh"
         ],
         "format": [
             "vendor/bin/pint",

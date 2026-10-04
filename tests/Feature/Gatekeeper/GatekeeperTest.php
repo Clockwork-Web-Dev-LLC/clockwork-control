@@ -347,6 +347,66 @@ describe('Gatekeeper Login Lockouts', function () {
             $site->refresh();
             expect($site->gatekeeper_settings)->toBeNull();
         });
+
+        it('supports quick toggling enabled state while preserving custom overrides', function () {
+            $user = User::factory()->create();
+            $site = Site::factory()->create([
+                'domain' => 'quicktoggle.example.com',
+                'companion_installed' => true,
+                'companion_capabilities' => ['gatekeeper'],
+                'gatekeeper_settings' => [
+                    'threshold' => 7,
+                    'headline' => 'Custom Block Headline',
+                ],
+            ]);
+
+            // Quick enable (sending only 'enabled' => '1')
+            $this->actingAs($user)
+                ->patch(route('sites.gatekeeper.update', $site), [
+                    'enabled' => '1',
+                ])
+                ->assertRedirect(route('sites.show', ['site' => $site, 'tab' => 'settings']))
+                ->assertSessionHas('status');
+
+            $site->refresh();
+            expect($site->gatekeeper_settings)->toBeArray()
+                ->and($site->gatekeeper_settings['enabled'])->toBeTrue()
+                ->and($site->gatekeeper_settings['threshold'])->toBe(7)
+                ->and($site->gatekeeper_settings['headline'])->toBe('Custom Block Headline');
+
+            // Quick disable (sending only 'enabled' => '0')
+            $this->actingAs($user)
+                ->patch(route('sites.gatekeeper.update', $site), [
+                    'enabled' => '0',
+                ])
+                ->assertRedirect(route('sites.show', ['site' => $site, 'tab' => 'settings']));
+
+            $site->refresh();
+            expect($site->gatekeeper_settings['enabled'])->toBeFalse()
+                ->and($site->gatekeeper_settings['threshold'])->toBe(7);
+
+            // Quick reset to default (sending only 'enabled' => 'default')
+            $this->actingAs($user)
+                ->patch(route('sites.gatekeeper.update', $site), [
+                    'enabled' => 'default',
+                ])
+                ->assertRedirect(route('sites.show', ['site' => $site, 'tab' => 'settings']));
+
+            $site->refresh();
+            expect($site->gatekeeper_settings)->not->toHaveKey('enabled')
+                ->and($site->gatekeeper_settings['threshold'])->toBe(7);
+
+            // JSON response when requested
+            $this->actingAs($user)
+                ->patchJson(route('sites.gatekeeper.update', $site), [
+                    'enabled' => '1',
+                ])
+                ->assertOk()
+                ->assertJson([
+                    'ok' => true,
+                    'enabled' => true,
+                ]);
+        });
     });
 
     describe('GatekeeperSettingsPusher defaults', function () {

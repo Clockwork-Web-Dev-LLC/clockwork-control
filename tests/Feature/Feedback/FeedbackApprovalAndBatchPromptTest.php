@@ -206,3 +206,32 @@ test('artisan clockwork:feedback-prompt creates prompt file in storage and updat
         File::delete($testOutputFile);
     }
 });
+
+test('feedback dashboard has clean decluttered layout without redundant banners or floating pill', function () {
+    $item = FeedbackItem::create([
+        'user_id' => $this->user->id,
+        'url' => 'http://control.test/monitoring',
+        'path' => '/monitoring',
+        'type' => FeedbackItem::TYPE_BUG,
+        'status' => FeedbackItem::STATUS_APPROVED,
+        'title' => 'Sample Approved Bug',
+        'content' => 'Bug details description',
+    ]);
+
+    $response = $this->actingAs($this->user)->get(route('feedback.index'));
+    $response->assertOk();
+
+    // Consolidated header actions exist
+    $response->assertSee('Generate Approved Prompt');
+    $response->assertSee('Batch Actions');
+    $response->assertSee('Mark In Progress');
+    $response->assertSee('Mark All Resolved');
+
+    // Redundant banner should NOT be present
+    $response->assertDontSee('Implementation Batch: 1 Approved Item');
+    $response->assertDontSee('Ready for Claude &amp; Grok', false);
+
+    // Floating overlay pill should NOT be rendered on feedback routes
+    $response->assertDontSee('Floating Bottom-Right Toolbar Pill');
+    $response->assertDontSee('title="Toggle visibility of pins on this page"', false);
+});

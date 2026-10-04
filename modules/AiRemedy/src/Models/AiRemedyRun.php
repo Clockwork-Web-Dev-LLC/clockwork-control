@@ -33,6 +33,17 @@ use Illuminate\Support\Carbon;
  * @property ?array<string, mixed> $before_metrics
  * @property ?array<string, mixed> $after_metrics
  * @property ?string $error_message
+ * @property ?string $verdict
+ * @property ?string $verdict_note
+ * @property ?int $verdict_by_user_id
+ * @property ?Carbon $verdict_at
+ * @property ?string $outcome
+ * @property ?array<string, mixed> $outcome_details
+ * @property ?Carbon $outcome_evaluated_at
+ * @property ?bool $is_fixable
+ * @property ?bool $is_maintenance
+ * @property ?string $maintenance_type
+ * @property ?array<int, mixed> $command_decisions
  * @property Carbon $started_at
  * @property ?Carbon $completed_at
  * @property ?Carbon $hidden_at
@@ -62,6 +73,26 @@ class AiRemedyRun extends Model
     public const STATUS_FAILED = 'failed';
 
     public const STATUS_ALLOWED_MAINTENANCE = 'allowed_maintenance';
+
+    public const STATUS_EXPIRED = 'expired';
+
+    public const VERDICT_CORRECT = 'correct';
+
+    public const VERDICT_PARTIAL = 'partial';
+
+    public const VERDICT_WRONG = 'wrong';
+
+    public const VERDICT_UNSURE = 'unsure';
+
+    public const OUTCOME_SELF_RESOLVED = 'self_resolved';
+
+    public const OUTCOME_HUMAN_RESOLVED = 'human_resolved';
+
+    public const OUTCOME_PERSISTED = 'persisted';
+
+    public const OUTCOME_ESCALATED = 'escalated';
+
+    public const OUTCOME_UNKNOWN = 'unknown';
 
     public const TIER_1_SAFE = 'tier_1_safe';
 
@@ -105,6 +136,17 @@ class AiRemedyRun extends Model
         'completed_at',
         'hidden_at',
         'hidden_by_user_id',
+        'verdict',
+        'verdict_note',
+        'verdict_by_user_id',
+        'verdict_at',
+        'outcome',
+        'outcome_details',
+        'outcome_evaluated_at',
+        'is_fixable',
+        'is_maintenance',
+        'maintenance_type',
+        'command_decisions',
     ];
 
     protected function casts(): array
@@ -121,6 +163,12 @@ class AiRemedyRun extends Model
             'total_cost_usd' => 'decimal:4',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'verdict_at' => 'datetime',
+            'outcome_evaluated_at' => 'datetime',
+            'outcome_details' => 'array',
+            'command_decisions' => 'array',
+            'is_fixable' => 'boolean',
+            'is_maintenance' => 'boolean',
         ];
     }
 
@@ -137,6 +185,11 @@ class AiRemedyRun extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function verdictByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verdict_by_user_id');
     }
 
     public function durationSeconds(): ?int
@@ -156,6 +209,7 @@ class AiRemedyRun extends Model
             self::STATUS_ALLOWED_MAINTENANCE => 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
             self::STATUS_EXECUTING => 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse',
             self::STATUS_UNFIXABLE => 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
+            self::STATUS_EXPIRED => 'bg-slate-500/15 text-slate-500 dark:text-slate-400 border-slate-500/30',
             self::STATUS_REJECTED => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
             self::STATUS_FAILED => 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
             default => 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30',
@@ -170,6 +224,7 @@ class AiRemedyRun extends Model
             self::STATUS_ANALYZED => 'Analyzed',
             self::STATUS_EXECUTING => 'Executing',
             self::STATUS_UNFIXABLE => 'Unfixable',
+            self::STATUS_EXPIRED => 'Expired',
             self::STATUS_REJECTED => 'Rejected',
             self::STATUS_FAILED => 'Failed',
             default => ucfirst(str_replace('_', ' ', (string) $this->status)),

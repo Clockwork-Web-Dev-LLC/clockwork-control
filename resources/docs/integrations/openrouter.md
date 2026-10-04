@@ -26,13 +26,13 @@ Rather than pinning Clockwork Control to a single proprietary SDK or provider ac
 Generate an API key in your [OpenRouter Dashboard](https://openrouter.ai/keys).
 
 ### 2. Configure Credentials
-The API key lives only in `.env` — never in the database. Either set it directly:
+The API key lives only in `.env` — never in the database. You can configure it via:
+- **Fleet Setup Checklist** (`/setup`): Click the gear icon on the AiRemedy card to open the limits and credentials modal.
+- **Dedicated Limits & Credentials Hub** (`/settings/integrations/ai-remedy/limits`): Configure `.env` credentials, vendor rate limits, and client connection tunables.
+- **AiRemedy Settings** (`/ai-remedy/settings`): Input your API key directly on the module configuration page.
+- **Direct `.env` edit**: Add `OPENROUTER_API_KEY=sk-or-v1-...` to your root `.env` file.
 
-```dotenv
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
-or paste it into **AiRemedy Settings** (`/ai-remedy/settings`), which writes it to `.env` for you (`OpenRouterClient::storeApiKey()`) and wipes any legacy database copy.
+Saving via any UI interface writes atomically to `.env` using `EnvCredentialManager` and `OpenRouterClient::setApiKey()`, purging any legacy database records.
 
 ### 3. Choose a Model
 The model is picked in **AiRemedy Settings** and stored as the `clockwork.ai_remedy.model` setting; it defaults to `anthropic/claude-sonnet-4.5` (`OpenRouterClient::DEFAULT_MODEL`). There is no env var for the model. The API endpoint (`https://openrouter.ai/api/v1/chat/completions`) and timeouts (30s for diagnosis, 10s for the connection test) are fixed in `OpenRouterClient`.
@@ -43,7 +43,7 @@ The model is picked in **AiRemedy Settings** and stored as the `clockwork.ai_rem
 
 AiRemedy registers an official diagnostic check (`AiRemedyCheck`) with Clockwork's system diagnostics suite:
 - Open **Diagnostics** (`/diagnostics`) to see whether the OpenRouter key is configured; the check is contributed via `AiRemedyServiceProvider::diagnosticCheck()`.
-- On **AiRemedy Settings**, click **[Test Connection]** (`POST /ai-remedy/test-connection`) to send a tiny completion request (`meta-llama/llama-3.2-1b-instruct`) through OpenRouter and confirm the key works.
+- On **AiRemedy Settings**, click **[Test Connection]** (`POST /ai-remedy/test-connection`) or test from the limits modal on `/setup` / `/settings/integrations` (`POST /settings/integrations/ai-remedy/test`) to send a tiny completion request (`meta-llama/llama-3.2-1b-instruct`) through OpenRouter and confirm the key works.
 
 ---
 
@@ -59,11 +59,17 @@ Because AiRemedy issues SSH commands and interacts with external AI APIs, strict
    - `POST /ai-remedy/simulate`: 10 requests / minute
    - `POST /ai-remedy/servers/{server}/diagnose`: 15 requests / minute
    - `POST /ai-remedy/runs/{run}/execute`: 10 requests / minute
-3. **Command Safety Guard**:
+3. **Vendor Limits & Operator Tunables (`ServiceRateLimitRegistry`)**:
+   OpenRouter is registered in `ServiceRateLimitRegistry` with vendor default limits:
+   - Standard Rate Limit: 200 requests / minute (varies by tier and downstream provider).
+   - Monitored response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+   - Default operator tunables: 45s HTTP timeout, concurrency of 2, 100ms pacing delay, 2 retry attempts.
+   - Configurable at `/settings/integrations/ai-remedy/limits` and within the `/setup` checklist modal.
+4. **Command Safety Guard**:
    Every command proposed by OpenRouter is validated against `CommandSafetyGuard`. Destructive operations (e.g. `rm -rf`, raw disk formatting, dropping databases, altering firewall rules) are categorized as **Tier 3 (Prohibited)** or **Unfixable** and are permanently blocked from execution.
-4. **SSH Non-Zero Exit Code Handling**:
+5. **SSH Non-Zero Exit Code Handling**:
    The execution engine checks `$session->getExitStatus()`. If any bash command exits with code 1 or fails (such as an unmet `sudo` password prompt), the incident transitions to `STATUS_FAILED` rather than generating false-positive resolutions.
-5. **Real-Time Chat Alerts**:
+6. **Real-Time Chat Alerts**:
    Outcomes from OpenRouter diagnostics are instantly broadcast to Slack and Mattermost channels via `ai_remedy_triaged` and `ai_remedy_executed` chat webhook events.
 
 ---
@@ -74,4 +80,6 @@ Because AiRemedy issues SSH commands and interacts with external AI APIs, strict
 - `modules/AiRemedy/src/AiRemedyCheck.php` — Diagnostics check implementation registered in `AiRemedyServiceProvider`.
 - `modules/AiRemedy/src/Services/AiRemedyTriager.php` — Orchestrates read-only SSH telemetry probes and LLM prompting.
 - `modules/AiRemedy/src/Services/RemedyExecutor.php` — SSH execution engine with exit-status validation.
+- `app/Support/ServiceRateLimitRegistry.php` — Official vendor rate limits, fleet impact projections, and default connection tunables for OpenRouter.
+- `app/Support/EnvCredentialManager.php` — Direct `.env` key mapping for `OPENROUTER_API_KEY`.
 - `config/clockwork.php` → `ai_remedy.openrouter_api_key` (reads `OPENROUTER_API_KEY`).

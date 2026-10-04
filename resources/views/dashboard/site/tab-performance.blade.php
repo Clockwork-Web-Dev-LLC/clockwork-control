@@ -79,7 +79,7 @@
         <div class="flex items-start justify-between mb-4 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-mobile-screen-button text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-mobile-screen-button text-[var(--color-ink-muted)] mr-1"></i>
                     Mobile
                 </h2>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
@@ -130,7 +130,7 @@
         <div class="flex items-start justify-between mb-4 gap-3">
             <div>
                 <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                    <i class="fa-solid fa-display text-[var(--color-ink-soft)] mr-1"></i>
+                    <i class="fa-solid fa-display text-[var(--color-ink-muted)] mr-1"></i>
                     Desktop
                 </h2>
                 <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
@@ -170,11 +170,107 @@
     </div>
 </div>
 
+{{-- Real Users (CrUX Field Data) --}}
+@php
+    $fieldPhone = $latestFieldMetricPhone ?? null;
+    $fieldDesktop = $latestFieldMetricDesktop ?? null;
+@endphp
+<div class="card p-5 mb-6">
+    <div class="flex items-start justify-between mb-4 gap-3">
+        <div>
+            <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] flex items-center gap-2">
+                <i class="fa-solid fa-users text-[var(--color-ink-muted)]"></i>
+                Real Users (Core Web Vitals)
+                @if ($fieldPhone && $fieldPhone->status === 'ok')
+                    @if ($fieldPhone->cwv_pass)
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                            <i class="fa-solid fa-check mr-1"></i> Passed Core Web Vitals
+                        </span>
+                    @else
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Needs Improvement
+                        </span>
+                    @endif
+                @endif
+            </h2>
+            <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
+                Chrome User Experience Report (CrUX) · 28-day rolling collection period
+                @if ($fieldPhone?->period_start && $fieldPhone?->period_end)
+                    ({{ $fieldPhone->period_start->format('M j') }} – {{ $fieldPhone->period_end->format('M j, Y') }})
+                @endif
+            </p>
+        </div>
+        <div class="text-right">
+            <span class="text-xs text-[var(--color-ink-muted)] block">75th Percentile (p75)</span>
+        </div>
+    </div>
+
+    @if ($fieldPhone && $fieldPhone->status === 'ok')
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+            {{-- LCP --}}
+            @php $lcpRating = $fieldPhone->ratingForMetric('lcp'); @endphp
+            <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--color-ink-muted)] block">LCP</span>
+                <span class="text-xl font-bold font-data text-[var(--color-ink-strong)] block mt-0.5">{{ $fieldPhone->lcpFormatted() }}</span>
+                <span class="text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded {{ $lcpRating === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($lcpRating === 'needs_improvement' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400') }}">
+                    {{ ucfirst(str_replace('_', ' ', $lcpRating)) }}
+                </span>
+            </div>
+            {{-- INP --}}
+            @php $inpRating = $fieldPhone->ratingForMetric('inp'); @endphp
+            <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--color-ink-muted)] block">INP</span>
+                <span class="text-xl font-bold font-data text-[var(--color-ink-strong)] block mt-0.5">{{ $fieldPhone->inpFormatted() }}</span>
+                <span class="text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded {{ $inpRating === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($inpRating === 'needs_improvement' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400') }}">
+                    {{ ucfirst(str_replace('_', ' ', $inpRating)) }}
+                </span>
+            </div>
+            {{-- CLS --}}
+            @php $clsRating = $fieldPhone->ratingForMetric('cls'); @endphp
+            <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--color-ink-muted)] block">CLS</span>
+                <span class="text-xl font-bold font-data text-[var(--color-ink-strong)] block mt-0.5">{{ $fieldPhone->clsFormatted() }}</span>
+                <span class="text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded {{ $clsRating === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($clsRating === 'needs_improvement' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400') }}">
+                    {{ ucfirst(str_replace('_', ' ', $clsRating)) }}
+                </span>
+            </div>
+            {{-- FCP --}}
+            @php $fcpRating = $fieldPhone->ratingForMetric('fcp'); @endphp
+            <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--color-ink-muted)] block">FCP</span>
+                <span class="text-xl font-bold font-data text-[var(--color-ink-strong)] block mt-0.5">{{ $fieldPhone->fcpFormatted() }}</span>
+                <span class="text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded {{ $fcpRating === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($fcpRating === 'needs_improvement' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400') }}">
+                    {{ ucfirst(str_replace('_', ' ', $fcpRating)) }}
+                </span>
+            </div>
+            {{-- TTFB --}}
+            @php $ttfbRating = $fieldPhone->ratingForMetric('ttfb'); @endphp
+            <div class="p-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--color-ink-muted)] block">TTFB</span>
+                <span class="text-xl font-bold font-data text-[var(--color-ink-strong)] block mt-0.5">{{ $fieldPhone->ttfbFormatted() }}</span>
+                <span class="text-[10px] font-semibold mt-1 inline-block px-1.5 py-0.5 rounded {{ $ttfbRating === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ($ttfbRating === 'needs_improvement' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400') }}">
+                    {{ ucfirst(str_replace('_', ' ', $ttfbRating)) }}
+                </span>
+            </div>
+        </div>
+    @elseif ($fieldPhone && $fieldPhone->status === 'no_data')
+        <div class="p-4 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-center text-sm text-[var(--color-ink-muted)]">
+            <i class="fa-solid fa-chart-simple text-lg mb-1 opacity-50 block"></i>
+            Not enough Chrome traffic for Google to report real-user field data for this origin.
+        </div>
+    @else
+        <div class="p-4 rounded-lg bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-center text-sm text-[var(--color-ink-muted)]">
+            <i class="fa-regular fa-clock text-lg mb-1 opacity-50 block"></i>
+            Real-user field metrics collection scheduled weekly for care-plan sites.
+        </div>
+    @endif
+</div>
+
 {{-- 30-day trend chart --}}
 @if (count($perfTrend['mobile']) + count($perfTrend['desktop']) > 0)
     <div class="card p-5 mb-6" x-data="performanceTrendChart({{ json_encode($perfTrend) }})">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-3">
-            <i class="fa-solid fa-chart-line text-[var(--color-ink-soft)] mr-1"></i>
+            <i class="fa-solid fa-chart-line text-[var(--color-ink-muted)] mr-1"></i>
             30-day score trend
         </h2>
         <div id="perf-trend-chart" style="height: 240px;"></div>
@@ -184,7 +280,7 @@
 {{-- History table --}}
 <div class="card p-5">
     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-3">
-        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-soft)] mr-1"></i>
+        <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)] mr-1"></i>
         Recent scans
     </h2>
     @if ($perfHistory->isEmpty())

@@ -5,54 +5,122 @@
 @section('content')
 @include('operations._tabs')
 @include('ai-remedy::_review_script')
-@php($canManageRuns = (bool) auth()->user()?->isAdmin())
+@php
+    $canManageRuns = (bool) auth()->user()?->isAdmin();
+    $runsPayload = [];
+    foreach ($runs as $r) {
+        $runsPayload[$r->id] = $r->toArray() + ['review' => $reviews[$r->id] ?? null];
+    }
+@endphp
+
+<script id="ai-remedy-runs-data" type="application/json">
+    {!! json_encode($runsPayload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) !!}
+</script>
+
+<script>
+function aiRemedyIndex(pageIds) {
+    let runsMap = {};
+    try {
+        const el = document.getElementById('ai-remedy-runs-data');
+        if (el) {
+            runsMap = JSON.parse(el.textContent || '{}');
+        }
+    } catch (e) {
+        console.error('Failed to parse runs data:', e);
+    }
+
+    return {
+        activeRun: null,
+        drawerOpen: false,
+        selected: [],
+        pageIds: pageIds || [],
+        runsData: runsMap,
+        get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
+        toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
+        verdictNote: '',
+        verdictSubmitting: false,
+        verdictSaved: false,
+        openDrawer(runOrId) {
+            const run = typeof runOrId === 'object' && runOrId !== null
+                ? runOrId
+                : (this.runsData[runOrId] || null);
+            if (!run) return;
+            this.activeRun = run;
+            this.verdictNote = run.verdict_note || '';
+            this.verdictSaved = false;
+            this.drawerOpen = true;
+        },
+        closeDrawer() {
+            this.drawerOpen = false;
+            this.activeRun = null;
+        },
+        formatSafetyTier(tier) {
+            if (!tier) return 'Unknown';
+            switch (tier) {
+                case 'tier_1_safe': return 'Tier 1 · Safe';
+                case 'tier_2_cautious': return 'Tier 2 · Cautious';
+                case 'tier_3_prohibited': return 'Tier 3 · Prohibited';
+                case 'tier_unfixable':
+                case 'unfixable': return 'Unfixable';
+                default: return tier.replace(/^tier_/, 'Tier ').replace(/_/g, ' ');
+            }
+        },
+        safetyBadgeClass(tier) {
+            if (!tier) return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+            switch (tier) {
+                case 'tier_1_safe':
+                    return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+                case 'tier_2_cautious':
+                    return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
+                case 'tier_3_prohibited':
+                case 'tier_unfixable':
+                case 'unfixable':
+                    return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
+                default:
+                    return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
+            }
+        },
+        async submitVerdict(verdict) {
+            if (!this.activeRun) return;
+            this.verdictSubmitting = true;
+            this.verdictSaved = false;
+            try {
+                const res = await fetch(`/ai-remedy/runs/${this.activeRun.id}/verdict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']')?.getAttribute('content') || '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ verdict: verdict, note: this.verdictNote })
+                });
+                if (res.ok) {
+                    this.activeRun.verdict = verdict;
+                    this.activeRun.verdict_note = this.verdictNote;
+                    this.verdictSaved = true;
+                    setTimeout(() => this.verdictSaved = false, 3500);
+                }
+            } catch (e) {
+                console.error('Failed to submit verdict:', e);
+            } finally {
+                this.verdictSubmitting = false;
+            }
+        }
+    };
+}
+</script>
+
 <div class="relative"
      @ai-remedy-executed.window="if (activeRun && $event.detail.run && activeRun.id === $event.detail.runId) { activeRun.status = $event.detail.run.status; }"
-     x-data="{
-    activeRun: null,
-    drawerOpen: false,
-    selected: [],
-    pageIds: @js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()),
-    get allSelected() { return this.pageIds.length > 0 && this.pageIds.every((id) => this.selected.includes(id)); },
-    toggleAll() { this.selected = this.allSelected ? [] : [...this.pageIds]; },
-    openDrawer(run) {
-        this.activeRun = run;
-        this.drawerOpen = true;
-    },
-    closeDrawer() {
-        this.drawerOpen = false;
-        this.activeRun = null;
-    },
-    formatSafetyTier(tier) {
-        if (!tier) return 'Unknown';
-        switch (tier) {
-            case 'tier_1_safe': return 'Tier 1 · Safe';
-            case 'tier_2_cautious': return 'Tier 2 · Cautious';
-            case 'tier_3_prohibited': return 'Tier 3 · Prohibited';
-            case 'tier_unfixable':
-            case 'unfixable': return 'Unfixable';
-            default: return tier.replace(/^tier_/, 'Tier ').replace(/_/g, ' ');
-        }
-    },
-    safetyBadgeClass(tier) {
-        if (!tier) return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
-        switch (tier) {
-            case 'tier_1_safe':
-                return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
-            case 'tier_2_cautious':
-                return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
-            case 'tier_3_prohibited':
-            case 'tier_unfixable':
-            case 'unfixable':
-                return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
-            default:
-                return 'bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30';
-        }
-    }
-}">
+     x-data="aiRemedyIndex(@js($runs->pluck('id')->map(fn ($id) => (string) $id)->values()))">
     <x-page-header title="AiRemedy"
         subtitle="AI-powered server diagnostics, root-cause forensics, and self-healing remediation via OpenRouter.">
         <x-slot:actions>
+            <a href="{{ route('ai-remedy.accuracy') }}"
+               class="btn-pill-nav text-xs md:text-sm py-1.5 px-3 flex items-center gap-2 cursor-pointer font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
+                <i class="fa-solid fa-chart-pie text-xs"></i>
+                <span>Accuracy & Outcomes</span>
+            </a>
             <a href="{{ route('ai-remedy.settings') }}"
                class="btn-pill-nav text-xs md:text-sm py-1.5 px-3 flex items-center gap-2 cursor-pointer font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
                 <i class="fa-solid fa-gear text-xs"></i>
@@ -102,6 +170,13 @@
             <a href="{{ route('ai-remedy.index', array_filter(['server_id' => $selectedServerId])) }}"
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ empty($activeStatus) && ! $showHidden ? 'bg-[var(--color-brand)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 All Runs
+            </a>
+            <a href="{{ route('ai-remedy.index', array_filter(['status' => 'needs_review', 'server_id' => $selectedServerId])) }}"
+               class="px-2.5 py-1 rounded-full font-medium transition-colors flex items-center gap-1.5 {{ $activeStatus === 'needs_review' ? 'bg-amber-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                <span>Needs Review</span>
+                @if (($needsReviewCount ?? 0) > 0)
+                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold {{ $activeStatus === 'needs_review' ? 'bg-white text-amber-700' : 'bg-amber-500 text-white' }}">{{ $needsReviewCount }}</span>
+                @endif
             </a>
             <a href="{{ route('ai-remedy.index', array_filter(['status' => 'resolved', 'server_id' => $selectedServerId])) }}"
                class="px-2.5 py-1 rounded-full font-medium transition-colors {{ $activeStatus === 'resolved' ? 'bg-emerald-600 text-white' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
@@ -303,7 +378,7 @@
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                     <button type="button"
-                                            @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
+                                            @click="openDrawer({{ $run->id }})"
                                             class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center gap-1 flex-shrink-0">
                                         <span>Forensics</span>
                                         <i class="fa-solid fa-arrow-right text-[10px]"></i>
@@ -385,7 +460,7 @@
                         {{-- Actions Button --}}
                         <div class="flex items-center justify-end pt-1">
                             <button type="button"
-                                    @click="openDrawer({{ json_encode($run->toArray() + ['review' => $reviews[$run->id] ?? null]) }})"
+                                    @click="openDrawer({{ $run->id }})"
                                     class="btn-pill-nav w-full sm:w-auto text-xs py-1.5 px-3.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] cursor-pointer inline-flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-microscope text-[11px] text-[var(--color-brand)]"></i>
                                 <span>Forensics &amp; Remediation</span>
@@ -457,6 +532,67 @@
                             </p>
                         </div>
                     </template>
+
+                    {{-- Operator Verdict & 60-Min Outcome Card --}}
+                    <div class="card p-3.5 space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)]">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-[var(--color-ink-muted)]">Operator Verdict & Outcome</span>
+                            <template x-if="activeRun?.outcome">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-data font-semibold border"
+                                      :class="activeRun?.outcome === 'self_resolved' ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' : (activeRun?.outcome === 'escalated' ? 'bg-rose-500/15 text-rose-600 border-rose-500/30' : 'bg-slate-500/15 text-slate-600 border-slate-500/30')"
+                                      x-text="'Outcome: ' + (activeRun?.outcome || '').replace('_', ' ').toUpperCase()"></span>
+                            </template>
+                        </div>
+
+                        {{-- Verdict Buttons --}}
+                        <div class="space-y-2">
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" @click="submitVerdict('correct')"
+                                        :disabled="verdictSubmitting"
+                                        class="px-2.5 py-1 rounded text-xs font-semibold border transition"
+                                        :class="activeRun?.verdict === 'correct' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'border-emerald-500/40 text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20'">
+                                    <i class="fa-solid fa-check mr-1"></i> Correct
+                                </button>
+                                <button type="button" @click="submitVerdict('partial')"
+                                        :disabled="verdictSubmitting"
+                                        class="px-2.5 py-1 rounded text-xs font-semibold border transition"
+                                        :class="activeRun?.verdict === 'partial' ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'border-amber-500/40 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20'">
+                                    <i class="fa-solid fa-minus mr-1"></i> Partial
+                                </button>
+                                <button type="button" @click="submitVerdict('wrong')"
+                                        :disabled="verdictSubmitting"
+                                        class="px-2.5 py-1 rounded text-xs font-semibold border transition"
+                                        :class="activeRun?.verdict === 'wrong' ? 'bg-rose-500 text-white border-rose-600 shadow-sm' : 'border-rose-500/40 text-rose-600 bg-rose-500/10 hover:bg-rose-500/20'">
+                                    <i class="fa-solid fa-xmark mr-1"></i> Wrong
+                                </button>
+                                <button type="button" @click="submitVerdict('unsure')"
+                                        :disabled="verdictSubmitting"
+                                        class="px-2.5 py-1 rounded text-xs font-semibold border transition"
+                                        :class="activeRun?.verdict === 'unsure' ? 'bg-slate-600 text-white border-slate-700 shadow-sm' : 'border-slate-500/40 text-slate-600 bg-slate-500/10 hover:bg-slate-500/20'">
+                                    <i class="fa-solid fa-question mr-1"></i> Unsure
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" x-model="verdictNote" placeholder="Optional feedback note..."
+                                       @keydown.enter.prevent="if (activeRun?.verdict) submitVerdict(activeRun.verdict)"
+                                       class="flex-1 text-xs font-data border border-[var(--color-border)] rounded px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-[var(--color-surface-alt)]">
+                                <button type="button" x-show="activeRun?.verdict" @click="submitVerdict(activeRun.verdict)"
+                                        :disabled="verdictSubmitting"
+                                        class="btn-primary text-xs py-1 px-2.5 shrink-0">
+                                    Update Note
+                                </button>
+                            </div>
+                            <div x-show="verdictSaved" x-transition.opacity class="text-[11px] text-emerald-600 font-medium">
+                                <i class="fa-solid fa-circle-check mr-1"></i> Verdict saved!
+                            </div>
+                        </div>
+
+                        {{-- Outcome detail if present --}}
+                        <template x-if="activeRun?.outcome_details?.summary">
+                            <div class="text-[11px] text-[var(--color-ink-muted)] pt-1 border-t border-[var(--color-border-light)] font-mono"
+                                 x-text="activeRun?.outcome_details?.summary"></div>
+                        </template>
+                    </div>
 
                     {{-- Executive Diagnosis --}}
                     <div>

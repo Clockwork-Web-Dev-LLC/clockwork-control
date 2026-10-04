@@ -2,7 +2,7 @@
 title: Overview
 section: Integrations
 order: 1
-updated: 2026-09-04
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [integrations, overview]
 ---
@@ -30,7 +30,9 @@ Every external service Clockwork talks to. Each gets its own page with auth, end
 | **Bill.com** | Billing | 🟢 Verified in Production | Active customer billing sync and care plan toggles. | [bill-com](/docs/integrations/bill-com) |
 | **Sucuri / Google / Spamhaus** | Security | 🟢 Verified in Production | Remote malware scans, Google Safe Browsing, DNS blacklists. | [sucuri-sitecheck](/docs/integrations/sucuri-sitecheck) |
 | **GTmetrix** | Performance | 🟢 Verified in Production | Nightly Lighthouse performance checks for care plan sites. | [gtmetrix](/docs/integrations/gtmetrix) |
+| **Google CrUX** | Performance | 🟢 Verified in Production | Real-user Core Web Vitals 28-day rolling metrics via Chrome UX Report API. | [pagespeed-insights](/docs/integrations/pagespeed-insights) |
 | **OpenRouter** | Cloud AI | 🟢 Verified in Production | Powers AiRemedy autonomous incident triage, root-cause forensics, and staged self-healing via Claude Sonnet 4.5 (default), Haiku 4.5, GPT-4o, and DeepSeek-V3. | [openrouter](/docs/integrations/openrouter) |
+| **Cloudflare / Google DoH** | DNS Security | 🟢 Verified in Production | DNS-over-HTTPS resolution for EmailAuth SPF 10-lookup limits, DMARC, and DKIM verification. | [email-auth](/docs/features/email-auth) |
 | **Pressable** | Hosting | 🟢 Verified in Production | Managed WordPress hosting, site imports, backup history sync, async WP-CLI commands. | [pressable](/docs/integrations/pressable) |
 | **Twilio (SMS)** | Notifications | 🟢 Verified in Production | On-call SMS paging for care-plan site downtime with storm circuit-breaker. | [twilio](/docs/integrations/twilio) |
 | **GridPane** | Hosting | 🧪 Looking for Testers | Written for REST API v1, server & site import, SSH WP-CLI, and backup schedule inspection. | [gridpane](/docs/integrations/gridpane) |
@@ -95,13 +97,14 @@ The `HostingProvider` contract, keyed on `sites.hosting_provider` — *who manag
 | Slack | Second ops-facing chat channel (same events as Mattermost), plus a separate per-site client-facing channel. | [slack](/docs/integrations/slack) |
 | Mailgun | Contact-form failure / recovery / monthly-summary emails. | [mailgun](/docs/integrations/mailgun) |
 
-## Security scans
+## Security scans & email authentication
 
 | Service | What it does | Page |
 |---|---|---|
 | Sucuri SiteCheck | Free remote malware scan (same engine ManageWP resold). | [sucuri-sitecheck](/docs/integrations/sucuri-sitecheck) |
 | Google Safe Browsing | Domain malware/phishing classification — drives Chrome's red warning. | [safe-browsing](/docs/integrations/safe-browsing) |
 | URLhaus + Spamhaus DBL | Two domain-blacklist sources. Spamhaus is free DNS; URLhaus needs a free account. | [urlhaus-spamhaus](/docs/integrations/urlhaus-spamhaus) |
+| Cloudflare / Google DoH | DNS-over-HTTPS TXT record resolution for SPF 10-lookup limits, loop detection, DMARC, and DKIM verification. | [email-auth](/docs/features/email-auth) |
 
 ## Performance
 
@@ -109,6 +112,7 @@ The `HostingProvider` contract, keyed on `sites.hosting_provider` — *who manag
 |---|---|---|
 | GTmetrix | Nightly Lighthouse score per care-plan site from a pinned test location. Primary engine. | [gtmetrix](/docs/integrations/gtmetrix) |
 | Google PageSpeed Insights | Fallback engine — runs only when GTmetrix errors. | [pagespeed-insights](/docs/integrations/pagespeed-insights) |
+| Google Chrome UX Report (CrUX) | Real-user Core Web Vitals (LCP, INP, CLS, FCP, TTFB) aggregated over rolling 28-day windows. | [pagespeed-insights](/docs/integrations/pagespeed-insights) |
 
 ## Bot management
 

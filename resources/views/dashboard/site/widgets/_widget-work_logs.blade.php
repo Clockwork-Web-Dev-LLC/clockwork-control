@@ -5,7 +5,7 @@
     <div>
         <div class="flex items-center justify-between mb-3">
             <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-clock text-sky-600"></i>
+                <i class="fa-solid fa-clock text-[var(--color-ink-muted)]"></i>
                 Work log
             </h3>
         </div>

@@ -13,7 +13,7 @@
                     :class="screenOptionsOpen ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-xs' : ''"
                     class="btn-pill-nav inline-flex items-center gap-1.5 cursor-pointer text-xs md:text-sm font-medium transition-all"
                     title="Customize monitoring pagination and display settings">
-                <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-brand)]'"></i>
+                <i class="fa-solid fa-sliders text-xs" :class="screenOptionsOpen ? 'text-white' : 'text-[var(--color-ink-muted)]'"></i>
                 <span>Screen Options</span>
                 <i class="fa-solid fa-chevron-down text-[10px] opacity-70 transition-transform duration-200"
                    :class="screenOptionsOpen ? 'rotate-180' : ''"></i>
@@ -41,42 +41,51 @@
          x-cloak
          class="mb-6 rounded-[var(--radius-card)] border-2 border-[var(--color-brand)]/40 bg-[var(--color-surface)] shadow-xl overflow-hidden">
         {{-- Screen Options Top Control Bar --}}
-        <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+        <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-2.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)]"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)] shrink-0"></span>
                 <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)]">Screen Options: Monitoring Display</span>
                 <span class="text-xs text-[var(--color-ink-muted)] hidden sm:inline">— Customize table pagination and display settings. Saved in your browser.</span>
             </div>
-            <div class="flex items-center gap-2 text-xs flex-wrap">
-                <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
+            <div class="flex items-center gap-4 text-xs flex-wrap flex-1 justify-end">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
+                    <button type="button"
+                            @click="setPerPage(25)"
+                            :class="perPage === 25 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                            class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                        25
+                    </button>
+                    <button type="button"
+                            @click="setPerPage(50)"
+                            :class="perPage === 50 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                            class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                        50 (Default)
+                    </button>
+                    <button type="button"
+                            @click="setPerPage(100)"
+                            :class="perPage === 100 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                            class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                        100
+                    </button>
+                    <button type="button"
+                            @click="setPerPage('all')"
+                            :class="perPage === 'all' ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
+                            class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
+                        All
+                    </button>
+                    <button type="button"
+                            @click="resetScreenOptions()"
+                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium ml-1">
+                        Reset
+                    </button>
+                </div>
+
                 <button type="button"
-                        @click="setPerPage(25)"
-                        :class="perPage === 25 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
-                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
-                    25
-                </button>
-                <button type="button"
-                        @click="setPerPage(50)"
-                        :class="perPage === 50 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
-                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
-                    50 (Default)
-                </button>
-                <button type="button"
-                        @click="setPerPage(100)"
-                        :class="perPage === 100 ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
-                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
-                    100
-                </button>
-                <button type="button"
-                        @click="setPerPage('all')"
-                        :class="perPage === 'all' ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]' : 'bg-[var(--color-surface)] border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)]'"
-                        class="px-2 py-1 rounded border transition-all cursor-pointer font-medium">
-                    All
-                </button>
-                <button type="button"
-                        @click="resetScreenOptions()"
-                        class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium ml-2">
-                    Reset
+                        @click="screenOptionsOpen = false"
+                        class="ml-auto sm:ml-0 px-4 py-1.5 rounded-lg bg-[var(--color-brand)] text-white hover:opacity-90 font-semibold text-xs cursor-pointer shadow-xs inline-flex items-center gap-1.5 transition-all">
+                    <span>Done</span>
+                    <i class="fa-solid fa-check text-[10px]"></i>
                 </button>
             </div>
         </div>
@@ -109,7 +118,7 @@
             </div>
             <div>
                 <h4 class="font-semibold text-xs text-[var(--color-ink-strong)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <i class="fa-solid fa-circle-info text-[var(--color-brand)]"></i>
+                    <i class="fa-solid fa-circle-info text-[var(--color-ink-muted)]"></i>
                     Display Notes
                 </h4>
                 <ul class="space-y-1.5 text-[var(--color-ink-muted)]">
@@ -218,14 +227,11 @@
             <div id="monitoring-stat-down" class="text-3xl font-bold font-data {{ $currentlyDown > 0 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-ink-strong)]' }}">{{ $currentlyDown }}</div>
             <div class="text-xs text-[var(--color-ink-muted)] mt-1">
                 {{ $unknown }} unknown
-                @if ($currentlyNotOurFault > 0)
-                    · <button type="button" @click="filterSearch('not our fault')" onclick="window.monitoringFilterSearch('not our fault')" class="text-amber-600 dark:text-amber-400 font-medium hover:underline cursor-pointer inline-flex items-center gap-1" title="Click to filter table: external downtime excluded from SLA (e.g. client DNS)"><i class="fa-solid fa-shield-halved"></i> {{ $currentlyNotOurFault }} not our fault</button>
-                @endif
-                @if ($currentlyMaintenance > 0)
-                    · <button type="button" @click="filterSearch('maint')" onclick="window.monitoringFilterSearch('maint')" class="text-[var(--color-primary-600)] font-medium hover:underline cursor-pointer inline-flex items-center gap-1" title="Click to filter maintenance sites"><i class="fa-solid fa-wrench"></i> {{ $currentlyMaintenance }} maint</button>
-                @endif
-                @if ($currentlyIgnored > 0)
-                    · <button type="button" @click="filterSearch('ignored')" onclick="window.monitoringFilterSearch('ignored')" class="text-[var(--color-status-yellow)] hover:underline cursor-pointer inline-flex items-center gap-1" title="Click to filter ignored sites"><i class="fa-solid fa-bell-slash"></i> {{ $currentlyIgnored }} ignored</button>
+                @php
+                    $exemptTotal = $currentlyNotOurFault + $currentlyMaintenance + $currentlyIgnored;
+                @endphp
+                @if ($exemptTotal > 0)
+                    · <span class="text-[var(--color-ink-soft)]">{{ $exemptTotal }} excused / other</span>
                 @endif
             </div>
         </div>
@@ -244,7 +250,7 @@
     </div>
 
     {{-- Search bar --}}
-    <div class="mb-6">
+    <div class="mb-4">
         <div class="relative">
             <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)]"></i>
             <input
@@ -269,11 +275,52 @@
         </div>
     </div>
 
+    {{-- Quick filter chips for states --}}
+    @if ($currentlyDown > 0 || $currentlyNotOurFault > 0 || $currentlyMaintenance > 0 || $currentlyIgnored > 0)
+        <div class="flex items-center gap-2 mb-6 flex-wrap text-xs">
+            <span class="text-[var(--color-ink-soft)] font-semibold uppercase tracking-wider text-[10px]">Filter:</span>
+            <button type="button" @click="clearSearch()"
+                    :class="!searchQuery ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)] border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] border-transparent hover:bg-[var(--color-surface)]/50'"
+                    class="btn-pill-nav text-xs py-1 px-2.5 cursor-pointer">All sites</button>
+            @if ($currentlyDown > 0)
+                <button type="button" @click="filterSearch('down')"
+                        class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-status-red)] cursor-pointer">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-status-red)] inline-block mr-1"></span>
+                    {{ $currentlyDown }} down
+                </button>
+            @endif
+            @if ($currentlyNotOurFault > 0)
+                <button type="button" @click="filterSearch('not our fault')" onclick="window.monitoringFilterSearch('not our fault')"
+                        class="btn-pill-nav text-xs py-1 px-2.5 text-amber-600 dark:text-amber-400 cursor-pointer"
+                        title="External downtime excluded from SLA (e.g. client DNS)">
+                    <i class="fa-solid fa-shield-halved text-[10px] mr-1"></i>
+                    {{ $currentlyNotOurFault }} not our fault
+                </button>
+            @endif
+            @if ($currentlyMaintenance > 0)
+                <button type="button" @click="filterSearch('maint')" onclick="window.monitoringFilterSearch('maint')"
+                        class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-primary-600)] cursor-pointer"
+                        title="Scheduled maintenance">
+                    <i class="fa-solid fa-wrench text-[10px] mr-1"></i>
+                    {{ $currentlyMaintenance }} maint
+                </button>
+            @endif
+            @if ($currentlyIgnored > 0)
+                <button type="button" @click="filterSearch('ignored')" onclick="window.monitoringFilterSearch('ignored')"
+                        class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-status-yellow)] cursor-pointer"
+                        title="Ignored sites">
+                    <i class="fa-solid fa-bell-slash text-[10px] mr-1"></i>
+                    {{ $currentlyIgnored }} ignored
+                </button>
+            @endif
+        </div>
+    @endif
+
     {{-- Per-site uptime table --}}
     <div class="card mb-6" id="monitoring-sites-card">
         <div class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-3">
             <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
-                <i class="fa-solid fa-list text-[var(--color-ink-soft)] mr-1"></i>
+                <i class="fa-solid fa-list text-[var(--color-ink-muted)] mr-1"></i>
                 Sites
             </h2>
             <span class="text-xs text-[var(--color-ink-muted)]" id="monitoring-sites-count">{{ $sites->count() }} monitored</span>

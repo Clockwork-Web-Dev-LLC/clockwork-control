@@ -156,6 +156,11 @@ interface ChatNotifier
             'description' => 'AiRemedy analyzed telemetry and identified the culprit for a performance spike or outage.',
             'default' => true,
         ],
+        'email_auth_degraded' => [
+            'label' => 'Email authentication degraded',
+            'description' => 'A domain email authentication posture degraded to FAIL (SPF, DMARC, or DKIM misconfigured).',
+            'default' => true,
+        ],
     ];
 
     public function send(string $text, array $attachments = []): bool;
@@ -207,6 +212,8 @@ interface ChatNotifier
     public function aiRemedyExecuted(AiRemedyRun $run): bool;
 
     public function aiRemedyTriaged(AiRemedyRun $run): bool;
+
+    public function emailAuthDegraded(string $domain, array $findings, ?string $previousStatus = null): bool;
 
     public function queueWorkerRestartFailed(string $reason): bool;
 
