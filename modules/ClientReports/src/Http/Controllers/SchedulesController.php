@@ -106,10 +106,7 @@ class SchedulesController extends Controller
         }
 
         $frequency = $validated['frequency'];
-        $nextRun = match ($frequency) {
-            ClientReportSchedule::FREQUENCY_WEEKLY => now()->addWeek(),
-            default => now()->addMonth(),
-        };
+        $nextRun = (new ClientReportSchedule(['frequency' => $frequency]))->computeNextRun();
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $validated['site_id'],
@@ -177,10 +174,7 @@ class SchedulesController extends Controller
 
         // If schedule has no next_run_at, set one based on updated frequency
         if ($schedule->next_run_at === null) {
-            $updates['next_run_at'] = match ($validated['frequency']) {
-                ClientReportSchedule::FREQUENCY_WEEKLY => now()->addWeek(),
-                default => now()->addMonth(),
-            };
+            $updates['next_run_at'] = (new ClientReportSchedule(['frequency' => $validated['frequency']]))->computeNextRun();
         }
 
         $schedule->update($updates);
