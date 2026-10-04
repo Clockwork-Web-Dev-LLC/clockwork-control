@@ -26,7 +26,6 @@ use Modules\GTmetrix\GTmetrixServiceProvider;
 use Modules\Hetzner\HetznerServiceProvider;
 use Modules\Kinsta\KinstaServiceProvider;
 use Modules\Linode\LinodeServiceProvider;
-use Modules\Llar\LlarServiceProvider;
 use Modules\Mattermost\MattermostServiceProvider;
 use Modules\PageSpeedInsights\PageSpeedInsightsServiceProvider;
 use Modules\Pressable\PressableServiceProvider;
@@ -78,7 +77,6 @@ return [
     PageSpeedInsightsServiceProvider::class,
     // Security scanning & protection modules (ManageWP replacement suite, brute-force defense)
     SucuriServiceProvider::class,
-    LlarServiceProvider::class,
     GatekeeperServiceProvider::class,
     EmailAuthServiceProvider::class,
     // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay, in-app visual feedback)

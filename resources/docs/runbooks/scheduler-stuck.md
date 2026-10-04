@@ -2,7 +2,7 @@
 title: Scheduler stuck
 section: Runbooks
 order: 50
-updated: 2026-09-12
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [runbook, scheduler, ops, incident]
 ---
@@ -44,7 +44,7 @@ In past testing, a separate launchd-managed `php artisan schedule:work` process 
 - Server queued for `apt-get upgrade` 30 minutes ago, still says `queued`.
 - Server rebooted, `reboot_required` badge still showing.
 - The dashboard `last_polled_at` for every server is older than 5 minutes.
-- LLAR / Wordfence pulls aren't happening (`/settings/ingest` shows stale `last_run_at`).
+- Gatekeeper lockout / Wordfence pulls aren't happening (`/settings/ingest` shows stale `last_run_at`).
 - Traffic rollup hasn't refreshed today (`/sites/{id}/traffic` 30-day chart cut off yesterday).
 
 If two or more of these are true at once — and `crontab -l` still shows the entry above — check the crontab-driven `schedule:run` is actually succeeding (see Diagnose), since a "present but failing" cron entry looks identical to a healthy one until you check its actual behavior.
@@ -109,7 +109,7 @@ The longer-cadence jobs catch up at their next scheduled tick.
   php artisan clockwork:run-performance-scans --strategy=mobile
   ```
 
-- **LLAR / Wordfence pulls** are gated by `IngestScheduleGate`. If the ingest window is configured to only run at night, manual `php artisan clockwork:pull-llar-lockouts` skips the gate.
+- **Gatekeeper lockout / Wordfence pulls** are gated by `IngestScheduleGate`. If the ingest window is configured to only run at night, manual `php artisan clockwork:pull-llar-lockouts` skips the gate.
 
 ## Mitigations baked in
 

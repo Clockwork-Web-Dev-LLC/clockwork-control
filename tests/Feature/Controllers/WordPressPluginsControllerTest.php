@@ -5,7 +5,6 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\Companion\CompanionProtectedPlugins;
 use App\Support\Settings;
-use Modules\Core\InstalledModule;
 use Modules\Core\ModuleStateResolver;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -40,8 +39,8 @@ it('lists WordPress sites on non-ignored servers with their protection totals', 
     $response->assertOk()
         ->assertSee('protected-site.test')
         ->assertSee('Installed v1.33.0')
-        ->assertSee('Limit Login Attempts')
-        ->assertSee('data-col="llar"', false);
+        ->assertSee('Gatekeeper')
+        ->assertSee('data-col="gatekeeper"', false);
 });
 
 it('excludes sites on ignored servers', function () {
@@ -103,32 +102,6 @@ it('shows install companion button and missing badge when companion is not insta
         ->assertSee('Install Companion');
 });
 
-it('omits LLAR column and install LLAR button when LLAR module is disabled', function () {
-    InstalledModule::create([
-        'module_id' => 'llar',
-        'name' => 'Limit Login Attempts Reloaded',
-        'enabled' => false,
-    ]);
-    app(ModuleStateResolver::class)->flush();
-
-    $server = Server::factory()->create(['is_ignored' => false]);
-    $site = Site::factory()->create([
-        'server_id' => $server->id,
-        'is_wordpress' => true,
-        'domain' => 'no-llar-module.test',
-        'companion_installed' => true,
-        'llar_enabled' => false,
-    ]);
-
-    $response = $this->actingAs(User::factory()->create())
-        ->get(route('settings.wordpress-plugins.index'));
-
-    $response->assertOk()
-        ->assertSee('no-llar-module.test')
-        ->assertDontSee('data-col="llar"', false)
-        ->assertDontSee('>Install LLAR<', false);
-});
-
 it('saves the protected plugin list and uses it on the control plane', function () {
     $this->actingAs(User::factory()->create())
         ->patch(route('settings.wordpress-plugins.protected.update'), [
@@ -142,27 +115,4 @@ it('saves the protected plugin list and uses it on the control plane', function 
     expect(CompanionProtectedPlugins::contains('jetpack/jetpack.php'))->toBeTrue();
     expect(CompanionProtectedPlugins::contains('hello-dolly/hello.php'))->toBeFalse();
     expect(CompanionProtectedPlugins::contains('clockwork-companion/clockwork-companion.php'))->toBeTrue();
-});
-
-it('blocks installLlar endpoint when LLAR module is disabled', function () {
-    InstalledModule::create([
-        'module_id' => 'llar',
-        'name' => 'Limit Login Attempts Reloaded',
-        'enabled' => false,
-    ]);
-    app(ModuleStateResolver::class)->flush();
-
-    $server = Server::factory()->create(['is_ignored' => false]);
-    $site = Site::factory()->create([
-        'server_id' => $server->id,
-        'is_wordpress' => true,
-        'domain' => 'block-install-llar.test',
-    ]);
-
-    $response = $this->actingAs(User::factory()->create())
-        ->post(route('sites.llar.install', $site));
-
-    $response->assertStatus(403)
-        ->assertJsonPath('ok', false)
-        ->assertJsonPath('result', 'disabled');
 });

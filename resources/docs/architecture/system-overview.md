@@ -2,7 +2,7 @@
 title: System overview
 section: Architecture
 order: 10
-updated: 2026-09-11
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [architecture, overview, stack, pressable, linux, self-hosted]
 ---
@@ -49,7 +49,7 @@ Bill.com ─── customers + invoices ┤
 WP sites (Companion) ─── snapshots ┤
 WP sites (SSH+SQL fallback) ─────┤      ┌─────────────┐
 nginx logs (SSH tail) ───────────┼─────►│ Clockwork   │──► Mattermost / Slack alerts
-Gatekeeper / LLAR / Wordfence ───┤      │  Laravel    │──► Mailgun (forms)
+Gatekeeper / Wordfence ──────────┤      │  Laravel    │──► Mailgun (forms)
 External blacklists ─────────────┤      │  + MySQL    │──► fail2ban over SSH
 GTmetrix / PSI / Sucuri / Web Risk ─┤      └──────┬──────┘   ──► (admin web UI)
                                                         │
@@ -66,7 +66,7 @@ A few decisions are load-bearing and worth knowing up front. The dedicated pages
 
 - **SSH is the substrate — for SpinupWP.** Every SpinupWP server is reached as a non-root sudo user (default `clockwork-deploy`) over SSH. We do not use the cloud-provider APIs for anything but metrics. Pressable has no SSH at all; its substrate is a REST API plus an async command-execution endpoint that Clockwork wraps into something synchronous. See [Integrations → SSH + fail2ban](/docs/integrations/ssh-and-fail2ban) and [Integrations → Pressable](/docs/integrations/pressable).
 - **Blocking is fail2ban-mediated — for SpinupWP.** A `clockwork` jail is provisioned once per server. Bans go via `sudo fail2ban-client set clockwork banip <ip>`. fail2ban handles iptables, persistence, and TTL. On Pressable, blocking is enforced at the application layer via Gatekeeper's HTTP 429 response card, as Pressable has no host-level jail. See [Architecture → Ingest pipeline](/docs/architecture/ingest-pipeline).
-- **Ingest is human-in-the-loop by default (with auto-ban on select servers).** Gatekeeper (REST) + LLAR + Wordfence + nginx logs feed a `review_queue`; an operator clicks Approve (unless server auto-ban or fleet repeat auto-approval is active). Pressable sites now stream Gatekeeper login lockouts over signed REST into the review queue for full fleet visibility. See [Features → Review queue](/docs/features/review-queue) and [Features → Gatekeeper](/docs/features/gatekeeper).
+- **Ingest is human-in-the-loop by default (with auto-ban on select servers).** Gatekeeper (REST) + Wordfence + nginx logs feed a `review_queue`; an operator clicks Approve (unless server auto-ban or fleet repeat auto-approval is active). Pressable sites now stream Gatekeeper login lockouts over signed REST into the review queue for full fleet visibility. See [Features → Review queue](/docs/features/review-queue) and [Features → Gatekeeper](/docs/features/gatekeeper).
 - **Companion mu-plugin coexists with SSH+SQL (and, for Pressable, the async command transport).** Where Companion is installed, we prefer signed REST calls. Where it isn't, the SSH+SQL fallback works for SpinupWP sites; Pressable sites without Companion have no fallback at all for anything that needs command execution (checksum verification, malware scan). The `companion_capabilities` column gates which path runs per feature. See [Architecture → Companion plugin](/docs/architecture/companion-plugin).
 - **Auth = Google OAuth + a database allowlist.** The `users` table IS the allowlist. No auto-provisioning. See [Architecture → Security model](/docs/architecture/security-model).
 - **The scheduler is load-bearing.** A one-line crontab entry (`* * * * * ... php artisan schedule:run`) drives drainers (bans, updates) and ingest — deliberately *not* a long-running `schedule:work` daemon (which can hold a stale cached PHP binary path across package upgrades). If the scheduler stops, the UI keeps rendering but everything drifts. `clockwork:scheduler-heartbeat` writes a timestamp every minute; the web UI flags it after 5 minutes of silence. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck) for architectural details and [Reference → Scheduled jobs](/docs/reference/scheduled-jobs) for what runs when.
@@ -95,7 +95,7 @@ Plus per-server (`/servers/{id}`) and per-site (`/sites/{id}`) detail pages, wit
 ## Where to read next
 
 - [Data model](/docs/architecture/data-model) — every table and how it relates.
-- [Ingest pipeline](/docs/architecture/ingest-pipeline) — nginx + LLAR + Wordfence → review queue → fail2ban.
+- [Ingest pipeline](/docs/architecture/ingest-pipeline) — nginx + Gatekeeper + Wordfence → review queue → fail2ban.
 - [Security model](/docs/architecture/security-model) — OAuth, allowlist, encrypted columns, dual CF tokens, HMAC-signed Companion.
 - [Companion plugin](/docs/architecture/companion-plugin) — what Companion is and why we built it.
 - [Integrations → Pressable](/docs/integrations/pressable) — the second hosting provider, and everywhere it changes the picture above.

@@ -2,7 +2,7 @@
 title: Contact form testing
 section: Features
 order: 70
-updated: 2026-09-14
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [contact-forms, companion, testing, care-plan, slack, modules]
 tracks: [modules/ContactForms/src/Commands/{TestContactForms,DetectContactForms,SyncCompanionFormSubscriptions}.php, modules/ContactForms/src/ContactFormsServiceProvider.php, modules/ContactForms/src/ContactFormTester.php, modules/ContactForms/src/FormsController.php, app/Http/Controllers/FormsController.php, app/Models/ContactFormTest.php, resources/views/dashboard/forms/index.blade.php]
@@ -64,7 +64,7 @@ Email used to be a secondary channel but was removed — if the form's own mail 
 
 ## Companion install
 
-Form testing requires the Companion mu-plugin. Per-site install button on Settings (one-click; runs `php artisan clockwork:install-companion --site=<id>` under the hood). Companion install is **not** scheduled fleet-wide — mirror of the LLAR pattern. See [Architecture → Companion plugin](/docs/architecture/companion-plugin).
+Form testing requires the Companion mu-plugin. Per-site install button on Settings (one-click; runs `php artisan clockwork:install-companion --site=<id>` under the hood). Companion install is **not** scheduled fleet-wide. See [Architecture → Companion plugin](/docs/architecture/companion-plugin).
 
 The HMAC secret can be rotated from the Settings tab too — useful when offboarding a contractor or replacing the laptop.
 

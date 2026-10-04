@@ -232,13 +232,6 @@
             "options": {
                 "symlink": true
             }
-        },
-        {
-            "type": "path",
-            "url": "modules/Llar",
-            "options": {
-                "symlink": true
-            }
         }
     ],
     "require-dev": {
@@ -259,7 +252,6 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
-            "Modules\\Llar\\": "modules/Llar/src/",
             "Modules\\Gatekeeper\\": "modules/Gatekeeper/src/",
             "Modules\\BackupRelay\\": "modules/BackupRelay/src/",
             "Modules\\CommentModeration\\": "modules/CommentModeration/src/",

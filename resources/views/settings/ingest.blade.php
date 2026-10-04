@@ -7,9 +7,9 @@
 
     $sourceLabels = [
         'llar' => [
-            'name' => 'Gatekeeper & Login Lockouts',
+            'name' => 'Gatekeeper Login Lockouts',
             'short' => 'Lockouts',
-            'desc' => 'Ingests failed-login lockouts via Gatekeeper REST (and legacy LLAR table fallback).',
+            'desc' => 'Ingests failed-login lockouts via Gatekeeper REST (with native clockwork_lockouts fallback).',
             'icon' => 'fa-key',
         ],
         'wordfence' => [

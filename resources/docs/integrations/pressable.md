@@ -2,7 +2,7 @@
 title: Pressable
 section: Integrations
 order: 21
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [integrations, pressable, hosting, wordpress]
 tracks: [modules/Pressable/src/**, app/Console/Commands/{ImportPressable,PressableTest,InstallCompanionPressable,PressableBackupsReport,PressableTrafficReport,PressableSecuritySummaryReport}.php]
@@ -145,7 +145,7 @@ Provider-agnostic paths use `Site::hostMonitored()` because Pressable sites have
 | Uptime, SSL cert expiry, GTmetrix/PSI performance scans | **Zero changes needed** — all three just hit the public URL. SSL specifically now uses [`LiveCertProbe`](/docs/features/ssl-cert-tracking) since Pressable has no per-site cert API to call. |
 | Companion install, backups, traffic, security summary, `wp core verify-checksums` | **New code** — see the relevant feature/architecture pages linked above. |
 | WP core/plugin/theme update *execution* via Pressable's native update API | **Not built.** `/updates` already shows correct pending-update data for Pressable sites because it reads Companion's snapshot, same as SpinupWP sites — no native-API path was needed for visibility. Executing updates through Pressable's own API instead of Companion/wp-cli remains a deferred idea, not a gap in what operators can see today. |
-| nginx-log-derived Traffic tab, Bans tab, LLAR install, cert recheck-now button | **Structurally impossible** without SSH/server access — hidden in the UI rather than shown broken. See [Features → Security scans](/docs/features/security-scans) and [Features → Traffic + capacity](/docs/features/traffic-and-capacity). |
+| nginx-log-derived Traffic tab, Bans tab, cert recheck-now button | **Structurally impossible** without SSH/server access — hidden in the UI rather than shown broken. See [Features → Security scans](/docs/features/security-scans) and [Features → Traffic + capacity](/docs/features/traffic-and-capacity). |
 
 ## Gotchas
 

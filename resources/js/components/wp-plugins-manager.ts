@@ -183,11 +183,6 @@ export function wpPluginsManager({ csrf = '' }: { csrf?: string } = {}) {
                 btn.addEventListener('click', () => this.handleCompanionInstall(btn));
             });
 
-            // LLAR install buttons
-            document.querySelectorAll<HTMLButtonElement>('.llar-install-btn').forEach((btn) => {
-                btn.addEventListener('click', () => this.handleLlarInstall(btn));
-            });
-
             // Refresh / Probe buttons
             document.querySelectorAll<HTMLButtonElement>('.wp-refresh-btn').forEach((btn) => {
                 btn.addEventListener('click', () => this.handlePluginRefresh(btn));
@@ -248,84 +243,6 @@ export function wpPluginsManager({ csrf = '' }: { csrf?: string } = {}) {
             }
         },
 
-        async handleLlarInstall(btn: HTMLButtonElement) {
-            const domain = btn.dataset.siteDomain || btn.dataset.domain || 'this site';
-            const ok = await window.confirmModal({
-                title: 'Install Limit Login Attempts Reloaded?',
-                message: `Install Limit Login Attempts Reloaded on ${domain}?`,
-                details: 'Email-on-lockout will be turned off. Existing installs will be left untouched.',
-                confirmText: 'Install LLAR',
-                variant: 'primary',
-            });
-            if (!ok) return;
-
-            const row = btn.closest('tr') as HTMLTableRowElement | null;
-            if (!row) return;
-
-            const original = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Installing…';
-
-            showRowResult(
-                row,
-                'status-yellow',
-                'fa-spinner fa-spin',
-                `<strong>${escapeHtml(domain)}</strong> — Running wp-cli over SSH…`,
-            );
-
-            try {
-                const r = await fetch(btn.dataset.url || '', {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': this.csrfToken, Accept: 'application/json' },
-                });
-                const data = await r.json();
-                if (data.ok) {
-                    const cls =
-                        data.result === 'installed' || data.result === 'updated' ? 'status-green' : 'status-yellow';
-                    const icon =
-                        data.result === 'installed' || data.result === 'updated' ? 'fa-circle-check' : 'fa-circle-info';
-                    showRowResult(
-                        row,
-                        cls,
-                        icon,
-                        `<strong>${escapeHtml(domain)}</strong> — ${escapeHtml(data.message)}`,
-                        data.output || null,
-                        cls === 'status-green',
-                    );
-
-                    if (data.llar_enabled) {
-                        const llarCell = row.querySelector('[data-col="llar"]');
-                        if (llarCell) {
-                            llarCell.innerHTML =
-                                '<span class="status-pill status-green text-xs inline-flex items-center gap-1.5"><i class="fa-solid fa-lock"></i> Active</span>';
-                        }
-                        row.dataset.llar = '1';
-                        row.dataset.sortLlar = '1';
-                        btn.remove();
-                    }
-                } else {
-                    showRowResult(
-                        row,
-                        'status-red',
-                        'fa-circle-xmark',
-                        `<strong>${escapeHtml(domain)}</strong> — ${escapeHtml(data.message || 'Failed.')}`,
-                        data.output || null,
-                    );
-                    btn.disabled = false;
-                    btn.innerHTML = original;
-                }
-            } catch (e: any) {
-                showRowResult(
-                    row,
-                    'status-red',
-                    'fa-circle-xmark',
-                    `<strong>${escapeHtml(domain)}</strong> — Network error: ${escapeHtml(e?.message || 'Unknown error')}`,
-                );
-                btn.disabled = false;
-                btn.innerHTML = original;
-            }
-        },
-
         async handlePluginRefresh(btn: HTMLButtonElement) {
             const domain = btn.dataset.siteDomain || btn.dataset.domain || 'this site';
             const row = btn.closest('tr') as HTMLTableRowElement | null;
@@ -357,28 +274,6 @@ export function wpPluginsManager({ csrf = '' }: { csrf?: string } = {}) {
                     }
                     row.dataset.wordfence = data.wordfence_enabled ? '1' : '0';
                     row.dataset.sortWordfence = data.wordfence_enabled ? '1' : '0';
-
-                    const llarCell = row.querySelector('[data-col="llar"]');
-                    if (llarCell) {
-                        // Mirror the Blade precedence: LLAR active → Gatekeeper → Inactive.
-                        // Without the middle case a re-probe on a migrated site
-                        // would paint its "Gatekeeper" pill over with "Inactive".
-                        if (data.llar_enabled) {
-                            llarCell.innerHTML =
-                                '<span class="status-pill status-green text-xs inline-flex items-center gap-1.5"><i class="fa-solid fa-lock"></i> Active</span>';
-                        } else if (row.dataset.gatekeeper === '1') {
-                            llarCell.innerHTML =
-                                '<span class="status-pill status-cf text-xs inline-flex items-center gap-1.5" title="Gatekeeper (native Companion login lockouts) is enabled — LLAR not needed"><i class="fa-solid fa-shield-halved"></i> Gatekeeper</span>';
-                        } else {
-                            llarCell.innerHTML =
-                                '<span class="text-[var(--color-ink-soft)] inline-flex items-center gap-1"><i class="fa-solid fa-minus text-[10px]"></i> Inactive</span>';
-                        }
-                    }
-                    row.dataset.llar = data.llar_enabled ? '1' : '0';
-                    row.dataset.sortLlar = data.llar_enabled ? '1' : '0';
-
-                    const llarBtn = row.querySelector('.llar-install-btn');
-                    if (data.llar_enabled && llarBtn) llarBtn.remove();
 
                     showRowResult(
                         row,

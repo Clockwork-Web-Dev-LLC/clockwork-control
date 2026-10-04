@@ -133,7 +133,7 @@
     </div>
 @elseif ($id === 'email-auth' || $id === 'email_auth')
     <div class="{{ $class }} rounded-lg bg-sky-50 text-sky-600 font-bold flex items-center justify-center text-sm shadow-xs dark:bg-sky-950/40 dark:text-sky-400">
-        <i class="fa-solid fa-envelope-shield"></i>
+        <i class="fa-solid fa-envelope-circle-check"></i>
     </div>
 @else
     <div class="{{ $class }} text-[var(--color-ink-muted)] flex items-center justify-center text-base">

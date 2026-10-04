@@ -303,31 +303,6 @@ abstract class WebhookChatNotifier implements ChatNotifier
     }
 
     /**
-     * Notify the channel that LLAR was just installed on a site (and that
-     * its email-on-lockout feature is off — the part that scares users).
-     */
-    public function llarInstalled(Site $site): bool
-    {
-        if (! $this->isEventEnabled('llar_installed')) {
-            return false;
-        }
-        $title = sprintf(':lock: LLAR installed on %s', $site->domain);
-
-        $attachment = [
-            'fallback' => $title,
-            'color' => '#33aa33',
-            'title' => $title,
-            'text' => 'Limit Login Attempts Reloaded was installed and activated. Email lockout notifications are disabled — only the log channel is on, which is what feeds the Clockwork review queue.',
-            'fields' => [
-                ['title' => 'Site', 'value' => $site->domain, 'short' => true],
-                ['title' => 'Server', 'value' => $site->server?->name ?? 'n/a', 'short' => true],
-            ],
-        ];
-
-        return $this->send($title, [$attachment]);
-    }
-
-    /**
      * Daily contact-form test on a care-plan site failed twice in a row.
      * (One-off blips don't fire — we only ping when streak reaches 2 to avoid
      * waking the channel for transient network problems.)

@@ -10,12 +10,9 @@
         ['key' => 'server',     'label' => 'Server',     'default' => false],
         ['key' => 'tier',       'label' => 'Tier',       'default' => false],
         ['key' => 'companion',  'label' => 'Companion',  'default' => true],
+        ['key' => 'gatekeeper', 'label' => 'Gatekeeper', 'default' => true],
         ['key' => 'wordfence',  'label' => 'Wordfence',  'default' => true],
     ];
-
-    if ($llarEnabled) {
-        $columnConfig[] = ['key' => 'llar', 'label' => 'LLAR', 'default' => true];
-    }
 @endphp
 
 @section('content')
@@ -30,7 +27,7 @@
     </x-page-header>
 
     {{-- Primary Metrics Row --}}
-    <div class="grid grid-cols-2 {{ $llarEnabled ? 'md:grid-cols-6' : 'md:grid-cols-5' }} gap-3 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">WordPress sites</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ number_format($totals['sites']) }}</div>
@@ -62,7 +59,7 @@
                 {{ number_format($totals['gatekeeper_enabled']) }}
                 <span class="text-sm text-[var(--color-ink-soft)]">/ {{ number_format($totals['sites']) }}</span>
             </div>
-            <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">Native login lockouts (replaces LLAR)</div>
+            <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">Native login lockouts</div>
         </div>
 
         <div class="card px-4 py-3">
@@ -74,30 +71,13 @@
             <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">WAF &amp; Login Security</div>
         </div>
 
-        @if ($llarEnabled)
-            <div class="card px-4 py-3">
-                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Limit Login Attempts</div>
-                <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">
-                    {{ number_format($totals['llar_enabled']) }}
-                    <span class="text-sm text-[var(--color-ink-soft)]">/ {{ number_format($totals['sites']) }}</span>
-                </div>
-                <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">
-                    @if ($totals['llar_missing'] > 0)
-                        <span>{{ number_format($totals['llar_missing']) }} not active</span>
-                    @else
-                        <span class="text-[var(--color-status-green)]">All active ✓</span>
-                    @endif
-                </div>
-            </div>
-        @endif
-
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Unprotected sites</div>
             <div class="text-2xl font-display {{ $totals['no_protection'] > 0 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-status-green)]' }} font-data">
                 {{ number_format($totals['no_protection']) }}
             </div>
             <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">
-                {{ $llarEnabled ? 'No Wordfence or LLAR' : 'No Wordfence active' }}
+                No Wordfence or Gatekeeper
             </div>
         </div>
     </div>
@@ -130,9 +110,7 @@
                  matches(row) {
                      if (this.filter === 'missing-companion' && row.dataset.companion === '1') return false;
                      if (this.filter === 'companion-installed' && row.dataset.companion !== '1') return false;
-                     @if ($llarEnabled)
-                     if (this.filter === 'missing-llar' && (row.dataset.llar === '1' || row.dataset.gatekeeper === '1')) return false;
-                     @endif
+                     if (this.filter === 'missing-gatekeeper' && row.dataset.gatekeeper === '1') return false;
                      if (this.search.trim() !== '') {
                          const q = this.search.toLowerCase();
                          const domain = (row.dataset.domain || '').toLowerCase();
@@ -183,15 +161,13 @@
                         <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] font-data">{{ $totals['companion_installed'] }}</span>
                     </button>
 
-                    @if ($llarEnabled)
-                        <button type="button"
-                                @click="filter = 'missing-llar'"
-                                :class="filter === 'missing-llar' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-sm font-semibold border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] border-transparent'"
-                                class="px-3 py-1.5 rounded-md text-xs border transition-colors inline-flex items-center gap-1.5">
-                            <span>Missing LLAR</span>
-                            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] font-data">{{ $totals['llar_missing'] }}</span>
-                        </button>
-                    @endif
+                    <button type="button"
+                            @click="filter = 'missing-gatekeeper'"
+                            :class="filter === 'missing-gatekeeper' ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-sm font-semibold border-[var(--color-border)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] border-transparent'"
+                            class="px-3 py-1.5 rounded-md text-xs border transition-colors inline-flex items-center gap-1.5">
+                        <span>Missing Gatekeeper</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] font-data">{{ $totals['sites'] - $totals['gatekeeper_enabled'] }}</span>
+                    </button>
                 </div>
 
                 {{-- Instant search --}}
@@ -224,14 +200,12 @@
                        data-hidden-cols="server tier">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
-                            <x-sort-th key="site"      data-col="site"      class="px-5 py-2.5">Site</x-sort-th>
-                            <x-sort-th key="server"    data-col="server"    class="px-5 py-2.5">Server</x-sort-th>
-                            <x-sort-th key="tier"      data-col="tier"      class="px-5 py-2.5">Tier</x-sort-th>
-                            <x-sort-th key="companion" data-col="companion" class="px-5 py-2.5" title="Sort to surface sites without Companion">Companion Plugin</x-sort-th>
-                            <x-sort-th key="wordfence" data-col="wordfence" class="px-5 py-2.5">Wordfence</x-sort-th>
-                            @if ($llarEnabled)
-                                <x-sort-th key="llar"  data-col="llar"      class="px-5 py-2.5" title="Limit Login Attempts Reloaded">LLAR</x-sort-th>
-                            @endif
+                            <x-sort-th key="site"       data-col="site"       class="px-5 py-2.5">Site</x-sort-th>
+                            <x-sort-th key="server"     data-col="server"     class="px-5 py-2.5">Server</x-sort-th>
+                            <x-sort-th key="tier"       data-col="tier"       class="px-5 py-2.5">Tier</x-sort-th>
+                            <x-sort-th key="companion"  data-col="companion"  class="px-5 py-2.5" title="Sort to surface sites without Companion">Companion Plugin</x-sort-th>
+                            <x-sort-th key="gatekeeper" data-col="gatekeeper" class="px-5 py-2.5" title="Gatekeeper login lockouts">Gatekeeper</x-sort-th>
+                            <x-sort-th key="wordfence"  data-col="wordfence"  class="px-5 py-2.5">Wordfence</x-sort-th>
                             <th class="px-5 py-2.5 text-right">Actions</th>
                         </tr>
                     </thead>
@@ -246,17 +220,14 @@
                                 data-domain="{{ $site->domain }}"
                                 data-server="{{ $serverName }}"
                                 data-companion="{{ $site->companion_installed ? '1' : '0' }}"
-                                data-llar="{{ $site->llar_enabled ? '1' : '0' }}"
                                 data-gatekeeper="{{ $site->gatekeeperEnabled() ? '1' : '0' }}"
                                 data-wordfence="{{ $site->wordfence_enabled ? '1' : '0' }}"
                                 data-sort-site="{{ $site->domain }}"
                                 data-sort-server="{{ $serverName }}"
                                 data-sort-tier="{{ $tier !== null ? $tierRank[$tier] : '' }}"
                                 data-sort-companion="{{ $site->companion_installed ? 1 : 0 }}"
+                                data-sort-gatekeeper="{{ $site->gatekeeperEnabled() ? 1 : 0 }}"
                                 data-sort-wordfence="{{ $site->wordfence_enabled ? 1 : 0 }}"
-                                @if ($llarEnabled)
-                                    data-sort-llar="{{ $site->llar_enabled ? 1 : 0 }}"
-                                @endif
                                 class="hover:bg-[var(--color-surface-alt)]/40 transition-colors">
                                 
                                 {{-- Site domain --}}
@@ -311,6 +282,19 @@
                                     @endif
                                 </td>
 
+                                {{-- Gatekeeper Status --}}
+                                <td data-col="gatekeeper" class="px-5 py-3 text-xs">
+                                    @if ($site->gatekeeperEnabled())
+                                        <span class="status-pill status-green text-xs inline-flex items-center gap-1.5" title="Gatekeeper login lockouts active">
+                                            <i class="fa-solid fa-shield-halved"></i> Active
+                                        </span>
+                                    @else
+                                        <span class="text-[var(--color-ink-soft)] inline-flex items-center gap-1" title="Gatekeeper not active">
+                                            <i class="fa-solid fa-minus text-[10px]"></i> Inactive
+                                        </span>
+                                    @endif
+                                </td>
+
                                 {{-- Wordfence Status --}}
                                 <td data-col="wordfence" class="px-5 py-3 text-xs">
                                     @if ($site->wordfence_enabled)
@@ -327,29 +311,6 @@
                                         </span>
                                     @endif
                                 </td>
-
-                                {{-- LLAR Status (only if LLAR module is enabled) --}}
-                                @if ($llarEnabled)
-                                    <td data-col="llar" class="px-5 py-3 text-xs">
-                                        @if ($site->llar_enabled)
-                                            <span class="status-pill status-green text-xs inline-flex items-center gap-1.5" title="Limit Login Attempts Reloaded active">
-                                                <i class="fa-solid fa-lock"></i> Active
-                                            </span>
-                                        @elseif ($site->gatekeeperEnabled())
-                                            <span class="status-pill status-cf text-xs inline-flex items-center gap-1.5" title="Gatekeeper (native Companion login lockouts) is enabled — LLAR not needed">
-                                                <i class="fa-solid fa-shield-halved"></i> Gatekeeper
-                                            </span>
-                                        @elseif ($probed)
-                                            <span class="text-[var(--color-ink-soft)] inline-flex items-center gap-1" title="LLAR not active or not installed">
-                                                <i class="fa-solid fa-minus text-[10px]"></i> Inactive
-                                            </span>
-                                        @else
-                                            <span class="text-[var(--color-ink-soft)] italic" title="Not yet checked — re-probe to inspect">
-                                                Unchecked
-                                            </span>
-                                        @endif
-                                    </td>
-                                @endif
 
                                 {{-- Actions --}}
                                 <td class="px-5 py-3 text-right">
@@ -372,17 +333,6 @@
                                                     data-site-domain="{{ $site->domain }}"
                                                     title="Install Clockwork Companion mu-plugin. Provides the Backups admin page, security headers, and REST monitoring.">
                                                 <i class="fa-solid fa-download"></i> Install Companion
-                                            </button>
-                                        @endif
-
-                                        {{-- Install LLAR button (module on, no LLAR, and Gatekeeper not already covering logins) --}}
-                                        @if ($llarEnabled && ! $site->llar_enabled && ! $site->gatekeeperEnabled())
-                                            <button type="button"
-                                                    class="llar-install-btn btn-pill-nav text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]"
-                                                    data-url="{{ route('sites.llar.install', $site) }}"
-                                                    data-site-domain="{{ $site->domain }}"
-                                                    title="Install LLAR via wp-cli over SSH and disable lockout email.">
-                                                <i class="fa-solid fa-download"></i> LLAR
                                             </button>
                                         @endif
                                     </div>

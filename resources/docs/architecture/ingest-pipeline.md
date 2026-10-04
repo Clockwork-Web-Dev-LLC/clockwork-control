@@ -2,7 +2,7 @@
 title: Ingest pipeline
 section: Architecture
 order: 30
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [architecture, ingest, fail2ban, security, exclusions]
 tracks: [app/Services/Llar/**, app/Services/Wordfence/**, app/Services/Logs/**, app/Services/Fail2ban/**, app/Console/Commands/Pull*.php, app/Console/Commands/AutoApproveRepeats.php, app/Console/Commands/ProcessPendingBans.php, app/Http/Controllers/IngestSettingsController.php]
@@ -22,7 +22,7 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
    ┌──────────────┐  │   └──────────────┘    └────────────────────┘
    │ Gatekeeper   │──┤      ▲                         │
    │ (REST) /     │  │      │                         ▼
-   │ LLAR (DB)    │  │      │ auto-approve     ┌──────────────┐
+   │ DB fallback  │  │      │ auto-approve     ┌──────────────┐
    └──────────────┘  │      │ (≥2 sightings)   │ fail2ban-    │
    ┌──────────────┐  │      │                  │ client banip │
    │ Wordfence    │──┘      │                  │  via SSH     │
@@ -47,12 +47,12 @@ How a malicious IP gets from "hit a site once" to "blocked at the firewall on ev
 - Parsed lines land in `threat_logs` (append-only). Nightly `clockwork:prune-threat-logs` drops rows older than the window set at `/settings/ingest` (default 30 days, minimum 7). On MySQL that is `DROP PARTITION` after `clockwork:rebuild-threat-logs-partitions`; otherwise chunked DELETE. Daily rollups in `site_traffic_daily` are kept.
 - Per-site try/catch: one unreachable server does not fail the whole run. Errors are isolated per site so a temporary connectivity issue on one host does not block log processing for the rest of the fleet. Per-site failures log `tail_nginx_logs.site_failed` at warning level, and the command only reports overall failure when every site in the fleet fails.
 
-### Gatekeeper REST + LLAR / Wordfence pulls
+### Gatekeeper REST / Wordfence pulls
 
 `clockwork:pull-llar-lockouts` and `clockwork:pull-wordfence-blocks` run every 15 minutes — when the `IngestScheduleGate` says they should.
 
-- **Gatekeeper as the Primary Ingest Engine:** We are migrating our fleet away from Limit Login Attempts Reloaded (eliminating LLAR's third-party ads, aggressive paid upsells, and panic-inducing "attacks blocked" dashboard graphs that frighten clients). On sites running Clockwork Companion 1.39.0+ or Renegade with the `gatekeeper` capability, `LlarLockoutPuller` queries the signed HMAC REST route `GET /wp-json/clockwork/v1/lockouts` directly. This enables login lockout monitoring for **Pressable** managed hosting for the first time (where direct MySQL access was impossible).
-- **Legacy LLAR SSH+SQL Fallback:** For un-migrated sites or sites without Companion, the puller wraps the `mysql` CLI over SSH using a temporary `defaults` file (base64 transport, 600 perms) checking both `prefix_limit_login_lockouts` and `prefix_options`.
+- **Gatekeeper as the Primary Ingest Engine:** The fleet has moved off Limit Login Attempts Reloaded (LLAR's third-party ads, paid upsells, and panic-inducing "attacks blocked" dashboard graphs frightened clients). On sites where Companion or Renegade advertises the `gatekeeper` (or older `lockouts`) capability, `LlarLockoutPuller` queries the signed HMAC REST route `GET /wp-json/clockwork/v1/lockouts` directly. This is what gives **Pressable** managed-hosting sites lockout monitoring (no direct MySQL access there).
+- **Native-table SSH+SQL Fallback:** If the REST call fails and the site has MySQL creds (SpinupWP), the puller reads `<prefix>clockwork_lockouts` directly by running the `mysql` CLI over SSH with a temporary `defaults` file (base64 transport, 600 perms). Sites with neither Companion nor DB creds return nothing. LLAR's own `<prefix>limit_login_lockouts` table and `limit_login_lockouts` option are **no longer read** (removed in 1.10.1); the class and command keep their `llar` names for compatibility.
 - **Deduplication & Noise Reduction:** Both source queries return every *currently active* lockout/block on each pull, not just new ones — that's the DB shape, not a bug. To prevent log noise, only genuinely new events log at `info` (an action outside `skipped_active_ban` / `incremented_existing` / `skipped_queued_for_ban`); the "still active, nothing changed" and `filtered_protected` cases log at `debug`.
 
 
@@ -92,7 +92,7 @@ Every real `BlockedIp::create()` — including this batch executor's — also fi
 
 ### The scheduler not running
 
-Without the scheduler running via cron, the entire pipeline drifts. nginx logs accumulate (still ingestable later), LLAR/Wordfence don't pull, the queue stops promoting, and approved bans sit in `queued_for_ban` forever. UI symptoms look like product bugs; the cause is the scheduler. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck).
+Without the scheduler running via cron, the entire pipeline drifts. nginx logs accumulate (still ingestable later), Gatekeeper/Wordfence don't pull, the queue stops promoting, and approved bans sit in `queued_for_ban` forever. UI symptoms look like product bugs; the cause is the scheduler. See [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck).
 
 ### CF-edge bans on CF-proxied sites
 

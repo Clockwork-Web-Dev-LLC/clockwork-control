@@ -226,13 +226,14 @@ class PressableBackupsReport extends Command
         $empty = ['sites' => [], 'generated_at' => null, 'expires_at' => null];
 
         $key = rtrim((string) config('clockwork.backup_relay.s3_prefix'), '/').'/download-links.json';
-        $disk = Storage::disk('s3');
-
-        if (! $disk->exists($key)) {
-            return $empty;
-        }
 
         try {
+            $disk = Storage::disk('s3');
+
+            if (! $disk->exists($key)) {
+                return $empty;
+            }
+
             $data = json_decode((string) $disk->get($key), true, flags: JSON_THROW_ON_ERROR);
         } catch (Throwable $e) {
             Log::warning('companion.pressable_backups_report.offsite_manifest_unreadable', ['error' => $e->getMessage()]);

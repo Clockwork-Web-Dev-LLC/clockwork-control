@@ -3,7 +3,7 @@ title: Inactive sites
 section: Features
 order: 32
 author: Aaron Reimann
-updated: 2026-09-28
+updated: 2026-10-04
 tags: [sites, issues, alerting, care-plan]
 tracks: [app/Models/Site.php, app/Models/SiteIngestExclusion.php, app/Support/IssueCounter.php, app/Http/Controllers/IssuesController.php, app/Http/Controllers/SitesController.php, app/Services/Chat/ChatNotifierDispatcher.php, database/migrations/*add_is_inactive_to_sites*, database/migrations/*site_ingest_exclusions*]
 ---
@@ -43,7 +43,7 @@ Unarchive (today: the orphan-review restore path) clears `archived_at` and delet
 - Contact-form / Companion-missing checks
 - Cloudflare DNS-only misconfiguration
 - Traffic-capacity ("over quota") flags
-- The matching Mattermost/Slack events: `ssl_state_changed`, `llar_installed`, `contact_form_failed`/`recovered`, `companion_unreachable`/`reachable`, `plugin_update_failed`
+- The matching Mattermost/Slack events: `ssl_state_changed`, `contact_form_failed`/`recovered`, `companion_unreachable`/`reachable`, `plugin_update_failed`
 
 **NOT suppressed** (active incidents — still Clockwork's problem regardless of the client relationship, since the site is still live infrastructure):
 

@@ -264,7 +264,13 @@
                                     </span>
 
                                     @if ($site->companion_installed)
-                                        <span class="status-pill status-unknown cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
+                                        @php
+                                            $companionClass = $site->companion_stuck_since ? 'status-yellow' : 'status-green';
+                                            $companionTooltip = $site->companion_stuck_since
+                                                ? ($site->isRenegade() ? 'Renegade Plugin Unreachable' : 'Companion Plugin Unreachable')
+                                                : ($site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active');
+                                        @endphp
+                                        <span class="status-pill {{ $companionClass }} cursor-default" data-tooltip="{{ $companionTooltip }}">
                                             <i class="fa-solid fa-plug"></i>
                                         </span>
                                     @endif

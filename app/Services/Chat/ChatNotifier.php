@@ -61,11 +61,6 @@ interface ChatNotifier
             'description' => 'fail2ban auto-banned a noisy IP at the firewall.',
             'default' => true,
         ],
-        'llar_installed' => [
-            'label' => 'LLAR auto-installed',
-            'description' => 'Limit Login Attempts Reloaded plugin auto-installed on a site that lacked it.',
-            'default' => true,
-        ],
         'contact_form_failed' => [
             'label' => 'Contact form failing',
             'description' => 'Contact form smoke test failed after the streak threshold.',
@@ -174,8 +169,6 @@ interface ChatNotifier
     public function seoIndexabilityBlocked(Site $site, string $reason, string $snippet): bool;
 
     public function seoIndexabilityRecovered(Site $site): bool;
-
-    public function llarInstalled(Site $site): bool;
 
     public function contactFormTestFailed(Site $site, string $reason, int $streak, ?string $formId = null): bool;
 

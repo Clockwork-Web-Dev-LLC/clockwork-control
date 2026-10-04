@@ -421,12 +421,6 @@
                             <i :class="isDark ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon text-indigo-500'"></i>
                         </button>
 
-                        <!-- Primary Action: Add Server -->
-                        <a href="{{ route('servers.create') }}" class="px-3.5 py-1.5 rounded-lg bg-[var(--color-brand)] text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
-                            <i class="fa-solid fa-plus text-xs"></i>
-                            <span class="hidden sm:inline">Add Server</span>
-                        </a>
-
                         <!-- Profile Dropdown Menu (Modern Studio Layout / Mobile) -->
                         <div class="relative cw-top-profile" @click.outside="userMenuOpen = false">
                             <button type="button"
@@ -635,7 +629,7 @@
                             </a>
                             <a href="{{ route('issues.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('issues.*') ? 'is-active' : '' }}">
-                                <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-status-yellow)]"></i> Issues</span>
+                                <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-brand)]"></i> Issues</span>
                                 @isset($issueCount)
                                     @if ($issueCount > 0)
                                         <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
@@ -653,7 +647,7 @@
                             </a>
                             <a href="{{ route('monitoring.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('monitoring.*') ? 'is-active' : '' }}">
-                                <span><i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-status-green)]"></i> Monitoring</span>
+                                <span><i class="fa-solid fa-heart-pulse mr-2 text-[var(--color-brand)]"></i> Monitoring</span>
                                 @isset($monitoringDownCount)
                                     @if ($monitoringDownCount > 0)
                                         <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $monitoringDownCount }}</span>
@@ -686,7 +680,7 @@
                             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
                                 <a href="{{ route('ai-remedy.index') }}"
                                    class="cw-mobile-nav-link {{ request()->routeIs('ai-remedy.*') ? 'is-active' : '' }}">
-                                    <span><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i> AiRemedy</span>
+                                    <span><i class="fa-solid fa-wand-magic-sparkles mr-2 text-[var(--color-brand)]"></i> AiRemedy</span>
                                     @isset($aiRemedyReviewCount)
                                         @if ($aiRemedyReviewCount > 0)
                                             <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-cyan)] text-slate-900" title="{{ $aiRemedyReviewCount }} Copilot runs pending review">{{ $aiRemedyReviewCount }}</span>
@@ -703,7 +697,7 @@
                             </div>
                             <a href="{{ route('settings.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
-                                <span><i class="fa-solid fa-sliders mr-2 text-[var(--color-ink-muted)]"></i> Settings</span>
+                                <span><i class="fa-solid fa-sliders mr-2 text-[var(--color-brand)]"></i> Settings</span>
                             </a>
                             <a href="{{ route('docs.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('docs.*') ? 'is-active' : '' }}">
@@ -828,7 +822,7 @@
                 { id: 'gatekeeper', section: 'Security', label: 'Gatekeeper Login Protection', code: 'GG', kbd: 'G G', icon: 'fa-solid fa-user-shield text-emerald-500', url: '{{ route('settings.gatekeeper.index') }}', keywords: ['gatekeeper', 'llar', 'lockouts', 'login protection', 'brute force', 'ip bans'] },
             @endif
             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('email-auth'))
-                { id: 'email-auth', section: 'Security', label: 'Email Authentication', code: 'GE', kbd: 'G E', icon: 'fa-solid fa-envelope-shield text-indigo-500', url: '{{ route('email-auth.index') }}', keywords: ['email', 'auth', 'spf', 'dkim', 'dmarc', 'dns', 'mx'] },
+                { id: 'email-auth', section: 'Security', label: 'Email Authentication', code: 'GE', kbd: 'G E', icon: 'fa-solid fa-envelope-circle-check text-indigo-500', url: '{{ route('email-auth.index') }}', keywords: ['email', 'auth', 'spf', 'dkim', 'dmarc', 'dns', 'mx'] },
             @endif
             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
                 { id: 'feedback', section: 'Operations', label: 'Feedback Backlog & Notes', code: 'GF', kbd: 'G F', icon: 'fa-solid fa-comment-dots text-purple-500', url: '{{ route('feedback.index') }}', keywords: ['feedback', 'bugs', 'tweaks', 'notes', 'claude prompt', 'pins', 'collaboration'] },

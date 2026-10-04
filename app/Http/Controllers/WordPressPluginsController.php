@@ -8,21 +8,17 @@ use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Modules\Core\ModuleStateResolver;
 
 class WordPressPluginsController extends Controller
 {
     /**
      * Fleet-wide view of WordPress security plugins and Companion agent per site.
      *
-     * Displays deployment status of the Clockwork Companion mu-plugin and security
-     * plugins across all monitored WordPress sites. If the Limit Login Attempts
-     * Reloaded (LLAR) module is enabled, LLAR status and install options are shown.
+     * Displays deployment status of the Clockwork Companion mu-plugin, Wordfence,
+     * and native Gatekeeper login lockout protection across all monitored WordPress sites.
      */
-    public function index(ModuleStateResolver $moduleState): View
+    public function index(): View
     {
-        $llarEnabled = $moduleState->isEnabled('llar');
-
         $sites = Site::query()
             ->with(['server.tags:id,name'])
             ->where('is_wordpress', true)
@@ -35,19 +31,11 @@ class WordPressPluginsController extends Controller
 
         $wordfenceEnabled = $sites->where('wordfence_enabled', true)->count();
         $gatekeeperEnabledCount = $sites->filter(fn (Site $s) => $s->gatekeeperEnabled())->count();
-        $llarEnabledCount = $llarEnabled ? $sites->where('llar_enabled', true)->count() : 0;
 
-        // "Missing" LLAR only matters where Gatekeeper hasn't taken over.
-        // A Gatekeeper site with no LLAR is the migration's end state.
-        $llarMissingCount = $llarEnabled
-            ? $sites->filter(fn (Site $s) => ! $s->llar_enabled && ! $s->gatekeeperEnabled())->count()
-            : 0;
-
-        $noProtection = $sites->filter(function (Site $s) use ($llarEnabled) {
+        $noProtection = $sites->filter(function (Site $s) {
             $hasWf = (bool) $s->wordfence_enabled;
-            $hasLlar = $llarEnabled && (bool) $s->llar_enabled;
 
-            return ! $hasWf && ! $hasLlar && ! $s->gatekeeperEnabled();
+            return ! $hasWf && ! $s->gatekeeperEnabled();
         })->count();
 
         $totals = [
@@ -56,14 +44,12 @@ class WordPressPluginsController extends Controller
             'companion_missing' => $companionMissing,
             'wordfence_enabled' => $wordfenceEnabled,
             'gatekeeper_enabled' => $gatekeeperEnabledCount,
-            'llar_enabled' => $llarEnabledCount,
-            'llar_missing' => $llarMissingCount,
             'no_protection' => $noProtection,
         ];
 
         $protectedPlugins = implode("\n", CompanionProtectedPlugins::configuredOperationalSlugs());
 
-        return view('settings.wordpress-plugins', compact('sites', 'totals', 'llarEnabled', 'protectedPlugins'));
+        return view('settings.wordpress-plugins', compact('sites', 'totals', 'protectedPlugins'));
     }
 
     public function updateProtectedPlugins(Request $request, Settings $settings): RedirectResponse

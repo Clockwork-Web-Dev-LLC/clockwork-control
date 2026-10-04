@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-10-04
+
+### Added
+- **Reorderable Site Settings Modules (`/sites/{site}?tab=settings`)**:
+  - Full drag-and-drop handles and accessible keyboard/mobile up/down arrow buttons on all 10 site settings cards (`Cert details`, `Cloudflare`, `WordPress security`, `Server tools`, `Care plan`, `Uptime monitoring`, `Site status`, `Companion mu-plugin`, `Contact forms`, and `Gatekeeper`).
+  - Asynchronous database persistence per-site via `PATCH /sites/{site}/settings-layout` saving to `sites.settings_layout` (JSON column).
+  - DOM-preserving node reordering ensuring all existing forms, inputs, modals (probe subscriber modal, cert editor, gatekeeper override editor), and event listeners remain fully interactive when rearranged.
+  - "Reset default layout" one-click action restoring the canonical module order with live toast feedback.
+  - Model helpers `Site::DEFAULT_SETTINGS_LAYOUT` and `resolvedSettingsLayout()` ensuring newly added modules seamlessly append to custom layouts.
+
+### Changed & Removed
+- **Full LLAR Sunsetting & Gatekeeper Transition**:
+  - Completely removed the legacy `modules/Llar` package, its provider registration, and module catalog entry.
+  - Retired `clockwork:install-llar` artisan command, `LlarInstaller` service, and `POST /sites/{site}/install-llar` endpoint.
+  - Cleaned up obsolete `llar_installed` chat events and notifications across Slack, Mattermost, and Webhooks.
+  - Refactored `WordPressPluginsController` (`/settings/wordpress-plugins`) to replace LLAR column and install buttons with native **Gatekeeper** status (`Active` / `Inactive`) and a dedicated "Missing Gatekeeper" filter.
+  - Retired legacy LLAR database scraping (`fromTable()`, `fromOptionRow()`); `LlarLockoutPuller` now pulls strictly from Gatekeeper REST (`/wp-json/clockwork/v1/lockouts`) and native `clockwork_lockouts` fallback table.
+  - Updated settings ingest, weird stats, companion settings, and site security cards to standardize on Gatekeeper as the sole native login brute-force protection layer.
+- **Server Fleet UI Simplifications**:
+  - Removed the global "Add Server" button from the top-right application layout header across all pages, keeping server provisioning localized to the `/servers` directory page header.
+  - Simplified the table view mode label on `/servers` from "Data Grid" to "Grid" to cleanly balance the "Cards" view mode toggle.
+  - Simplified the single-provider sync button on `/servers` from "Refresh Servers" to "Refresh" to eliminate redundancy.
+  - Simplified the tag management button on `/servers` from "Manage Tags" to "Tags".
+
+### Fixed
+- **Sites Directory Companion Plugin Status Pill Color**:
+  - Restored the active Companion/Renegade status pill on the `/sites` directory list view to `status-green` (with `status-yellow` when unreachable/stuck) instead of grey `status-unknown`, establishing color consistency where green denotes active/healthy services and grey signifies inactive or unmonitored states.
+- **Mobile Navigation Drawer Icon Consistency**:
+  - Unified icon colors in the mobile navigation drawer to brand blue (`text-[var(--color-brand)]`) across Issues, Monitoring, AiRemedy, and Settings.
+  - Replaced missing `fa-envelope-shield` icon with valid Font Awesome Free `fa-solid fa-envelope-circle-check` across EmailAuth navigation, Quick Jump, and service logos.
+- **Scheduled Jobs Dashboard & Recording Reliability (`/settings/scheduled-jobs`)**:
+  - Fixed false-failure reporting on background scheduled jobs (`->runInBackground()`) where `ScheduledTaskFinished` dispatches with a `null` exit code upon process launch; `RecordScheduledTaskResult` now properly records background launches as successful and listens to `ScheduledBackgroundTaskFinished` to update the final exit code and status once complete.
+  - Eliminated duplicate event listener registration in `AppServiceProvider` that caused every scheduler event to be recorded twice in `scheduled_job_runs`.
+  - Added robust exception handling around `SshClient::exec` in `WpPluginDetector` so unreachable or firewalled hosts do not crash `clockwork:detect-wp-plugins` with an unhandled `RuntimeException`.
+  - Wrapped S3 bucket existence checks in `PullBackupRelayReport` and `PressableBackupsReport` in `try / catch` blocks to gracefully handle AWS 403 Forbidden errors or network interruptions without aborting scheduled reports.
+  - Corrected historical false-failure rows in the database so the Scheduled Jobs dashboard accurately reflects real operational status.
+
 ## [1.10.0] - 2026-10-03
 
 ### Added
@@ -73,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Registered `ai-remedy` in `ServiceRateLimitRegistry` with official OpenRouter vendor limits (200 requests/minute, 45s timeout, concurrency 2, delay 100ms, retry attempts 2, and aliases `airemedy`, `openrouter`).
   - Added `openrouter_api_key` definition (`OPENROUTER_API_KEY`) to `EnvCredentialManager` for direct `.env` persistence without database storage.
   - Added AiRemedy configuration and run detection to `SetupController::detectInUse()` to prevent false `Needs Config` indicators when `OPENROUTER_API_KEY` is present.
-  - Added dedicated `fa-wand-magic-sparkles` brand icon in `resources/views/components/service-logo.blade.php` for AiRemedy (and `fa-envelope-shield` for EmailAuth).
+  - Added dedicated `fa-wand-magic-sparkles` brand icon in `resources/views/components/service-logo.blade.php` for AiRemedy (and `fa-envelope-circle-check` for EmailAuth).
   - Canonicalized `openrouter` and `airemedy` aliases in `IntegrationCredentialsController::test()` to support in-modal on-demand connection testing.
 - **Global Stray-Process Test Guardrail**:
   - Global `Process::preventStrayProcesses()` in `tests/TestCase.php` ensuring no test can spawn unmocked CLI commands or background child processes.

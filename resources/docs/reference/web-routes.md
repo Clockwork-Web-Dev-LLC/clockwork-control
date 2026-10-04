@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-10-03
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -67,7 +67,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | DELETE | `/servers/{server}` | Remove. |
 | POST | `/servers/{server}/provision/fail2ban` | One-time fail2ban setup. |
 | POST | `/servers/{server}/ban-ip` | Manual ban. |
-| POST | `/servers/{server}/auto-ban-{llar,wordfence}` | Per-source auto-ban toggle. |
+| POST | `/servers/{server}/auto-ban-{llar,wordfence}` | Per-source auto-ban toggle (`llar` = the Gatekeeper lockout source; name kept for compatibility). |
 | POST | `/servers/{server}/update/{queue,cancel}` | Queue / cancel apt-get upgrades. |
 | POST | `/servers/{server}/reboot[/{cancel,probe}]` | SSH-driven reboot lifecycle. |
 | PATCH | `/servers/{server}/tags` | Assign tier tags. |
@@ -99,7 +99,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/companion/download` | Stream compiled `clockwork-companion.zip` plugin package for manual WP Admin upload. |
 | POST | `/sites/{site}/bans/{blockedIp}/unban` · `/bans/unban-all` | Unban one / all. |
 | POST | `/sites/{site}/gatekeeper/push` | Push effective Gatekeeper lockout settings to this site immediately via HMAC REST. |
-| POST | `/sites/{site}/install-companion` · `/install-llar` (legacy) | Install plugins. Companion install dispatches to the SSH or Pressable installer based on `Site::isPressable()`. LLAR installation is phased out in favor of Gatekeeper. |
+| POST | `/sites/{site}/install-companion` | Install Companion. Dispatches to the provider's installer via `$site->host()->companionInstaller()`. (The legacy `/install-llar` route was removed in 1.10.1 — Gatekeeper replaced LLAR.) |
+| PATCH | `/sites/{site}/settings-layout` | Save the per-site Settings tab card order (`layout[]` of card keys) to `sites.settings_layout`; `reset=1` clears it back to the default order. JSON for XHR, redirect otherwise. |
 | POST | `/sites/{site}/companion/{push-update,refresh-snapshot,sso,plugin-update}` | Companion ops. |
 
 | POST | `/sites/{site}/care-plan[/clear-override]` | Toggle / un-pin care plan. |
@@ -167,7 +168,7 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 |---|---|---|
 | GET | `/settings` | Settings & Operations Hub — 4-quadrant operations command center with real-time tool search. See [Features → Settings Hub](/documentation/features/settings-hub). |
 | GET/POST/PATCH | `/settings/users[/{user}/{revoke,restore}]` | Allowlist management. |
-| GET/PATCH/POST | `/settings/ingest[/run-now]` | LLAR/Wordfence pull cadence + manual run. |
+| GET/PATCH/POST | `/settings/ingest[/run-now]` | Gatekeeper lockout / Wordfence pull cadence + manual run. |
 | PATCH | `/settings/ingest/retention` | Days/weeks window for raw `threat_logs` (default 30 days). |
 | POST | `/settings/ingest/prune-now` | Start `clockwork:prune-threat-logs` in the background. |
 | POST | `/settings/ingest/rebuild-partitions` | Start `clockwork:rebuild-threat-logs-partitions` in the background. |

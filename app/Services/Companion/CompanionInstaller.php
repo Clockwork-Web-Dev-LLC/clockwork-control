@@ -373,7 +373,7 @@ BASH;
 
     /**
      * Run an arbitrary bash script as the site_user via sudo. Handles the
-     * sudo password the same way LlarInstaller does (env var, never on cmdline).
+     * sudo password via an env var, never on the command line.
      *
      * `echo` (not `printf %s`) for the password feed: `printf %s` omits the
      * trailing newline, so sudo -S waits on EOF rather than seeing a

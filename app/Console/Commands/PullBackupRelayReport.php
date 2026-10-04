@@ -53,13 +53,13 @@ class PullBackupRelayReport extends Command
         $disk = Storage::disk('s3');
         $key = rtrim((string) config('clockwork.backup_relay.s3_prefix'), '/').'/last-report.json';
 
-        if (! $disk->exists($key)) {
-            $this->warn("No report found at s3://{$key} yet — the relay may not have run.");
-
-            return self::SUCCESS;
-        }
-
         try {
+            if (! $disk->exists($key)) {
+                $this->warn("No report found at s3://{$key} yet — the relay may not have run.");
+
+                return self::SUCCESS;
+            }
+
             $data = json_decode((string) $disk->get($key), true, flags: JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
             $this->error("Failed to read/parse report at s3://{$key}: {$e->getMessage()}");

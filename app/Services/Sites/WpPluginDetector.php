@@ -81,7 +81,17 @@ class WpPluginDetector
             escapeshellarg($inner),
         );
 
-        $raw = $this->ssh->exec($site->server, $cmd);
+        try {
+            $raw = $this->ssh->exec($site->server, $cmd);
+        } catch (\Throwable $e) {
+            return [
+                'result' => self::RESULT_FAILED,
+                'message' => 'SSH connection failed: '.$e->getMessage(),
+                'llar' => null,
+                'wordfence' => null,
+                'output' => '',
+            ];
+        }
 
         $exit = -1;
         if (preg_match('/'.$sentinel.':(\d+)/', $raw, $m)) {

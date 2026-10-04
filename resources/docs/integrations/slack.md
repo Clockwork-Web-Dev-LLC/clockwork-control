@@ -2,7 +2,7 @@
 title: Slack
 section: Integrations
 order: 61
-updated: 2026-09-28
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [integrations, slack, notifications, alerts, pressable]
 tracks: [modules/Slack/src/**, app/Services/Chat/**, resources/views/settings/slack.blade.php]
@@ -43,7 +43,7 @@ Some team members or channels prefer Slack over Mattermost, or the agency wants 
 
 3. Configure per-event toggles at **Settings → Slack** (`/settings/slack`). All events default to ON — same defaults as Mattermost's per-event settings, tracked independently (`notifications.slack.events` vs `notifications.mattermost.events` in `app_settings`).
 
-There's no dedicated `clockwork:slack-test` command yet — verify by toggling on a low-noise event (e.g. `llar_installed`) and triggering it, or by temporarily setting `CLOCKWORK_SLACK_CHANNEL` to a test channel and watching a real transition fire.
+There's no dedicated `clockwork:slack-test` command yet — verify by toggling on a low-noise event (e.g. `ssl_state_changed`) and triggering it, or by temporarily setting `CLOCKWORK_SLACK_CHANNEL` to a test channel and watching a real transition fire.
 
 `SlackNotifier` is a real, independently installable module (`modules/Slack/`, package `clockwork/slack`) — same pattern as every hosting/cloud-provider module. An agency that only wants Mattermost can leave `clockwork/slack` out of `composer.json` entirely; there's no dead settings page or half-configured integration left behind, since the module owns its own routes, settings controller, and nav link too.
 
@@ -53,7 +53,7 @@ The webhook URL is the credential, same trust model as Mattermost's — don't co
 
 ### What we POST
 
-Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `serverWentRed`, `serverRecovered`, `aiRemedyTriaged`, `aiRemedyExecuted`, `ipBlocked`, `sslStateChanged`, `llarInstalled`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`, `schedulerStale`/`schedulerRecovered`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
+Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `serverWentRed`, `serverRecovered`, `aiRemedyTriaged`, `aiRemedyExecuted`, `ipBlocked`, `sslStateChanged`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`, `schedulerStale`/`schedulerRecovered`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
 
 ### Files
 
@@ -77,7 +77,7 @@ Clients don't need to know an IP got blocked or a plugin auto-update failed — 
 - `siteWentDown` / `siteWentUp` — "Your website example.com is currently unreachable" / "...is back online," with a link to your configured support URL (`CLOCKWORK_OPERATOR_SUPPORT_URL`) on the down message. No status codes, no server names.
 - `contactFormTestFailed` / `contactFormTestRecovered` — same tone, for the contact-form smoke test.
 
-Every other `ChatNotifier` method (`ipBlocked`, `sslStateChanged`, `llarInstalled`, `pluginUpdateFailed`, `companionUnreachable`, `malwareFindingDetected`, generic `send`) is implemented as a hard `return false` — not gated by a setting, just a no-op by design. This is the one channel in the fan-out where "doesn't send most events" is intentional, not a missing feature.
+Every other `ChatNotifier` method (`ipBlocked`, `sslStateChanged`, `pluginUpdateFailed`, `companionUnreachable`, `malwareFindingDetected`, generic `send`) is implemented as a hard `return false` — not gated by a setting, just a no-op by design. This is the one channel in the fan-out where "doesn't send most events" is intentional, not a missing feature.
 
 ### Why a site-level webhook instead of a Clockwork setting
 

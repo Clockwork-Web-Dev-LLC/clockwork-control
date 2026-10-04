@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-10-03
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
@@ -52,7 +52,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 
 | Command | What it does |
 |---|---|
-| `clockwork:pull-llar-lockouts` | Ingest active login lockouts from Gatekeeper (via Companion HMAC REST) with legacy LLAR direct-DB fallback. Gated by `IngestScheduleGate` (per-source enable + window + cadence). |
+| `clockwork:pull-llar-lockouts` | Ingest active login lockouts from Gatekeeper (via Companion HMAC REST) with a direct-DB fallback to the native `clockwork_lockouts` table. Gated by `IngestScheduleGate` (per-source enable + window + cadence). |
 | `clockwork:pull-wordfence-blocks` | Same for Wordfence blocks. |
 | `clockwork:pull-site-metrics` | Per-site CPU/memory rollups from Companion sites advertising `resource-sampler`. Feeds `/capacity`. Pausable via `monitoring.site_metrics_enabled`. |
 | `clockwork:ai-remedy-evaluate-outcomes` | Classifies 60-minute resolution outcomes (`self_resolved`, `human_resolved`, `persisted`, `escalated`, `unknown`) for past AiRemedy incident diagnoses by analyzing `server_metrics`, `site_uptime_events`, and human `action_logs` (contributed by `AiRemedyServiceProvider`). |

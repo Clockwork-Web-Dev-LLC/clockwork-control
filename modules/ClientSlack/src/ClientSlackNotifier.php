@@ -57,11 +57,6 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
-    public function llarInstalled(Site $site): bool
-    {
-        return false;
-    }
-
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
     {
         return false;
