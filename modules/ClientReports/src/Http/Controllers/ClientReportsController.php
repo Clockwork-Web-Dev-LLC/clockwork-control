@@ -122,8 +122,7 @@ class ClientReportsController extends Controller
         }
 
         try {
-            $reportUrl = route('client-reports.public', ['token' => $report->public_token]);
-            Mail::to($email)->send(new ClientReportMail($report, $reportUrl));
+            Mail::to($email)->send(new ClientReportMail($report));
 
             $report->update([
                 'status' => 'sent',
