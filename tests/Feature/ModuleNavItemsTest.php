@@ -94,8 +94,9 @@ class ModuleNavItemsTest extends TestCase
 
         config(['clockwork.twilio.enabled' => true]);
         $response = $this->actingAs($user)->get(route('capacity.index'));
-        // Ensure it appears once per layout user menu (Command Center sidebar, Modern Studio header, and mobile drawer)
-        $this->assertSame(3, substr_count($response->getContent(), 'SMS notifications'));
+        // Once per user menu (Command Center sidebar popover, Modern Studio header, mobile drawer),
+        // plus the Command Center rail's Modules group: its label and its collapsed-rail tooltip.
+        $this->assertSame(5, substr_count($response->getContent(), 'SMS notifications'));
     }
 
     public function test_slack_nav_item_is_dynamically_gated_by_enabled_status(): void

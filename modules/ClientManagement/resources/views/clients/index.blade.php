@@ -17,8 +17,6 @@
         </x-slot:actions>
     </x-page-header>
 
-    @include('client-reports::_tabs', ['activeTab' => 'clients'])
-
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
             <i class="fa-solid fa-circle-check"></i>
