@@ -3,6 +3,7 @@
 @section('title', 'Email Authentication · Clockwork')
 
 @section('content')
+@php $activeTab = 'email-auth'; @endphp
 <div class="relative"
      x-data="{
         activeDomain: null,
@@ -65,6 +66,25 @@
             }
         },
 
+        async deleteDomain(domain) {
+            if (!confirm(`Remove ${domain} from Email Authentication monitoring?`)) {
+                return;
+            }
+            try {
+                const res = await fetch(`/email-auth/domains/${domain}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+                window.location.reload();
+            } catch (e) {
+                console.error('Delete failed:', e);
+            }
+        },
+
         async saveSelectors(domain) {
             this.savingSelectors = true;
             try {
@@ -96,19 +116,74 @@
         }
      }">
 
-    <x-page-header title="Email Authentication"
-        subtitle="Monitor SPF 10-lookup limits, recursive loop detection, DMARC enforcement policies, and DKIM selector validation across your fleet.">
+    <x-page-header title="Security"
+        subtitle="Monitor SPF 10-lookup limits, recursive loop detection, DMARC enforcement policies, and DKIM selector validation across client domains.">
         <x-slot:actions>
-            <form method="POST" action="{{ route('email-auth.scan') }}" class="flex items-center gap-2">
-                @csrf
-                <input type="text" name="domain" placeholder="Test apex domain..." required
-                       class="text-xs font-data border border-[var(--color-border)] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-[var(--color-surface)]">
-                <button type="submit" class="btn-primary text-xs py-1.5 px-3">
-                    <i class="fa-solid fa-magnifying-glass mr-1"></i> Scan Domain
-                </button>
-            </form>
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="POST" action="{{ route('email-auth.scan-all') }}">
+                    @csrf
+                    <button type="submit"
+                            @if ($isGlobalScanning ?? false) disabled @endif
+                            class="btn-pill-nav text-xs py-1.5 px-3 border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] flex items-center gap-1.5 {{ ($isGlobalScanning ?? false) ? 'opacity-60 cursor-not-allowed' : '' }}"
+                            title="Start fleet-wide background scan of all platform domains">
+                        <i class="fa-solid fa-arrows-rotate {{ ($isGlobalScanning ?? false) ? 'fa-spin text-indigo-500' : 'text-[var(--color-brand)]' }}"></i>
+                        <span>{{ ($isGlobalScanning ?? false) ? 'Scan in Progress...' : 'Scan All Domains' }}</span>
+                    </button>
+                </form>
+
+                <form method="POST" action="{{ route('email-auth.scan') }}" class="flex items-center gap-2">
+                    @csrf
+                    <input type="text" name="domain" placeholder="Scan platform domain (e.g. domain.com)..." required
+                           pattern="^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
+                           title="Please enter a valid full domain (e.g. domain.com)"
+                           class="text-xs font-data border border-[var(--color-border)] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-[var(--color-surface)]">
+                    <button type="submit" class="btn-primary text-xs py-1.5 px-3">
+                        <i class="fa-solid fa-magnifying-glass mr-1"></i> Scan Domain
+                    </button>
+                </form>
+            </div>
         </x-slot:actions>
     </x-page-header>
+
+    @include('security._tabs')
+
+    @if ($isGlobalScanning ?? false)
+        <div class="mb-4 px-4 py-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-medium flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-arrows-rotate fa-spin text-indigo-500"></i>
+                <span>A fleet-wide email authentication scan is currently running in the background. Posture results will update as domains complete.</span>
+            </div>
+            <button type="button" onclick="window.location.reload()" class="underline text-xs hover:text-indigo-700 font-semibold">Refresh</button>
+        </div>
+    @endif
+
+    @if (session('status'))
+        <div class="mb-4 px-4 py-2.5 rounded-lg bg-[var(--color-status-green)]/10 border border-[var(--color-status-green)]/20 text-[var(--color-status-green)] text-xs font-medium flex items-center gap-2">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>{{ session('status') }}</span>
+        </div>
+    @endif
+
+    @if (session('error'))
+        <div class="mb-4 px-4 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium flex items-center gap-2">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>{{ session('error') }}</span>
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div class="mb-4 px-4 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium">
+            <div class="flex items-center gap-2 font-bold mb-1">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>Please fix the following:</span>
+            </div>
+            <ul class="list-disc list-inside space-y-0.5">
+                @foreach ($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     {{-- Stats Cards --}}
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -294,11 +369,19 @@
                             </td>
 
                             <td class="p-3.5 text-right">
-                                <button type="button"
-                                        @click="openDrawer({{ json_encode($domain->toArray() + ['latest_check' => $check?->toArray()]) }})"
-                                        class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
-                                    <i class="fa-solid fa-sliders text-[10px] mr-1"></i> Inspect
-                                </button>
+                                <div class="inline-flex items-center gap-1.5 justify-end">
+                                    <button type="button"
+                                            @click="openDrawer({{ json_encode($domain->toArray() + ['latest_check' => $check?->toArray()]) }})"
+                                            class="btn-pill-nav text-xs py-1 px-2.5 font-medium border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]">
+                                        <i class="fa-solid fa-sliders text-[10px] mr-1"></i> Inspect
+                                    </button>
+                                    <button type="button"
+                                            @click="deleteDomain('{{ $domain->domain }}')"
+                                            class="btn-pill-nav text-xs py-1 px-2 font-medium border border-[var(--color-border)] hover:text-rose-600 hover:border-rose-500/30 hover:bg-rose-500/10"
+                                            title="Remove domain from monitoring">
+                                        <i class="fa-regular fa-trash-can text-[10px]"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -375,15 +458,28 @@
 
                 {{-- Drawer Body --}}
                 <div class="flex-1 overflow-y-auto p-5 space-y-5">
-                    {{-- Ignore Toggle --}}
-                    <div class="card p-3 bg-[var(--color-surface-alt)] flex items-center justify-between">
-                        <div class="text-xs">
-                            <span class="font-bold text-[var(--color-ink-strong)] block">Alert Suppression</span>
-                            <span class="text-[var(--color-ink-muted)]" x-text="activeDomain?.ignored_at ? 'Currently ignored from degradation alerts' : 'Actively monitored for chat alerts'"></span>
+                    {{-- Alert Suppression and Management --}}
+                    <div class="space-y-2">
+                        <div class="card p-3 bg-[var(--color-surface-alt)] flex items-center justify-between">
+                            <div class="text-xs">
+                                <span class="font-bold text-[var(--color-ink-strong)] block">Alert Suppression</span>
+                                <span class="text-[var(--color-ink-muted)]" x-text="activeDomain?.ignored_at ? 'Currently ignored from degradation alerts' : 'Actively monitored for chat alerts'"></span>
+                            </div>
+                            <button type="button" @click="toggleIgnore(activeDomain?.domain)"
+                                    class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)]"
+                                    x-text="activeDomain?.ignored_at ? 'Unignore Domain' : 'Ignore from Alerts'"></button>
                         </div>
-                        <button type="button" @click="toggleIgnore(activeDomain?.domain)"
-                                class="btn-pill-nav text-xs py-1 px-3 border border-[var(--color-border)]"
-                                x-text="activeDomain?.ignored_at ? 'Unignore Domain' : 'Ignore from Alerts'"></button>
+
+                        <div class="card p-3 bg-[var(--color-surface-alt)] flex items-center justify-between">
+                            <div class="text-xs">
+                                <span class="font-bold text-[var(--color-ink-strong)] block">Remove Domain</span>
+                                <span class="text-[var(--color-ink-muted)]">Stop monitoring and remove from fleet overview</span>
+                            </div>
+                            <button type="button" @click="deleteDomain(activeDomain?.domain)"
+                                    class="btn-pill-nav text-xs py-1 px-3 border border-rose-500/30 text-rose-600 hover:bg-rose-500/10">
+                                <i class="fa-regular fa-trash-can mr-1"></i> Remove
+                            </button>
+                        </div>
                     </div>
 
                     {{-- Findings Section --}}

@@ -474,7 +474,7 @@ class AiRemedyController extends Controller
             'site_id' => $run->site_id,
             'action_type' => 'ai_remedy_verdict',
             'summary' => "Recorded verdict '{$validated['verdict']}' on AiRemedy run #{$run->id}",
-            'actor' => $request->user()?->name ?? 'operator',
+            'actor' => $request->user()->name ?? 'operator',
             'ran_at' => Carbon::now(),
             'details' => [
                 'run_id' => $run->id,

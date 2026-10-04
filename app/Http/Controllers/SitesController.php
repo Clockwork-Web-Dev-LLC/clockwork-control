@@ -80,16 +80,57 @@ class SitesController extends Controller
 
         $q = trim((string) $request->query('q', ''));
 
-        $sites = Site::query()
+        $sort = strtolower((string) $request->query('sort', 'domain'));
+        $allowedSorts = ['domain', 'server', 'status', 'health', 'created_at', 'added'];
+        if (! in_array($sort, $allowedSorts, true)) {
+            $sort = 'domain';
+        }
+        if ($sort === 'health') {
+            $sort = 'status';
+        } elseif ($sort === 'added') {
+            $sort = 'created_at';
+        }
+
+        $dir = strtolower((string) $request->query('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $sitesQuery = Site::query()
             ->with(['server:id,name', 'consolidatedSites:id,domain,consolidated_into_site_id'])
             ->when($provider, fn ($query) => $query->where('hosting_provider', $provider))
             ->when($q !== '', fn ($query) => $query->where(function ($sq) use ($q) {
                 $sq->where('domain', 'like', '%'.$q.'%')
                     ->orWhereHas('consolidatedSites', fn ($csq) => $csq->withoutGlobalScopes()->where('domain', 'like', '%'.$q.'%'));
-            }))
-            ->orderBy('domain')
-            ->paginate(50)
-            ->withQueryString();
+            }));
+
+        switch ($sort) {
+            case 'server':
+                $sitesQuery->leftJoin('servers', 'sites.server_id', '=', 'servers.id')
+                    ->select('sites.*')
+                    ->orderByRaw("COALESCE(servers.name, sites.hosting_provider) {$dir}")
+                    ->orderBy('sites.domain', 'asc');
+                break;
+
+            case 'status':
+                $statusOrder = "CASE sites.uptime_state WHEN 'down' THEN 1 WHEN 'maintenance' THEN 2 WHEN 'unknown' THEN 3 WHEN 'up' THEN 4 ELSE 5 END";
+                $sitesQuery->select('sites.*')
+                    ->orderByRaw("{$statusOrder} ".($dir === 'desc' ? 'DESC' : 'ASC'))
+                    ->orderBy('sites.domain', 'asc');
+                break;
+
+            case 'created_at':
+                $sitesQuery->select('sites.*')
+                    ->orderBy('sites.created_at', $dir)
+                    ->orderBy('sites.domain', 'asc');
+                break;
+
+            case 'domain':
+            default:
+                $sort = 'domain';
+                $sitesQuery->select('sites.*')
+                    ->orderBy('sites.domain', $dir);
+                break;
+        }
+
+        $sites = $sitesQuery->paginate(50)->withQueryString();
 
         $counts = ['all' => Site::query()->count()];
         $providerTabs = ['all' => 'All'];
@@ -108,6 +149,8 @@ class SitesController extends Controller
             'providers' => $enabledProviders,
             'activeProvider' => $provider ?? 'all',
             'q' => $q,
+            'sort' => $sort,
+            'dir' => $dir,
         ]);
     }
 

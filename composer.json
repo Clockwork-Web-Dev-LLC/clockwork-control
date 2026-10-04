@@ -303,6 +303,9 @@
         "pint": [
             "vendor/bin/pint"
         ],
+        "screenshots": [
+            "./private/marketing-screenshot-tool/bin/screenshots.sh"
+        ],
         "format": [
             "vendor/bin/pint",
             "npm run format"

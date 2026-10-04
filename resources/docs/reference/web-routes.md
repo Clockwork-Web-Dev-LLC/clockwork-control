@@ -207,8 +207,8 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | GET | `/ai-remedy` | AiRemedy audit log, incident history, filtering by status, and aggregate token cost metrics. |
 | GET | `/ai-remedy/accuracy` | AiRemedy diagnosis accuracy report, operator verdict statistics, automated 60-minute outcome distributions, and readiness scorecard. |
 | GET | `/ai-remedy/settings` | AiRemedy configuration hub (model selection, automated spike watchdog toggle, CPU threshold %, and cooldown minutes). |
-| POST | `/ai-remedy/settings/test-connection` | Validates OpenRouter API key, balance, and latency (throttled: `10,1`). |
-| POST | `/ai-remedy/settings/simulate` | Executes safe read-only test simulation in Watch Mode (throttled: `10,1`). |
+| POST | `/ai-remedy/test-connection` | Validates OpenRouter API key, balance, and latency (throttled: `10,1`). |
+| POST | `/ai-remedy/simulate` | Executes safe read-only test simulation in Watch Mode (throttled: `10,1`). |
 | POST | `/ai-remedy/servers/{server}/diagnose` | Triggers live read-only SSH telemetry probe and OpenRouter root-cause triage (throttled: `15,1`). |
 | POST | `/ai-remedy/runs/{run}/execute` | Admin-only. Runs the operator-selected subset of a run's proposed commands (`selected: [{index, command}]`) via SSH with exit code validation; records per-command decisions; 409 for Shadow/simulation, already-run, stale (>2h) runs, or a server with a fix already running (throttled: `10,1`). |
 | POST | `/ai-remedy/runs/{run}/verdict` | Authenticated operators submit diagnosis verdict (`correct`, `partial`, `wrong`, `unsure`) and optional feedback notes. |
@@ -221,10 +221,12 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/email-auth` | Email authentication fleet overview table: SPF lookup counts, DMARC policies, DKIM status, and detailed slide-over inspector. |
-| POST | `/email-auth/scan` | Trigger on-demand background DNS verification scan across all fleet domains. |
+| GET | `/email-auth` | Email authentication fleet overview table: SPF lookup counts, DMARC policies, DKIM status, and detailed slide-over inspector (subtab under `/security/email-auth`). |
+| POST | `/email-auth/scan` | Trigger on-demand DNS verification scan for a single domain. |
+| POST | `/email-auth/scan-all` | Trigger on-demand fleet-wide background DNS verification scan across all active domains. |
 | POST | `/email-auth/domains/{domain}/ignore` | Toggle advisory ignore state for a domain (silences degradation alerts for externally-managed client DNS). |
 | POST | `/email-auth/domains/{domain}/selectors` | Update custom DKIM selector probing list for a specific client domain. |
+| DELETE | `/email-auth/domains/{domain}` | Soft-delete a domain from tracking, removing it from views and scheduled weekly checks. |
 
 ### Docs (this site)
 

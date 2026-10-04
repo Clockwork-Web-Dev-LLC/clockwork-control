@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
+use Modules\AiRemedy\Models\AiRemedyRun;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleCatalog;
 use Modules\Core\ModuleManifest;
@@ -109,6 +110,10 @@ class SetupController extends Controller
             'url' => 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/glacier-instant-retrieval-storage-class.html',
             'guide' => 'Amazon S3 Glacier Instant Retrieval bucket, credentials, and streaming prefix for scheduled offsite backups.',
         ],
+        'ai-remedy' => [
+            'url' => 'https://openrouter.ai/keys',
+            'guide' => 'OpenRouter API Key to power automated server diagnostics, spike triage, and autonomous remediation.',
+        ],
     ];
 
     /**
@@ -122,8 +127,9 @@ class SetupController extends Controller
     /**
      * Step 1: "Which services are you using?" selection grid
      */
-    public function step1(): View
+    public function step1(?ModuleStateResolver $resolver = null): View
     {
+        $resolver ??= app(ModuleStateResolver::class);
         $bundled = ModuleCatalog::bundled();
         $installed = InstalledModule::all()->keyBy('module_id');
 
@@ -201,10 +207,11 @@ class SetupController extends Controller
             $detection = $this->detectInUse($id, $item['manifest']);
 
             // If explicitly configured in installed_modules, respect the saved toggle.
-            // Otherwise, automatically enable services that are currently detected in use.
+            // If the modules table has already been initialized, respect ModuleStateResolver.
+            // Otherwise, on a brand-new installation, automatically enable services detected in use.
             $enabled = $installed->has($id)
                 ? (bool) $installed->get($id)->enabled
-                : $detection['in_use'];
+                : ($installed->isNotEmpty() ? $resolver->isEnabled($id) : $detection['in_use']);
 
             $rateLimitRegistry = app(ServiceRateLimitRegistry::class);
             $serviceMeta = $rateLimitRegistry->get($id);
@@ -351,6 +358,14 @@ class SetupController extends Controller
             $s3Disk = (string) config('clockwork.backup_relay.disk', 's3-backup-relay');
             $bucket = config("filesystems.disks.{$s3Disk}.bucket");
             if (! empty($bucket)) {
+                $hasEnvCreds = true;
+            }
+        }
+        if ($id === 'ai-remedy') {
+            if (AiRemedyRun::exists()) {
+                $hasActivity = true;
+            }
+            if (! empty(config('services.openrouter.api_key')) || ! empty($envManager->getEnvValue('OPENROUTER_API_KEY'))) {
                 $hasEnvCreds = true;
             }
         }

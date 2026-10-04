@@ -33,6 +33,17 @@ use Illuminate\Support\Carbon;
  * @property ?array<string, mixed> $before_metrics
  * @property ?array<string, mixed> $after_metrics
  * @property ?string $error_message
+ * @property ?string $verdict
+ * @property ?string $verdict_note
+ * @property ?int $verdict_by_user_id
+ * @property ?Carbon $verdict_at
+ * @property ?string $outcome
+ * @property ?array<string, mixed> $outcome_details
+ * @property ?Carbon $outcome_evaluated_at
+ * @property ?bool $is_fixable
+ * @property ?bool $is_maintenance
+ * @property ?string $maintenance_type
+ * @property ?array<int, mixed> $command_decisions
  * @property Carbon $started_at
  * @property ?Carbon $completed_at
  * @property ?Carbon $hidden_at

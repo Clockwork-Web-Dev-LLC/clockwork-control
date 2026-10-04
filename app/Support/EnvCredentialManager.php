@@ -536,6 +536,17 @@ class EnvCredentialManager
                 'config_path' => 'services.microsoft.tenant_id',
             ],
         ],
+
+        'ai-remedy' => [
+            'openrouter_api_key' => [
+                'env_var' => 'OPENROUTER_API_KEY',
+                'label' => 'OpenRouter API Key',
+                'secret' => true,
+                'guide' => 'Personal API Key from your OpenRouter account (openrouter.ai/keys) to query AI models.',
+                'url' => 'https://openrouter.ai/keys',
+                'config_path' => 'services.openrouter.api_key',
+            ],
+        ],
     ];
 
     /**
@@ -564,6 +575,9 @@ class EnvCredentialManager
             'client-slack' => 'client_slack',
             'client_slack' => 'client_slack',
             'backup_relay' => 'backup-relay',
+            'airemedy' => 'ai-remedy',
+            'ai_remedy' => 'ai-remedy',
+            'openrouter' => 'ai-remedy',
         ];
 
         if (isset($aliases[$id])) {

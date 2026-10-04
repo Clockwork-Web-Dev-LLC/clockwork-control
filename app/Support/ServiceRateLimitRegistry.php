@@ -646,6 +646,36 @@ class ServiceRateLimitRegistry
                     'retry_attempts' => 3,
                 ],
             ],
+
+            'ai-remedy' => [
+                'id' => 'ai-remedy',
+                'name' => 'AiRemedy',
+                'category' => 'Maintenance & QA',
+                'type' => 'api',
+                'has_rate_limits' => true,
+                'docs_url' => 'https://openrouter.ai/docs',
+                'rate_limit_docs_url' => 'https://openrouter.ai/docs#rate-limits',
+                'official_limits' => [
+                    'standard' => '200 requests / minute (varies by tier and model)',
+                    'window' => 'Per-minute rolling request rate limit and account credit balance enforcement.',
+                    'headers' => ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+                    'exceeded_code' => '429 Too Many Requests',
+                    'burst_notes' => 'Burst limits depend on the downstream model provider (e.g. Anthropic, OpenAI, DeepSeek).',
+                ],
+                'fleet_impact' => [
+                    'calls_per_server' => '1 LLM completion request per CPU/RAM spike triage incident or manual diagnosis.',
+                    'fleet_projection' => 'Spike watchdog polls every minute and triages only when telemetry exceeds anomalous thresholds.',
+                    'recommendation' => 'Set concurrency to 2 and timeout to 45s to allow deep reasoning models sufficient time to respond.',
+                ],
+                'defaults' => [
+                    'rate_limit' => 200,
+                    'rate_limit_unit' => 'requests / minute',
+                    'timeout' => 45,
+                    'concurrency' => 2,
+                    'delay_ms' => 100,
+                    'retry_attempts' => 2,
+                ],
+            ],
         ];
     }
 
@@ -673,6 +703,9 @@ class ServiceRateLimitRegistry
             'clientslack' => 'client_slack',
             'backup_relay' => 'backup-relay',
             'backuprelay' => 'backup-relay',
+            'airemedy' => 'ai-remedy',
+            'ai_remedy' => 'ai-remedy',
+            'openrouter' => 'ai-remedy',
         ];
 
         $cleanId = strtolower(trim($serviceId));

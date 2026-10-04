@@ -408,7 +408,8 @@
         </div>
     </div>
 
-    {{-- 5. Floating Bottom-Right Toolbar Pill --}}
+    {{-- 5. Floating Bottom-Right Toolbar Pill (hidden on feedback management screen) --}}
+    @if (! request()->routeIs('feedback.*'))
     <div class="fixed bottom-4 right-4 z-40 flex items-center gap-2">
         <template x-if="!minimized">
             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-md shadow-xl text-xs">
@@ -449,6 +450,7 @@
             </button>
         </template>
     </div>
+    @endif
 
     {{-- 6. Toast Notification --}}
     <div x-show="toast.visible"

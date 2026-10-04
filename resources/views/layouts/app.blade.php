@@ -182,7 +182,7 @@
                     </a>
 
                     <a href="{{ route('security.scans') }}"
-                       class="cmd-nav-item {{ (request()->routeIs('security.*') || request()->routeIs('bans.*')) ? 'is-active' : '' }}"
+                       class="cmd-nav-item {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}"
                        :title="!sidebarOpen ? 'Security' : ''">
                         <i class="fa-solid fa-shield-halved w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Security</span>
@@ -550,7 +550,7 @@
                                 @endisset
                             </a>
                             <a href="{{ route('security.scans') }}"
-                               class="studio-nav-tab {{ (request()->routeIs('security.*') || request()->routeIs('bans.*')) ? 'is-active' : '' }}">
+                               class="studio-nav-tab {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}">
                                 <i class="fa-solid fa-shield-halved"></i> Security
                             </a>
                             <a href="{{ route('capacity.index') }}"
@@ -661,7 +661,7 @@
                                 @endisset
                             </a>
                             <a href="{{ route('security.scans') }}"
-                               class="cw-mobile-nav-link {{ (request()->routeIs('security.*') || request()->routeIs('bans.*')) ? 'is-active' : '' }}">
+                               class="cw-mobile-nav-link {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}">
                                 <span><i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security</span>
                             </a>
                         </div>
@@ -826,6 +826,9 @@
             @endif
             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gatekeeper'))
                 { id: 'gatekeeper', section: 'Security', label: 'Gatekeeper Login Protection', code: 'GG', kbd: 'G G', icon: 'fa-solid fa-user-shield text-emerald-500', url: '{{ route('settings.gatekeeper.index') }}', keywords: ['gatekeeper', 'llar', 'lockouts', 'login protection', 'brute force', 'ip bans'] },
+            @endif
+            @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('email-auth'))
+                { id: 'email-auth', section: 'Security', label: 'Email Authentication', code: 'GE', kbd: 'G E', icon: 'fa-solid fa-envelope-shield text-indigo-500', url: '{{ route('email-auth.index') }}', keywords: ['email', 'auth', 'spf', 'dkim', 'dmarc', 'dns', 'mx'] },
             @endif
             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback'))
                 { id: 'feedback', section: 'Operations', label: 'Feedback Backlog & Notes', code: 'GF', kbd: 'G F', icon: 'fa-solid fa-comment-dots text-purple-500', url: '{{ route('feedback.index') }}', keywords: ['feedback', 'bugs', 'tweaks', 'notes', 'claude prompt', 'pins', 'collaboration'] },

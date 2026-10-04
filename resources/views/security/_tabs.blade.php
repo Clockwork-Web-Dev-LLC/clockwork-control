@@ -1,14 +1,19 @@
 @php
     // Shared tab strip for the unified Security section. Renders on /security/scans
     // (scans subtab) and /bans/* (queue/active/history subtabs). Each calling view
-    // sets $activeTab to one of: 'scans', 'queue', 'active', 'history'.
+    // sets $activeTab to one of: 'scans', 'admins', 'email-auth', 'queue', 'active', 'history'.
     $tabs = [
         ['key' => 'scans',   'label' => 'Scans',   'route' => 'security.scans', 'badge' => null],
         ['key' => 'admins',  'label' => 'WP Admins', 'route' => 'security.admins', 'badge' => $flaggedWpAdminCount ?? null],
-        ['key' => 'queue',   'label' => 'Bans',    'route' => 'bans.queue',     'badge' => $reviewQueueCount ?? 0],
-        ['key' => 'active',  'label' => 'Active',  'route' => 'bans.active',    'badge' => $activeBansCount ?? 0],
-        ['key' => 'history', 'label' => 'History', 'route' => 'bans.history',   'badge' => null],
     ];
+
+    if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('email-auth')) {
+        $tabs[] = ['key' => 'email-auth', 'label' => 'Email Auth', 'route' => 'email-auth.index', 'badge' => null];
+    }
+
+    $tabs[] = ['key' => 'queue',   'label' => 'Bans',    'route' => 'bans.queue',     'badge' => $reviewQueueCount ?? 0];
+    $tabs[] = ['key' => 'active',  'label' => 'Active',  'route' => 'bans.active',    'badge' => $activeBansCount ?? 0];
+    $tabs[] = ['key' => 'history', 'label' => 'History', 'route' => 'bans.history',   'badge' => null];
 @endphp
 
 <div class="flex items-center gap-1 mb-6 border-b border-[var(--color-border-light)] overflow-x-auto scrollbar-none">

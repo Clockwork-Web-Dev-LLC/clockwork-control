@@ -5,6 +5,7 @@ namespace Modules\EmailAuth\Console\Commands;
 use App\Models\Site;
 use App\Services\Domains\RootDomainResolver;
 use Illuminate\Console\Command;
+use Modules\EmailAuth\Models\EmailAuthDomain;
 use Modules\EmailAuth\Services\EmailAuthScanner;
 
 class CheckEmailAuth extends Command
@@ -42,10 +43,13 @@ class CheckEmailAuth extends Command
             ->hostMonitored()
             ->pluck('domain');
 
+        $trashedDomains = EmailAuthDomain::onlyTrashed()->pluck('domain')->all();
+
         $apexDomains = $siteDomains
             ->map(fn ($d) => RootDomainResolver::resolve((string) $d))
-            ->filter(fn ($d) => $d !== '')
+            ->filter(fn ($d) => $d !== '' && str_contains($d, '.'))
             ->unique()
+            ->reject(fn ($d) => in_array($d, $trashedDomains, true))
             ->values();
 
         if ($apexDomains->isEmpty()) {

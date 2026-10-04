@@ -303,4 +303,36 @@ describe('test', function () {
             ->assertJsonPath('status', 'fail')
             ->assertJsonPath('summary', 'No connection test available for this integration.');
     });
+
+    it('runs connection test for ai-remedy and openrouter alias', function () {
+        Http::fake([
+            'https://openrouter.ai/api/v1/chat/completions' => Http::response([
+                'id' => 'gen-test-123',
+                'choices' => [
+                    [
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => 'PONG',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        config(['services.openrouter.api_key' => 'sk-or-test-key']);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson(route('settings.integrations.test', 'ai-remedy'));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', 'ok');
+
+        $aliasResponse = $this->actingAs(User::factory()->create())
+            ->postJson(route('settings.integrations.test', 'openrouter'));
+
+        $aliasResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('status', 'ok');
+    });
 });

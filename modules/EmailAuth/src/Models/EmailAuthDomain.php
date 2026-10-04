@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 /**
@@ -16,12 +17,14 @@ use Illuminate\Support\Carbon;
  * @property ?string $ignored_reason
  * @property ?string $last_overall_status
  * @property ?Carbon $last_checked_at
+ * @property ?Carbon $deleted_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
 class EmailAuthDomain extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
         'domain',

@@ -56,74 +56,86 @@
         </div>
     </div>
 
-    {{-- Month picker as horizontal pill bar. --}}
-    <div class="card px-4 py-3 mb-4 flex items-center gap-2 flex-wrap">
-        <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mr-2">Month</span>
-        @foreach ($months as $m)
-            <a href="{{ route('maintenance-history.index', array_merge(request()->query(), ['month' => $m['value']])) }}"
-               class="btn-pill-nav text-xs {{ $m['is_current'] ? 'is-active' : '' }} {{ $m['is_future'] ? 'opacity-40' : '' }}">
-                {{ $m['label'] }}
-            </a>
-        @endforeach
-    </div>
+    {{-- Unified Toolbar: Month Picker & Filters --}}
+    <div class="card p-4 mb-6 space-y-3">
+        {{-- Month Picker Row --}}
+        <div class="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-[var(--color-border-light)]">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs uppercase tracking-wider font-semibold text-[var(--color-ink-soft)] mr-1">
+                    <i class="fa-solid fa-calendar mr-1 text-[10px]"></i> Month:
+                </span>
+                @foreach ($months as $m)
+                    <a href="{{ route('maintenance-history.index', array_merge(request()->query(), ['month' => $m['value']])) }}"
+                       class="px-2.5 py-1 rounded-full text-xs font-medium transition-all {{ $m['is_current'] ? 'bg-[var(--color-brand)] text-white font-semibold shadow-xs' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-border-light)]' }} {{ $m['is_future'] ? 'opacity-40' : '' }}">
+                        {{ $m['label'] }}
+                    </a>
+                @endforeach
+            </div>
 
-    {{-- Filters. --}}
-    <form method="GET" action="{{ route('maintenance-history.index') }}" class="card px-4 py-3 mb-4 flex items-end gap-3 flex-wrap">
-        <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
-        <label class="block w-full sm:w-auto">
-            <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Site</span>
-            <select name="site_id" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1 w-full sm:w-auto sm:min-w-[14rem] max-w-full">
-                <option value="">All sites</option>
-                @foreach ($allSites as $s)
-                    <option value="{{ $s->id }}" @selected((string) $siteFilter === (string) $s->id)>
-                        {{ $s->domain }}{{ ($carePlansEnabled && $s->care_plan_enabled) ? ' ★' : '' }}
-                    </option>
-                @endforeach
-            </select>
-        </label>
-        <label class="block">
-            <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Action</span>
-            <select name="action_type" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
-                <option value="">All</option>
-                @foreach ($typeLabels as $value => $label)
-                    <option value="{{ $value }}" @selected($typeFilter === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </label>
-        @if ($carePlansEnabled)
-            <label class="block">
-                <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Care plan</span>
-                <select name="care_plan" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
-                    <option value="">All</option>
-                    <option value="1" @selected($carePlanFilter === '1')>Covered</option>
-                    <option value="0" @selected($carePlanFilter === '0')>Billable</option>
+            @if ($siteFilter || $typeFilter || $carePlanFilter !== '' || $outcomeFilter !== '' || $actorFilter !== '')
+                <a href="{{ route('maintenance-history.index', ['month' => $month->format('Y-m')]) }}" class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-ink-muted)] hover:text-rose-600 transition-colors">
+                    <i class="fa-solid fa-xmark mr-1"></i> Clear filters
+                </a>
+            @endif
+        </div>
+
+        {{-- Dropdown Filters Form --}}
+        <form method="GET" action="{{ route('maintenance-history.index') }}" class="flex items-center gap-2.5 flex-wrap text-xs">
+            <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
+
+            <div class="flex items-center gap-1.5 flex-1 min-w-[160px] sm:min-w-[200px] max-w-sm">
+                <label for="filter-site" class="text-[10px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold shrink-0">Site:</label>
+                <select id="filter-site" name="site_id" onchange="this.form.submit()" class="w-full text-xs border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)] cursor-pointer truncate">
+                    <option value="">All sites</option>
+                    @foreach ($allSites as $s)
+                        <option value="{{ $s->id }}" @selected((string) $siteFilter === (string) $s->id)>
+                            {{ $s->domain }}{{ ($carePlansEnabled && $s->care_plan_enabled) ? ' ★' : '' }}
+                        </option>
+                    @endforeach
                 </select>
-            </label>
-        @endif
-        <label class="block">
-            <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Outcome</span>
-            <select name="outcome" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
-                <option value="">All</option>
-                <option value="ok" @selected($outcomeFilter === 'ok')>Succeeded</option>
-                <option value="fail" @selected($outcomeFilter === 'fail')>Failed</option>
-            </select>
-        </label>
-        <label class="block">
-            <span class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Actor</span>
-            <select name="actor" class="mt-1 text-sm border border-[var(--color-border)] rounded-md px-2 py-1">
-                <option value="">All</option>
-                @foreach ($actorOptions as $a)
-                    <option value="{{ $a }}" @selected($actorFilter === $a)>{{ $a }}</option>
-                @endforeach
-            </select>
-        </label>
-        <button type="submit" class="btn-primary text-sm">Apply</button>
-        @if ($siteFilter || $typeFilter || $carePlanFilter !== '' || $outcomeFilter !== '' || $actorFilter !== '')
-            <a href="{{ route('maintenance-history.index', ['month' => $month->format('Y-m')]) }}" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]">
-                Clear filters
-            </a>
-        @endif
-    </form>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <label for="filter-action" class="text-[10px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold shrink-0">Action:</label>
+                <select id="filter-action" name="action_type" onchange="this.form.submit()" class="text-xs border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)] cursor-pointer">
+                    <option value="">All actions</option>
+                    @foreach ($typeLabels as $value => $label)
+                        <option value="{{ $value }}" @selected($typeFilter === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            @if ($carePlansEnabled)
+                <div class="flex items-center gap-1.5">
+                    <label for="filter-care-plan" class="text-[10px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold shrink-0">Plan:</label>
+                    <select id="filter-care-plan" name="care_plan" onchange="this.form.submit()" class="text-xs border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)] cursor-pointer">
+                        <option value="">All plans</option>
+                        <option value="1" @selected($carePlanFilter === '1')>Covered</option>
+                        <option value="0" @selected($carePlanFilter === '0')>Billable</option>
+                    </select>
+                </div>
+            @endif
+
+            <div class="flex items-center gap-1.5">
+                <label for="filter-outcome" class="text-[10px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold shrink-0">Outcome:</label>
+                <select id="filter-outcome" name="outcome" onchange="this.form.submit()" class="text-xs border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)] cursor-pointer">
+                    <option value="">All outcomes</option>
+                    <option value="ok" @selected($outcomeFilter === 'ok')>Succeeded</option>
+                    <option value="fail" @selected($outcomeFilter === 'fail')>Failed</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <label for="filter-actor" class="text-[10px] uppercase tracking-wider text-[var(--color-ink-soft)] font-semibold shrink-0">Actor:</label>
+                <select id="filter-actor" name="actor" onchange="this.form.submit()" class="text-xs border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:border-[var(--color-brand)] cursor-pointer">
+                    <option value="">All actors</option>
+                    @foreach ($actorOptions as $a)
+                        <option value="{{ $a }}" @selected($actorFilter === $a)>{{ $a }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </form>
+    </div>
 
     {{-- Per-site rollup. --}}
     <div class="card overflow-hidden mb-6">

@@ -52,24 +52,29 @@
         subtitle="Pending plugin, theme, WordPress core, and translation updates across the fleet. Cached Companion snapshots refresh nightly at 03:00 (and immediately after any update batch finishes).">
         <x-slot:actions>
             <a href="{{ route('maintenance-history.index', ['action_type' => '_updates']) }}"
-               class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]"
+               class="btn-pill-nav text-xs md:text-sm"
                title="Full log of every plugin, theme, core, and translation update ever run">
-                <i class="fa-solid fa-clock-rotate-left"></i> History
+                <i class="fa-solid fa-clock-rotate-left text-[var(--color-ink-muted)]"></i>
+                <span>History</span>
             </a>
             <a href="{{ route('updates.carePlan') }}"
-               class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] ml-3"
+               class="btn-pill-nav text-xs md:text-sm"
                title="{{ \App\Models\Site::areCarePlansEnabled() ? 'Manage which care-plan sites are on the nightly auto-update path' : 'Manage which sites are on the nightly auto-update path' }}">
-                <i class="fa-solid fa-moon"></i> {{ \App\Models\Site::areCarePlansEnabled() ? 'Care-plan auto-updates' : 'Nightly auto-updates' }}
+                <i class="fa-solid fa-moon text-[var(--color-ink-muted)]"></i>
+                <span>{{ \App\Models\Site::areCarePlansEnabled() ? 'Care-plan auto-updates' : 'Nightly auto-updates' }}</span>
             </a>
             <a href="{{ route('settings.updates.index') }}"
-               class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] ml-3"
+               class="btn-pill-nav text-xs md:text-sm"
                title="Clockwork Control system updates and companion rollout">
-                <i class="fa-solid fa-arrows-rotate"></i> App updates
+                <i class="fa-solid fa-arrows-rotate text-[var(--color-ink-muted)]"></i>
+                <span>App updates</span>
             </a>
             @if ($hasActiveFilters)
                 <a href="{{ route('updates.index', ['tab' => $activeTab]) }}"
-                   class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] ml-3">
-                    <i class="fa-solid fa-xmark"></i> Reset filters
+                   class="btn-pill-nav text-xs md:text-sm text-[var(--color-status-red)] hover:border-[var(--color-status-red)]"
+                   title="Clear active filters">
+                    <i class="fa-solid fa-xmark"></i>
+                    <span>Reset filters</span>
                 </a>
             @endif
         </x-slot:actions>

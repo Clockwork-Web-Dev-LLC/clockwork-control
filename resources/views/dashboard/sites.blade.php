@@ -23,6 +23,8 @@
                 @if ($activeProvider !== 'all')
                     <input type="hidden" name="provider" id="sites-provider-filter" value="{{ $activeProvider }}">
                 @endif
+                <input type="hidden" name="sort" id="sites-sort-filter" value="{{ $sort }}">
+                <input type="hidden" name="dir" id="sites-dir-filter" value="{{ $dir }}">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-ink-soft)]"></i>
                 <input
                     type="search"
@@ -45,7 +47,7 @@
                 <div class="flex items-center gap-2 flex-wrap" id="sites-provider-tabs">
                     <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mr-1">Host:</span>
                     @foreach ($providerTabs as $key => $label)
-                        <a href="{{ route('sites.index', array_filter(['provider' => $key === 'all' ? null : $key, 'q' => $q ?: null])) }}"
+                        <a href="{{ route('sites.index', array_filter(['provider' => $key === 'all' ? null : $key, 'q' => $q ?: null, 'sort' => $sort !== 'domain' ? $sort : null, 'dir' => $dir !== 'asc' ? $dir : null])) }}"
                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border
                                   {{ $activeProvider === $key ? 'bg-[var(--color-nav-active-bg)] text-[var(--color-nav-active-ink)] border-[var(--color-nav-active-border)]' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border-transparent hover:bg-[var(--color-border-light)]' }}">
                             {{ $label }}
@@ -57,22 +59,46 @@
                 <div></div>
             @endif
 
-            {{-- View Mode Toggle: List vs Visual Grid --}}
-            <div class="inline-flex items-center bg-[var(--color-surface-alt)] p-1 rounded-xl border border-[var(--color-border-light)] text-xs ml-auto">
-                <button type="button" @click="setView('list')"
-                        :class="view === 'list' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
-                        class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
-                        title="List view">
-                    <i class="fa-solid fa-list text-xs"></i>
-                    <span class="hidden sm:inline">List</span>
-                </button>
-                <button type="button" @click="setView('grid')"
-                        :class="view === 'grid' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
-                        class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
-                        title="Visual Grid view">
-                    <i class="fa-solid fa-table-cells text-xs"></i>
-                    <span class="hidden sm:inline">Grid</span>
-                </button>
+            <div class="flex items-center gap-2.5 ml-auto flex-wrap">
+                {{-- Sort Dropdown --}}
+                <div class="relative inline-flex items-center">
+                    <label for="sites-sort-select" class="sr-only">Sort sites</label>
+                    <div class="relative flex items-center">
+                        <i class="fa-solid fa-arrow-down-short-wide absolute left-2.5 text-[11px] text-[var(--color-ink-soft)] pointer-events-none"></i>
+                        <select id="sites-sort-select"
+                                onchange="window.location.href = this.value"
+                                class="appearance-none bg-[var(--color-surface-alt)] hover:bg-[var(--color-surface)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] py-1 pl-7 pr-7 rounded-xl text-xs font-medium cursor-pointer focus:outline-none focus:border-[var(--color-brand)] transition-colors shadow-2xs"
+                                aria-label="Sort sites list">
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'domain', 'dir' => 'asc'])) }}" {{ $sort === 'domain' && $dir === 'asc' ? 'selected' : '' }}>Domain (A–Z)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'domain', 'dir' => 'desc'])) }}" {{ $sort === 'domain' && $dir === 'desc' ? 'selected' : '' }}>Domain (Z–A)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'server', 'dir' => 'asc'])) }}" {{ $sort === 'server' && $dir === 'asc' ? 'selected' : '' }}>Host / Server (A–Z)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'server', 'dir' => 'desc'])) }}" {{ $sort === 'server' && $dir === 'desc' ? 'selected' : '' }}>Host / Server (Z–A)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'status', 'dir' => 'asc'])) }}" {{ $sort === 'status' && $dir === 'asc' ? 'selected' : '' }}>Status (Issues First)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'status', 'dir' => 'desc'])) }}" {{ $sort === 'status' && $dir === 'desc' ? 'selected' : '' }}>Status (Healthy First)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'created_at', 'dir' => 'desc'])) }}" {{ $sort === 'created_at' && $dir === 'desc' ? 'selected' : '' }}>Date Added (Newest)</option>
+                            <option value="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'created_at', 'dir' => 'asc'])) }}" {{ $sort === 'created_at' && $dir === 'asc' ? 'selected' : '' }}>Date Added (Oldest)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-2 text-[9px] text-[var(--color-ink-soft)] pointer-events-none"></i>
+                    </div>
+                </div>
+
+                {{-- View Mode Toggle: List vs Visual Grid --}}
+                <div class="inline-flex items-center bg-[var(--color-surface-alt)] p-1 rounded-xl border border-[var(--color-border-light)] text-xs">
+                    <button type="button" @click="setView('list')"
+                            :class="view === 'list' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                            class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
+                            title="List view">
+                        <i class="fa-solid fa-list text-xs"></i>
+                        <span class="hidden sm:inline">List</span>
+                    </button>
+                    <button type="button" @click="setView('grid')"
+                            :class="view === 'grid' ? 'bg-[var(--color-surface)] shadow-xs font-semibold text-[var(--color-ink-strong)]' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'"
+                            class="px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all"
+                            title="Visual Grid view">
+                        <i class="fa-solid fa-table-cells text-xs"></i>
+                        <span class="hidden sm:inline">Grid</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -84,92 +110,175 @@
         {{-- 1. Standard List View --}}
         <div class="card overflow-hidden mb-6" id="sites-list-card" x-show="view === 'list'">
             @if ($sites->isNotEmpty())
-                <ul class="divide-y divide-[var(--color-border-light)]" id="sites-list">
-                    @foreach ($sites as $site)
-                        @php
-                            $sslState = $site->sslState();
-                            $sslMeta = match (true) {
-                                $site->cert_source === 'redirect_only' => ['class' => 'status-unknown', 'icon' => 'fa-arrow-up-right-from-square', 'tooltip' => 'Redirect Only'],
-                                $sslState === 'green' => ['class' => 'status-green', 'icon' => 'fa-lock', 'tooltip' => 'SSL Valid'],
-                                $sslState === 'yellow' => ['class' => 'status-yellow', 'icon' => 'fa-clock-rotate-left', 'tooltip' => 'SSL Expiring Soon'],
-                                $sslState === 'red' => ['class' => 'status-red', 'icon' => 'fa-lock-open', 'tooltip' => 'SSL Expired'],
-                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'No SSL'],
-                            };
-                            $uptimeMeta = match ($site->uptime_state) {
-                                'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'tooltip' => 'Uptime Online'],
-                                'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'tooltip' => 'Site Down'],
-                                'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'tooltip' => 'In Maintenance'],
-                                default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
-                            };
-                        @endphp
-                        <li class="site-row relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors"
-                            data-search="{{ strtolower($site->domain . ' ' . implode(' ', $site->aliasDomains()) . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
-                            <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
+                @php
+                    $domainNextDir = ($sort === 'domain' && $dir === 'asc') ? 'desc' : 'asc';
+                    $serverNextDir = ($sort === 'server' && $dir === 'asc') ? 'desc' : 'asc';
+                    $statusNextDir = ($sort === 'status' && $dir === 'asc') ? 'desc' : 'asc';
+                @endphp
+                {{-- List Header / Column Sorting --}}
+                <div class="relative grid grid-cols-1 lg:grid-cols-2 bg-[var(--color-surface-alt)]/70 border-b border-[var(--color-border-light)] text-xs font-mono font-semibold uppercase tracking-wider text-[var(--color-ink-muted)] select-none">
+                    {{-- Vertical divider line between columns in header on wide screens --}}
+                    <div class="hidden lg:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none"></div>
 
-                            @if ($site->is_wordpress)
-                                <i class="fa-brands fa-wordpress text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
-                            @else
-                                <i class="fa-solid fa-globe text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
-                            @endif
+                    {{-- Left Column Header --}}
+                    <div class="px-3.5 sm:px-5 py-2.5 flex items-center gap-2.5 sm:gap-3">
+                        <span class="w-5 sm:w-6 shrink-0 text-center" title="Site Type">
+                            <i class="fa-solid fa-globe text-[11px] text-[var(--color-ink-soft)]"></i>
+                        </span>
+                        <div class="min-w-0 flex-1 flex items-center gap-4 sm:gap-6">
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'domain', 'dir' => $domainNextDir])) }}"
+                               class="inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'domain' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Domain ({{ $sort === 'domain' && $dir === 'asc' ? 'Z–A' : 'A–Z' }})">
+                                <span>Domain</span>
+                                @if ($sort === 'domain')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-a-z' : 'fa-arrow-down-z-a' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
 
-                            <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
-                                <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug">
-                                    {{ $site->domain }}
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'server', 'dir' => $serverNextDir])) }}"
+                               class="hidden sm:inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'server' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Host / Server">
+                                <span>Host / Server</span>
+                                @if ($sort === 'server')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-a-z' : 'fa-arrow-down-z-a' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
+                        </div>
+                        <div class="shrink-0 flex items-center justify-end">
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'status', 'dir' => $statusNextDir])) }}"
+                               class="inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'status' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Health & Uptime Status">
+                                <span>Status</span>
+                                @if ($sort === 'status')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
+                        </div>
+                    </div>
+
+                    {{-- Right Column Header (Visible on lg: screens and up) --}}
+                    <div class="hidden lg:flex px-3.5 sm:px-5 py-2.5 items-center gap-2.5 sm:gap-3">
+                        <span class="w-5 sm:w-6 shrink-0 text-center" title="Site Type">
+                            <i class="fa-solid fa-globe text-[11px] text-[var(--color-ink-soft)]"></i>
+                        </span>
+                        <div class="min-w-0 flex-1 flex items-center gap-4 sm:gap-6">
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'domain', 'dir' => $domainNextDir])) }}"
+                               class="inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'domain' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Domain ({{ $sort === 'domain' && $dir === 'asc' ? 'Z–A' : 'A–Z' }})">
+                                <span>Domain</span>
+                                @if ($sort === 'domain')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-a-z' : 'fa-arrow-down-z-a' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
+
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'server', 'dir' => $serverNextDir])) }}"
+                               class="inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'server' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Host / Server">
+                                <span>Host / Server</span>
+                                @if ($sort === 'server')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-a-z' : 'fa-arrow-down-z-a' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
+                        </div>
+                        <div class="shrink-0 flex items-center justify-end">
+                            <a href="{{ route('sites.index', array_filter(['provider' => $activeProvider === 'all' ? null : $activeProvider, 'q' => $q ?: null, 'sort' => 'status', 'dir' => $statusNextDir])) }}"
+                               class="inline-flex items-center gap-1.5 hover:text-[var(--color-ink-strong)] transition-colors {{ $sort === 'status' ? 'text-[var(--color-brand)] font-bold' : '' }}"
+                               title="Sort by Health & Uptime Status">
+                                <span>Status</span>
+                                @if ($sort === 'status')
+                                    <i class="fa-solid {{ $dir === 'asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short' }} text-[10px]"></i>
+                                @else
+                                    <i class="fa-solid fa-sort text-[10px] text-[var(--color-ink-soft)] opacity-60"></i>
+                                @endif
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- List Container with Central Vertical Divider on lg: --}}
+                <div class="relative">
+                    <div class="hidden lg:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none z-10"></div>
+                    <ul class="grid grid-cols-1 lg:grid-cols-2" id="sites-list">
+                        @foreach ($sites as $site)
+                            @php
+                                $sslState = $site->sslState();
+                                $sslMeta = match (true) {
+                                    $site->cert_source === 'redirect_only' => ['class' => 'status-unknown', 'icon' => 'fa-arrow-up-right-from-square', 'tooltip' => 'Redirect Only'],
+                                    $sslState === 'green' => ['class' => 'status-green', 'icon' => 'fa-lock', 'tooltip' => 'SSL Valid'],
+                                    $sslState === 'yellow' => ['class' => 'status-yellow', 'icon' => 'fa-clock-rotate-left', 'tooltip' => 'SSL Expiring Soon'],
+                                    $sslState === 'red' => ['class' => 'status-red', 'icon' => 'fa-lock-open', 'tooltip' => 'SSL Expired'],
+                                    default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'No SSL'],
+                                };
+                                $uptimeMeta = match ($site->uptime_state) {
+                                    'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'tooltip' => 'Uptime Online'],
+                                    'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'tooltip' => 'Site Down'],
+                                    'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'tooltip' => 'In Maintenance'],
+                                    default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
+                                };
+                            @endphp
+                            <li class="site-row relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors border-b border-[var(--color-border-light)]"
+                                data-search="{{ strtolower($site->domain . ' ' . implode(' ', $site->aliasDomains()) . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
+                                <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
+
+                                @if ($site->is_wordpress)
+                                    <i class="fa-brands fa-wordpress text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
+                                @else
+                                    <i class="fa-solid fa-globe text-[var(--color-ink-muted)] text-lg relative z-10 pointer-events-none shrink-0"></i>
+                                @endif
+
+                                <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
+                                    <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug">
+                                        {{ $site->domain }}
+                                    </div>
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] truncate flex items-center gap-1.5 mt-0.5">
+                                        @if ($site->isPressable())
+                                            <i class="fa-solid fa-cloud text-[10px] text-[var(--color-ink-soft)]"></i> <span>Pressable</span>
+                                        @elseif ($site->isCustom())
+                                            <i class="fa-solid fa-plug text-[10px] text-[var(--color-ink-soft)]"></i> <span>{{ $site->pluginOnlyHostLabel() }}</span>
+                                        @elseif ($site->server)
+                                            <i class="fa-solid fa-server text-[10px] text-[var(--color-ink-soft)]"></i> <span>{{ $site->server->display_name ?? $site->server->name }}</span>
+                                        @endif
+                                        @if ($site->is_inactive)
+                                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-[var(--color-surface-alt)] text-[var(--color-ink-soft)] font-medium">Inactive</span>
+                                        @endif
+                                    </div>
                                 </div>
-                                <div class="text-[11px] text-[var(--color-ink-muted)] truncate flex items-center gap-1.5 mt-0.5 sm:hidden">
-                                    @if ($site->isPressable())
-                                        <i class="fa-solid fa-cloud text-[10px]"></i> Pressable
-                                    @elseif ($site->isCustom())
-                                        <i class="fa-solid fa-plug text-[10px]"></i> {{ $site->pluginOnlyHostLabel() }}
-                                    @elseif ($site->server)
-                                        <i class="fa-solid fa-server text-[10px]"></i> {{ $site->server->display_name ?? $site->server->name }}
+
+                                <div class="flex items-center gap-1.5 sm:gap-2 relative z-10 shrink-0">
+                                    <span class="status-pill {{ $uptimeMeta['class'] }} cursor-default" data-tooltip="{{ $uptimeMeta['tooltip'] }}">
+                                        <i class="fa-solid {{ $uptimeMeta['icon'] }}"></i>
+                                    </span>
+
+                                    <span class="status-pill {{ $sslMeta['class'] }} cursor-default" data-tooltip="{{ $sslMeta['tooltip'] }}">
+                                        <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
+                                    </span>
+
+                                    @if ($site->companion_installed)
+                                        <span class="status-pill status-unknown cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
+                                            <i class="fa-solid fa-plug"></i>
+                                        </span>
+                                    @endif
+
+                                    @if (\App\Models\Site::areCarePlansEnabled() && $site->care_plan_enabled)
+                                        <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
+                                            <i class="fa-solid fa-shield-heart"></i>
+                                        </span>
                                     @endif
                                 </div>
-                            </div>
-
-                            <div class="flex items-center gap-1.5 sm:gap-2 relative z-10 shrink-0">
-                                @if ($site->is_inactive)
-                                    <span class="status-pill status-unknown cursor-default" data-tooltip="Site Inactive">
-                                        <i class="fa-solid fa-moon"></i>
-                                    </span>
-                                @endif
-                                @if ($site->isPressable())
-                                    <span class="hidden sm:inline-flex status-pill status-unknown cursor-default" data-tooltip="Host: Pressable">
-                                         <i class="fa-solid fa-cloud"></i> Pressable
-                                     </span>
-                                 @elseif ($site->isCustom())
-                                     <span class="hidden sm:inline-flex status-pill status-unknown cursor-default" data-tooltip="Host: Custom / {{ $site->pluginOnlyHostLabel() }}">
-                                         <i class="fa-solid fa-plug"></i> {{ $site->pluginOnlyHostLabel() }}
-                                     </span>
-                                 @elseif ($site->server)
-                                    <span class="hidden sm:inline-flex status-pill status-unknown truncate max-w-[10rem] cursor-default" data-tooltip="Server: {{ $site->server->display_name ?? $site->server->name }}">
-                                        <i class="fa-solid fa-server"></i> {{ $site->server->display_name ?? $site->server->name }}
-                                    </span>
-                                @endif
-
-                                <span class="status-pill {{ $uptimeMeta['class'] }} cursor-default" data-tooltip="{{ $uptimeMeta['tooltip'] }}">
-                                    <i class="fa-solid {{ $uptimeMeta['icon'] }}"></i>
-                                </span>
-
-                                <span class="status-pill {{ $sslMeta['class'] }} cursor-default" data-tooltip="{{ $sslMeta['tooltip'] }}">
-                                    <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
-                                </span>
-
-                                @if ($site->companion_installed)
-                                    <span class="status-pill status-unknown cursor-default" data-tooltip="{{ $site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active' }}">
-                                        <i class="fa-solid fa-plug"></i>
-                                    </span>
-                                @endif
-
-                                @if (\App\Models\Site::areCarePlansEnabled() && $site->care_plan_enabled)
-                                    <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
-                                        <i class="fa-solid fa-shield-heart"></i>
-                                    </span>
-                                @endif
-                            </div>
-                        </li>
-                    @endforeach
-                </ul>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
             @endif
         </div>
 

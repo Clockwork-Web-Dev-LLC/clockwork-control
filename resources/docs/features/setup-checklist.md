@@ -2,7 +2,7 @@
 title: Fleet Integrations Setup
 section: Features
 order: 5
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [setup, onboarding, first-run, modularization, env, credentials, rate-limits]
 tracks: [app/Http/Controllers/SetupController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, resources/views/setup/**]
@@ -62,5 +62,6 @@ Every service card includes a gear icon that opens the Alpine.js settings modal 
 
 - **Fleet Source Prerequisite**: At least one Managed WordPress host (Pressable, WP Engine, Kinsta) or Server Management Panel (SpinupWP, Cloudways, GridPane) must be enabled to discover sites.
 - **Hardware Telemetry Pairing**: When a panel provider is active, pairing with a Cloud VPS provider (DigitalOcean, Hetzner, Vultr, Linode, Azure) is highlighted to collect 5-minute CPU, RAM, and droplet telemetry.
+- **Automated Self-Healing & AI Triage**: When **AiRemedy** is enabled under Maintenance & QA, the cog modal allows configuring your OpenRouter API key, model selection defaults, and API limits directly.
 - **Category Counts**: Labeled as **"X integrations"** per category (e.g. "5 integrations", "6 integrations").
 

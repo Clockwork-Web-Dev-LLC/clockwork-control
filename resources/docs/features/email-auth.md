@@ -52,18 +52,21 @@ Checks run per **registrable apex domain** (via `RootDomainResolver::resolve()`)
 
 ## Surfacing and UI
 
-- **Fleet Hub (`/email-auth`)**: A centralized table displaying every client apex domain, associated site count, SPF lookup counts, DMARC policy pills (`reject`, `quarantine`, `none`), DKIM status, and overall grade.
+- **Security Hub Integration (`/security/email-auth` or `/email-auth`)**: Seamlessly integrated as an active subtab in the unified **Security** navigation strip (`Scans`, `WP Admins`, `Email Auth`, `Bans`). Displays every client apex domain, associated site count, SPF lookup counts, DMARC policy pills (`reject`, `quarantine`, `none`), DKIM status, and overall grade.
+- **Global Fleet Scan ("Scan all domains")**: Operators can trigger an immediate, on-demand background scan across every active apex domain via the header button (`POST /email-auth/scan-all`). Soft-deleted domains are automatically skipped.
 - **Slide-Over Drawer**: Click any domain to open the detail drawer featuring:
   - Copyable raw DNS records (`v=spf1...`, `v=DMARC1...`).
   - Plain-English advisory findings with color-coded severity (`fail`, `warn`, `info`).
   - Suggested fix records tailored to the domain.
   - Custom DKIM selector manager.
   - One-click **Ignore Domain** toggle to silence alerts for third-party-managed client DNS.
+  - Instant **Re-scan Domain** button (`POST /email-auth/scan`) for fast verification after client DNS updates.
+  - **Remove from Tracking**: Safely soft-deletes the domain (`DELETE /email-auth/domains/{domain}`), removing it from the fleet overview and excluding it from scheduled weekly scans.
 - **Chat Alerts**: Fires `email_auth_degraded` to Slack and Mattermost only on **state transitions** (e.g., when a previously passing domain degrades to `fail`).
 
 ## CLI and Scheduled Cadence
 
-- Runs weekly via `clockwork:check-email-auth` on Mondays at 04:00 UTC.
+- Runs weekly via `clockwork:check-email-auth` on Mondays at 04:00 UTC (automatically excluding soft-deleted/trashed domains).
 - On-demand fleet scans or single-domain checks via CLI:
 
 ```bash

@@ -2,7 +2,7 @@
 title: Integrations settings
 section: Features
 order: 89
-updated: 2026-09-28
+updated: 2026-10-03
 author: Aaron Reimann
 tags: [integrations, credentials, settings, modularization, rate-limits, env]
 tracks: [app/Http/Controllers/IntegrationCredentialsController.php, app/Http/Controllers/ServiceApiLimitsController.php, app/Support/EnvCredentialManager.php, app/Support/ServiceRateLimitRegistry.php, app/Support/CredentialResolver.php, app/Models/IntegrationCredential.php, modules/*/src/*ServiceProvider.php]
@@ -13,7 +13,7 @@ Lives at **`/settings/integrations`** (gear menu → API credentials, or via the
 ## Root `.env` Credential Architecture: `EnvCredentialManager`
 
 To eliminate unnecessary database credential storage and enforce the root `.env` file as the single source of truth:
-- **`App\Support\EnvCredentialManager`** maintains canonical environment variable mappings for all 25 fleet services (e.g. `CLOCKWORK_DIGITALOCEAN_TOKEN`, `CLOCKWORK_HETZNER_TOKEN`, `CLOCKWORK_SPINUPWP_TOKEN`, `CLOCKWORK_AZURE_*`, `GOOGLE_*`, `TWILIO_*`, etc.).
+- **`App\Support\EnvCredentialManager`** maintains canonical environment variable mappings for all fleet services (e.g. `CLOCKWORK_DIGITALOCEAN_TOKEN`, `CLOCKWORK_HETZNER_TOKEN`, `CLOCKWORK_SPINUPWP_TOKEN`, `CLOCKWORK_AZURE_*`, `GOOGLE_*`, `TWILIO_*`, `OPENROUTER_API_KEY`, etc.).
 - Saving credentials from either the `/setup` cog modal or the dedicated limits page at `/settings/integrations/{service}/limits` writes atomically to the root `.env` file via regex.
 - **Process Memory Reflection**: Calls `putenv()`, updates `$_ENV` and `$_SERVER`, and mutates Laravel `config([$path => $value])` — this only affects the *current* request's own PHP process, so a save is immediately visible on the confirmation response and any code that runs later in that same request. It does **not** reach other already-running processes.
 - **Queue restart, not a full server reboot**: `ServiceApiLimitsController` calls `php artisan queue:restart` after any credential change, so the long-running `queue:work` daemon (`com.clockwork.queue`) picks up the new value on its very next job — launchd's `KeepAlive` respawns it automatically, no manual restart needed. Scheduled/cron-driven fleet polling doesn't need this at all: `schedule:run` forks a fresh process every minute and reads `.env` fresh every time. The one thing that's genuinely NOT instant is `php artisan serve`/php-fpm itself — those are long-running processes that loaded `.env` once at boot, so a credential saved here won't be visible to a *different* concurrent request until that process restarts (rare in practice, since this app is meant to run under Herd/php-fpm which recycles workers regularly, not the long-lived dev server).

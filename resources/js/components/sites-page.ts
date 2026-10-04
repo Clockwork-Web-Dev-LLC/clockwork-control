@@ -126,6 +126,14 @@ export function sitesPage() {
                 if (providerInput?.value && providerInput.value !== 'all') {
                     url.searchParams.set('provider', providerInput.value);
                 }
+                const sortInput = document.getElementById('sites-sort-filter') as HTMLInputElement | null;
+                if (sortInput?.value && sortInput.value !== 'domain') {
+                    url.searchParams.set('sort', sortInput.value);
+                }
+                const dirInput = document.getElementById('sites-dir-filter') as HTMLInputElement | null;
+                if (dirInput?.value && dirInput.value !== 'asc') {
+                    url.searchParams.set('dir', dirInput.value);
+                }
                 const trimmed = (q || '').trim();
                 if (trimmed) {
                     url.searchParams.set('q', trimmed);

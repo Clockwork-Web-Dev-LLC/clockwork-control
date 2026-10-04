@@ -35,7 +35,11 @@ describe('DashboardController', function () {
         $response = $this->actingAs(User::factory()->create())
             ->get(route('dashboard'));
 
-        $response->assertOk()->assertSee('web1.example.com');
+        $response->assertOk()
+            ->assertSee('web1.example.com')
+            ->assertSee('cw-server-card', false)
+            ->assertSee('cursor-pointer', false)
+            ->assertSee(route('servers.show', $server), false);
     });
 
     it('shows only the Refresh from SpinupWP fleet action when GridPane is disabled', function () {

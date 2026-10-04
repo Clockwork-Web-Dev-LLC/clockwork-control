@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Services\Chat\ChatNotifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Modules\Core\ModuleStateResolver;
 use Modules\EmailAuth\Contracts\DnsTxtResolver;
+use Modules\EmailAuth\Jobs\ScanEmailAuthFleetJob;
 use Modules\EmailAuth\Models\EmailAuthCheck;
 use Modules\EmailAuth\Models\EmailAuthDomain;
 use Modules\EmailAuth\Services\EmailAuthScanner;
@@ -207,4 +209,93 @@ test('email-auth web interface renders and supports ignore toggle and custom sel
 
     $domain->refresh();
     expect($domain->custom_dkim_selectors)->toBe(['custom1', 'custom2']);
+});
+
+test('scanNow rejects non-full domains and non-platform domains', function () {
+    // 1. Non-full domain ('clock' without dot or TLD)
+    $res1 = $this->actingAs($this->admin)
+        ->postJson(route('email-auth.scan'), ['domain' => 'clock']);
+
+    $res1->assertStatus(422)
+        ->assertJson(['ok' => false]);
+
+    // 2. Off-platform domain ('offplatform.com' is full domain but not on platform)
+    $res2 = $this->actingAs($this->admin)
+        ->postJson(route('email-auth.scan'), ['domain' => 'offplatform.com']);
+
+    $res2->assertStatus(422)
+        ->assertJson(['ok' => false]);
+});
+
+test('destroy removes domain from email-auth and persists exclusion on index', function () {
+    EmailAuthDomain::create([
+        'domain' => 'clientdomain.com',
+        'last_overall_status' => 'pass',
+        'last_checked_at' => now(),
+    ]);
+
+    // 1. Delete domain
+    $delRes = $this->actingAs($this->admin)
+        ->deleteJson(route('email-auth.destroy', 'clientdomain.com'));
+
+    $delRes->assertOk()->assertJson(['ok' => true]);
+
+    $domain = EmailAuthDomain::withTrashed()->where('domain', 'clientdomain.com')->first();
+    expect($domain->trashed())->toBeTrue();
+
+    // 2. Visiting index should not show clientdomain.com and should not resurrect it
+    $indexRes = $this->actingAs($this->admin)->get(route('email-auth.index'));
+    $indexRes->assertOk();
+    $indexRes->assertDontSee('p-3.5 font-medium font-data text-sm', false);
+
+    expect(EmailAuthDomain::where('domain', 'clientdomain.com')->count())->toBe(0);
+});
+
+test('security tabs include Email Auth and highlight navigation', function () {
+    // Security Scans view should include Email Auth tab
+    $scansRes = $this->actingAs($this->admin)->get(route('security.scans'));
+    $scansRes->assertOk()
+        ->assertSee('Email Auth')
+        ->assertSee(route('email-auth.index'), false);
+
+    // Email Auth index view should include Security tabs and mark Security as active
+    $emailAuthRes = $this->actingAs($this->admin)->get(route('email-auth.index'));
+    $emailAuthRes->assertOk()
+        ->assertSee('Email Auth')
+        ->assertSee('Scan All Domains')
+        ->assertSee(route('security.scans'), false);
+});
+
+test('scan-all initiates background fleet scan and blocks concurrent runs', function () {
+    // 1. First trigger
+    $res1 = $this->actingAs($this->admin)
+        ->postJson(route('email-auth.scan-all'));
+
+    $res1->assertOk()->assertJson(['ok' => true]);
+    expect(Cache::has('email_auth.scan_fleet'))->toBeTrue();
+
+    // 2. Index should show in-progress indicator
+    $indexRes = $this->actingAs($this->admin)->get(route('email-auth.index'));
+    $indexRes->assertOk()->assertSee('Scan in Progress...');
+
+    // 3. Second concurrent trigger gets 409 already running
+    $res2 = $this->actingAs($this->admin)
+        ->postJson(route('email-auth.scan-all'));
+
+    $res2->assertStatus(409)->assertJson(['already_running' => true]);
+
+    Cache::forget('email_auth.scan_fleet');
+});
+
+test('ScanEmailAuthFleetJob runs Artisan command and releases lock', function () {
+    $resolver = Mockery::mock(DnsTxtResolver::class);
+    $resolver->shouldReceive('resolveMx')->andReturn([['priority' => 10, 'target' => 'mail.test.com']]);
+    $resolver->shouldReceive('resolveTxt')->andReturn(['v=spf1 -all']);
+    $this->app->instance(DnsTxtResolver::class, $resolver);
+
+    $job = new ScanEmailAuthFleetJob;
+    $job->handle();
+
+    expect(Cache::has('email_auth.scan_fleet'))->toBeFalse();
+    expect(EmailAuthDomain::where('domain', 'clientdomain.com')->count())->toBe(1);
 });

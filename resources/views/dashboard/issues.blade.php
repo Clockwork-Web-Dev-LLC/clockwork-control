@@ -230,17 +230,15 @@
                     <span>All clear across the fleet.</span>
                 @else
                     <span>
-                        <span x-text="visibleItemsCount">{{ $totals['all'] }}</span> of {{ $totals['all'] }} {{ Str::plural('item', $totals['all']) }} shown
+                        Diagnostic and fleet health items requiring review.
+                        <span x-show="visibleItemsCount !== {{ $totals['all'] }}" class="text-[var(--color-ink-strong)] font-medium ml-1" x-cloak>
+                            (<span x-text="visibleItemsCount"></span> of {{ $totals['all'] }} {{ Str::plural('item', $totals['all']) }} shown)
+                        </span>
                         <span x-show="disabledCategoriesCount > 0" class="text-slate-400 font-medium ml-1" x-cloak>
-                            (<span x-text="disabledItemsCount"></span> muted across <span x-text="disabledCategoriesCount"></span> <span x-text="disabledCategoriesCount === 1 ? 'category' : 'categories'"></span>)
+                            · <span x-text="disabledCategoriesCount"></span> muted
                         </span>
                         <span x-show="hiddenItemsCount > 0" class="text-[var(--color-status-yellow)] font-medium ml-1" x-cloak>
-                            (<span x-text="hiddenItemsCount"></span> hidden)
-                        </span>
-                        <span class="text-[var(--color-ink-soft)] font-normal text-xs ml-1">
-                            · <span class="text-red-500 font-semibold"><span x-text="emergencyItemsCount"></span> emergency</span>
-                            · <span class="text-amber-500 font-semibold"><span x-text="pressingItemsCount"></span> pressing</span>
-                            · <span class="text-slate-400"><span x-text="notPressingItemsCount"></span> routine</span>
+                            · <span x-text="hiddenItemsCount"></span> hidden
                         </span>
                     </span>
                 @endif
@@ -343,44 +341,49 @@
              x-cloak
              class="mb-6 rounded-[var(--radius-card)] border-2 border-[var(--color-brand)]/40 bg-[var(--color-surface)] shadow-xl overflow-hidden">
             {{-- Screen Options Top Control Bar --}}
-            <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3">
+            <div class="px-5 py-3.5 bg-[var(--color-surface-alt)]/80 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-4">
                 <div class="flex items-center gap-2.5">
-                    <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)]"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-brand)] shrink-0"></span>
                     <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-strong)]">Screen Options: Elements on this page</span>
                     <span class="text-xs text-[var(--color-ink-muted)] hidden sm:inline">— Select categories to display. Saved in your browser.</span>
                 </div>
-                <div class="flex items-center gap-2 text-xs flex-wrap">
-                    <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
-                    <button type="button"
-                            @click="showAllCategories()"
-                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-brand)] text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
-                        Show All
-                    </button>
-                    <button type="button"
-                            @click="showOnlyCritical()"
-                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-red-500 text-red-500 transition-all cursor-pointer font-medium">
-                        Critical Only
-                    </button>
-                    <button type="button"
-                            @click="hideRoutine()"
-                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
-                        Hide Routine
-                    </button>
-                    <button type="button"
-                            @click="resetCategories()"
-                            class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] transition-all cursor-pointer">
-                        Reset
-                    </button>
-                    <span class="text-[var(--color-border-light)]">|</span>
-                    <button type="button"
-                            @click="prioritiesModalOpen = true"
-                            class="text-[var(--color-brand)] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1">
-                        <i class="fa-solid fa-sliders text-[11px]"></i> Fleet Priorities
-                    </button>
+
+                <div class="flex items-center gap-4 text-xs flex-wrap flex-1 justify-end">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-[var(--color-ink-soft)] font-medium">Presets:</span>
+                        <button type="button"
+                                @click="showAllCategories()"
+                                class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-[var(--color-brand)] text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
+                            Show All
+                        </button>
+                        <button type="button"
+                                @click="showOnlyCritical()"
+                                class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-red-500 text-red-500 transition-all cursor-pointer font-medium">
+                            Critical Only
+                        </button>
+                        <button type="button"
+                                @click="hideRoutine()"
+                                class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:border-amber-500 text-[var(--color-ink-strong)] transition-all cursor-pointer font-medium">
+                            Hide Routine
+                        </button>
+                        <button type="button"
+                                @click="resetCategories()"
+                                class="px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-border-light)] hover:bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] transition-all cursor-pointer">
+                            Reset
+                        </button>
+                        <span class="text-[var(--color-border-light)]">|</span>
+                        <button type="button"
+                                @click="prioritiesModalOpen = true"
+                                class="text-[var(--color-brand)] hover:underline font-semibold cursor-pointer inline-flex items-center gap-1">
+                            <i class="fa-solid fa-sliders text-[11px]"></i> Fleet Priorities
+                        </button>
+                    </div>
+
                     <button type="button"
                             @click="screenOptionsOpen = false"
-                            class="ml-2 px-3 py-1 rounded bg-[var(--color-brand)] text-white hover:opacity-90 font-medium text-xs cursor-pointer shadow-xs">
-                        Done
+                            class="ml-auto sm:ml-0 px-4 py-1.5 rounded-lg bg-[var(--color-brand)] text-white hover:opacity-90 font-semibold text-xs cursor-pointer shadow-xs inline-flex items-center gap-1.5 transition-all">
+                        <span>Done</span>
+                        <i class="fa-solid fa-check text-[10px]"></i>
                     </button>
                 </div>
             </div>
@@ -551,20 +554,6 @@
                               x-text="disabledCategoriesCount"></span>
                     </button>
                 </div>
-
-                {{-- Fleet Priorities Config Button --}}
-                <button type="button"
-                        @click="prioritiesModalOpen = true"
-                        class="btn-pill-nav text-xs inline-flex items-center gap-1.5 cursor-pointer py-1.5"
-                        :class="disabledCategoriesCount > 0 ? 'border-amber-500/50 text-amber-500 ring-1 ring-amber-500/20' : ''"
-                        title="Configure category alert priorities or mute categories fleet-wide">
-                    <i class="fa-solid fa-sliders text-[var(--color-brand)]"></i>
-                    <span>Priorities</span>
-                    <span x-show="disabledCategoriesCount > 0"
-                          x-cloak
-                          x-text="disabledCategoriesCount + ' muted'"
-                          class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-500/20 text-[var(--color-ink-soft)] font-semibold font-mono"></span>
-                </button>
 
                 {{-- Collapse / Expand All button --}}
                 <button type="button"

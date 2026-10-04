@@ -50,24 +50,6 @@
     <x-page-header title="Capacity"
         subtitle="Fleet capacity, resource pressure, headroom, and visit-threshold overages across SpinupWP shared servers, Pressable cloud, and standalone sites.">
         <x-slot:actions>
-            @if (! empty($pressableCapacity))
-                <button type="button"
-                        @click="scrollTo('pressable-capacity')"
-                        class="btn-pill-nav text-sm font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border-light)] hover:border-[var(--color-primary-500)] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                        title="Jump directly down to Pressable Fleet Capacity">
-                    <i class="fa-solid fa-cloud text-[var(--color-primary-600)]"></i>
-                    <span>Pressable ({{ $pressableCapacity['dbSitesCount'] ?? 108 }})</span>
-                    <i class="fa-solid fa-arrow-down text-[10px] opacity-70"></i>
-                </button>
-            @endif
-            <button type="button"
-                    @click="scrollTo('shared-vps-sections')"
-                    class="btn-pill-nav text-sm font-medium text-[var(--color-ink-strong)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border-light)] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                    title="Jump to SpinupWP Shared VPS servers section">
-                <i class="fa-solid fa-server text-[var(--color-brand)]"></i>
-                <span>Shared VPS</span>
-                <i class="fa-solid fa-arrow-down text-[10px] opacity-70"></i>
-            </button>
             <a href="{{ route('capacity.settings') }}" class="btn-pill-nav text-sm">
                 <i class="fa-solid fa-sliders text-[var(--color-ink-muted)]"></i>
                 <span>Capacity settings</span>
@@ -139,7 +121,7 @@
                         @click="scrollTo('pressable-capacity')"
                         class="px-2 py-0.5 rounded-md bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)] text-[var(--color-primary-700)] dark:text-[var(--color-primary-300)] font-medium hover:bg-[var(--color-primary-100)] transition-colors flex items-center gap-1 cursor-pointer">
                     <i class="fa-solid fa-cloud text-[10px]"></i>
-                    <span>Pressable</span>
+                    <span>Pressable ({{ $pressableCapacity['dbSitesCount'] ?? 108 }})</span>
                     <i class="fa-solid fa-arrow-down text-[9px] opacity-70"></i>
                 </button>
             @endif

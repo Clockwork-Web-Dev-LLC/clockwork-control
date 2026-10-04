@@ -11,7 +11,7 @@ The **AiRemedy** module equips Clockwork Control with intelligent site outage tr
 - **Intelligent Cooldown Protection**: Automatically suppresses duplicate automated AI triage within a configurable window (default: 30 minutes) to prevent token drain during prolonged load.
 - **Human-in-the-Loop or Autonomous Modes**: Switch between passive **Shadow Mode**, **Interactive Copilot** (operator approval required), and **Autonomous Self-Healing** (auto-executes non-destructive Tier 1 fixes).
 - **Multi-Model Support via OpenRouter**: Use Claude Sonnet 4.5 (default, recommended for systems engineering), Claude Haiku 4.5, Claude Sonnet 4, GPT-4o, GPT-4o Mini, or DeepSeek-V3 with transparent per-incident cost tracking.
-- **Strict API Key Hygiene**: OpenRouter API key is stored exclusively in `.env` (`OPENROUTER_API_KEY`). **Never stored in the database**.
+- **Strict API Key Hygiene**: OpenRouter API key is stored exclusively in `.env` (`OPENROUTER_API_KEY`). **Never stored in the database**. Configurable via `/ai-remedy/settings`, the `/setup` checklist, or `/settings/integrations/ai-remedy/limits`.
 - **Automated Uptime & Provider Hooks**: Automatically triggers non-destructive triage whenever a monitored site transitions to `down` in `UptimeStateUpdater`, or when cloud provider metrics in `clockwork:poll-servers` transition a server to RED status.
 - **On-Demand Safe Simulation**: Test AiRemedy against any connected server right from the settings page or dashboard with zero risk.
 - **Multi-Tier Command Safety Guard**: All commands pass through `CommandSafetyGuard` to prevent hallucinated or dangerous commands (blocking disk wipes, script piping, destructive SQL drops, etc.).
@@ -130,17 +130,27 @@ Remediation execution at `src/Services/RemedyExecutor.php`:
 ## Routes
 
 ```php
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/ai-remedy', [AiRemedyController::class, 'index'])->name('ai-remedy.index');
-    Route::get('/ai-remedy/settings', [AiRemedySettingsController::class, 'index'])->name('ai-remedy.settings');
-    Route::post('/ai-remedy/settings', [AiRemedySettingsController::class, 'update'])->name('ai-remedy.settings.update');
-    Route::post('/ai-remedy/test-connection', [AiRemedyController::class, 'testConnection'])->name('ai-remedy.test-connection');
-    Route::post('/ai-remedy/simulate', [AiRemedyController::class, 'simulateServer'])->name('ai-remedy.simulate');
+    Route::get('/ai-remedy/accuracy', [AiRemedyAccuracyController::class, 'index'])->name('ai-remedy.accuracy');
     Route::get('/ai-remedy/runs/{run}', [AiRemedyController::class, 'show'])->name('ai-remedy.show');
-    Route::post('/ai-remedy/servers/{server}/diagnose', [AiRemedyController::class, 'diagnoseServer'])->name('ai-remedy.server.diagnose');
-    Route::post('/ai-remedy/runs/{run}/execute', [AiRemedyController::class, 'execute'])->name('ai-remedy.execute');
+    Route::post('/ai-remedy/runs/{run}/verdict', [AiRemedyController::class, 'setVerdict'])->name('ai-remedy.verdict');
+
+    Route::middleware('admin')->group(function () {
+        Route::get('/ai-remedy/settings', [AiRemedySettingsController::class, 'index'])->name('ai-remedy.settings');
+        Route::post('/ai-remedy/settings', [AiRemedySettingsController::class, 'update'])->name('ai-remedy.settings.update');
+        Route::post('/ai-remedy/test-connection', [AiRemedyController::class, 'testConnection'])->name('ai-remedy.test-connection');
+        Route::post('/ai-remedy/simulate', [AiRemedyController::class, 'simulateServer'])->name('ai-remedy.simulate');
+        Route::post('/ai-remedy/servers/{server}/diagnose', [AiRemedyController::class, 'diagnoseServer'])->name('ai-remedy.server.diagnose');
+        Route::post('/ai-remedy/runs/{run}/execute', [AiRemedyController::class, 'execute'])->name('ai-remedy.execute');
+        Route::delete('/ai-remedy/runs', [AiRemedyController::class, 'destroyMany'])->name('ai-remedy.runs.destroy');
+        Route::post('/ai-remedy/runs/hide', [AiRemedyController::class, 'hideMany'])->name('ai-remedy.runs.hide');
+        Route::post('/ai-remedy/runs/unhide', [AiRemedyController::class, 'unhideMany'])->name('ai-remedy.runs.unhide');
+    });
 });
 ```
+
+AiRemedy also hooks into Clockwork's centralized integration credentials and connection tunables at `/settings/integrations/ai-remedy/limits` and within the `/setup` onboarding checklist.
 
 ---
 

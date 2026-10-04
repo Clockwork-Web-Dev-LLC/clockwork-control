@@ -28,8 +28,10 @@ Standalone / Renegade enrollment (`SitesController::store`) kicks a one-shot Sit
 
 ## Where to look
 
-- **`/security/scans`** — fleet inventory of latest scan per site.
+- **`/security/scans`** — fleet inventory of latest scan per site with expandable schedule and coverage details.
 - **`/security/admins`** — fleet administrator audit inventory (`SecurityAdminsController`). Lists every WP admin across all sites, flags unexpected domains/emails, and allows ignoring acknowledged client admins.
+- **`/security/email-auth`** — email authentication deliverability, SPF lookup expansion, DMARC enforcement, and DKIM probing (active subtab when the `email-auth` module is enabled).
+- **`/bans/*`** — firewall protection suite: review queue (`/bans/queue`), active bans (`/bans/active`), and permanent audit history (`/bans/history`).
 - **`/sites/{id}/security`** — per-site security tab. Latest scan per type plus a **Recent scans** history table at the bottom. History rows are expandable — clicking the chevron shows the structured findings (malware: kind/path/evidence; checksums: Modified / Missing / Unexpected file lists).
 - **Issues page** — sites with `status=issues_found` surface here. The **Core file tampering** card links directly to `/sites/{id}/security#core-integrity` so clicking a site name lands exactly at the Core file integrity card. There is also a **Companion malware findings** section and a **Plugins closed on WordPress.org** section ensuring operators are alerted proactively on the dashboard whenever abandoned or vulnerable components are detected.
 - **Companion → Tools → Clockwork → Security** — what the client sees in their wp-admin. Same data, friendlier copy.

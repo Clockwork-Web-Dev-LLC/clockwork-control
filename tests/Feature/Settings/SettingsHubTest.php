@@ -112,3 +112,24 @@ test('settings pages render persistent navigation', function () {
         ->assertSee('System &amp; Workspace', false)
         ->assertSee('Diagnostics &amp; Health', false);
 });
+
+test('settings hub renders module reordering controls and zero-fouc script', function () {
+    $this->mockIssueCounterZero();
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->get(route('settings.index'));
+
+    $response->assertOk()
+        ->assertSee('id="settings-cards-grid"', false)
+        ->assertSee('data-card-id="branding"', false)
+        ->assertSee('data-card-id="fleet_policies"', false)
+        ->assertSee('data-card-id="integrations_alerts"', false)
+        ->assertSee('data-card-id="operations_tools"', false)
+        ->assertSee('data-card-id="system_workspace"', false)
+        ->assertSee('settingsHubManager()', false)
+        ->assertSee('cw_settings_cards_order', false)
+        ->assertSee('Reset default order', false)
+        ->assertSee('Move module earlier', false)
+        ->assertSee('Move module later', false)
+        ->assertSee('Drag to reorder module', false);
+});

@@ -482,5 +482,31 @@ describe('Step 1 toggle auto-save (POST /setup/toggle)', function () {
         $response->assertDontSee('Client Reports API Limits &amp; Settings', false);
         $response->assertDontSee('Comment Moderation API Limits &amp; Settings', false);
         $response->assertDontSee('Site Maintenance API Limits &amp; Settings', false);
+
+        // AiRemedy has OpenRouter credentials and rate limits, so it must have the cog
+        $response->assertSee('AiRemedy API Limits &amp; Settings', false);
+    });
+
+    it('respects ModuleStateResolver for unlisted bundled modules when installed_modules is initialized', function () {
+        $user = User::factory()->create();
+
+        // Simulate an existing installation that has some modules saved in installed_modules
+        InstalledModule::create([
+            'module_id' => 'digitalocean',
+            'name' => 'DigitalOcean',
+            'enabled' => true,
+        ]);
+
+        app(ModuleStateResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('setup.step1'));
+        $response->assertOk();
+
+        $categories = $response->viewData('categories');
+        $allServices = collect($categories)->pluck('services')->flatten(1)->keyBy('id');
+
+        // ai-remedy is bundled and unrecorded in installed_modules; it should be enabled by resolver
+        expect($allServices['ai-remedy']['enabled'])->toBeTrue()
+            ->and($allServices['ai-remedy']['has_settings'])->toBeTrue();
     });
 });

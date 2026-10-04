@@ -303,7 +303,7 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 
 | Variable | Default | Notes |
 |---|---|---|
-| `OPENROUTER_API_KEY` | unset | API key from openrouter.ai used by AiRemedy. Setting it from AiRemedy Settings (`/ai-remedy/settings`) writes it here; it is never stored in the database. The model is a setting, not an env var (default `anthropic/claude-sonnet-4.5`). |
+| `OPENROUTER_API_KEY` | unset | API key from openrouter.ai used by AiRemedy. Configurable via Setup (`/setup`), Settings → API limits (`/settings/integrations/ai-remedy/limits`), or AiRemedy Settings (`/ai-remedy/settings`), which writes it directly to `.env` without database storage. The model is a setting, not an env var (default `anthropic/claude-sonnet-4.5`). |
 
 ## Companion mu-plugin
 
