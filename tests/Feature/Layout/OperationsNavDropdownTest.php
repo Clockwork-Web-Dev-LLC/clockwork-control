@@ -76,3 +76,36 @@ describe('Command Center rail Modules group', function () {
         expect($rail)->not->toContain(route('ai-remedy.index'));
     });
 });
+
+describe('Command Center rail collapsible groups', function () {
+    beforeEach(function () {
+        $this->mockIssueCounterZero();
+        $server = Server::factory()->create();
+        Site::factory()->spinupwp()->create(['server_id' => $server->id]);
+    });
+
+    it('renders Operations, Configuration and Modules collapsed on an unrelated page', function () {
+        $html = $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->getContent();
+
+        foreach (['operations', 'configuration', 'modules'] as $group) {
+            $block = str($html)->after("railGroup('{$group}', false)")->before('</a>')->toString();
+            expect($block)->toMatch('/x-show="!sidebarOpen \|\| open"\s+style="display: none"/');
+        }
+    });
+
+    it('opens the group that contains the current page', function () {
+        $html = $this->actingAs(User::factory()->create())
+            ->get(route('capacity.index'))
+            ->assertOk()
+            ->getContent();
+
+        expect($html)->toContain("railGroup('operations', true)")
+            ->toContain("railGroup('configuration', false)");
+
+        $ops = str($html)->after("railGroup('operations', true)")->before('</a>')->toString();
+        expect($ops)->not->toContain('style="display: none"');
+    });
+});
