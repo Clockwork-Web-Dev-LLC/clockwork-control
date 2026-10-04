@@ -17,6 +17,11 @@ class DigitalOceanMetricsParser
      * To convert to "% in use" over a window, take (last - first) for each mode,
      * then 1 - (idle_delta / total_delta).
      *
+     * When a server reboots mid-window, CPU counters in /proc/stat reset back to 0.
+     * We detect any counter reset timestamp across all series and compute utilization
+     * across the post-reboot data points so the server doesn't report null/unknown
+     * for the duration of the polling window.
+     *
      * @param  array  $cpuData  the `data` payload from /monitoring/metrics/droplet/cpu
      * @return float|null percentage (0-100), or null if data is unusable
      */
@@ -28,11 +33,30 @@ class DigitalOceanMetricsParser
             return null;
         }
 
+        // Detect if a counter reset (e.g. system reboot) occurred within the window.
+        // If so, identify the latest reset timestamp across all series so all modes
+        // are evaluated across the exact same post-reboot time interval.
+        $latestResetTimestamp = null;
+        foreach ($results as $series) {
+            $values = $series['values'] ?? [];
+            $count = count($values);
+            for ($i = 1; $i < $count; $i++) {
+                if ((float) $values[$i][1] < (float) $values[$i - 1][1]) {
+                    $ts = (int) $values[$i][0];
+                    $latestResetTimestamp = max($latestResetTimestamp ?? 0, $ts);
+                }
+            }
+        }
+
         $idleDelta = null;
         $totalDelta = 0.0;
 
         foreach ($results as $series) {
             $values = $series['values'] ?? [];
+
+            if ($latestResetTimestamp !== null) {
+                $values = array_values(array_filter($values, fn ($v) => (int) $v[0] >= $latestResetTimestamp));
+            }
 
             if (count($values) < 2) {
                 return null;
