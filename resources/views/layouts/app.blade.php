@@ -251,6 +251,31 @@
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Docs &amp; Runbooks</span>
                     </a>
                 </div>
+
+                <!-- Modules Navigation — same list as the mobile drawer's Modules group. AiRemedy
+                     is skipped because it already lives under Operations. -->
+                @php
+                    $railModuleNavItems = array_filter(
+                        app(\Modules\Core\ModuleRegistry::class)->navItems(),
+                        fn ($item) => $item->isVisible() && $item->route !== 'ai-remedy.index',
+                    );
+                @endphp
+                @if (! empty($railModuleNavItems))
+                    <div class="space-y-1">
+                        <div x-show="sidebarOpen" x-transition.opacity class="px-2 text-[10px] uppercase tracking-wider font-semibold text-[var(--color-ink-soft)]">
+                            Modules
+                        </div>
+
+                        @foreach ($railModuleNavItems as $moduleNavItem)
+                            <a href="{{ route($moduleNavItem->route) }}"
+                               class="cmd-nav-item {{ request()->routeIs($moduleNavItem->route) ? 'is-active' : '' }}"
+                               :title="!sidebarOpen ? @js($moduleNavItem->label) : ''">
+                                <i class="{{ $moduleNavItem->icon }} w-4 text-center shrink-0"></i>
+                                <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">{{ $moduleNavItem->label }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
             </div>
 
             <!-- Bottom Sidebar Footer (User & Popover Menu) -->
