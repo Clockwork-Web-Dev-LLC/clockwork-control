@@ -458,6 +458,18 @@
 
                 {{-- Drawer Body --}}
                 <div class="flex-1 overflow-y-auto p-5 space-y-5">
+                    {{-- Email the client: branded notice with a custom note + these findings --}}
+                    <template x-if="activeDomain?.latest_check">
+                        <div class="card p-4 flex items-center justify-between gap-3 border-[var(--color-brand)]/30">
+                            <div class="text-xs">
+                                <span class="font-bold text-[var(--color-ink-strong)] block"><i class="fa-regular fa-envelope mr-1"></i> Email the client about this</span>
+                                <span class="text-[var(--color-ink-muted)]">Write a note and send these findings in a branded email.</span>
+                            </div>
+                            <a :href="'{{ url('/email-auth/domains') }}/' + encodeURIComponent(activeDomain.domain) + '/notify'"
+                               class="btn-primary text-xs px-3 py-1.5 whitespace-nowrap">Compose email</a>
+                        </div>
+                    </template>
+
                     {{-- Alert Suppression and Management --}}
                     <div class="space-y-2">
                         <div class="card p-3 bg-[var(--color-surface-alt)] flex items-center justify-between">
