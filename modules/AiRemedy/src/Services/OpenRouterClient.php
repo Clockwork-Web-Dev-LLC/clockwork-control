@@ -212,6 +212,11 @@ CRITICAL SAFETY RULES:
        `sudo renice -n 19 -p <PID>`
        `sudo ionice -c 3 -p <PID>`
      - Or propose empty commands `[]` if the backup is running normally and should simply be allowed to complete.
+8. HIGH-VOLUME BOT / DOS TRAFFIC & IP BLOCKING:
+   - Exercise extreme caution before recommending IP blocking.
+   - ONLY propose IP-level blocking if the diagnostic logs prove a SINGLE external IP is sending sustained, overwhelming, non-human request traffic for an extended period (hundreds/thousands of requests hitting uncached PHP endpoints).
+   - NEVER block Cloudflare IP ranges, known search engine crawlers (Googlebot, Bingbot), internal/RFC1918 addresses, or server loopback.
+   - If traffic is distributed across many IPs, or if the server sits behind Cloudflare proxy, DO NOT propose host-level IP bans (iptables/fail2ban). Instead, mark safety_tier as "unfixable" or recommend Cloudflare WAF / Rate Limiting rules in the unfixable_briefing.
 
 Return ONLY a valid JSON object with this exact schema:
 {
@@ -285,7 +290,10 @@ CRITICAL RULES:
 3. Categorize safety_tier: "tier_1_safe" | "tier_2_cautious" | "unfixable".
 4. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). Write each command plainly, with no trailing fallbacks.
 5. SITE COMMANDS: use the telemetry's exact "wp_path" and "site_user" for this site, e.g. "sudo -u <site_user> wp cache flush --path=<wp_path>". NEVER guess or invent paths (such as /var/www/... or htdocs).
-
+6. BOT FLOODING & EDGE BLOCKING:
+   - If downtime is caused by traffic flooding, verify whether it is a single rogue IP generating sustained excessive requests.
+   - Exercise extreme caution: NEVER ban Cloudflare proxy IPs, search crawlers, or local IPs.
+   - If distributed or behind Cloudflare, recommend Cloudflare edge WAF / Under Attack mode in the unfixable_briefing rather than host iptables bans.
 
 Return ONLY a valid JSON object matching this schema:
 {

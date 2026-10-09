@@ -57,6 +57,34 @@ test('server spike outcome: self_resolved when metrics drop under threshold with
     expect($result['outcome'])->toBe(AiRemedyRun::OUTCOME_SELF_RESOLVED);
 });
 
+test('server spike outcome: ai_resolved when metrics normalize after AiRemedy automated remediation', function () {
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+        'status' => AiRemedyRun::STATUS_RESOLVED,
+        'server_id' => $this->server->id,
+        'actor' => 'autonomous',
+        'model_used' => 'anthropic/claude-sonnet-4.5',
+        'diagnosis_summary' => 'Worker spike',
+        'root_cause' => 'PHP worker exhaustion',
+        'approved_commands' => ['sudo systemctl reload php8.3-fpm'],
+        'execution_output' => 'Reloaded php8.3-fpm successfully',
+        'started_at' => Carbon::now()->subMinutes(65),
+    ]);
+
+    // Metric 40 mins after: 35% (recovered)
+    ServerMetric::create([
+        'server_id' => $this->server->id,
+        'cpu_pct' => 35.0,
+        'memory_pct' => 40.0,
+        'recorded_at' => Carbon::now()->subMinutes(20),
+    ]);
+
+    $result = $this->classifier->evaluate($run);
+
+    expect($result['outcome'])->toBe(AiRemedyRun::OUTCOME_AI_RESOLVED)
+        ->and($result['details']['reason'])->toContain('automated AiRemedy remediation');
+});
+
 test('server spike outcome: human_resolved when metrics drop but operator action logged', function () {
     $operator = User::factory()->create();
 
@@ -219,4 +247,31 @@ test('site downtime outcome: human_resolved when UP event occurs and human actio
     $result = $this->classifier->evaluate($run);
 
     expect($result['outcome'])->toBe(AiRemedyRun::OUTCOME_HUMAN_RESOLVED);
+});
+
+test('site downtime outcome: ai_resolved when UP event occurs after AiRemedy automated remediation', function () {
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SITE_DOWNTIME,
+        'status' => AiRemedyRun::STATUS_RESOLVED,
+        'site_id' => $this->site->id,
+        'server_id' => $this->server->id,
+        'actor' => 'autonomous',
+        'model_used' => 'anthropic/claude-sonnet-4.5',
+        'diagnosis_summary' => 'PHP socket stalled',
+        'root_cause' => 'PHP socket stall',
+        'approved_commands' => ['sudo systemctl reload php8.3-fpm'],
+        'execution_output' => 'Reloaded php8.3-fpm successfully',
+        'started_at' => Carbon::now()->subMinutes(75),
+    ]);
+
+    SiteUptimeEvent::create([
+        'site_id' => $this->site->id,
+        'event_type' => 'up',
+        'event_at' => Carbon::now()->subMinutes(50),
+    ]);
+
+    $result = $this->classifier->evaluate($run);
+
+    expect($result['outcome'])->toBe(AiRemedyRun::OUTCOME_AI_RESOLVED)
+        ->and($result['details']['reason'])->toContain('automated AiRemedy remediation');
 });

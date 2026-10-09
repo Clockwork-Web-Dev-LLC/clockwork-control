@@ -184,6 +184,13 @@
 
             <div class="space-y-3">
                 <div class="flex items-center justify-between p-2.5 rounded bg-[var(--color-surface-alt)]">
+                    <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                        <i class="fa-solid fa-robot"></i> AiRemedy Resolved
+                    </span>
+                    <span class="font-data font-bold text-sm text-[var(--color-ink-strong)]">{{ $outcomes['ai_resolved'] ?? 0 }}</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2.5 rounded bg-[var(--color-surface-alt)]">
                     <span class="text-xs font-medium text-sky-600 dark:text-sky-400 flex items-center gap-2">
                         <i class="fa-solid fa-arrow-trend-down"></i> Self-Resolved (Transient)
                     </span>

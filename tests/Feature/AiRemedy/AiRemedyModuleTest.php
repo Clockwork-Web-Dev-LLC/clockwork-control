@@ -590,6 +590,53 @@ test('watch server spikes command skips triage when live telemetry confirms spik
         ->assertSuccessful();
 });
 
+test('watch server spikes command skips triage when top process is recognized background maintenance', function () {
+    $server = Server::factory()->create([
+        'name' => 'backup-box',
+        'is_ignored' => false,
+        'vcpus' => 2,
+    ]);
+
+    // Historical metric indicating a past spike
+    ServerMetric::create([
+        'server_id' => $server->id,
+        'recorded_at' => now()->subMinutes(2),
+        'cpu_pct' => 96.0,
+        'load_1' => 8.0,
+    ]);
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+    });
+
+    // Mock collector returning mysqldump backup process
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')
+            ->withArgs(fn ($s) => $s->id === $server->id)
+            ->andReturn([
+                'ok' => true,
+                'server_id' => $server->id,
+                'hostname' => $server->hostname,
+                'cores' => 2,
+                'loadavg' => [5.2, 4.0, 3.0],
+                'memory' => ['used_percent' => 55.0],
+                'top_cpu' => [['command' => '/usr/bin/mysqldump --all-databases', 'cpu_pct' => 92.0]],
+            ]);
+    });
+
+    // Triager must NOT receive triageServerSpike
+    $this->mock(AiRemedyTriager::class, function ($mock) {
+        $mock->shouldReceive('getMode')->andReturn('watch');
+        $mock->shouldReceive('getCooldownMinutes')->andReturn(30);
+        $mock->shouldReceive('isServerInCooldown')->andReturn(false);
+        $mock->shouldNotReceive('triageServerSpike');
+    });
+
+    $this->artisan('clockwork:watch-server-spikes')
+        ->expectsOutputToContain('top process is background maintenance')
+        ->assertSuccessful();
+});
+
 test('graceful_kill command is classified as tier 1 safe and accepts single or multiple PIDs', function () {
     $guard = app(CommandSafetyGuard::class);
 

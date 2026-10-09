@@ -79,12 +79,6 @@ class WatchServerSpikes extends Command
                 // Debounce check: verify whether the spike was transient and has already cleared
                 if (! $this->option('no-debounce') && $this->isTransientCleared($server, $collector, $cpuThreshold)) {
                     $transientSkipped++;
-                    $this->line("  ↷ {$server->name}: transient spike cleared naturally. Skipping triage.");
-                    Log::info('ai_remedy.transient_spike_cleared', [
-                        'server_id' => $server->id,
-                        'server_name' => $server->name,
-                        'reason' => $spikeReason,
-                    ]);
 
                     continue;
                 }
@@ -201,24 +195,48 @@ class WatchServerSpikes extends Command
             return false;
         }
 
+        // 2. Recognize legitimate background maintenance tasks (wp-cron, backups, package managers)
+        $topCmd = (string) ($telemetry['top_cpu'][0]['command'] ?? '');
+        if ($this->isMaintenanceProcess($topCmd)) {
+            $this->line("  ↷ {$server->name}: top process is background maintenance ({$topCmd}). Skipping triage.");
+            Log::info('ai_remedy.maintenance_task_skipped', [
+                'server_id' => $server->id,
+                'server_name' => $server->name,
+                'command' => $topCmd,
+            ]);
+
+            return true;
+        }
+
         $cores = (int) ($telemetry['cores'] ?? ($server->vcpus ?: 1));
         $load1 = (float) ($telemetry['loadavg'][0] ?? 0);
         $topCpu = (float) ($telemetry['top_cpu'][0]['cpu_pct'] ?? 0);
         $memPct = (float) ($telemetry['memory']['used_percent'] ?? 0);
 
-        // If the server is STILL actively elevated right now, it is a real active incident
         $isElevated = ($load1 >= ($cores * 1.5))
             || ($topCpu >= $cpuThreshold)
             || ($memPct >= 92);
 
-        if ($isElevated) {
-            return false;
+        // If it's already completely quiet/normal on the initial check, it cleared naturally before watchdog ran.
+        if (! $isElevated) {
+            $this->line("  ↷ {$server->name}: transient spike cleared naturally. Skipping triage.");
+            Log::info('ai_remedy.transient_spike_cleared', [
+                'server_id' => $server->id,
+                'server_name' => $server->name,
+                'telemetry' => [
+                    'load1' => $load1,
+                    'top_cpu' => $topCpu,
+                    'mem_pct' => $memPct,
+                ],
+            ]);
+
+            return true;
         }
 
-        // 2. Initial live metrics are within normal bounds. Debounce to confirm stability.
+        // 3. The server is currently elevated. Debounce to see if it clears naturally within the window.
         $debounceSec = $this->getDebounceSeconds();
         if ($debounceSec > 0) {
-            $this->line("  ⏳ {$server->name}: initial check healthy, debouncing for {$debounceSec}s to confirm stability...");
+            $this->line("  ⏳ {$server->name}: currently elevated, debouncing for {$debounceSec}s to confirm persistence...");
             sleep($debounceSec);
 
             $recheck = $collector->collect($server);
@@ -226,16 +244,82 @@ class WatchServerSpikes extends Command
                 return false;
             }
 
+            // Check if top process in recheck is background maintenance
+            $recheckTopCmd = (string) ($recheck['top_cpu'][0]['command'] ?? '');
+            if ($this->isMaintenanceProcess($recheckTopCmd)) {
+                $this->line("  ↷ {$server->name}: recheck confirmed background maintenance ({$recheckTopCmd}). Skipping triage.");
+                Log::info('ai_remedy.maintenance_task_skipped', [
+                    'server_id' => $server->id,
+                    'server_name' => $server->name,
+                    'command' => $recheckTopCmd,
+                ]);
+
+                return true;
+            }
+
             $recheckLoad1 = (float) ($recheck['loadavg'][0] ?? 0);
             $recheckTopCpu = (float) ($recheck['top_cpu'][0]['cpu_pct'] ?? 0);
             $recheckMemPct = (float) ($recheck['memory']['used_percent'] ?? 0);
 
-            if (($recheckLoad1 >= ($cores * 1.5)) || ($recheckTopCpu >= $cpuThreshold) || ($recheckMemPct >= 92)) {
-                return false; // Resurged during debounce window
+            $stillElevated = ($recheckLoad1 >= ($cores * 1.5))
+                || ($recheckTopCpu >= $cpuThreshold)
+                || ($recheckMemPct >= 92);
+
+            if (! $stillElevated) {
+                // Calmed down during debounce window!
+                $this->line("  ↷ {$server->name}: transient spike cleared naturally within debounce window. Skipping triage.");
+                Log::info('ai_remedy.transient_spike_cleared', [
+                    'server_id' => $server->id,
+                    'server_name' => $server->name,
+                    'recheck' => [
+                        'load1' => $recheckLoad1,
+                        'top_cpu' => $recheckTopCpu,
+                        'mem_pct' => $recheckMemPct,
+                    ],
+                ]);
+
+                return true;
             }
         }
 
-        return true;
+        // Still elevated after the debounce window — genuine sustained incident.
+        return false;
+    }
+
+    /**
+     * Check if a command is a legitimate, expected background maintenance task.
+     */
+    protected function isMaintenanceProcess(string $command): bool
+    {
+        if ($command === '') {
+            return false;
+        }
+
+        $patterns = [
+            'wp-cron',
+            'wp cron',
+            'mysqldump',
+            'rclone',
+            'borgbackup',
+            'logrotate',
+            'composer',
+            'unattended-upgr',
+            'apt-get',
+            'dpkg',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (str_contains($command, $pattern)) {
+                return true;
+            }
+        }
+
+        // Match archiving / compression utilities as distinct commands
+        if (preg_match('/\b(tar|gzip|pigz|bzip2|xz|zip|unzip)\b/i', $command)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -247,6 +331,6 @@ class WatchServerSpikes extends Command
             return 0;
         }
 
-        return (int) config('clockwork.ai_remedy.debounce_seconds', 15);
+        return (int) config('clockwork.ai_remedy.debounce_seconds', 60);
     }
 }
