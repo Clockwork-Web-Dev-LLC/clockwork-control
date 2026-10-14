@@ -347,6 +347,36 @@ class ServiceRateLimitRegistry
                 ],
             ],
 
+            'turnkeywp' => [
+                'id' => 'turnkeywp',
+                'name' => 'TurnkeyWP',
+                'category' => 'Control Panel',
+                'type' => 'api',
+                'has_rate_limits' => true,
+                'docs_url' => 'https://app.turnkeywp.com/docs/integrations/clockwork-control-api',
+                'rate_limit_docs_url' => 'https://app.turnkeywp.com/docs/integrations/clockwork-control-api',
+                'official_limits' => [
+                    'standard' => '60 requests / minute (1 req/sec)',
+                    'window' => 'Per-minute limit per API token (per TurnkeyWP user), shared by every client using that token.',
+                    'headers' => ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After'],
+                    'exceeded_code' => '429 Too Many Requests',
+                    'burst_notes' => 'Writes (reboot, restart, purge, add SSH key) are queued on TurnkeyWP and return an event_id; polling those events counts against the same 60/min.',
+                ],
+                'fleet_impact' => [
+                    'calls_per_server' => 'The import reads GET /servers and GET /sites at 100 records per page — no per-server or per-site calls.',
+                    'fleet_projection' => 'A 100-server, 500-site fleet syncs in about 7 requests.',
+                    'recommendation' => 'No pacing needed: the client waits for Retry-After on a 429 and never resends a write.',
+                ],
+                'defaults' => [
+                    'rate_limit' => 60,
+                    'rate_limit_unit' => 'requests / minute',
+                    'timeout' => 15,
+                    'concurrency' => 1,
+                    'delay_ms' => 0,
+                    'retry_attempts' => 2,
+                ],
+            ],
+
             'cloudflare' => [
                 'id' => 'cloudflare',
                 'name' => 'Cloudflare',

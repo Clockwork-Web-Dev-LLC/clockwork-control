@@ -221,6 +221,14 @@ class EnvCredentialManager
                 'url' => 'https://app.turnkeywp.com/settings/api-tokens',
                 'config_path' => 'clockwork.turnkeywp.token',
             ],
+            'base_url' => [
+                'env_var' => 'TURNKEYWP_BASE_URL',
+                'label' => 'API Base URL',
+                'secret' => false,
+                'guide' => 'Defaults to https://app.turnkeywp.com/api/v1',
+                'url' => '',
+                'config_path' => 'clockwork.turnkeywp.base_url',
+            ],
         ],
 
         'cloudflare' => [

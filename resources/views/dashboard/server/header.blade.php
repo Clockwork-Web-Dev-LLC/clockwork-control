@@ -27,6 +27,7 @@
     $refreshPanel = match (true) {
         $server->spinupwp_id !== null && $moduleState->isEnabled('spinupwp') => 'spinupwp',
         $server->provider === Server::PROVIDER_GRIDPANE && $moduleState->isEnabled('gridpane') => 'gridpane',
+        $server->turnkeywp_server_id !== null && $moduleState->isEnabled('turnkeywp') => 'turnkeywp',
         default => null,
     };
 @endphp
@@ -193,6 +194,15 @@
                             title="Re-pull servers + sites from GridPane API. Reflects new servers and site moves immediately."
                             onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
                         <i class="fa-solid fa-rotate"></i> <span>Refresh from GridPane</span>
+                    </button>
+                </form>
+            @elseif ($refreshPanel === 'turnkeywp')
+                <form method="POST" action="{{ route('servers.refreshFromTurnkeyWp') }}" class="mt-2">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            title="Re-pull servers + sites from TurnkeyWP API. Reflects new servers and site moves immediately."
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Refresh from TurnkeyWP</span>
                     </button>
                 </form>
             @endif

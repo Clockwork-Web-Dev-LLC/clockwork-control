@@ -4,9 +4,13 @@ namespace Tests\Feature\Modules;
 
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\User;
 use App\Services\Diagnostics\CheckResult;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Services\Security\WpCoreChecksumVerifier;
 use App\Services\Ssh\SshClient;
+use App\Support\Settings;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
@@ -560,5 +564,54 @@ describe('clockwork:turnkeywp-authorize-ssh', function () {
             && $r['name'] === 'Clockwork Control');
         Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && str_contains($r->url(), '/servers/8/'));
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/servers/9/'));
+    });
+});
+
+describe('TurnkeyWP settings modal and refresh', function () {
+    it('serves the settings modal data with credentials, limits and a testable check', function () {
+        $response = $this->actingAs(User::factory()->create())
+            ->getJson(route('settings.integrations.limits', 'turnkeywp'));
+
+        $response->assertOk()
+            ->assertJsonPath('service.name', 'TurnkeyWP')
+            ->assertJsonPath('service.official_limits.standard', '60 requests / minute (1 req/sec)')
+            ->assertJsonPath('testable', true)
+            ->assertJsonPath('hosting_panels.turnkeywp.label', 'TurnkeyWP');
+
+        $envVars = collect($response->json('credentials'))->pluck('env_var')->all();
+        expect($envVars)->toContain('TURNKEYWP_TOKEN')
+            ->and($envVars)->toContain('TURNKEYWP_BASE_URL');
+    });
+
+    it('uses the operator timeout and retry overrides saved from the modal', function () {
+        app(Settings::class)->put('services.turnkeywp.timeout', 40);
+        app(Settings::class)->put('services.turnkeywp.retry_attempts', 0);
+
+        $client = new TurnkeyWpClient(token: 'test-tk-token', baseUrl: TK_BASE);
+
+        expect($client->getTimeout())->toBe(40);
+    });
+
+    it('starts the TurnkeyWP import and fleet poll in the background', function () {
+        $this->mock(BackgroundArtisan::class, function ($mock) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $key, array $cmds) => $key === 'fleet.import_turnkeywp'
+                    && $cmds === ['clockwork:import-turnkeywp', 'clockwork:poll-servers'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('servers.refreshFromTurnkeyWp'))
+            ->assertSessionHas('status', fn ($msg) => str_contains($msg, 'TurnkeyWP refresh started in the background'));
+    });
+
+    it('shows the Refresh from TurnkeyWP button on a TurnkeyWP server page', function () {
+        $server = Server::factory()->create(['turnkeywp_server_id' => '7', 'spinupwp_id' => null]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('servers.show', $server))
+            ->assertOk()
+            ->assertSee('Refresh from TurnkeyWP');
     });
 });

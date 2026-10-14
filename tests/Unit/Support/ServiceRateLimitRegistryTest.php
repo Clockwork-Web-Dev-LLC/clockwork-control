@@ -23,6 +23,7 @@ describe('ServiceRateLimitRegistry', function () {
             'kinsta',
             'cloudways',
             'gridpane',
+            'turnkeywp',
             'cloudflare',
             'psi',
             'gtmetrix',
@@ -39,7 +40,7 @@ describe('ServiceRateLimitRegistry', function () {
             'ai-remedy',
         ];
 
-        expect(count($services))->toBe(25);
+        expect(count($services))->toBe(26);
 
         foreach ($expectedServices as $serviceId) {
             expect($services)->toHaveKey($serviceId);

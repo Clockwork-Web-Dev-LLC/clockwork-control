@@ -71,6 +71,29 @@ class ServersController extends Controller
     }
 
     /**
+     * Run `clockwork:import-turnkeywp` on demand, the TurnkeyWP counterpart
+     * to refreshFromSpinupWp() above.
+     */
+    public function refreshFromTurnkeyWp(Request $request): RedirectResponse
+    {
+        if (! app(ModuleStateResolver::class)->isEnabled('turnkeywp')) {
+            return back()->with('status_error', 'TurnkeyWP is not enabled for this fleet.');
+        }
+
+        $result = $this->startImportInBackground(
+            'fleet.import_turnkeywp',
+            ['clockwork:import-turnkeywp', 'clockwork:poll-servers'],
+            'turnkeywp-import-bg',
+        );
+
+        if ($result['ok']) {
+            return back()->with('status', $result['summary']);
+        }
+
+        return back()->with('status_error', $result['summary']);
+    }
+
+    /**
      * Import then poll, detached. The previous inline Artisan::call pair
      * blocked the request for the whole fleet (import + metrics poll).
      *
@@ -89,7 +112,11 @@ class ServersController extends Controller
             return ['ok' => false, 'summary' => $result->error ?? 'Could not start the background refresh.'];
         }
 
-        $label = str_contains($commands[0], 'gridpane') ? 'GridPane' : 'SpinupWP';
+        $label = match (true) {
+            str_contains($commands[0], 'gridpane') => 'GridPane',
+            str_contains($commands[0], 'turnkeywp') => 'TurnkeyWP',
+            default => 'SpinupWP',
+        };
 
         return ['ok' => true, 'summary' => "{$label} refresh started in the background (import, then fleet poll). Refresh this page in a minute."];
     }
