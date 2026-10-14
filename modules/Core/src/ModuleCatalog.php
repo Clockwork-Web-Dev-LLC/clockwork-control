@@ -66,7 +66,7 @@ class ModuleCatalog
             return 'maintenance';
         }
 
-        if (in_array($id, ['spinupwp', 'cloudways', 'gridpane'], true)) {
+        if (in_array($id, ['spinupwp', 'cloudways', 'gridpane', 'turnkeywp'], true)) {
             return 'control_panels';
         }
 

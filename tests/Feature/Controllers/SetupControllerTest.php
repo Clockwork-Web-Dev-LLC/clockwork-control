@@ -200,7 +200,7 @@ describe('Step 1: Which services are you using? (GET/POST /setup)', function () 
 
         $categories = $response->viewData('categories');
 
-        // Verify fleet sources are strictly alphabetical: Cloudways, GridPane, Kinsta, Pressable, SpinupWP, WP Engine
+        // Verify fleet sources are strictly alphabetical: Cloudways, GridPane, Kinsta, Pressable, SpinupWP, TurnkeyWP, WP Engine
         $fleetNames = array_column($categories['fleet_sources']['services'], 'name');
         expect($fleetNames)->toBe([
             'Cloudways',
@@ -208,6 +208,7 @@ describe('Step 1: Which services are you using? (GET/POST /setup)', function () 
             'Kinsta',
             'Pressable',
             'SpinupWP',
+            'TurnkeyWP',
             'WP Engine',
         ]);
 

@@ -43,6 +43,11 @@ class InstallerController extends Controller
                     'icon' => 'fa-solid fa-layer-group',
                     'description' => 'High-performance WordPress hosting control panel on Linux VPS servers.',
                 ],
+                'turnkeywp' => [
+                    'name' => 'TurnkeyWP',
+                    'icon' => 'fa-solid fa-key',
+                    'description' => 'Clockwork\'s self-hosted WordPress control plane on Hetzner, DigitalOcean, or your own Ubuntu servers.',
+                ],
             ],
         ],
         'managed_hosts' => [
@@ -87,6 +92,12 @@ class InstallerController extends Controller
             'name' => 'GridPane',
             'icon' => 'fa-solid fa-layer-group',
             'description' => 'High-performance WordPress hosting control panel on Linux VPS servers.',
+            'category' => 'control_panels',
+        ],
+        'turnkeywp' => [
+            'name' => 'TurnkeyWP',
+            'icon' => 'fa-solid fa-key',
+            'description' => 'Clockwork\'s self-hosted WordPress control plane on Hetzner, DigitalOcean, or your own Ubuntu servers.',
             'category' => 'control_panels',
         ],
         'pressable' => [

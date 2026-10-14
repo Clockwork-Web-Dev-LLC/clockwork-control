@@ -58,6 +58,10 @@
         <rect x="2" y="13" width="9" height="9" rx="2"/>
         <rect x="13" y="13" width="9" height="9" rx="2"/>
     </svg>
+@elseif ($id === 'turnkeywp')
+    <svg class="{{ $class }}" viewBox="0 0 24 24" fill="#2563EB" aria-hidden="true">
+        <path d="M7 14a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm5.65-4A6 6 0 1 0 12.65 14H16v3h3v-3h2v-4h-8.35z"/>
+    </svg>
 @elseif ($id === 'slack' || $id === 'client_slack')
     <svg class="{{ $class }}" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z" fill="#E01E5A"/>
