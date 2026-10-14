@@ -29,6 +29,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $kinsta_environment_id
  * @property ?string $cloudways_app_id
  * @property ?string $gridpane_site_id
+ * @property ?string $turnkeywp_site_id
  * @property ?int $server_id null for Pressable-hosted sites — Pressable has no server concept
  * @property string $hosting_provider spinupwp|pressable
  * @property string $domain
@@ -165,6 +166,8 @@ class Site extends Model
 
     public const HOSTING_PROVIDER_GRIDPANE = 'gridpane';
 
+    public const HOSTING_PROVIDER_TURNKEYWP = 'turnkeywp';
+
     public const HOSTING_PROVIDER_CUSTOM = 'custom';
 
     /**
@@ -258,6 +261,7 @@ class Site extends Model
         'kinsta_environment_id',
         'cloudways_app_id',
         'gridpane_site_id',
+        'turnkeywp_site_id',
         'server_id',
         'hosting_provider',
         'domain',
@@ -935,6 +939,7 @@ class Site extends Model
                 self::HOSTING_PROVIDER_KINSTA => 'Kinsta',
                 self::HOSTING_PROVIDER_CLOUDWAYS => 'Cloudways',
                 self::HOSTING_PROVIDER_GRIDPANE => 'GridPane',
+                self::HOSTING_PROVIDER_TURNKEYWP => 'TurnkeyWP',
                 self::HOSTING_PROVIDER_CUSTOM => 'Custom / Standalone',
                 default => ucfirst((string) $this->hosting_provider),
             };
@@ -956,6 +961,7 @@ class Site extends Model
 
         return match ($this->hosting_provider) {
             self::HOSTING_PROVIDER_SPINUPWP => "/sites/{$this->domain}/files",
+            self::HOSTING_PROVIDER_TURNKEYWP => "/sites/{$this->domain}/files",
             self::HOSTING_PROVIDER_GRIDPANE => "/var/www/{$this->domain}/htdocs",
             default => null,
         };

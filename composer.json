@@ -45,6 +45,7 @@
         "clockwork/slack": "@dev",
         "clockwork/spinupwp": "@dev",
         "clockwork/sucuri": "@dev",
+        "clockwork/turnkeywp": "@dev",
         "clockwork/twilio": "@dev",
         "clockwork/vultr": "@dev",
         "clockwork/wpengine": "@dev",
@@ -133,6 +134,13 @@
         {
             "type": "path",
             "url": "modules/GridPane",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "modules/TurnkeyWp",
             "options": {
                 "symlink": true
             }

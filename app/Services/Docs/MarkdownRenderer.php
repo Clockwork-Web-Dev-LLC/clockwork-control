@@ -240,7 +240,7 @@ class MarkdownRenderer
             if ($slug === 'integrations/overview') {
                 return 'Overview';
             }
-            if (in_array($slug, ['integrations/pressable', 'integrations/spinupwp', 'integrations/wp-engine', 'integrations/kinsta', 'integrations/cloudways', 'integrations/gridpane'], true)) {
+            if (in_array($slug, ['integrations/pressable', 'integrations/spinupwp', 'integrations/wp-engine', 'integrations/kinsta', 'integrations/cloudways', 'integrations/gridpane', 'integrations/turnkeywp'], true)) {
                 return 'Managed WordPress Hosts';
             }
             if (in_array($slug, ['integrations/digitalocean', 'integrations/hetzner', 'integrations/azure', 'integrations/vultr', 'integrations/linode', 'integrations/digitalocean-spaces'], true)) {

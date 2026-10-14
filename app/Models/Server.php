@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property ?string $ssh_private_key encrypted at rest
  * @property ?string $ssh_password encrypted at rest
  * @property ?int $spinupwp_id
+ * @property ?string $turnkeywp_server_id TurnkeyWP's server id; set alongside spinupwp_id on a server TurnkeyWP adopted
  * @property string $provider e.g. "digitalocean", "hetzner" — which cloud owns this server
  * @property ?string $provider_id the droplet/server id within the provider's API
  * @property ?string $size_slug e.g. "s-2vcpu-4gb" (DO Basic) or "cx21" (Hetzner shared)
@@ -114,6 +115,7 @@ class Server extends Model
         'ssh_password',
         'ssh_password_updated_at',
         'spinupwp_id',
+        'turnkeywp_server_id',
         'provider',
         'provider_id',
         'size_slug',

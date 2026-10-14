@@ -212,6 +212,17 @@ class EnvCredentialManager
             ],
         ],
 
+        'turnkeywp' => [
+            'token' => [
+                'env_var' => 'TURNKEYWP_TOKEN',
+                'label' => 'API Token',
+                'secret' => true,
+                'guide' => 'Personal access token from TurnkeyWP -> Settings -> API tokens (use an Owner account)',
+                'url' => 'https://app.turnkeywp.com/settings/api-tokens',
+                'config_path' => 'clockwork.turnkeywp.token',
+            ],
+        ],
+
         'cloudflare' => [
             'api_token' => [
                 'env_var' => 'CLOCKWORK_CLOUDFLARE_API_TOKEN',

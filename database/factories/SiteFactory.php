@@ -116,6 +116,18 @@ class SiteFactory extends Factory
         ]);
     }
 
+    public function turnkeywp(): static
+    {
+        return $this->state(fn () => [
+            'server_id' => Server::factory(),
+            'spinupwp_id' => null,
+            'pressable_site_id' => null,
+            'turnkeywp_site_id' => (string) $this->faker->unique()->numberBetween(1, 99999),
+            'hosting_provider' => Site::HOSTING_PROVIDER_TURNKEYWP,
+            'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
+        ]);
+    }
+
     public function custom(): static
     {
         return $this->state(fn () => [

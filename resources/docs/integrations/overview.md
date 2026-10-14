@@ -36,6 +36,7 @@ Every external service Clockwork talks to. Each gets its own page with auth, end
 | **Pressable** | Hosting | 🟢 Verified in Production | Managed WordPress hosting, site imports, backup history sync, async WP-CLI commands. | [pressable](/docs/integrations/pressable) |
 | **Twilio (SMS)** | Notifications | 🟢 Verified in Production | On-call SMS paging for care-plan site downtime with storm circuit-breaker. | [twilio](/docs/integrations/twilio) |
 | **GridPane** | Hosting | 🧪 Looking for Testers | Written for REST API v1, server & site import, SSH WP-CLI, and backup schedule inspection. | [gridpane](/docs/integrations/gridpane) |
+| **TurnkeyWP** | Hosting | 🧪 Looking for Testers | Clockwork's own hosting control plane. REST API v1 server & site import, SSH as the `turnkey` user, SpinupWP-migration-safe ownership rules. | [turnkeywp](/docs/integrations/turnkeywp) |
 | **GitHub** | Auth | 🧪 Looking for Testers | OAuth 2.0 login integration. Looking for agencies with GitHub accounts to test. | [google-oauth](/docs/integrations/google-oauth) |
 | **Microsoft** | Auth | 🧪 Looking for Testers | Microsoft Entra ID / Microsoft 365 OAuth login integration. Looking for testers. | [google-oauth](/docs/integrations/google-oauth) |
 | **WP Engine** | Hosting | 🧪 Looking for Testers | Written against published API docs. Needs live account testing for backup envelopes and install SSH. | [wp-engine](/docs/integrations/wp-engine) |
@@ -75,6 +76,7 @@ The `HostingProvider` contract, keyed on `sites.hosting_provider` — *who manag
 | Kinsta | No server concept — real per-environment SSH, same caveat as WP Engine (unverified against a live account, including a genuinely-guessed SSH-connection-info endpoint). | [kinsta](/docs/integrations/kinsta) |
 | Cloudways | Has a real server row (see Cloud/server providers above) — the only hosting provider that's also a cloud provider. Built against Cloudways' API (v1 has reached end-of-life; targets v2). | [cloudways](/docs/integrations/cloudways) |
 | GridPane | Dedicated server management panel on cloud VPS with real server rows, direct SSH access, site discovery, and backup schedule inspection. | [gridpane](/docs/integrations/gridpane) |
+| TurnkeyWP | Clockwork's self-hosted hosting control plane (the SpinupWP replacement): real server rows, SSH as `turnkey`, same `/sites/<domain>/files` layout as SpinupWP. | [turnkeywp](/docs/integrations/turnkeywp) |
 
 ## Networking & access
 
