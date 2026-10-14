@@ -15,7 +15,7 @@ Clockwork Control talks to TurnkeyWP in two ways:
 1. **TurnkeyWP REST API v1** for inventory: servers and sites are imported every hour.
 2. **SSH** for everything else (WP-CLI, Companion installs, log tailing, apt polling), as the server's `turnkey` sudo user. TurnkeyWP disables root login once a server is provisioned.
 
-The full API reference lives in the TurnkeyWP repo at `docs/integrations/turnkeywp-api-v1.md`.
+The full API reference, with every endpoint, payload, the event model and the known gaps, is [TurnkeyWP API v1 reference](/docs/integrations/turnkeywp-api). It is copied from the TurnkeyWP repo, where `docs/integrations/turnkeywp-api-v1.md` is the source of truth.
 
 ---
 
