@@ -196,8 +196,8 @@ Determine safe, non-destructive bash remediation commands to restore normal perf
 
 CRITICAL SAFETY RULES:
 1. ONLY propose non-destructive commands. Never propose `rm -rf /` or dropping databases.
-2. If restarting services, target the exact worker pool (e.g., `sudo systemctl reload php8.3-fpm` or `sudo systemctl reload nginx`).
-3. If killing runaway processes, provide exact PID-based commands (e.g., `sudo kill -15 <PID>` or `sudo kill -9 <PID>`).
+2. SERVICE RELOAD NAMES: On Ubuntu/SpinupWP, the PHP-FPM service name in systemd is ALWAYS `php8.3-fpm` (or the specific version from telemetry, e.g. `php8.2-fpm`). NEVER invent per-site systemd units like `php8.3-fpm-<site>.service` or `php8.3-fpm-<user>`. Always write `sudo systemctl reload php8.3-fpm` or `sudo systemctl reload nginx`.
+3. KILLING RUNAWAY PROCESSES: Only propose killing single processes if there is a distinct, stuck runaway script (e.g. infinite loop). Provide exact PID-based commands (e.g. `sudo kill -15 <PID>`). NEVER kill backup/maintenance processes (see Rule 7).
 4. Categorize the safety_tier:
    - "tier_1_safe": Service reload/restart, clearing caches, log rotation, deprioritizing CPU/IO (renice/ionice).
    - "tier_2_cautious": Killing rogue worker processes, restarting MySQL.
@@ -212,6 +212,15 @@ CRITICAL SAFETY RULES:
        `sudo renice -n 19 -p <PID>`
        `sudo ionice -c 3 -p <PID>`
      - Or propose empty commands `[]` if the backup is running normally and should simply be allowed to complete.
+8. HIGH-VOLUME BOT / DOS TRAFFIC & IP BLOCKING:
+   - Exercise extreme caution before recommending IP blocking.
+   - ONLY propose IP-level blocking if the diagnostic logs prove a SINGLE external IP is sending sustained, overwhelming, non-human request traffic for an extended period (hundreds/thousands of requests hitting uncached PHP endpoints).
+   - NEVER block Cloudflare IP ranges, known search engine crawlers (Googlebot, Bingbot), internal/RFC1918 addresses, or server loopback.
+   - If traffic is distributed across many IPs, or if the server sits behind Cloudflare proxy, DO NOT propose host-level IP bans (iptables/fail2ban). Instead, mark safety_tier as "unfixable" or recommend Cloudflare WAF / Rate Limiting rules in the unfixable_briefing.
+9. MULTI-WORKER TRAFFIC SPIKES:
+   - When CPU or load is elevated across multiple concurrent PHP-FPM workers (e.g. 4+ workers in the same pool processing HTTP requests under traffic), DO NOT attempt to kill individual worker PIDs. Killing single workers during active traffic does not solve the load and causes 502 Bad Gateway errors for visitors. Instead, propose:
+     - Clearing object cache and transients: `sudo -u <site_user> wp cache flush --path=<wp_path>` and `sudo -u <site_user> wp transient delete --all --path=<wp_path>`
+     - Gracefully reloading PHP-FPM: `sudo systemctl reload php8.3-fpm`
 
 Return ONLY a valid JSON object with this exact schema:
 {
@@ -280,12 +289,15 @@ A monitored website is DOWN. Analyze the HTTP response code, SSH diagnostics (FP
 Determine if the issue can be safely remediated via bash commands or if it requires human developer intervention.
 
 CRITICAL RULES:
-1. ONLY propose non-destructive commands (e.g. reloading/restarting the specific PHP-FPM pool or Nginx, clearing stale `.maintenance` file, clearing cache).
+1. ONLY propose non-destructive commands. For PHP-FPM, use the canonical systemd unit (e.g. `sudo systemctl reload php8.3-fpm` or `sudo systemctl reload nginx`); NEVER invent per-site units like `php8.3-fpm-<site>.service`.
 2. If the outage is caused by a fatal PHP parse error, missing database table, corrupted plugin, or external API timeout, mark `is_fixable: false` and `safety_tier: "unfixable"`, and provide a detailed `unfixable_briefing`.
 3. Categorize safety_tier: "tier_1_safe" | "tier_2_cautious" | "unfixable".
 4. Each command in "commands" MUST be a single, standalone bash command. NEVER use shell chaining (&&, ||), pipes (|), subshells ($(), ``), or redirection (>, 2>/dev/null). Write each command plainly, with no trailing fallbacks.
 5. SITE COMMANDS: use the telemetry's exact "wp_path" and "site_user" for this site, e.g. "sudo -u <site_user> wp cache flush --path=<wp_path>". NEVER guess or invent paths (such as /var/www/... or htdocs).
-
+6. BOT FLOODING & EDGE BLOCKING:
+   - If downtime is caused by traffic flooding, verify whether it is a single rogue IP generating sustained excessive requests.
+   - Exercise extreme caution: NEVER ban Cloudflare proxy IPs, search crawlers, or local IPs.
+   - If distributed or behind Cloudflare, recommend Cloudflare edge WAF / Under Attack mode in the unfixable_briefing rather than host iptables bans.
 
 Return ONLY a valid JSON object matching this schema:
 {

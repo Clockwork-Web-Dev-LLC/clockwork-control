@@ -118,6 +118,21 @@ class OutcomeClassifier
                 ];
             }
 
+            $hasAiIntervention = ! empty($run->execution_output)
+                || ! empty($run->approved_commands)
+                || $run->status === AiRemedyRun::STATUS_RESOLVED;
+
+            if ($hasAiIntervention) {
+                return [
+                    'outcome' => AiRemedyRun::OUTCOME_AI_RESOLVED,
+                    'details' => [
+                        'final_cpu' => $cpu,
+                        'final_ram' => $ram,
+                        'reason' => 'Metrics normalized back under thresholds following automated AiRemedy remediation',
+                    ],
+                ];
+            }
+
             return [
                 'outcome' => AiRemedyRun::OUTCOME_SELF_RESOLVED,
                 'details' => [
@@ -163,6 +178,17 @@ class OutcomeClassifier
                 return [
                     'outcome' => AiRemedyRun::OUTCOME_HUMAN_RESOLVED,
                     'details' => ['reason' => 'Site recovered following operator intervention'],
+                ];
+            }
+
+            $hasAiIntervention = ! empty($run->execution_output)
+                || ! empty($run->approved_commands)
+                || $run->status === AiRemedyRun::STATUS_RESOLVED;
+
+            if ($hasAiIntervention) {
+                return [
+                    'outcome' => AiRemedyRun::OUTCOME_AI_RESOLVED,
+                    'details' => ['reason' => 'Site recovered following automated AiRemedy remediation'],
                 ];
             }
 

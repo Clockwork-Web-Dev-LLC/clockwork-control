@@ -51,6 +51,7 @@ class AiRemedyAccuracyController extends Controller
 
         // Outcome breakdown
         $outcomes = [
+            AiRemedyRun::OUTCOME_AI_RESOLVED => $allRuns->where('outcome', AiRemedyRun::OUTCOME_AI_RESOLVED)->count(),
             AiRemedyRun::OUTCOME_SELF_RESOLVED => $allRuns->where('outcome', AiRemedyRun::OUTCOME_SELF_RESOLVED)->count(),
             AiRemedyRun::OUTCOME_HUMAN_RESOLVED => $allRuns->where('outcome', AiRemedyRun::OUTCOME_HUMAN_RESOLVED)->count(),
             AiRemedyRun::OUTCOME_PERSISTED => $allRuns->where('outcome', AiRemedyRun::OUTCOME_PERSISTED)->count(),

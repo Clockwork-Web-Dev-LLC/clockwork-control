@@ -84,6 +84,8 @@ class AiRemedyRun extends Model
 
     public const VERDICT_UNSURE = 'unsure';
 
+    public const OUTCOME_AI_RESOLVED = 'ai_resolved';
+
     public const OUTCOME_SELF_RESOLVED = 'self_resolved';
 
     public const OUTCOME_HUMAN_RESOLVED = 'human_resolved';
