@@ -2,7 +2,7 @@
 title: Email Authentication (SPF, DMARC, DKIM)
 section: Features
 order: 42
-updated: 2026-10-03
+updated: 2026-10-04
 author: Aaron Reimann
 tags: [email-auth, security, spf, dmarc, dkim, dns, doh]
 tracks: [modules/EmailAuth/**]
@@ -63,6 +63,18 @@ Checks run per **registrable apex domain** (via `RootDomainResolver::resolve()`)
   - Instant **Re-scan Domain** button (`POST /email-auth/scan`) for fast verification after client DNS updates.
   - **Remove from Tracking**: Safely soft-deletes the domain (`DELETE /email-auth/domains/{domain}`), removing it from the fleet overview and excluding it from scheduled weekly scans.
 - **Chat Alerts**: Fires `email_auth_degraded` to Slack and Mattermost only on **state transitions** (e.g., when a previously passing domain degrades to `fail`).
+
+## Emailing a client about a domain
+
+Open a domain's drawer on `/email-auth` and click **Compose email** (or go to `/email-auth/domains/{domain}/notify`). The composer sends a white-labeled email to the client:
+
+- **To** is pre-filled with the report contacts of every client that owns a site on this apex domain (`RootDomainResolver`); edit freely, comma-separated, max 20.
+- **Your note** comes first in the email (default: *"We've noticed some issues with your domain's email settings (DNS)… Would you like us to fix this for you?"*), then **What we found** — each selected finding in plain English (`Modules\EmailAuth\Support\FindingExplainer`), then a **reply** call-to-action, then **Technical details** for whoever manages DNS: the scanner message + code for each finding and the current SPF / DMARC / DKIM / MX state.
+- **Findings**: `fail` and `warn` are pre-ticked, `info` is offered unticked, `pass` is never offered. Unknown codes posted to the form are dropped.
+- **Live preview** renders the exact email beside the form.
+- **Branding** = White Labeling → Client Reports (header colour, accent, logo, company name, support email) — same template family as the monthly client report. The logo is embedded inline (`App\Support\Mail\BrandLogo`). Reply-To is the support email; the only link in the email is the support `mailto:` (Control isn't publicly reachable).
+- **Send me a copy** BCCs the operator. Each send writes an `email_auth_client_notice_sent` action-log row (recipients, subject, finding codes, mailer).
+- If `MAIL_MAILER=log`, the composer shows a warning and the send is written to the log instead of delivered.
 
 ## CLI and Scheduled Cadence
 

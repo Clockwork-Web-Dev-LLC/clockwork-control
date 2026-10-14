@@ -2,17 +2,15 @@
 
 namespace Modules\ClientReports\Mail;
 
+use App\Support\Mail\BrandLogo;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Modules\ClientReports\Models\ClientReport;
-use Throwable;
 
 /**
  * The monthly client report, delivered as a complete self-contained email.
@@ -126,29 +124,9 @@ class ClientReportMail extends Mailable
         return (string) preg_replace('/^www\./i', '', (string) $domain);
     }
 
-    /**
-     * Logo bytes for an inline (CID) image, cached for a day. Null when the logo
-     * can't be fetched — the view then falls back to the remote URL / brand name.
-     */
+    /** Logo bytes for an inline (CID) image; null falls back to the remote URL / brand name. */
     protected function logoBytes(): ?string
     {
-        $url = $this->branding()['logo_url'];
-        if (! Str::startsWith($url, ['https://', 'http://'])) {
-            return null;
-        }
-
-        try {
-            $encoded = Cache::remember('client-report-logo:'.md5($url), now()->addDay(), function () use ($url) {
-                $response = Http::timeout(5)->get($url);
-
-                return $response->successful() && str_starts_with((string) $response->header('Content-Type'), 'image/')
-                    ? base64_encode($response->body())
-                    : '';
-            });
-        } catch (Throwable) {
-            return null;
-        }
-
-        return $encoded !== '' ? (base64_decode($encoded, true) ?: null) : null;
+        return BrandLogo::bytes($this->branding()['logo_url']);
     }
 }

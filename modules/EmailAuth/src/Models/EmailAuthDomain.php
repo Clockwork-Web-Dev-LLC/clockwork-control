@@ -44,11 +44,13 @@ class EmailAuthDomain extends Model
         ];
     }
 
+    /** @return HasMany<EmailAuthCheck, $this> */
     public function checks(): HasMany
     {
         return $this->hasMany(EmailAuthCheck::class, 'domain', 'domain')->orderByDesc('checked_at');
     }
 
+    /** @return HasOne<EmailAuthCheck, $this> */
     public function latestCheck(): HasOne
     {
         return $this->hasOne(EmailAuthCheck::class, 'domain', 'domain')->latestOfMany('checked_at');
