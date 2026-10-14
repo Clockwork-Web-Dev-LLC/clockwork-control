@@ -615,3 +615,43 @@ describe('TurnkeyWP settings modal and refresh', function () {
             ->assertSee('Refresh from TurnkeyWP');
     });
 });
+
+describe('cloud provider linking after import', function () {
+    it('links a new TurnkeyWP server to its droplet so metrics can poll it right away', function () {
+        config([
+            'clockwork.digitalocean.token' => 'test-do-token',
+            'clockwork.digitalocean.base_url' => 'https://api.digitalocean.com/v2',
+        ]);
+        Http::fake([
+            'turnkey.example.com/api/v1/servers*' => Http::response(tkPage([tkServer()])),
+            'turnkey.example.com/api/v1/sites*' => Http::response(tkPage([tkSite()])),
+            'api.digitalocean.com/v2/droplets*' => Http::response([
+                'droplets' => [[
+                    'id' => 608188532,
+                    'size_slug' => 's-1vcpu-2gb',
+                    'vcpus' => 1,
+                    'memory' => 2048,
+                    'disk' => 50,
+                    'networks' => ['v4' => [['type' => 'public', 'ip_address' => '203.0.113.10']]],
+                ]],
+                'links' => [],
+                'meta' => ['total' => 1],
+            ]),
+            '*' => Http::response([], 404),
+        ]);
+
+        $this->artisan('clockwork:import-turnkeywp')
+            ->assertSuccessful()
+            ->expectsOutputToContain('Linked 1 of 1 new server(s) to their cloud provider');
+
+        expect(Server::where('turnkeywp_server_id', '7')->sole()->provider_id)->toBe('608188532');
+    });
+
+    it('does not try to link anything on a dry run', function () {
+        fakeTurnkey([tkServer()], [tkSite()]);
+
+        $this->artisan('clockwork:import-turnkeywp --dry-run')
+            ->assertSuccessful()
+            ->doesntExpectOutputToContain('Linked');
+    });
+});

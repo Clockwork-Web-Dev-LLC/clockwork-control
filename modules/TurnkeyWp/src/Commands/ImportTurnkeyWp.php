@@ -161,7 +161,36 @@ class ImportTurnkeyWp extends Command
         $this->info($prefix.'Servers: '.json_encode($serverStats));
         $this->info($prefix.'Sites:   '.json_encode($siteStats));
 
+        if (! $dryRun) {
+            $this->linkCloudProviders();
+        }
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Fill provider_id (the droplet / cloud server id) for TurnkeyWP servers
+     * that don't have one yet. Server metrics and health come from the cloud
+     * provider's API keyed on provider_id, so without this a new server shows
+     * "Unknown" until the nightly clockwork:reconcile-provider run.
+     */
+    protected function linkCloudProviders(): void
+    {
+        $unlinked = Server::query()
+            ->whereNotNull('turnkeywp_server_id')
+            ->whereNull('provider_id')
+            ->pluck('id');
+
+        if ($unlinked->isEmpty()) {
+            return;
+        }
+
+        foreach ($unlinked as $id) {
+            $this->callSilently('clockwork:reconcile-provider', ['--server' => (string) $id]);
+        }
+
+        $linked = Server::whereIn('id', $unlinked)->whereNotNull('provider_id')->count();
+        $this->line("  Linked {$linked} of {$unlinked->count()} new server(s) to their cloud provider for metrics.");
     }
 
     /**
