@@ -57,7 +57,7 @@ describe('Update failure streaks and auto-ignore', function () {
             $job = fakeNightlyJob($site, 'stubborn-plugin');
 
             Http::fake([
-                "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response([
+                "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
                     'ok' => false,
                     'error' => 'Update package not available.',
                     'slug' => 'stubborn-plugin',
@@ -90,7 +90,7 @@ describe('Update failure streaks and auto-ignore', function () {
         $site = makeExampleSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
                 'ok' => false,
                 'error' => 'Plugin update failed.',
                 'slug' => 'stubborn-plugin',
@@ -99,7 +99,7 @@ describe('Update failure streaks and auto-ignore', function () {
                 'was_active' => true,
                 'reactivated' => true,
             ], 200),
-            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
         ]);
 
         for ($i = 1; $i <= 5; $i++) {
@@ -174,7 +174,7 @@ describe('Update failure streaks and auto-ignore', function () {
 
         // 3 failures then 1 success
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::sequence()
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::sequence()
                 ->push([
                     'ok' => false,
                     'error' => 'Temporary failure',
@@ -241,7 +241,7 @@ describe('Update failure streaks and auto-ignore', function () {
         $job = fakeNightlyJob($site, 'stubborn-plugin');
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => function () {
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => function () {
                 throw new ConnectionException('cURL error 28: Operation timed out after 30000 milliseconds');
             },
         ]);
@@ -285,7 +285,7 @@ describe('Update failure streaks and auto-ignore', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::sequence()
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::sequence()
                 ->push([
                     'ok' => false,
                     'error' => 'Manual run failed',
@@ -381,7 +381,7 @@ describe('Update failure streaks and auto-ignore', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
         ]);
 
         $response = $this->actingAs($user)->post(route('updates.bulkUnignore'), [
@@ -401,7 +401,7 @@ describe('Update failure streaks and auto-ignore', function () {
 
         // Empty exceptions pushed to site
         Http::assertSent(function ($request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
                 && isset($request['items'])
                 && count($request['items']) === 0;
         });
@@ -413,7 +413,7 @@ describe('Update failure streaks and auto-ignore', function () {
         app(Settings::class)->put('updates.auto_ignore_after_failures', 3);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
                 'ok' => false,
                 'error' => 'Failure',
                 'slug' => 'fast-ignore-plugin',
@@ -422,7 +422,7 @@ describe('Update failure streaks and auto-ignore', function () {
                 'was_active' => true,
                 'reactivated' => true,
             ], 200),
-            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
         ]);
 
         for ($i = 1; $i <= 3; $i++) {
@@ -445,7 +445,7 @@ describe('Update failure streaks and auto-ignore', function () {
         app(Settings::class)->put('updates.auto_ignore_enabled', false);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
                 'ok' => false,
                 'error' => 'Failure',
                 'slug' => 'no-ignore-plugin',
@@ -602,7 +602,7 @@ describe('Update failure streaks and auto-ignore', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
         ]);
 
         $this->actingAs($user)->post(route('updates.bulkIgnore'), [
@@ -618,7 +618,7 @@ describe('Update failure streaks and auto-ignore', function () {
             ->and($ignore->client_visible)->toBeFalse();
 
         Http::assertSent(function ($request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
                 && isset($request['items'])
                 && count($request['items']) === 0;
         });

@@ -778,12 +778,12 @@ describe('pushCompanionData', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 5, 'updates_available' => 1]]],
                 200,
                 ['Content-Type' => 'application/json'],
             ),
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(
                 ['ok' => true],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -821,7 +821,7 @@ describe('refreshCompanionSnapshot', function () {
         $site = companionSite(['companion_capabilities' => ['snapshot']]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 3, 'updates_available' => 2]]],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -858,7 +858,7 @@ describe('ssoLaunch', function () {
         $site = companionSite(['companion_snapshot' => ['admins' => ['admins' => [['login' => 'siteadmin']]]]]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/sso/magic-link" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/sso/magic-link*" => Http::response(
                 ['url' => 'https://'.$site->domain.'/wp-login-magic-abc123', 'expires_at' => now()->addMinute()->toIso8601String()],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -901,7 +901,7 @@ describe('updatePlugin', function () {
         $site = companionSite(['companion_capabilities' => ['updates']]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
                 'ok' => true,
                 'slug' => 'akismet',
                 'before_version' => '5.3',

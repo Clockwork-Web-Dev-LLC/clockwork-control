@@ -20,6 +20,7 @@ use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Companion\ClockworkCompanionClient;
+use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
@@ -2372,6 +2373,15 @@ class SitesController extends Controller
             } catch (Throwable) {
                 // non-fatal
             }
+        }
+
+        // White-label branding — the SSH and Pressable installers push it, but
+        // standalone (Renegade) enrolment didn't, leaving sites on plugin
+        // defaults until someone re-saved branding settings.
+        try {
+            app(CompanionBrandingManager::class)->syncSite($site);
+        } catch (Throwable) {
+            // non-fatal; the weekly branding check re-pushes
         }
 
         app(ActionLogger::class)->record(

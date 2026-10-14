@@ -269,6 +269,18 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Branding currently active on the site (Companion/Renegade `GET /branding`).
+     *
+     * @return array<string, mixed>
+     */
+    public function branding(): array
+    {
+        $res = $this->getJson('/branding');
+
+        return (array) ($res['branding'] ?? $res);
+    }
+
+    /**
      * Push active update exceptions to WordPress.
      * Stored in wp_options['clockwork_update_exceptions']; rendered in
      * wp-admin under Update coverage for manage_options users.
@@ -963,17 +975,12 @@ class ClockworkCompanionClient
         $body = '';
         $request = $this->signedRequest('DELETE', $route, $body, $options);
         $url = $this->buildUrl($route);
-        if ($query !== []) {
-            $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
-        }
+        $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
         $response = $request->delete($url);
 
         if ($this->isNonJsonResponse($response)) {
             $retryRequest = $this->signedRequest('DELETE', $route, $body, $options);
-            $retryUrl = $this->buildQueryRouteUrl($route);
-            if ($query !== []) {
-                $retryUrl .= '&'.http_build_query($query);
-            }
+            $retryUrl = $this->buildQueryRouteUrl($route).'&'.http_build_query($query);
             $response = $retryRequest->delete($retryUrl);
         }
 
@@ -1046,12 +1053,18 @@ class ClockworkCompanionClient
 
     protected function get(string $route, array $query = []): Response
     {
+        // Some hosts cache signed GET responses — SpinupWP's fastcgi cache keys on
+        // the path alone, and several standalone hosts cache /wp-json/* at the
+        // edge — so a read could return what the site said hours ago (seen
+        // 2026-10-14: /branding reported pre-push values on 6 Renegade sites).
+        // A unique query param defeats path-keyed caches; the HMAC covers only
+        // method + route + timestamp + body, so it doesn't affect the signature.
+        $query['_cw'] = (string) hrtime(true);
+
         $body = '';
-        $request = $this->signedRequest('GET', $route, $body);
+        $request = $this->signedRequest('GET', $route, $body)->withHeaders(['Cache-Control' => 'no-cache']);
         $url = $this->buildUrl($route);
-        if ($query !== []) {
-            $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
-        }
+        $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
         $response = $request->get($url);
 
         if ($this->isNonJsonResponse($response)) {
@@ -1064,11 +1077,8 @@ class ClockworkCompanionClient
             // entirely. Signature is unaffected — it's computed over the
             // logical route string, which $request->get_route() returns
             // identically regardless of which URL form reached it.
-            $retryRequest = $this->signedRequest('GET', $route, $body);
-            $retryUrl = $this->buildQueryRouteUrl($route);
-            if ($query !== []) {
-                $retryUrl .= '&'.http_build_query($query);
-            }
+            $retryRequest = $this->signedRequest('GET', $route, $body)->withHeaders(['Cache-Control' => 'no-cache']);
+            $retryUrl = $this->buildQueryRouteUrl($route).'&'.http_build_query($query);
             $response = $retryRequest->get($retryUrl);
         }
 

@@ -68,14 +68,14 @@ describe('clockwork:companion-canary-deploy', function () {
         Http::fake([
             // $ok already carries the capability, so its only network call
             // in the verify pass is the malware scan.
-            "https://{$ok->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(
+            "https://{$ok->domain}/wp-json/clockwork/v1/malware-scan*" => Http::response(
                 ['ok' => true, 'scanned_files_count' => 100, 'findings' => []],
                 200,
                 ['Content-Type' => 'application/json'],
             ),
             // $fail lacks the capability, triggers a live /detect nudge —
             // which still doesn't report it, so verify never reaches malware-scan.
-            "https://{$fail->domain}/wp-json/clockwork/v1/detect" => Http::response(
+            "https://{$fail->domain}/wp-json/clockwork/v1/detect*" => Http::response(
                 ['installed' => true, 'version' => '1.30.4', 'capabilities' => []],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -110,8 +110,8 @@ describe('clockwork:companion-canary-deploy', function () {
         });
 
         Http::fake([
-            "https://{$a->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(['ok' => true, 'scanned_files_count' => 10, 'findings' => []], 200, ['Content-Type' => 'application/json']),
-            "https://{$b->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(['ok' => true, 'scanned_files_count' => 10, 'findings' => []], 200, ['Content-Type' => 'application/json']),
+            "https://{$a->domain}/wp-json/clockwork/v1/malware-scan*" => Http::response(['ok' => true, 'scanned_files_count' => 10, 'findings' => []], 200, ['Content-Type' => 'application/json']),
+            "https://{$b->domain}/wp-json/clockwork/v1/malware-scan*" => Http::response(['ok' => true, 'scanned_files_count' => 10, 'findings' => []], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:companion-canary-deploy')->assertSuccessful();
@@ -130,7 +130,7 @@ describe('clockwork:companion-canary-deploy', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(['ok' => true, 'scanned_files_count' => 5, 'findings' => []], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/malware-scan*" => Http::response(['ok' => true, 'scanned_files_count' => 5, 'findings' => []], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:companion-canary-deploy', ['--skip-install' => true])->assertSuccessful();

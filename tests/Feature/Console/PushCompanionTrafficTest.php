@@ -67,7 +67,7 @@ function pctInsertRow(Site $site, string $date, array $overrides = []): void
 function pctFakeTraffic(Site $site, bool $ok = true, int $status = 200): void
 {
     Http::fake([
-        "https://{$site->domain}/wp-json/clockwork/v1/traffic-report" => Http::response(
+        "https://{$site->domain}/wp-json/clockwork/v1/traffic-report*" => Http::response(
             ['ok' => $ok],
             $status,
             ['Content-Type' => 'application/json'],
@@ -178,7 +178,7 @@ describe('clockwork:push-companion-traffic — options', function () {
 
         $this->artisan('clockwork:push-companion-traffic', ['--site' => $target->domain])->assertSuccessful();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$target->domain}/wp-json/clockwork/v1/traffic-report");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$target->domain}/wp-json/clockwork/v1/traffic-report");
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $other->domain));
     });
 
@@ -194,7 +194,7 @@ describe('clockwork:push-companion-traffic — options', function () {
 
         $this->artisan('clockwork:push-companion-traffic', ['--server' => $serverA->name])->assertSuccessful();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$onA->domain}/wp-json/clockwork/v1/traffic-report");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$onA->domain}/wp-json/clockwork/v1/traffic-report");
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $onB->domain));
     });
 
@@ -207,7 +207,7 @@ describe('clockwork:push-companion-traffic — options', function () {
         $site = pctSite(['server_id' => $serverNoSsh->id]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/traffic-report" => Http::response(['ok' => true]),
+            "https://{$site->domain}/wp-json/clockwork/v1/traffic-report*" => Http::response(['ok' => true]),
         ]);
 
         $this->artisan('clockwork:push-companion-traffic', ['--site' => $site->domain])->assertSuccessful();
