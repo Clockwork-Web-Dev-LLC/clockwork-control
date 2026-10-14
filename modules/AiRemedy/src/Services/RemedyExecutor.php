@@ -60,6 +60,9 @@ class RemedyExecutor
             }
         }
 
+        // Normalize common command variations/hallucinations (e.g. per-site PHP-FPM service units)
+        $commandsToRun = array_map([$this, 'normalizeCommand'], $commandsToRun);
+
         // Safety policy check
         $safety = $this->guard->evaluateBatch($commandsToRun);
         if (! $safety['allowed']) {
@@ -206,10 +209,21 @@ class RemedyExecutor
                 ];
 
                 if ($exitStatus !== 0) {
-                    $hadError = true;
-                    $errorMessage = "Command '{$cmd}' exited with non-zero status code {$exitStatus}.";
-                    $fullOutput .= "[Process exited with code {$exitStatus}]\n";
-                    break;
+                    // If a kill/renice/ionice command targeted a PID that already terminated naturally,
+                    // treat it as non-fatal so remaining commands (e.g. cache flush, service reload) proceed.
+                    if ($this->isProcessAlreadyTerminated($cmd, $cmdOutput, $exitStatus)) {
+                        $fullOutput .= "[Notice: target process already terminated naturally — proceeding]\n";
+                        Log::info('ai_remedy.process_already_terminated', [
+                            'server_id' => $server->id,
+                            'command' => $cmd,
+                            'output' => trim($cmdOutput),
+                        ]);
+                    } else {
+                        $hadError = true;
+                        $errorMessage = "Command '{$cmd}' exited with non-zero status code {$exitStatus}.";
+                        $fullOutput .= "[Process exited with code {$exitStatus}]\n";
+                        break;
+                    }
                 }
             }
 
@@ -279,5 +293,41 @@ class RemedyExecutor
             'run' => $run->fresh() ?? $run,
             'results' => $results,
         ];
+    }
+
+    /**
+     * Normalize common command variations/hallucinations (e.g. per-site PHP-FPM service units).
+     */
+    public function normalizeCommand(string $cmd): string
+    {
+        $cmd = trim($cmd);
+
+        // Normalize hallucinated per-site PHP-FPM units:
+        // 'sudo systemctl reload php8.3-fpm-sitename.service' -> 'sudo systemctl reload php8.3-fpm'
+        if (preg_match('/^(sudo\s+systemctl\s+(?:reload|restart|status))\s+php([0-9\.]+)-fpm-[a-zA-Z0-9_\-]+(?:\.service)?$/i', $cmd, $m)) {
+            return "{$m[1]} php{$m[2]}-fpm";
+        }
+
+        if (preg_match('/^(sudo\s+service)\s+php([0-9\.]+)-fpm-[a-zA-Z0-9_\-]+\s+(reload|restart|status)$/i', $cmd, $m)) {
+            return "{$m[1]} php{$m[2]}-fpm {$m[3]}";
+        }
+
+        return $cmd;
+    }
+
+    /**
+     * Determine if a command failed specifically because the target process had already exited.
+     */
+    protected function isProcessAlreadyTerminated(string $cmd, string $output, int $exitStatus): bool
+    {
+        if ($exitStatus !== 1) {
+            return false;
+        }
+
+        if (! preg_match('/^sudo\s+(kill|pkill|renice|ionice)\b/i', $cmd)) {
+            return false;
+        }
+
+        return (bool) preg_match('/no such process/i', $output);
     }
 }

@@ -175,7 +175,9 @@ class WatchServerSpikes extends Command
             if ($topProcCpu >= $cpuThreshold) {
                 $procCmd = $telemetry['top_cpu'][0]['command'] ?? 'unknown';
 
-                return "Live SSH probe detected rogue process pegging CPU: {$procCmd} ({$topProcCpu}%)";
+                if (! $this->isDiagnosticCommand($procCmd) && ! $this->isMaintenanceProcess($procCmd)) {
+                    return "Live SSH probe detected rogue process pegging CPU: {$procCmd} ({$topProcCpu}%)";
+                }
             }
         } catch (\Throwable) {
             return null;
@@ -332,5 +334,19 @@ class WatchServerSpikes extends Command
         }
 
         return (int) config('clockwork.ai_remedy.debounce_seconds', 60);
+    }
+
+    /**
+     * Check if a command is a read-only system diagnostic/probe command that should not trigger rogue CPU alerts.
+     */
+    protected function isDiagnosticCommand(string $command): bool
+    {
+        if ($command === '') {
+            return false;
+        }
+
+        $trimmed = trim($command);
+
+        return (bool) preg_match('/^(ps\s+|top\b|head\b|tail\b|grep\b|awk\b|sed\b|uptime\b|df\b|free\b)/i', $trimmed);
     }
 }

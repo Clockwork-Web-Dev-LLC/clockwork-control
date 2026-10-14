@@ -294,7 +294,19 @@ class AiRemedyTriager
         // Step 2: OpenRouter AI Analysis
         $triggerReason = $isSimulation ? "[SIMULATION / WATCH MODE] {$reason}" : $reason;
         $telemetry['wordpress_sites'] = app(ServerSiteContext::class)->sites($server);
+
+        $recentSpikesCount = AiRemedyRun::query()
+            ->where('server_id', $server->id)
+            ->where('started_at', '>=', now()->subHours(48))
+            ->where('trigger_type', AiRemedyRun::TRIGGER_SERVER_SPIKE)
+            ->count();
+        $telemetry['recent_spikes_48h'] = $recentSpikesCount;
+
         $analysis = $this->client->diagnoseServerSpike($telemetry, $triggerReason);
+
+        if ($recentSpikesCount >= 5 && ! str_contains($analysis['summary'] ?? '', 'Chronic Saturation')) {
+            $analysis['summary'] = ($analysis['summary'] ?? '')." [Chronic Saturation Alert: {$recentSpikesCount} spikes in last 48h — recurring capacity pressure]";
+        }
 
         // Step 3: Check for recognized benign maintenance activity
         $maintenance = $this->detectMaintenance($telemetry, $analysis);

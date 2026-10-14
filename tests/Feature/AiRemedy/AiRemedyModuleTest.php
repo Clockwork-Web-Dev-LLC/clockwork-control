@@ -1146,3 +1146,201 @@ test('remedy executor holds an autonomous run with a guessed site path without c
         ->and($run->fresh()->status)->toBe(AiRemedyRun::STATUS_ANALYZED)
         ->and($run->fresh()->error_message)->toContain('held for review');
 });
+
+test('remedy executor treats terminated PID exit code 1 as non-fatal and continues batch', function () {
+    $server = Server::factory()->create(['name' => 'spinup-pid-test']);
+
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+        'status' => AiRemedyRun::STATUS_ANALYZED,
+        'server_id' => $server->id,
+        'user_id' => $this->user->id,
+        'actor' => 'manual',
+        'model_used' => 'anthropic/claude-3.5-sonnet',
+        'diagnosis_summary' => 'Terminating runaway process.',
+        'safety_tier' => AiRemedyRun::TIER_1_SAFE,
+        'proposed_commands' => [
+            'sudo kill -15 9999',
+            'sudo systemctl reload php8.3-fpm',
+        ],
+        'started_at' => now(),
+    ]);
+
+    $this->mock(SshClient::class, function ($mock) {
+        $session = Mockery::mock(SSH2::class);
+        $session->shouldReceive('setTimeout')->with(30);
+
+        // Command 1: kill -15 returns exit 1 with "No such process"
+        $session->shouldReceive('exec')
+            ->with('sudo kill -15 9999')
+            ->once()
+            ->andReturn("kill: (9999): No such process\n");
+
+        // Command 2: reload php8.3-fpm runs and succeeds
+        $session->shouldReceive('exec')
+            ->with('sudo systemctl reload php8.3-fpm')
+            ->once()
+            ->andReturn('');
+
+        $session->shouldReceive('getExitStatus')
+            ->andReturn(1, 0);
+
+        $session->shouldReceive('disconnect');
+
+        $mock->shouldReceive('connect')->once()->andReturn($session);
+    });
+
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')->once()->andReturn([
+            'ok' => true,
+            'server_id' => $server->id,
+            'hostname' => $server->hostname,
+            'loadavg' => [0.5, 0.7, 0.9],
+        ]);
+    });
+
+    $result = app(RemedyExecutor::class)->execute($run);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($run->fresh()->status)->toBe(AiRemedyRun::STATUS_RESOLVED)
+        ->and($run->fresh()->execution_output)->toContain('Notice: target process already terminated naturally — proceeding');
+});
+
+test('remedy executor normalizes hallucinated per-site php-fpm units', function () {
+    $server = Server::factory()->create(['name' => 'spinup-normalize-test']);
+
+    $run = AiRemedyRun::create([
+        'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+        'status' => AiRemedyRun::STATUS_ANALYZED,
+        'server_id' => $server->id,
+        'user_id' => $this->user->id,
+        'actor' => 'manual',
+        'model_used' => 'anthropic/claude-3.5-sonnet',
+        'diagnosis_summary' => 'Reloading FPM pool.',
+        'safety_tier' => AiRemedyRun::TIER_1_SAFE,
+        'proposed_commands' => [
+            'sudo systemctl reload php8.3-fpm-filtnews.service',
+        ],
+        'started_at' => now(),
+    ]);
+
+    $this->mock(SshClient::class, function ($mock) {
+        $session = Mockery::mock(SSH2::class);
+        $session->shouldReceive('setTimeout')->with(30);
+
+        // Expect the normalized canonical service name
+        $session->shouldReceive('exec')
+            ->with('sudo systemctl reload php8.3-fpm')
+            ->once()
+            ->andReturn('');
+
+        $session->shouldReceive('getExitStatus')->andReturn(0);
+        $session->shouldReceive('disconnect');
+
+        $mock->shouldReceive('connect')->once()->andReturn($session);
+    });
+
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')->once()->andReturn([
+            'ok' => true,
+            'server_id' => $server->id,
+            'hostname' => $server->hostname,
+            'loadavg' => [0.4, 0.6, 0.8],
+        ]);
+    });
+
+    $result = app(RemedyExecutor::class)->execute($run);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($run->fresh()->approved_commands)->toBe(['sudo systemctl reload php8.3-fpm']);
+});
+
+test('watch server spikes command ignores ps aux and diagnostic commands in rogue cpu detection', function () {
+    $server = Server::factory()->create([
+        'name' => 'ps-probe-box',
+        'is_ignored' => false,
+        'vcpus' => 2,
+    ]);
+
+    // Live probe returns ps aux at 100% CPU, but load and memory are normal
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')
+            ->withArgs(fn ($s) => $s->id === $server->id)
+            ->andReturn([
+                'ok' => true,
+                'server_id' => $server->id,
+                'hostname' => $server->hostname,
+                'cores' => 2,
+                'loadavg' => [0.2, 0.3, 0.4],
+                'memory' => ['used_percent' => 40.0],
+                'top_cpu' => [
+                    ['command' => 'ps aux --sort=-%cpu', 'cpu_pct' => 99.0],
+                ],
+            ]);
+    });
+
+    $this->mock(AiRemedyTriager::class, function ($mock) {
+        $mock->shouldReceive('getMode')->andReturn('watch');
+        $mock->shouldReceive('getCooldownMinutes')->andReturn(30);
+        $mock->shouldReceive('isServerInCooldown')->andReturn(false);
+        $mock->shouldNotReceive('triageServerSpike');
+    });
+
+    $this->artisan('clockwork:watch-server-spikes')
+        ->assertSuccessful();
+});
+
+test('triager detects chronic saturation and attaches advisory when 5 or more spikes occurred in 48h', function () {
+    $server = Server::factory()->create(['name' => 'chronic-server-01']);
+
+    // Seed 5 previous runs in the last 48h
+    for ($i = 0; $i < 5; $i++) {
+        AiRemedyRun::create([
+            'trigger_type' => AiRemedyRun::TRIGGER_SERVER_SPIKE,
+            'status' => AiRemedyRun::STATUS_RESOLVED,
+            'server_id' => $server->id,
+            'actor' => 'watch_mode',
+            'model_used' => 'anthropic/claude-3.5-sonnet',
+            'diagnosis_summary' => "Previous spike {$i}",
+            'started_at' => now()->subHours(10 + $i),
+        ]);
+    }
+
+    $this->mock(ServerTelemetryCollector::class, function ($mock) use ($server) {
+        $mock->shouldReceive('collect')->once()->andReturn([
+            'ok' => true,
+            'server_id' => $server->id,
+            'hostname' => $server->hostname,
+            'loadavg' => [4.0, 3.5, 3.0],
+            'top_cpu' => [['command' => 'php-fpm', 'cpu_pct' => 50.0]],
+        ]);
+    });
+
+    $this->mock(OpenRouterClient::class, function ($mock) {
+        $mock->shouldReceive('getApiKey')->andReturn('test-key');
+        $mock->shouldReceive('getModel')->andReturn('anthropic/claude-3.5-sonnet');
+        $mock->shouldReceive('diagnoseServerSpike')
+            ->once()
+            ->withArgs(function ($telemetry, $reason) {
+                return isset($telemetry['recent_spikes_48h']) && $telemetry['recent_spikes_48h'] === 5;
+            })
+            ->andReturn([
+                'ok' => true,
+                'summary' => 'PHP worker saturation.',
+                'root_cause' => 'Traffic burst',
+                'safety_tier' => 'tier_1_safe',
+                'is_fixable' => true,
+                'commands' => ['sudo systemctl reload php8.3-fpm'],
+                'prompt_tokens' => 100,
+                'completion_tokens' => 50,
+                'cost_usd' => 0.001,
+            ]);
+    });
+
+    $triager = app(AiRemedyTriager::class);
+    $result = $triager->triageServerSpike($server, 'Spike alert', 'watch_mode');
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['run']->diagnosis_summary)->toContain('Chronic Saturation Alert: 5 spikes in last 48h')
+        ->and($result['run']->telemetry_snapshot['recent_spikes_48h'])->toBe(5);
+});
