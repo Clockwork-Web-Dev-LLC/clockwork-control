@@ -243,11 +243,18 @@ class ImportTurnkeyWp extends Command
             // user is `turnkey`. Only set on create so an operator's
             // change (e.g. to a dedicated deploy user) sticks.
             $server->ssh_user = (string) ($row['ssh_user'] ?? 'turnkey') ?: 'turnkey';
+            $server->passwordless_sudo = $this->hasPasswordlessSudo($server->ssh_user);
             $server->status = Server::STATUS_UNKNOWN;
             $server->save();
             $stats['created']++;
 
             return;
+        }
+
+        // TurnkeyWP's own users sudo without a password, so no sudo password
+        // is ever stored for them. Only ever turned on here, never off.
+        if (! $server->passwordless_sudo && $this->hasPasswordlessSudo($server->ssh_user)) {
+            $attributes['passwordless_sudo'] = true;
         }
 
         $server->fill($attributes);
@@ -464,6 +471,14 @@ class ImportTurnkeyWp extends Command
         $site->spinupwp_id = null;
 
         return true;
+    }
+
+    /**
+     * TurnkeyWP provisions `turnkey` with NOPASSWD sudo; root needs no sudo.
+     */
+    private function hasPasswordlessSudo(?string $sshUser): bool
+    {
+        return in_array($sshUser, ['turnkey', 'root'], true);
     }
 
     /**

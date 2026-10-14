@@ -82,7 +82,7 @@ class ServerUpdateController extends Controller
             return $error("Cannot reboot ignored server {$server->name}.");
         }
 
-        if ($server->clockwork_jail_provisioned_at === null && empty($server->ssh_password)) {
+        if ($server->clockwork_jail_provisioned_at === null && ! $server->hasSudoAccess()) {
             return $error("Server {$server->name} has no SSH credentials.");
         }
 

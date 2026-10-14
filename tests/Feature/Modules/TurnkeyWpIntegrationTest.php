@@ -5,6 +5,8 @@ namespace Tests\Feature\Modules;
 use App\Models\Server;
 use App\Models\Site;
 use App\Services\Diagnostics\CheckResult;
+use App\Services\Security\WpCoreChecksumVerifier;
+use App\Services\Ssh\SshClient;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
@@ -153,7 +155,9 @@ describe('clockwork:import-turnkeywp', function () {
         expect($server->hostname)->toBe('203.0.113.10')
             ->and($server->ssh_user)->toBe('turnkey')
             ->and($server->provider)->toBe('digitalocean')
-            ->and((bool) $server->upgrade_required)->toBeTrue();
+            ->and((bool) $server->upgrade_required)->toBeTrue()
+            ->and($server->passwordless_sudo)->toBeTrue()
+            ->and($server->hasSudoAccess())->toBeTrue();
 
         $site = Site::withoutGlobalScopes()->where('turnkeywp_site_id', '41')->sole();
         expect($site->hosting_provider)->toBe(Site::HOSTING_PROVIDER_TURNKEYWP)
@@ -383,6 +387,51 @@ describe('clockwork:import-turnkeywp', function () {
         $this->artisan('clockwork:import-turnkeywp')->assertSuccessful();
 
         expect($site->refresh()->wp_path)->toBe('/sites/example.com/files/wp');
+    });
+});
+
+describe('passwordless sudo', function () {
+    it('turns on passwordless_sudo for a turnkey server imported before the flag existed', function () {
+        $server = Server::factory()->create([
+            'hostname' => '203.0.113.10', 'ssh_port' => 22, 'turnkeywp_server_id' => '7',
+            'ssh_user' => 'turnkey', 'passwordless_sudo' => false,
+        ]);
+        fakeTurnkey([tkServer()], [tkSite()]);
+
+        $this->artisan('clockwork:import-turnkeywp')->assertSuccessful();
+
+        expect($server->refresh()->passwordless_sudo)->toBeTrue();
+    });
+
+    it('leaves the flag off for a server SpinupWP still tracks', function () {
+        $server = Server::factory()->create([
+            'hostname' => '203.0.113.10', 'ssh_port' => 22, 'spinupwp_id' => 555, 'ssh_user' => 'clockwork-deploy',
+        ]);
+        fakeTurnkey([tkServer()], []);
+
+        $this->artisan('clockwork:import-turnkeywp')->assertSuccessful();
+
+        expect($server->refresh()->passwordless_sudo)->toBeFalse();
+    });
+
+    it('grants sudo access for a stored password, root, or the passwordless flag', function () {
+        expect(Server::factory()->make(['ssh_user' => 'clockwork-deploy', 'ssh_password' => null])->hasSudoAccess())->toBeFalse()
+            ->and(Server::factory()->make(['ssh_user' => 'clockwork-deploy', 'ssh_password' => 'secret'])->hasSudoAccess())->toBeTrue()
+            ->and(Server::factory()->make(['ssh_user' => 'root', 'ssh_password' => null])->hasSudoAccess())->toBeTrue()
+            ->and(Server::factory()->make(['ssh_user' => 'turnkey', 'ssh_password' => null, 'passwordless_sudo' => true])->hasSudoAccess())->toBeTrue();
+    });
+
+    it('lets the core checksum scan run on a passwordless-sudo server instead of skipping it', function () {
+        $server = Server::factory()->create(['ssh_user' => 'turnkey', 'ssh_password' => null, 'passwordless_sudo' => true]);
+        $site = Site::factory()->turnkeywp()->create(['server_id' => $server->id, 'site_user' => 'example']);
+
+        $ssh = \Mockery::mock(SshClient::class);
+        $ssh->shouldReceive('exec')->once()->andReturn("Success: WordPress installation verifies against checksums.\n__CLOCKWORK_WP_EXIT__:0");
+        app()->instance(SshClient::class, $ssh);
+
+        $result = app(WpCoreChecksumVerifier::class)->verify($site);
+
+        expect($result->error)->not->toBe('missing_credentials');
     });
 });
 

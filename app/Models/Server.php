@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $ssh_user
  * @property ?string $ssh_private_key encrypted at rest
  * @property ?string $ssh_password encrypted at rest
+ * @property bool $passwordless_sudo the SSH user can sudo without a password (TurnkeyWP's turnkey user)
  * @property ?int $spinupwp_id
  * @property ?string $turnkeywp_server_id TurnkeyWP's server id; set alongside spinupwp_id on a server TurnkeyWP adopted
  * @property string $provider e.g. "digitalocean", "hetzner" — which cloud owns this server
@@ -113,6 +114,7 @@ class Server extends Model
         'ssh_user',
         'ssh_private_key',
         'ssh_password',
+        'passwordless_sudo',
         'ssh_password_updated_at',
         'spinupwp_id',
         'turnkeywp_server_id',
@@ -156,6 +158,7 @@ class Server extends Model
             'ssh_port' => 'integer',
             'ssh_private_key' => 'encrypted',
             'ssh_password' => 'encrypted',
+            'passwordless_sudo' => 'boolean',
             'is_ignored' => 'boolean',
             'auto_ban_llar' => 'boolean',
             'auto_ban_wordfence' => 'boolean',
@@ -313,6 +316,17 @@ class Server extends Model
      * True when SSH credentials (private key, password, or system default key)
      * are configured for this server.
      */
+    public function hasSudoAccess(): bool
+    {
+        // sudo works here when a sudo password is stored, or when the SSH user
+        // doesn't need one (root, or a NOPASSWD user such as TurnkeyWP's
+        // turnkey). Callers that pipe ssh_password into `sudo -S` keep working
+        // on a NOPASSWD user: sudo never reads the empty password.
+        return $this->passwordless_sudo
+            || $this->ssh_user === 'root'
+            || ($this->ssh_password !== null && $this->ssh_password !== '');
+    }
+
     public function hasSshConfigured(): bool
     {
         if (! empty($this->ssh_private_key) || ! empty($this->ssh_password)) {

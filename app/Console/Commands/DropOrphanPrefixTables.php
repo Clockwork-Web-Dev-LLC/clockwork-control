@@ -60,7 +60,7 @@ class DropOrphanPrefixTables extends Command
             return self::FAILURE;
         }
 
-        if (! $site->server || ! $site->site_user || ! $site->server->ssh_password) {
+        if (! $site->server || ! $site->site_user || ! $site->server->hasSudoAccess()) {
             $this->error('Missing prerequisites (server / site_user / ssh_password).');
 
             return self::FAILURE;

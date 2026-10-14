@@ -39,7 +39,7 @@ class WpPluginDetector
         if (! $site->server || $site->server->is_ignored) {
             return ['result' => self::RESULT_SKIPPED, 'message' => 'No server / server is ignored.', 'llar' => null, 'wordfence' => null];
         }
-        if (! $site->site_user || ! $site->server->ssh_password) {
+        if (! $site->site_user || ! $site->server->hasSudoAccess()) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Missing site_user or sudo password.', 'llar' => null, 'wordfence' => null];
         }
 

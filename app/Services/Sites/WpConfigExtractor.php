@@ -23,7 +23,7 @@ class WpConfigExtractor
         // Try a plain read first (works for 0644 files, the SpinupWP default).
         $contents = $this->ssh->exec($site->server, "cat {$escaped} 2>/dev/null");
 
-        if ($contents === '' && $site->server->ssh_password) {
+        if ($contents === '' && $site->server->hasSudoAccess()) {
             // Some sites have wp-config.php at mode 0600 owned by the site user — only sudo can read.
             // Pass the password via env-var, never on the command line.
             $script = "printf '%s\\n' \"\$CW_SUDO_PW\" | sudo -S cat {$escaped} 2>/dev/null";

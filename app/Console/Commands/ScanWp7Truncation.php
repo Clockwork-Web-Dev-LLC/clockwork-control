@@ -80,7 +80,7 @@ class ScanWp7Truncation extends Command
 
         foreach ($sites as $site) {
             $server = $site->server;
-            if (! $server || ! $server->ssh_password) {
+            if (! $server || ! $server->hasSudoAccess()) {
                 continue;
             }
             $checked++;

@@ -105,7 +105,7 @@ class RefreshCloudflareRealIp extends Command
      */
     private function pushTo(Server $server, string $snippet, SshClient $ssh): array
     {
-        if (! $server->ssh_password) {
+        if (! $server->hasSudoAccess()) {
             return ['ok' => false, 'output' => '', 'message' => 'No sudo password stored.'];
         }
 

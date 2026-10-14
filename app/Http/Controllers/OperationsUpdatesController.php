@@ -150,7 +150,7 @@ class OperationsUpdatesController extends Controller
 
                 continue;
             }
-            if ($server->clockwork_jail_provisioned_at === null && empty($server->ssh_password)) {
+            if ($server->clockwork_jail_provisioned_at === null && ! $server->hasSudoAccess()) {
                 $stats['skipped_no_ssh']++;
 
                 continue;

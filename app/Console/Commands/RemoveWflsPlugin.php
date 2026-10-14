@@ -130,7 +130,7 @@ class RemoveWflsPlugin extends Command
                 }
             } else {
                 $wpPath = $site->resolveWpPath();
-                if (! $site->server || $site->server->is_ignored || ! $site->site_user || ! $site->server->ssh_password || $wpPath === null) {
+                if (! $site->server || $site->server->is_ignored || ! $site->site_user || ! $site->server->hasSudoAccess() || $wpPath === null) {
                     $this->warn("  [fail] {$site->domain}: missing SSH prerequisites (server/site_user/ssh_password/wp_path) — can't run wp-cli.");
                     $totals['failed']++;
 

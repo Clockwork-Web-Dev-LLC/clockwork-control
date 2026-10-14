@@ -88,7 +88,7 @@ class RefreshFail2banIgnoreip extends Command
      */
     private function pushTo(Server $server, string $renderedList, SshClient $ssh): array
     {
-        if (! $server->ssh_password) {
+        if (! $server->hasSudoAccess()) {
             return ['ok' => false, 'output' => '', 'message' => 'No sudo password stored.'];
         }
 
