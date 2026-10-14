@@ -7,9 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-14
+
+### Added
+- **Email Auth — Client Notice Composer (`/email-auth/domains/{domain}/notify`)**:
+  - New "Compose email" action inside each domain's drawer in `/email-auth` opens an interactive composer prefilled with recipient contacts from clients owning sites on that apex domain, a customizable operator note, and granular finding checkboxes (warnings/failures pre-checked, informational optional).
+  - White-labeled email delivery matching Client Reports branding (custom primary brand header background and embedded logo CID), plain-English explanations via `FindingExplainer`, direct operator `mailto:` reply handling, and full action logging (`email_auth_client_notice_sent`).
+- **Client Reports — Full Inline Report Emails**:
+  - Monthly client maintenance report emails now render the entire report inline: branded header with embedded logo CID, at-a-glance metrics tiles, updates list with clean plugin titles, uptime, security scans, Core Web Vitals performance, traffic stats, backups, and work logs.
+  - Plain-text email alternative and direct support mailto call-to-action (eliminating unreachable localhost links).
+- **AiRemedy — Chronic Server Saturation Detection**:
+  - Added trailing 48-hour spike tracking (`recent_spikes_48h`) across monitored servers.
+  - Servers encountering $\ge 5$ spikes in 48 hours receive an advisory alert in the incident diagnosis summary recommending infrastructure resizing or edge/CDN caching over repeated worker termination.
+
+### Changed
+- **AiRemedy — Autonomous Healing Resilience & Telemetry Hardening**:
+  - **Graceful Ephemeral PID Handling**: Commands like `kill`, `pkill`, `renice`, and `ionice` returning exit code 1 (`No such process`) because an ephemeral spike process concluded naturally before SSH execution are now treated as non-fatal notices; subsequent remediation steps (cache flushes, service reloads) proceed uninterrupted.
+  - **PHP-FPM Service Unit Normalization**: Automatically rewrites hallucinated per-site service units (e.g. `systemctl reload php8.3-fpm-<site>.service`) into the canonical system-wide unit (`php8.3-fpm`), avoiding exit code 5 service unit not found failures.
+  - **Diagnostic Command Filtering**: Enhanced `WatchServerSpikes` to ignore diagnostic probe commands (`ps aux`, `top`, `grep`) from being misclassified as runaway rogue processes.
+  - **Debounce & Maintenance Task Detection**: Extended CPU spike persistence threshold from 20s to 60s, and excluded routine scheduled maintenance tasks (`wp-cron`, `wp backup`, `mysqldump`, duplicity, composer) from triggering unnecessary remediation runs.
+  - **Outcome Classification Accuracy**: Adjusted automated evaluation so runs executing corrective actions that restore system health are accurately scored as `ai_resolved` rather than `self_resolved`.
+
 ### Fixed
 - **DigitalOcean CPU Metrics Post-Reboot Resilience**:
-  - Enhanced `DigitalOceanMetricsParser::percentCpuUsed()` to detect Linux counter resets (`/proc/stat` jiffies) when droplets reboot mid-polling window. Utilization is now calculated across the synchronized post-reboot data points instead of discarding the entire window and reporting an "Unknown" status for 15 minutes.
+  - Enhanced `DigitalOceanMetricsParser::percentCpuUsed()` to detect Linux counter resets (`/proc/stat` jiffies) when droplets reboot mid-polling window. Utilization is now calculated across synchronized post-reboot data points instead of discarding the entire window and reporting an "Unknown" status for 15 minutes.
+- **Client Report Monthly Schedule Drift**:
+  - Fixed a schedule calculation bug where monthly client reports drifted forward by one day on each recurring cycle; monthly schedules now reliably snap to midnight on the 1st of each month.
+- **Security & Dev Dependencies**:
+  - Resolved npm security advisories in `shell-quote` (GHSA-pqg4-j6r4-53mv) and `source-map-js` (GHSA-68fv-2mgg-jv7q) via `concurrently 10.0.6`, `shell-quote 1.12.0`, and `source-map-js 1.2.2`.
+  - Bumped dev dependencies: `vite` to `8.3.2` and `@biomejs/biome` to `2.5.15`.
 
 ## [1.10.3] - 2026-10-04
 
