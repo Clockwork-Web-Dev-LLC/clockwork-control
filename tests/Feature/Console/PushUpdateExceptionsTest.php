@@ -32,14 +32,14 @@ describe('clockwork:push-update-exceptions console command', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
         ]);
 
         $this->artisan('clockwork:push-update-exceptions')
             ->assertSuccessful();
 
         Http::assertSent(function ($request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
                 && count($request['items']) === 1
                 && $request['items'][0]['slug'] === 'broken-plugin';
         });

@@ -48,6 +48,10 @@ describe('Enrollment Variant Detection (Renegade vs Classic Companion)', functio
             ->and($site->companion_version)->toBe('1.0.0')
             ->and($site->auto_updates_paused)->toBeFalse();
 
+        // Standalone enrolment pushes white-label branding like the installers do.
+        Http::assertSent(fn ($r) => $r->method() === 'POST'
+            && str_starts_with($r->url(), 'https://renegade-site.com/wp-json/clockwork-renegade/v1/branding'));
+
         $response->assertRedirect(route('sites.show', $site));
     });
 

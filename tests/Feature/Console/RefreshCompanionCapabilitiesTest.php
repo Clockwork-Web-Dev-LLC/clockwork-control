@@ -38,7 +38,7 @@ describe('clockwork:refresh-companion-capabilities', function () {
         $site = capabilitiesSite(['domain' => 'refresh-changed.test']);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 CompanionFixtures::health(['version' => '1.30.4', 'capabilities' => ['malware-scan', 'resource-metrics', 'two-factor']]),
                 200,
                 ['Content-Type' => 'application/json'],
@@ -62,7 +62,7 @@ describe('clockwork:refresh-companion-capabilities', function () {
         $lastSeenBefore = $site->companion_last_seen_at;
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 CompanionFixtures::health(['version' => '1.30.4', 'capabilities' => ['resource-metrics', 'malware-scan']]),
                 200,
                 ['Content-Type' => 'application/json'],
@@ -81,7 +81,7 @@ describe('clockwork:refresh-companion-capabilities', function () {
         $site = capabilitiesSite(['domain' => 'refresh-fail.test', 'companion_capabilities' => ['malware-scan']]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response('Service Unavailable', 503),
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response('Service Unavailable', 503),
         ]);
 
         $this->artisan('clockwork:refresh-companion-capabilities')
@@ -96,7 +96,7 @@ describe('clockwork:refresh-companion-capabilities', function () {
         $other = capabilitiesSite(['domain' => 'refresh-other.test']);
 
         Http::fake([
-            "https://{$target->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$target->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 CompanionFixtures::health(['version' => '1.30.5']),
                 200,
                 ['Content-Type' => 'application/json'],

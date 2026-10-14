@@ -44,7 +44,7 @@ function makeCompanionSite(array $overrides = []): Site
 function fakePluginUpdateEndpoint(Site $site, array $response, int $status = 200): void
 {
     Http::fake([
-        "https://{$site->domain}/wp-json/clockwork/v1/plugins/update" => Http::response(
+        "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response(
             $response,
             $status,
             ['Content-Type' => 'application/json'],

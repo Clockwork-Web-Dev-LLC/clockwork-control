@@ -30,7 +30,7 @@ describe('Gatekeeper Login Lockouts', function () {
 
             // Fake the REST HTTP response from Companion
             Http::fake([
-                'https://example.gov/wp-json/clockwork/v1/lockouts' => Http::response([
+                'https://example.gov/wp-json/clockwork/v1/lockouts*' => Http::response([
                     'ok' => true,
                     'lockouts' => [
                         [
@@ -69,7 +69,7 @@ describe('Gatekeeper Login Lockouts', function () {
 
             // Fake 500 error from WordPress
             Http::fake([
-                'https://example.gov/wp-json/clockwork/v1/lockouts' => Http::response(['error' => 'server error'], 500),
+                'https://example.gov/wp-json/clockwork/v1/lockouts*' => Http::response(['error' => 'server error'], 500),
             ]);
 
             $mysqlMock = $this->mock(SiteMySqlClient::class, function ($mock) {
@@ -97,7 +97,7 @@ describe('Gatekeeper Login Lockouts', function () {
             ]);
 
             Http::fake([
-                'https://example.gov/wp-json/clockwork/v1/lockouts' => Http::response(['error' => 'server error'], 500),
+                'https://example.gov/wp-json/clockwork/v1/lockouts*' => Http::response(['error' => 'server error'], 500),
             ]);
 
             $mysqlMock = $this->mock(SiteMySqlClient::class, function ($mock) {

@@ -355,6 +355,15 @@ Schedule::command('clockwork:push-gatekeeper-settings')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Weekly white-label self-heal: read each Companion/Renegade site's live branding
+// and re-push only where it drifted. Branding was otherwise pushed only on
+// settings save and at install, so a failed push or a Renegade enrolment left
+// sites unbranded indefinitely (10 found 2026-10-14).
+Schedule::command('clockwork:push-companion-branding --verify')
+    ->weeklyOn(1, '06:50')
+    ->withoutOverlapping(60)
+    ->onOneServer();
+
 // Daily catch-up sync for update exceptions (paused auto-updates).
 // Pushes the active exceptions list to Companion and Renegade on all sites.
 // Runs after nightly updates have completed so any newly paused plugins are synced to wp-admin.

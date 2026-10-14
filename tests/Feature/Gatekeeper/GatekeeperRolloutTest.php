@@ -41,10 +41,10 @@ function fakeCompanionFor(string $domain, array $overrides = []): void
     $base = "https://{$domain}/wp-json/clockwork/v1";
 
     Http::fake(array_merge([
-        "{$base}/gatekeeper-settings" => Http::response(['ok' => true]),
-        "{$base}/plugins/toggle" => Http::response(['ok' => true]),
-        "{$base}/plugins/delete" => Http::response(['ok' => true]),
-        "{$base}/health" => Http::response(['ok' => true, 'version' => '1.39.1', 'capabilities' => ['gatekeeper', 'plugins']]),
+        "{$base}/gatekeeper-settings*" => Http::response(['ok' => true]),
+        "{$base}/plugins/toggle*" => Http::response(['ok' => true]),
+        "{$base}/plugins/delete*" => Http::response(['ok' => true]),
+        "{$base}/health*" => Http::response(['ok' => true, 'version' => '1.39.1', 'capabilities' => ['gatekeeper', 'plugins']]),
         '*' => Http::response(['ok' => true]),
     ], $overrides));
 }
@@ -121,7 +121,7 @@ describe('Companion site still on LLAR', function () {
     it('leaves LLAR alone when the Gatekeeper push fails', function () {
         $site = rolloutSite(['domain' => 'llar.example']);
         fakeCompanionFor('llar.example', [
-            'https://llar.example/wp-json/clockwork/v1/gatekeeper-settings' => Http::response(['error' => 'boom'], 500),
+            'https://llar.example/wp-json/clockwork/v1/gatekeeper-settings*' => Http::response(['error' => 'boom'], 500),
         ]);
 
         $this->artisan('clockwork:gatekeeper-rollout', ['--force' => true])
@@ -139,7 +139,7 @@ describe('Companion site still on LLAR', function () {
     it('does not delete LLAR when deactivation fails', function () {
         $site = rolloutSite(['domain' => 'llar.example']);
         fakeCompanionFor('llar.example', [
-            'https://llar.example/wp-json/clockwork/v1/plugins/toggle' => Http::response(['error' => 'nope'], 500),
+            'https://llar.example/wp-json/clockwork/v1/plugins/toggle*' => Http::response(['error' => 'nope'], 500),
         ]);
 
         $this->artisan('clockwork:gatekeeper-rollout', ['--force' => true])
@@ -198,13 +198,13 @@ describe('Companion too old for Gatekeeper', function () {
         expect($site->companion_capabilities)->toContain('gatekeeper')
             ->and($site->llar_enabled)->toBeFalse();
 
-        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/health'));
+        Http::assertSent(fn (Request $r) => str_ends_with(strtok($r->url(), '?'), '/health'));
     });
 
     it('stops if Companion still lacks the capability after install', function () {
         $site = rolloutSite(['domain' => 'stuck.example', 'companion_version' => '1.36.0', 'companion_capabilities' => ['plugins']]);
         fakeCompanionFor('stuck.example', [
-            'https://stuck.example/wp-json/clockwork/v1/health' => Http::response(['ok' => true, 'version' => '1.36.0', 'capabilities' => ['plugins']]),
+            'https://stuck.example/wp-json/clockwork/v1/health*' => Http::response(['ok' => true, 'version' => '1.36.0', 'capabilities' => ['plugins']]),
         ]);
 
         $this->mock(CompanionInstaller::class, function ($mock) {
