@@ -19,6 +19,8 @@ use RuntimeException;
  * Signature scheme MUST match src/Auth/HmacVerifier.php in the plugin repo:
  *   payload = METHOD + "\n" + "/wp-json/clockwork/v1<route>" + "\n" + ts + "\n" + body
  *   signature = hex hmac_sha256(payload, secret)
+ * plus, when the request has query params, X-Clockwork-Signature-V2 over
+ * the same payload with "?" + canonicalQuery() appended to the path.
  *
  * Replay window on the plugin side is 5 minutes — clock drift larger than
  * that will cause stale_timestamp 401s. (`time()` is fine.)
@@ -127,6 +129,9 @@ class ClockworkCompanionClient
      * windows safely (the Clockwork-side ingest is UPSERT).
      *
      * Requires Companion 1.17.0+ and the `resource-sampler` capability.
+     *
+     * Query params are signed separately via X-Clockwork-Signature-V2 —
+     * see signedRequest().
      *
      * @return array<string, mixed> shape: { ok, version, now, rows: [{bucket_at, cpu_us_total, wall_us_total, mem_peak_max, requests}] }
      */
@@ -961,7 +966,7 @@ class ClockworkCompanionClient
     protected function delete(string $route, array $query = [], array $options = []): Response
     {
         $body = '';
-        $request = $this->signedRequest('DELETE', $route, $body, $options);
+        $request = $this->signedRequest('DELETE', $route, $body, $options, $query);
         $url = $this->buildUrl($route);
         if ($query !== []) {
             $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
@@ -969,7 +974,7 @@ class ClockworkCompanionClient
         $response = $request->delete($url);
 
         if ($this->isNonJsonResponse($response)) {
-            $retryRequest = $this->signedRequest('DELETE', $route, $body, $options);
+            $retryRequest = $this->signedRequest('DELETE', $route, $body, $options, $query);
             $retryUrl = $this->buildQueryRouteUrl($route);
             if ($query !== []) {
                 $retryUrl .= '&'.http_build_query($query);
@@ -1047,7 +1052,7 @@ class ClockworkCompanionClient
     protected function get(string $route, array $query = []): Response
     {
         $body = '';
-        $request = $this->signedRequest('GET', $route, $body);
+        $request = $this->signedRequest('GET', $route, $body, [], $query);
         $url = $this->buildUrl($route);
         if ($query !== []) {
             $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
@@ -1063,8 +1068,9 @@ class ClockworkCompanionClient
             // query-string form (?rest_route=) bypasses that rewrite
             // entirely. Signature is unaffected — it's computed over the
             // logical route string, which $request->get_route() returns
-            // identically regardless of which URL form reached it.
-            $retryRequest = $this->signedRequest('GET', $route, $body);
+            // identically regardless of which URL form reached it, and
+            // Companion drops rest_route from the signed query.
+            $retryRequest = $this->signedRequest('GET', $route, $body, [], $query);
             $retryUrl = $this->buildQueryRouteUrl($route);
             if ($query !== []) {
                 $retryUrl .= '&'.http_build_query($query);
@@ -1122,9 +1128,17 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Companion's get_route() excludes the query string, so the V1
+     * signature doesn't cover it. When there are query params we also send
+     * X-Clockwork-Signature-V2 over the same payload with the path extended
+     * by "?" + the canonical query (sorted by key, RFC 3986) — Companion
+     * 1.40.0+ requires it for any request with query params. Older
+     * Companions ignore the extra header and keep checking V1.
+     *
      * @param  array{timeout?: int, retries?: int}  $options
+     * @param  array<string, scalar>  $query
      */
-    protected function signedRequest(string $method, string $route, string $body, array $options = []): PendingRequest
+    protected function signedRequest(string $method, string $route, string $body, array $options = [], array $query = []): PendingRequest
     {
         $secret = $this->site->companion_secret;
         if (! is_string($secret) || $secret === '') {
@@ -1144,7 +1158,24 @@ class ClockworkCompanionClient
         };
 
         $timestamp = time();
-        $signature = $sign($timestamp);
+        $headers = [
+            'X-Clockwork-Signature' => $sign($timestamp),
+            'X-Clockwork-Timestamp' => (string) $timestamp,
+        ];
+
+        $canonicalQuery = self::canonicalQuery($query);
+        $signV2 = null;
+        if ($canonicalQuery !== '') {
+            $signV2 = function (int $timestamp) use ($method, $route, $canonicalQuery, $body, $secret, $routeNamespace): string {
+                $payloadV2 = strtoupper($method)
+                    ."\n".'/wp-json/'.$routeNamespace.$route.'?'.$canonicalQuery
+                    ."\n".$timestamp
+                    ."\n".$body;
+
+                return hash_hmac('sha256', $payloadV2, $secret);
+            };
+            $headers['X-Clockwork-Signature-V2'] = $signV2($timestamp);
+        }
 
         // Http::retry($n, ...) treats $n as total attempts (1 = no retries,
         // 2 = one retry after first failure). Default 2 = single retry.
@@ -1154,10 +1185,7 @@ class ClockworkCompanionClient
 
         return Http::timeout($options['timeout'] ?? $this->timeout)
             ->withUserAgent(self::USER_AGENT)
-            ->withHeaders([
-                'X-Clockwork-Signature' => $signature,
-                'X-Clockwork-Timestamp' => (string) $timestamp,
-            ])
+            ->withHeaders($headers)
             ->acceptJson()
             // verify => false matches UptimeProber's stance — browsers do
             // AIA fetching for missing intermediates (common with GoDaddy /
@@ -1189,15 +1217,35 @@ class ClockworkCompanionClient
             // 400 missing_config surfaced as replayed_request). time() can
             // return the same second on a fast retry, so bump past the last
             // used timestamp to force a distinct signature.
-            ->retry($retries, 500, function ($exception, $request) use ($sign, &$timestamp) {
+            ->retry($retries, 500, function ($exception, $request) use ($sign, $signV2, &$timestamp) {
                 $timestamp = max(time(), $timestamp + 1);
-                $request->withHeaders([
+                $retryHeaders = [
                     'X-Clockwork-Signature' => $sign($timestamp),
                     'X-Clockwork-Timestamp' => (string) $timestamp,
-                ]);
+                ];
+                if ($signV2 !== null) {
+                    $retryHeaders['X-Clockwork-Signature-V2'] = $signV2($timestamp);
+                }
+                $request->withHeaders($retryHeaders);
 
                 return true;
             });
+    }
+
+    /**
+     * Must match HmacVerifier::canonicalQuery() in the Companion repo.
+     *
+     * @param  array<string, scalar>  $query
+     */
+    public static function canonicalQuery(array $query): string
+    {
+        unset($query['rest_route']);
+        if ($query === []) {
+            return '';
+        }
+        ksort($query, SORT_STRING);
+
+        return http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
 
     protected function buildUrl(string $route): string
