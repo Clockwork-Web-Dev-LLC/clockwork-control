@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **DigitalOcean CPU Metrics Post-Reboot Resilience**:
+  - Enhanced `DigitalOceanMetricsParser::percentCpuUsed()` to detect Linux counter resets (`/proc/stat` jiffies) when droplets reboot mid-polling window. Utilization is now calculated across the synchronized post-reboot data points instead of discarding the entire window and reporting an "Unknown" status for 15 minutes.
+
 ## [1.10.3] - 2026-10-04
 
 ### Changed
