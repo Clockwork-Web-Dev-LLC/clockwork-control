@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php, app/Http/Controllers/SitesController.php]
@@ -114,6 +114,7 @@ php artisan clockwork:verify-wp-core-checksums --site=42
   - `wp_config_recently_modified` — wp-config.php mtime within 30 days; operator should confirm the change was authorized.
   - `php_in_uploads` — PHP file found under `wp-content/uploads/`. Legitimately placed by plugins like Smush (log files), so yellow rather than red. Still worth a glance to confirm the path is from a known plugin.
   - `preg_replace_e_modifier` — the `/e` modifier was a historic backdoor technique, but was **removed in PHP 7.0**, so on modern PHP fleets a match is dead version-guarded code. In practice it only flags legacy vendor code. A genuine backdoor also trips the `eval_*`/`shell_*` signatures, which stay `issues_found`.
+- **Our own scanner is never a finding.** `MalwareScanner.php` lists every signature it searches for, so when Companion (or Renegade) is installed as a regular plugin, inside the scanned tree, it used to flag itself as a webshell. `CompanionMalwareScanner::isOwnScannerSource()` drops findings in `wp-content/(mu-)plugins/clockwork-{companion,renegade}/src/SecurityScans/` only; anything else in our plugin folder is still flagged.
 - **`issues_found`** (red) — at least one real-malware finding (PHP backdoor in uploads, obfuscation signature, etc.). The `details` JSON has the structured verdict. Drives the Issues page.
 - **`failed`** (yellow, "Failed") — couldn't run. Common cause for Sucuri: CF WAF 403'd the scanner. Companion's Security page recognises this shape and renders "Blocked by site firewall (likely Cloudflare)" instead of a red alarm. The blacklist scan covers the gap.
 
