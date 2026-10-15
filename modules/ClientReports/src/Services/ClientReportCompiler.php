@@ -365,20 +365,23 @@ class ClientReportCompiler
     {
         // Only tests run inside the period: an old score shown under this
         // month's heading reads as this month's result.
-        $latestMobile = SitePerformanceScan::query()
+        // GTmetrix on our plan has no phone emulation: its scans run desktop
+        // Chrome whatever strategy they were filed under, so they're reported
+        // as desktop. Pressable's and Google's "mobile" results really are.
+        $inPeriod = fn () => SitePerformanceScan::query()
             ->where('site_id', $site->id)
-            ->where('strategy', SitePerformanceScan::STRATEGY_MOBILE)
             ->where('status', SitePerformanceScan::STATUS_OK)
             ->whereBetween('scanned_at', [$start, $end])
-            ->orderByDesc('scanned_at')
+            ->orderByDesc('scanned_at');
+
+        $latestMobile = $inPeriod()
+            ->where('strategy', SitePerformanceScan::STRATEGY_MOBILE)
+            ->where('engine', '!=', SitePerformanceScan::ENGINE_GTMETRIX)
             ->first();
 
-        $latestDesktop = SitePerformanceScan::query()
-            ->where('site_id', $site->id)
-            ->where('strategy', SitePerformanceScan::STRATEGY_DESKTOP)
-            ->where('status', SitePerformanceScan::STATUS_OK)
-            ->whereBetween('scanned_at', [$start, $end])
-            ->orderByDesc('scanned_at')
+        $latestDesktop = $inPeriod()
+            ->where(fn ($q) => $q->where('strategy', SitePerformanceScan::STRATEGY_DESKTOP)
+                ->orWhere('engine', SitePerformanceScan::ENGINE_GTMETRIX))
             ->first();
 
         $latestField = SiteFieldMetric::query()

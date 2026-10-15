@@ -58,6 +58,22 @@
         </div>
     </div>
 
+    @if (($isOperatorPreview ?? false) && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
+        <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
+            A newer report for this schedule and period replaced this one. It can't be sent.
+        </div>
+    @elseif (($isOperatorPreview ?? false) && ! empty($data['meta']['review_reasons']) && $report->status !== 'sent')
+        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            <div class="font-semibold mb-1"><i class="fa-solid fa-hand"></i> {{ $report->schedule?->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_AUTO ? 'Held for review instead of being emailed automatically' : 'Check these before sending' }}</div>
+            <ul class="list-disc ml-5 space-y-0.5">
+                @foreach ($data['meta']['review_reasons'] as $reason)
+                    <li>{{ $reason }}</li>
+                @endforeach
+            </ul>
+            <div class="mt-2 text-xs text-amber-800">Fix or confirm these, then send it from the history table (or generate a fresh one).</div>
+        </div>
+    @endif
+
     {{-- Report Document Container --}}
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden report-card">
         {{-- Brand Accent Strip --}}

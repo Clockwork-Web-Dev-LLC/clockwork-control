@@ -92,9 +92,9 @@ class ClientReportsController extends Controller
      */
     public function show(ClientReport $report): View
     {
-        $report->load('site');
+        $report->load('site', 'schedule');
 
-        return view('client-reports::reports.show', compact('report'));
+        return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => true]);
     }
 
     /**
@@ -107,7 +107,7 @@ class ClientReportsController extends Controller
             ->with('site')
             ->firstOrFail();
 
-        return view('client-reports::reports.show', compact('report'));
+        return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false]);
     }
 
     /**
@@ -115,6 +115,10 @@ class ClientReportsController extends Controller
      */
     public function send(ClientReport $report, Request $request, ClientReportSender $sender): RedirectResponse
     {
+        if ($report->status === ClientReport::STATUS_SUPERSEDED) {
+            return back()->with('status_error', 'A newer report for this period replaced this one. Send the newer one instead.');
+        }
+
         $recipients = $request->filled('email')
             ? ClientReport::parseRecipients((string) $request->input('email'))
             : $report->recipients();

@@ -75,7 +75,11 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3">
-                                        @if ($r->status !== 'sent' && ! empty($r->sent_to))
+                                        @if ($r->status === 'generated' && empty($r->sent_to) && ! empty($r->sections_data['meta']['review_reasons']))
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="{{ implode(' ', $r->sections_data['meta']['review_reasons']) }}">
+                                                Needs review
+                                            </span>
+                                        @elseif ($r->status !== 'sent' && ! empty($r->sent_to))
                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="Delivered to {{ implode(', ', $r->sent_to) }}">
                                                 Partly sent
                                             </span>

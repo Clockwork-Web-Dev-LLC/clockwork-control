@@ -34,6 +34,13 @@ class ClientReport extends Model
 {
     use HasFactory;
 
+    public const STATUS_GENERATED = 'generated';
+
+    public const STATUS_SENT = 'sent';
+
+    /** A newer report for the same schedule and period replaced this one before it reached anyone. */
+    public const STATUS_SUPERSEDED = 'superseded';
+
     protected $table = 'client_reports';
 
     protected $fillable = [

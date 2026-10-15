@@ -208,6 +208,10 @@ class SchedulesController extends Controller
             return back()->with('status_error', 'Cannot generate report: site is inactive.');
         }
 
+        if (! ScheduledReportRunner::siteIsEligible($site)) {
+            return back()->with('status_error', 'This site has no care plan. Client reports are only sent for care-plan sites.');
+        }
+
         $recipients = array_values(array_filter((array) $schedule->recipients));
         $isAuto = $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT;
 
@@ -217,6 +221,11 @@ class SchedulesController extends Controller
 
         try {
             $run = $runner->run($schedule);
+
+            if ($run->held()) {
+                return redirect()->route('client-reports.show', $run->report)
+                    ->with('status_error', 'Held for review instead of sending: '.implode(' ', $run->heldReasons).' Check it, then send it from the history table.');
+            }
 
             if ($run->isDraft) {
                 return redirect()->route('client-reports.show', $run->report)

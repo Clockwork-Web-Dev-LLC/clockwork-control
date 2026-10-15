@@ -444,12 +444,22 @@ describe('performance (#7)', function () {
 
     it('shows scans that ran inside the period', function () {
         $site = accuracySite();
-        SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-09-14'), 'strategy' => SitePerformanceScan::STRATEGY_MOBILE, 'performance_score' => 88]);
+        SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-09-14'), 'strategy' => SitePerformanceScan::STRATEGY_MOBILE, 'engine' => SitePerformanceScan::ENGINE_PRESSABLE, 'performance_score' => 88]);
 
         $report = compileSeptember($site);
 
         expect($report['data']['performance']['mobile'])->toMatchArray(['score' => 88, 'scanned_at' => '2026-09-14'])
             ->and($report['html'])->toContain('Tested Sep 14, 2026');
+    });
+
+    it('reports GTmetrix scans as desktop, since our plan has no phone emulation', function () {
+        $site = accuracySite();
+        SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-09-14'), 'strategy' => SitePerformanceScan::STRATEGY_MOBILE, 'engine' => SitePerformanceScan::ENGINE_GTMETRIX, 'performance_score' => 91]);
+
+        $perf = compileSeptember($site)['data']['performance'];
+
+        expect($perf['mobile'])->toBeNull()
+            ->and($perf['desktop'])->toMatchArray(['score' => 91]);
     });
 });
 

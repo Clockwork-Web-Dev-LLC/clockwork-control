@@ -2,6 +2,8 @@
 
 namespace Modules\ClientReports\Services;
 
+use App\Models\Site;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
@@ -20,6 +22,12 @@ class ScheduledReportRunner
         protected ClientReportSender $sender,
     ) {}
 
+    /** Reports are a care-plan service; with care plans switched off fleet-wide, every site counts. */
+    public static function siteIsEligible(?Site $site): bool
+    {
+        return $site !== null && (! Site::areCarePlansEnabled() || $site->care_plan_enabled);
+    }
+
     public function run(ClientReportSchedule $schedule): ScheduledReportRun
     {
         $start = now()->subMonth()->startOfMonth();
@@ -27,18 +35,32 @@ class ScheduledReportRunner
         $recipients = array_values(array_filter((array) $schedule->recipients));
 
         if ($schedule->delivery_mode === ClientReportSchedule::MODE_DRAFT) {
-            $report = $this->compile($schedule, $start, $end, $recipients);
+            $report = $this->compileFresh($schedule, $start, $end, $recipients);
+            $reasons = $this->flagForReview($report);
             $schedule->advanceNextRun();
 
-            return new ScheduledReportRun($report, isDraft: true, resumed: false);
+            return new ScheduledReportRun($report, isDraft: true, resumed: false, heldReasons: $reasons);
         }
 
-        // A previous run for this period that didn't reach everyone is resumed
-        // rather than recompiled, so recipients who already got it aren't
-        // emailed a second copy.
-        $report = $this->unfinishedReport($schedule, $start, $end);
+        // An earlier report for this period is reused rather than recompiled, so
+        // recipients who already got it aren't emailed a second copy and a mail
+        // outage doesn't pile up a new report every day. A held report is the
+        // exception: it's recompiled, since someone may have fixed the problem.
+        $report = $this->resumableReport($schedule, $start, $end);
         $resumed = $report !== null;
-        $report ??= $this->compile($schedule, $start, $end, $recipients);
+        $report ??= $this->compileFresh($schedule, $start, $end, $recipients);
+
+        // Anything that hasn't reached anyone yet is checked first: a fresh
+        // report, a draft that predates switching the schedule to auto, or a
+        // run that died before its check was saved.
+        if (empty($report->sent_to)) {
+            $reasons = $this->flagForReview($report);
+            if ($reasons !== []) {
+                $schedule->advanceNextRun();
+
+                return new ScheduledReportRun($report, isDraft: true, resumed: $resumed, heldReasons: $reasons);
+            }
+        }
 
         $pending = array_values(array_diff($recipients, $report->sent_to ?? []));
         $failed = $this->sender->send($report, $pending);
@@ -57,15 +79,60 @@ class ScheduledReportRunner
         );
     }
 
-    protected function unfinishedReport(ClientReportSchedule $schedule, Carbon $start, Carbon $end): ?ClientReport
+    protected function resumableReport(ClientReportSchedule $schedule, Carbon $start, Carbon $end): ?ClientReport
+    {
+        $report = $this->samePeriod($schedule, $start, $end)
+            ->where('status', ClientReport::STATUS_GENERATED)
+            ->latest('id')
+            ->first();
+
+        $held = $report !== null && empty($report->sent_to) && ! empty($report->sections_data['meta']['review_reasons']);
+
+        return $held ? null : $report;
+    }
+
+    /**
+     * Compile a new report for the period, retiring any earlier copy that never
+     * reached anyone, so there's one live report per schedule per period and
+     * an older copy can't be sent by mistake.
+     *
+     * @param  list<string>  $recipients
+     */
+    protected function compileFresh(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients): ClientReport
+    {
+        $this->samePeriod($schedule, $start, $end)
+            ->where('status', ClientReport::STATUS_GENERATED)
+            ->get()
+            ->filter(fn (ClientReport $r) => empty($r->sent_to))
+            ->each(fn (ClientReport $r) => $r->update(['status' => ClientReport::STATUS_SUPERSEDED]));
+
+        return $this->compile($schedule, $start, $end, $recipients);
+    }
+
+    /**
+     * Save what a person should check before this report goes out.
+     *
+     * @return list<string>
+     */
+    protected function flagForReview(ClientReport $report): array
+    {
+        $reasons = ReportReviewFlags::reasons($report->sections_data ?? []);
+        if ($reasons !== []) {
+            $data = $report->sections_data;
+            $data['meta']['review_reasons'] = $reasons;
+            $report->update(['sections_data' => $data]);
+        }
+
+        return $reasons;
+    }
+
+    /** @return Builder<ClientReport> */
+    protected function samePeriod(ClientReportSchedule $schedule, Carbon $start, Carbon $end)
     {
         return ClientReport::query()
             ->where('schedule_id', $schedule->id)
             ->whereDate('period_start', $start->toDateString())
-            ->whereDate('period_end', $end->toDateString())
-            ->where('status', '!=', 'sent')
-            ->latest('id')
-            ->first();
+            ->whereDate('period_end', $end->toDateString());
     }
 
     /**
@@ -90,7 +157,7 @@ class ScheduledReportRunner
             ),
             'client_name' => $site->domain,
             'client_email' => $recipients !== [] ? implode(', ', $recipients) : null,
-            'status' => 'generated',
+            'status' => ClientReport::STATUS_GENERATED,
         ]);
     }
 }
