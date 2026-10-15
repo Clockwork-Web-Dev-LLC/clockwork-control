@@ -16,6 +16,8 @@ Open issues, decisions and next steps are tracked separately in [Internal → Cl
 
 **Reports** (`/client-reports`) holds the history table and the manual **Generate** form. Pick a site, a template, a date range, and optionally a client name, email and a custom note. You land on a preview page with a **Print / Download PDF** button.
 
+The paper-plane button in the history table emails a report to every address in its `client_email`, which scheduled reports fill with all their recipients, comma-separated. If a report has no address saved, the button asks for one (you can enter several, comma-separated) and saves it on the report.
+
 **Templates** (`/client-reports/templates`) control which sections go into a report. A template is just a name plus a list of section keys. Exactly one template is the default. You can't delete the default or the last remaining template, and un-ticking "default" on the only default is silently ignored.
 
 **Scheduling** (`/client-reports/schedules`) allows one schedule per site, enforced by a unique index on `site_id`. Each schedule has a frequency (`weekly` / `monthly`), a recipients list, a template, and a delivery mode:
@@ -52,9 +54,15 @@ Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Ad
 
 1. It skips paused schedules, inactive sites, and schedules whose `next_run_at` is still in the future.
 2. It skips `auto` schedules that have no recipients.
-3. It compiles **last calendar month** using the schedule's template, and saves the report.
-4. For `auto` schedules, it sends one email per recipient, marks the report `sent`, and stamps `last_sent_at`.
-5. It moves `next_run_at` forward: the 1st of next month for monthly schedules, or now plus 7 days at midnight for weekly ones. The midnight snap is on purpose, so the next 06:00 run sees it as due. Before this, runs used to slip a day every cycle.
+3. It compiles **last calendar month** using the schedule's template, and saves the report with `schedule_id` set. For `auto`, if an unfinished report from this schedule already exists for the same period, it **resumes that one** instead (see below).
+4. For `auto` schedules, it sends one email per recipient who isn't already in the report's `sent_to`. Once everyone has it, it marks the report `sent` and stamps `last_sent_at`.
+5. It moves `next_run_at` forward: the 1st of next month for monthly schedules, or now plus 7 days at midnight for weekly ones. The midnight snap is on purpose, so the next 06:00 run sees it as due. Before this, runs used to slip a day every cycle. If any recipient failed, `next_run_at` **doesn't** move, so tomorrow's run retries.
+
+The command and the **Send now** button share the same code: `ScheduledReportRunner`, with delivery in `ClientReportSender`.
+
+### When a send fails part-way
+
+Every successful delivery is written to `client_reports.sent_to` straight away, before the next recipient is tried. If one address fails, the report stays `generated` (shown as **Partly sent** in the history table), the failure is logged, and the schedule stays due. The next run picks up the **same report** and only emails the addresses that are still missing. Clients who already got it never get a second copy, and you don't end up with a pile of duplicate reports while a mail outage lasts.
 
 Manual runs:
 

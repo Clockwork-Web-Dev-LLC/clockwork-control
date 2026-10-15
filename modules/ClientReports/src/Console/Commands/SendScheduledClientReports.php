@@ -4,11 +4,8 @@ namespace Modules\ClientReports\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Modules\ClientReports\Mail\ClientReportMail;
-use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
-use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 use Throwable;
 
 class SendScheduledClientReports extends Command
@@ -19,7 +16,7 @@ class SendScheduledClientReports extends Command
 
     protected $description = 'Generate and email scheduled client reports for care plan websites.';
 
-    public function handle(ClientReportCompiler $compiler): int
+    public function handle(ScheduledReportRunner $runner): int
     {
         $isForce = (bool) $this->option('force');
 
@@ -43,10 +40,6 @@ class SendScheduledClientReports extends Command
 
             return self::SUCCESS;
         }
-
-        $now = now();
-        $start = $now->copy()->subMonth()->startOfMonth();
-        $end = $now->copy()->subMonth()->endOfMonth();
 
         $processed = 0;
 
@@ -74,49 +67,20 @@ class SendScheduledClientReports extends Command
             }
 
             try {
-                $sections = $schedule->template ? $schedule->template->sections : null;
+                $run = $runner->run($schedule);
 
-                $sectionsData = $compiler->compile(
-                    site: $site,
-                    periodStart: $start,
-                    periodEnd: $end,
-                    sections: $sections
-                );
-
-                $title = "Maintenance Report: {$site->domain} ({$start->format('M Y')})";
-
-                $report = ClientReport::create([
-                    'site_id' => $site->id,
-                    'template_id' => $schedule->template_id,
-                    'title' => $title,
-                    'period_start' => $start,
-                    'period_end' => $end,
-                    'sections_data' => $sectionsData,
-                    'client_name' => $site->domain,
-                    'client_email' => ! empty($recipients) ? implode(', ', $recipients) : null,
-                    'status' => 'generated',
-                ]);
-
-                if ($isAuto) {
-                    foreach ($recipients as $email) {
-                        Mail::to($email)->send(new ClientReportMail($report));
-                    }
-
-                    $report->update([
-                        'status' => 'sent',
-                        'sent_at' => now(),
-                    ]);
-
-                    $schedule->update([
-                        'last_sent_at' => now(),
-                    ]);
-
-                    $this->line("  ✓ {$site->domain}: sent report to ".implode(', ', $recipients));
-                } else {
+                if ($run->isDraft) {
                     $this->line("  ✓ {$site->domain}: generated draft report (awaiting operator review)");
+                } elseif ($run->complete() && $run->sentTo === []) {
+                    $this->line("  ✓ {$site->domain}: every recipient already had this report; marked sent");
+                } elseif ($run->complete()) {
+                    $resumed = $run->resumed ? ' (resumed earlier partial send)' : '';
+                    $this->line("  ✓ {$site->domain}: sent report to ".implode(', ', $run->sentTo).$resumed);
+                } else {
+                    $this->error("  ✗ {$site->domain}: failed for ".implode(', ', $run->failed)
+                        .'; will retry only those recipients on the next run');
                 }
 
-                $schedule->advanceNextRun();
                 $processed++;
             } catch (Throwable $e) {
                 $this->error("  ✗ {$site->domain}: {$e->getMessage()}");

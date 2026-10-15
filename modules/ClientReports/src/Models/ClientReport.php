@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property int $site_id
  * @property ?int $template_id
+ * @property ?int $schedule_id
  * @property string $title
  * @property Carbon $period_start
  * @property Carbon $period_end
@@ -21,11 +22,13 @@ use Illuminate\Support\Str;
  * @property ?string $client_email
  * @property string $status
  * @property ?Carbon $sent_at
+ * @property ?list<string> $sent_to
  * @property string $public_token
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
  * @property-read Site $site
  * @property-read ?ClientReportTemplate $template
+ * @property-read ?ClientReportSchedule $schedule
  */
 class ClientReport extends Model
 {
@@ -36,6 +39,7 @@ class ClientReport extends Model
     protected $fillable = [
         'site_id',
         'template_id',
+        'schedule_id',
         'title',
         'period_start',
         'period_end',
@@ -44,6 +48,7 @@ class ClientReport extends Model
         'client_email',
         'status',
         'sent_at',
+        'sent_to',
         'public_token',
     ];
 
@@ -54,7 +59,27 @@ class ClientReport extends Model
             'period_end' => 'date',
             'sections_data' => 'array',
             'sent_at' => 'datetime',
+            'sent_to' => 'array',
         ];
+    }
+
+    /**
+     * Scheduled reports store every recipient comma-joined in client_email,
+     * so it has to be split before it can be used as an address.
+     *
+     * @return list<string>
+     */
+    public static function parseRecipients(?string $input): array
+    {
+        $parts = preg_split('/[\s,;]+/', (string) $input) ?: [];
+
+        return array_values(array_unique(array_filter($parts, fn (string $part) => $part !== '')));
+    }
+
+    /** @return list<string> */
+    public function recipients(): array
+    {
+        return self::parseRecipients($this->client_email);
     }
 
     protected static function booted(): void
@@ -74,5 +99,10 @@ class ClientReport extends Model
     public function template(): BelongsTo
     {
         return $this->belongsTo(ClientReportTemplate::class, 'template_id');
+    }
+
+    public function schedule(): BelongsTo
+    {
+        return $this->belongsTo(ClientReportSchedule::class, 'schedule_id');
     }
 }

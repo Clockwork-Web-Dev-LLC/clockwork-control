@@ -4,6 +4,8 @@ use App\Models\Site;
 use App\Models\SiteTrafficDaily;
 use App\Models\User;
 use App\Services\Companion\CompanionBrandingManager;
+use Illuminate\Support\Facades\Mail;
+use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Tests\Concerns\RendersAuthenticatedPages;
@@ -179,5 +181,86 @@ describe('publicShow', function () {
         $response = $this->get(route('client-reports.public', ['token' => 'not-a-real-token']));
 
         $response->assertNotFound();
+    });
+});
+
+describe('send', function () {
+    function sendableReport(?string $clientEmail): ClientReport
+    {
+        return ClientReport::create([
+            'site_id' => Site::factory()->create()->id,
+            'title' => 'Send Test Report',
+            'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(),
+            'sections_data' => [],
+            'client_email' => $clientEmail,
+            'status' => 'generated',
+        ]);
+    }
+
+    it('emails every address in a scheduled report\'s comma-joined recipient list', function () {
+        // Regression: send() ran the whole "a, b" string through
+        // FILTER_VALIDATE_EMAIL, so any scheduled draft with more than one
+        // recipient could never be sent from the UI.
+        Mail::fake();
+        $report = sendableReport('one@client.test, two@client.test');
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status', 'Report emailed to one@client.test, two@client.test.');
+
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('one@client.test'));
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('two@client.test'));
+
+        $report->refresh();
+        expect($report->status)->toBe('sent')
+            ->and($report->sent_to)->toBe(['one@client.test', 'two@client.test']);
+    });
+
+    it('sends a report with no saved address to the one entered, and remembers it', function () {
+        Mail::fake();
+        $report = sendableReport(null);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report), ['email' => 'entered@client.test'])
+            ->assertSessionHas('status', 'Report emailed to entered@client.test.');
+
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('entered@client.test'));
+        expect($report->fresh()->client_email)->toBe('entered@client.test');
+    });
+
+    it('refuses to send when there is no address at all', function () {
+        Mail::fake();
+        $report = sendableReport(null);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status_error');
+
+        Mail::assertNothingSent();
+        expect($report->fresh()->status)->toBe('generated');
+    });
+
+    it('refuses the whole send if any address is invalid', function () {
+        Mail::fake();
+        $report = sendableReport('good@client.test, not-an-email');
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status_error', "Invalid email address: 'not-an-email'.");
+
+        Mail::assertNothingSent();
+    });
+
+    it('asks for an address on the reports list when a report has none', function () {
+        $this->mockIssueCounterZero();
+        sendableReport(null);
+        sendableReport('saved@client.test');
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('client-reports.index'))
+            ->assertOk()
+            ->assertSee('Send this report to which email address(es)?')
+            ->assertSee('Email report to saved@client.test?');
     });
 });

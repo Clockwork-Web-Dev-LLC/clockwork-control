@@ -546,3 +546,109 @@ describe('ClientReportSchedule next-run cadence', function () {
         expect($schedule->fresh()->isDue())->toBeTrue();
     });
 });
+
+describe('partial delivery failures', function () {
+    /**
+     * Swap the mailer for one that throws for any address currently in
+     * $failing (mutable, so a test can let a retry succeed) and records every
+     * address it actually delivered to.
+     */
+    function mailerFailingFor(ArrayObject $failing): ArrayObject
+    {
+        $delivered = new ArrayObject;
+
+        Mail::shouldReceive('to')->andReturnUsing(function (string $email) use ($failing, $delivered) {
+            $pending = Mockery::mock();
+            $pending->shouldReceive('send')->andReturnUsing(function () use ($email, $failing, $delivered) {
+                if (in_array($email, $failing->getArrayCopy(), true)) {
+                    throw new RuntimeException("550 mailbox unavailable: {$email}");
+                }
+                $delivered[] = $email;
+            });
+
+            return $pending;
+        });
+
+        return $delivered;
+    }
+
+    function dueAutoSchedule(array $recipients): ClientReportSchedule
+    {
+        return ClientReportSchedule::create([
+            'site_id' => Site::factory()->create()->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => $recipients,
+            'is_enabled' => true,
+            'next_run_at' => now()->subHour(),
+        ]);
+    }
+
+    it('records who got the report and leaves the schedule due when one recipient fails', function () {
+        $delivered = mailerFailingFor(new ArrayObject(['bad@client.test']));
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('failed for bad@client.test')
+            ->assertExitCode(0);
+
+        expect($delivered->getArrayCopy())->toBe(['a@client.test', 'c@client.test']);
+
+        $report = ClientReport::sole();
+        expect($report->status)->toBe('generated')
+            ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test'])
+            ->and($report->schedule_id)->toBe($schedule->id);
+
+        $schedule->refresh();
+        expect($schedule->last_sent_at)->toBeNull()
+            ->and($schedule->isDue())->toBeTrue();
+    });
+
+    it('resumes the same report on the next run and only emails the recipient that failed', function () {
+        $failing = new ArrayObject(['bad@client.test']);
+        $delivered = mailerFailingFor($failing);
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+
+        $failing->exchangeArray([]);
+        $delivered->exchangeArray([]);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('sent report to bad@client.test (resumed earlier partial send)')
+            ->assertExitCode(0);
+
+        expect($delivered->getArrayCopy())->toBe(['bad@client.test']);
+
+        $report = ClientReport::sole();
+        expect($report->status)->toBe('sent')
+            ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test', 'bad@client.test']);
+
+        $schedule->refresh();
+        expect($schedule->last_sent_at)->not->toBeNull()
+            ->and($schedule->next_run_at->isFuture())->toBeTrue();
+    });
+
+    it('does not pile up duplicate reports while every send keeps failing', function () {
+        mailerFailingFor(new ArrayObject(['only@client.test']));
+        dueAutoSchedule(['only@client.test']);
+
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+
+        expect(ClientReport::count())->toBe(1)
+            ->and(ClientReport::sole()->sent_to)->toBeNull();
+    });
+
+    it('Send now reports the failed addresses and only retries those', function () {
+        $user = User::factory()->create();
+        mailerFailingFor(new ArrayObject(['bad@client.test']));
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test']);
+
+        $this->actingAs($user)
+            ->post(route('client-reports.schedules.send-now', $schedule))
+            ->assertSessionHas('status_error', fn (string $msg) => str_contains($msg, 'bad@client.test')
+                && str_contains($msg, 'Delivered to a@client.test'));
+
+        expect(ClientReport::sole()->sent_to)->toBe(['a@client.test']);
+    });
+});

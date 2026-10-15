@@ -27,25 +27,22 @@ As of the 2026-10-15 production DB snapshot:
 
 ## Open issues
 
-Found by reading the code on 2026-10-15. Not yet reproduced in tests.
+Found by reading the code on 2026-10-15. Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | # | Issue | Why it matters | Where |
 |---|---|---|---|
-| 1 | **Weekly schedules report on the wrong period.** Both scheduled paths hard-code "last calendar month", whatever the frequency. | A weekly schedule would email the same monthly report every week. No weekly schedules exist yet. | `SendScheduledClientReports::handle()`, `SchedulesController::sendNow()` |
-| 2 | **Manual Send fails for most drafts.** The Send button posts no email field, so `send()` relies on `client_email`. Scheduled reports store recipients as `"a@x.com, b@y.com"`, which fails `FILTER_VALIDATE_EMAIL` whenever there's more than one, and reports with no email can't be sent at all. | `draft` mode is unusable for any site with more than one recipient. | `ClientReportsController::send()`, `index.blade.php` |
-| 3 | **A partial send failure re-emails everyone.** Recipients are mailed one at a time. If one throws, the report stays `generated` and `next_run_at` isn't advanced, so the next day's run compiles a **new** report and emails everyone again. | Duplicate emails to clients, and duplicate report rows. | `SendScheduledClientReports::handle()` |
+| 1 | **Weekly schedules report on the wrong period.** The scheduled path hard-codes "last calendar month", whatever the frequency. | A weekly schedule would email the same monthly report every week. No weekly schedules exist yet. | `ScheduledReportRunner::run()` (now the one place to fix it) |
 | 4 | **Forms shows a 100% pass rate when zero tests ran.** | Claims testing that didn't happen. | `ClientReportCompiler::compileForms()` |
 | 5 | **Checksum status defaults to `ok` when there's no scan.** | Claims a clean scan that never ran. | `ClientReportCompiler::compileSecurity()` |
 | 6 | **Backups shows "enabled" from flags alone.** It's true if the care plan is on, even with no evidence a backup ran, and the "Host Automated Snapshots" label is an assumption. | Promises backups we can't verify. | `ClientReportCompiler::compileBackups()` |
 | 7 | **Performance ignores the report period.** It always uses the latest scan ever, which may be months old. | October's report could show June numbers. | `ClientReportCompiler::compilePerformance()` |
 | 8 | **The security CVE count is the site's *current* snapshot**, not the period. | Numbers shift depending on when you generate. | `ClientReportCompiler::compileSecurity()` |
-| 9 | **Generate-and-send logic is duplicated** in the command and in `sendNow()`. | Every fix to 1 or 3 has to land twice. Pull it into one service. | Both files above |
 | 10 | **The work log is empty** (`site_work_logs` has 0 rows), but `work_log` is in the default template. | Every report shows an empty "Work log" section unless hours get logged. | Data / template choice |
 
 ## Ideas and backlog
 
 - **Phase 4: conditional delivery.** Hold an `auto` send for review if the site is down or its latest security scan flagged something. See the plan file for the original design.
-- **Sent-email audit.** Nothing records *which* recipients actually got a report. `client_email` is a comma-joined string and `sent_at` is set once. It would help to have a per-recipient record (or `action_logs` entries).
+- **Sent-email audit.** `sent_to` now records *who* got each report, but not *when* or *by whom* (scheduler vs. an operator clicking Send). Writing `action_logs` entries would make that visible on the site's activity log.
 - **A "preview the next batch" view.** Show what the next scheduled run would send, and to whom, before it fires.
 - **Remove the public `/reports/view/{token}` route, or decide its purpose.** Clients can't reach it, and the email deliberately doesn't link to it.
 
@@ -53,4 +50,7 @@ Found by reading the code on 2026-10-15. Not yet reproduced in tests.
 
 | Date | What | Ref |
 |---|---|---|
-| 2026-10-15 | Wrote the feature doc page and this tracker | `feature/client-reports` |
+| 2026-10-15 | Wrote the feature doc page and this tracker | `b652081` |
+| 2026-10-15 | **#2:** Send splits the comma-joined `client_email` and emails every recipient. When a report has no address, the button asks for one and saves it. | `feature/client-reports` |
+| 2026-10-15 | **#3:** Each delivery is recorded in `client_reports.sent_to` as it happens. A failed run keeps the schedule due, and the next run resumes the same report (`schedule_id` + period) and emails only the missing recipients. History shows **Partly sent**. | `feature/client-reports` |
+| 2026-10-15 | **#9:** The command and **Send now** both go through `ScheduledReportRunner` + `ClientReportSender`. | `feature/client-reports` |

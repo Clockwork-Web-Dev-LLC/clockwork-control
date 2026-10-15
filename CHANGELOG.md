@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Client Reports — Partial send failures no longer re-email everyone**:
+  - Each successful delivery is recorded on the report (`client_reports.sent_to`) as it happens. A scheduled run that fails for some recipients keeps the schedule due, and the next run resumes the same report and emails only the recipients still missing, with no duplicate emails and no duplicate report rows. The history table shows **Partly sent**.
+  - The `clockwork:send-client-reports` command and the schedule's **Send now** button now share one code path (`ScheduledReportRunner` + `ClientReportSender`).
+- **Client Reports — Sending a report from the history table**:
+  - Reports with several recipients (every multi-recipient scheduled draft) can now be sent: the comma-joined `client_email` is split and each address is emailed. A report with no saved address prompts for one instead of failing.
+
+### Added
+- **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.
+
 ## [1.11.0] - 2026-10-14
 
 ### Added

@@ -75,17 +75,32 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3">
-                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $r->status === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700' }}">
-                                            {{ ucfirst($r->status) }}
-                                        </span>
+                                        @if ($r->status !== 'sent' && ! empty($r->sent_to))
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="Delivered to {{ implode(', ', $r->sent_to) }}">
+                                                Partly sent
+                                            </span>
+                                        @else
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $r->status === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700' }}">
+                                                {{ ucfirst($r->status) }}
+                                            </span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3 text-right whitespace-nowrap">
                                         <div class="flex items-center justify-end gap-1.5">
                                             <a href="{{ route('client-reports.show', $r) }}" target="_blank" class="btn-pill-nav text-xs py-1.5 px-2" title="View / Print">
                                                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                             </a>
-                                            <form method="POST" action="{{ route('client-reports.send', $r) }}" class="inline" onsubmit="return confirm('Email report to client?');">
+                                            {{-- No saved recipient: ask for one instead of failing server-side. --}}
+                                            <form method="POST" action="{{ route('client-reports.send', $r) }}" class="inline"
+                                                @if ($r->recipients() === [])
+                                                    onsubmit="const to = prompt('Send this report to which email address(es)?'); if (! to) return false; this.email.value = to; return true;"
+                                                @else
+                                                    onsubmit="return confirm(@js('Email report to '.implode(', ', $r->recipients()).'?'));"
+                                                @endif
+                                            >
                                                 @csrf
+                                                <input type="hidden" name="email" value="">
+
                                                 <button type="submit" class="btn-pill-nav text-xs py-1.5 px-2 text-indigo-600 hover:bg-indigo-50" title="Send Email">
                                                     <i class="fa-solid fa-paper-plane"></i>
                                                 </button>
