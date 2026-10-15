@@ -10,7 +10,7 @@ tracks: [app/Services/Performance/**, app/Console/Commands/RunPerformanceScans.p
 
 A weekly Lighthouse score per care-plan site (via a nightly 1/7th-of-fleet rotation), via GTmetrix's REST API v2 (primary) with Google PageSpeed Insights as a fallback. Pressable sites aren't in the rotation: Pressable's own report is read nightly instead (see "Pressable sites" below). Stored in `site_performance_scans`, mirrored to Companion's Performance admin page so the client sees the same numbers.
 
-**This GTmetrix→PSI chain is SpinupWP-only.** Pressable sites skip it entirely — `RunPerformanceScans` branches on `$site->isPressable()` and uses `PressableLighthouseClient` instead, which wraps Pressable's own built-in Lighthouse report (`engine=pressable`). No fallback chain needed there since it's not a rate-limited third-party API — but it also isn't generated fresh on every poll (see "Pressable's monthly report cadence" below, a real gotcha the nightly scan has to account for). See below.
+**This GTmetrix→PSI chain covers every site except Pressable ones** (SpinupWP, GridPane, custom and other hosts). Pressable sites skip it entirely — `RunPerformanceScans` branches on whether the site's host supports `HostingProvider::CAP_PERFORMANCE_SCAN` (only Pressable does) and uses `PressableLighthouseClient` instead, which wraps Pressable's own built-in Lighthouse report (`engine=pressable`). No fallback chain needed there since it's not a rate-limited third-party API — but it also isn't generated fresh on every poll (see "Pressable's report regenerates monthly — the dedup guard" below, a real gotcha the nightly read has to account for). See below.
 
 ## Why GTmetrix is our primary engine
 
@@ -34,21 +34,21 @@ CLS is stored as `cls_x1000` (CLS × 1000 as integer) to avoid float drift in My
 
 ## Where to look
 
-- **`/sites/{id}/overview` Performance card** — latest score plus a 30-day trend.
+- **`/sites/{id}/overview` Performance card** — latest mobile and desktop scores.
+- **`/sites/{id}/performance` tab** — 30-day score trend chart plus scan history.
 - **Companion → Tools → Clockwork → Performance** — the client view. Hero cards, full Core Web Vitals breakdown, scan history table.
-- **Issues page** — sites whose Performance score has dropped meaningfully since the previous run.
 
 ## Cadence
 
 **Three scheduled runs per night:** 04:45 UTC scans 1/7th of the GTmetrix/PSI fleet (`--weekly-rotation`), so each of those sites gets one primary-engine scan per week; 05:05 (mobile) and 05:15 (desktop) read Pressable's own report for every Pressable care-plan site (`--host-reports`). Host-report reads are free, need no GTmetrix/PSI key, and never trip the "unavailable" flag (that flag protects the paid quota): a failed read is just retried the next night.
 
-Why the rotation: GTmetrix refills API credits daily at ~04:27 UTC and **credits don't accumulate**. The full-fleet nightly run would burn credits quickly and fall back to PSI. The rotation slices sites (ordered by domain) into 7 near-equal buckets by `index % 7 == UTC weekday`, ~11 sites per night, which fits comfortably within the daily budget. A site's scan weekday can shift when sites are added/removed — fine, since scores are compared week-over-week either way.
+Why the rotation: GTmetrix refills API credits daily at ~04:27 UTC and **credits don't accumulate**. The full-fleet nightly run would burn credits quickly and fall back to PSI. The rotation slices sites (ordered by domain) into 7 near-equal buckets by `index % 7 == UTC weekday`, ~8 sites per night now that Pressable sites are left out, which fits comfortably within the daily budget. A site's scan weekday can shift when sites are added/removed — fine, since scores are compared week-over-week either way.
 
 The run time is scheduled at 04:45 UTC to land just *after* the credit refill. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for on-demand manual scans.
 
 It's one scan per site per run, not two. GTmetrix's tier doesn't expose device emulation (`/devices` + `/connections` return empty; `/browsers` only lists desktop Chrome and Firefox), so "mobile" and "desktop" strategies would submit identical desktop-Chrome scans. Running twice would double quota usage for identical data.
 
-The scheduled command keeps `--strategy=mobile` purely so new rows line up with pre-cutover PSI rows in historical analysis — the flag is display-only on this tier. If GTmetrix unlocks mobile device emulation on a higher tier, re-add the desktop scheduler entry and restore per-strategy attributes in `GtmetrixClient::submitTest`.
+The scheduled command keeps `--strategy=mobile` purely so new rows line up with pre-cutover PSI rows in historical analysis — the flag is display-only on this tier. If GTmetrix unlocks mobile device emulation on a higher tier, add a desktop `--weekly-rotation` scheduler entry and restore per-strategy attributes in `GtmetrixClient::submitTest`.
 
 Gated on `Settings('performance_scans.enabled')` and on the per-site `care_plan_enabled` flag. Hosting-tier sites are skipped — they see "what care plan would add" upsell copy on the Companion Performance page.
 
@@ -102,7 +102,7 @@ Recovery is automatic: any successful scan (via `--site=X` smoke-test, or an `--
 |---|---|
 | `--site=X` | Bypasses both the care-plan filter and the unavailable gate. Use for manual retry. |
 | `--include-unavailable` | Runs against flagged sites for "is the engine back?" probes. |
-| `--engine=gtmetrix\|psi` | Forces one engine, bypassing the fallback chain. |
+| `--engine=gtmetrix\|psi` | Forces one engine, bypassing the fallback chain. Ignored for Pressable sites (always read from Pressable's report). |
 | `--weekly-rotation` | Scan only tonight's 1/7th slice of the fleet (GTmetrix/PSI sites; Pressable sites are left out). What the scheduler passes. Ignored when `--site` is given. |
 | `--host-reports` | Only sites whose host runs its own report (Pressable), read nightly. Ignored when `--site` is given. |
 
@@ -118,13 +118,13 @@ Because Pressable's report is always-on (not a rate-limited third-party quota), 
 
 **"Always-on" doesn't mean "freshly generated on every poll."** Pressable's underlying reports regenerate on a monthly cadence rather than daily. Polling nightly without deduplication would repeatedly store the same report snapshot. The guard compares with the last *stored report* (the newest row with a `source_generated_at`), not the last row, so a failed read in between doesn't make the old report look new.
 
-Fixed with `sites_performance_scans.source_generated_at` — the report's own generation timestamp, distinct from when we happened to poll it (null for GTmetrix/PSI, where every call is a genuinely fresh scan). `PerformanceScanRecorder::record()` compares a new result's `source_generated_at` against the last stored row for that `(site, strategy, engine)`; an exact match means nothing actually changed since last time, and the insert is skipped — `record()` returns `null` instead of a new row. `RunPerformanceScans` treats that as a third bucket alongside ok/failed: `duplicate_skipped`, logged in the run summary and shown per-site with `-v`. Not a failure — there's just nothing new to store yet.
+Fixed with `site_performance_scans.source_generated_at` — the report's own generation timestamp, distinct from when we happened to poll it (null for GTmetrix/PSI, where every call is a genuinely fresh scan). `PerformanceScanRecorder::record()` compares a new result's `source_generated_at` against the last stored report (newest row with a `source_generated_at`) for that `(site, strategy, engine)`; an exact match means nothing actually changed since last time, and the insert is skipped — `record()` returns `null` instead of a new row. `RunPerformanceScans` treats that as a third bucket alongside ok/failed: `duplicate_skipped`, logged in the run summary and shown per-site with `-v`. Not a failure — there's just nothing new to store yet.
 
 Practically: a Pressable site's `site_performance_scans` history will show real gaps of roughly a month between rows, not a row every night. That's correct — it's real signal frequency, not a broken schedule.
 
 ## What this replaces
 
-ManageWP's "Performance Check" feature. We get a more authoritative number (Chrome's Lighthouse vs ManageWP's roll-your-own), with a pinned test environment ManageWP never offered, at the same daily cadence.
+ManageWP's "Performance Check" feature. We get a more authoritative number (Chrome's Lighthouse vs ManageWP's roll-your-own), with a pinned test environment ManageWP never offered. Cadence is weekly per site (nightly rotation) rather than ManageWP's daily check; Pressable sites are read nightly.
 
 ## What this doesn't do
 
@@ -153,14 +153,14 @@ Many small or niche client websites do not receive enough Chrome visitor traffic
 - **It is never treated as a scan failure** and never trips the circuit breaker or alerts operators.
 
 ### Where it appears
-- **Site Performance Tab (`/sites/{id}?tab=performance`)**: A dedicated **"Real users, last 28 days"** card rendered alongside the lab performance cards. Color-coded pills show Google's official thresholds (Good / Needs Improvement / Poor) for LCP, INP, and CLS.
+- **Site Performance Tab (`/sites/{id}/performance`)**: A dedicated **"Real users, last 28 days"** card rendered alongside the lab performance cards. Color-coded pills show Google's official thresholds (Good / Needs Improvement / Poor) for LCP, INP, and CLS.
 - **Site Overview Performance Widget**: Displays the CWV Pass badge.
 - **Monthly Client Reports (`ClientReportCompiler::compilePerformance`)**: Automatically incorporates real-user Core Web Vitals and TTFB into client-facing performance reports.
 
 ### Cadence and Configuration
 - **Scheduled Weekly**: `clockwork:collect-field-metrics` runs every Sunday at 05:30 UTC for all active care-plan sites. Because CrUX represents a rolling 28-day window, weekly querying captures fresh data without wasting API quota.
-- **API Key**: Requires the **Chrome UX Report API** to be enabled on your Google Cloud Console project. Configured with `CLOCKWORK_CRUX_API_KEY` in `.env`, falling back to `CLOCKWORK_PSI_API_KEY`.
-- **Toggle**: Gated by the `performance_scans.field_data_enabled` setting or `CLOCKWORK_CRUX_ENABLED=true`.
+- **API Key**: Requires the **Chrome UX Report API** to be enabled on your Google Cloud Console project. Uses the PageSpeed Insights key: the API key saved on the PageSpeed Insights integration, or `CLOCKWORK_PSI_API_KEY` in `.env`. A separate CrUX key currently has no effect. `CLOCKWORK_CRUX_API_KEY` isn't read because `config/clockwork.php` has no `crux` block. The integration's optional "CrUX API Key" field is saved as `psi.crux_api_key`, but the client looks for `crux.api_key`.
+- **Toggle**: Gated by the `performance_scans.field_data_enabled` setting. It defaults to on and has no control in the UI. `CLOCKWORK_CRUX_ENABLED` isn't wired into config, so it has no effect. `--force` runs the command even when the setting is off.
 
 ## Gotchas
 
@@ -168,9 +168,9 @@ Many small or niche client websites do not receive enough Chrome visitor traffic
 - **Mobile vs desktop is display-only.** Both strategies submit identical desktop-Chrome scans on this tier.
 - **Engine column matters for trends.** GTmetrix and PSI scores aren't directly comparable (different throttling and environment). Filter by `engine` when analyzing across different scan engines.
 - **CLS is integer ×1000.** Don't compare raw column values to display values; divide on read.
-- **Sequential, not parallel.** Each scan takes 15-60s and we don't stampede either API. The nightly rotation slice (~11 sites) finishes in ~5-10 minutes; a full-fleet manual run is more like 20-40.
+- **Sequential, not parallel.** Each scan takes 15-60s and we don't stampede either API. The nightly rotation slice (~8 sites) finishes in ~5-10 minutes; a full-fleet manual run is more like 20-40.
 - **GTmetrix credits refill daily and don't bank.** A full-fleet manual run right before the ~04:27 UTC refill can starve the scheduled 04:45 run onto the PSI fallback. Prefer `--site=X` for one-offs.
-- **Keys are optional.** With neither engine key set, the scheduled command short-circuits without erroring.
+- **Keys are optional for Pressable.** With neither engine key set, the GTmetrix/PSI runs print an error and exit without scanning (a failed run on the Scheduled Jobs dashboard); the `--host-reports` runs need no key and still read Pressable's report.
 - **Circuit-breaker trips at 3 consecutive failures.** Check `sites.psi_unavailable_reason` on the Performance tab and force a retry with `php artisan clockwork:run-performance-scans --site=domain.com`.
 - **CrUX 404s are normal.** Do not treat a missing CrUX row as an error — low-traffic sites simply lack Chrome data.
 

@@ -16,14 +16,18 @@ Open issues, decisions and next steps are tracked separately in [Internal → Cl
 
 **Reports** (`/client-reports`) holds the history table and the manual **Generate** form. Pick a site, a template, a date range, and optionally a client name, email and a custom note. You land on a preview page with a **Print / Download PDF** button.
 
-The paper-plane button in the history table emails a report to every address in its `client_email`, which scheduled reports fill with all their recipients, comma-separated. If a report has no address saved, the button asks for one (you can enter several, comma-separated) and saves it on the report.
+The paper-plane button in the history table emails a report to every address in its `client_email`, which scheduled reports fill with all their recipients, comma-separated. If a report has no address saved, the button asks for one (you can enter several, comma-separated) and saves it on the report. A **superseded** report can't be sent.
+
+History statuses: **Generated** (compiled, not sent), **Needs review** (held, see below), **Partly sent** (some recipients got it), **Sent**, and **Superseded** (a newer report for the same schedule and period replaced it before it reached anyone).
 
 **Templates** (`/client-reports/templates`) control which sections go into a report. A template is just a name plus a list of section keys. Exactly one template is the default. You can't delete the default or the last remaining template, and un-ticking "default" on the only default is silently ignored.
 
 **Scheduling** (`/client-reports/schedules`) allows one schedule per site, enforced by a unique index on `site_id`. Each schedule has a frequency (`weekly` / `monthly`), a recipients list, a template, and a delivery mode:
 
-- **`auto`** compiles and emails every recipient right away. It needs at least one recipient.
-- **`draft`** only compiles, so someone can review the report before sending it by hand.
+- **`auto`** compiles and emails every recipient, unless something needs a person first, in which case it's held as a draft (see **Hold for review**). It needs at least one recipient.
+- **`draft`** only compiles, so someone can review the report before sending it by hand. Drafts are flagged with the same review reasons.
+
+Schedules only send for **care-plan sites** (see below); the list marks the others **No care plan — won't send**.
 
 Each row also has **Pause/Enable** and **Send now** buttons.
 
@@ -47,9 +51,9 @@ The rule for every section: **if we didn't check it during the period, the repor
 | `security` malware | Latest completed `companion_malware` scan in the period, falling back to `sitecheck` | In period | "Not checked this month" |
 | `security` core files | Latest *completed* `core_checksums` scan in the period. A site counts as WordPress if `is_wordpress` is set **or** Companion reports a `wp_core`. | In period | "Not checked this month"; row left out for non-WordPress sites |
 | `security` vulnerabilities | `PluginVulnerabilityMatcher` (installed plugins from the Companion snapshot vs. the vulnerability feed). Matches in inactive plugins are noted separately. | **Snapshot date**, shown as "as of …" | "Not checked" when there's no plugin list, **or** the feed hasn't refreshed in 48h (an empty or stale feed would otherwise read as "None found") |
-| `performance` | Latest OK mobile/desktop `site_performance_scans` + phone `site_field_metrics`. **GTmetrix scans count as desktop** whatever strategy they were filed under: our GTmetrix plan has no phone emulation, so its "mobile" rows are desktop Chrome. Only Pressable's and Google's mobile results show as Mobile. | In period | Section hidden |
+| `performance` | Latest OK mobile/desktop `site_performance_scans` + phone `site_field_metrics`. **GTmetrix scans count as desktop** whatever strategy they were filed under: our GTmetrix plan has no phone emulation, so its "mobile" rows are desktop Chrome. Only Pressable's and Google's mobile results show as Mobile. Pressable's own report (read nightly, mobile and desktop) is **dated by when Pressable ran the test** (`source_generated_at`), not when we read it, and so is the "Tested …" label. | In period (by test date) | Section hidden |
 | `forms` | `contact_form_test_runs`. Only **live** runs test delivery: delivered = `status = 'success'` **and** `mail_outcome = 'sent'`. **Lab** runs suppress the email, so they're reported as "accepted N of M" and never as delivered. | In period | Section hidden (`pass_rate` is null) |
-| `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | In period | Section hidden |
+| `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | In period | Section hidden. "Data transferred" is left out when the host reports no byte counts (Pressable). |
 | `backups` | `site_backups`: what the site's **real** backup source reported, recorded daily by `clockwork:record-site-backups` (05:30). Pressable → Pressable's backup API (files daily, plus one database backup per day); SpinupWP → the DigitalOcean Spaces bucket SpinupWP writes to; unhosted sites → our own S3 archives (Companion uploads). The email lists the **last 10 days of the period**, one row per day, plus how many days that month had a backup. A day's size counts one backup of each kind (the newest scheduled one), so extra on-demand or hourly backups don't inflate it. | In period | Section hidden from the client. The preview shows **No backups found** (checked, none), **No backups in the last 10 days** (backups stopped mid-period) or **Could not check** (read failed, or no clean check in 48h), with the error. |
 | `work_log` | `site_work_logs` (hours entered on the site page) | In period | Section hidden |
 
@@ -69,8 +73,8 @@ Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Ad
 
 1. It skips paused schedules, inactive sites, and schedules whose `next_run_at` is still in the future. It also skips sites **without a care plan**: reports are a care-plan service, and those sites get no nightly updates or security scans, so their report would be empty or wrong. The schedule still moves on to next month, so turning the care plan back on never sends a report for a month the site didn't have one. The Schedules list marks these **No care plan — won't send**, and **Send now** refuses them.
 2. It skips `auto` schedules that have no recipients.
-3. It compiles **last calendar month** using the schedule's template, and saves the report with `schedule_id` set. For `auto`, if an unfinished report from this schedule already exists for the same period, it **resumes that one** instead (see below).
-4. **Hold for review.** For `auto`, a freshly compiled report is checked by `ReportReviewFlags`. If anything needs a person first, it's kept as a draft instead of emailed, the reasons are saved in `meta.review_reasons`, and the schedule moves on to next month. The history table shows **Needs review**, and the preview lists the reasons. Send it by hand from the history table once it's checked. Held reports are never sent automatically: running the schedule again (**Send now**, `--force`) recompiles from current data and checks again, and the older copy is marked **superseded** so it can't be sent by mistake. Draft-mode reports get the same check, so the first-run drafts show **Needs review** too, and any report that hasn't reached anyone is checked again before an auto send. The reasons show only in our preview, never on the public view. The rules:
+3. It compiles **last calendar month** using the schedule's template, and saves the report with `schedule_id` set. For `auto`, if a report from this schedule already exists for the same period and isn't held, it **reuses that one** instead (see below); a held one is recompiled.
+4. **Hold for review.** Any report that hasn't reached anyone yet is checked by `ReportReviewFlags`. If anything needs a person first, an `auto` schedule keeps it as a draft instead of emailing it, the reasons are saved in `meta.review_reasons`, and the schedule moves on to next month. The history table shows **Needs review**, and the preview lists the reasons. Send it by hand from the history table once it's checked. Held reports are never sent automatically: running the schedule again (**Send now**, `--force`) recompiles from current data and checks again, and the older copy is marked **superseded** so it can't be sent by mistake. Draft-mode reports get the same check, so the first-run drafts show **Needs review** too, and any report that hasn't reached anyone is checked again before an auto send. The reasons show only in our preview, never on the public view. The rules:
    - malware scan, core files or blocklist came back `warning` / `issues_found`
    - backups: none found, stopped before the last 10 days, or couldn't be checked
    - the site was still down at the end of the month
@@ -106,6 +110,10 @@ There's deliberately **no "view online" link**: Control lives on a private netwo
 
 Colours, logo, company name and support details come from **Settings → Companion & White Label → Client Reports** (`/settings/companion?tab=reports`, stored as `reports.branding.*`). Blank fields fall back to the shared Companion identity. See [Companion & White Label](/docs/features/companion-branding).
 
+The **primary colour** fills the header banner of both the email and the operator preview (and the section underlines); the logo sits on it, so use a logo that reads on that colour. The preview keeps the colours when printed or saved as a PDF. Because branding is captured in the snapshot, regenerate a report to see a colour change.
+
 ## Tests
 
-`tests/Feature/Modules/` contains `ClientReportsControllerTest`, `ClientReportTemplatesTest`, `ClientReportSchedulesTest` and `ClientReportMailTest`.
+- `tests/Feature/Modules/`: `ClientReportsControllerTest`, `ClientReportTemplatesTest`, `ClientReportSchedulesTest` (scheduling, care-plan gate, hold for review, partial sends), `ClientReportMailTest`, `ClientReportAccuracyTest` (every section's numbers and wording against the "never claim what wasn't checked" rule) and `BackupRelayDirectOnlyTest`.
+- `tests/Feature/Console/RecordSiteBackupsTest.php`: the backup recorder.
+- `tests/Unit/ReportReviewFlagsTest.php`: the hold-for-review rules.

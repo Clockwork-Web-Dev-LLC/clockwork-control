@@ -11,72 +11,76 @@ The running to-do list for the Client Reports module. For how the feature works,
 
 ## Where things stand (2026-10-15)
 
-- The original plan, `plans/client-reports-templates-scheduling.md`, is **mostly shipped**: phases 1–3 (scheduler fixes, templates, scheduling UI) are all live with tests. Only phase 4 (conditional delivery) is left. That plan's own "not yet implemented" header is out of date. Treat this page as the source of truth.
-- Working branch: `feature/client-reports`.
+- **Goal:** recreate the ManageWP client report in Control, then retire ManageWP.
+- **Branch:** `feature/client-reports` (draft PR #50). Not deployed yet; see the checklist below.
+- The original plan, `plans/client-reports-templates-scheduling.md`, is **fully shipped** now: phases 1–3 (scheduler fixes, templates, scheduling UI) were already live, and phase 4 (conditional delivery) shipped as **hold for review**. That plan's own "not yet implemented" header is out of date. Treat this page as the source of truth.
+- **Decisions (2026-10-15):** reports are for **care-plan customers only**; the **first send on 2026-11-01 goes out as drafts** for review; after that, clean reports send themselves and flagged ones are held (**review only the exceptions**); unchecked sections are hidden from the client and flagged in the preview.
 
-## ⚠️ Heads-up: first mass send on 2026-11-01
+## Heads-up: first send on 2026-11-01
 
-As of the 2026-10-15 production DB snapshot:
-
-- **72 schedules**, all enabled, all `monthly`, all **`auto`**, all on the default template.
-- **None has ever sent** (`last_sent_at` is null everywhere).
-- All 72 have `next_run_at = 2026-11-01 00:00`, so the 06:00 UTC run that day will email October reports to all 72 sites' recipients in one go.
-- Only 4 reports exist so far: 3 test reports against our own site and 1 sent to a client.
-
-**Decision needed:** is that intended? And should the first cycle go out as `draft`, so someone can eyeball the reports before clients see them? The open issues below affect what those 72 emails would say.
+As of the 2026-10-15 production DB snapshot there are **72 schedules**, all enabled, `monthly`, `auto`, on the default template, none ever sent, and all with `next_run_at = 2026-11-01 00:00`. **45** of those sites have a care plan and will get a report; the other **27** are skipped until someone decides about them (checklist). The 06:00 UTC run that day compiles October for all eligible sites at once, so switch them to drafts first (checklist).
 
 ## Open issues
 
-Found by reading the code on 2026-10-15 (#4–8 confirmed against the production copy by an investigate-then-refute pass). Numbers stay stable as items are fixed; fixed ones move to **Done**.
+Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | # | Issue | Why it matters | Where |
 |---|---|---|---|
-| 1 | **Weekly schedules report on the wrong period.** The scheduled path hard-codes "last calendar month", whatever the frequency. | A weekly schedule would email the same monthly report every week. No weekly schedules exist yet. | `ScheduledReportRunner::run()` (now the one place to fix it) |
-| 10 | **The work log is empty** (`site_work_logs` has 0 rows), but `work_log` is in the default template. | Every report shows an empty "Work log" section unless hours get logged. | Data / template choice |
-| 11 | **⚠️ Backups are failing (operations, not a report bug).** Every backup-relay run since 2026-09-13 failed for every site with S3 `HeadObject 403 Forbidden`, and there have been no runs since 2026-09-16. Only 1 scheduled site has a per-site archive timestamp at all. | Since #6, reports no longer *claim* backups that didn't happen, but the backups themselves still aren't happening. **Confirmed 2026-10-15:** listing the bucket with the S3 key in the production `.env` copy fails with `InvalidAccessKeyId` ("The AWS Access Key Id you provided does not exist"), so the key was deleted or rotated in AWS and not updated in Control. The 4 scheduled unhosted sites show **Could not check** until a valid key is in place. | `backup_relay_runs`, `modules/BackupRelay/`, `AWS_ACCESS_KEY_ID` |
-| 12 | **Vulnerability count is "as of the snapshot", not the month.** No history of installed plugin versions is kept, so the report can only show the state on the Companion snapshot date. It's labelled "(as of …)". | The count can differ from what was true during the month. Acceptable, but worth knowing. | `ClientReportCompiler::compileSecurity()` |
-| 14 | **A partial vulnerability-feed refresh silently drops matches.** `WpVulnerabilityClient::refresh()` deletes the whole `plugin_vulnerabilities` table, re-inserts only the plugins it fetched, and always reports success. The report's 48h freshness check catches a total failure (empty table), but not a few plugins timing out. | Those plugins' vulnerabilities vanish from reports with no sign anything is missing. | `app/Services/Security/WpVulnerabilityClient.php` |
-| 16 | **20 SpinupWP sites have no backups in the Spaces bucket** (first live recorder run, 2026-10-15). 2 of them have report schedules; their backups section will be hidden and flagged. List kept locally, not in the repo. | Either SpinupWP backups aren't turned on for those sites, or they're stored under a different path. | SpinupWP dashboard / `SpacesClient::listSiteBackupObjects()` |
-| 15 | **4 scheduled sites are flagged `is_wordpress = 0` but run WordPress** (ids 315, 330, 331, 332). The report now detects them via Companion's `wp_core`, but the flag also keeps the core-checksum scanner from covering them. | No core-file checks ever run on those sites. | Data fix on `sites.is_wordpress` |
+| 1 | **Weekly schedules report on the wrong period.** The scheduled path hard-codes "last calendar month", whatever the frequency. | A weekly schedule would email the same monthly report every week. No weekly schedules exist yet. | `ScheduledReportRunner::run()` |
+| 10 | **The work log is empty** (`site_work_logs` has 0 rows), but `work_log` is in the default template. | The section is hidden unless hours get logged, so ManageWP-style "extra work" never appears. | Data / process |
+| 11 | **⚠️ Off-site backups have stopped (operations).** Every backup-relay run since 2026-09-13 failed with S3 `403 Forbidden`. Listing the bucket with the key in the production `.env` copy fails with `InvalidAccessKeyId`, so the key was deleted or rotated in AWS and not updated in Control. | Unhosted sites aren't being backed up, and their report section shows **Could not check** (held for review). | `AWS_ACCESS_KEY_ID`, `modules/BackupRelay/` |
+| 12 | **Vulnerability count is "as of the snapshot", not the month.** No history of installed plugin versions is kept. It's labelled "(as of …)". | The count can differ from what was true during the month. Acceptable. | `ClientReportCompiler::compileSecurity()` |
+| 14 | **A partial vulnerability-feed refresh silently drops matches.** `WpVulnerabilityClient::refresh()` deletes the whole table, re-inserts only what it fetched, and always reports success. The 48h freshness check catches a total failure, not a few plugins timing out. | Those plugins' vulnerabilities vanish from reports with no sign. | `app/Services/Security/WpVulnerabilityClient.php` |
+| 15 | **4 scheduled sites are flagged `is_wordpress = 0` but run WordPress** (ids 315, 330, 331, 332). The report detects them via Companion's `wp_core`, but the flag keeps the core-checksum scanner off them. | No core-file checks run on those sites. | Data fix on `sites.is_wordpress` |
+| 16 | **20 SpinupWP sites have no backups in the Spaces bucket** (first recorder run, 2026-10-15); 2 have report schedules. List kept locally, not in the repo. | Their backups section is hidden and the report held. Either SpinupWP backups are off for them or stored elsewhere. | SpinupWP dashboard / `SpacesClient` |
+| 17 | **Harmless "PHP in uploads" malware warnings hold reports.** Plugins such as WP All Import, Sucuri, BackWPup and Smush put PHP files in `uploads/`; the scan marks them for review, which holds that site's report. | Clean sites get held every month until the paths are marked safe. | `clockwork:suppress-malware-path` (operator) |
+| 18 | **Pressable can skip a month's speed test.** Pressable tests each site about once a month on its own schedule (no way to trigger one); about 1 site in 70 had a gap in Aug–Sep. | That site's Speed section is hidden for that month. Acceptable unless it becomes common. | Pressable |
+| 19 | **Non-Pressable sites get desktop speed only.** GTmetrix on our plan has no phone emulation. | No mobile score for the ~17 non-Pressable report sites. Options: GTmetrix plan with mobile, or PSI for mobile only (noisier). | `RunPerformanceScans` |
+| 20 | **The Security intro says we "block attackers at the server"** even on sites where nothing reports blocks (the row itself is hidden there). | Overstates protection on those sites. One-line wording fix. | `emails/report*.blade.php` |
+| 21 | **The operator preview's layout differs from the email** below the header (e.g. updates as a table of plugin file names). | What we review isn't exactly what the client reads. | `reports/show.blade.php` |
 
 ## Before 2026-11-01 (deploy checklist)
 
-- [ ] Deploy this branch, then run `php artisan migrate` **before** the scheduler fires again (the runner and the compiler read the new columns/tables).
-- [ ] **Deploy by about 2026-10-22.** Pressable keeps file backups daily for only ~8 days (then weekly), while database backups stay daily for ~60 days. The email lists Oct 22–31, so the recorder must be running in production by then for every listed day to show "Files & database" rather than "Database".
-- [ ] Run `php artisan clockwork:record-site-backups` once by hand, straight after deploy, to backfill. Check the output for `[fail]` lines. (First local run on 2026-10-15: 261 sites, 251 OK, about 5 minutes; the 10 failures were all S3, see #11.)
+- [ ] **Deploy by about 2026-10-22**, then run `php artisan migrate` (adds `site_backups` + `site_backup_checks`) before the scheduler fires again. Pressable keeps daily file backups for only ~8 days, and the email lists Oct 22–31, so the recorder must be running by then for every listed day to show "Files & database".
+- [ ] Run `php artisan clockwork:record-site-backups` once by hand straight after deploy to backfill; check the output for `[fail]` lines. (Local run 2026-10-15: 261 sites, 251 OK, ~5 min; the 10 failures were all S3, see #11.)
 - [ ] Put a valid AWS key in production `.env` (#11). Without it the unhosted sites' backups can't be read **or** made.
-- [ ] **Switch the first run to drafts** (decided 2026-10-15): set every schedule's delivery mode to *Draft* (Schedules tab, or `UPDATE client_report_schedules SET delivery_mode='draft'`). Review a few reports per host, then send by hand or switch back to Auto.
-- [ ] Fix the relay droplet's S3 403 (#11). Not needed for reports any more, but the off-site copies have stopped.
-- [ ] Decide each of the 27 scheduled sites with **no care plan**: turn the care plan back on, or delete the schedule. Until then they're skipped.
-- [ ] Set `is_wordpress = 1` for the 4 misflagged sites (#15) so core-file checks start covering them.
+- [ ] **Switch the first run to drafts**: set every schedule's delivery mode to *Draft* (Schedules tab, or `UPDATE client_report_schedules SET delivery_mode='draft'`). Review them (flagged ones show **Needs review**), send by hand, then switch back to Auto for December.
+- [ ] Decide each of the **27 scheduled sites with no care plan**: turn the care plan back on, or delete the schedule. Until then each month is skipped.
+- [ ] Set the report colour in production: **Settings → Companion & White Label → Client Reports → Primary `#5B21B6`** (it's a setting, not code).
+- [ ] Mark the known-safe "PHP in uploads" paths with `clockwork:suppress-malware-path` (#17), and look at anything that isn't a known plugin's files by hand.
+- [ ] Set `is_wordpress = 1` for the 4 misflagged sites (#15).
 
 ## Ideas and backlog
 
-- **SEO Ranking section** (ManageWP parity; clients get it today). No data source in Control yet; the SEMrush data behind the monthly SEO reports is the obvious source.
-- **Google Analytics section** (ManageWP parity; clients get it today). Control only has server-log visit counts; GA4 needs an integration.
-
-- **Phase 4: conditional delivery.** Hold an `auto` send for review if the site is down or its latest security scan flagged something. See the plan file for the original design.
-- **Sent-email audit.** `sent_to` now records *who* got each report, but not *when* or *by whom* (scheduler vs. an operator clicking Send). Writing `action_logs` entries would make that visible on the site's activity log.
-- **A "preview the next batch" view.** Show what the next scheduled run would send, and to whom, before it fires.
-- **Remove the public `/reports/view/{token}` route, or decide its purpose.** Clients can't reach it, and the email deliberately doesn't link to it.
+- **SEO Ranking section** (ManageWP parity; decided for after Nov 1). The SEMrush data behind the monthly SEO reports is the obvious source.
+- **Google Analytics section** (ManageWP parity; after Nov 1). Control only has server-log visit counts; GA4 needs an integration.
+- **PDF attachment** for clients who forward the report.
+- **A personal note per month** on the schedule (the field exists on manual reports only).
+- **Sent-email audit.** `sent_to` records *who* got each report, not *when* or *by whom*. `action_logs` entries would show it on the site's activity log.
+- **A "preview the next batch" view.** What the next scheduled run would send, and to whom.
+- **Remove the public `/reports/view/{token}` route, or decide its purpose.** Clients can't reach it and the email doesn't link to it.
 
 ## Done
 
 | Date | What | Ref |
 |---|---|---|
 | 2026-10-15 | Wrote the feature doc page and this tracker | `b652081` |
-| 2026-10-15 | **#2:** Send splits the comma-joined `client_email` and emails every recipient. When a report has no address, the button asks for one and saves it. | `feature/client-reports` |
-| 2026-10-15 | **#3:** Each delivery is recorded in `client_reports.sent_to` as it happens. A failed run keeps the schedule due, and the next run resumes the same report (`schedule_id` + period) and emails only the missing recipients. History shows **Partly sent**. | `feature/client-reports` |
-| 2026-10-15 | **#8:** Vulnerabilities come from `PluginVulnerabilityMatcher`. Before, the report read a snapshot key nothing ever writes, so every report said "None"; on the 2026-10-15 data, 26 of 72 scheduled sites have 59 known matches. It shows "N found in X plugins (as of …)", or "Not checked" with no plugin list. | `feature/client-reports` |
-| 2026-10-15 | **#6:** Backups are only claimed when the relay archived inside the period. No more "Host Automated Snapshots" assumption. The preview shows "Not verified this period". For September only 1 of 72 sites qualifies, because of #11. | `feature/client-reports` |
-| 2026-10-15 | **#5:** Core-file status is the latest completed in-period `core_checksums` scan, or "Not checked this month" (it used to default to "Ok"). The row is left out for non-WordPress sites. The preview's hard-coded "Clean / Passed" tile is gone. Also: failed scans no longer count as "run", and `warn_scans` counts `warning`/`issues_found` (it looked for `warn`, which never occurs). | `feature/client-reports` |
-| 2026-10-15 | **#4:** Forms counts `status = 'success'`. It looked for `'ok'`, which is never written, so every tested site was told "0% delivered". The pass rate is null when nothing ran. | `feature/client-reports` |
-| 2026-10-15 | **#7:** Performance only uses scans and field data from inside the period, so stale scores no longer appear under this month's heading. | `feature/client-reports` |
-| 2026-10-15 | **Review follow-ups** (a 3-lens review with a skeptic checking each finding: 19 findings, 14 confirmed). Fixed here: **uptime** counted every outage as 5 min because it read a non-existent `duration_seconds` column; it now measures down→up intervals, carries an outage open at the start, and skips SLA-exempt ones. **Forms**: lab runs (email suppressed) no longer count as "delivered", and a live run only counts when the mail was actually sent. Added a **Malware scan** row (flagged findings used to be invisible). The vulnerability line is "Not checked" when the **feed is stale**, and notes matches in **inactive plugins**. Sites with a Companion `wp_core` count as **WordPress**. `meta.schema_version = 2` stops old stored reports re-showing "None found" and "0% delivered". Empty performance sections are gone from the text email and the preview. | `feature/client-reports` |
-| 2026-10-15 | **Backups from real sources (#13):** a new `site_backups` + `site_backup_checks` table, filled daily by `clockwork:record-site-backups` from Pressable's API, SpinupWP's Spaces bucket and our S3 archives. The report lists the last 10 days of the period and hides the section (flagged in the preview) when none were found or the read failed. Replaces the relay-timestamp check, which could never pass in `external_agent` mode. | `feature/client-reports` |
-| 2026-10-15 | **Unhosted sites weren't being backed up at all** in `external_agent` mode. `clockwork:backup-relay-run --direct-only` now runs daily at 04:30, and those sites are no longer sent to the droplet. | `43c1b1c` |
-| 2026-10-15 | **ManageWP parity, cheap items:** an uptime outage list (start + length), a "Spam & malware blocklists" line, no-op "X → X" updates left out (87 since September), and the WordPress version read from the right snapshot key. | `feature/client-reports` |
-| 2026-10-15 | **Review of the backups work** (3 lenses with a skeptic checking each finding: 18 findings, 14 confirmed, all fixed). **Size:** Pressable database backups are keyed by day, and a day's size counts one backup of each kind, so the size was no longer double-counted. **Stale:** backups that stopped before the last 10 days are flagged and no longer fall back to the old "independent off-site storage" wording. **SpinupWP:** runs are labelled by what's really there. **S3:** empty archives don't count. **No-op updates:** "already up to date" and "0 package(s)" runs are left out, and "3.3.4 → 3.4" is no longer mistaken for one. **Outages:** marked when carried in or still open. **Text email:** blocklist and malware rows show for non-WordPress sites. **Ops:** the recorder carries on past a failing site and exits as failed, and the relay sweep honours the restore / Backup Now locks and reports failures to chat. | `feature/client-reports` |
-| 2026-10-15 | **First real report (clockworkwd.com, Oct 1–15):** found that the blocklist check skipped every serverless site (58 of 72 report sites), and that Pressable sites showed "Data transferred: 0 MB" because Pressable's traffic feed has no byte counts. Both fixed. | `feature/client-reports` |
-| 2026-10-15 | **Care-plan only + hold for review:** sending skips sites without a care plan (27 of 72 scheduled sites had it off, with no updates since Sep 23 and 121 waiting, so their reports would have said "up to date"). Auto reports with a malware/core/blocklist flag, a backup problem, or a site still down at month end are held as **Needs review** drafts instead of sent. GTmetrix speed scores are labelled desktop (no phone emulation on our plan). | `feature/client-reports` |
-| 2026-10-15 | **#9:** The command and **Send now** both go through `ScheduledReportRunner` + `ClientReportSender`. | `feature/client-reports` |
+| 2026-10-15 | **#2:** Send splits the comma-joined `client_email` and emails every recipient. When a report has no address, the button asks for one and saves it. | `d6fb99c` |
+| 2026-10-15 | **#3:** Each delivery is recorded in `client_reports.sent_to` as it happens. A failed run keeps the schedule due, and the next run resumes the same report and emails only the missing recipients. History shows **Partly sent**. | `d6fb99c` |
+| 2026-10-15 | **#9:** The command and **Send now** both go through `ScheduledReportRunner` + `ClientReportSender`. | `d6fb99c` |
+| 2026-10-15 | **#8:** Vulnerabilities come from `PluginVulnerabilityMatcher` (before, every report said "None"; on 2026-10-15 data, 26 of 72 scheduled sites have 59 known matches). "N found in X plugins (as of …)", or "Not checked". | `9baccf8` |
+| 2026-10-15 | **#5:** Core-file status is the latest completed in-period `core_checksums` scan, or "Not checked this month" (it used to default to "Ok"). Failed scans no longer count as "run". | `9baccf8` |
+| 2026-10-15 | **#4:** Forms counts `status = 'success'` (it looked for `'ok'`, so every site was told "0% delivered"). Lab runs no longer count as delivered. | `9baccf8` |
+| 2026-10-15 | **#7:** Performance only uses tests from inside the period. Host reports (Pressable) are dated by when the host ran the test, not when we read it (`f2aea21`). | `9baccf8` |
+| 2026-10-15 | **Honesty review** (19 findings, 14 confirmed): real down→up outage minutes, Malware scan row, stale-feed "Not checked", Companion `wp_core` counts as WordPress, `meta.schema_version`. | `9baccf8` |
+| 2026-10-15 | **Backups from real sources (#13, replaces #6):** `site_backups` + `site_backup_checks`, filled daily by `clockwork:record-site-backups` from Pressable's API, SpinupWP's Spaces bucket and our S3 archives. Last 10 days listed; hidden and flagged when none were found or the read failed. | `2056b1b`, `bcc327a` |
+| 2026-10-15 | **Unhosted sites weren't being backed up** in `external_agent` mode: `clockwork:backup-relay-run --direct-only` runs daily at 04:30; sweeps honour the restore / Backup Now locks. | `43c1b1c`, `6cd7db8` |
+| 2026-10-15 | **ManageWP parity, cheap items:** outage list, "Spam & malware blocklists" line, no-op updates left out, WordPress version from the right key. | `bcc327a` |
+| 2026-10-15 | **Backups review** (18 findings, 14 confirmed): no double-counted sizes (incl. SpinupWP full-backup days, `3b618d0`), stale backups flagged, SpinupWP labels, empty archives ignored, outages marked carried-in/ongoing, recorder robustness. | `bcc327a`, `3b618d0` |
+| 2026-10-15 | **Blocklist check skipped every serverless site** (58 of 72 report sites); **"Data transferred: 0 MB"** on Pressable (no byte counts). Both fixed. | `997aca8` |
+| 2026-10-15 | **"Threats blocked" only when something reports blocks** (no misleading 0). | `c6ac653` |
+| 2026-10-15 | **The malware scan flagged Companion's own scanner file** on sites where Companion is a regular plugin. Fixed. | `d22457a` |
+| 2026-10-15 | **Care-plan only + hold for review (phase 4):** sending skips sites without a care plan; a report that hasn't reached anyone is checked first and held as **Needs review** for malware/core/blocklist flags, backup problems, a site down at month end, or a vulnerable plugin with an update waiting. Older unsent copies are **superseded**. GTmetrix scores labelled desktop. | `309e8ff`, `8dcf34b` |
+| 2026-10-15 | **No "already up to date" while updates wait** (found on a site whose premium-plugin updates failed all month). | `8dcf34b` |
+| 2026-10-15 | **Pressable speed reports read nightly**, mobile and desktop, so a new monthly test lands within a day (15 of 28 Pressable report sites had no October score under the weekly rotation). | `f2aea21` |
+| 2026-10-15 | **Brand-colour header on the operator preview**, matching the email. | `044ca6e` |

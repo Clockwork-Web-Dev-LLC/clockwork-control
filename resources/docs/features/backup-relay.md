@@ -16,7 +16,7 @@ Third-party backup retention windows (e.g. ManageWP's 90-day retention or host-l
 
 ## Operational Modes
 
-Backup Relay operates in one of two modes, configured via `CLOCKWORK_BACKUP_RELAY_MODE`:
+Backup Relay operates in one of two modes, configured via `CLOCKWORK_BACKUP_RELAY_MODE` (the mode picker on `/settings/backup-relay` saves `backup_relay.mode`, which overrides it):
 
 ### 1. In-Repo Mode (`in_repo` — Default)
 In-repo mode runs natively within Clockwork Control with zero external server dependencies:
@@ -34,8 +34,8 @@ Recommended for production agency fleets with high-bandwidth requirements and ai
 2. **Credential & Blast-Radius Isolation**: Account-wide Pressable API and AWS write credentials reside strictly on the single-purpose droplet, completely isolated from developer workstations or web-facing servers.
 3. **Zero Inbound Connections**: The monitoring app never opens ports, tunnels, or public webhooks. Both sides communicate exclusively via an S3 control channel.
 
-**The S3 Control Channel Timeline (Sundays & Wednesdays)**:
-- **`04:58 UTC` — Clockwork Control**: `clockwork:push-backup-relay-targets` runs locally, queries all sites with `backup_relay_enabled = 1`, and writes `s3://{bucket}/_control/backup-relay/targets.json` (schema v2).
+**The S3 Control Channel Timeline (Control's steps run daily; the droplet runs Sundays & Wednesdays)**:
+- **`04:58 UTC` — Clockwork Control**: `clockwork:push-backup-relay-targets` runs locally, queries all sites with `backup_relay_enabled = 1` (minus direct-to-S3 Companion sites, which Control backs up itself — see the 04:30 entry below), and writes `s3://{bucket}/_control/backup-relay/targets.json` (schema v2).
 - **`05:00 UTC` — External Droplet**: Cron runs `bin/relay.php`. It reads `targets.json`, checks S3 (`HeadObject`) for existing archives to avoid redundant downloads, streams new snapshots from Pressable directly to S3 Glacier Instant Retrieval (`{domain}/fs/{date}.bz2` and `{domain}/db/{date}.sql`), generates 5-day presigned S3 download links, and writes `last-report.json` and `download-links.json` to S3.
 - **`06:32 UTC` — Clockwork Control**: `clockwork:pressable-backups-report` pulls `download-links.json` and pushes the offsite archive download links to each site's WordPress Companion plugin (`wp-admin/admin.php?page=clockwork-backups`).
 - **`06:40 UTC` — Clockwork Control**: `clockwork:pull-backup-relay-report` reads `last-report.json`, logs the completed run to `backup_relay_runs`, and updates the dashboard.
@@ -43,7 +43,7 @@ Recommended for production agency fleets with high-bandwidth requirements and ai
 - **`04:30 UTC` daily — Clockwork Control**: `clockwork:backup-relay-run --direct-only` backs up the sites the droplet **can't**: unhosted/custom sites, where Companion uploads a zip straight to S3 using a presigned URL only Control can mint. These sites are left out of `targets.json`, and this pass doesn't write `backup_relay_runs` or the last-run settings (those belong to the droplet). Each site still records `backup_relay_last_archived_at`. Like any sweep (a run without `--site`), it skips a site that's mid-restore or already running **Backup Now**, and holds that site's `backup_relay.run.site.{id}` lock while it works so a restore can't be staged underneath it. Failures are logged (`backup_relay.site_failed`) and posted to chat, since this pass has no run history. Before 2026-10, nothing ran these in `external_agent` mode, so unhosted sites only got manual **Backup Now** archives.
 
 > [!NOTE]
-> **Dashboard UI Note**: In `external_agent` mode, the droplet reports aggregate run metrics (`sites_total`, `sites_archived`, `sites_failed`) rather than per-site database updates. As a result, the "Last Archived" column in the site targets table will display `—`. Full run health and completed archive counts are tracked in the **Last Relay Run** card and **Relay Run History** table at the bottom of the page.
+> **Dashboard UI Note**: In `external_agent` mode, the droplet reports aggregate run metrics (`sites_total`, `sites_archived`, `sites_failed`) rather than per-site database updates. As a result, the "Last Archived" column in the site targets table will display `—` for droplet-handled sites (direct-to-S3 Companion sites, archived by Control's 04:30 pass, still show their date). Full run health and completed archive counts are tracked in the **Last Relay Run** card and **Relay Run History** table at the bottom of the page.
 
 ---
 
@@ -167,6 +167,7 @@ Backup relay is not hardcoded to Pressable. Any hosting provider module in `modu
 Built-in provider adapters:
 - **Pressable**: Queries Pressable's backups API for the newest filesystem and database snapshots.
 - **SpinupWP**: Inspects DigitalOcean Spaces backup objects via `SpacesClient` to stream the newest archive run.
+- **Custom / unhosted**: `CompanionBackupRelayAdapter`, a `DirectS3BackupRelayAdapter` — Companion PUTs the zip straight to S3 via a presigned URL Control mints (see below). Sites using it are left out of `targets.json` and handled by `--direct-only` in `external_agent` mode.
 
 ## Dedicated Per-Site Enablement
 
@@ -182,8 +183,9 @@ For WordPress sites we **do not host** (WP Engine, Kinsta, a client box, any `cu
 
 - Connecting a site at `/sites/create` turns relay **on** and sets `backup_relay_frequency = daily`.
 - The site Overview **Backups** card is the per-site control: on/off, Daily / Twice weekly / Weekly, last/next, a month calendar of archives, and **Backup Now**.
-- Nightly `clockwork:backup-relay-run` (04:58) respects that per-site cadence. Daily uses calendar day so a 15:00 Backup Now does not skip tomorrow morning.
+- Nightly `clockwork:backup-relay-run` (04:58 in `in_repo` mode; the 04:30 `--direct-only` pass in `external_agent` mode) respects that per-site cadence. Daily uses calendar day so a 15:00 Backup Now does not skip tomorrow morning.
 - **Backup Now** runs `clockwork:backup-relay-run --site={id} --force` in the background and writes `archives/{domain}/{Y-m-d_H-i-s}.zip` so it never collides with the scheduled daily key.
+- Monthly client reports read these archives into `site_backups` via `clockwork:record-site-backups` (daily 05:30) — see [Client reports → Backup recording](/docs/features/client-reports#backup-recording).
 
 ### Restore for Custom Sites (Two-Step Stage & Apply)
 
@@ -253,7 +255,7 @@ CLOCKWORK_BACKUP_RELAY_ARCHIVE_PREFIX=archives
 
 The web UI provides full visibility and control:
 - **Operational Mode Badge**: Shows whether in-repo native archiving or external droplet handoff is active.
-- **Run Relay Now**: Launches `clockwork:backup-relay-run` in the background (`BackgroundArtisan`, 2-hour lock). The request returns immediately — a full archive + Glacier upload per site cannot finish in-request.
+- **Run Relay Now** (`in_repo` mode only; refused with a warning in `external_agent` mode): Launches `clockwork:backup-relay-run` in the background (`BackgroundArtisan`, 2-hour lock). The request returns immediately — a full archive + Glacier upload per site cannot finish in-request.
 - **Site Relay Targets**: Domain list with provider badges, adapter capability status, last archived timestamp, and instant toggle switches. Each row is expandable — see [Viewing & Downloading Historical Archives](#viewing--downloading-historical-archives) below.
 - **Run History**: Table of recent runs displaying archived, skipped, failed counts, durations, and error details.
 
@@ -294,7 +296,7 @@ Backup Relay supports configurable snapshot frequency and retention policies man
   - Per-site override on custom/unhosted sites (`sites.backup_relay_frequency`). Daily skips when an archive already exists for **today**; weekly / twice-weekly still use the hour floor (144h / 72h).
   - `weekly` (`1 a week` — Default for hosted relay): Runs once per week off-peak.
   - `twice_weekly` (`2 a week`): About every three days.
-  - `daily` (`Daily`): Every morning at 04:58, and the default for newly enrolled standalone sites.
+  - `daily` (`Daily`): Every morning at 04:58 (04:30 for direct-to-S3 sites in `external_agent` mode), and the default for newly enrolled standalone sites.
 - **Retention Period**:
   - Default: `90 days`. Configurable to `30`, `60`, `90`, `180`, or `365` days.
   - In external agent mode, `targets.json` includes `frequency` and `retention_days` in the manifest schema v2 so the remote droplet enforces the retention lifecycle.
@@ -308,4 +310,4 @@ CLOCKWORK_BACKUP_RELAY_RETENTION_DAYS=90
 
 ## Silence & Staleness Detection
 
-If the relay fails to record a successful run within the dynamic staleness threshold (10 days for weekly, 6 days for twice-weekly, 3 days for daily), `clockwork:pull-backup-relay-report` triggers a `backup_relay_stale` alert via Mattermost, Slack, or configured webhook channels. A recovery notification (`backup_relay_recovered`) fires automatically when a new run completes.
+If the relay fails to record a successful run within the dynamic staleness threshold (10 days for weekly, 6 days for twice-weekly, 3 days for daily), `clockwork:pull-backup-relay-report` (scheduled in `external_agent` mode only; it tracks the droplet's runs, not the direct-only pass) triggers a `backup_relay_stale` alert via Mattermost, Slack, or configured webhook channels. A recovery notification (`backup_relay_recovered`) fires automatically when a new run completes.

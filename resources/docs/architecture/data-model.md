@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-10-03
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -18,9 +18,9 @@ These are the natural-key tables — everything else hangs off them.
 
 One row per managed host. Natural key: `spinupwp_id`. Notable columns:
 
-- Identity: `name`, `hostname`, `spinupwp_id`.
-- Cloud provider: `provider` (`digitalocean|hetzner|…`), `provider_id`, `size_slug`, `vcpus`, `memory_mb`, `disk_gb`. Populated daily by `clockwork:import-spinupwp` from SpinupWP's `provider_name` field, cross-referenced against the matching cloud's API.
-- SSH: `ssh_user`, `ssh_port`, `ssh_private_key` (encrypted), `ssh_password` (encrypted), `ssh_password_updated_at` (tracked for sudo password 90-day hygiene).
+- Identity: `name`, `hostname`, `spinupwp_id`, `turnkeywp_server_id` (nullable, unique; a server TurnkeyWP adopted from SpinupWP carries both ids).
+- Cloud provider: `provider` (`digitalocean|hetzner|…`), `provider_id`, `size_slug`, `vcpus`, `memory_mb`, `disk_gb`. Populated hourly by `clockwork:import-spinupwp` from SpinupWP's `provider_name` field, cross-referenced against the matching cloud's API.
+- SSH: `ssh_user`, `ssh_port`, `ssh_private_key` (encrypted), `ssh_password` (encrypted), `ssh_password_updated_at` (tracked for sudo password 90-day hygiene), `passwordless_sudo` (default `false`; the SSH user can sudo without a password, e.g. TurnkeyWP's `turnkey` user or root, so no `ssh_password` is stored).
 - Monitoring state: `status` (`green|yellow|red|unknown`), `last_polled_at`, `last_alert_at`, `last_ssh_ok_at`, `provider_missing_since` (nullable timestamp — set the first time `clockwork:poll-servers` finds `CloudProvider::isDeletedAtProvider()` true, a precise "genuinely gone from the cloud provider's own inventory" signal distinct from a generic polling error; drives a red "Remove from Clockwork" banner on the server show page and is cleared automatically the next time a poll succeeds).
 - Provisioning: `clockwork_jail_provisioned_at`, `last_provision_log`.
 - Operations: `is_ignored`, `ignore_reason`, `auto_ban_llar`, `auto_ban_wordfence`, `last_llar_pull_at`, `last_wordfence_pull_at`, `upgrade_required`, `reboot_required`, `update_status`, `scheduled_reboot_at`.
@@ -45,11 +45,11 @@ One row per WordPress (or non-WP) site. Natural key: `domain` (unique). Notable 
 - Uptime: `uptime_monitoring_enabled`, `uptime_state`, `uptime_last_checked_at`, `uptime_last_up_at`, `uptime_last_status_code`, `uptime_consecutive_failures`, `uptime_down_since`, `uptime_require_keyword` (optional homepage string the 5-minute probe must find), `uptime_skip_body_check` (skip the white-screen length heuristic; fatals and required keyword still apply).
 - Work logs: `site_work_logs` (`worked_on`, `hours`, `description`, `user_id`) feed the Client Reports `work_log` section.
 - Flagged WP admins: `ignored_wp_admins` acknowledges a specific snapshot admin (`site_id` + `subject`). Site-level `/issues` mute uses `ignored_issues.issue_type = wp_admin_flagged`.
-- Performance: `performance_scan_region` (GTmetrix location ID override; NULL = global default), `psi_unavailable_at` + `psi_unavailable_reason` (circuit-breaker after 3 consecutive failed scans — name is historical, applies to any engine; auto-cleared on the next successful scan).
+- Performance: `performance_scan_region` (GTmetrix location ID override; NULL = global default), `psi_unavailable_at` + `psi_unavailable_reason` (circuit-breaker after 3 consecutive failed GTmetrix/PSI scans; the name is historical. It protects the paid quota, so failed reads of Pressable's free host report never set it. Auto-cleared on the next successful scan or host-report read, even an unchanged one).
 
 `Site::query()` excludes archived rows by the `notArchived` global scope. Bypass with `Site::withoutGlobalScopes()` in import / migration paths — see [Concepts → Server, Site, Care plan, Hosting tier](/docs/concepts/server-site-care-plan).
 
-`Site::isPressable()` / `Site::isSpinupWp()` branch on `hosting_provider` — both `@deprecated` as of the modularization roadmap's Phase 5 in favor of `Site::host()->supports(HostingProvider::CAP_*)` for behavior gating (e.g. `CAP_SSH`, `CAP_CERT_SYNC`, `CAP_BACKUP_RELAY`), though for display-only "which provider is this" checks they're still fine and most call sites haven't migrated yet. `Site::scopeHostMonitored()` is true for a SpinupWP site whose server isn't ignored/staging (the old check), OR any Pressable site (which has no server-level ignore concept to check) — this replaced `whereHas('server', fn ($q) => $q->monitored())` across every fleet-wide monitoring command (uptime, SSL, security scans, Companion snapshot/capabilities refresh, resource metrics, action-log backfill) so Pressable sites get the same coverage without provider-specific branching in each command.
+`Site::isPressable()` / `Site::isSpinupWp()` branch on `hosting_provider` — both `@deprecated` as of the modularization roadmap's Phase 5 in favor of `Site::host()->supports(HostingProvider::CAP_*)` for behavior gating (e.g. `CAP_SSH`, `CAP_CERT_SYNC`, `CAP_BACKUP_RELAY`), though for display-only "which provider is this" checks they're still fine and most call sites haven't migrated yet. `Site::scopeHostMonitored()` is true for a site whose server isn't ignored or staging-tagged (the old check), OR any site on a host with no server concept (`Site::HOSTING_PROVIDERS_WITHOUT_SERVER`: Pressable, WP Engine, Kinsta, custom). It replaced `whereHas('server', fn ($q) => $q->monitored())` across every fleet-wide monitoring command (uptime, SSL, security scans, Companion snapshot/capabilities refresh, resource metrics, action-log backfill), so serverless sites get the same coverage without provider-specific branching in each command. The blocklist check moved to it on 2026-10-15.
 
 ### `site_ingest_exclusions`
 
@@ -124,7 +124,7 @@ Transition log (down/up), NOT one row per probe. Indexed on `(site_id, event_at)
 
 ### `site_security_scans`
 
-Polymorphic by `scan_type` ∈ `sitecheck|core_checksums|blacklist|companion_malware`. One coarse `status` (`clean|issues_found|failed`) drives every dashboard regardless of scan type. Adding a Phase-2 type is a new constant on `SiteSecurityScan`, not a migration.
+Polymorphic by `scan_type` ∈ `sitecheck|core_checksums|blacklist|companion_malware`. One coarse `status` (`clean|warning|issues_found|failed`) drives every dashboard regardless of scan type. Adding a Phase-2 type is a new constant on `SiteSecurityScan`, not a migration.
 
 `companion_malware` is the in-WP scanner that bypasses Cloudflare — runs via the Companion plugin's HMAC-signed endpoint when available, falls back to SSH wp-cli. Replaces SiteCheck's role on Cloudflare-fronted sites where Sucuri's external scanner gets 403'd at the edge.
 
@@ -132,11 +132,19 @@ Polymorphic by `scan_type` ∈ `sitecheck|core_checksums|blacklist|companion_mal
 
 One row per Lighthouse run. Stores Performance score + LCP/FCP/TBT/SI/CLS + page weight + request count, plus `engine` (`gtmetrix` / `psi` / `psi-fallback` / `pressable`) — GTmetrix is primary, PSI only fills in when GTmetrix errors; `pressable` is Pressable's own always-available report (no fallback chain). **CLS is stored ×1000 as integer** to avoid float drift in MySQL — divide on read.
 
-`accessibility_score` / `best_practices_score` / `seo_score` (nullable) — extracted for `pressable` and `psi`/`psi-fallback` rows (`PageSpeedInsightsClient` and `PressableLighthouseClient` extract them, while GTmetrix's current tier focuses primarily on Performance metrics). `source_generated_at` (nullable) — the report's own generation time, distinct from poll time; null for GTmetrix/PSI (every call is a fresh scan), set for Pressable (whose report only regenerates ~monthly). `PerformanceScanRecorder` uses it to skip inserting a duplicate row when Pressable's underlying report hasn't actually changed since the last poll — see [Features → Performance scans](/docs/features/performance-scans).
+`accessibility_score` / `best_practices_score` / `seo_score` (nullable) — extracted for `pressable` and `psi`/`psi-fallback` rows (`PageSpeedInsightsClient` and `PressableLighthouseClient` extract them, while GTmetrix's current tier focuses primarily on Performance metrics). `source_generated_at` (nullable) — the report's own generation time, distinct from poll time; null for GTmetrix/PSI (every call is a fresh scan), set for Pressable (whose report only regenerates ~monthly). `PerformanceScanRecorder` uses it to skip inserting a duplicate row when Pressable's underlying report hasn't changed since the last stored report. That's the newest row for the same site, strategy and engine that has a `source_generated_at`, so a failed read in between can't make an old report look new. Client reports date Pressable results by it, not by `scanned_at` — see [Features → Performance scans](/docs/features/performance-scans).
 
 ### `site_field_metrics`
 
 One row per site × form factor (`phone`/`desktop`) × scope (`origin`/`url`) × collection period. Stores real-user Core Web Vitals measured from Chrome browsers over rolling 28-day windows from Google's Chrome UX Report (CrUX) API. Columns: `lcp_p75_ms`, `inp_p75_ms`, `cls_p75_x1000`, `fcp_p75_ms`, `ttfb_p75_ms`, `cwv_pass` (bool pass assessment), `good_pct` (JSON distribution of "good" bucket per metric), `status` (`ok`/`no_data`/`failed`), `period_start`, `period_end`. Unique on `(site_id, form_factor, scope, period_end)`.
+
+### `site_backups` + `site_backup_checks`
+
+Backup evidence for client reports, written daily (05:30) by `clockwork:record-site-backups` (`App\Services\Backups\SiteBackupRecorder`) from each site's real backup source, never from a setting that says backups should be happening.
+
+`site_backups` has one row per backup the source reported. Columns: `source` (`pressable` = Pressable's backup API, `spinupwp_spaces` = the DigitalOcean Spaces bucket SpinupWP writes to, `s3_archive` = our own S3 archives for unhosted relay sites), `kind` (`fs` / `db` / `full`), `external_ref` (the source's own id), `backup_at`, `bytes` (nullable), `is_manual`, `first_seen_at`, `last_seen_at`. It's unique on `(site_id, source, kind, external_ref)` and indexed on `(site_id, backup_at)`. Rows are kept after the source prunes them, so a report for an older period can still be rebuilt.
+
+`site_backup_checks` holds the latest read attempt per `(site_id, source)`: `checked_at`, `ok`, `backups_seen`, `error`. It lets "checked, found none" be told apart from "couldn't check". Both tables cascade on site delete. See [Features → Client reports](/docs/features/client-reports).
 
 ### `email_auth_checks` + `email_auth_domains`
 
@@ -145,6 +153,20 @@ Modular email security posture verification (`modules/EmailAuth`). `email_auth_c
 ### `contact_form_tests` + `contact_form_test_runs`
 
 Per-site contact-form configuration and smoke-test history (the $9/mo care-plan feature, decoupled into `modules/ContactForms`). `contact_form_tests` stores configured forms (up to 3 per care-plan site, frequency weekly/daily, failure streak, status), while `contact_form_test_runs` logs every execution attempt and result.
+
+### `client_reports` + `client_report_schedules` + `client_report_templates`
+
+Client Reports module (`modules/ClientReports`). See [Features → Client reports](/docs/features/client-reports).
+
+`client_reports` holds one compiled report per site and period. Columns: `site_id`, `template_id`, `schedule_id` (nullable; lets a scheduled run find and resume its own unfinished report), `title`, `period_start` / `period_end`, `sections_data`, `client_name`, `client_email` (recipients, comma-joined), `status`, `sent_at`, `sent_to` (JSON list of recipients already emailed, so a partial send resumes without double-sending), `public_token`. `sections_data` is a JSON snapshot of every section; its `meta.schema_version` is currently 3, and a held report also carries `meta.review_reasons`. `status` is one of:
+
+- `generated`: compiled, not yet sent to everyone.
+- `sent`: every recipient succeeded.
+- `superseded`: a newer report for the same schedule and period replaced it before it reached anyone.
+
+`client_report_schedules` has one row per site (unique `site_id`). Columns: `template_id`, `frequency` (`weekly` / `monthly`), `delivery_mode` (`auto` / `draft`), `recipients` (JSON), `is_enabled`, `last_sent_at`, `next_run_at`.
+
+`client_report_templates` stores `name`, `sections` (JSON) and `is_default`.
 
 ## Audit + ops
 
@@ -156,7 +178,7 @@ Generic audit trail. `action_type` is a string; `details` is freeform JSON. Inde
 
 ### `backup_relay_runs`
 
-One row per run of the backup relay pipeline that archives off-host site backups across supported hosting providers (Pressable, SpinupWP, and any provider implementing `HostingProvider::CAP_BACKUP_RELAY` via `Modules\Core\Contracts\BackupRelayAdapter`) directly to S3 Glacier Instant Retrieval, replacing host-limited retention windows. Supports two operational modes: in-repo mode (default, executing `Modules\BackupRelay\Jobs\ArchiveSiteBackupJob` natively via Laravel queues) and external-agent mode (coordinating with a standalone droplet via S3 `targets.json` and `last-report.json`). Columns: `sites_total`, `sites_archived`, `sites_skipped`, `sites_failed`, `failures` (JSON array of `{domain, error}`), `started_at`, `finished_at`. `pull-backup-relay-report` (in external-agent mode) or the in-repo runner also detects relay silence — 6+ days since the last row fires a Mattermost/Slack alert once, cleared on the next fresh run. See [Features → Backup relay](/docs/features/backup-relay).
+One row per run of the backup relay pipeline that archives off-host site backups across supported hosting providers (Pressable, SpinupWP, and any provider implementing `HostingProvider::CAP_BACKUP_RELAY` via `Modules\Core\Contracts\BackupRelayAdapter`) directly to S3 Glacier Instant Retrieval, replacing host-limited retention windows. Supports two operational modes: in-repo mode (default, executing `Modules\BackupRelay\Jobs\ArchiveSiteBackupJob` natively via Laravel queues) and external-agent mode (coordinating with a standalone droplet via S3 `targets.json` and `last-report.json`). Columns: `sites_total`, `sites_archived`, `sites_skipped`, `sites_failed`, `failures` (JSON array of `{domain, error}`), `started_at`, `finished_at`. `pull-backup-relay-report` (in external-agent mode) or the in-repo runner also detects relay silence — 6+ days since the last row fires a Mattermost/Slack alert once, cleared on the next fresh run. In external-agent mode, the 04:30 `clockwork:backup-relay-run --direct-only` pass writes no row here, because the droplet owns the run history. That pass covers unhosted sites where Companion uploads straight to S3. See [Features → Backup relay](/docs/features/backup-relay).
 
 ### `bill_com_customers` + `bill_com_care_plan_items`
 

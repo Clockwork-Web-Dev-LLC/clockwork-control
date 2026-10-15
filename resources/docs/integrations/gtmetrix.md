@@ -8,7 +8,7 @@ tags: [integrations, performance, lighthouse, gtmetrix, care-plan, pressable]
 tracks: [modules/GTmetrix/src/GtmetrixClient.php, modules/GTmetrix/src/GTmetrixServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
 ---
 
-GTmetrix REST API v2 is the **primary** performance-scanning engine for SpinupWP sites. It runs a nightly Lighthouse scan against 1/7th of the care-plan fleet (each site weekly — see the credit budget below) from a pinned datacenter, pinned browser version, and pinned connection profile. [Google PageSpeed Insights](/docs/integrations/pagespeed-insights) serves as the fallback engine.
+GTmetrix REST API v2 is the **primary** performance-scanning engine for every site not hosted on Pressable. It runs a nightly Lighthouse scan against 1/7th of the care-plan fleet (each site weekly — see the credit budget below) from a pinned datacenter, pinned browser version, and pinned connection profile. [Google PageSpeed Insights](/docs/integrations/pagespeed-insights) serves as the fallback engine.
 
 Pressable sites don't go through this chain at all — see [Features → Performance scans](/docs/features/performance-scans) ("Pressable sites — a third engine, no fallback chain") for their own always-on Lighthouse report.
 
@@ -32,7 +32,7 @@ PSI's scores swung ±10-15 points day-over-day on unchanged pages (simulated-thr
 php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix
 ```
 
-If the key is empty the runner falls through to PSI (or short-circuits if that's unset too) — no error.
+If the key is empty, the default run falls through to PSI (a forced `--engine=` doesn't fall back). If PSI's key is unset too, GTmetrix/PSI runs print an error and exit without scanning; `--host-reports` runs need neither key.
 
 ## Auth
 
@@ -63,7 +63,7 @@ The `location` attribute is a GTmetrix datacenter. Global default: **4 = San Ant
 
 ## Mobile vs desktop
 
-Display-only on this tier. `/devices` and `/connections` return empty arrays for us, and `/browsers` exposes only desktop Chrome (id=3) and Firefox (id=1) — every scan is desktop Chrome from the chosen datacenter regardless of `--strategy`. The scheduler therefore runs **one** nightly scan (the PSI era ran two). The `strategy` column is still written for row continuity with historical data. If GTmetrix unlocks device emulation on a higher tier, pin `browser` + `simulate_device` in `GtmetrixClient::submitTest` and re-add the desktop scheduler entry.
+Display-only on this tier. `/devices` and `/connections` return empty arrays for us, and `/browsers` exposes only desktop Chrome (id=3) and Firefox (id=1) — every scan is desktop Chrome from the chosen datacenter regardless of `--strategy`. The scheduler therefore runs **one** nightly scan (the PSI era ran two). The `strategy` column is still written for row continuity with historical data. If GTmetrix unlocks device emulation on a higher tier, pin `browser` + `simulate_device` in `GtmetrixClient::submitTest` and add a desktop `--weekly-rotation` scheduler entry.
 
 ## Files
 
@@ -83,7 +83,7 @@ Gated on `Settings('performance_scans.enabled')`.
 
 ## Credit budget (why the weekly rotation exists)
 
-API credits refill daily at ~04:27 UTC and **don't accumulate**. To ensure coverage within credit limits, the scheduler passes `--weekly-rotation`: sites ordered by domain, sliced into 7 buckets by `index % 7 == UTC weekday`, ~11 sites/night. Pressable sites aren't in the slices (as of 2026-10-15 they use Pressable's own report, read nightly), so the rotation is about 54 sites, ~8 a night. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for manual runs and retries.
+API credits refill daily at ~04:27 UTC and **don't accumulate**. To ensure coverage within credit limits, the scheduler passes `--weekly-rotation`: sites ordered by domain, sliced into 7 buckets by `index % 7 == UTC weekday`. Pressable sites aren't in the slices (as of 2026-10-15 they use Pressable's own report, read nightly), so the rotation is about 54 sites, ~8 a night. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for manual runs and retries.
 
 ## Storage
 
