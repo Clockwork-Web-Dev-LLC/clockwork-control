@@ -40,18 +40,25 @@ The rule for every section: **if we didn't check it during the period, the repor
 | Key | Source | Period | When there's no data |
 |---|---|---|---|
 | `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true` | In period | "Everything was already up to date" |
-| `uptime` | `site_uptime_events`: each `down` runs until the next `up`/`maintenance`, clamped to the period (an outage already open at the start counts from the start). SLA-exempt outages are skipped. | In period | Hidden if the site isn't monitored |
+| `uptime` | `site_uptime_events`: each `down` runs until the next `up`/`maintenance`, clamped to the period (an outage already open at the start counts from the start). SLA-exempt outages are skipped. The 5 most recent outages are listed with start time and length, marked when one began before the period ("Down since before …") or was still open at its end. | In period | Hidden if the site isn't monitored |
 | `security` scans | `site_security_scans`, excluding `failed` scans (they never completed); warnings = `warning` + `issues_found` | In period | Count of 0 |
+| `security` blocklists | Latest completed `blacklist` scan in the period | In period | "Not checked this month" |
 | `security` malware | Latest completed `companion_malware` scan in the period, falling back to `sitecheck` | In period | "Not checked this month" |
 | `security` core files | Latest *completed* `core_checksums` scan in the period. A site counts as WordPress if `is_wordpress` is set **or** Companion reports a `wp_core`. | In period | "Not checked this month"; row left out for non-WordPress sites |
 | `security` vulnerabilities | `PluginVulnerabilityMatcher` (installed plugins from the Companion snapshot vs. the vulnerability feed). Matches in inactive plugins are noted separately. | **Snapshot date**, shown as "as of …" | "Not checked" when there's no plugin list, **or** the feed hasn't refreshed in 48h (an empty or stale feed would otherwise read as "None found") |
 | `performance` | Latest OK mobile/desktop `site_performance_scans` + phone `site_field_metrics` | In period | Section hidden |
 | `forms` | `contact_form_test_runs`. Only **live** runs test delivery: delivered = `status = 'success'` **and** `mail_outcome = 'sent'`. **Lab** runs suppress the email, so they're reported as "accepted N of M" and never as delivered. | In period | Section hidden (`pass_rate` is null) |
 | `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | In period | Section hidden |
-| `backups` | Only claimed when the backup relay archived inside the period (`backup_relay_last_archived_at`) | In period | Section hidden from the client. The preview says "Not verified this period". |
+| `backups` | `site_backups`: what the site's **real** backup source reported, recorded daily by `clockwork:record-site-backups` (05:30). Pressable → Pressable's backup API (files daily, plus one database backup per day); SpinupWP → the DigitalOcean Spaces bucket SpinupWP writes to; unhosted sites → our own S3 archives (Companion uploads). The email lists the **last 10 days of the period**, one row per day, plus how many days that month had a backup. A day's size counts one backup of each kind (the newest scheduled one), so extra on-demand or hourly backups don't inflate it. | In period | Section hidden from the client. The preview shows **No backups found** (checked, none), **No backups in the last 10 days** (backups stopped mid-period) or **Could not check** (read failed, or no clean check in 48h), with the error. |
 | `work_log` | `site_work_logs` (hours entered on the site page) | In period | Section hidden |
 
-Every compiled report carries `meta.schema_version` (currently **2**). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
+Every compiled report carries `meta.schema_version` (currently **3**: 2 = honesty fixes, 3 = recorded backups list). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
+
+### Backup recording
+
+`clockwork:record-site-backups` (core, `App\Services\Backups\SiteBackupRecorder`) reads every active site's backups from its source and upserts them into `site_backups`, keyed by source and the source's own id. It also writes one `site_backup_checks` row per site saying whether the read worked. Rows are **kept after the source prunes them**, so re-generating an old report still has the evidence. A failed read never deletes or zeroes anything; it only marks the check as failed, logs `site_backups.record_failed`, and makes the run exit as failed so it shows red in Scheduled Jobs. It's all reads: Pressable's backup endpoints are allowed in view-only mode.
+
+Pressable's database backups are hourly, so one row per UTC day is kept, keyed `day:YYYY-MM-DD`; a later run's newer pick replaces it. A SpinupWP run is labelled by what's actually in the bucket (files, database, or both), and a run first seen mid-upload is replaced once the rest lands. Empty (0-byte) objects don't count as backups.
 
 Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Adding a section means adding it there, adding a `compileX()` method in the compiler, and adding a block to both views and the email.
 

@@ -66,6 +66,13 @@
         default => [$vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : ''), $warn],
     };
     $showMalware = array_key_exists('malware_status', $security);
+    $showBlacklist = array_key_exists('blacklist_status', $security);
+    [$blacklistLabel, $blacklistColor] = match ($security['blacklist_status'] ?? null) {
+        'clean' => ['Not listed', $good],
+        'issues_found', 'warning' => ['Listed — under review', $warn],
+        null => ['Not checked this month', $muted],
+        default => [ucfirst((string) $security['blacklist_status']), $warn],
+    };
     [$malwareLabel, $malwareColor] = match ($security['malware_status'] ?? null) {
         'clean' => ['No malware found', $good],
         'warning', 'issues_found' => ['Issues flagged', $warn],
@@ -76,6 +83,14 @@
         ? \Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j')
         : null;
     $showBackups = isset($data['backups']) && ! empty($backups['verified']);
+    $backupKindLabel = fn (array $kinds) => match (true) {
+        in_array('full', $kinds, true), in_array('fs', $kinds, true) && in_array('db', $kinds, true) => 'Files & database',
+        in_array('db', $kinds, true) => 'Database',
+        default => 'Files',
+    };
+    $outageWhen = fn (array $o) => (! empty($o['started_before_period']) ? 'Down since before ' : 'Down ').\Illuminate\Support\Carbon::parse($o['started_at'])->format('M j, g:i A').' UTC'.(! empty($o['ongoing']) ? ' (still down at period end)' : '');
+    $outageLength = fn (int $m) => $m < 1 ? '<1 min' : ($m >= 60 ? floor($m / 60).'h '.($m % 60).'m' : $m.' min');
+    $formatBytes = fn (int $b) => $b >= 1024 ** 3 ? number_format($b / 1024 ** 3, 1).' GB' : ($b >= 1024 ** 2 ? number_format($b / 1024 ** 2, 0).' MB' : number_format(max(1, $b / 1024), 0).' KB');
 
     $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : '#b91c1c');
     $bandwidth = (float) ($traffic['bandwidth_mb'] ?? 0);
@@ -194,6 +209,19 @@
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Outages</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ (int) ($uptime['outages_count'] ?? 0) }}</td></tr>
                 <tr><td style="padding:8px 0; color:#334155;">Total downtime</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $downtimeLabel }}</td></tr>
             </table>
+            @if (! empty($uptime['outages']))
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:12px; margin-top:6px;">
+                    @foreach ($uptime['outages'] as $outage)
+                        <tr>
+                            <td style="padding:5px 0; color:{{ $muted }};">{{ $outageWhen($outage) }}</td>
+                            <td align="right" style="padding:5px 0; color:{{ $muted }};">{{ $outageLength((int) $outage['minutes']) }}</td>
+                        </tr>
+                    @endforeach
+                </table>
+                @if ((int) ($uptime['outages_count'] ?? 0) > count($uptime['outages']))
+                    <p style="margin:6px 0 0 0; font-size:11px; color:#94a3b8;">Showing the {{ count($uptime['outages']) }} most recent of {{ (int) $uptime['outages_count'] }} outages.</p>
+                @endif
+            @endif
         </td></tr>
     @endif
 
@@ -204,6 +232,9 @@
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Security scans run</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['total_scans'] ?? 0)) }}</td></tr>
+                @if ($showBlacklist)
+                    <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Spam &amp; malware blocklists</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $blacklistColor }};">{{ $blacklistLabel }}</td></tr>
+                @endif
                 @if ($showMalware)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Malware scan</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $malwareColor }};">{{ $malwareLabel }}</td></tr>
                 @endif
@@ -274,12 +305,32 @@
     @if ($showBackups)
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Backups</div>
-            <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">
-                Your site's files and database were backed up to independent off-site storage this month, so it can be restored if anything goes wrong.
-                @if (! empty($backups['last_backup_at']))
-                    Most recent backup: <strong>{{ \Illuminate\Support\Carbon::parse($backups['last_backup_at'])->format('M j, Y') }}</strong>.
-                @endif
-            </p>
+            @if (isset($backups['status']))
+                {{-- Schema 3+: real backups recorded from the site's own source. Only
+                     shown when verified, which means there's at least one recent day. --}}
+                @php $backupDays = (int) ($backups['days_with_backups'] ?? 0); @endphp
+                <p style="margin:10px 0 12px 0; font-size:14px; line-height:1.6; color:#334155;">
+                    Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
+                    @foreach ($backups['recent'] as $day)
+                        <tr>
+                            <td style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $ink }}; white-space:nowrap;">{{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}</td>
+                            <td style="padding:7px 8px; border-bottom:1px solid {{ $line }}; color:#334155;">{{ $backupKindLabel($day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                            <td align="right" style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $muted }}; white-space:nowrap;">{{ $day['bytes'] !== null ? $formatBytes((int) $day['bytes']) : '—' }}</td>
+                        </tr>
+                    @endforeach
+                </table>
+                <p style="margin:6px 0 0 0; font-size:11px; color:#94a3b8;">Most recent backups shown.</p>
+            @else
+                {{-- Older reports, compiled before backups were recorded. --}}
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">
+                    Your site's files and database were backed up to independent off-site storage this month, so it can be restored if anything goes wrong.
+                    @if (! empty($backups['last_backup_at']))
+                        Most recent backup: <strong>{{ \Illuminate\Support\Carbon::parse($backups['last_backup_at'])->format('M j, Y') }}</strong>.
+                    @endif
+                </p>
+            @endif
         </td></tr>
     @endif
 

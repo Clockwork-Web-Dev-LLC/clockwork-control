@@ -7,12 +7,15 @@ use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
 use App\Models\PluginVulnerability;
 use App\Models\Site;
+use App\Models\SiteBackup;
+use App\Models\SiteBackupCheck;
 use App\Models\SiteFieldMetric;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
 use App\Models\SiteWorkLog;
+use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Support\Settings;
@@ -20,7 +23,15 @@ use Illuminate\Support\Carbon;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
+
+    /** How many of the period's final days the backups list shows. */
+    public const BACKUP_LIST_DAYS = 10;
+
+    public const UPTIME_OUTAGE_LIST_MAX = 5;
+
+    /** A clean read older than this can't vouch for "no backups found". */
+    public const BACKUP_CHECK_MAX_AGE_HOURS = 48;
 
     /** The feed refreshes daily; allow one missed run before calling it stale. */
     public const VULNERABILITY_FEED_MAX_AGE_HOURS = 48;
@@ -30,6 +41,7 @@ class ClientReportCompiler
     public function __construct(
         protected Settings $settings,
         protected PluginVulnerabilityMatcher $vulnerabilities,
+        protected SiteBackupRecorder $backups,
     ) {}
 
     /**
@@ -70,7 +82,7 @@ class ClientReportCompiler
                 'id' => $site->id,
                 'domain' => $site->domain,
                 'is_wordpress' => $isWordPress,
-                'wp_version' => $site->companion_snapshot['wp_core']['version'] ?? null,
+                'wp_version' => $site->companion_snapshot['wp_core']['current_version'] ?? null,
                 'php_version' => $site->companion_snapshot['environment']['php_version'] ?? null,
                 'care_plan_enabled' => (bool) $site->care_plan_enabled,
             ],
@@ -139,7 +151,8 @@ class ClientReportCompiler
             ->where('ok', true)
             ->whereBetween('ran_at', [$start, $end])
             ->orderByDesc('ran_at')
-            ->get();
+            ->get()
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary));
 
         $pluginUpdates = [];
         $themeUpdates = [];
@@ -177,6 +190,18 @@ class ClientReportCompiler
     }
 
     /**
+     * A run that changed nothing isn't an update to report: one that ends on
+     * the version it started from ("1.5.3 → 1.5.3"), a plugin that was already
+     * current, or a translations run with no packages.
+     */
+    public static function isNoOpUpdate(string $summary): bool
+    {
+        return (bool) preg_match('/(?<![\w.\-])(\d[\w.\-]*)\s*→\s*\1(?![\w.\-])/u', $summary)
+            || (bool) preg_match('/^\s*(plugin|theme)s?\s+already\s+up\s+to\s+date\b/i', $summary)
+            || (bool) preg_match('/^\s*translations\s+updated:\s*0\s+package/i', $summary);
+    }
+
+    /**
      * Downtime is measured from each `down` event to the next `up` (or
      * `maintenance`) event, clamped to the period. Events only record state
      * changes, so the last event before the period tells us whether the site
@@ -203,32 +228,29 @@ class ClientReportCompiler
 
         $isCountedDown = fn (SiteUptimeEvent $e) => $e->event_type === SiteUptimeEvent::TYPE_DOWN && ! $e->is_sla_exempt;
 
-        $outages = 0;
-        $downtimeSeconds = 0;
+        $intervals = [];
         $downSince = $priorEvent !== null && $isCountedDown($priorEvent) ? $start->copy() : null;
-        if ($downSince !== null) {
-            $outages++;
-        }
 
         foreach ($events as $event) {
             if ($isCountedDown($event)) {
-                if ($downSince === null) {
-                    $downSince = $event->event_at->copy();
-                    $outages++;
-                }
+                $downSince ??= $event->event_at->copy();
 
                 continue;
             }
 
             if ($downSince !== null) {
-                $downtimeSeconds += max(0, (int) $downSince->diffInSeconds($event->event_at));
+                $intervals[] = [$downSince, $event->event_at->copy()];
                 $downSince = null;
             }
         }
 
-        if ($downSince !== null && $periodEnd->greaterThan($downSince)) {
-            $downtimeSeconds += (int) $downSince->diffInSeconds($periodEnd);
+        $stillDown = $downSince !== null;
+        if ($stillDown && $periodEnd->greaterThan($downSince)) {
+            $intervals[] = [$downSince, $periodEnd->copy()];
         }
+
+        $outages = count($intervals) + ($stillDown && ! $periodEnd->greaterThan($downSince) ? 1 : 0);
+        $downtimeSeconds = array_sum(array_map(fn (array $i) => max(0, (int) $i[0]->diffInSeconds($i[1])), $intervals));
 
         $downtimeMinutes = min($totalMinutes, (int) round($downtimeSeconds / 60));
         $uptimePercentage = max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
@@ -239,6 +261,15 @@ class ClientReportCompiler
             'outages_count' => $outages,
             'downtime_minutes' => $downtimeMinutes,
             'total_period_minutes' => $totalMinutes,
+            // Newest first, capped: the email lists the most recent outages. An
+            // outage carried in from before the period starts at the period
+            // start, so it's flagged rather than shown as starting then.
+            'outages' => array_slice(array_reverse(array_map(fn (array $i) => [
+                'started_at' => $i[0]->toIso8601String(),
+                'minutes' => (int) round($i[0]->diffInSeconds($i[1]) / 60),
+                'started_before_period' => $i[0]->equalTo($start) && $priorEvent !== null && $isCountedDown($priorEvent),
+                'ongoing' => $stillDown && $i[1]->equalTo($periodEnd),
+            ], $intervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
         ];
     }
 
@@ -265,6 +296,7 @@ class ClientReportCompiler
         // (remote, front-end only) stands in when it didn't run.
         $malwareScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)
             ?? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_SITECHECK);
+        $blacklistScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_BLACKLIST);
 
         // The plugin list is the site's current Companion snapshot, so this is
         // the state on the snapshot date, not a history over the period.
@@ -294,6 +326,8 @@ class ClientReportCompiler
             'checksum_checked_at' => $checksumScan?->scanned_at?->toDateString(),
             'malware_status' => $malwareScan?->status,
             'malware_checked_at' => $malwareScan?->scanned_at?->toDateString(),
+            'blacklist_status' => $blacklistScan?->status,
+            'blacklist_checked_at' => $blacklistScan?->scanned_at?->toDateString(),
         ];
     }
 
@@ -406,21 +440,78 @@ class ClientReportCompiler
         ];
     }
 
+    /**
+     * Backups come only from site_backups — what each site's real source
+     * (Pressable's API, SpinupWP's Spaces bucket, our S3 archives) reported,
+     * recorded daily by clockwork:record-site-backups. A backup is only shown
+     * if we saw it; "none found" and "couldn't check" are kept apart so the
+     * preview can flag them, and neither is shown to the client.
+     */
     protected function compileBackups(Site $site, Carbon $start, Carbon $end): array
     {
-        // A backup only counts if the relay actually archived one inside the
-        // period. Being switched on (or being on a care plan, or a host that
-        // "usually" snapshots) isn't evidence, and clients read this as a
-        // promise that a restore is possible.
-        $hasBackupRelay = (bool) ($site->backup_relay_enabled ?? false);
-        $lastArchived = $site->backup_relay_last_archived_at;
-        $verified = $hasBackupRelay && $lastArchived !== null && $lastArchived->between($start, $end);
+        $source = $this->backups->sourceFor($site);
+        $windowStart = $end->copy()->subDays(self::BACKUP_LIST_DAYS - 1)->startOfDay()->max($start);
+
+        $inPeriod = $source === null ? collect() : SiteBackup::query()
+            ->where('site_id', $site->id)
+            ->where('source', $source)
+            ->whereBetween('backup_at', [$start, $end])
+            ->orderByDesc('backup_at')
+            ->get();
+
+        // One row per day: a Pressable day has a files and a database backup.
+        // The size counts one backup of each kind (the newest scheduled one),
+        // so an extra on-demand or hourly backup doesn't inflate it.
+        $days = $inPeriod
+            ->groupBy(fn (SiteBackup $b) => $b->backup_at->toDateString())
+            ->map(function ($group, string $day) {
+                $perKind = $group->groupBy('kind')->map(fn ($rows) => $rows
+                    ->sortBy([['is_manual', 'asc'], ['backup_at', 'desc']])
+                    ->first());
+
+                return [
+                    'date' => $day,
+                    'kinds' => $perKind->keys()->sort()->values()->all(),
+                    'bytes' => $perKind->contains(fn (SiteBackup $b) => $b->bytes === null) ? null : (int) $perKind->sum('bytes'),
+                    'manual' => $group->every(fn (SiteBackup $b) => $b->is_manual),
+                ];
+            });
+        $recent = $days->filter(fn (array $d) => $d['date'] >= $windowStart->toDateString())->values();
+
+        $check = $source === null ? null : SiteBackupCheck::query()
+            ->where('site_id', $site->id)
+            ->where('source', $source)
+            ->first();
+        $checkIsCurrent = $check !== null && $check->ok
+            && $check->checked_at->greaterThanOrEqualTo(now()->subHours(self::BACKUP_CHECK_MAX_AGE_HOURS));
+
+        $status = match (true) {
+            $source === null => 'no_source',
+            // Backups that stopped before the last 10 days are a problem to
+            // look at, not something to show the client as fine.
+            $recent->isNotEmpty() => 'verified',
+            $days->isNotEmpty() => 'stale',
+            $checkIsCurrent => 'none_found',
+            default => 'not_checked',
+        };
 
         return [
-            'enabled' => $hasBackupRelay || $site->care_plan_enabled,
-            'verified' => $verified,
-            'last_backup_at' => $lastArchived?->toDateString(),
-            'destination' => $verified ? 'Independent AWS S3 / Glacier' : null,
+            'enabled' => $source !== null,
+            'verified' => $status === 'verified',
+            'status' => $status,
+            'source' => $source,
+            'destination' => match ($source) {
+                SiteBackup::SOURCE_PRESSABLE => 'your host, Pressable',
+                SiteBackup::SOURCE_SPINUPWP_SPACES => 'SpinupWP, stored in DigitalOcean Spaces',
+                SiteBackup::SOURCE_S3_ARCHIVE => 'independent off-site storage (Amazon S3)',
+                default => null,
+            },
+            'days_with_backups' => $days->count(),
+            'last_backup_at' => $inPeriod->first()?->backup_at->toDateString(),
+            'list_from' => $windowStart->toDateString(),
+            'recent' => $recent->all(),
+            'check_error' => $check !== null && ! $check->ok ? $check->error : null,
+            'checked_at' => $check?->checked_at->toIso8601String(),
         ];
     }
 

@@ -26,7 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The vulnerability line reads "Not checked" when the vulnerability feed hasn't refreshed in 48h, and notes matches in inactive plugins.
   - Reports now carry `meta.schema_version`. Older stored reports no longer re-show "None found" vulnerabilities or a wrong "0% delivered".
 
+- **Backup Relay — Unhosted sites are backed up again in `external_agent` mode**: `clockwork:backup-relay-run --direct-only` is now scheduled daily (04:30) in that mode. Before, nothing triggered Companion's direct-to-S3 upload, so these sites only got manual Backup Now archives. Direct-to-S3 sites are no longer sent to the external agent, which can't reach them.
+- **Client Reports — Updates list** leaves out runs that changed nothing: re-runs that ended on the version they started from ("1.5.3 → 1.5.3"), "Plugin already up to date" runs and "Translations updated: 0 package(s)". The site's WordPress version is read from the correct snapshot key.
+- **Backup Relay — The scheduled sweep honours the Backup Now / restore locks**: it skips a site that's mid-restore or already running Backup Now, and holds that site's backup lock while it works so a restore can't be staged underneath it. Failures in the 04:30 direct pass are logged and posted to chat.
+
 ### Added
+- **Backup history recording (`clockwork:record-site-backups`, daily 05:30)**: records each site's backups from its real source (Pressable's backup API, SpinupWP's DigitalOcean Spaces bucket, our own S3 archives) into the new `site_backups` table, plus a `site_backup_checks` row per site saying whether the read worked. Rows are kept after the source prunes them. The run exits as failed (and logs each site) when any read fails, so Scheduled Jobs shows it.
+- **Client Reports — Backups list**: the report now lists the last 10 days of the period's recorded backups (one row per day, with size) and how many days that month had one. The section is hidden from clients when none were found, when backups stopped before the last 10 days, or when the read failed, and the preview says which.
+- **Client Reports — Uptime outage list and blocklist check**: the 5 most recent outages with start time and length (flagged when one began before the period or was still open at its end), and a "Spam & malware blocklists" line from the latest in-period blacklist scan.
 - **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.
 
 ## [1.11.0] - 2026-10-14

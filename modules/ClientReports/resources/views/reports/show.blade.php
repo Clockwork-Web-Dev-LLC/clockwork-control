@@ -296,31 +296,44 @@
 
         {{-- Section: Backups & Disaster Recovery --}}
         @if (isset($data['backups']))
+            @php
+                $backupStatus = $backups['status'] ?? (! empty($backups['verified']) ? 'verified' : 'not_checked');
+                [$backupBadge, $backupBadgeClass] = match ($backupStatus) {
+                    'verified' => ['Verified this period', 'text-emerald-700 bg-emerald-50'],
+                    'none_found' => ['No backups found this period — hidden from the client email', 'text-amber-700 bg-amber-50'],
+                    'stale' => ['No backups in the last 10 days of the period — hidden from the client email', 'text-amber-700 bg-amber-50'],
+                    'no_source' => ['No backup source for this host — hidden from the client email', 'text-slate-600 bg-slate-100'],
+                    default => ['Could not check backups — hidden from the client email', 'text-red-700 bg-red-50'],
+                };
+            @endphp
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
                     </h2>
-                    @if (! empty($backups['verified']))
-                        <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Verified this period</span>
-                    @elseif (! empty($backups['enabled']))
-                        <span class="no-print text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">Not verified this period — hidden from the client email</span>
-                    @else
-                        <span class="no-print text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">Not configured — hidden from the client email</span>
-                    @endif
+                    <span class="{{ $backupStatus === 'verified' ? '' : 'no-print' }} text-xs font-semibold {{ $backupBadgeClass }} px-2.5 py-1 rounded-full">{{ $backupBadge }}</span>
                 </div>
-                @if (! empty($backups['verified']))
+                @if (in_array($backupStatus, ['verified', 'stale'], true))
                     <p class="text-xs text-slate-500">
-                        Your website files and database were backed up to independent off-site storage during this period.
+                        Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
                     </p>
                 @endif
-                <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    @if (! empty($backups['destination']))
-                        <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
-                        <span class="mx-2">&bull;</span>
-                    @endif
-                    <span class="font-semibold text-slate-800">Latest Recorded Backup:</span> {{ $backups['last_backup_at'] ?? 'none on record' }}
-                </div>
+                @if (! empty($backups['recent']))
+                    <table class="w-full text-xs text-left">
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach ($backups['recent'] as $day)
+                                <tr>
+                                    <td class="px-3 py-1.5 font-mono text-slate-700">{{ $day['date'] }}</td>
+                                    <td class="px-3 py-1.5 text-slate-500">{{ implode(' + ', $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ $day['bytes'] !== null ? number_format($day['bytes'] / 1024 ** 2, 1).' MB' : '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+                @if (! empty($backups['check_error']))
+                    <div class="no-print text-xs text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">Last check failed: {{ $backups['check_error'] }}</div>
+                @endif
             </div>
         @endif
 

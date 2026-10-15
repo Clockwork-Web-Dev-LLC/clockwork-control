@@ -1,8 +1,11 @@
 <?php
 
+use App\Models\ActionLog;
 use App\Models\ContactFormTestRun;
 use App\Models\PluginVulnerability;
 use App\Models\Site;
+use App\Models\SiteBackup;
+use App\Models\SiteBackupCheck;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteUptimeEvent;
@@ -127,36 +130,101 @@ describe('known plugin vulnerabilities (#8)', function () {
 });
 
 describe('backups (#6)', function () {
-    it('claims a backup only when the relay archived one inside the period', function () {
-        $site = accuracySite([
-            'backup_relay_enabled' => true,
-            'backup_relay_last_archived_at' => Carbon::parse('2026-09-20 03:00'),
+    function pressableBackupSite(): Site
+    {
+        return accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => (string) random_int(1000, 999999)]);
+    }
+
+    function recordBackup(Site $site, string $kind, string $at, ?int $bytes = 50 * 1024 ** 2): void
+    {
+        SiteBackup::create([
+            'site_id' => $site->id, 'source' => SiteBackup::SOURCE_PRESSABLE, 'kind' => $kind,
+            'external_ref' => $kind.$at, 'backup_at' => Carbon::parse($at), 'bytes' => $bytes,
+            'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
         ]);
+    }
+
+    function recordCheck(Site $site, bool $ok, ?Carbon $at = null): void
+    {
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_PRESSABLE, 'checked_at' => $at ?? now(), 'ok' => $ok, 'error' => $ok ? null : 'Pressable API returned 503']);
+    }
+
+    it('lists the last 10 days of recorded backups, one row per day', function () {
+        $site = pressableBackupSite();
+        foreach (range(1, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+            recordBackup($site, SiteBackup::KIND_DATABASE, sprintf('2026-09-%02d 23:00:00', $day), 10 * 1024 ** 2);
+        }
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-10-01 00:00:00'); // after the period
+        recordCheck($site, true);
 
         $report = compileSeptember($site);
+        $backups = $report['data']['backups'];
 
-        expect($report['data']['backups'])->toMatchArray(['verified' => true, 'destination' => 'Independent AWS S3 / Glacier']);
-        expect($report['html'])->toContain('were backed up to independent off-site storage this month')
-            ->toContain('Sep 20, 2026');
-        expect($report['text'])->toContain('BACKUPS');
+        expect($backups)->toMatchArray(['status' => 'verified', 'verified' => true, 'days_with_backups' => 30, 'list_from' => '2026-09-21', 'last_backup_at' => '2026-09-30'])
+            ->and($backups['recent'])->toHaveCount(10)
+            ->and($backups['recent'][0])->toMatchArray(['date' => '2026-09-30', 'kinds' => ['db', 'fs'], 'bytes' => 60 * 1024 ** 2]);
+        expect($report['html'])->toContain('backed up on <strong>30 days</strong> this month by your host, Pressable')
+            ->toContain('Wed, Sep 30')->toContain('Files &amp; database')->toContain('60 MB')
+            ->not->toContain('Sep 20');
+        expect($report['text'])->toContain('Backed up on 30 days this month by your host, Pressable');
     });
 
     it('does not claim backups from a care plan flag alone', function () {
-        $report = compileSeptember(accuracySite(['care_plan_enabled' => true, 'backup_relay_enabled' => false]));
+        $report = compileSeptember(accuracySite(['care_plan_enabled' => true, 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false]));
 
-        expect($report['data']['backups'])->toMatchArray(['enabled' => true, 'verified' => false, 'destination' => null]);
-        expect($report['html'])->not->toContain('backed up')->not->toContain('Host Automated Snapshots');
-        expect($report['text'])->not->toContain('BACKUPS');
+        expect($report['data']['backups'])->toMatchArray(['status' => 'no_source', 'verified' => false])
+            ->and($report['html'])->not->toContain('backed up')
+            ->and($report['text'])->not->toContain('BACKUPS');
     });
 
-    it('does not claim backups when the last archive is from before the period', function () {
-        $report = compileSeptember(accuracySite([
-            'backup_relay_enabled' => true,
-            'backup_relay_last_archived_at' => Carbon::parse('2026-08-28 03:00'),
-        ]));
+    it('hides the section when backups were checked and none were found', function () {
+        $site = pressableBackupSite();
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-08-28 00:00:00'); // before the period
+        recordCheck($site, true);
 
-        expect($report['data']['backups']['verified'])->toBeFalse()
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups']['status'])->toBe('none_found')
             ->and($report['html'])->not->toContain('backed up');
+    });
+
+    it('counts one backup of each kind per day in the size, preferring the scheduled one', function () {
+        $site = pressableBackupSite();
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-09-30 00:00:00', 50 * 1024 ** 2);
+        recordBackup($site, SiteBackup::KIND_DATABASE, '2026-09-30 05:00:00', 9 * 1024 ** 2);
+        recordBackup($site, SiteBackup::KIND_DATABASE, '2026-09-30 23:00:00', 10 * 1024 ** 2);
+        SiteBackup::create([
+            'site_id' => $site->id, 'source' => SiteBackup::SOURCE_PRESSABLE, 'kind' => SiteBackup::KIND_FILES,
+            'external_ref' => 'manual', 'backup_at' => Carbon::parse('2026-09-30 15:00:00'), 'bytes' => 70 * 1024 ** 2,
+            'is_manual' => true, 'first_seen_at' => now(), 'last_seen_at' => now(),
+        ]);
+        recordCheck($site, true);
+
+        expect(compileSeptember($site)['data']['backups']['recent'][0])
+            ->toMatchArray(['date' => '2026-09-30', 'kinds' => ['db', 'fs'], 'bytes' => 60 * 1024 ** 2, 'manual' => false]);
+    });
+
+    it('flags backups that stopped before the last 10 days instead of showing them to the client', function () {
+        $site = pressableBackupSite();
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-09-05 00:00:00');
+        recordCheck($site, true);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'stale', 'verified' => false, 'days_with_backups' => 1, 'recent' => []])
+            ->and($report['html'])->not->toContain('backed up')->not->toContain('independent off-site storage')
+            ->and($report['text'])->not->toContain('BACKUPS');
+    });
+
+    it('treats a failed or stale check as "could not check", not as no backups', function () {
+        $failing = pressableBackupSite();
+        recordCheck($failing, false);
+        $stale = pressableBackupSite();
+        recordCheck($stale, true, now()->subDays(5));
+
+        expect(compileSeptember($failing)['data']['backups'])->toMatchArray(['status' => 'not_checked', 'check_error' => 'Pressable API returned 503'])
+            ->and(compileSeptember($stale)['data']['backups']['status'])->toBe('not_checked');
     });
 });
 
@@ -225,6 +293,29 @@ describe('malware scan', function () {
 
         expect($report['data']['security']['malware_status'])->toBeNull()
             ->and($report['text'])->toContain('Malware scan: Not checked this month');
+    });
+});
+
+describe('blacklist check', function () {
+    it('reports blocklist status from the latest in-period blacklist scan', function () {
+        $site = accuracySite();
+        SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => SiteSecurityScan::TYPE_BLACKLIST, 'scanned_at' => Carbon::parse('2026-09-20'), 'status' => SiteSecurityScan::STATUS_CLEAN]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security']['blacklist_status'])->toBe('clean')
+            ->and($report['html'])->toContain('Spam &amp; malware blocklists')->toContain('Not listed')
+            ->and(compileSeptember(accuracySite())['text'])->toContain('Spam & malware blocklists: Not checked this month');
+    });
+
+    it('shows the blocklist row in both emails for non-WordPress sites', function () {
+        $site = accuracySite(['is_wordpress' => false, 'companion_snapshot' => null]);
+        SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => SiteSecurityScan::TYPE_BLACKLIST, 'scanned_at' => Carbon::parse('2026-09-20'), 'status' => SiteSecurityScan::STATUS_CLEAN]);
+
+        $report = compileSeptember($site);
+
+        expect($report['html'])->toContain('Spam &amp; malware blocklists')->not->toContain('WordPress core files')
+            ->and($report['text'])->toContain('Spam & malware blocklists: Not listed')->not->toContain('WordPress core files');
     });
 });
 
@@ -326,7 +417,10 @@ describe('uptime', function () {
 
         $uptime = compileSeptember($site)['data']['uptime'];
 
-        expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 240]);
+        expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 240])
+            ->and($uptime['outages'])->toHaveCount(1)
+            ->and($uptime['outages'][0])->toBe(['started_at' => '2026-09-10T10:00:00+00:00', 'minutes' => 240, 'started_before_period' => false, 'ongoing' => false]);
+        expect(compileSeptember($site)['html'])->toContain('Down Sep 10, 10:00 AM UTC')->toContain('4h 0m');
     });
 
     it('counts an outage that started before the period from the start of the period', function () {
@@ -334,14 +428,22 @@ describe('uptime', function () {
         uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-08-31 23:00:00');
         uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 01:30:00');
 
-        expect(compileSeptember($site)['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 90]);
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 90])
+            ->and($report['data']['uptime']['outages'][0]['started_before_period'])->toBeTrue()
+            ->and($report['html'])->toContain('Down since before Sep 1, 12:00 AM UTC');
     });
 
     it('runs an outage still open at the end of the period to the end', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
         uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00');
 
-        expect(compileSeptember($site)['data']['uptime']['downtime_minutes'])->toBe(120);
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime']['downtime_minutes'])->toBe(120)
+            ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeTrue()
+            ->and($report['text'])->toContain('(still down at period end)');
     });
 
     it('ignores SLA-exempt outages and treats maintenance as not down', function () {
@@ -375,5 +477,51 @@ describe('reports compiled before these fixes', function () {
         $html = (new ClientReportMail($report))->render();
 
         expect($html)->not->toContain('% delivered')->not->toContain('None found')->toContain('Not checked');
+    });
+});
+
+describe('updates and site facts', function () {
+    it('leaves out "updates" that ended on the version they started from', function () {
+        $site = accuracySite();
+        foreach (['Plugin updated: Beaver Themer 1.5.3 → 1.5.3', 'Plugin updated: Yoast SEO 26.1 → 26.2', 'Plugin updated: Thing 1.5 → 1.5.1'] as $i => $summary) {
+            ActionLog::create([
+                'site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => "p{$i}/p.php",
+                'summary' => $summary, 'ok' => true, 'ran_at' => Carbon::parse('2026-09-1'.$i), 'actor' => 'test',
+            ]);
+        }
+
+        $updates = compileSeptember($site)['data']['updates'];
+
+        expect($updates['total'])->toBe(2)
+            ->and(array_column($updates['items']['plugins'], 'summary'))->not->toContain('Plugin updated: Beaver Themer 1.5.3 → 1.5.3');
+    });
+
+    it('leaves out "already up to date" and empty translation runs, but keeps real updates that look similar', function () {
+        $site = accuracySite();
+        $rows = [
+            [ActionLog::TYPE_PLUGIN_UPDATE, 'Plugin already up to date: acf/acf.php (6.8.10) on example.com'],
+            [ActionLog::TYPE_TRANSLATIONS_UPDATE, 'Translations updated: 0 package(s)'],
+            [ActionLog::TYPE_TRANSLATIONS_UPDATE, 'Translations updated: 3 package(s)'],
+            // The new version is the tail of the old one; this is a real update.
+            [ActionLog::TYPE_PLUGIN_UPDATE, 'Plugin updated: Thing 3.3.4 → 3.4'],
+        ];
+        foreach ($rows as $i => [$type, $summary]) {
+            ActionLog::create([
+                'site_id' => $site->id, 'action_type' => $type, 'target' => "t{$i}",
+                'summary' => $summary, 'ok' => true, 'ran_at' => Carbon::parse('2026-09-1'.$i), 'actor' => 'test',
+            ]);
+        }
+
+        $updates = compileSeptember($site)['data']['updates'];
+
+        expect($updates['total'])->toBe(2)
+            ->and($updates['translations_count'])->toBe(1)
+            ->and(array_column($updates['items']['plugins'], 'summary'))->toBe(['Plugin updated: Thing 3.3.4 → 3.4']);
+    });
+
+    it('reads the WordPress version from the Companion snapshot', function () {
+        $site = accuracySite(['companion_snapshot' => ['wp_core' => ['current_version' => '6.8.3'], 'plugins' => ['plugins' => []]]]);
+
+        expect(compileSeptember($site)['data']['site']['wp_version'])->toBe('6.8.3');
     });
 });
