@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**, modules/*/src/Console/Commands/**]
@@ -139,7 +139,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:process-pending-bans` | Drain `queued_for_ban` → fail2ban over SSH. | `php artisan clockwork:process-pending-bans` |
 | `clockwork:composer-audit` | Composer dependency CVE scan. | `php artisan clockwork:composer-audit` |
 | `clockwork:security-check` | System-wide audit (`--ssh` runs SSH-side checks). | `php artisan clockwork:security-check --ssh --quiet-ok` |
-| `clockwork:run-performance-scans` | Lighthouse run per care-plan site — GTmetrix primary, PSI fallback. `--engine=` forces one engine; `--weekly-rotation` (what the scheduler passes) scans only tonight's 1/7th fleet slice to fit the GTmetrix credit budget. | `php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix` |
+| `clockwork:run-performance-scans` | Lighthouse run per care-plan site — GTmetrix primary, PSI fallback. `--engine=` forces one engine; `--weekly-rotation` (what the scheduler passes) scans only tonight's 1/7th fleet slice to fit the GTmetrix credit budget, leaving out Pressable sites; `--host-reports` reads Pressable's own report for every Pressable care-plan site (scheduled nightly, mobile and desktop). | `php artisan clockwork:run-performance-scans --site=42 --engine=gtmetrix` |
 | `clockwork:check-email-auth` | Inspect SPF (10-lookup limits, loop detection, void lookups), DMARC policies, and DKIM selector probing via DNS-over-HTTPS across unique client apex domains. `--domain=` checks a single domain. | `php artisan clockwork:check-email-auth --domain=example.com` |
 
 ## AiRemedy operations

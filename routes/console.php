@@ -551,6 +551,26 @@ Schedule::command('clockwork:run-performance-scans --strategy=mobile --weekly-ro
     ->onOneServer()
     ->runInBackground();
 
+// Pressable runs its own Lighthouse test about once a month per site (no way
+// to trigger one) and we can only read the latest. Reading it is free, so
+// every Pressable care-plan site is read nightly, mobile and desktop, and a
+// new report lands within a day — in time for the 1st-of-month client
+// reports. Unchanged reports are skipped. These sites are no longer in the
+// GTmetrix rotation above.
+Schedule::command('clockwork:run-performance-scans --strategy=mobile --host-reports')
+    ->dailyAt('05:05')
+    ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
+Schedule::command('clockwork:run-performance-scans --strategy=desktop --host-reports')
+    ->dailyAt('05:15')
+    ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
 // Collect Google Chrome UX Report (CrUX) real-user Core Web Vitals metrics.
 // CrUX aggregates over a 28-day rolling window, so weekly collection captures fresh data.
 Schedule::command('clockwork:collect-field-metrics')

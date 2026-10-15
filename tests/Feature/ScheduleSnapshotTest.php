@@ -84,6 +84,8 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:rollup-traffic --backfill=2',
         'clockwork:run-companion-malware-scans',
         'clockwork:run-performance-scans --strategy=mobile --weekly-rotation',
+        'clockwork:run-performance-scans --strategy=mobile --host-reports',
+        'clockwork:run-performance-scans --strategy=desktop --host-reports',
         'clockwork:scan-sitecheck',
         'clockwork:scan-wp7-truncation --repair',
         'clockwork:scheduler-heartbeat',

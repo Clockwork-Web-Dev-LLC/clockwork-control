@@ -452,6 +452,19 @@ describe('performance (#7)', function () {
             ->and($report['html'])->toContain('Tested Sep 14, 2026');
     });
 
+    it('dates a host report by when the host ran the test, not when we read it', function () {
+        $site = accuracySite();
+        // Pressable ran this on Aug 28; we only read it on Sep 5. It isn't September's.
+        SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-09-05'), 'source_generated_at' => Carbon::parse('2026-08-28'), 'strategy' => SitePerformanceScan::STRATEGY_MOBILE, 'engine' => SitePerformanceScan::ENGINE_PRESSABLE, 'performance_score' => 60]);
+        // Ran Sep 20, read Oct 2: it is September's, labelled Sep 20.
+        SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-10-02'), 'source_generated_at' => Carbon::parse('2026-09-20'), 'strategy' => SitePerformanceScan::STRATEGY_DESKTOP, 'engine' => SitePerformanceScan::ENGINE_PRESSABLE, 'performance_score' => 82]);
+
+        $perf = compileSeptember($site)['data']['performance'];
+
+        expect($perf['mobile'])->toBeNull()
+            ->and($perf['desktop'])->toMatchArray(['score' => 82, 'scanned_at' => '2026-09-20']);
+    });
+
     it('reports GTmetrix scans as desktop, since our plan has no phone emulation', function () {
         $site = accuracySite();
         SitePerformanceScan::factory()->create(['site_id' => $site->id, 'scanned_at' => Carbon::parse('2026-09-14'), 'strategy' => SitePerformanceScan::STRATEGY_MOBILE, 'engine' => SitePerformanceScan::ENGINE_GTMETRIX, 'performance_score' => 91]);

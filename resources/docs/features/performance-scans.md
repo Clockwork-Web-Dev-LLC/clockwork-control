@@ -2,13 +2,13 @@
 title: Performance scans
 section: Features
 order: 50
-updated: 2026-10-03
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [performance, lighthouse, gtmetrix, psi, care-plan, pressable]
 tracks: [app/Services/Performance/**, app/Console/Commands/RunPerformanceScans.php, modules/Pressable/src/PressableLighthouseClient.php, modules/Pressable/src/PressableClient.php]
 ---
 
-A weekly Lighthouse score per care-plan site (via a nightly 1/7th-of-fleet rotation), via GTmetrix's REST API v2 (primary) with Google PageSpeed Insights as a fallback. Stored in `site_performance_scans`, mirrored to Companion's Performance admin page so the client sees the same numbers.
+A weekly Lighthouse score per care-plan site (via a nightly 1/7th-of-fleet rotation), via GTmetrix's REST API v2 (primary) with Google PageSpeed Insights as a fallback. Pressable sites aren't in the rotation: Pressable's own report is read nightly instead (see "Pressable sites" below). Stored in `site_performance_scans`, mirrored to Companion's Performance admin page so the client sees the same numbers.
 
 **This GTmetrix→PSI chain is SpinupWP-only.** Pressable sites skip it entirely — `RunPerformanceScans` branches on `$site->isPressable()` and uses `PressableLighthouseClient` instead, which wraps Pressable's own built-in Lighthouse report (`engine=pressable`). No fallback chain needed there since it's not a rate-limited third-party API — but it also isn't generated fresh on every poll (see "Pressable's monthly report cadence" below, a real gotcha the nightly scan has to account for). See below.
 
@@ -40,7 +40,7 @@ CLS is stored as `cls_x1000` (CLS × 1000 as integer) to avoid float drift in My
 
 ## Cadence
 
-**One scheduled run per night at 04:45 UTC, scanning 1/7th of the fleet** (`--weekly-rotation`) — so each site gets one primary-engine scan per week.
+**Three scheduled runs per night:** 04:45 UTC scans 1/7th of the GTmetrix/PSI fleet (`--weekly-rotation`), so each of those sites gets one primary-engine scan per week; 05:05 (mobile) and 05:15 (desktop) read Pressable's own report for every Pressable care-plan site (`--host-reports`). Host-report reads are free, need no GTmetrix/PSI key, and never trip the "unavailable" flag (that flag protects the paid quota): a failed read is just retried the next night.
 
 Why the rotation: GTmetrix refills API credits daily at ~04:27 UTC and **credits don't accumulate**. The full-fleet nightly run would burn credits quickly and fall back to PSI. The rotation slices sites (ordered by domain) into 7 near-equal buckets by `index % 7 == UTC weekday`, ~11 sites per night, which fits comfortably within the daily budget. A site's scan weekday can shift when sites are added/removed — fine, since scores are compared week-over-week either way.
 
@@ -103,7 +103,8 @@ Recovery is automatic: any successful scan (via `--site=X` smoke-test, or an `--
 | `--site=X` | Bypasses both the care-plan filter and the unavailable gate. Use for manual retry. |
 | `--include-unavailable` | Runs against flagged sites for "is the engine back?" probes. |
 | `--engine=gtmetrix\|psi` | Forces one engine, bypassing the fallback chain. |
-| `--weekly-rotation` | Scan only tonight's 1/7th slice of the fleet. What the scheduler passes. Ignored when `--site` is given. |
+| `--weekly-rotation` | Scan only tonight's 1/7th slice of the fleet (GTmetrix/PSI sites; Pressable sites are left out). What the scheduler passes. Ignored when `--site` is given. |
+| `--host-reports` | Only sites whose host runs its own report (Pressable), read nightly. Ignored when `--site` is given. |
 
 The site's Performance tab surfaces `psi_unavailable_reason` as a banner so you know why scans stopped.
 
@@ -111,11 +112,11 @@ The site's Performance tab surfaces `psi_unavailable_reason` as a banner so you 
 
 `PressableLighthouseClient::scanSite()` calls Pressable's own performance-report endpoint (`PressableClient::sitePerformanceReport()`) and maps its `mobile_report`/`desktop_report` sub-object onto the same `PerformanceScanResult` shape GTmetrix and PSI produce — same columns, same Companion Performance page, `engine='pressable'` in `site_performance_scans`. Pressable returns accessibility/best-practices/SEO scores (now stored — see above), and the Core Web Vitals fields line up 1:1 with what GTmetrix/PSI populate.
 
-Because Pressable's report is always-on (not a rate-limited third-party quota), there's no fallback chain for these sites. The weekly-rotation site-selection query itself doesn't currently distinguish by provider, though — Pressable sites get sliced into the same 1/7th-per-night buckets as everyone else, even though nothing about their engine requires it. Harmless (each Pressable site still gets its weekly scan on schedule) but worth knowing if you're wondering why a Pressable site isn't scanned nightly despite having no credit budget to protect — that's an implementation-simplicity choice, not a limitation of Pressable's report.
+Because Pressable's report is always-on (not a rate-limited third-party quota), there's no fallback chain for these sites. **As of 2026-10-15 Pressable sites are read nightly, not in the rotation**: `--host-reports` selects only sites whose host supports `CAP_PERFORMANCE_SCAN`, and `--weekly-rotation` now leaves them out. Two scheduled runs (05:05 mobile, 05:15 desktop) read every Pressable care-plan site. Why: Pressable runs its own test about once a month per site (on a varying day, with no way to trigger one), and under the rotation a new report could sit unread for up to three weeks, so many sites had no score in a given month when client reports went out on the 1st. Reading is free and an unchanged report is skipped by the dedup guard below, so a new report now lands within a day. Client reports date these results by `source_generated_at` (when Pressable ran the test), not `scanned_at` (when we read it).
 
 ### Pressable's report regenerates monthly — the dedup guard
 
-**"Always-on" doesn't mean "freshly generated on every poll."** Pressable's underlying reports regenerate on a monthly cadence rather than daily. Polling on the regular rotation without deduplication would repeatedly store the same report snapshot.
+**"Always-on" doesn't mean "freshly generated on every poll."** Pressable's underlying reports regenerate on a monthly cadence rather than daily. Polling nightly without deduplication would repeatedly store the same report snapshot. The guard compares with the last *stored report* (the newest row with a `source_generated_at`), not the last row, so a failed read in between doesn't make the old report look new.
 
 Fixed with `sites_performance_scans.source_generated_at` — the report's own generation timestamp, distinct from when we happened to poll it (null for GTmetrix/PSI, where every call is a genuinely fresh scan). `PerformanceScanRecorder::record()` compares a new result's `source_generated_at` against the last stored row for that `(site, strategy, engine)`; an exact match means nothing actually changed since last time, and the insert is skipped — `record()` returns `null` instead of a new row. `RunPerformanceScans` treats that as a third bucket alongside ok/failed: `duplicate_skipped`, logged in the run summary and shown per-site with `-v`. Not a failure — there's just nothing new to store yet.
 

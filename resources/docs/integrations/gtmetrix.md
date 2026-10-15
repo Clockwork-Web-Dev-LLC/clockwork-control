@@ -2,7 +2,7 @@
 title: GTmetrix
 section: Integrations
 order: 79
-updated: 2026-09-14
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, gtmetrix, care-plan, pressable]
 tracks: [modules/GTmetrix/src/GtmetrixClient.php, modules/GTmetrix/src/GTmetrixServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
@@ -77,13 +77,13 @@ Display-only on this tier. `/devices` and `/connections` return empty arrays for
 
 | Cadence | Command | Notes |
 |---|---|---|
-| daily 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Tonight's 1/7th fleet slice; each site scanned weekly. 04:45 lands just after the ~04:27 UTC credit refill. `--strategy=mobile` kept for historical row continuity. |
+| daily 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Tonight's 1/7th fleet slice (Pressable sites excluded; they're read from Pressable's own report nightly); each site scanned weekly. 04:45 lands just after the ~04:27 UTC credit refill. `--strategy=mobile` kept for historical row continuity. |
 
 Gated on `Settings('performance_scans.enabled')`.
 
 ## Credit budget (why the weekly rotation exists)
 
-API credits refill daily at ~04:27 UTC and **don't accumulate**. To ensure coverage within credit limits, the scheduler passes `--weekly-rotation`: sites ordered by domain, sliced into 7 buckets by `index % 7 == UTC weekday`, ~11 sites/night. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for manual runs and retries.
+API credits refill daily at ~04:27 UTC and **don't accumulate**. To ensure coverage within credit limits, the scheduler passes `--weekly-rotation`: sites ordered by domain, sliced into 7 buckets by `index % 7 == UTC weekday`, ~11 sites/night. Pressable sites aren't in the slices (as of 2026-10-15 they use Pressable's own report, read nightly), so the rotation is about 54 sites, ~8 a night. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for manual runs and retries.
 
 ## Storage
 

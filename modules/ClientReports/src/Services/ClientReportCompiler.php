@@ -385,11 +385,13 @@ class ClientReportCompiler
         // GTmetrix on our plan has no phone emulation: its scans run desktop
         // Chrome whatever strategy they were filed under, so they're reported
         // as desktop. Pressable's and Google's "mobile" results really are.
+        // A host's own report (Pressable) is dated by when the host ran the
+        // test, not when we read it, which can be weeks later.
         $inPeriod = fn () => SitePerformanceScan::query()
             ->where('site_id', $site->id)
             ->where('status', SitePerformanceScan::STATUS_OK)
-            ->whereBetween('scanned_at', [$start, $end])
-            ->orderByDesc('scanned_at');
+            ->whereRaw('COALESCE(source_generated_at, scanned_at) BETWEEN ? AND ?', [$start, $end])
+            ->orderByRaw('COALESCE(source_generated_at, scanned_at) DESC');
 
         $latestMobile = $inPeriod()
             ->where('strategy', SitePerformanceScan::STRATEGY_MOBILE)
@@ -414,12 +416,12 @@ class ClientReportCompiler
             'desktop' => $latestDesktop ? [
                 'score' => $latestDesktop->performance_score,
                 'lcp_ms' => $latestDesktop->lcp_ms,
-                'scanned_at' => $latestDesktop->scanned_at?->toDateString(),
+                'scanned_at' => ($latestDesktop->source_generated_at ?? $latestDesktop->scanned_at)?->toDateString(),
             ] : null,
             'mobile' => $latestMobile ? [
                 'score' => $latestMobile->performance_score,
                 'lcp_ms' => $latestMobile->lcp_ms,
-                'scanned_at' => $latestMobile->scanned_at?->toDateString(),
+                'scanned_at' => ($latestMobile->source_generated_at ?? $latestMobile->scanned_at)?->toDateString(),
             ] : null,
             'field_data' => $latestField ? [
                 'cwv_pass' => $latestField->cwv_pass,

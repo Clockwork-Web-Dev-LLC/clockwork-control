@@ -43,7 +43,8 @@ class RunPerformanceScans extends Command
         {--strategy=mobile : "mobile" or "desktop"}
         {--include-unavailable : Include sites currently marked psi_unavailable_at — useful when manually probing whether either engine has recovered}
         {--engine= : Force a specific engine ("gtmetrix" or "psi"). Default: gtmetrix primary, psi fallback.}
-        {--weekly-rotation : Scan only tonight\'s 1/7th slice of the fleet (sites ordered by domain, index % 7 == UTC weekday), so every site gets one scan per week within the GTmetrix daily credit budget. Ignored when --site is given.}';
+        {--weekly-rotation : Scan only tonight\'s 1/7th slice of the fleet (sites ordered by domain, index % 7 == UTC weekday), so every site gets one scan per week within the GTmetrix daily credit budget. Ignored when --site is given.}
+        {--host-reports : Only sites whose host runs its own Lighthouse report (Pressable). Reading it is free, so these are read every night instead of joining the rotation. Ignored when --site is given.}';
 
     protected $description = 'Daily performance scan per care-plan site (GTmetrix primary, PSI fallback). Records performance score, Core Web Vitals, page weight.';
 
@@ -71,7 +72,8 @@ class RunPerformanceScans extends Command
         // At least one engine has to be configured for anything to run. If
         // both keys are unset the command short-circuits cleanly (matches
         // the pre-GTmetrix behavior when CLOCKWORK_PSI_API_KEY was empty).
-        if (! $gtmetrix->isConfigured() && ! $psi->isConfigured()) {
+        // Reading a host's own report (--host-reports) needs neither key.
+        if (! $this->option('host-reports') && ! $gtmetrix->isConfigured() && ! $psi->isConfigured()) {
             $this->error('Neither GTmetrix nor PSI API keys configured — nothing to run.');
 
             return self::FAILURE;
@@ -114,8 +116,12 @@ class RunPerformanceScans extends Command
             if ($result->isOk() && $recordedRow === null) {
                 // Same underlying report as last time (Pressable's monthly
                 // batch hasn't refreshed yet) — recorder silently skipped
-                // the duplicate insert. Not a failure, just nothing new.
+                // the duplicate insert. Not a failure, just nothing new,
+                // and a working read, so any unavailable flag is cleared.
                 $duplicateSkipped++;
+                if ($this->clearUnavailableIfSet($site)) {
+                    $recovered++;
+                }
                 if ($this->getOutput()->isVerbose()) {
                     $bar->clear();
                     $this->line("  ⏭  {$site->domain}: no new report since last scan (source unchanged)");
@@ -143,7 +149,11 @@ class RunPerformanceScans extends Command
                 }
             } else {
                 $failed++;
-                if ($this->markUnavailableIfPersistent($site, $result->error)) {
+                // The unavailable flag protects the GTmetrix/PSI quota. A host's
+                // own report costs nothing to read, so its failures never switch
+                // the site off — it's simply read again tomorrow.
+                if ($result->engine !== SitePerformanceScan::ENGINE_PRESSABLE
+                    && $this->markUnavailableIfPersistent($site, $result->error)) {
                     $newlySuspended++;
                     $bar->clear();
                     $this->warn("  ⛔ {$site->domain}: 3 consecutive scan failures — marked unavailable");
@@ -167,7 +177,7 @@ class RunPerformanceScans extends Command
 
         $settings->put('performance_scans.last_run_at', now()->toIso8601String());
 
-        return $failed > 0 && $ok === 0 ? self::FAILURE : self::SUCCESS;
+        return $failed > 0 && $ok + $duplicateSkipped === 0 ? self::FAILURE : self::SUCCESS;
     }
 
     /**
@@ -247,11 +257,24 @@ class RunPerformanceScans extends Command
         }
 
         $q->carePlanEligible();
-        if (! $this->option('include-unavailable')) {
+        // The unavailable flag doesn't apply to free host-report reads.
+        if (! $this->option('include-unavailable') && ! $this->option('host-reports')) {
             $q->whereNull('psi_unavailable_at');
         }
 
+        // Hosts with their own report (Pressable) run the test themselves about
+        // once a month and we can only read the latest one. Reading is free and
+        // an unchanged report is skipped, so they're read nightly by
+        // --host-reports and kept out of the GTmetrix rotation, so a new
+        // report is picked up within a day rather than up to three weeks later.
+        $hasHostReport = fn (Site $site) => $site->host()->supports(HostingProvider::CAP_PERFORMANCE_SCAN);
         $sites = $q->get();
+        if ($this->option('host-reports')) {
+            return $sites->filter($hasHostReport)->values();
+        }
+        if ($this->option('weekly-rotation')) {
+            $sites = $sites->reject($hasHostReport)->values();
+        }
 
         // Weekly rotation: slice the fleet into 7 near-equal buckets by
         // domain-sorted position and scan only tonight's bucket. GTmetrix

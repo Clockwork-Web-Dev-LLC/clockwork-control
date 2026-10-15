@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
@@ -109,6 +109,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 04:31 | `clockwork:prune-scheduled-job-runs` | Drop `scheduled_job_runs` rows older than the retention window (default 30 days, `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS`). Keeps [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) bounded. |
 | 04:32 | `clockwork:prune-threat-logs` | Drop `threat_logs` older than the `/settings/ingest` window (default 30 days). `DROP PARTITION` on monthly MySQL partitions, else chunked DELETE. `withoutOverlapping(240)`, `runInBackground()`. |
 | 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Lighthouse run for tonight's 1/7th of the care-plan fleet — GTmetrix primary, PSI fallback. Each site gets one scan per week. Scheduled at 04:45 to land just after GTmetrix's daily credit refill (credits don't bank). `--strategy` is display-only on GTmetrix's tier; kept for row continuity. |
+| 05:05 / 05:15 | `clockwork:run-performance-scans --strategy=mobile --host-reports` / `--strategy=desktop --host-reports` | Reads Pressable's own Lighthouse report for every Pressable care-plan site (free; unchanged reports skipped), so a new monthly report lands within a day. |
 | 04:45 | `clockwork:capture-site-screenshots` | Refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `withoutOverlapping(30)`, `runInBackground()`. |
 | 04:45 | `clockwork:detect-wp-plugins` | SSH wp-cli probe for active LLAR/Wordfence per WP site. |
 | 04:50 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. |
