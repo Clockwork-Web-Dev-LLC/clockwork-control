@@ -76,38 +76,38 @@
 
     {{-- Report Document Container --}}
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden report-card">
-        {{-- Brand Accent Strip --}}
-        <div style="height: 4px; background: {{ $accentColor }};"></div>
-
-        <div class="p-8 sm:p-12 space-y-10">
-        {{-- Header & Cover Banner --}}
-        <div class="border-b border-slate-200 pb-8 flex items-start justify-between flex-wrap gap-6">
+        {{-- Header & Cover Banner: the brand colour, same as the email's header. --}}
+        <div class="px-8 sm:px-12 pt-8 pb-7 flex items-start justify-between flex-wrap gap-6" style="background: {{ $primaryColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             <div>
                 @if (!empty($branding['logo_url']))
                     <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['company_name'] }}" class="h-10 mb-4 object-contain">
                 @else
-                    <div class="text-xl font-extrabold text-slate-900 tracking-tight mb-2">
+                    <div class="text-xl font-extrabold text-white tracking-tight mb-2">
                         {{ $branding['company_name'] }}
                     </div>
                 @endif
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    Website Care & Maintenance Report
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">
+                    Website Care Report
                 </h1>
-                <p class="text-slate-500 text-sm mt-1">
-                    Prepared for <span class="font-semibold text-slate-800">{{ $report->client_name ?: $site['domain'] }}</span>
+                <p class="text-sm mt-1" style="color: #DCD8EA;">
+                    Prepared for <span class="font-semibold text-white">{{ $report->client_name ?: $site['domain'] }}</span>
                 </p>
             </div>
 
             <div class="text-right sm:text-right">
-                <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Report Period</div>
-                <div class="text-base font-bold text-slate-900 mt-0.5">
+                <div class="text-xs uppercase tracking-wider font-semibold" style="color: #DCD8EA;">Report Period</div>
+                <div class="text-base font-bold text-white mt-0.5">
                     {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}
                 </div>
-                <div class="text-xs text-slate-500 mt-1 font-mono">
+                <div class="text-xs mt-1 font-mono" style="color: #DCD8EA;">
                     {{ $site['domain'] }}
                 </div>
             </div>
         </div>
+        {{-- Brand Accent Strip --}}
+        <div style="height: 4px; background: {{ $accentColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;"></div>
+
+        <div class="p-8 sm:p-12 space-y-10">
 
         {{-- Custom Operator Notes if Provided --}}
         @if (!empty($meta['custom_notes']))
