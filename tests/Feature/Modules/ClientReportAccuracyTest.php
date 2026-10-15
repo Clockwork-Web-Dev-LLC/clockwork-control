@@ -580,6 +580,19 @@ describe('updates and site facts', function () {
             ->and(array_column($updates['items']['plugins'], 'summary'))->toBe(['Plugin updated: Thing 3.3.4 → 3.4']);
     });
 
+    it('does not say "already up to date" while plugin updates are waiting', function () {
+        $waiting = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [['name' => 'WP Rocket', 'active' => true, 'update_available' => true]]]]]);
+        $current = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]]]]);
+
+        $w = compileSeptember($waiting);
+        $c = compileSeptember($current);
+
+        expect($w['data']['updates']['pending_plugins'])->toBe(['WP Rocket'])
+            ->and($w['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date')
+            ->and($w['text'])->toContain('No updates were applied this month.')
+            ->and($c['html'])->toContain('Everything was already up to date');
+    });
+
     it('reads the WordPress version from the Companion snapshot', function () {
         $site = accuracySite(['companion_snapshot' => ['wp_core' => ['current_version' => '6.8.3'], 'plugins' => ['plugins' => []]]]);
 

@@ -186,7 +186,24 @@ class ClientReportCompiler
                 'themes' => $themeUpdates,
                 'core' => $coreUpdates,
             ],
+            // Plugin updates still waiting on the snapshot date, so the email
+            // never says "already up to date" while some are (null = unknown).
+            'pending_plugins' => $this->pendingPluginNames($site),
         ];
+    }
+
+    /** @return list<string>|null */
+    protected function pendingPluginNames(Site $site): ?array
+    {
+        $plugins = $site->companion_snapshot['plugins']['plugins'] ?? null;
+        if (! is_array($plugins)) {
+            return null;
+        }
+
+        return array_values(array_map(
+            fn (array $p) => (string) ($p['name'] ?? $p['slug'] ?? ''),
+            array_filter($plugins, fn ($p) => is_array($p) && ! empty($p['update_available'])),
+        ));
     }
 
     /**

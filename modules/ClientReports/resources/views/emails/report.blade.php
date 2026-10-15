@@ -195,7 +195,11 @@
                     @endforeach
                 </table>
             @else
-                <p style="margin:0; font-size:14px; color:#334155;">Everything was already up to date this month — no updates were needed.</p>
+                @if (array_key_exists('pending_plugins', $updates) && ($updates['pending_plugins'] === null || $updates['pending_plugins'] !== []))
+                    <p style="margin:0; font-size:14px; color:#334155;">No updates were applied this month.</p>
+                @else
+                    <p style="margin:0; font-size:14px; color:#334155;">Everything was already up to date this month — no updates were needed.</p>
+                @endif
             @endif
         </td></tr>
     @endif

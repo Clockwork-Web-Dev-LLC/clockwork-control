@@ -23,3 +23,10 @@ it('lets a clean report, unchecked scans and known vulnerabilities through', fun
         'uptime' => ['outages' => [['ongoing' => false]]],
     ]))->toBe([]);
 });
+
+it('flags a vulnerable plugin whose update is still waiting', function () {
+    expect(ReportReviewFlags::reasons([
+        'security' => ['vulnerable_plugins' => ['WP Rocket', 'Akismet']],
+        'updates' => ['pending_plugins' => ['WP Rocket', 'Hello Dolly']],
+    ]))->toBe(['A plugin with a known vulnerability has an update waiting: WP Rocket.']);
+});

@@ -39,7 +39,7 @@ The rule for every section: **if we didn't check it during the period, the repor
 
 | Key | Source | Period | When there's no data |
 |---|---|---|---|
-| `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true` | In period | "Everything was already up to date" |
+| `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true`, minus runs that changed nothing. `pending_plugins` lists updates still waiting on the Companion snapshot. | In period | "Everything was already up to date" only when nothing is waiting; otherwise "No updates were applied this month" |
 | `uptime` | `site_uptime_events`: each `down` runs until the next `up`/`maintenance`, clamped to the period (an outage already open at the start counts from the start). SLA-exempt outages are skipped. The 5 most recent outages are listed with start time and length, marked when one began before the period ("Down since before …") or was still open at its end. | In period | Hidden if the site isn't monitored |
 | `security` scans | `site_security_scans`, excluding `failed` scans (they never completed); warnings = `warning` + `issues_found` | In period | Count of 0 |
 | `security` threats blocked | `blocked_ips` rows banned in the period (lockouts pulled from Gatekeeper or Limit Login Attempts Reloaded) | In period | Left out (tile and row) when nothing on the site reports blocks to Control. A 0 is shown only when a blocker is reporting. |
@@ -74,6 +74,7 @@ Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Ad
    - malware scan, core files or blocklist came back `warning` / `issues_found`
    - backups: none found, stopped before the last 10 days, or couldn't be checked
    - the site was still down at the end of the month
+   - a plugin with a known vulnerability has an update waiting (the update isn't going through, often an unlicensed premium plugin)
 
    Known plugin vulnerabilities don't hold a report (about a third of sites have one at any time).
 5. For `auto` schedules, it sends one email per recipient who isn't already in the report's `sent_to`. Once everyone has it, it marks the report `sent` and stamps `last_sent_at`.

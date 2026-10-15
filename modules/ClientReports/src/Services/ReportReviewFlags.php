@@ -34,6 +34,15 @@ class ReportReviewFlags
             $reasons[] = 'The site is on a spam or malware blocklist.';
         }
 
+        // A known hole with a fix waiting means an update isn't going through.
+        $vulnerableAndWaiting = array_values(array_intersect(
+            (array) ($security['vulnerable_plugins'] ?? []),
+            (array) ($data['updates']['pending_plugins'] ?? []),
+        ));
+        if ($vulnerableAndWaiting !== []) {
+            $reasons[] = 'A plugin with a known vulnerability has an update waiting: '.implode(', ', array_unique($vulnerableAndWaiting)).'.';
+        }
+
         $backupStatus = $data['backups']['status'] ?? null;
         if (isset($data['backups']) && in_array($backupStatus, ['none_found', 'stale', 'not_checked'], true)) {
             $reasons[] = match ($backupStatus) {

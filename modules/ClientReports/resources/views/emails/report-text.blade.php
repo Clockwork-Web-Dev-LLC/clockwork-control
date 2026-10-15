@@ -25,7 +25,7 @@ UPDATES APPLIED ({{ count($updateRows) }})
 @forelse ($updateRows as $row)
 - [{{ $row['type'] }}] {{ $row['label'] }}{{ $row['date'] ? ' ('.\Illuminate\Support\Carbon::parse($row['date'])->format('M j').')' : '' }}
 @empty
-Everything was already up to date this month.
+{{ array_key_exists('pending_plugins', $updates) && ($updates['pending_plugins'] === null || $updates['pending_plugins'] !== []) ? 'No updates were applied this month.' : 'Everything was already up to date this month.' }}
 @endforelse
 @endif
 @if (isset($data['uptime']) && ($uptime['monitored'] ?? true))
