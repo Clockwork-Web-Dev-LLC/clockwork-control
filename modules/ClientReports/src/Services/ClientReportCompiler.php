@@ -469,10 +469,16 @@ class ClientReportCompiler
                     ->sortBy([['is_manual', 'asc'], ['backup_at', 'desc']])
                     ->first());
 
+                // A full backup already holds the files and database, so a
+                // separate same-day database run (SpinupWP) isn't added on top.
+                $sized = $perKind->has(SiteBackup::KIND_FULL)
+                    ? $perKind->filter(fn (SiteBackup $b, string $kind) => $kind === SiteBackup::KIND_FULL)
+                    : $perKind;
+
                 return [
                     'date' => $day,
                     'kinds' => $perKind->keys()->sort()->values()->all(),
-                    'bytes' => $perKind->contains(fn (SiteBackup $b) => $b->bytes === null) ? null : (int) $perKind->sum('bytes'),
+                    'bytes' => $sized->contains(fn (SiteBackup $b) => $b->bytes === null) ? null : (int) $sized->sum('bytes'),
                     'manual' => $group->every(fn (SiteBackup $b) => $b->is_manual),
                 ];
             });

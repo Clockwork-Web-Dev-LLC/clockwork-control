@@ -205,6 +205,23 @@ describe('backups (#6)', function () {
             ->toMatchArray(['date' => '2026-09-30', 'kinds' => ['db', 'fs'], 'bytes' => 60 * 1024 ** 2, 'manual' => false]);
     });
 
+    it('sizes a day with a full backup by the full backup alone', function () {
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        foreach ([[SiteBackup::KIND_FULL, '2026-09-30 00:01:00', 500], [SiteBackup::KIND_DATABASE, '2026-09-30 06:00:00', 20]] as [$kind, $at, $mb]) {
+            SiteBackup::create([
+                'site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'kind' => $kind,
+                'external_ref' => $at, 'backup_at' => Carbon::parse($at), 'bytes' => $mb * 1024 ** 2,
+                'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+            ]);
+        }
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups']['recent'][0])->toMatchArray(['kinds' => ['db', 'full'], 'bytes' => 500 * 1024 ** 2])
+            ->and($report['html'])->toContain('by SpinupWP, stored in DigitalOcean Spaces')->toContain('Files &amp; database')->toContain('500 MB');
+    });
+
     it('flags backups that stopped before the last 10 days instead of showing them to the client', function () {
         $site = pressableBackupSite();
         recordBackup($site, SiteBackup::KIND_FILES, '2026-09-05 00:00:00');
