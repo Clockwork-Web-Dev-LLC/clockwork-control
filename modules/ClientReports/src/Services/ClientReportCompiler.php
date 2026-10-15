@@ -5,6 +5,7 @@ namespace Modules\ClientReports\Services;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
+use App\Models\PluginVulnerability;
 use App\Models\Site;
 use App\Models\SiteFieldMetric;
 use App\Models\SitePerformanceScan;
@@ -13,13 +14,22 @@ use App\Models\SiteTrafficDaily;
 use App\Models\SiteUptimeEvent;
 use App\Models\SiteWorkLog;
 use App\Services\Companion\CompanionBrandingManager;
+use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 
 class ClientReportCompiler
 {
+    public const SCHEMA_VERSION = 2;
+
+    /** The feed refreshes daily; allow one missed run before calling it stale. */
+    public const VULNERABILITY_FEED_MAX_AGE_HOURS = 48;
+
+    protected ?bool $vulnerabilityFeedFresh = null;
+
     public function __construct(
-        protected Settings $settings
+        protected Settings $settings,
+        protected PluginVulnerabilityMatcher $vulnerabilities,
     ) {}
 
     /**
@@ -40,6 +50,10 @@ class ClientReportCompiler
 
         $shouldInclude = fn (string $key) => $sections === null || in_array($key, $sections, true);
 
+        // Some sites are flagged non-WordPress but report a WordPress core via
+        // Companion; trust the snapshot so their core-file row isn't dropped.
+        $isWordPress = (bool) $site->is_wordpress || isset($site->companion_snapshot['wp_core']);
+
         $data = [
             'meta' => [
                 'compiled_at' => now()->toIso8601String(),
@@ -47,12 +61,15 @@ class ClientReportCompiler
                 'period_end' => $end->toDateString(),
                 'period_days' => $start->diffInDays($end) + 1,
                 'custom_notes' => $customNotes,
+                // Bumped when a section's meaning changes, so the views can
+                // tell reports compiled under the old (overstating) rules apart.
+                'schema_version' => self::SCHEMA_VERSION,
             ],
             'branding' => $this->compileBranding(),
             'site' => [
                 'id' => $site->id,
                 'domain' => $site->domain,
-                'is_wordpress' => (bool) $site->is_wordpress,
+                'is_wordpress' => $isWordPress,
                 'wp_version' => $site->companion_snapshot['wp_core']['version'] ?? null,
                 'php_version' => $site->companion_snapshot['environment']['php_version'] ?? null,
                 'care_plan_enabled' => (bool) $site->care_plan_enabled,
@@ -66,7 +83,7 @@ class ClientReportCompiler
             $data['uptime'] = $this->compileUptime($site, $start, $end);
         }
         if ($shouldInclude('security')) {
-            $data['security'] = $this->compileSecurity($site, $start, $end);
+            $data['security'] = $this->compileSecurity($site, $start, $end, $isWordPress);
         }
         if ($shouldInclude('performance')) {
             $data['performance'] = $this->compilePerformance($site, $start, $end);
@@ -159,49 +176,104 @@ class ClientReportCompiler
         ];
     }
 
+    /**
+     * Downtime is measured from each `down` event to the next `up` (or
+     * `maintenance`) event, clamped to the period. Events only record state
+     * changes, so the last event before the period tells us whether the site
+     * was already down when it began. SLA-exempt outages don't count.
+     */
     protected function compileUptime(Site $site, Carbon $start, Carbon $end): array
     {
-        $totalMinutes = max(1, $start->diffInMinutes($end));
+        $totalMinutes = max(1, (int) $start->diffInMinutes($end));
+        $periodEnd = $end->copy()->min(now());
 
-        $downEvents = SiteUptimeEvent::query()
+        $priorEvent = SiteUptimeEvent::query()
+            ->where('site_id', $site->id)
+            ->where('event_at', '<', $start)
+            ->orderByDesc('event_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $events = SiteUptimeEvent::query()
             ->where('site_id', $site->id)
             ->whereBetween('event_at', [$start, $end])
-            ->where('event_type', 'down')
             ->orderBy('event_at')
+            ->orderBy('id')
             ->get();
 
-        $totalDowntimeMinutes = 0;
-        foreach ($downEvents as $event) {
-            // If resolved, calculate duration; otherwise estimate 5 minutes per check outage
-            $totalDowntimeMinutes += ($event->duration_seconds ?? 300) / 60;
+        $isCountedDown = fn (SiteUptimeEvent $e) => $e->event_type === SiteUptimeEvent::TYPE_DOWN && ! $e->is_sla_exempt;
+
+        $outages = 0;
+        $downtimeSeconds = 0;
+        $downSince = $priorEvent !== null && $isCountedDown($priorEvent) ? $start->copy() : null;
+        if ($downSince !== null) {
+            $outages++;
         }
 
-        $downtimeMinutes = min($totalMinutes, (int) round($totalDowntimeMinutes));
+        foreach ($events as $event) {
+            if ($isCountedDown($event)) {
+                if ($downSince === null) {
+                    $downSince = $event->event_at->copy();
+                    $outages++;
+                }
+
+                continue;
+            }
+
+            if ($downSince !== null) {
+                $downtimeSeconds += max(0, (int) $downSince->diffInSeconds($event->event_at));
+                $downSince = null;
+            }
+        }
+
+        if ($downSince !== null && $periodEnd->greaterThan($downSince)) {
+            $downtimeSeconds += (int) $downSince->diffInSeconds($periodEnd);
+        }
+
+        $downtimeMinutes = min($totalMinutes, (int) round($downtimeSeconds / 60));
         $uptimePercentage = max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
 
         return [
             'monitored' => (bool) $site->uptime_monitoring_enabled,
             'uptime_percentage' => $uptimePercentage,
-            'outages_count' => $downEvents->count(),
+            'outages_count' => $outages,
             'downtime_minutes' => $downtimeMinutes,
             'total_period_minutes' => $totalMinutes,
         ];
     }
 
-    protected function compileSecurity(Site $site, Carbon $start, Carbon $end): array
+    /**
+     * Anything we didn't actually check is reported as null / not-checked —
+     * never as a passing default — because this goes to clients verbatim.
+     */
+    protected function compileSecurity(Site $site, Carbon $start, Carbon $end, bool $isWordPress): array
     {
+        // A failed scan never ran to completion, so it can't count as a scan
+        // "run" or as evidence of anything.
         $scans = SiteSecurityScan::query()
             ->where('site_id', $site->id)
             ->whereBetween('scanned_at', [$start, $end])
+            ->where('status', '!=', SiteSecurityScan::STATUS_FAILED)
             ->orderByDesc('scanned_at')
             ->get();
 
-        $cleanScans = $scans->where('status', 'clean')->count();
-        $warnScans = $scans->where('status', 'warn')->count();
-        $cveCount = 0;
-        if (is_array($site->companion_snapshot['vulnerabilities'] ?? null)) {
-            $cveCount = count($site->companion_snapshot['vulnerabilities']);
-        }
+        $checksumScan = $isWordPress
+            ? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_CORE_CHECKSUMS)
+            : null;
+
+        // Companion's in-WordPress malware probe is the deeper check; SiteCheck
+        // (remote, front-end only) stands in when it didn't run.
+        $malwareScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)
+            ?? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_SITECHECK);
+
+        // The plugin list is the site's current Companion snapshot, so this is
+        // the state on the snapshot date, not a history over the period.
+        // An empty or stale vulnerability feed matches nothing, which would
+        // read as "None found" — so a feed that hasn't refreshed recently
+        // counts as not checked.
+        $snapshotPlugins = $site->companion_snapshot['plugins']['plugins'] ?? null;
+        $vulnerabilitiesChecked = is_array($snapshotPlugins) && $this->vulnerabilityFeedIsFresh();
+        $vulnerabilities = $vulnerabilitiesChecked ? $this->vulnerabilities->forSite($site) : [];
 
         $blockedIpsCount = BlockedIp::query()
             ->where('site_id', $site->id)
@@ -210,20 +282,41 @@ class ClientReportCompiler
 
         return [
             'total_scans' => $scans->count(),
-            'clean_scans' => $cleanScans,
-            'warn_scans' => $warnScans,
-            'active_vulnerabilities' => $cveCount,
+            'clean_scans' => $scans->where('status', SiteSecurityScan::STATUS_CLEAN)->count(),
+            'warn_scans' => $scans->whereIn('status', [SiteSecurityScan::STATUS_WARNING, SiteSecurityScan::STATUS_ISSUES_FOUND])->count(),
+            'vulnerabilities_checked' => $vulnerabilitiesChecked,
+            'vulnerabilities_as_of' => $vulnerabilitiesChecked ? $site->companion_snapshot_at?->toDateString() : null,
+            'active_vulnerabilities' => count($vulnerabilities),
+            'vulnerable_plugins' => array_values(array_unique(array_column($vulnerabilities, 'plugin_name'))),
+            'inactive_plugin_vulnerabilities' => count(array_filter($vulnerabilities, fn (array $v) => ! $v['active'])),
             'blocked_threats_count' => $blockedIpsCount,
-            'checksum_status' => $site->latestChecksumScan?->status ?? 'ok',
+            'checksum_status' => $checksumScan?->status,
+            'checksum_checked_at' => $checksumScan?->scanned_at?->toDateString(),
+            'malware_status' => $malwareScan?->status,
+            'malware_checked_at' => $malwareScan?->scanned_at?->toDateString(),
         ];
+    }
+
+    protected function vulnerabilityFeedIsFresh(): bool
+    {
+        if ($this->vulnerabilityFeedFresh === null) {
+            $latest = PluginVulnerability::query()->max('feed_updated_at');
+            $this->vulnerabilityFeedFresh = $latest !== null
+                && Carbon::parse($latest)->greaterThanOrEqualTo(now()->subHours(self::VULNERABILITY_FEED_MAX_AGE_HOURS));
+        }
+
+        return $this->vulnerabilityFeedFresh;
     }
 
     protected function compilePerformance(Site $site, Carbon $start, Carbon $end): array
     {
+        // Only tests run inside the period: an old score shown under this
+        // month's heading reads as this month's result.
         $latestMobile = SitePerformanceScan::query()
             ->where('site_id', $site->id)
             ->where('strategy', SitePerformanceScan::STRATEGY_MOBILE)
             ->where('status', SitePerformanceScan::STATUS_OK)
+            ->whereBetween('scanned_at', [$start, $end])
             ->orderByDesc('scanned_at')
             ->first();
 
@@ -231,6 +324,7 @@ class ClientReportCompiler
             ->where('site_id', $site->id)
             ->where('strategy', SitePerformanceScan::STRATEGY_DESKTOP)
             ->where('status', SitePerformanceScan::STATUS_OK)
+            ->whereBetween('scanned_at', [$start, $end])
             ->orderByDesc('scanned_at')
             ->first();
 
@@ -238,11 +332,12 @@ class ClientReportCompiler
             ->where('site_id', $site->id)
             ->where('form_factor', SiteFieldMetric::FORM_FACTOR_PHONE)
             ->where('status', SiteFieldMetric::STATUS_OK)
+            ->whereBetween('collected_at', [$start, $end])
             ->orderByDesc('collected_at')
             ->first();
 
         return [
-            'has_performance' => $latestMobile !== null || $latestDesktop !== null || $latestField !== null,
+            'has_performance' => $latestMobile !== null || $latestDesktop !== null,
             'desktop' => $latestDesktop ? [
                 'score' => $latestDesktop->performance_score,
                 'lcp_ms' => $latestDesktop->lcp_ms,
@@ -272,14 +367,23 @@ class ClientReportCompiler
             ->whereBetween('ran_at', [$start, $end])
             ->get();
 
-        $totalRuns = $runs->count();
-        $passedRuns = $runs->where('status', 'ok')->count();
-        $passRate = $totalRuns > 0 ? round(($passedRuns / $totalRuns) * 100, 1) : 100.0;
+        // Only live runs actually send email, so only they say anything about
+        // delivery. Lab runs suppress the email and just prove the form accepts
+        // a submission.
+        $live = $runs->where('mode', ContactFormTestRun::MODE_LIVE);
+        $lab = $runs->where('mode', ContactFormTestRun::MODE_LAB);
+        $delivered = $live
+            ->where('status', ContactFormTestRun::STATUS_SUCCESS)
+            ->where('mail_outcome', ContactFormTestRun::MAIL_SENT)
+            ->count();
 
         return [
-            'total_synthetic_tests' => $totalRuns,
-            'successful_tests' => $passedRuns,
-            'pass_rate' => $passRate,
+            'total_synthetic_tests' => $runs->count(),
+            'live_tests' => $live->count(),
+            'successful_tests' => $delivered,
+            'pass_rate' => $live->isNotEmpty() ? round(($delivered / $live->count()) * 100, 1) : null,
+            'lab_tests' => $lab->count(),
+            'lab_accepted' => $lab->where('status', ContactFormTestRun::STATUS_SUCCESS)->count(),
         ];
     }
 
@@ -304,14 +408,19 @@ class ClientReportCompiler
 
     protected function compileBackups(Site $site, Carbon $start, Carbon $end): array
     {
-        // Estimate frequency based on care plan and backup relay settings
+        // A backup only counts if the relay actually archived one inside the
+        // period. Being switched on (or being on a care plan, or a host that
+        // "usually" snapshots) isn't evidence, and clients read this as a
+        // promise that a restore is possible.
         $hasBackupRelay = (bool) ($site->backup_relay_enabled ?? false);
         $lastArchived = $site->backup_relay_last_archived_at;
+        $verified = $hasBackupRelay && $lastArchived !== null && $lastArchived->between($start, $end);
 
         return [
             'enabled' => $hasBackupRelay || $site->care_plan_enabled,
+            'verified' => $verified,
             'last_backup_at' => $lastArchived?->toDateString(),
-            'destination' => $hasBackupRelay ? 'Independent AWS S3 / Glacier' : 'Host Automated Snapshots',
+            'destination' => $verified ? 'Independent AWS S3 / Glacier' : null,
         ];
     }
 

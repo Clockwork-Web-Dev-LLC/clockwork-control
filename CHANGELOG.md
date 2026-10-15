@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The `clockwork:send-client-reports` command and the schedule's **Send now** button now share one code path (`ScheduledReportRunner` + `ClientReportSender`).
 - **Client Reports — Sending a report from the history table**:
   - Reports with several recipients (every multi-recipient scheduled draft) can now be sent: the comma-joined `client_email` is split and each address is emailed. A report with no saved address prompts for one instead of failing.
+- **Client Reports — Reports no longer present unchecked things as passing**:
+  - **Known plugin vulnerabilities** are now matched against the vulnerability feed (`PluginVulnerabilityMatcher`). Previously every report said "None", because it read a snapshot key that is never written. Shown "as of" the snapshot date, or "Not checked" when there is no plugin list.
+  - **Backups** are only claimed when the backup relay archived one inside the report period. A care plan flag or the host alone no longer counts, and the "Host Automated Snapshots" wording is gone.
+  - **WordPress core files** shows the latest completed in-period checksum scan, or "Not checked this month" (it used to default to "Ok"). The row is left out for non-WordPress sites, and the preview's hard-coded "Clean / Passed" tile is gone.
+  - **Contact forms** counts `success` runs (it looked for `ok`, which is never written, so every tested site showed "0% delivered"). The pass rate is null when nothing ran.
+  - **Performance** only uses scans from inside the report period.
+  - Failed security scans no longer count as "scans run", and the warning count now matches `warning`/`issues_found`.
+  - **Uptime** measures real outage length (down → up, clamped to the period, SLA-exempt outages skipped). It used to read a non-existent `duration_seconds` column and count every outage as 5 minutes.
+  - **Contact forms** only claims "delivered" for live runs whose email was actually sent. Lab runs (email suppressed) are shown as "accepted N of M".
+  - New **Malware scan** row (latest in-period Companion malware scan, else SiteCheck), so flagged findings are no longer hidden behind an all-clear section.
+  - The vulnerability line reads "Not checked" when the vulnerability feed hasn't refreshed in 48h, and notes matches in inactive plugins.
+  - Reports now carry `meta.schema_version`. Older stored reports no longer re-show "None found" vulnerabilities or a wrong "0% delivered".
 
 ### Added
 - **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.

@@ -89,7 +89,10 @@ it('hides the contact-forms section when no form tests ran', function () {
     $html = (new ClientReportMail(clientReportMailFixture()))->render();
     expect($html)->not->toContain('Contact forms');
 
-    $html = (new ClientReportMail(clientReportMailFixture(['forms' => ['total_synthetic_tests' => 4, 'pass_rate' => 100]])))->render();
+    $html = (new ClientReportMail(clientReportMailFixture([
+        'meta' => ['schema_version' => 2],
+        'forms' => ['total_synthetic_tests' => 4, 'live_tests' => 4, 'pass_rate' => 100],
+    ])))->render();
     expect($html)->toContain('Contact forms')->toContain('100% delivered');
 });
 

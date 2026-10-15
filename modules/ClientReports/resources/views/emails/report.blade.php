@@ -33,7 +33,11 @@
     $range = $report->period_start->format('M j').' – '.$report->period_end->format('M j, Y');
 
     $showUptime = isset($data['uptime']) && ($uptime['monitored'] ?? true);
-    $showForms = isset($data['forms']) && (int) ($forms['total_synthetic_tests'] ?? 0) > 0;
+    // Reports compiled before schema 2 counted form passes wrongly (always 0%), so their forms data isn't shown.
+    $isCurrentSchema = (int) ($meta['schema_version'] ?? 1) >= 2;
+    $liveTests = (int) ($forms['live_tests'] ?? 0);
+    $labTests = (int) ($forms['lab_tests'] ?? 0);
+    $showForms = $isCurrentSchema && isset($data['forms']) && ($liveTests > 0 || $labTests > 0);
     $showPerf = isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop']));
     $showTraffic = isset($data['traffic']) && ! empty($traffic['has_traffic']);
     $showWork = isset($data['work_log']) && ! empty($workLog['entries']);
@@ -43,8 +47,35 @@
     $uptimeLabel = $uptimePct === null ? '—' : rtrim(rtrim(number_format((float) $uptimePct, 2), '0'), '.').'%';
     $downtime = (int) ($uptime['downtime_minutes'] ?? 0);
     $downtimeLabel = $downtime >= 60 ? floor($downtime / 60).'h '.($downtime % 60).'m' : $downtime.' min';
+    $isWordPress = (bool) ($data['site']['is_wordpress'] ?? true);
+    $checksum = $security['checksum_status'] ?? null;
+    [$checksumLabel, $checksumColor] = match ($checksum) {
+        'clean' => ['Verified clean', $good],
+        'issues_found', 'warning' => ['Unexpected changes found', $warn],
+        null => ['Not checked this month', $muted],
+        default => [ucfirst((string) $checksum), $warn],
+    };
+    // Older reports never actually checked vulnerabilities, so a missing flag means "not checked".
+    $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
+    $inactiveVulns = (int) ($security['inactive_plugin_vulnerabilities'] ?? 0);
     $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
-    $checksum = (string) ($security['checksum_status'] ?? '');
+    $vulnPlugins = count($security['vulnerable_plugins'] ?? []);
+    [$vulnLabel, $vulnColor] = match (true) {
+        ! $vulnsChecked => ['Not checked', $muted],
+        $vulns === 0 => ['None found', $good],
+        default => [$vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : ''), $warn],
+    };
+    $showMalware = array_key_exists('malware_status', $security);
+    [$malwareLabel, $malwareColor] = match ($security['malware_status'] ?? null) {
+        'clean' => ['No malware found', $good],
+        'warning', 'issues_found' => ['Issues flagged', $warn],
+        null => ['Not checked this month', $muted],
+        default => [ucfirst((string) $security['malware_status']), $warn],
+    };
+    $vulnsAsOf = ! empty($security['vulnerabilities_as_of'])
+        ? \Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j')
+        : null;
+    $showBackups = isset($data['backups']) && ! empty($backups['verified']);
 
     $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : '#b91c1c');
     $bandwidth = (float) ($traffic['bandwidth_mb'] ?? 0);
@@ -173,10 +204,13 @@
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Security scans run</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['total_scans'] ?? 0)) }}</td></tr>
-                @if ($checksum !== '')
-                    <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksum === 'clean' ? $good : $warn }};">{{ $checksum === 'clean' ? 'Verified clean' : ucfirst($checksum) }}</td></tr>
+                @if ($showMalware)
+                    <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Malware scan</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $malwareColor }};">{{ $malwareLabel }}</td></tr>
                 @endif
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Known vulnerabilities</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $vulns === 0 ? $good : $warn }};">{{ $vulns === 0 ? 'None' : $vulns.' being addressed' }}</td></tr>
+                @if ($isWordPress)
+                    <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
+                @endif
+                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
                 <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['blocked_threats_count'] ?? 0)) }}</td></tr>
             </table>
         </td></tr>
@@ -227,16 +261,21 @@
     @if ($showForms)
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Contact forms</div>
-            <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ (int) $forms['total_synthetic_tests'] }}</strong> test {{ \Illuminate\Support\Str::plural('submission', (int) $forms['total_synthetic_tests']) }} through your forms to confirm messages reach you — <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}% delivered</strong>.</p>
+            @if ($liveTests > 0)
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms to confirm messages reach you — <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}% delivered</strong>.</p>
+            @endif
+            @if ($labTests > 0)
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span style="color:{{ $muted }};">These checks confirm the form works without sending an email, so they don't test delivery.</span></p>
+            @endif
         </td></tr>
     @endif
 
     {{-- Backups --}}
-    @if (isset($data['backups']) && ($backups['enabled'] ?? true))
+    @if ($showBackups)
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Backups</div>
             <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">
-                Your site's files and database are backed up automatically{{ ! empty($backups['destination']) ? ' ('.$backups['destination'].')' : '' }}, so it can be restored if anything goes wrong.
+                Your site's files and database were backed up to independent off-site storage this month, so it can be restored if anything goes wrong.
                 @if (! empty($backups['last_backup_at']))
                     Most recent backup: <strong>{{ \Illuminate\Support\Carbon::parse($backups['last_backup_at'])->format('M j, Y') }}</strong>.
                 @endif

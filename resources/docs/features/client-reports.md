@@ -35,16 +35,23 @@ So if you change the branding or fix a data bug, existing reports won't change. 
 
 ## Where each section's numbers come from
 
-| Key | Source | Respects the report period? |
-|---|---|---|
-| `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true` | Yes |
-| `uptime` | `site_uptime_events` where `event_type = 'down'`; each event counts its `duration_seconds`, or 5 min if that's null | Yes |
-| `security` | `site_security_scans`, `blocked_ips`, plus CVEs and checksum status from the site's *current* state | Partly |
-| `performance` | Latest OK mobile/desktop `site_performance_scans` + latest phone `site_field_metrics` | **No** (always latest) |
-| `forms` | `contact_form_test_runs` | Yes |
-| `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | Yes |
-| `backups` | `sites.backup_relay_enabled` / `care_plan_enabled` / `backup_relay_last_archived_at` | **No** (flags only) |
-| `work_log` | `site_work_logs` (hours entered on the site page) | Yes |
+The rule for every section: **if we didn't check it during the period, the report says so** ("Not checked this month") or leaves it out. It never shows a passing default, because the email goes to clients as-is.
+
+| Key | Source | Period | When there's no data |
+|---|---|---|---|
+| `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true` | In period | "Everything was already up to date" |
+| `uptime` | `site_uptime_events`: each `down` runs until the next `up`/`maintenance`, clamped to the period (an outage already open at the start counts from the start). SLA-exempt outages are skipped. | In period | Hidden if the site isn't monitored |
+| `security` scans | `site_security_scans`, excluding `failed` scans (they never completed); warnings = `warning` + `issues_found` | In period | Count of 0 |
+| `security` malware | Latest completed `companion_malware` scan in the period, falling back to `sitecheck` | In period | "Not checked this month" |
+| `security` core files | Latest *completed* `core_checksums` scan in the period. A site counts as WordPress if `is_wordpress` is set **or** Companion reports a `wp_core`. | In period | "Not checked this month"; row left out for non-WordPress sites |
+| `security` vulnerabilities | `PluginVulnerabilityMatcher` (installed plugins from the Companion snapshot vs. the vulnerability feed). Matches in inactive plugins are noted separately. | **Snapshot date**, shown as "as of …" | "Not checked" when there's no plugin list, **or** the feed hasn't refreshed in 48h (an empty or stale feed would otherwise read as "None found") |
+| `performance` | Latest OK mobile/desktop `site_performance_scans` + phone `site_field_metrics` | In period | Section hidden |
+| `forms` | `contact_form_test_runs`. Only **live** runs test delivery: delivered = `status = 'success'` **and** `mail_outcome = 'sent'`. **Lab** runs suppress the email, so they're reported as "accepted N of M" and never as delivered. | In period | Section hidden (`pass_rate` is null) |
+| `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | In period | Section hidden |
+| `backups` | Only claimed when the backup relay archived inside the period (`backup_relay_last_archived_at`) | In period | Section hidden from the client. The preview says "Not verified this period". |
+| `work_log` | `site_work_logs` (hours entered on the site page) | In period | Section hidden |
+
+Every compiled report carries `meta.schema_version` (currently **2**). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
 
 Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Adding a section means adding it there, adding a `compileX()` method in the compiler, and adding a block to both views and the email.
 

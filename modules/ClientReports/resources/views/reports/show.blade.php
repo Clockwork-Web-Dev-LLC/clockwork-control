@@ -103,10 +103,12 @@
 
         {{-- Key Metric Highlights Grid --}}
         @php
+            // Pre-schema-2 reports counted form passes wrongly (always 0%); don't show them.
+            $showFormsTile = (int) ($data['meta']['schema_version'] ?? 1) >= 2 && (int) ($forms['live_tests'] ?? 0) > 0;
             $metricCount = (isset($data['updates']) ? 1 : 0)
                 + (isset($data['uptime']) ? 1 : 0)
                 + (isset($data['security']) ? 1 : 0)
-                + (isset($data['forms']) ? 1 : 0);
+                + ($showFormsTile ? 1 : 0);
             // Tailwind's build-time scanner only picks up utility classes it can
             // find as literal substrings — sm:grid-cols-{{ $n }} would compile to
             // nothing for any $n whose literal class string doesn't appear
@@ -139,9 +141,9 @@
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Threats Blocked</div>
                     </div>
                 @endif
-                @if (isset($data['forms']))
+                @if ($showFormsTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 100 }}%</div>
+                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 0 }}%</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
                     </div>
                 @endif
@@ -228,12 +230,43 @@
                     </h2>
                     <span class="text-xs font-semibold text-slate-500">{{ $security['total_scans'] ?? 0 }} scans conducted</span>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">Malware & Checksum Scan</div>
-                        <div class="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
-                            <i class="fa-solid fa-check-circle"></i> Clean / Passed
+                @php
+                    $checksum = $security['checksum_status'] ?? null;
+                    [$checksumLabel, $checksumClass] = match ($checksum) {
+                        'clean' => ['Verified clean', 'text-emerald-600'],
+                        'issues_found', 'warning' => ['Unexpected changes found', 'text-amber-600'],
+                        null => ['Not checked this period', 'text-slate-400'],
+                        default => [ucfirst((string) $checksum), 'text-amber-600'],
+                    };
+                    $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
+                    [$malwareLabel, $malwareClass] = match ($security['malware_status'] ?? null) {
+                        'clean' => ['No malware found', 'text-emerald-600'],
+                        'warning', 'issues_found' => ['Issues flagged', 'text-amber-600'],
+                        null => ['Not checked this period', 'text-slate-400'],
+                        default => [ucfirst((string) $security['malware_status']), 'text-amber-600'],
+                    };
+                    $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
+                @endphp
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    @if (array_key_exists('malware_status', $security))
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-xs font-medium text-slate-500">Malware Scan</div>
+                            <div class="text-sm font-bold {{ $malwareClass }} mt-1">{{ $malwareLabel }}</div>
+                            @if (! empty($security['malware_checked_at']))
+                                <div class="text-[11px] text-slate-400">Checked {{ $security['malware_checked_at'] }}</div>
+                            @endif
                         </div>
+                    @endif
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
+                        @if ((bool) ($data['site']['is_wordpress'] ?? true))
+                            <div class="text-sm font-bold {{ $checksumClass }} mt-1">{{ $checksumLabel }}</div>
+                            @if (! empty($security['checksum_checked_at']))
+                                <div class="text-[11px] text-slate-400">Checked {{ $security['checksum_checked_at'] }}</div>
+                            @endif
+                        @else
+                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked (no WordPress detected)</div>
+                        @endif
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
@@ -242,10 +275,20 @@
                         </div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">Known CVE Vulnerabilities</div>
-                        <div class="text-sm font-bold {{ ($security['active_vulnerabilities'] ?? 0) === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
-                            {{ $security['active_vulnerabilities'] ?? 0 }} Active
-                        </div>
+                        <div class="text-xs font-medium text-slate-500">Known Plugin Vulnerabilities</div>
+                        @if (! $vulnsChecked)
+                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked</div>
+                        @else
+                            <div class="text-sm font-bold {{ $vulns === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
+                                {{ $vulns === 0 ? 'None found' : $vulns.' found' }}
+                            </div>
+                            @if (! empty($security['vulnerable_plugins']))
+                                <div class="text-[11px] text-slate-500">{{ implode(', ', $security['vulnerable_plugins']) }}</div>
+                            @endif
+                            @if (! empty($security['vulnerabilities_as_of']))
+                                <div class="text-[11px] text-slate-400">As of {{ $security['vulnerabilities_as_of'] }}</div>
+                            @endif
+                        @endif
                     </div>
                 </div>
             </div>
@@ -258,23 +301,31 @@
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
                     </h2>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Active</span>
-                </div>
-                <p class="text-xs text-slate-500">
-                    Your website files and database are routinely backed up and stored in off-site secure cloud storage for complete disaster recovery.
-                </p>
-                <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
-                    @if (!empty($backups['last_backup_at']))
-                        <span class="mx-2">&bull;</span>
-                        <span class="font-semibold text-slate-800">Latest Verified Backup:</span> {{ $backups['last_backup_at'] }}
+                    @if (! empty($backups['verified']))
+                        <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Verified this period</span>
+                    @elseif (! empty($backups['enabled']))
+                        <span class="no-print text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">Not verified this period — hidden from the client email</span>
+                    @else
+                        <span class="no-print text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">Not configured — hidden from the client email</span>
                     @endif
+                </div>
+                @if (! empty($backups['verified']))
+                    <p class="text-xs text-slate-500">
+                        Your website files and database were backed up to independent off-site storage during this period.
+                    </p>
+                @endif
+                <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    @if (! empty($backups['destination']))
+                        <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
+                        <span class="mx-2">&bull;</span>
+                    @endif
+                    <span class="font-semibold text-slate-800">Latest Recorded Backup:</span> {{ $backups['last_backup_at'] ?? 'none on record' }}
                 </div>
             </div>
         @endif
 
         {{-- Section: Performance Benchmarks --}}
-        @if (isset($data['performance']) && !empty($perf['has_performance']))
+        @if (isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop'])))
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
