@@ -77,6 +77,10 @@
                                     <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
                                         Care Plan
                                     </span>
+                                @elseif (! \Modules\ClientReports\Services\ScheduledReportRunner::siteIsEligible($s->site))
+                                    <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800" title="Reports are only sent for care-plan sites. Each month without a care plan is skipped; reports resume the month after it's turned back on.">
+                                        No care plan — won't send
+                                    </span>
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-[var(--color-ink-soft)] whitespace-nowrap">

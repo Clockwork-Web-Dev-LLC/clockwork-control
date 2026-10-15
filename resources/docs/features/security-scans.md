@@ -2,7 +2,7 @@
 title: Security scans
 section: Features
 order: 40
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [security, scans, sucuri, blacklist, checksums, allowlist, care-plan, wordpress-7, pressable, modules, admins, closed-plugins, cisa-kev]
 tracks: [app/Services/Security/**, modules/Sucuri/src/**, app/Console/Commands/{ScanSiteCheck,CheckBlacklists,VerifyWpCoreChecksums,PressableSecuritySummaryReport,RefreshClosedPlugins,RefreshCisaKev}.php, app/Models/SiteCoreChecksumAllowlist.php, app/Models/IgnoredWpAdmin.php, app/Models/PluginDirectoryStatus.php, app/Models/CisaKevEntry.php, modules/Pressable/src/**, app/Http/Controllers/SecurityScansController.php, app/Http/Controllers/SecurityScansSettingsController.php, app/Http/Controllers/SecurityAdminsController.php, app/Http/Controllers/SitesController.php]
@@ -22,9 +22,9 @@ Four scan types, one table. `site_security_scans` is polymorphic on `scan_type` 
 | **CISA KEV catalog sync** | daily 03:20 | all sites | Syncs CISA's Known Exploited Vulnerabilities catalog (JSON feed) to flag active in-the-wild exploitation of CVEs affecting installed plugins. |
 | **Closed plugins** | weekly Mon 03:30 | all sites | Audits active plugins against WordPress.org's directory status (`plugin_directory_statuses`). Flags abandoned / closed zombieware plugins that receive no security patches. |
 
-Sucuri + checksums + companion-malware are care-plan-only. Blacklist, CISA KEV, and closed plugin auditing run against every site; the fleet admin audit covers every monitored site with a Companion snapshot.
+Sucuri + checksums + companion-malware are care-plan-only. Blacklist, CISA KEV, and closed plugin auditing run against every site (blacklist selects via `Site::hostMonitored()`, so serverless Pressable / custom sites are included); the fleet admin audit covers every monitored site with a Companion snapshot.
 
-Standalone / Renegade enrollment (`SitesController::store`) kicks a one-shot SiteCheck + Companion malware scan in the background (`clockwork:scan-sitecheck --site=` and `clockwork:run-companion-malware-scans --site=`), so the Security tab is not empty until the next 02:00 ET cron. WP core checksums are SSH / Pressable-only and are not run for custom hosts — the in-WP malware probe is the checksum analogue on those sites.
+Standalone / Renegade enrollment (`SitesController::store`) kicks a one-shot SiteCheck + Companion malware scan in the background (`clockwork:scan-sitecheck --site=` and `clockwork:run-companion-malware-scans --site=`), so the Security tab is not empty until the next 02:00 UTC cron. WP core checksums are SSH / Pressable-only and are not run for custom hosts — the in-WP malware probe is the checksum analogue on those sites.
 
 ## Where to look
 
@@ -63,7 +63,7 @@ Clockwork audits WordPress administrator accounts across the entire fleet to det
 
 ## `/security/scans` — fleet inventory (`SecurityScansController`)
 
-The index inventory queries all monitored sites via `Site::query()->hostMonitored()`. This encompasses both server-hosted sites (SpinupWP, Cloudways) and serverless managed hosts (Pressable, WP Engine, Kinsta). For serverless sites where `server_id` is null, the Server column displays the hosting provider badge (e.g. `<i class="fa-solid fa-cloud"></i> Pressable`) and sorts by provider name.
+The index inventory queries all monitored sites via `Site::query()->hostMonitored()`. This encompasses both server-hosted sites (SpinupWP, Cloudways) and serverless hosts (Pressable, WP Engine, Kinsta, custom). For serverless sites where `server_id` is null, the Server column displays the hosting provider badge (e.g. `<i class="fa-solid fa-cloud"></i> Pressable`) and sorts by provider name.
 
 The summary tiles are computed across this fleet, split by `care_plan_enabled` since that's the population actually scanned on a recurring basis:
 
@@ -114,6 +114,7 @@ php artisan clockwork:verify-wp-core-checksums --site=42
   - `wp_config_recently_modified` — wp-config.php mtime within 30 days; operator should confirm the change was authorized.
   - `php_in_uploads` — PHP file found under `wp-content/uploads/`. Legitimately placed by plugins like Smush (log files), so yellow rather than red. Still worth a glance to confirm the path is from a known plugin.
   - `preg_replace_e_modifier` — the `/e` modifier was a historic backdoor technique, but was **removed in PHP 7.0**, so on modern PHP fleets a match is dead version-guarded code. In practice it only flags legacy vendor code. A genuine backdoor also trips the `eval_*`/`shell_*` signatures, which stay `issues_found`.
+- **Our own scanner is never a finding.** `MalwareScanner.php` lists every signature it searches for, so when Companion (or Renegade) is installed as a regular plugin, inside the scanned tree, it used to flag itself as a webshell. `CompanionMalwareScanner::isOwnScannerSource()` drops findings in `wp-content/(mu-)plugins/clockwork-{companion,renegade}/src/SecurityScans/` only; anything else in our plugin folder is still flagged.
 - **`issues_found`** (red) — at least one real-malware finding (PHP backdoor in uploads, obfuscation signature, etc.). The `details` JSON has the structured verdict. Drives the Issues page.
 - **`failed`** (yellow, "Failed") — couldn't run. Common cause for Sucuri: CF WAF 403'd the scanner. Companion's Security page recognises this shape and renders "Blocked by site firewall (likely Cloudflare)" instead of a red alarm. The blacklist scan covers the gap.
 
@@ -252,7 +253,7 @@ The suppressed count is still recorded in the scan's `details.ignored_unexpected
 
 ## Gotchas
 
-- **The malware scanner must exclude itself.** The signature needles (`eval(base64_decode(`, `c99shell`, …) exist as literal strings inside Companion's own `MalwareScanner.php`, so both scan paths exclude the `clockwork-companion` directory — the Companion-side scanner natively, and the SSH-transport grep via `--exclude-dir=clockwork-companion`. Without it every Companion-equipped docroot would self-flag findings. PHP-in-uploads (check 1) keeps no exclusion.
+- **The malware scanner must exclude itself.** The signature needles (`eval(base64_decode(`, `c99shell`, …) exist as literal strings inside Companion's own `MalwareScanner.php`, so both scan paths exclude the `clockwork-companion` directory — the Companion-side scanner natively, and the SSH-transport grep via `--exclude-dir=clockwork-companion`. Without it every Companion-equipped docroot would self-flag findings. Because the Companion-side exclusion missed copies installed as a regular plugin, Control also drops any finding under `wp-content/(mu-)plugins/clockwork-{companion,renegade}/src/SecurityScans/` for both transports (`CompanionMalwareScanner::isOwnScannerSource()`). PHP-in-uploads (check 1) keeps no exclusion.
 - **`echo` not `printf %s`** when feeding sudo's stdin password during checksum runs. `printf %s` (no trailing newline) makes sudo wait on EOF and `wp` exits silently with empty output. The plugin detector accidentally hides this via a trailing `| grep ... || true`; the security verifier doesn't, so it must use `echo`.
 - **Sucuri rate-limited around 30 req/min.** The artisan loop sleeps 250 ms between sites. A 60-site care-plan run takes about half a minute on top of the per-site scan time.
 - **Care-plan toggle drives Sucuri + checksums automatically.** When Bill.com flips a site off care plan, those scans stop running for it on the next cycle. Blacklist keeps going (hosting tier).

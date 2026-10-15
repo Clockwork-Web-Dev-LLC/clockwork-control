@@ -7,12 +7,11 @@ use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
-use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ClientReportSender;
 
 class ClientReportsController extends Controller
 {
@@ -93,9 +92,9 @@ class ClientReportsController extends Controller
      */
     public function show(ClientReport $report): View
     {
-        $report->load('site');
+        $report->load('site', 'schedule');
 
-        return view('client-reports::reports.show', compact('report'));
+        return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => true]);
     }
 
     /**
@@ -108,30 +107,45 @@ class ClientReportsController extends Controller
             ->with('site')
             ->firstOrFail();
 
-        return view('client-reports::reports.show', compact('report'));
+        return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false]);
     }
 
     /**
      * Email report to client.
      */
-    public function send(ClientReport $report, Request $request): RedirectResponse
+    public function send(ClientReport $report, Request $request, ClientReportSender $sender): RedirectResponse
     {
-        $email = $report->client_email ?: $request->input('email');
-        if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return back()->with('status_error', 'Please provide a valid client email address.');
+        if ($report->status === ClientReport::STATUS_SUPERSEDED) {
+            return back()->with('status_error', 'A newer report for this period replaced this one. Send the newer one instead.');
         }
 
-        try {
-            Mail::to($email)->send(new ClientReportMail($report));
+        $recipients = $request->filled('email')
+            ? ClientReport::parseRecipients((string) $request->input('email'))
+            : $report->recipients();
 
-            $report->update([
-                'status' => 'sent',
-                'sent_at' => now(),
-            ]);
-
-            return back()->with('status', "Report emailed to {$email}.");
-        } catch (\Throwable $e) {
-            return back()->with('status_error', "Failed sending email: {$e->getMessage()}");
+        if ($recipients === []) {
+            return back()->with('status_error', 'This report has no recipient. Enter an email address to send it to.');
         }
+
+        foreach ($recipients as $email) {
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return back()->with('status_error', "Invalid email address: '{$email}'.");
+            }
+        }
+
+        if (! $report->client_email) {
+            $report->update(['client_email' => implode(', ', $recipients)]);
+        }
+
+        $failed = $sender->send($report, $recipients);
+        $delivered = array_values(array_diff($recipients, $failed));
+
+        if ($failed !== []) {
+            $deliveredNote = $delivered === [] ? '' : ' Delivered to '.implode(', ', $delivered).'.';
+
+            return back()->with('status_error', 'Failed sending to '.implode(', ', $failed).' (see the log).'.$deliveredNote);
+        }
+
+        return back()->with('status', 'Report emailed to '.implode(', ', $delivered).'.');
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Support\Settings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
+use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
 
@@ -31,9 +32,14 @@ class PushBackupRelayTargets extends Command
             ->orderBy('domain')
             ->get();
 
+        // Direct-to-S3 (Companion) sites are backed up by Control itself; the
+        // agent can't reach them and only logs a failure for each.
         $sites = $allSites->filter(function (Site $site) {
             try {
-                return $site->host()->supports(HostingProvider::CAP_BACKUP_RELAY);
+                $host = $site->host();
+
+                return $host->supports(HostingProvider::CAP_BACKUP_RELAY)
+                    && ! $host->backupRelayAdapter() instanceof DirectS3BackupRelayAdapter;
             } catch (Throwable) {
                 return false;
             }

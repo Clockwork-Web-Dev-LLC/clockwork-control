@@ -10,9 +10,16 @@ use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
+use Modules\ClientReports\Services\ClientReportCompiler;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
+
+/** A care-plan site whose compiled report has nothing to hold for review (no backup source to check). */
+function reportableSite(array $attributes = []): Site
+{
+    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false], $attributes));
+}
 
 it('requires authentication for schedule management routes', function () {
     $site = Site::factory()->create();
@@ -242,7 +249,7 @@ describe('sendNow immediate execution', function () {
         Mail::fake();
 
         $user = User::factory()->create();
-        $site = Site::factory()->create(['domain' => 'sendnow-auto.test']);
+        $site = reportableSite(['domain' => 'sendnow-auto.test']);
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id,
@@ -275,7 +282,7 @@ describe('sendNow immediate execution', function () {
         Mail::fake();
 
         $user = User::factory()->create();
-        $site = Site::factory()->create(['domain' => 'sendnow-draft.test']);
+        $site = reportableSite(['domain' => 'sendnow-draft.test']);
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id,
@@ -307,8 +314,8 @@ describe('Console Command: clockwork:send-client-reports', function () {
     it('skips disabled schedules and schedules whose next_run_at is in the future', function () {
         Mail::fake();
 
-        $site1 = Site::factory()->create(['domain' => 'disabled-site.test']);
-        $site2 = Site::factory()->create(['domain' => 'future-site.test']);
+        $site1 = reportableSite(['domain' => 'disabled-site.test']);
+        $site2 = reportableSite(['domain' => 'future-site.test']);
 
         // Disabled schedule
         ClientReportSchedule::create([
@@ -341,7 +348,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
     it('processes due schedules in auto mode: generates report, emails client, and advances next_run_at', function () {
         Mail::fake();
 
-        $site = Site::factory()->create(['domain' => 'due-site.test']);
+        $site = reportableSite(['domain' => 'due-site.test']);
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id,
@@ -375,7 +382,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
     it('processes due schedules in draft mode: generates report without emailing, and advances next_run_at', function () {
         Mail::fake();
 
-        $site = Site::factory()->create(['domain' => 'draft-due-site.test']);
+        $site = reportableSite(['domain' => 'draft-due-site.test']);
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id,
@@ -404,7 +411,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
     it('--force bypasses the due-date check and processes future schedules', function () {
         Mail::fake();
 
-        $site = Site::factory()->create(['domain' => 'forced-site.test']);
+        $site = reportableSite(['domain' => 'forced-site.test']);
 
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id,
@@ -439,7 +446,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
         // 2026-11-01 and the client would never get an October report.
         Mail::fake();
 
-        $site = Site::factory()->create(['domain' => 'early-force-site.test']);
+        $site = reportableSite(['domain' => 'early-force-site.test']);
         $originalNextRun = now()->addDays(20);
 
         $schedule = ClientReportSchedule::create([
@@ -463,7 +470,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
     it('applies custom template sections when schedule references a template', function () {
         Mail::fake();
 
-        $site = Site::factory()->create(['domain' => 'custom-tpl-site.test']);
+        $site = reportableSite(['domain' => 'custom-tpl-site.test']);
 
         $template = ClientReportTemplate::create([
             'name' => 'Backups & Traffic Only',
@@ -533,7 +540,7 @@ describe('ClientReportSchedule next-run cadence', function () {
     it('is due again at the next month\'s 06:00 tick after a slow send', function () {
         $this->travelTo(Carbon::parse('2026-11-01 06:04:37', 'UTC'));
         $schedule = ClientReportSchedule::create([
-            'site_id' => Site::factory()->create()->id,
+            'site_id' => reportableSite()->id,
             'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_DRAFT,
             'recipients' => [],
@@ -544,5 +551,236 @@ describe('ClientReportSchedule next-run cadence', function () {
         $this->travelTo(Carbon::parse('2026-12-01 06:00:00', 'UTC'));
 
         expect($schedule->fresh()->isDue())->toBeTrue();
+    });
+});
+
+describe('partial delivery failures', function () {
+    /**
+     * Swap the mailer for one that throws for any address currently in
+     * $failing (mutable, so a test can let a retry succeed) and records every
+     * address it actually delivered to.
+     */
+    function mailerFailingFor(ArrayObject $failing): ArrayObject
+    {
+        $delivered = new ArrayObject;
+
+        Mail::shouldReceive('to')->andReturnUsing(function (string $email) use ($failing, $delivered) {
+            $pending = Mockery::mock();
+            $pending->shouldReceive('send')->andReturnUsing(function () use ($email, $failing, $delivered) {
+                if (in_array($email, $failing->getArrayCopy(), true)) {
+                    throw new RuntimeException("550 mailbox unavailable: {$email}");
+                }
+                $delivered[] = $email;
+            });
+
+            return $pending;
+        });
+
+        return $delivered;
+    }
+
+    function dueAutoSchedule(array $recipients): ClientReportSchedule
+    {
+        return ClientReportSchedule::create([
+            'site_id' => reportableSite()->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => $recipients,
+            'is_enabled' => true,
+            'next_run_at' => now()->subHour(),
+        ]);
+    }
+
+    it('records who got the report and leaves the schedule due when one recipient fails', function () {
+        $delivered = mailerFailingFor(new ArrayObject(['bad@client.test']));
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('failed for bad@client.test')
+            ->assertExitCode(0);
+
+        expect($delivered->getArrayCopy())->toBe(['a@client.test', 'c@client.test']);
+
+        $report = ClientReport::sole();
+        expect($report->status)->toBe('generated')
+            ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test'])
+            ->and($report->schedule_id)->toBe($schedule->id);
+
+        $schedule->refresh();
+        expect($schedule->last_sent_at)->toBeNull()
+            ->and($schedule->isDue())->toBeTrue();
+    });
+
+    it('resumes the same report on the next run and only emails the recipient that failed', function () {
+        $failing = new ArrayObject(['bad@client.test']);
+        $delivered = mailerFailingFor($failing);
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+
+        $failing->exchangeArray([]);
+        $delivered->exchangeArray([]);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('sent report to bad@client.test (resumed earlier partial send)')
+            ->assertExitCode(0);
+
+        expect($delivered->getArrayCopy())->toBe(['bad@client.test']);
+
+        $report = ClientReport::sole();
+        expect($report->status)->toBe('sent')
+            ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test', 'bad@client.test']);
+
+        $schedule->refresh();
+        expect($schedule->last_sent_at)->not->toBeNull()
+            ->and($schedule->next_run_at->isFuture())->toBeTrue();
+    });
+
+    it('does not pile up duplicate reports while every send keeps failing', function () {
+        mailerFailingFor(new ArrayObject(['only@client.test']));
+        dueAutoSchedule(['only@client.test']);
+
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+
+        expect(ClientReport::count())->toBe(1)
+            ->and(ClientReport::sole()->sent_to)->toBeNull();
+    });
+
+    it('Send now reports the failed addresses and only retries those', function () {
+        $user = User::factory()->create();
+        mailerFailingFor(new ArrayObject(['bad@client.test']));
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test']);
+
+        $this->actingAs($user)
+            ->post(route('client-reports.schedules.send-now', $schedule))
+            ->assertSessionHas('status_error', fn (string $msg) => str_contains($msg, 'bad@client.test')
+                && str_contains($msg, 'Delivered to a@client.test'));
+
+        expect(ClientReport::sole()->sent_to)->toBe(['a@client.test']);
+    });
+});
+
+describe('care-plan customers only', function () {
+    it('skips a schedule whose site has no care plan, and moves it on to next month', function () {
+        Mail::fake();
+        $site = Site::factory()->create(['domain' => 'no-plan.test', 'care_plan_enabled' => false, 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM]);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@no-plan.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('no-plan.test: skipped this month (care plan is off')
+            ->assertSuccessful();
+
+        Mail::assertNothingSent();
+        expect(ClientReport::count())->toBe(0)
+            ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
+    });
+
+    it('refuses Send now for a site with no care plan', function () {
+        $user = User::factory()->create();
+        $site = Site::factory()->create(['care_plan_enabled' => false]);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => [], 'is_enabled' => true,
+        ]);
+
+        $this->actingAs($user)->post(route('client-reports.schedules.send-now', $schedule))
+            ->assertSessionHas('status_error', fn ($m) => str_contains($m, 'no care plan'));
+        expect(ClientReport::count())->toBe(0);
+    });
+});
+
+describe('hold for review', function () {
+    it('keeps an auto report as a draft when something needs a person, and moves the schedule on', function () {
+        Mail::fake();
+        // A SpinupWP site whose backups were never checked: "Backups could not be checked."
+        $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('flagged.test: held as a draft for review: Backups could not be checked.')
+            ->assertSuccessful();
+
+        Mail::assertNothingSent();
+        $report = ClientReport::sole();
+        expect($report->status)->toBe('generated')
+            ->and($report->sections_data['meta']['review_reasons'])->toBe(['Backups could not be checked.'])
+            ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
+
+        // Running again in the same period never sends a held report by itself,
+        // and leaves one live copy: the older one is superseded.
+        $this->artisan('clockwork:send-client-reports', ['--force' => true])->assertSuccessful();
+        $this->artisan('clockwork:send-client-reports', ['--force' => true])->assertSuccessful();
+        Mail::assertNothingSent();
+        expect(ClientReport::where('status', ClientReport::STATUS_GENERATED)->count())->toBe(1)
+            ->and(ClientReport::where('status', ClientReport::STATUS_SUPERSEDED)->count())->toBe(2);
+    });
+
+    it('checks a draft-mode report too, and never emails it unchecked after switching to auto', function () {
+        Mail::fake();
+        $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@was-draft.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+        expect(ClientReport::sole()->sections_data['meta']['review_reasons'])->toBe(['Backups could not be checked.']);
+
+        $schedule->update(['delivery_mode' => ClientReportSchedule::MODE_AUTO]);
+        $this->artisan('clockwork:send-client-reports', ['--force' => true])->assertSuccessful();
+
+        Mail::assertNothingSent();
+    });
+
+    it('will not send a superseded copy by hand', function () {
+        Mail::fake();
+        $user = User::factory()->create();
+        $report = ClientReport::create([
+            'site_id' => reportableSite()->id, 'title' => 'Old copy', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(), 'sections_data' => ['meta' => []],
+            'client_email' => 'client@example.com', 'status' => ClientReport::STATUS_SUPERSEDED,
+        ]);
+
+        $this->actingAs($user)->post(route('client-reports.send', $report))->assertSessionHas('status_error');
+        Mail::assertNothingSent();
+    });
+
+    it('shows the review reasons to operators but never on the public view', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+        $site = reportableSite();
+        $data = app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth());
+        $data['meta']['review_reasons'] = ['Backups could not be checked.'];
+        $report = ClientReport::create([
+            'site_id' => $site->id, 'title' => 'Held', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(), 'status' => ClientReport::STATUS_GENERATED, 'sections_data' => $data,
+        ]);
+
+        $this->actingAs($user)->get(route('client-reports.show', $report))->assertSee('Backups could not be checked.');
+        $this->get(route('client-reports.public', $report->public_token))->assertDontSee('Backups could not be checked.');
+    });
+
+    it('sends a clean auto report straight away', function () {
+        Mail::fake();
+        $site = reportableSite(['domain' => 'clean.test']);
+        ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@clean.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        Mail::assertSent(ClientReportMail::class, 1);
+        expect(ClientReport::sole()->status)->toBe('sent');
     });
 });

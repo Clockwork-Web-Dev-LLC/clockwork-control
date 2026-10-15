@@ -58,40 +58,56 @@
         </div>
     </div>
 
+    @if (($isOperatorPreview ?? false) && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
+        <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
+            A newer report for this schedule and period replaced this one. It can't be sent.
+        </div>
+    @elseif (($isOperatorPreview ?? false) && ! empty($data['meta']['review_reasons']) && $report->status !== 'sent')
+        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            <div class="font-semibold mb-1"><i class="fa-solid fa-hand"></i> {{ $report->schedule?->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_AUTO ? 'Held for review instead of being emailed automatically' : 'Check these before sending' }}</div>
+            <ul class="list-disc ml-5 space-y-0.5">
+                @foreach ($data['meta']['review_reasons'] as $reason)
+                    <li>{{ $reason }}</li>
+                @endforeach
+            </ul>
+            <div class="mt-2 text-xs text-amber-800">Fix or confirm these, then send it from the history table (or generate a fresh one).</div>
+        </div>
+    @endif
+
     {{-- Report Document Container --}}
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden report-card">
-        {{-- Brand Accent Strip --}}
-        <div style="height: 4px; background: {{ $accentColor }};"></div>
-
-        <div class="p-8 sm:p-12 space-y-10">
-        {{-- Header & Cover Banner --}}
-        <div class="border-b border-slate-200 pb-8 flex items-start justify-between flex-wrap gap-6">
+        {{-- Header & Cover Banner: the brand colour, same as the email's header. --}}
+        <div class="px-8 sm:px-12 pt-8 pb-7 flex items-start justify-between flex-wrap gap-6" style="background: {{ $primaryColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             <div>
                 @if (!empty($branding['logo_url']))
                     <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['company_name'] }}" class="h-10 mb-4 object-contain">
                 @else
-                    <div class="text-xl font-extrabold text-slate-900 tracking-tight mb-2">
+                    <div class="text-xl font-extrabold text-white tracking-tight mb-2">
                         {{ $branding['company_name'] }}
                     </div>
                 @endif
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    Website Care & Maintenance Report
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">
+                    Website Care Report
                 </h1>
-                <p class="text-slate-500 text-sm mt-1">
-                    Prepared for <span class="font-semibold text-slate-800">{{ $report->client_name ?: $site['domain'] }}</span>
+                <p class="text-sm mt-1" style="color: #DCD8EA;">
+                    Prepared for <span class="font-semibold text-white">{{ $report->client_name ?: $site['domain'] }}</span>
                 </p>
             </div>
 
             <div class="text-right sm:text-right">
-                <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Report Period</div>
-                <div class="text-base font-bold text-slate-900 mt-0.5">
+                <div class="text-xs uppercase tracking-wider font-semibold" style="color: #DCD8EA;">Report Period</div>
+                <div class="text-base font-bold text-white mt-0.5">
                     {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}
                 </div>
-                <div class="text-xs text-slate-500 mt-1 font-mono">
+                <div class="text-xs mt-1 font-mono" style="color: #DCD8EA;">
                     {{ $site['domain'] }}
                 </div>
             </div>
         </div>
+        {{-- Brand Accent Strip --}}
+        <div style="height: 4px; background: {{ $accentColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;"></div>
+
+        <div class="p-8 sm:p-12 space-y-10">
 
         {{-- Custom Operator Notes if Provided --}}
         @if (!empty($meta['custom_notes']))
@@ -103,10 +119,14 @@
 
         {{-- Key Metric Highlights Grid --}}
         @php
+            // Pre-schema-2 reports counted form passes wrongly (always 0%); don't show them.
+            $showFormsTile = (int) ($data['meta']['schema_version'] ?? 1) >= 2 && (int) ($forms['live_tests'] ?? 0) > 0;
+            // Null means nothing on the site reports blocks, so there's no number to show.
+            $showBlockedTile = isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null;
             $metricCount = (isset($data['updates']) ? 1 : 0)
                 + (isset($data['uptime']) ? 1 : 0)
-                + (isset($data['security']) ? 1 : 0)
-                + (isset($data['forms']) ? 1 : 0);
+                + ($showBlockedTile ? 1 : 0)
+                + ($showFormsTile ? 1 : 0);
             // Tailwind's build-time scanner only picks up utility classes it can
             // find as literal substrings — sm:grid-cols-{{ $n }} would compile to
             // nothing for any $n whose literal class string doesn't appear
@@ -133,15 +153,15 @@
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
                     </div>
                 @endif
-                @if (isset($data['security']))
+                @if ($showBlockedTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] ?? 0 }}</div>
+                        <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] }}</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Threats Blocked</div>
                     </div>
                 @endif
-                @if (isset($data['forms']))
+                @if ($showFormsTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 100 }}%</div>
+                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 0 }}%</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
                     </div>
                 @endif
@@ -228,24 +248,65 @@
                     </h2>
                     <span class="text-xs font-semibold text-slate-500">{{ $security['total_scans'] ?? 0 }} scans conducted</span>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">Malware & Checksum Scan</div>
-                        <div class="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
-                            <i class="fa-solid fa-check-circle"></i> Clean / Passed
+                @php
+                    $checksum = $security['checksum_status'] ?? null;
+                    [$checksumLabel, $checksumClass] = match ($checksum) {
+                        'clean' => ['Verified clean', 'text-emerald-600'],
+                        'issues_found', 'warning' => ['Unexpected changes found', 'text-amber-600'],
+                        null => ['Not checked this period', 'text-slate-400'],
+                        default => [ucfirst((string) $checksum), 'text-amber-600'],
+                    };
+                    $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
+                    [$malwareLabel, $malwareClass] = match ($security['malware_status'] ?? null) {
+                        'clean' => ['No malware found', 'text-emerald-600'],
+                        'warning', 'issues_found' => ['Issues flagged', 'text-amber-600'],
+                        null => ['Not checked this period', 'text-slate-400'],
+                        default => [ucfirst((string) $security['malware_status']), 'text-amber-600'],
+                    };
+                    $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
+                @endphp
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    @if (array_key_exists('malware_status', $security))
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-xs font-medium text-slate-500">Malware Scan</div>
+                            <div class="text-sm font-bold {{ $malwareClass }} mt-1">{{ $malwareLabel }}</div>
+                            @if (! empty($security['malware_checked_at']))
+                                <div class="text-[11px] text-slate-400">Checked {{ $security['malware_checked_at'] }}</div>
+                            @endif
                         </div>
+                    @endif
+                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                        <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
+                        @if ((bool) ($data['site']['is_wordpress'] ?? true))
+                            <div class="text-sm font-bold {{ $checksumClass }} mt-1">{{ $checksumLabel }}</div>
+                            @if (! empty($security['checksum_checked_at']))
+                                <div class="text-[11px] text-slate-400">Checked {{ $security['checksum_checked_at'] }}</div>
+                            @endif
+                        @else
+                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked (no WordPress detected)</div>
+                        @endif
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
                         <div class="text-sm font-bold text-slate-900 mt-1">
-                            {{ $security['blocked_threats_count'] ?? 0 }} IP bans
+                            {{ ($security['blocked_threats_count'] ?? null) !== null ? $security['blocked_threats_count'].' IP bans' : 'Not measured (no blocker reports to Control)' }}
                         </div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">Known CVE Vulnerabilities</div>
-                        <div class="text-sm font-bold {{ ($security['active_vulnerabilities'] ?? 0) === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
-                            {{ $security['active_vulnerabilities'] ?? 0 }} Active
-                        </div>
+                        <div class="text-xs font-medium text-slate-500">Known Plugin Vulnerabilities</div>
+                        @if (! $vulnsChecked)
+                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked</div>
+                        @else
+                            <div class="text-sm font-bold {{ $vulns === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
+                                {{ $vulns === 0 ? 'None found' : $vulns.' found' }}
+                            </div>
+                            @if (! empty($security['vulnerable_plugins']))
+                                <div class="text-[11px] text-slate-500">{{ implode(', ', $security['vulnerable_plugins']) }}</div>
+                            @endif
+                            @if (! empty($security['vulnerabilities_as_of']))
+                                <div class="text-[11px] text-slate-400">As of {{ $security['vulnerabilities_as_of'] }}</div>
+                            @endif
+                        @endif
                     </div>
                 </div>
             </div>
@@ -253,28 +314,49 @@
 
         {{-- Section: Backups & Disaster Recovery --}}
         @if (isset($data['backups']))
+            @php
+                $backupStatus = $backups['status'] ?? (! empty($backups['verified']) ? 'verified' : 'not_checked');
+                [$backupBadge, $backupBadgeClass] = match ($backupStatus) {
+                    'verified' => ['Verified this period', 'text-emerald-700 bg-emerald-50'],
+                    'none_found' => ['No backups found this period — hidden from the client email', 'text-amber-700 bg-amber-50'],
+                    'stale' => ['No backups in the last 10 days of the period — hidden from the client email', 'text-amber-700 bg-amber-50'],
+                    'no_source' => ['No backup source for this host — hidden from the client email', 'text-slate-600 bg-slate-100'],
+                    default => ['Could not check backups — hidden from the client email', 'text-red-700 bg-red-50'],
+                };
+            @endphp
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
                     </h2>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Active</span>
+                    <span class="{{ $backupStatus === 'verified' ? '' : 'no-print' }} text-xs font-semibold {{ $backupBadgeClass }} px-2.5 py-1 rounded-full">{{ $backupBadge }}</span>
                 </div>
-                <p class="text-xs text-slate-500">
-                    Your website files and database are routinely backed up and stored in off-site secure cloud storage for complete disaster recovery.
-                </p>
-                <div class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <span class="font-semibold text-slate-800">Storage Destination:</span> {{ $backups['destination'] }}
-                    @if (!empty($backups['last_backup_at']))
-                        <span class="mx-2">&bull;</span>
-                        <span class="font-semibold text-slate-800">Latest Verified Backup:</span> {{ $backups['last_backup_at'] }}
-                    @endif
-                </div>
+                @if (in_array($backupStatus, ['verified', 'stale'], true))
+                    <p class="text-xs text-slate-500">
+                        Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                    </p>
+                @endif
+                @if (! empty($backups['recent']))
+                    <table class="w-full text-xs text-left">
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach ($backups['recent'] as $day)
+                                <tr>
+                                    <td class="px-3 py-1.5 font-mono text-slate-700">{{ $day['date'] }}</td>
+                                    <td class="px-3 py-1.5 text-slate-500">{{ implode(' + ', $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ $day['bytes'] !== null ? number_format($day['bytes'] / 1024 ** 2, 1).' MB' : '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+                @if (! empty($backups['check_error']))
+                    <div class="no-print text-xs text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">Last check failed: {{ $backups['check_error'] }}</div>
+                @endif
             </div>
         @endif
 
         {{-- Section: Performance Benchmarks --}}
-        @if (isset($data['performance']) && !empty($perf['has_performance']))
+        @if (isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop'])))
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -323,7 +405,7 @@
                         <div class="text-[11px] text-slate-500">Total Requests</div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['bandwidth_mb'] ?? 0, 1) }} MB</div>
+                        <div class="text-sm font-bold text-slate-900">{{ ($traffic['bandwidth_mb'] ?? 0) > 0 ? number_format($traffic['bandwidth_mb'], 1).' MB' : 'Not measured' }}</div>
                         <div class="text-[11px] text-slate-500">Bandwidth Served</div>
                     </div>
                 </div>

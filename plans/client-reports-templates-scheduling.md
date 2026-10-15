@@ -1,5 +1,11 @@
 # Client Reports: Templates & Scheduling
 
+> **Status (2026-10-15):** Phases 1–3 below have shipped (scheduler fixes, templates, scheduling
+> UI, with tests). Only Phase 4 is still open. The "Not yet implemented" note further down is
+> historical. Current status, open issues and next steps live in
+> `resources/docs/internal/client-reports-tracker.md`; how the feature works is in
+> `resources/docs/features/client-reports.md`.
+
 Drafted 2026-09-07 by Claude, after Aaron flagged that the reports history table's Actions
 column was cramped (fixed separately, small commit) and shared screenshots of a ManageWP-style
 "Client Report" panel with four tabs — Reports, Templates, Custom Work, Scheduling — asking for

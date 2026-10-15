@@ -2,7 +2,7 @@
 title: Scheduler stuck
 section: Runbooks
 order: 50
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [runbook, scheduler, ops, incident]
 ---
@@ -100,13 +100,15 @@ The longer-cadence jobs catch up at their next scheduled tick.
 ## Catch-up gotchas
 
 - **`clockwork:rollup-traffic --backfill=2`** runs hourly. If you missed multiple days, run a manual backfill: `php artisan clockwork:rollup-traffic --backfill=7`.
-- **Daily security + performance scans** run in fixed windows. If you missed the 02:00–05:00 window, kick them off manually:
+- **Daily security + performance scans** run in fixed windows. If you missed the 02:00–05:15 window, kick them off manually:
 
   ```bash
   php artisan clockwork:check-blacklists
   php artisan clockwork:scan-sitecheck
   php artisan clockwork:verify-wp-core-checksums
-  php artisan clockwork:run-performance-scans --strategy=mobile
+  php artisan clockwork:run-performance-scans --strategy=mobile --weekly-rotation
+  php artisan clockwork:run-performance-scans --strategy=mobile --host-reports
+  php artisan clockwork:run-performance-scans --strategy=desktop --host-reports
   ```
 
 - **Gatekeeper lockout / Wordfence pulls** are gated by `IngestScheduleGate`. If the ingest window is configured to only run at night, manual `php artisan clockwork:pull-llar-lockouts` skips the gate.

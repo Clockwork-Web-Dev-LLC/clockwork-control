@@ -78,6 +78,14 @@ class BackupRelayServiceProvider extends ModuleServiceProvider
                 ->dailyAt('06:40')
                 ->withoutOverlapping(60)
                 ->onOneServer();
+
+            // The agent only pulls from hosts with their own backups (Pressable,
+            // SpinupWP). Sites we don't host back up by Companion uploading to
+            // S3, which only Control can trigger, so that half still runs here.
+            $schedule->command('clockwork:backup-relay-run --direct-only')
+                ->dailyAt('04:30')
+                ->withoutOverlapping(60)
+                ->onOneServer();
         } else {
             $schedule->command('clockwork:backup-relay-run')
                 ->dailyAt('04:58')

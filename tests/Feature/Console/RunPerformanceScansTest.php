@@ -4,8 +4,10 @@ namespace Tests\Feature\Console;
 
 use App\Models\Site;
 use App\Models\SitePerformanceScan;
+use App\Services\Performance\PerformanceScanResult;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Modules\Pressable\PressableLighthouseClient;
 use Tests\Fixtures\GtmetrixFixtures;
 use Tests\Fixtures\PageSpeedInsightsFixtures;
 
@@ -233,5 +235,94 @@ describe('clockwork:run-performance-scans — weekly rotation', function () {
 
         expect(SitePerformanceScan::query()->count())->toBe(1)
             ->and(SitePerformanceScan::query()->first()->site_id)->toBe($target->id);
+    });
+});
+
+describe('clockwork:run-performance-scans — host reports (Pressable)', function () {
+    function rpsPressableReport(): void
+    {
+        test()->mock(PressableLighthouseClient::class, function ($mock) {
+            $mock->shouldReceive('scanSite')->andReturnUsing(fn (Site $site, string $strategy) => new PerformanceScanResult(
+                site: $site,
+                status: SitePerformanceScan::STATUS_OK,
+                strategy: $strategy,
+                sourceGeneratedAt: '2026-10-12T04:00:00+00:00',
+                performanceScore: 71,
+                engine: SitePerformanceScan::ENGINE_PRESSABLE,
+            ));
+        });
+    }
+
+    it('--host-reports reads every Pressable care-plan site and nothing else', function () {
+        config(['clockwork.gtmetrix.api_key' => 'test-key']);
+        $pressable = Site::factory()->pressable()->carePlan()->count(3)->create();
+        Site::factory()->carePlan()->create(['domain' => 'spinup.example.test']);
+        Site::factory()->pressable()->create(['care_plan_enabled' => false]);
+        rpsPressableReport();
+        Http::fake(); // GTmetrix must not be called.
+
+        $this->artisan('clockwork:run-performance-scans', ['--host-reports' => true, '--strategy' => 'desktop'])->assertSuccessful();
+
+        expect(SitePerformanceScan::query()->pluck('site_id')->sort()->values()->all())->toBe($pressable->pluck('id')->sort()->values()->all())
+            ->and(SitePerformanceScan::query()->pluck('strategy')->unique()->all())->toBe(['desktop']);
+        Http::assertNothingSent();
+    });
+
+    it('never switches a Pressable site off after failed reads, and still reads a flagged one', function () {
+        $site = Site::factory()->pressable()->carePlan()->create(['psi_unavailable_at' => now()->subDays(30), 'psi_unavailable_reason' => 'old']);
+        $fresh = Site::factory()->pressable()->carePlan()->create();
+        $this->mock(PressableLighthouseClient::class, function ($mock) use ($site) {
+            $mock->shouldReceive('scanSite')->andReturnUsing(fn (Site $s, string $strategy) => $s->is($site)
+                ? new PerformanceScanResult(site: $s, status: SitePerformanceScan::STATUS_OK, strategy: $strategy, sourceGeneratedAt: '2026-10-12T04:00:00+00:00', performanceScore: 70, engine: SitePerformanceScan::ENGINE_PRESSABLE)
+                : new PerformanceScanResult(site: $s, status: SitePerformanceScan::STATUS_FAILED, strategy: $strategy, error: 'Could not resolve host', engine: SitePerformanceScan::ENGINE_PRESSABLE));
+        });
+
+        foreach (range(1, 4) as $_) {
+            $this->artisan('clockwork:run-performance-scans', ['--host-reports' => true])->assertSuccessful();
+        }
+
+        expect($fresh->fresh()->psi_unavailable_at)->toBeNull()
+            ->and($site->fresh()->psi_unavailable_at)->toBeNull();
+    });
+
+    it('does not store an old report again after a failed read', function () {
+        $site = Site::factory()->pressable()->carePlan()->create();
+        $calls = 0;
+        $this->mock(PressableLighthouseClient::class, function ($mock) use (&$calls) {
+            $mock->shouldReceive('scanSite')->andReturnUsing(function (Site $s, string $strategy) use (&$calls) {
+                return $calls++ === 1
+                    ? new PerformanceScanResult(site: $s, status: SitePerformanceScan::STATUS_FAILED, strategy: $strategy, error: 'timeout', engine: SitePerformanceScan::ENGINE_PRESSABLE)
+                    : new PerformanceScanResult(site: $s, status: SitePerformanceScan::STATUS_OK, strategy: $strategy, sourceGeneratedAt: '2026-10-12T04:00:00+00:00', performanceScore: 70, engine: SitePerformanceScan::ENGINE_PRESSABLE);
+            });
+        });
+
+        foreach (range(1, 3) as $_) {
+            $this->artisan('clockwork:run-performance-scans', ['--host-reports' => true]);
+        }
+
+        expect(SitePerformanceScan::query()->where('site_id', $site->id)->where('status', 'ok')->count())->toBe(1);
+    });
+
+    it('runs without GTmetrix or PSI keys, which Pressable reports do not need', function () {
+        config(['clockwork.gtmetrix.api_key' => null, 'clockwork.psi.api_key' => null, 'services.pagespeed.key' => null]);
+        Site::factory()->pressable()->carePlan()->create();
+        rpsPressableReport();
+
+        $this->artisan('clockwork:run-performance-scans', ['--host-reports' => true])->assertSuccessful();
+
+        expect(SitePerformanceScan::query()->count())->toBe(1);
+    });
+
+    it('keeps Pressable sites out of the GTmetrix rotation', function () {
+        config(['clockwork.gtmetrix.api_key' => 'test-key']);
+        Carbon::setTestNow(Carbon::parse('2026-09-06 12:00:00', 'UTC')); // Sunday = bucket 0
+        Site::factory()->pressable()->carePlan()->create(['domain' => 'a-pressable.example.test']);
+        $spinup = Site::factory()->carePlan()->create(['domain' => 'b-spinup.example.test']);
+        rpsFakeGtmetrixOk();
+
+        $this->artisan('clockwork:run-performance-scans', ['--weekly-rotation' => true])->assertSuccessful();
+
+        expect(SitePerformanceScan::query()->pluck('site_id')->all())->toBe([$spinup->id]);
+        Carbon::setTestNow();
     });
 });

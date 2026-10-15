@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Client Reports — Partial send failures no longer re-email everyone**:
+  - Each successful delivery is recorded on the report (`client_reports.sent_to`) as it happens. A scheduled run that fails for some recipients keeps the schedule due, and the next run resumes the same report and emails only the recipients still missing, with no duplicate emails and no duplicate report rows. The history table shows **Partly sent**.
+  - The `clockwork:send-client-reports` command and the schedule's **Send now** button now share one code path (`ScheduledReportRunner` + `ClientReportSender`).
+- **Client Reports — Sending a report from the history table**:
+  - Reports with several recipients (every multi-recipient scheduled draft) can now be sent: the comma-joined `client_email` is split and each address is emailed. A report with no saved address prompts for one instead of failing.
+- **Client Reports — Reports no longer present unchecked things as passing**:
+  - **Known plugin vulnerabilities** are now matched against the vulnerability feed (`PluginVulnerabilityMatcher`). Previously every report said "None", because it read a snapshot key that is never written. Shown "as of" the snapshot date, or "Not checked" when there is no plugin list.
+  - **Backups** are only claimed when a backup was actually recorded inside the report period (see *Backup history recording* below). A care plan flag or the host alone no longer counts, and the "Host Automated Snapshots" wording is gone.
+  - **WordPress core files** shows the latest completed in-period checksum scan, or "Not checked this month" (it used to default to "Ok"). The row is left out for non-WordPress sites, and the preview's hard-coded "Clean / Passed" tile is gone.
+  - **Contact forms** counts `success` runs (it looked for `ok`, which is never written, so every tested site showed "0% delivered"). The pass rate is null when nothing ran.
+  - **Performance** only uses tests run inside the report period (Pressable's own reports are dated by when Pressable ran the test).
+  - Failed security scans no longer count as "scans run", and the warning count now matches `warning`/`issues_found`.
+  - **Uptime** measures real outage length (down → up, clamped to the period, SLA-exempt outages skipped). It used to read a non-existent `duration_seconds` column and count every outage as 5 minutes.
+  - **Contact forms** only claims "delivered" for live runs whose email was actually sent. Lab runs (email suppressed) are shown as "accepted N of M".
+  - New **Malware scan** row (latest in-period Companion malware scan, else SiteCheck), so flagged findings are no longer hidden behind an all-clear section.
+  - The vulnerability line reads "Not checked" when the vulnerability feed hasn't refreshed in 48h, and notes matches in inactive plugins.
+  - Reports now carry `meta.schema_version`. Older stored reports no longer re-show "None found" vulnerabilities or a wrong "0% delivered".
+
+- **Backup Relay — Unhosted sites are backed up again in `external_agent` mode**: `clockwork:backup-relay-run --direct-only` is now scheduled daily (04:30) in that mode. Before, nothing triggered Companion's direct-to-S3 upload, so these sites only got manual Backup Now archives. Direct-to-S3 sites are no longer sent to the external agent, which can't reach them.
+- **Security — Blacklist check now covers serverless sites**: `clockwork:check-blacklists` selected only sites on a monitored server, so Pressable and custom-hosted sites (58 of the 72 scheduled report sites) were never checked and their reports said "Not checked this month". It now uses the same `hostMonitored()` scope as SiteCheck.
+- **Client Reports — Reports are for care-plan sites only**: scheduled sending and **Send now** skip sites without a care plan (they get no nightly updates or scans, so the report would claim "Everything was already up to date" while updates waited). Such schedules are marked in the list, and each month without a care plan is skipped rather than caught up later.
+- **Client Reports — No "already up to date" while updates are waiting**: when nothing was applied but the Companion snapshot shows plugin updates waiting (e.g. premium plugins whose updates keep failing), the email says "No updates were applied this month". A plugin with a known vulnerability and a waiting update holds the report for review.
+- **Performance — Pressable sites are read nightly**: Pressable runs its own Lighthouse test about once a month per site and we can only read the latest. Under the weekly rotation a new report could sit unread for up to three weeks, so many Pressable sites had no speed score in the month their client report covered. `--host-reports` (05:05 mobile, 05:15 desktop) now reads every Pressable care-plan site nightly, at no GTmetrix cost, and the rotation covers only GTmetrix/PSI sites. Client reports date these results by when Pressable ran the test, not when we read it.
+- **Client Reports — Speed scores from GTmetrix are labelled desktop**: our GTmetrix plan has no phone emulation, so its scans filed as "mobile" were shown to clients as mobile scores.
+- **Security — The malware scan no longer flags Companion's own scanner**: on sites where Companion is a regular plugin rather than an mu-plugin, its `MalwareScanner.php` (which lists every signature it looks for) was reported as a webshell, turning the site red and the client report to "Issues flagged". Only that folder is excluded.
+- **Client Reports — "Threats blocked" is only shown when something reports blocks**: a site with no lockout source reporting to Control (Gatekeeper or Limit Login Attempts Reloaded) no longer tells the client "0 threats blocked".
+- **Client Reports — The operator preview uses the brand colour**: its header was plain white, so the report colour (and the white logo) only showed in the email. It now has the same branded banner, kept when printed or saved as a PDF.
+- **Client Reports — "Data transferred" is left out when the host reports no byte counts** (Pressable's traffic feed has none), instead of telling the client "0 MB".
+- **Client Reports — Updates list** leaves out runs that changed nothing: re-runs that ended on the version they started from ("1.5.3 → 1.5.3"), "Plugin already up to date" runs and "Translations updated: 0 package(s)". The site's WordPress version is read from the correct snapshot key.
+- **Backup Relay — The scheduled sweep honours the Backup Now / restore locks**: it skips a site that's mid-restore or already running Backup Now, and holds that site's backup lock while it works so a restore can't be staged underneath it. Failures in the 04:30 direct pass are logged and posted to chat.
+
+### Added
+- **Client Reports — Hold for review**: a report that hasn't reached anyone is checked first. An auto schedule keeps it as a draft, not emailed, when the malware scan, core files or blocklist check flagged something, backups weren't found or couldn't be checked, the site was still down at month end, or a plugin with a known vulnerability has an update waiting. History shows **Needs review** and the operator preview lists why; drafts get the same flags; re-running recompiles and marks the older unsent copy **superseded** (it can't be sent). Clean reports still send themselves.
+- **Backup history recording (`clockwork:record-site-backups`, daily 05:30)**: records each site's backups from its real source (Pressable's backup API, SpinupWP's DigitalOcean Spaces bucket, our own S3 archives) into the new `site_backups` table, plus a `site_backup_checks` row per site saying whether the read worked. Rows are kept after the source prunes them. The run exits as failed (and logs each site) when any read fails, so Scheduled Jobs shows it.
+- **Client Reports — Backups list**: the report now lists the last 10 days of the period's recorded backups (one row per day, with size) and how many days that month had one. The section is hidden from clients when none were found, when backups stopped before the last 10 days, or when the read failed, and the preview says which.
+- **Client Reports — Uptime outage list and blocklist check**: the 5 most recent outages with start time and length (flagged when one began before the period or was still open at its end), and a "Spam & malware blocklists" line from the latest in-period blacklist scan.
+- **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.
+
 ## [1.11.0] - 2026-10-14
 
 ### Added
