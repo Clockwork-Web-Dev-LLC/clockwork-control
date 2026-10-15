@@ -2,10 +2,14 @@
 
 namespace Modules\BackupRelay\Console;
 
+use App\Console\Commands\BackupRestoreCommand;
 use App\Models\BackupRelayRun;
 use App\Models\Site;
+use App\Services\Chat\ChatNotifier;
 use App\Support\Settings;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Modules\BackupRelay\Jobs\ArchiveSiteBackupJob;
 use Modules\BackupRelay\Services\GlacierUploader;
 use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
@@ -74,8 +78,30 @@ class RunBackupRelayNow extends Command
         $sitesFailed = 0;
         $failures = [];
 
+        // A sweep (no --site) shares each site's Backup Now lock, so it never
+        // backs up a site mid-restore or alongside a Backup Now already running,
+        // and a restore can't be staged while the sweep is on that site.
+        $isSweep = ! $this->option('site');
+
         foreach ($sites as $site) {
+            $lockKey = 'backup_relay.run.site.'.$site->id;
+            $locked = false;
             try {
+                if ($isSweep) {
+                    if ($this->restoreInFlight($site)) {
+                        $sitesSkipped++;
+                        $this->line("  [skip] {$site->domain} — a restore is in progress");
+
+                        continue;
+                    }
+                    if (! ($locked = Cache::add($lockKey, now()->toIso8601String(), 3600))) {
+                        $sitesSkipped++;
+                        $this->line("  [skip] {$site->domain} — a backup is already running");
+
+                        continue;
+                    }
+                }
+
                 $job = new ArchiveSiteBackupJob($site, $force);
                 $result = $job->handle($uploader);
 
@@ -93,6 +119,11 @@ class RunBackupRelayNow extends Command
                     'error' => $e->getMessage(),
                 ];
                 $this->error("  [fail] {$site->domain} — {$e->getMessage()}");
+                Log::error('backup_relay.site_failed', ['site_id' => $site->id, 'direct_only' => $directOnly, 'error' => $e->getMessage()]);
+            } finally {
+                if ($locked) {
+                    Cache::forget($lockKey);
+                }
             }
         }
 
@@ -104,6 +135,13 @@ class RunBackupRelayNow extends Command
         // its own backup_relay_last_archived_at.
         if ($directOnly) {
             $this->info("Direct backups complete: archived={$sitesArchived} skipped={$sitesSkipped} failed={$sitesFailed}.");
+            if ($failures !== []) {
+                // No run history covers this pass, so say so in chat.
+                app(ChatNotifier::class)->send(
+                    'Direct (Companion → S3) backups failed for '.count($failures).' site(s): '
+                    .implode('; ', array_map(fn (array $f) => $f['domain'].' — '.mb_substr($f['error'], 0, 200), array_slice($failures, 0, 10)))
+                );
+            }
 
             return $sitesFailed > 0 ? self::FAILURE : self::SUCCESS;
         }
@@ -133,5 +171,13 @@ class RunBackupRelayNow extends Command
         $this->info("Backup relay complete: archived={$sitesArchived} skipped={$sitesSkipped} failed={$sitesFailed}.");
 
         return $sitesFailed > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    protected function restoreInFlight(Site $site): bool
+    {
+        $state = Cache::get("backup_restore.site.{$site->id}.state");
+
+        return Cache::has('backup_restore.site.'.$site->id)
+            || in_array(is_array($state) ? ($state['status'] ?? '') : '', BackupRestoreCommand::IN_FLIGHT_STATUSES, true);
     }
 }

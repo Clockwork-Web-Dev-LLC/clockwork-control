@@ -4,6 +4,7 @@ use App\Models\BackupRelayRun;
 use App\Models\Site;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Modules\BackupRelay\BackupRelayServiceProvider;
@@ -64,4 +65,21 @@ it('--direct-only processes unhosted sites without touching the agent run histor
         ->expectsOutputToContain('Direct backups complete');
 
     expect(BackupRelayRun::count())->toBe(0);
+});
+
+it('the scheduled pass skips a site that is mid-restore or already running Backup Now', function () {
+    Http::fake();
+    Storage::fake('s3');
+    $restoring = relaySite(Site::HOSTING_PROVIDER_CUSTOM, ['domain' => 'a-restoring.example.com']);
+    $busy = relaySite(Site::HOSTING_PROVIDER_CUSTOM, ['domain' => 'b-busy.example.com']);
+    Cache::put("backup_restore.site.{$restoring->id}.state", ['status' => 'applying_sql'], 600);
+    Cache::put("backup_relay.run.site.{$busy->id}", now()->toIso8601String(), 600);
+
+    $this->artisan('clockwork:backup-relay-run --direct-only')
+        ->expectsOutputToContain('a-restoring.example.com — a restore is in progress')
+        ->expectsOutputToContain('b-busy.example.com — a backup is already running')
+        ->assertSuccessful();
+
+    // The sweep releases only locks it took itself.
+    expect(Cache::has("backup_relay.run.site.{$busy->id}"))->toBeTrue();
 });
