@@ -2,7 +2,7 @@
 title: Backup relay (Multi-Provider → S3 Glacier)
 section: Features
 order: 130
-updated: 2026-09-28
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [pressable, spinupwp, backups, s3, glacier, backup-relay]
 tracks: [modules/BackupRelay/**, app/Console/Commands/PushBackupRelayTargets.php, app/Console/Commands/PullBackupRelayReport.php, app/Console/Commands/BackupRestoreCommand.php, app/Models/BackupRelayRun.php, app/Http/Controllers/Settings/BackupRelaySettingsController.php, app/Http/Controllers/SitesController.php, resources/views/dashboard/site/widgets/_widget-backups.blade.php]
@@ -39,6 +39,8 @@ Recommended for production agency fleets with high-bandwidth requirements and ai
 - **`05:00 UTC` — External Droplet**: Cron runs `bin/relay.php`. It reads `targets.json`, checks S3 (`HeadObject`) for existing archives to avoid redundant downloads, streams new snapshots from Pressable directly to S3 Glacier Instant Retrieval (`{domain}/fs/{date}.bz2` and `{domain}/db/{date}.sql`), generates 5-day presigned S3 download links, and writes `last-report.json` and `download-links.json` to S3.
 - **`06:32 UTC` — Clockwork Control**: `clockwork:pressable-backups-report` pulls `download-links.json` and pushes the offsite archive download links to each site's WordPress Companion plugin (`wp-admin/admin.php?page=clockwork-backups`).
 - **`06:40 UTC` — Clockwork Control**: `clockwork:pull-backup-relay-report` reads `last-report.json`, logs the completed run to `backup_relay_runs`, and updates the dashboard.
+
+- **`04:30 UTC` daily — Clockwork Control**: `clockwork:backup-relay-run --direct-only` backs up the sites the droplet **can't**: unhosted/custom sites, where Companion uploads a zip straight to S3 using a presigned URL only Control can mint. These sites are left out of `targets.json`, and this pass doesn't write `backup_relay_runs` or the last-run settings (those belong to the droplet). Each site still records `backup_relay_last_archived_at`. Before 2026-10, nothing ran these in `external_agent` mode, so unhosted sites only got manual **Backup Now** archives.
 
 > [!NOTE]
 > **Dashboard UI Note**: In `external_agent` mode, the droplet reports aggregate run metrics (`sites_total`, `sites_archived`, `sites_failed`) rather than per-site database updates. As a result, the "Last Archived" column in the site targets table will display `—`. Full run health and completed archive counts are tracked in the **Last Relay Run** card and **Relay Run History** table at the bottom of the page.

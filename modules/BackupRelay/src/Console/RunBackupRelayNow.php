@@ -8,6 +8,7 @@ use App\Support\Settings;
 use Illuminate\Console\Command;
 use Modules\BackupRelay\Jobs\ArchiveSiteBackupJob;
 use Modules\BackupRelay\Services\GlacierUploader;
+use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
 
@@ -16,7 +17,8 @@ class RunBackupRelayNow extends Command
     protected $signature = 'clockwork:backup-relay-run
         {--site= : Limit to a single site (id or domain)}
         {--force : Ignore cadence / last-archive skips (Backup Now)}
-        {--queue : Queue the backup jobs asynchronously}';
+        {--queue : Queue the backup jobs asynchronously}
+        {--direct-only : Only sites that upload straight to S3 from Companion (the external agent cannot back these up)}';
 
     protected $description = 'Run in-repo backup relay archiving for enabled sites to S3 Glacier.';
 
@@ -34,10 +36,15 @@ class RunBackupRelayNow extends Command
 
         $allSites = $query->orderBy('domain')->get();
 
+        $directOnly = (bool) $this->option('direct-only');
+
         // Filter to providers supporting CAP_BACKUP_RELAY
-        $sites = $allSites->filter(function (Site $site) {
+        $sites = $allSites->filter(function (Site $site) use ($directOnly) {
             try {
-                return $site->host()->supports(HostingProvider::CAP_BACKUP_RELAY);
+                $host = $site->host();
+
+                return $host->supports(HostingProvider::CAP_BACKUP_RELAY)
+                    && (! $directOnly || $host->backupRelayAdapter() instanceof DirectS3BackupRelayAdapter);
             } catch (Throwable) {
                 return false;
             }
@@ -90,6 +97,16 @@ class RunBackupRelayNow extends Command
         }
 
         $finishedAt = now();
+
+        // In external_agent mode the run history and last-run settings belong
+        // to the droplet (they drive the relay dashboard and its stale alert),
+        // so the direct-only pass leaves them alone. Each site still records
+        // its own backup_relay_last_archived_at.
+        if ($directOnly) {
+            $this->info("Direct backups complete: archived={$sitesArchived} skipped={$sitesSkipped} failed={$sitesFailed}.");
+
+            return $sitesFailed > 0 ? self::FAILURE : self::SUCCESS;
+        }
 
         $run = BackupRelayRun::query()->create([
             'sites_total' => $sitesTotal,
