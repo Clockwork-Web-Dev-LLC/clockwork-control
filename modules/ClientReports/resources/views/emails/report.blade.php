@@ -94,6 +94,7 @@
 
     $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : '#b91c1c');
     $bandwidth = (float) ($traffic['bandwidth_mb'] ?? 0);
+    $showBandwidth = $bandwidth > 0;
     $bandwidthLabel = $bandwidth >= 1024 ? number_format($bandwidth / 1024, 1).' GB' : number_format($bandwidth, 0).' MB';
 
     // Tiles sit four across even on a phone, so long numbers are abbreviated there
@@ -282,8 +283,10 @@
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Traffic</div>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px; margin-top:8px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Visits</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($traffic['total_visits'] ?? 0)) }}</td></tr>
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Page &amp; file requests served</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($traffic['total_requests'] ?? 0)) }}</td></tr>
-                <tr><td style="padding:8px 0; color:#334155;">Data transferred</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $bandwidthLabel }}</td></tr>
+                <tr><td style="padding:8px 0; {{ $showBandwidth ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Page &amp; file requests served</td><td align="right" style="padding:8px 0; {{ $showBandwidth ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $ink }};">{{ number_format((int) ($traffic['total_requests'] ?? 0)) }}</td></tr>
+                @if ($showBandwidth)
+                    <tr><td style="padding:8px 0; color:#334155;">Data transferred</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $bandwidthLabel }}</td></tr>
+                @endif
             </table>
         </td></tr>
     @endif

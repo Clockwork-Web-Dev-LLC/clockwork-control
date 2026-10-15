@@ -436,7 +436,9 @@ class ClientReportCompiler
             'has_traffic' => $traffic->isNotEmpty(),
             'total_visits' => $visits,
             'total_requests' => $requests,
-            'bandwidth_mb' => round($bytes / (1024 * 1024), 1),
+            // Some hosts' traffic feeds (Pressable) carry no byte counts; 0 bytes
+            // for real requests means "not measured", not "nothing sent".
+            'bandwidth_mb' => $bytes > 0 ? round($bytes / (1024 * 1024), 1) : null,
         ];
     }
 

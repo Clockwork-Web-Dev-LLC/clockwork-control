@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reports now carry `meta.schema_version`. Older stored reports no longer re-show "None found" vulnerabilities or a wrong "0% delivered".
 
 - **Backup Relay — Unhosted sites are backed up again in `external_agent` mode**: `clockwork:backup-relay-run --direct-only` is now scheduled daily (04:30) in that mode. Before, nothing triggered Companion's direct-to-S3 upload, so these sites only got manual Backup Now archives. Direct-to-S3 sites are no longer sent to the external agent, which can't reach them.
+- **Security — Blacklist check now covers serverless sites**: `clockwork:check-blacklists` selected only sites on a monitored server, so Pressable and custom-hosted sites (58 of the 72 scheduled report sites) were never checked and their reports said "Not checked this month". It now uses the same `hostMonitored()` scope as SiteCheck.
+- **Client Reports — "Data transferred" is left out when the host reports no byte counts** (Pressable's traffic feed has none), instead of telling the client "0 MB".
 - **Client Reports — Updates list** leaves out runs that changed nothing: re-runs that ended on the version they started from ("1.5.3 → 1.5.3"), "Plugin already up to date" runs and "Translations updated: 0 package(s)". The site's WordPress version is read from the correct snapshot key.
 - **Backup Relay — The scheduled sweep honours the Backup Now / restore locks**: it skips a site that's mid-restore or already running Backup Now, and holds that site's backup lock while it works so a restore can't be staged underneath it. Failures in the 04:30 direct pass are logged and posted to chat.
 

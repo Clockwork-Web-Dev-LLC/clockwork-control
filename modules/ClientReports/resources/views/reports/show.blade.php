@@ -387,7 +387,7 @@
                         <div class="text-[11px] text-slate-500">Total Requests</div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['bandwidth_mb'] ?? 0, 1) }} MB</div>
+                        <div class="text-sm font-bold text-slate-900">{{ ($traffic['bandwidth_mb'] ?? 0) > 0 ? number_format($traffic['bandwidth_mb'], 1).' MB' : 'Not measured' }}</div>
                         <div class="text-[11px] text-slate-500">Bandwidth Served</div>
                     </div>
                 </div>

@@ -102,6 +102,20 @@ describe('clockwork:check-blacklists', function () {
         expect(SiteSecurityScan::query()->count())->toBe(1);
     });
 
+    it('also checks serverless sites (Pressable, custom), which have no server to monitor', function () {
+        $pressable = Site::factory()->create(['domain' => 'pressable-hosted.example.test', 'server_id' => null, 'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => '4242']);
+        $custom = Site::factory()->create(['domain' => 'custom-hosted.example.test', 'server_id' => null, 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM]);
+
+        $this->mock(BlacklistChecker::class, function ($mock) {
+            $mock->shouldReceive('check')->twice()->andReturnUsing(fn (Site $s) => cbResult($s, SiteSecurityScan::STATUS_CLEAN));
+        });
+
+        $this->artisan('clockwork:check-blacklists')->assertSuccessful();
+
+        expect(SiteSecurityScan::query()->where('scan_type', SiteSecurityScan::TYPE_BLACKLIST)->pluck('site_id')->sort()->values()->all())
+            ->toBe(collect([$pressable->id, $custom->id])->sort()->values()->all());
+    });
+
     it('exits SUCCESS with no DB writes and a warning when nothing matches', function () {
         $this->mock(BlacklistChecker::class, function ($mock) {
             $mock->shouldNotReceive('check');

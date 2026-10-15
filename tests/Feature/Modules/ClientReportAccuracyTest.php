@@ -10,6 +10,7 @@ use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteUptimeEvent;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
@@ -310,6 +311,18 @@ describe('malware scan', function () {
 
         expect($report['data']['security']['malware_status'])->toBeNull()
             ->and($report['text'])->toContain('Malware scan: Not checked this month');
+    });
+});
+
+describe('traffic', function () {
+    it('leaves out data transferred when the host reports no byte counts', function () {
+        $site = accuracySite();
+        DB::table('site_traffic_daily')->insert(['site_id' => $site->id, 'date' => '2026-09-10', 'requests' => 5000, 'visits' => 80, 'bytes_sent' => 0, 'created_at' => now(), 'updated_at' => now()]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['has_traffic' => true, 'total_requests' => 5000, 'bandwidth_mb' => null])
+            ->and($report['html'])->toContain('Visits')->not->toContain('Data transferred');
     });
 });
 
