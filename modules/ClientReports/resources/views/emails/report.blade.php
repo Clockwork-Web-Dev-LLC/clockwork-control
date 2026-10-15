@@ -106,7 +106,7 @@
     if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $good];
     if (isset($data['security'])) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
     if ($showTraffic) $tiles[] = [$compact((int) ($traffic['total_visits'] ?? 0)), 'Visits', $ink];
-    elseif (isset($data['security'])) $tiles[] = [$compact((int) ($security['blocked_threats_count'] ?? 0)), 'Threats blocked', $ink];
+    elseif (isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
     $tiles = array_slice($tiles, 0, 4);
 @endphp
 <!DOCTYPE html>
@@ -242,8 +242,11 @@
                 @if ($isWordPress)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
                 @endif
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
-                <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['blocked_threats_count'] ?? 0)) }}</td></tr>
+                @php $showBlocked = ($security['blocked_threats_count'] ?? null) !== null; @endphp
+                <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
+                @if ($showBlocked)
+                    <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) $security['blocked_threats_count']) }}</td></tr>
+                @endif
             </table>
         </td></tr>
     @endif

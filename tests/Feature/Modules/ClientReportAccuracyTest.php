@@ -314,6 +314,27 @@ describe('malware scan', function () {
     });
 });
 
+describe('threats blocked', function () {
+    it('leaves the count out when nothing on the site reports blocks', function () {
+        $report = compileSeptember(accuracySite());
+
+        expect($report['data']['security']['blocked_threats_count'])->toBeNull()
+            ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('Threats blocked')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked');
+    });
+
+    it('shows a real 0 when a blocker reports to Control', function () {
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php', 'active' => true],
+        ]]]]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security']['blocked_threats_count'])->toBe(0)
+            ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+    });
+});
+
 describe('traffic', function () {
     it('leaves out data transferred when the host reports no byte counts', function () {
         $site = accuracySite();

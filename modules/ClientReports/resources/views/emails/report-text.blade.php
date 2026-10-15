@@ -60,7 +60,9 @@ WordPress core files: {{ match ($security['checksum_status'] ?? null) { 'clean' 
     $inactiveVulns = (int) ($security['inactive_plugin_vulnerabilities'] ?? 0);
 @endphp
 Known plugin vulnerabilities{{ ! empty($security['vulnerabilities_as_of']) ? ' (as of '.\Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j').')' : '' }}: {{ ! ($security['vulnerabilities_checked'] ?? false) ? 'Not checked' : ($vulns === 0 ? 'None found' : $vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : '')) }}
-Malicious visitors blocked: {{ number_format((int) ($security['blocked_threats_count'] ?? 0)) }}
+@if (($security['blocked_threats_count'] ?? null) !== null)
+Malicious visitors blocked: {{ number_format((int) $security['blocked_threats_count']) }}
+@endif
 @endif
 @if (! empty($data['backups']['verified']))
 

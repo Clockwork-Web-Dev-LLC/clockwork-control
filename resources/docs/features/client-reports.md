@@ -42,6 +42,7 @@ The rule for every section: **if we didn't check it during the period, the repor
 | `updates` | `action_logs` rows in `ActionLog::UPDATE_TYPES` with `ok = true` | In period | "Everything was already up to date" |
 | `uptime` | `site_uptime_events`: each `down` runs until the next `up`/`maintenance`, clamped to the period (an outage already open at the start counts from the start). SLA-exempt outages are skipped. The 5 most recent outages are listed with start time and length, marked when one began before the period ("Down since before …") or was still open at its end. | In period | Hidden if the site isn't monitored |
 | `security` scans | `site_security_scans`, excluding `failed` scans (they never completed); warnings = `warning` + `issues_found` | In period | Count of 0 |
+| `security` threats blocked | `blocked_ips` rows banned in the period (lockouts pulled from Gatekeeper or Limit Login Attempts Reloaded) | In period | Left out (tile and row) when nothing on the site reports blocks to Control. A 0 is shown only when a blocker is reporting. |
 | `security` blocklists | Latest completed `blacklist` scan in the period | In period | "Not checked this month" |
 | `security` malware | Latest completed `companion_malware` scan in the period, falling back to `sitecheck` | In period | "Not checked this month" |
 | `security` core files | Latest *completed* `core_checksums` scan in the period. A site counts as WordPress if `is_wordpress` is set **or** Companion reports a `wp_core`. | In period | "Not checked this month"; row left out for non-WordPress sites |

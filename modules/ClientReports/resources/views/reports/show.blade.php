@@ -105,9 +105,11 @@
         @php
             // Pre-schema-2 reports counted form passes wrongly (always 0%); don't show them.
             $showFormsTile = (int) ($data['meta']['schema_version'] ?? 1) >= 2 && (int) ($forms['live_tests'] ?? 0) > 0;
+            // Null means nothing on the site reports blocks, so there's no number to show.
+            $showBlockedTile = isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null;
             $metricCount = (isset($data['updates']) ? 1 : 0)
                 + (isset($data['uptime']) ? 1 : 0)
-                + (isset($data['security']) ? 1 : 0)
+                + ($showBlockedTile ? 1 : 0)
                 + ($showFormsTile ? 1 : 0);
             // Tailwind's build-time scanner only picks up utility classes it can
             // find as literal substrings — sm:grid-cols-{{ $n }} would compile to
@@ -135,9 +137,9 @@
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
                     </div>
                 @endif
-                @if (isset($data['security']))
+                @if ($showBlockedTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] ?? 0 }}</div>
+                        <div class="text-2xl font-black text-slate-900">{{ $security['blocked_threats_count'] }}</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Threats Blocked</div>
                     </div>
                 @endif
@@ -271,7 +273,7 @@
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
                         <div class="text-sm font-bold text-slate-900 mt-1">
-                            {{ $security['blocked_threats_count'] ?? 0 }} IP bans
+                            {{ ($security['blocked_threats_count'] ?? null) !== null ? $security['blocked_threats_count'].' IP bans' : 'Not measured (no blocker reports to Control)' }}
                         </div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">

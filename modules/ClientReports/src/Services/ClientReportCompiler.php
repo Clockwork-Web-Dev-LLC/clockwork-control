@@ -321,7 +321,9 @@ class ClientReportCompiler
             'active_vulnerabilities' => count($vulnerabilities),
             'vulnerable_plugins' => array_values(array_unique(array_column($vulnerabilities, 'plugin_name'))),
             'inactive_plugin_vulnerabilities' => count(array_filter($vulnerabilities, fn (array $v) => ! $v['active'])),
-            'blocked_threats_count' => $blockedIpsCount,
+            // Only a number when something on the site reports its blocks to us;
+            // with no blocker reporting, 0 would read as "no attacks".
+            'blocked_threats_count' => $blockedIpsCount > 0 || $this->reportsBlocks($site) ? $blockedIpsCount : null,
             'checksum_status' => $checksumScan?->status,
             'checksum_checked_at' => $checksumScan?->scanned_at?->toDateString(),
             'malware_status' => $malwareScan?->status,
@@ -329,6 +331,23 @@ class ClientReportCompiler
             'blacklist_status' => $blacklistScan?->status,
             'blacklist_checked_at' => $blacklistScan?->scanned_at?->toDateString(),
         ];
+    }
+
+    /** Gatekeeper (Companion) or Limit Login Attempts Reloaded sends this site's lockouts to Control. */
+    protected function reportsBlocks(Site $site): bool
+    {
+        if (in_array('gatekeeper', (array) $site->companion_capabilities, true)) {
+            return true;
+        }
+
+        foreach ((array) ($site->companion_snapshot['plugins']['plugins'] ?? []) as $plugin) {
+            $file = (string) ($plugin['slug'] ?? $plugin['file'] ?? '');
+            if (str_starts_with($file, 'limit-login-attempts-reloaded/') && ! empty($plugin['active'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function vulnerabilityFeedIsFresh(): bool
