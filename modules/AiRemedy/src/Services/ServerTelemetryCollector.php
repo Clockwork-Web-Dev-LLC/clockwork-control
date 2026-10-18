@@ -87,7 +87,7 @@ echo "===TOP_MEM==="
 ps aux --sort=-%mem 2>/dev/null | head -n 12
 
 echo "===SERVICES==="
-for svc in nginx php8.3-fpm php8.2-fpm php8.1-fpm mysql mariadb redis-server fail2ban; do
+for svc in nginx php8.5-fpm php8.4-fpm php8.3-fpm php8.2-fpm php8.1-fpm mysql mariadb redis-server fail2ban; do
     if systemctl list-unit-files "$svc.service" &>/dev/null; then
         st=$(systemctl is-active "$svc" 2>/dev/null)
         echo "$svc:$st"
