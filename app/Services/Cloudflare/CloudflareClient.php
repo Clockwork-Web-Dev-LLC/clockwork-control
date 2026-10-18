@@ -257,6 +257,44 @@ class CloudflareClient
         }
     }
 
+    /**
+     * Fetch DNS records for a zone.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<int, array<string, mixed>>
+     */
+    public function dnsRecords(string $zoneId, array $query = []): array
+    {
+        $response = $this->client()->get("/zones/{$zoneId}/dns_records", $query);
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "Cloudflare DNS records fetch failed: HTTP {$response->status()} {$response->body()}"
+            );
+        }
+
+        return $response->json('result', []) ?? [];
+    }
+
+    /**
+     * Update an existing DNS record in a zone.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function updateDnsRecord(string $zoneId, string $recordId, array $data): array
+    {
+        $response = $this->writeClient()->patch("/zones/{$zoneId}/dns_records/{$recordId}", $data);
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "Cloudflare DNS record update failed: HTTP {$response->status()} {$response->body()}"
+            );
+        }
+
+        return $response->json('result', []) ?? [];
+    }
+
     protected function writeClient(): PendingRequest
     {
         if (! $this->isWriteConfigured()) {

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActionLog;
 use App\Models\Server;
+use App\Models\ServerUpdateSnapshot;
 use App\Models\Tag;
 use App\Services\Servers\AptUpdateProbe;
 use App\Services\Servers\ServerUpdater;
@@ -185,5 +186,40 @@ class ProcessServerUpdatesTest extends TestCase
         $this->artisan('clockwork:process-server-updates')->assertSuccessful();
 
         $this->assertSame(Server::UPDATE_STATUS_COMPLETED, $server->fresh()->update_status);
+    }
+
+    public function test_inline_repoll_ignores_ssh_failed_if_reboot_scheduled(): void
+    {
+        Http::fake();
+        $server = $this->makeQueuedServer();
+
+        $this->mock(ServerUpdater::class, function ($mock) {
+            $mock->shouldReceive('update')->once()->andReturn([
+                'ok' => true,
+                'output' => 'ok',
+                'reboot_required_after' => false,
+                'reboot_scheduled' => true,
+                'nginx_state_after' => 'active',
+            ]);
+        });
+
+        $this->mock(AptUpdateProbe::class, function ($mock) {
+            $mock->shouldReceive('probe')->once()->andReturn([
+                'total_updates' => 0,
+                'security_updates' => 0,
+                'reboot_required' => false,
+                'reboot_required_pkgs' => [],
+                'upgradable_pkgs' => [],
+                'poll_status' => ServerUpdateSnapshot::STATUS_SSH_FAILED,
+                'poll_error' => 'Connection closed by server',
+            ]);
+        });
+
+        $this->artisan('clockwork:process-server-updates')->assertSuccessful();
+
+        $snapshot = ServerUpdateSnapshot::where('server_id', $server->id)->first();
+        $this->assertNotNull($snapshot);
+        $this->assertSame(ServerUpdateSnapshot::STATUS_OK, $snapshot->poll_status);
+        $this->assertSame(0, $snapshot->total_updates);
     }
 }

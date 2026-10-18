@@ -70,16 +70,20 @@ class CompanionCanaryDeploy extends Command
                     continue;
                 }
 
-                $result = $installer->installOrUpdate($site, (bool) $this->option('rotate-secret'));
-                $installResults[$site->id] = $result;
-                $logger->recordCompanionInstall($site, $result);
-                $tag = match ($result['result']) {
-                    CompanionInstaller::RESULT_INSTALLED,
-                    CompanionInstaller::RESULT_UPDATED,
-                    CompanionInstaller::RESULT_ALREADY_CURRENT => '✓',
-                    default => '✗',
-                };
-                $this->line(sprintf('  %s %-40s %s', $tag, $site->domain, $result['message'] ?? $result['result']));
+                try {
+                    $result = $installer->installOrUpdate($site, (bool) $this->option('rotate-secret'));
+                    $installResults[$site->id] = $result;
+                    $logger->recordCompanionInstall($site, $result);
+                    $tag = match ($result['result']) {
+                        CompanionInstaller::RESULT_INSTALLED,
+                        CompanionInstaller::RESULT_UPDATED,
+                        CompanionInstaller::RESULT_ALREADY_CURRENT => '✓',
+                        default => '✗',
+                    };
+                    $this->line(sprintf('  %s %-40s %s', $tag, $site->domain, $result['message'] ?? $result['result']));
+                } catch (\Throwable $e) {
+                    $this->line(sprintf('  %s %-40s %s', '✗', $site->domain, 'Install error: '.$e->getMessage()));
+                }
             }
         }
 

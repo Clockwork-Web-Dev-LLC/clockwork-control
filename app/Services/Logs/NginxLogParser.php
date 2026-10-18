@@ -42,7 +42,7 @@ class NginxLogParser
                 'site_id' => $site->id,
                 'source' => ThreatLog::SOURCE_NGINX,
                 'event_at' => $eventAt,
-                'ip' => $m['ip'],
+                'ip' => mb_substr(trim($m['ip']), 0, 45),
                 'user_agent' => mb_substr($m['ua'] ?? '', 0, 1024),
                 'request_path' => mb_substr($m['path'] ?? '', 0, 2048),
                 'request_method' => mb_substr($m['method'] ?? '', 0, 16),

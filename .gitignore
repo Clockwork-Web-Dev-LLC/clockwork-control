@@ -45,3 +45,8 @@ Thumbs.db
 /private/
 /docs/screenshots/
 
+# Database dumps and archives
+*.sql
+*.zip
+env.txt
+
