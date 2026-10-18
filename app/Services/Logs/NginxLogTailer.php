@@ -6,6 +6,7 @@ use App\Models\NginxLogCursor;
 use App\Models\Site;
 use App\Models\ThreatLog;
 use App\Services\Ssh\SshClient;
+use Modules\ExploitShield\Services\ExploitShieldManager;
 use RuntimeException;
 
 class NginxLogTailer
@@ -90,6 +91,10 @@ class NginxLogTailer
         $consumedBytes = strlen($consumed);
 
         $rows = $this->parser->parse($consumed, $site);
+
+        if (function_exists('app') && app()->bound(ExploitShieldManager::class)) {
+            rescue(fn () => app(ExploitShieldManager::class)->inspectLogRows($rows, $site), report: false);
+        }
 
         $inserted = 0;
         foreach (array_chunk($rows, 500) as $chunk) {

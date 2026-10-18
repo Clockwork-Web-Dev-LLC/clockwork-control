@@ -21,7 +21,7 @@
             'label' => 'Fleet Policies',
             'icon' => 'fa-sliders',
             'route' => 'settings.wordpress-plugins.index',
-            'active' => request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*') || request()->routeIs('settings.care-plans.*') || request()->routeIs('settings.gatekeeper.*') || request()->routeIs('settings.tags.*'),
+            'active' => request()->routeIs('settings.wordpress-plugins.*') || request()->routeIs('settings.ingest.*') || request()->routeIs('settings.security-scans.*') || request()->routeIs('settings.backup-relay.*') || request()->routeIs('settings.care-plans.*') || request()->routeIs('settings.gatekeeper.*') || request()->routeIs('settings.exploit-shield.*') || request()->routeIs('settings.tags.*'),
         ],
         [
             'key' => 'integrations',
@@ -49,6 +49,9 @@
             ['label' => 'WordPress Plugins', 'icon' => 'fa-brands fa-wordpress', 'route' => 'settings.wordpress-plugins.index', 'active' => request()->routeIs('settings.wordpress-plugins.*')],
             ['label' => 'Scheduling & Ingest', 'icon' => 'fa-solid fa-clock-rotate-left', 'route' => 'settings.ingest.index', 'active' => request()->routeIs('settings.ingest.*')],
             ['label' => 'Security Scans', 'icon' => 'fa-solid fa-shield-halved', 'route' => 'settings.security-scans.index', 'active' => request()->routeIs('settings.security-scans.*')],
+            app(\Modules\Core\ModuleStateResolver::class)->isEnabled('exploit-shield')
+                ? ['label' => 'Exploit Shield', 'icon' => 'fa-solid fa-shield-virus', 'route' => 'settings.exploit-shield.index', 'active' => request()->routeIs('settings.exploit-shield.*')]
+                : null,
             ['label' => 'Backup Relay', 'icon' => 'fa-solid fa-cloud-arrow-up', 'route' => 'settings.backup-relay.index', 'active' => request()->routeIs('settings.backup-relay.*')],
             ['label' => 'Care Plans', 'icon' => 'fa-solid fa-shield-heart', 'route' => 'settings.care-plans.index', 'active' => request()->routeIs('settings.care-plans.*')],
             app(\Modules\Core\ModuleStateResolver::class)->isEnabled('gatekeeper')
