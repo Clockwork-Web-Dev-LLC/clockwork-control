@@ -35,20 +35,27 @@ use Throwable;
 class ProcessServerUpdates extends Command
 {
     protected $signature = 'clockwork:process-server-updates
-        {--limit=1 : Max servers to process this tick}';
+        {--limit=1 : Max servers to process this tick}
+        {--server= : Optional specific server ID to process}';
 
     protected $description = 'Run apt-get update/upgrade on servers marked update_status=queued.';
 
     public function handle(ServerUpdater $updater, AptUpdateProbe $probe, ActionLogger $logger, ChatNotifier $chatNotifier): int
     {
         $limit = max(1, (int) $this->option('limit'));
+        $serverId = $this->option('server');
 
-        $servers = Server::query()
+        $query = Server::query()
             ->where('update_status', Server::UPDATE_STATUS_QUEUED)
-            ->eligibleForSystemUpdates()
-            ->orderBy('update_queued_at')
-            ->limit($limit)
-            ->get();
+            ->eligibleForSystemUpdates();
+
+        if ($serverId) {
+            $query->whereKey($serverId);
+        } else {
+            $query->orderBy('update_queued_at')->limit($limit);
+        }
+
+        $servers = $query->get();
 
         if ($servers->isEmpty()) {
             return self::SUCCESS;
