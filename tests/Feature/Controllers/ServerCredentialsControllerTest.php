@@ -105,6 +105,20 @@ describe('edit (GET /servers/{server}/edit)', function () {
         $response->assertOk();
         $response->assertSee($server->hostname);
     });
+
+    it('pre-populates the stored password and includes view and copy buttons', function () {
+        $server = Server::factory()->create([
+            'name' => 'secret-test.example.com',
+            'ssh_password' => 'super-secret-password-123',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())->get(route('servers.credentials.edit', $server));
+
+        $response->assertOk();
+        $response->assertSee('value="super-secret-password-123"', false);
+        $response->assertSee('View');
+        $response->assertSee('Copy');
+    });
 });
 
 describe('update (PATCH /servers/{server}/credentials)', function () {

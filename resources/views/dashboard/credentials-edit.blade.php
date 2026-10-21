@@ -35,14 +35,61 @@
             </label>
         </div>
 
-        <div class="mt-5">
+        <div class="mt-5" x-data="{
+            show: false,
+            copied: false,
+            copy() {
+                const val = this.$refs.pwdInput.value;
+                if (!val) return;
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(val).then(() => {
+                        this.copied = true;
+                        setTimeout(() => this.copied = false, 2000);
+                    });
+                } else {
+                    this.$refs.pwdInput.select();
+                    document.execCommand('copy');
+                    this.copied = true;
+                    setTimeout(() => this.copied = false, 2000);
+                }
+            }
+        }">
             <label class="block">
-                <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">SSH password</span>
-                <input type="password" name="ssh_password"
-                       autocomplete="new-password"
-                       placeholder="{{ $server->ssh_password ? 'Currently set — leave empty to keep, or type a new value' : 'Enter password' }}"
-                       class="mt-1 w-full font-data border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                <span class="text-xs text-[var(--color-ink-soft)] mt-1 block">Stored encrypted (AES-256-GCM, keyed by APP_KEY).</span>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs uppercase tracking-wide text-[var(--color-ink-soft)]">SSH password</span>
+                    @if ($server->ssh_password)
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                            <i class="fa-solid fa-shield-check text-[10px]"></i> Password stored & encrypted
+                        </span>
+                    @endif
+                </div>
+                <div class="relative flex items-center mt-1">
+                    <input :type="show ? 'text' : 'password'"
+                           x-ref="pwdInput"
+                           name="ssh_password"
+                           value="{{ old('ssh_password', $server->ssh_password ?? '') }}"
+                           autocomplete="new-password"
+                           placeholder="{{ $server->ssh_password ? 'Currently set — leave as-is to keep, or type a new value' : 'Enter password' }}"
+                           class="w-full font-data border border-[var(--color-border)] rounded-md pl-3 pr-28 py-2 bg-[var(--color-surface)] text-[var(--color-ink-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+
+                    <div class="absolute right-1.5 flex items-center bg-[var(--color-surface)] rounded border border-[var(--color-border)] shadow-xs divide-x divide-[var(--color-border)]">
+                        <button type="button"
+                                @click="show = !show"
+                                class="px-2.5 py-1 text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-hover)] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                :title="show ? 'Hide password' : 'View password in plain text'">
+                            <i class="fa-solid w-3.5 text-center" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                            <span class="text-[11px] font-medium" x-text="show ? 'Hide' : 'View'">View</span>
+                        </button>
+                        <button type="button"
+                                @click="copy()"
+                                class="px-2.5 py-1 text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-hover)] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                :title="copied ? 'Copied to clipboard!' : 'Copy password to clipboard'">
+                            <i class="fa-solid w-3.5 text-center" :class="copied ? 'fa-check text-emerald-500' : 'fa-copy'"></i>
+                            <span class="text-[11px] font-medium" :class="copied ? 'text-emerald-500 font-semibold' : ''" x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+                        </button>
+                    </div>
+                </div>
+                <span class="text-xs text-[var(--color-ink-soft)] mt-1 block">Stored encrypted (AES-256-GCM, keyed by APP_KEY). Click <strong>View</strong> to reveal or <strong>Copy</strong> to copy to your clipboard.</span>
             </label>
 
             @if ($server->ssh_password)
