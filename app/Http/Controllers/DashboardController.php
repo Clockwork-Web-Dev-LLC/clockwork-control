@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BlockedIp;
 use App\Models\Server;
 use App\Models\ServerMetric;
 use App\Models\Site;
@@ -10,8 +11,11 @@ use App\Models\ThreatLog;
 use App\Services\Servers\LiveServerLoad;
 use App\Services\Servers\PhpFpmPoolStats;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Modules\Core\ModuleStateResolver;
+use Modules\ExploitShield\Services\ExploitShieldManager;
 
 class DashboardController extends Controller
 {
@@ -275,16 +279,43 @@ class DashboardController extends Controller
     }
 
     /**
-     * @return array{bannedIps: \Illuminate\Database\Eloquent\Collection}
+     * @return array{bannedIps: \Illuminate\Database\Eloquent\Collection, exploitShieldActive: bool, exploitShieldGloballyEnabled: bool, exploitShieldServerEnabled: bool}
      */
     private function loadBansTab(Server $server): array
     {
-        $bannedIps = $server->blockedIps()
+        $resolver = app(ModuleStateResolver::class);
+        $exploitShieldActive = $resolver->isEnabled('exploit-shield');
+        $exploitShieldGloballyEnabled = false;
+        $exploitShieldServerEnabled = false;
+
+        if ($exploitShieldActive) {
+            $manager = app(ExploitShieldManager::class);
+            $exploitShieldGloballyEnabled = $manager->isEnabled();
+            $exploitShieldServerEnabled = $manager->isServerEnabled($server);
+        }
+
+        $now = Carbon::now();
+
+        $bannedIps = BlockedIp::query()
             ->whereNull('unbanned_at')
+            ->where(function ($q) use ($now) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
+            })
+            ->where(function ($q) use ($server, $exploitShieldServerEnabled) {
+                $q->where('server_id', $server->id);
+                if ($exploitShieldServerEnabled) {
+                    $q->orWhere('source', BlockedIp::SOURCE_EXPLOIT_SHIELD);
+                }
+            })
             ->orderByDesc('banned_at')
             ->get();
 
-        return compact('bannedIps');
+        return [
+            'bannedIps' => $bannedIps,
+            'exploitShieldActive' => $exploitShieldActive,
+            'exploitShieldGloballyEnabled' => $exploitShieldGloballyEnabled,
+            'exploitShieldServerEnabled' => $exploitShieldServerEnabled,
+        ];
     }
 
     /**

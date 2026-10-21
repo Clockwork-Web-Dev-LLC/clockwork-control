@@ -43,6 +43,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:detect-wp-plugins',
         'clockwork:ensure-companion-trust-proxy',
         'clockwork:ensure-queue-worker',
+        'clockwork:exploit-shield-prune',
         'clockwork:feedback-prompt',
         'clockwork:find-orphan-sites',
         'clockwork:import-gridpane',
