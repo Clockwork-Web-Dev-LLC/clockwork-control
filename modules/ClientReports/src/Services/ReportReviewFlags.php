@@ -52,6 +52,16 @@ class ReportReviewFlags
             };
         }
 
+        if (! empty($data['uptime']['probe_stopped'])) {
+            $since = $data['uptime']['last_checked_at'] ?? null;
+            $reasons[] = 'Uptime monitoring is on, but the site '.($since ? "hasn't been checked since {$since}" : 'has never been checked').', so the Uptime section was left out.';
+        }
+
+        if (! empty($data['updates']['snapshot_stale'])) {
+            $since = $data['updates']['snapshot_at'] ?? null;
+            $reasons[] = 'Companion '.($since ? "hasn't reported since {$since}" : 'has no snapshot date').', so waiting updates and plugin vulnerabilities are out of date.';
+        }
+
         foreach ((array) ($data['uptime']['outages'] ?? []) as $outage) {
             if (! empty($outage['ongoing'])) {
                 $reasons[] = 'The site was still down at the end of the month.';

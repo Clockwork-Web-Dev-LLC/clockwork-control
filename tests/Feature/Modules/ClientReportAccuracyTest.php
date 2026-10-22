@@ -3,6 +3,7 @@
 use App\Models\ActionLog;
 use App\Models\ContactFormTestRun;
 use App\Models\PluginVulnerability;
+use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteBackup;
 use App\Models\SiteBackupCheck;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ReportReviewFlags;
 
 /*
 |--------------------------------------------------------------------------
@@ -40,6 +42,7 @@ function accuracySite(array $attributes = []): Site
         'backup_relay_last_archived_at' => null,
         'companion_snapshot' => ['plugins' => ['plugins' => []]],
         'companion_snapshot_at' => Carbon::parse('2026-10-01 06:00'),
+        'uptime_last_checked_at' => now(),
     ], $attributes));
 }
 
@@ -540,6 +543,31 @@ describe('uptime', function () {
             ->and($report['text'])->toContain('(still down at period end)');
     });
 
+    it('leaves uptime out for a site the probe skips, instead of claiming 100%', function () {
+        // CheckSiteUptime skips ignored and staging servers, so there are no events to read.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'server_id' => Server::factory()->ignored()]);
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+
+        expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false])
+            ->and($report['html'])->not->toContain('around the clock')->not->toContain('Uptime')
+            ->and($report['text'])->not->toContain('UPTIME')
+            ->and($preview)->not->toContain('Uptime &amp; Availability')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Uptime');
+    });
+
+    it('holds the report when the probe stopped checking a site it should check', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_last_checked_at' => Carbon::parse('2026-09-12 08:00')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => true, 'last_checked_at' => '2026-09-12'])
+            ->and($report['html'])->not->toContain('around the clock')
+            ->and(ReportReviewFlags::reasons($report['data']))
+            ->toContain("Uptime monitoring is on, but the site hasn't been checked since 2026-09-12, so the Uptime section was left out.");
+    });
+
     it('ignores SLA-exempt outages and treats maintenance as not down', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
         uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-05 10:00:00', exempt: true);
@@ -615,7 +643,11 @@ describe('updates and site facts', function () {
 
     it('does not say "already up to date" while plugin updates are waiting', function () {
         $waiting = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [['name' => 'WP Rocket', 'active' => true, 'update_available' => true]]]]]);
-        $current = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]]]]);
+        $current = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]],
+            'themes' => ['items' => [['name' => 'Astra', 'slug' => 'astra', 'update_available' => false]]],
+            'wp_core' => ['current_version' => '6.8.3', 'update_available' => false],
+        ]]);
 
         $w = compileSeptember($waiting);
         $preview = fn () => view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
@@ -630,6 +662,52 @@ describe('updates and site facts', function () {
         // The preview (what prints as the PDF) follows the same rule.
         expect($wPreview)->toContain('No updates were applied this period.')->not->toContain('up-to-date throughout')
             ->and($cPreview)->toContain('up-to-date throughout this period');
+    });
+
+    it('does not say "already up to date" while a theme or WordPress update is waiting', function () {
+        $snapshot = fn (bool $theme, bool $core) => ['companion_snapshot' => [
+            'plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]],
+            'themes' => ['items' => [['name' => 'Divi', 'slug' => 'Divi', 'update_available' => $theme]]],
+            'wp_core' => ['current_version' => '6.8.2', 'update_available' => $core],
+        ]];
+
+        $theme = compileSeptember(accuracySite($snapshot(true, false)));
+        $core = compileSeptember(accuracySite($snapshot(false, true)));
+
+        expect($theme['data']['updates'])->toMatchArray(['pending_themes' => ['Divi'], 'pending_core' => false])
+            ->and($theme['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date')
+            ->and($theme['text'])->toContain('No updates were applied this month.')
+            ->and($core['data']['updates']['pending_core'])->toBeTrue()
+            ->and($core['html'])->toContain('No updates were applied this month.');
+    });
+
+    it('does not say "already up to date" from a stale snapshot, and holds the report', function () {
+        // Companion stopped answering in August: its snapshot can't say what was waiting at the end of September.
+        $site = accuracySite(['companion_snapshot_at' => Carbon::parse('2026-08-20 01:30'), 'companion_snapshot' => [
+            'plugins' => ['plugins' => []], 'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['updates'])->toMatchArray(['pending_plugins' => null, 'pending_themes' => null, 'pending_core' => null, 'snapshot_stale' => true])
+            ->and($report['html'])->toContain('No updates were applied this month.')
+            ->and(ReportReviewFlags::reasons($report['data']))
+            ->toContain("Companion hasn't reported since 2026-08-20, so waiting updates and plugin vulnerabilities are out of date.");
+    });
+
+    it('counts an update applied after the period as waiting at its end', function () {
+        // Nightly updates run before the 06:00 report, and a held report may be recompiled days later.
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['name' => 'WP Rocket', 'active' => true, 'update_available' => false]]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'wp-rocket/wp-rocket.php',
+            'summary' => 'Plugin updated: WP Rocket 3.1 → 3.2', 'ok' => true, 'ran_at' => Carbon::parse('2026-10-01 01:40'), 'actor' => 'test']);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['updates'])->toMatchArray(['total' => 0, 'updated_since_period' => 1])
+            ->and($report['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date');
     });
 
     it('reads the WordPress version from the Companion snapshot', function () {

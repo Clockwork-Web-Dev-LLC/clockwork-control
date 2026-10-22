@@ -29,6 +29,8 @@
     $site = $data['site'] ?? [];
     $updates = $data['updates'] ?? [];
     $uptime = $data['uptime'] ?? [];
+    // Same rule as the email: a site the uptime probe doesn't check has no uptime to show.
+    $showUptime = isset($data['uptime']) && ($uptime['monitored'] ?? true);
     $security = $data['security'] ?? [];
     $perf = $data['performance'] ?? [];
     $forms = $data['forms'] ?? [];
@@ -129,7 +131,7 @@
             // Null means nothing on the site reports blocks, so there's no number to show.
             $showBlockedTile = isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null;
             $metricCount = (isset($data['updates']) ? 1 : 0)
-                + (isset($data['uptime']) ? 1 : 0)
+                + ($showUptime ? 1 : 0)
                 + ($showBlockedTile ? 1 : 0)
                 + ($showFormsTile ? 1 : 0);
             // Tailwind's build-time scanner only picks up utility classes it can
@@ -152,7 +154,7 @@
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Updates Completed</div>
                     </div>
                 @endif
-                @if (isset($data['uptime']))
+                @if ($showUptime)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
                         <div class="text-2xl font-black text-emerald-600">{{ $uptime['uptime_percentage'] ?? 100 }}%</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
@@ -207,7 +209,7 @@
                             </tbody>
                         </table>
                     </div>
-                @elseif (array_key_exists('pending_plugins', $updates) && ($updates['pending_plugins'] === null || $updates['pending_plugins'] !== []))
+                @elseif (\Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates))
                     {{-- Same rule as the email: never "up to date" while updates wait or weren't checked. --}}
                     <div class="text-xs text-slate-500 italic py-2">No updates were applied this period.</div>
                 @else
@@ -217,7 +219,7 @@
         @endif
 
         {{-- Section: Uptime & Availability --}}
-        @if (isset($data['uptime']))
+        @if ($showUptime)
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -341,7 +343,11 @@
                 </div>
                 @if (in_array($backupStatus, ['verified', 'stale'], true))
                     <p class="text-xs text-slate-500">
-                        Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                        @if ($backups['covers_period'] ?? true)
+                            Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                        @else
+                            Backed up{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                        @endif
                     </p>
                     @if (! ($backups['covers_period'] ?? true) && ($isOperatorPreview ?? false))
                         <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>

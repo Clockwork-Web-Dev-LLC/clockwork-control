@@ -32,8 +32,11 @@ class ScheduledReportRunner
 
     public function run(ClientReportSchedule $schedule): ScheduledReportRun
     {
-        $start = now()->subMonth()->startOfMonth();
-        $end = now()->subMonth()->endOfMonth();
+        // NoOverflow: on the 29th-31st a plain subMonth() rolls into the
+        // current month (Oct 31 - 1 month = "Sep 31" = Oct 1).
+        $month = now()->subMonthNoOverflow();
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
         $recipients = array_values(array_filter((array) $schedule->recipients));
 
         if ($schedule->delivery_mode === ClientReportSchedule::MODE_DRAFT) {
@@ -46,8 +49,10 @@ class ScheduledReportRunner
 
         // An earlier report for this period is reused rather than recompiled, so
         // recipients who already got it aren't emailed a second copy and a mail
-        // outage doesn't pile up a new report every day. A held report is the
-        // exception: it's recompiled, since someone may have fixed the problem.
+        // outage doesn't pile up a new report every day. That includes one
+        // already sent (say, finished by hand after a failed run). A held
+        // report is the exception: it's recompiled, since someone may have
+        // fixed the problem.
         $report = $this->resumableReport($schedule, $start, $end);
         $resumed = $report !== null;
         $report ??= $this->compileFresh($schedule, $start, $end, $recipients);
@@ -67,10 +72,13 @@ class ScheduledReportRunner
         }
 
         $pending = array_values(array_diff($recipients, $report->sent_to ?? []));
-        $failed = $this->sender->send($report, $pending);
+        $alreadySent = $pending === [] && $report->status === ClientReport::STATUS_SENT;
+        $failed = $alreadySent ? [] : $this->sender->send($report, $pending);
 
         if ($failed === []) {
-            $schedule->update(['last_sent_at' => now()]);
+            if (! $alreadySent || $schedule->last_sent_at === null) {
+                $schedule->update(['last_sent_at' => now()]);
+            }
             $schedule->advanceNextRun();
         }
 
@@ -86,7 +94,7 @@ class ScheduledReportRunner
     protected function resumableReport(ClientReportSchedule $schedule, Carbon $start, Carbon $end): ?ClientReport
     {
         $report = $this->samePeriod($schedule, $start, $end)
-            ->where('status', ClientReport::STATUS_GENERATED)
+            ->whereIn('status', [ClientReport::STATUS_GENERATED, ClientReport::STATUS_SENT])
             ->latest('id')
             ->first();
 

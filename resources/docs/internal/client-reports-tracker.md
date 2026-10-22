@@ -25,10 +25,10 @@ None of them has ever sent, so the 06:00 UTC run holds **every** report for revi
 
 ### On the day (runbook)
 
-1. **06:00 UTC:** `clockwork:send-client-reports` compiles October for the 45 care-plan sites and holds each one. The 27 without a care plan are skipped and move on to Dec 1. An `auto` schedule with no recipients is skipped and retried daily, so give it one. Check the output in Scheduled Jobs, or run `php artisan clockwork:send-client-reports` by hand to see it.
+1. **06:00 UTC:** `clockwork:send-client-reports` compiles October for the 45 care-plan sites and holds each one. The 27 without a care plan are skipped and move on to Dec 1. An `auto` schedule with no recipients is skipped and retried daily, so give it one. **Expect 45 Needs review reports in history.** Scheduled Jobs only shows OK/failed and a duration; it goes red if any site's report crashed. To see per-site results, run `php artisan clockwork:send-client-reports` by hand: handled sites print "skipped (not due until Dec 1)", and any site that crashed or has no recipients is still due and runs again (errors are also in `laravel.log`, "Failed sending scheduled client report for …").
 2. **Client reports → history:** every report shows **Needs review**. Open each one (↗). The amber box lists why it was held. Click **Email version** to see exactly what the client gets.
 3. **Only "first report" listed:** send it with the paper-plane button.
-4. **Other reasons too:** fix the cause (or confirm it's fine), then either send as-is, or press **Send now** on the schedule to recompile from current data. That copy is held again as a first report; check it and send by hand. The older copy is marked superseded.
+4. **Other reasons too:** fix the cause (or confirm it's fine), then either send as-is, or press **Send now** on the schedule to recompile from current data. That copy is held again as a first report; check it and send by hand. The older copy is marked superseded. A recompile reads today's vulnerability list (shown "as of" today); updates applied since Oct 31 still count as waiting at month end, so the Updates section won't turn into "already up to date".
 5. **From December:** sending a report by hand stamps the schedule's `last_sent_at`, so the Dec 1 run emails clean reports by itself and holds only flagged ones.
 
 ## Open issues
@@ -47,6 +47,7 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 | 18 | **Pressable can skip a month's speed test.** Pressable tests each site about once a month on its own schedule (no way to trigger one); about 1 site in 70 had a gap in Aug–Sep. | That site's Speed section is hidden for that month. Acceptable unless it becomes common. | Pressable |
 | 19 | **Non-Pressable sites get desktop speed only.** GTmetrix on our plan has no phone emulation. | No mobile score for the ~17 non-Pressable report sites. Options: GTmetrix plan with mobile, or PSI for mobile only (noisier). | `RunPerformanceScans` |
 | 21 | **The operator preview's layout still differs from the email** below the header (e.g. updates as a table of plugin file names). Reviewers now have **Email version** (the real email), so this is cosmetic. | The preview is what prints as the PDF. | `reports/show.blade.php` |
+| 22 | **A plugin whose vulnerability lookup has never succeeded reads "None found".** Since #14 a failed lookup keeps the plugin's previous entries, but a plugin with no earlier entries has nothing to keep, and the feed still counts as fresh. | Rare (a new plugin plus a lookup failure that night), but it's a "None found" nobody checked. Fix: store failed slugs and report those plugins as not checked. | `WpVulnerabilityClient`, `ClientReportCompiler::compileSecurity()` |
 
 ## Before 2026-11-01 (deploy checklist)
 
@@ -74,6 +75,13 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | Date | What | Ref |
 |---|---|---|
+| 2026-10-22 | **Independent review of the Nov 1 changes** (5 reviewers, each finding checked by a skeptic; 7 confirmed, all fixed). Below, from "Sent reports reused" to "Plain-text email". | PR #50 |
+| 2026-10-22 | **Sent reports reused for their period:** a run that was finished by hand after a failure, or **Send now** pressed again, no longer recompiles and emails everyone a second copy. | PR #50 |
+| 2026-10-22 | **"Already up to date" only when nothing was waiting at month end:** themes and WordPress core now count (only plugins did), updates applied after the period count as waiting then, and a Companion snapshot more than 48h older than the period end makes it unknown and holds the report. | PR #50 |
+| 2026-10-22 | **Uptime only for sites the probe checks:** sites on ignored/staging servers or ignore-listed domains no longer show "100%, checked around the clock"; a site the probe should check but hasn't lately is held. The preview follows the same rule. | PR #50 |
+| 2026-10-22 | **Report period on the 29th–31st:** `subMonth()` overflowed into the current month (Send now on Dec 31 compiled December); now `subMonthNoOverflow()`. | PR #50 |
+| 2026-10-22 | **The batch exits as failed when a site's report crashes**, so Scheduled Jobs shows it (it always said OK). | PR #50 |
+| 2026-10-22 | **Plain-text email no longer HTML-escapes** names and notes ("O&#039;Brien &amp; Sons"); the Email version page shows the text part too and says when everyone already has the report. | PR #50 |
 | 2026-10-22 | **A schedule's first report is always held for review** (auto schedules), so the Nov 1 run can't email anyone unreviewed. A report sent by hand stamps its schedule's `last_sent_at`, so December's clean reports send themselves. | PR #50 |
 | 2026-10-22 | **First-month backup count:** Pressable keeps ~8 days, so the first month's email would have said "backed up on 9 days this month". The count is now left out unless our records cover the whole period (`covers_period`). | PR #50 |
 | 2026-10-22 | **#20:** the Security intro only says "block attackers at the server" when something reports blocks. | PR #50 |

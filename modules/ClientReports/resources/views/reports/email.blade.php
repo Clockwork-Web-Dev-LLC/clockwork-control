@@ -11,6 +11,11 @@
 @php
     // What pressing Send would do right now, so the reviewer sees the real "To".
     $to = $report->recipientsToSend();
+    $toLabel = match (true) {
+        $to !== [] => implode(', ', $to),
+        $report->recipients() !== [] => 'Everyone on this report already has it',
+        default => 'No recipient saved — Send will ask for one',
+    };
     $reasons = $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SENT ? [] : ($report->sections_data['meta']['review_reasons'] ?? []);
 @endphp
 <div class="max-w-3xl mx-auto space-y-4">
@@ -20,7 +25,7 @@
     </div>
 
     <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-1.5">
-        <div><span class="inline-block w-20 text-slate-500">To</span>{{ $to !== [] ? implode(', ', $to) : 'No recipient saved — Send will ask for one' }}</div>
+        <div><span class="inline-block w-20 text-slate-500">To</span>{{ $toLabel }}</div>
         @if (! empty($report->sent_to))
             <div><span class="inline-block w-20 text-slate-500">Sent to</span>{{ implode(', ', $report->sent_to) }}</div>
         @endif
@@ -43,6 +48,12 @@
     {{-- No scripts inside; allow-same-origin only so the frame can be sized to its content. --}}
     <iframe srcdoc="{{ $html }}" sandbox="allow-same-origin" title="Report email" style="display: block; width: 100%; height: 80vh; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;"
         onload="this.style.height = this.contentDocument.documentElement.scrollHeight + 'px'"></iframe>
+
+    <details class="bg-white rounded-xl border border-slate-200 p-4 text-sm">
+        <summary class="cursor-pointer font-semibold text-slate-700">Plain-text version</summary>
+        <p class="mt-2 text-xs text-slate-500">What mail apps that don't show HTML display instead.</p>
+        <pre style="white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; margin-top: 8px;">{{ $text }}</pre>
+    </details>
 </div>
 </body>
 </html>

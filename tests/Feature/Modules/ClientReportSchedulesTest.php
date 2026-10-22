@@ -16,10 +16,10 @@ use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
 
-/** A care-plan site whose compiled report has nothing to hold for review (no backup source to check). */
+/** A care-plan site whose compiled report has nothing to hold for review (no backup source to check, uptime probe running). */
 function reportableSite(array $attributes = []): Site
 {
-    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false], $attributes));
+    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now()], $attributes));
 }
 
 it('requires authentication for schedule management routes', function () {
@@ -703,7 +703,7 @@ describe('hold for review', function () {
     it('keeps an auto report as a draft when something needs a person, and moves the schedule on', function () {
         Mail::fake();
         // A SpinupWP site whose backups were never checked: "Backups could not be checked."
-        $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
@@ -731,7 +731,7 @@ describe('hold for review', function () {
 
     it('checks a draft-mode report too, and never emails it unchecked after switching to auto', function () {
         Mail::fake();
-        $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@was-draft.test'],
@@ -815,6 +815,7 @@ describe('hold for review', function () {
 
         // Next month: clean, so it goes out by itself.
         $this->travel(1)->months();
+        $site->update(['uptime_last_checked_at' => now()]); // the probe kept running
         $this->artisan('clockwork:send-client-reports')
             ->expectsOutputToContain('first.test: sent report to client@first.test')
             ->assertSuccessful();
@@ -833,6 +834,83 @@ describe('hold for review', function () {
         $this->artisan('clockwork:send-client-reports')->assertSuccessful();
 
         expect(ClientReport::sole()->sections_data['meta'])->not->toHaveKey('review_reasons');
+    });
+});
+
+describe('a period that was already sent', function () {
+    it('does not email anyone again when a failed run was finished by hand', function () {
+        $user = User::factory()->create();
+        $failing = new ArrayObject(['bad@client.test']);
+        $delivered = mailerFailingFor($failing);
+        $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test']);
+        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+
+        // Mail works again; someone finishes it from the history table.
+        $failing->exchangeArray([]);
+        $this->actingAs($user)->post(route('client-reports.send', ClientReport::sole()))->assertSessionHas('status');
+        expect($delivered->getArrayCopy())->toBe(['a@client.test', 'bad@client.test']);
+
+        // The schedule was still due; the next morning's run must not send it again.
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('every recipient already had this report; nothing sent')
+            ->assertExitCode(0);
+
+        expect($delivered->getArrayCopy())->toBe(['a@client.test', 'bad@client.test'])
+            ->and(ClientReport::count())->toBe(1)
+            ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
+    });
+
+    it('does not re-send a period already sent when Send now is pressed again', function () {
+        Mail::fake();
+        $user = User::factory()->create();
+        $schedule = dueAutoSchedule(['client@example.test']);
+
+        $this->actingAs($user)->post(route('client-reports.schedules.send-now', $schedule));
+        $this->actingAs($user)->post(route('client-reports.schedules.send-now', $schedule))
+            ->assertSessionHas('status', fn ($m) => str_contains($m, 'nothing was sent'));
+
+        Mail::assertSent(ClientReportMail::class, 1);
+        expect(ClientReport::count())->toBe(1);
+    });
+});
+
+describe('report period', function () {
+    it('reports last month even on the 31st, when subtracting a month overflows', function () {
+        Mail::fake();
+        $this->travelTo(Carbon::parse('2026-12-31 10:00:00'));
+        $schedule = dueAutoSchedule(['client@example.test']);
+
+        $this->artisan('clockwork:send-client-reports', ['--force' => true])->assertExitCode(0);
+
+        $report = ClientReport::sole();
+        expect($report->period_start->toDateString())->toBe('2026-11-01')
+            ->and($report->period_end->toDateString())->toBe('2026-11-30');
+    });
+});
+
+describe('a site whose report crashes', function () {
+    it('keeps going with the other sites, and exits as failed so Scheduled Jobs shows it', function () {
+        Mail::fake();
+        $broken = dueAutoSchedule(['a@broken.test']);
+        $fine = dueAutoSchedule(['a@fine.test']);
+        $this->mock(ClientReportCompiler::class, function ($mock) use ($broken) {
+            $mock->shouldReceive('compile')->andReturnUsing(function (Site $site) use ($broken) {
+                if ($site->id === $broken->site_id) {
+                    throw new RuntimeException('compile exploded');
+                }
+
+                return ['meta' => ['schema_version' => ClientReportCompiler::SCHEMA_VERSION], 'branding' => [], 'site' => ['domain' => $site->domain]];
+            });
+        });
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('compile exploded')
+            ->expectsOutputToContain('1 site(s) failed')
+            ->assertFailed();
+
+        Mail::assertSent(ClientReportMail::class, 1);
+        expect($broken->fresh()->isDue())->toBeTrue()
+            ->and($fine->fresh()->isDue())->toBeFalse();
     });
 });
 

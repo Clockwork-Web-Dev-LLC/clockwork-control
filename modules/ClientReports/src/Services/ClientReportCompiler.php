@@ -36,6 +36,9 @@ class ClientReportCompiler
     /** The feed refreshes daily; allow one missed run before calling it stale. */
     public const VULNERABILITY_FEED_MAX_AGE_HOURS = 48;
 
+    /** A Companion snapshot older than this before the period end can't say what was waiting then. */
+    public const SNAPSHOT_MAX_AGE_HOURS = 48;
+
     protected ?bool $vulnerabilityFeedFresh = null;
 
     public function __construct(
@@ -186,24 +189,87 @@ class ClientReportCompiler
                 'themes' => $themeUpdates,
                 'core' => $coreUpdates,
             ],
-            // Plugin updates still waiting on the snapshot date, so the email
-            // never says "already up to date" while some are (null = unknown).
-            'pending_plugins' => $this->pendingPluginNames($site),
+            // What was still waiting at the end of the period, so the email
+            // never says "already up to date" while something was. null means
+            // unknown (no snapshot, or one too old to say). See updatesWereWaiting().
+            ...$this->pendingUpdates($site, $end),
         ];
     }
 
-    /** @return list<string>|null */
-    protected function pendingPluginNames(Site $site): ?array
+    /**
+     * Updates waiting at the end of the period, from the Companion snapshot.
+     * A snapshot taken well before the period end (Companion stopped
+     * answering) can't say, so everything is unknown. One taken after it may
+     * no longer show an update that was waiting then and has since been
+     * applied, so those are counted separately (nightly updates run before
+     * the 06:00 report, and an operator may recompile days later).
+     *
+     * @return array{pending_plugins: ?list<string>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
+     */
+    protected function pendingUpdates(Site $site, Carbon $end): array
     {
-        $plugins = $site->companion_snapshot['plugins']['plugins'] ?? null;
-        if (! is_array($plugins)) {
-            return null;
+        $snapshot = (array) $site->companion_snapshot;
+        $snapshotAt = $site->companion_snapshot_at;
+        $stale = $site->companion_snapshot !== null
+            && ($snapshotAt === null || $snapshotAt->lessThan($end->copy()->subHours(self::SNAPSHOT_MAX_AGE_HOURS)));
+
+        $waitingNames = function (mixed $items): ?array {
+            if (! is_array($items)) {
+                return null;
+            }
+
+            return array_values(array_map(
+                fn (array $i) => (string) ($i['name'] ?? $i['slug'] ?? ''),
+                array_filter($items, fn ($i) => is_array($i) && ! empty($i['update_available'])),
+            ));
+        };
+        $core = $snapshot['wp_core'] ?? null;
+
+        $updatedSince = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', [ActionLog::TYPE_PLUGIN_UPDATE, ActionLog::TYPE_THEME_UPDATE, ActionLog::TYPE_CORE_UPDATE])
+            ->where('ok', true)
+            ->where('ran_at', '>', $end)
+            ->get(['summary'])
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary))
+            ->count();
+
+        return [
+            'pending_plugins' => $stale ? null : $waitingNames($snapshot['plugins']['plugins'] ?? null),
+            'pending_themes' => $stale ? null : $waitingNames($snapshot['themes']['items'] ?? null),
+            'pending_core' => $stale || ! is_array($core) ? null : ! empty($core['update_available']),
+            'updated_since_period' => $updatedSince,
+            'snapshot_at' => $snapshotAt?->toDateString(),
+            'snapshot_stale' => $stale,
+        ];
+    }
+
+    /**
+     * Whether a report's updates section must not say "already up to date":
+     * something was waiting at the period end, or we can't tell. Shared by
+     * the email, its text version and the preview so they can't drift apart.
+     * Reports compiled before waiting updates were recorded keep their old
+     * wording.
+     *
+     * @param  array<string, mixed>  $updates  a report's sections_data['updates']
+     */
+    public static function updatesWereWaiting(array $updates): bool
+    {
+        if (! array_key_exists('pending_plugins', $updates)) {
+            return false;
         }
 
-        return array_values(array_map(
-            fn (array $p) => (string) ($p['name'] ?? $p['slug'] ?? ''),
-            array_filter($plugins, fn ($p) => is_array($p) && ! empty($p['update_available'])),
-        ));
+        foreach (['pending_plugins', 'pending_themes'] as $key) {
+            if (array_key_exists($key, $updates) && ($updates[$key] === null || $updates[$key] !== [])) {
+                return true;
+            }
+        }
+
+        if (array_key_exists('pending_core', $updates) && $updates['pending_core'] !== false) {
+            return true;
+        }
+
+        return (int) ($updates['updated_since_period'] ?? 0) > 0;
     }
 
     /**
@@ -272,8 +338,20 @@ class ClientReportCompiler
         $downtimeMinutes = min($totalMinutes, (int) round($downtimeSeconds / 60));
         $uptimePercentage = max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
 
+        // No events reads as 100%, so the flag alone isn't enough: the probe
+        // skips ignored and staging servers and ignore-listed domains (the
+        // same query as clockwork:check-site-uptime), and one that stopped
+        // checking the site leaves no events either.
+        $inProbe = $site->uptime_monitoring_enabled
+            && Site::query()->whereKey($site->id)->hostMonitored()->notDomainIgnored()->exists();
+        $lastChecked = $site->uptime_last_checked_at;
+        $checkedRecently = $lastChecked !== null && $lastChecked->greaterThanOrEqualTo($periodEnd->copy()->subDay());
+
         return [
-            'monitored' => (bool) $site->uptime_monitoring_enabled,
+            'monitored' => $inProbe && $checkedRecently,
+            // On, in the probe, but not checked lately: a person should look.
+            'probe_stopped' => $inProbe && ! $checkedRecently,
+            'last_checked_at' => $lastChecked?->toDateString(),
             'uptime_percentage' => $uptimePercentage,
             'outages_count' => $outages,
             'downtime_minutes' => $downtimeMinutes,

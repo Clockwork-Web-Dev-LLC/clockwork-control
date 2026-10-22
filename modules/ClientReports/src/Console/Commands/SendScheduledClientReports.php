@@ -42,6 +42,7 @@ class SendScheduledClientReports extends Command
         }
 
         $processed = 0;
+        $crashed = 0;
 
         foreach ($schedules as $schedule) {
             $site = $schedule->site;
@@ -84,7 +85,7 @@ class SendScheduledClientReports extends Command
                 } elseif ($run->isDraft) {
                     $this->line("  ✓ {$site->domain}: generated draft report (awaiting operator review)");
                 } elseif ($run->complete() && $run->sentTo === []) {
-                    $this->line("  ✓ {$site->domain}: every recipient already had this report; marked sent");
+                    $this->line("  ✓ {$site->domain}: every recipient already had this report; nothing sent");
                 } elseif ($run->complete()) {
                     $resumed = $run->resumed ? ' (resumed earlier partial send)' : '';
                     $this->line("  ✓ {$site->domain}: sent report to ".implode(', ', $run->sentTo).$resumed);
@@ -95,6 +96,7 @@ class SendScheduledClientReports extends Command
 
                 $processed++;
             } catch (Throwable $e) {
+                $crashed++;
                 $this->error("  ✗ {$site->domain}: {$e->getMessage()}");
                 Log::error("Failed sending scheduled client report for {$site->domain}: {$e->getMessage()}", [
                     'site_id' => $site->id,
@@ -105,6 +107,15 @@ class SendScheduledClientReports extends Command
         }
 
         $this->info("Scheduled client reports dispatch completed ({$processed} processed).");
+
+        // A site whose report crashed stays due and is retried tomorrow; exit
+        // as failed so Scheduled Jobs shows it instead of a quiet green run.
+        // (A recipient that failed is retried the same way, but isn't a crash.)
+        if ($crashed > 0) {
+            $this->error("{$crashed} site(s) failed; see laravel.log (\"Failed sending scheduled client report\").");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

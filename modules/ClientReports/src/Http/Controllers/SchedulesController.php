@@ -240,7 +240,7 @@ class SchedulesController extends Controller
             }
 
             if ($run->sentTo === []) {
-                return back()->with('status', 'Every recipient already had this report; marked it as sent.');
+                return back()->with('status', 'Every recipient already has this month\'s report, so nothing was sent.');
             }
 
             return back()->with('status', 'Report successfully generated and emailed to '.implode(', ', $run->sentTo).'.');

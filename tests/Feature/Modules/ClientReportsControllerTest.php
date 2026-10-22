@@ -182,6 +182,24 @@ describe('email version', function () {
         $this->actingAs($user)->get(route('client-reports.show', $report))
             ->assertSee(route('client-reports.email', $report), false);
     });
+
+    it('shows the plain-text part too, and says so when everyone already has the report', function () {
+        $user = User::factory()->create();
+        $site = Site::factory()->create(['domain' => 'text-part.test']);
+        $report = ClientReport::create([
+            'site_id' => $site->id, 'title' => 'Text part', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(),
+            'sections_data' => app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()),
+            'client_email' => 'a@client.test', 'sent_to' => ['a@client.test'], 'status' => 'generated',
+        ]);
+
+        $this->actingAs($user)->get(route('client-reports.email', $report))
+            ->assertOk()
+            ->assertSee('Plain-text version')
+            ->assertSee('WEBSITE CARE REPORT')
+            ->assertSee('Everyone on this report already has it')
+            ->assertDontSee('No recipient saved');
+    });
 });
 
 describe('publicShow', function () {

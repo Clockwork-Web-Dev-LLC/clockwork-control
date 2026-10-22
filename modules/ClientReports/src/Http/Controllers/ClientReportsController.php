@@ -106,11 +106,14 @@ class ClientReportsController extends Controller
     {
         $report->load('site.client', 'schedule');
         $mail = new ClientReportMail($report);
+        $content = $mail->content();
 
         return view('client-reports::reports.email', [
             'report' => $report,
             'subject' => $mail->envelope()->subject,
             'html' => $mail->render(),
+            // Plain-text clients get this part instead.
+            'text' => view($content->text, $content->with)->render(),
         ]);
     }
 

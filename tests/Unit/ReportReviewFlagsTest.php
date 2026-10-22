@@ -30,3 +30,13 @@ it('flags a vulnerable plugin whose update is still waiting', function () {
         'updates' => ['pending_plugins' => ['WP Rocket', 'Hello Dolly']],
     ]))->toBe(['A plugin with a known vulnerability has an update waiting: WP Rocket.']);
 });
+
+it('flags an uptime probe that stopped and a Companion that stopped reporting', function () {
+    expect(ReportReviewFlags::reasons([
+        'uptime' => ['monitored' => false, 'probe_stopped' => true, 'last_checked_at' => '2026-09-12'],
+        'updates' => ['pending_plugins' => null, 'snapshot_stale' => true, 'snapshot_at' => '2026-08-20'],
+    ]))->toBe([
+        "Uptime monitoring is on, but the site hasn't been checked since 2026-09-12, so the Uptime section was left out.",
+        "Companion hasn't reported since 2026-08-20, so waiting updates and plugin vulnerabilities are out of date.",
+    ]);
+});
