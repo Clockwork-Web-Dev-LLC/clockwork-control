@@ -163,12 +163,12 @@
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">From Date</label>
-                        <input type="date" name="period_start" value="{{ now()->subMonth()->startOfMonth()->toDateString() }}" required
+                        <input type="date" name="period_start" value="{{ now()->subMonthNoOverflow()->startOfMonth()->toDateString() }}" required
                                class="w-full text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">To Date</label>
-                        <input type="date" name="period_end" value="{{ now()->subMonth()->endOfMonth()->toDateString() }}" required
+                        <input type="date" name="period_end" value="{{ now()->subMonthNoOverflow()->endOfMonth()->toDateString() }}" required
                                class="w-full text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
                     </div>
                 </div>

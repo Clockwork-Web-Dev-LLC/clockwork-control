@@ -696,7 +696,7 @@ describe('updates and site facts', function () {
     });
 
     it('counts an update applied after the period as waiting at its end', function () {
-        // Nightly updates run before the 06:00 report, and a held report may be recompiled days later.
+        // A held report recompiled after the month, or a manual update applied on the 1st.
         $site = accuracySite(['companion_snapshot' => [
             'plugins' => ['plugins' => [['name' => 'WP Rocket', 'active' => true, 'update_available' => false]]],
             'themes' => ['items' => []], 'wp_core' => ['update_available' => false],

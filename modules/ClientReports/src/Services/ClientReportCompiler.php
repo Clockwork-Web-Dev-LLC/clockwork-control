@@ -198,11 +198,14 @@ class ClientReportCompiler
 
     /**
      * Updates waiting at the end of the period, from the Companion snapshot.
-     * A snapshot taken well before the period end (Companion stopped
-     * answering) can't say, so everything is unknown. One taken after it may
-     * no longer show an update that was waiting then and has since been
-     * applied, so those are counted separately (nightly updates run before
-     * the 06:00 report, and an operator may recompile days later).
+     * The 06:00 UTC run comes before that night's refresh (01:30 ET), so it
+     * normally reads the previous day's snapshot: "waiting at the end" means
+     * waiting at the last snapshot, typically ~17h before the period end. A
+     * snapshot taken well before that (Companion stopped answering) can't
+     * say, so everything is unknown. One taken after the period end (a held
+     * report recompiled days later) may no longer show an update that was
+     * waiting then and has since been applied, so those are counted
+     * separately.
      *
      * @return array{pending_plugins: ?list<string>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
      */

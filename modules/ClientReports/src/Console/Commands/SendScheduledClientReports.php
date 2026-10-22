@@ -43,6 +43,7 @@ class SendScheduledClientReports extends Command
 
         $processed = 0;
         $crashed = 0;
+        $undelivered = 0;
 
         foreach ($schedules as $schedule) {
             $site = $schedule->site;
@@ -90,6 +91,7 @@ class SendScheduledClientReports extends Command
                     $resumed = $run->resumed ? ' (resumed earlier partial send)' : '';
                     $this->line("  ✓ {$site->domain}: sent report to ".implode(', ', $run->sentTo).$resumed);
                 } else {
+                    $undelivered++;
                     $this->error("  ✗ {$site->domain}: failed for ".implode(', ', $run->failed)
                         .'; will retry only those recipients on the next run');
                 }
@@ -108,12 +110,17 @@ class SendScheduledClientReports extends Command
 
         $this->info("Scheduled client reports dispatch completed ({$processed} processed).");
 
-        // A site whose report crashed stays due and is retried tomorrow; exit
-        // as failed so Scheduled Jobs shows it instead of a quiet green run.
-        // (A recipient that failed is retried the same way, but isn't a crash.)
+        // A site whose report crashed, or whose email didn't reach everyone
+        // (a mail outage is the likely one), stays due and is retried
+        // tomorrow; exit as failed so Scheduled Jobs shows it instead of a
+        // quiet green run.
         if ($crashed > 0) {
             $this->error("{$crashed} site(s) failed; see laravel.log (\"Failed sending scheduled client report\").");
-
+        }
+        if ($undelivered > 0) {
+            $this->error("{$undelivered} site(s) have recipients who didn't get the report; see laravel.log (\"failed to send to\"). They're retried tomorrow.");
+        }
+        if ($crashed > 0 || $undelivered > 0) {
             return self::FAILURE;
         }
 

@@ -600,9 +600,11 @@ describe('partial delivery failures', function () {
         $delivered = mailerFailingFor(new ArrayObject(['bad@client.test']));
         $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
 
+        // Red in Scheduled Jobs, so a mail outage doesn't look like a clean run.
         $this->artisan('clockwork:send-client-reports')
             ->expectsOutputToContain('failed for bad@client.test')
-            ->assertExitCode(0);
+            ->expectsOutputToContain("1 site(s) have recipients who didn't get the report")
+            ->assertFailed();
 
         expect($delivered->getArrayCopy())->toBe(['a@client.test', 'c@client.test']);
 
@@ -621,7 +623,7 @@ describe('partial delivery failures', function () {
         $failing = new ArrayObject(['bad@client.test']);
         $delivered = mailerFailingFor($failing);
         $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test', 'c@client.test']);
-        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+        $this->artisan('clockwork:send-client-reports')->assertFailed();
 
         $failing->exchangeArray([]);
         $delivered->exchangeArray([]);
@@ -645,8 +647,8 @@ describe('partial delivery failures', function () {
         mailerFailingFor(new ArrayObject(['only@client.test']));
         dueAutoSchedule(['only@client.test']);
 
-        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
-        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+        $this->artisan('clockwork:send-client-reports')->assertFailed();
+        $this->artisan('clockwork:send-client-reports')->assertFailed();
 
         expect(ClientReport::count())->toBe(1)
             ->and(ClientReport::sole()->sent_to)->toBeNull();
@@ -843,7 +845,7 @@ describe('a period that was already sent', function () {
         $failing = new ArrayObject(['bad@client.test']);
         $delivered = mailerFailingFor($failing);
         $schedule = dueAutoSchedule(['a@client.test', 'bad@client.test']);
-        $this->artisan('clockwork:send-client-reports')->assertExitCode(0);
+        $this->artisan('clockwork:send-client-reports')->assertFailed();
 
         // Mail works again; someone finishes it from the history table.
         $failing->exchangeArray([]);
