@@ -89,6 +89,21 @@ class ClientReport extends Model
         return self::parseRecipients($this->client_email);
     }
 
+    /**
+     * Who pressing Send emails: everyone on the report, except that a partly
+     * sent report only goes to the addresses that don't have it yet.
+     *
+     * @return list<string>
+     */
+    public function recipientsToSend(): array
+    {
+        if ($this->status === self::STATUS_SENT) {
+            return $this->recipients();
+        }
+
+        return array_values(array_diff($this->recipients(), $this->sent_to ?? []));
+    }
+
     protected static function booted(): void
     {
         static::creating(function (ClientReport $report) {

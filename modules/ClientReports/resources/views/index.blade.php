@@ -99,7 +99,7 @@
                                                 @if ($r->recipients() === [])
                                                     onsubmit="const to = prompt('Send this report to which email address(es)?'); if (! to) return false; this.email.value = to; return true;"
                                                 @else
-                                                    onsubmit="return confirm(@js('Email report to '.implode(', ', $r->recipients()).'?'));"
+                                                    onsubmit="return confirm(@js('Email report to '.implode(', ', $r->recipientsToSend() ?: $r->recipients()).'?'));"
                                                 @endif
                                             >
                                                 @csrf

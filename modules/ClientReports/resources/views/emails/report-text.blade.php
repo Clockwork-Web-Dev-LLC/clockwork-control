@@ -68,7 +68,11 @@ Malicious visitors blocked: {{ number_format((int) $security['blocked_threats_co
 
 BACKUPS
 @if (isset($data['backups']['status']))
+@if ($data['backups']['covers_period'] ?? true)
 Backed up on {{ (int) $data['backups']['days_with_backups'] }} {{ \Illuminate\Support\Str::plural('day', (int) $data['backups']['days_with_backups']) }} this month{{ ! empty($data['backups']['destination']) ? ' by '.$data['backups']['destination'] : '' }}. Most recent:
+@else
+Backed up{{ ! empty($data['backups']['destination']) ? ' by '.$data['backups']['destination'] : '' }}. Most recent:
+@endif
 @foreach ($data['backups']['recent'] as $day)
 - {{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}
 @endforeach

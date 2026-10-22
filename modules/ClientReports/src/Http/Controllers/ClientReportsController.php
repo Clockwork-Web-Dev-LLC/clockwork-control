@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
+use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
@@ -98,6 +99,22 @@ class ClientReportsController extends Controller
     }
 
     /**
+     * The email exactly as the client gets it. The preview page lays some
+     * sections out differently, so this is what to check before sending.
+     */
+    public function email(ClientReport $report): View
+    {
+        $report->load('site.client', 'schedule');
+        $mail = new ClientReportMail($report);
+
+        return view('client-reports::reports.email', [
+            'report' => $report,
+            'subject' => $mail->envelope()->subject,
+            'html' => $mail->render(),
+        ]);
+    }
+
+    /**
      * Public read-only client-facing report view.
      */
     public function publicShow(string $token): View
@@ -121,7 +138,11 @@ class ClientReportsController extends Controller
 
         $recipients = $request->filled('email')
             ? ClientReport::parseRecipients((string) $request->input('email'))
-            : $report->recipients();
+            : $report->recipientsToSend();
+
+        if ($recipients === [] && $report->recipients() !== []) {
+            return back()->with('status', 'Everyone on this report already has it.');
+        }
 
         if ($recipients === []) {
             return back()->with('status_error', 'This report has no recipient. Enter an email address to send it to.');
@@ -139,6 +160,12 @@ class ClientReportsController extends Controller
 
         $failed = $sender->send($report, $recipients);
         $delivered = array_values(array_diff($recipients, $failed));
+
+        // A held or draft report sent by hand counts as the schedule's send,
+        // so its next clean report goes out by itself.
+        if ($failed === [] && $report->schedule !== null) {
+            $report->schedule->update(['last_sent_at' => now()]);
+        }
 
         if ($failed !== []) {
             $deliveredNote = $delivered === [] ? '' : ' Delivered to '.implode(', ', $delivered).'.';

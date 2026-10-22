@@ -527,6 +527,17 @@ class ClientReportCompiler
             });
         $recent = $days->filter(fn (array $d) => $d['date'] >= $windowStart->toDateString())->values();
 
+        // Records reach back only as far as the source still kept backups
+        // when we first read it (Pressable keeps about 8 days), so in a month
+        // we started recording part-way through, the early days have no
+        // record either way. "Backed up on N days this month" would then
+        // understate it, so the count is only given for a fully covered month.
+        $recordsFrom = $source === null ? null : SiteBackup::query()
+            ->where('site_id', $site->id)
+            ->where('source', $source)
+            ->min('backup_at');
+        $coversPeriod = $recordsFrom !== null && Carbon::parse($recordsFrom)->lessThan($start->copy()->addDay());
+
         $check = $source === null ? null : SiteBackupCheck::query()
             ->where('site_id', $site->id)
             ->where('source', $source)
@@ -556,6 +567,8 @@ class ClientReportCompiler
                 default => null,
             },
             'days_with_backups' => $days->count(),
+            'covers_period' => $coversPeriod,
+            'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,
             'last_backup_at' => $inPeriod->first()?->backup_at->toDateString(),
             'list_from' => $windowStart->toDateString(),
             'recent' => $recent->all(),

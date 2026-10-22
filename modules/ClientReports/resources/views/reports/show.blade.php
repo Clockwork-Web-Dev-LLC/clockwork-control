@@ -52,6 +52,11 @@
             <span class="text-xs text-slate-500">Period: {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}</span>
         </div>
         <div class="flex items-center gap-2">
+            @if ($isOperatorPreview ?? false)
+                <a href="{{ route('client-reports.email', $report) }}" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="The email exactly as the client gets it">
+                    <i class="fa-solid fa-envelope"></i> Email version
+                </a>
+            @endif
             <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
                 <i class="fa-solid fa-print"></i> Print / Download PDF
             </button>
@@ -202,6 +207,9 @@
                             </tbody>
                         </table>
                     </div>
+                @elseif (array_key_exists('pending_plugins', $updates) && ($updates['pending_plugins'] === null || $updates['pending_plugins'] !== []))
+                    {{-- Same rule as the email: never "up to date" while updates wait or weren't checked. --}}
+                    <div class="text-xs text-slate-500 italic py-2">No updates were applied this period.</div>
                 @else
                     <div class="text-xs text-slate-500 italic py-2">All software components were up-to-date throughout this period.</div>
                 @endif
@@ -335,6 +343,9 @@
                     <p class="text-xs text-slate-500">
                         Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
                     </p>
+                    @if (! ($backups['covers_period'] ?? true) && ($isOperatorPreview ?? false))
+                        <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>
+                    @endif
                 @endif
                 @if (! empty($backups['recent']))
                     <table class="w-full text-xs text-left">

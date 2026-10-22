@@ -11,6 +11,7 @@ use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -257,6 +258,7 @@ describe('sendNow immediate execution', function () {
             'delivery_mode' => ClientReportSchedule::MODE_AUTO,
             'recipients' => ['recipient@sendnow.test'],
             'is_enabled' => true,
+            'last_sent_at' => now()->subMonth(), // has sent before: a first report is always held
             'next_run_at' => now()->subDay(),
         ]);
 
@@ -274,7 +276,7 @@ describe('sendNow immediate execution', function () {
             ->and($report->sent_at)->not->toBeNull();
 
         $schedule->refresh();
-        expect($schedule->last_sent_at)->not->toBeNull()
+        expect($schedule->last_sent_at->isToday())->toBeTrue()
             ->and($schedule->next_run_at->isFuture())->toBeTrue();
     });
 
@@ -356,6 +358,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
             'delivery_mode' => ClientReportSchedule::MODE_AUTO,
             'recipients' => ['partner@due-site.test'],
             'is_enabled' => true,
+            'last_sent_at' => now()->subMonth(), // has sent before: a first report is always held
             'next_run_at' => now()->subMinutes(10),
         ]);
 
@@ -373,7 +376,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
             ->and($report->sent_at)->not->toBeNull();
 
         $schedule->refresh();
-        expect($schedule->last_sent_at)->not->toBeNull()
+        expect($schedule->last_sent_at->isToday())->toBeTrue()
             ->and($schedule->next_run_at->isFuture())->toBeTrue()
             // Weekly advancement should be ~ 7 days in future
             ->and($schedule->next_run_at->greaterThan(now()->addDays(6)))->toBeTrue();
@@ -419,6 +422,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
             'delivery_mode' => ClientReportSchedule::MODE_AUTO,
             'recipients' => ['forced@site.test'],
             'is_enabled' => true,
+            'last_sent_at' => now()->subMonth(), // has sent before: a first report is always held
             'next_run_at' => now()->addDays(20), // not due!
         ]);
 
@@ -587,6 +591,7 @@ describe('partial delivery failures', function () {
             'delivery_mode' => ClientReportSchedule::MODE_AUTO,
             'recipients' => $recipients,
             'is_enabled' => true,
+            'last_sent_at' => now()->subMonth(), // has sent before: a first report is always held
             'next_run_at' => now()->subHour(),
         ]);
     }
@@ -606,8 +611,9 @@ describe('partial delivery failures', function () {
             ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test'])
             ->and($report->schedule_id)->toBe($schedule->id);
 
+        // Not stamped by this run: it still shows last month's send.
         $schedule->refresh();
-        expect($schedule->last_sent_at)->toBeNull()
+        expect($schedule->last_sent_at->lessThan(now()->subDay()))->toBeTrue()
             ->and($schedule->isDue())->toBeTrue();
     });
 
@@ -631,7 +637,7 @@ describe('partial delivery failures', function () {
             ->and($report->sent_to)->toBe(['a@client.test', 'c@client.test', 'bad@client.test']);
 
         $schedule->refresh();
-        expect($schedule->last_sent_at)->not->toBeNull()
+        expect($schedule->last_sent_at->isToday())->toBeTrue()
             ->and($schedule->next_run_at->isFuture())->toBeTrue();
     });
 
@@ -701,7 +707,7 @@ describe('hold for review', function () {
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
-            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+            'is_enabled' => true, 'next_run_at' => now()->subHour(), 'last_sent_at' => now()->subMonth(),
         ]);
 
         $this->artisan('clockwork:send-client-reports')
@@ -775,12 +781,93 @@ describe('hold for review', function () {
         ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@clean.test'],
-            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+            'is_enabled' => true, 'next_run_at' => now()->subHour(), 'last_sent_at' => now()->subMonth(),
         ]);
 
         $this->artisan('clockwork:send-client-reports')->assertSuccessful();
 
         Mail::assertSent(ClientReportMail::class, 1);
         expect(ClientReport::sole()->status)->toBe('sent');
+    });
+
+    it('holds a schedule\'s first report, and sends the next clean one by itself once that was sent by hand', function () {
+        Mail::fake();
+        $user = User::factory()->create();
+        $site = reportableSite(['domain' => 'first.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@first.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('first.test: held as a draft for review: This is the first report from this schedule.')
+            ->assertSuccessful();
+
+        Mail::assertNothingSent();
+        $first = ClientReport::sole();
+        expect($first->sections_data['meta']['review_reasons'])->toBe([ScheduledReportRunner::FIRST_REPORT_REASON])
+            ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
+
+        $this->actingAs($user)->post(route('client-reports.send', $first))->assertSessionHas('status');
+        Mail::assertSent(ClientReportMail::class, 1);
+        expect($schedule->fresh()->last_sent_at)->not->toBeNull();
+
+        // Next month: clean, so it goes out by itself.
+        $this->travel(1)->months();
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('first.test: sent report to client@first.test')
+            ->assertSuccessful();
+        Mail::assertSent(ClientReportMail::class, 2);
+    });
+
+    it('does not hold a draft-mode report just for being the first', function () {
+        Mail::fake();
+        $site = reportableSite(['domain' => 'first-draft.test']);
+        ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@first-draft.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        expect(ClientReport::sole()->sections_data['meta'])->not->toHaveKey('review_reasons');
+    });
+});
+
+describe('sending a partly sent report by hand', function () {
+    it('only emails the recipients who do not have it yet', function () {
+        Mail::fake();
+        $user = User::factory()->create();
+        $report = ClientReport::create([
+            'site_id' => reportableSite()->id, 'title' => 'Partly sent', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(), 'sections_data' => ['meta' => []],
+            'client_email' => 'a@client.test, b@client.test', 'sent_to' => ['a@client.test'],
+            'status' => ClientReport::STATUS_GENERATED,
+        ]);
+
+        $this->actingAs($user)->post(route('client-reports.send', $report))
+            ->assertSessionHas('status', 'Report emailed to b@client.test.');
+
+        Mail::assertSent(ClientReportMail::class, 1);
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('b@client.test'));
+        expect($report->fresh()->status)->toBe(ClientReport::STATUS_SENT)
+            ->and($report->fresh()->sent_to)->toBe(['a@client.test', 'b@client.test']);
+    });
+
+    it('sends a fully sent report to everyone again when asked', function () {
+        Mail::fake();
+        $user = User::factory()->create();
+        $report = ClientReport::create([
+            'site_id' => reportableSite()->id, 'title' => 'Sent', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(), 'sections_data' => ['meta' => []],
+            'client_email' => 'a@client.test, b@client.test', 'sent_to' => ['a@client.test', 'b@client.test'],
+            'status' => ClientReport::STATUS_SENT,
+        ]);
+
+        $this->actingAs($user)->post(route('client-reports.send', $report))->assertSessionHas('status');
+
+        Mail::assertSent(ClientReportMail::class, 2);
     });
 });

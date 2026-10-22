@@ -234,7 +234,9 @@
     @if (isset($data['security']))
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Security</div>
-            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.</p>
+            {{-- Only claim blocking where something on the site reports its blocks to us. --}}
+            @php $showBlocked = ($security['blocked_threats_count'] ?? null) !== null; @endphp
+            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">{{ $showBlocked ? 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.' : 'We scan for malware and tampered files and watch for known plugin vulnerabilities.' }}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Security scans run</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['total_scans'] ?? 0)) }}</td></tr>
                 @if ($showBlacklist)
@@ -246,7 +248,6 @@
                 @if ($isWordPress)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
                 @endif
-                @php $showBlocked = ($security['blocked_threats_count'] ?? null) !== null; @endphp
                 <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
                 @if ($showBlocked)
                     <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) $security['blocked_threats_count']) }}</td></tr>
@@ -317,10 +318,15 @@
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Backups</div>
             @if (isset($backups['status']))
                 {{-- Schema 3+: real backups recorded from the site's own source. Only
-                     shown when verified, which means there's at least one recent day. --}}
+                     shown when verified, which means there's at least one recent day.
+                     The month's count is left out when our records start mid-month. --}}
                 @php $backupDays = (int) ($backups['days_with_backups'] ?? 0); @endphp
                 <p style="margin:10px 0 12px 0; font-size:14px; line-height:1.6; color:#334155;">
-                    Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                    @if ($backups['covers_period'] ?? true)
+                        Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                    @else
+                        Your site is backed up{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                    @endif
                 </p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
                     @foreach ($backups['recent'] as $day)

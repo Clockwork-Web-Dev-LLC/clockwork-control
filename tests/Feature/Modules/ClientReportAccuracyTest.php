@@ -235,6 +235,24 @@ describe('backups (#6)', function () {
             ->and($report['text'])->not->toContain('BACKUPS');
     });
 
+    it('leaves out the month\'s count when our records start part-way through the month', function () {
+        // Pressable keeps about 8 days, so the first recorder run can't see
+        // the start of the month: "backed up on 9 days" would understate it.
+        $site = pressableBackupSite();
+        foreach (range(22, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+        }
+        recordCheck($site, true);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'covers_period' => false, 'records_from' => '2026-09-22', 'days_with_backups' => 9])
+            ->and($report['html'])->toContain('Your site is backed up by your host, Pressable, so it can be restored')
+            ->not->toContain('backed up on')->toContain('Wed, Sep 30')
+            ->and($report['text'])->toContain('Backed up by your host, Pressable. Most recent:')
+            ->not->toContain('Backed up on');
+    });
+
     it('treats a failed or stale check as "could not check", not as no backups', function () {
         $failing = pressableBackupSite();
         recordCheck($failing, false);
@@ -320,6 +338,7 @@ describe('threats blocked', function () {
 
         expect($report['data']['security']['blocked_threats_count'])->toBeNull()
             ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('Threats blocked')
+            ->not->toContain('block attackers')
             ->and($report['text'])->not->toContain('Malicious visitors blocked');
     });
 
@@ -331,6 +350,7 @@ describe('threats blocked', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['security']['blocked_threats_count'])->toBe(0)
+            ->and($report['html'])->toContain('block attackers at the server')
             ->and($report['text'])->toContain('Malicious visitors blocked: 0');
     });
 });
@@ -598,12 +618,18 @@ describe('updates and site facts', function () {
         $current = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]]]]);
 
         $w = compileSeptember($waiting);
+        $preview = fn () => view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+        $wPreview = $preview();
         $c = compileSeptember($current);
+        $cPreview = $preview();
 
         expect($w['data']['updates']['pending_plugins'])->toBe(['WP Rocket'])
             ->and($w['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date')
             ->and($w['text'])->toContain('No updates were applied this month.')
             ->and($c['html'])->toContain('Everything was already up to date');
+        // The preview (what prints as the PDF) follows the same rule.
+        expect($wPreview)->toContain('No updates were applied this period.')->not->toContain('up-to-date throughout')
+            ->and($cPreview)->toContain('up-to-date throughout this period');
     });
 
     it('reads the WordPress version from the Companion snapshot', function () {

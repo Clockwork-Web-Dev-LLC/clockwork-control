@@ -40,6 +40,7 @@ it('requires authentication for the operator routes', function () {
     $this->get(route('client-reports.show', $report))->assertRedirect(route('login'));
     $this->post(route('client-reports.generate'))->assertRedirect(route('login'));
     $this->post(route('client-reports.send', $report))->assertRedirect(route('login'));
+    $this->get(route('client-reports.email', $report))->assertRedirect(route('login'));
 });
 
 describe('index', function () {
@@ -154,6 +155,32 @@ describe('generate + show', function () {
             ->get(route('client-reports.show', $report))
             ->assertOk()
             ->assertDontSee('Traffic Analytics');
+    });
+});
+
+describe('email version', function () {
+    it('shows the email exactly as the client gets it, with who it goes to and why it was held', function () {
+        $user = User::factory()->create();
+        $site = Site::factory()->create(['domain' => 'email-version.test']);
+        $data = app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth());
+        $data['meta']['review_reasons'] = ['Backups could not be checked.'];
+        $report = ClientReport::create([
+            'site_id' => $site->id, 'title' => 'Email version', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(), 'sections_data' => $data,
+            'client_email' => 'a@client.test, b@client.test', 'sent_to' => ['a@client.test'], 'status' => 'generated',
+        ]);
+        $subject = (new ClientReportMail($report))->envelope()->subject;
+
+        $this->actingAs($user)->get(route('client-reports.email', $report))
+            ->assertOk()
+            ->assertSee($subject)
+            ->assertSee('b@client.test')
+            ->assertSee('Backups could not be checked.')
+            ->assertSee('Website Care Report') // inside the rendered email
+            ->assertSee('srcdoc=', false);
+
+        $this->actingAs($user)->get(route('client-reports.show', $report))
+            ->assertSee(route('client-reports.email', $report), false);
     });
 });
 

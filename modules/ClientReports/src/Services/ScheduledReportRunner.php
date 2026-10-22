@@ -17,6 +17,8 @@ use Modules\ClientReports\Models\ClientReportSchedule;
  */
 class ScheduledReportRunner
 {
+    public const FIRST_REPORT_REASON = 'This is the first report from this schedule. Once it has been sent, clean reports send themselves.';
+
     public function __construct(
         protected ClientReportCompiler $compiler,
         protected ClientReportSender $sender,
@@ -52,9 +54,11 @@ class ScheduledReportRunner
 
         // Anything that hasn't reached anyone yet is checked first: a fresh
         // report, a draft that predates switching the schedule to auto, or a
-        // run that died before its check was saved.
+        // run that died before its check was saved. A schedule's first report
+        // always waits for a person, so a new client's first email is seen
+        // before it goes out; after that, clean reports send themselves.
         if (empty($report->sent_to)) {
-            $reasons = $this->flagForReview($report);
+            $reasons = $this->flagForReview($report, firstReport: $schedule->last_sent_at === null);
             if ($reasons !== []) {
                 $schedule->advanceNextRun();
 
@@ -114,9 +118,12 @@ class ScheduledReportRunner
      *
      * @return list<string>
      */
-    protected function flagForReview(ClientReport $report): array
+    protected function flagForReview(ClientReport $report, bool $firstReport = false): array
     {
         $reasons = ReportReviewFlags::reasons($report->sections_data ?? []);
+        if ($firstReport) {
+            array_unshift($reasons, self::FIRST_REPORT_REASON);
+        }
         if ($reasons !== []) {
             $data = $report->sections_data;
             $data['meta']['review_reasons'] = $reasons;
