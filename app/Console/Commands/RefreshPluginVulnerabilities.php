@@ -47,6 +47,10 @@ class RefreshPluginVulnerabilities extends Command
             $result['rows_inserted'],
         ));
 
+        if ($result['failed_slugs'] !== []) {
+            $this->warn('Kept the previous entries for '.count($result['failed_slugs']).' plugin(s) that could not be fetched: '.implode(', ', $result['failed_slugs']));
+        }
+
         return self::SUCCESS;
     }
 }

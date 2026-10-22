@@ -195,6 +195,52 @@ class BackupArchiveEnumerator
     }
 
     /**
+     * Raw archive objects for a site (no manifest read, no presigning), for
+     * recording backup history. Unlike forSite(), a listing failure throws so
+     * the caller can record "couldn't check" rather than "no archives".
+     *
+     * @return list<array{key: string, type: string, bytes: int, archived_at: ?Carbon, has_checksum: bool}>
+     */
+    public function listArchiveObjects(Site $site): array
+    {
+        $disk = $this->disk();
+        $archivePrefix = rtrim((string) config('clockwork.backup_relay.archive_prefix', 'archives'), '/');
+
+        $objects = [];
+        $checksums = [];
+        foreach (["{$archivePrefix}/{$site->domain}", (string) $site->domain] as $prefix) {
+            foreach ($disk->listContents($prefix, true) as $item) {
+                if (! method_exists($item, 'isFile') || ! $item->isFile()) {
+                    continue;
+                }
+                $key = $item->path();
+                $filename = basename($key);
+                if (str_ends_with($filename, '.sha256.json')) {
+                    $checksums[substr($key, 0, -strlen('.sha256.json'))] = true;
+
+                    continue;
+                }
+                if (str_starts_with($filename, '.') || str_ends_with($filename, '.json') || isset($objects[$key])) {
+                    continue;
+                }
+
+                $mtime = method_exists($item, 'lastModified') ? $item->lastModified() : null;
+                $objects[$key] = [
+                    'key' => $key,
+                    'type' => $this->detectType($key)['type'],
+                    'bytes' => method_exists($item, 'fileSize') ? (int) ($item->fileSize() ?? 0) : 0,
+                    'archived_at' => $this->detectArchivedAt($key, $mtime ? Carbon::createFromTimestamp($mtime) : null),
+                ];
+            }
+        }
+
+        return array_values(array_map(
+            fn (array $o) => $o + ['has_checksum' => isset($checksums[$o['key']])],
+            $objects,
+        ));
+    }
+
+    /**
      * True when $key is under this site's archive prefixes
      * (`{archive_prefix}/{domain}/` or `{domain}/`). Rejects `..` and
      * sibling domains (`archives/example.com.evil/...`).

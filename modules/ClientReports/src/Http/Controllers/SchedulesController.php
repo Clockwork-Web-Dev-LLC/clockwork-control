@@ -7,13 +7,10 @@ use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
-use Modules\ClientReports\Mail\ClientReportMail;
-use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
-use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 use Throwable;
 
 class SchedulesController extends Controller
@@ -204,11 +201,15 @@ class SchedulesController extends Controller
             ->with('status', "Schedule for {$schedule->site->domain} has been {$state}.");
     }
 
-    public function sendNow(ClientReportSchedule $schedule, ClientReportCompiler $compiler): RedirectResponse
+    public function sendNow(ClientReportSchedule $schedule, ScheduledReportRunner $runner): RedirectResponse
     {
         $site = $schedule->site;
         if (! $site || $site->is_inactive) {
             return back()->with('status_error', 'Cannot generate report: site is inactive.');
+        }
+
+        if (! ScheduledReportRunner::siteIsEligible($site)) {
+            return back()->with('status_error', 'This site has no care plan. Client reports are only sent for care-plan sites.');
         }
 
         $recipients = array_values(array_filter((array) $schedule->recipients));
@@ -219,53 +220,30 @@ class SchedulesController extends Controller
         }
 
         try {
-            $now = now();
-            $start = $now->copy()->subMonth()->startOfMonth();
-            $end = $now->copy()->subMonth()->endOfMonth();
+            $run = $runner->run($schedule);
 
-            $sections = $schedule->template ? $schedule->template->sections : null;
-
-            $sectionsData = $compiler->compile(
-                site: $site,
-                periodStart: $start,
-                periodEnd: $end,
-                sections: $sections
-            );
-
-            $title = "Maintenance Report: {$site->domain} ({$start->format('M Y')})";
-
-            $report = ClientReport::create([
-                'site_id' => $site->id,
-                'template_id' => $schedule->template_id,
-                'title' => $title,
-                'period_start' => $start,
-                'period_end' => $end,
-                'sections_data' => $sectionsData,
-                'client_name' => $site->domain,
-                'client_email' => ! empty($recipients) ? implode(', ', $recipients) : null,
-                'status' => 'generated',
-            ]);
-
-            if ($isAuto) {
-                foreach ($recipients as $email) {
-                    Mail::to($email)->send(new ClientReportMail($report));
-                }
-
-                $report->update([
-                    'status' => 'sent',
-                    'sent_at' => now(),
-                ]);
-
-                $schedule->update(['last_sent_at' => now()]);
-                $schedule->advanceNextRun();
-
-                return back()->with('status', 'Report successfully generated and emailed to '.implode(', ', $recipients).'.');
+            if ($run->held()) {
+                return redirect()->route('client-reports.show', $run->report)
+                    ->with('status_error', 'Held for review instead of sending: '.implode(' ', $run->heldReasons).' Check it, then send it from the history table.');
             }
 
-            $schedule->advanceNextRun();
+            if ($run->isDraft) {
+                return redirect()->route('client-reports.show', $run->report)
+                    ->with('status', 'Draft report compiled successfully. Preview and review below before sending.');
+            }
 
-            return redirect()->route('client-reports.show', $report)
-                ->with('status', 'Draft report compiled successfully. Preview and review below before sending.');
+            if (! $run->complete()) {
+                $delivered = $run->sentTo === [] ? '' : ' Delivered to '.implode(', ', $run->sentTo).'.';
+
+                return back()->with('status_error', 'Report failed to send to '.implode(', ', $run->failed).'.'
+                    .$delivered.' Running it again will only retry the failed addresses.');
+            }
+
+            if ($run->sentTo === []) {
+                return back()->with('status', 'Every recipient already has this month\'s report, so nothing was sent.');
+            }
+
+            return back()->with('status', 'Report successfully generated and emailed to '.implode(', ', $run->sentTo).'.');
         } catch (Throwable $e) {
             Log::error("Manual run failed for scheduled report on {$site->domain}: {$e->getMessage()}", [
                 'exception' => $e,

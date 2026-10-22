@@ -136,6 +136,53 @@ describe('clockwork:refresh-plugin-vulnerabilities — real sync against a faked
         expect(DB::table('plugin_vulnerabilities')->count())->toBe(0);
     });
 
+    it('keeps the previous entries of a plugin whose lookup failed, instead of silently dropping them', function () {
+        Site::factory()->create([
+            'companion_snapshot' => ['plugins' => ['plugins' => [
+                ['slug' => 'contact-form-7/wp-contact-form-7.php'],
+                ['slug' => 'flaky-plugin/flaky.php'],
+            ]]],
+        ]);
+        foreach (['contact-form-7' => 'old-cf7-vuln', 'flaky-plugin' => 'flaky-vuln', 'removed-plugin' => 'removed-vuln'] as $slug => $id) {
+            DB::table('plugin_vulnerabilities')->insert([
+                'wordfence_id' => $id, 'slug' => $slug, 'software_type' => 'plugin', 'title' => 'Earlier entry',
+                'from_inclusive' => true, 'to_inclusive' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        Http::fake([
+            'wpvulnerability.net/plugin/contact-form-7*' => Http::response(pluginVulnResponse([pluginVulnEntry(['uuid' => 'cf7-vuln'])])),
+            'wpvulnerability.net/plugin/flaky-plugin*' => Http::response('', 500),
+        ]);
+
+        $this->artisan('clockwork:refresh-plugin-vulnerabilities')
+            ->expectsOutputToContain('fetch_failed=1')
+            ->expectsOutputToContain('Kept the previous entries for 1 plugin(s) that could not be fetched: flaky-plugin')
+            ->assertSuccessful();
+
+        // Fetched slugs are replaced, the failed one is kept, plugins no longer installed go.
+        expect(DB::table('plugin_vulnerabilities')->orderBy('wordfence_id')->pluck('wordfence_id')->all())
+            ->toBe(['cf7-vuln', 'flaky-vuln']);
+    });
+
+    it('changes nothing and fails when every lookup fails', function () {
+        Site::factory()->create([
+            'companion_snapshot' => ['plugins' => ['plugins' => [['slug' => 'contact-form-7/wp-contact-form-7.php']]]],
+        ]);
+        DB::table('plugin_vulnerabilities')->insert([
+            'wordfence_id' => 'cf7-vuln', 'slug' => 'contact-form-7', 'software_type' => 'plugin', 'title' => 'Earlier entry',
+            'from_inclusive' => true, 'to_inclusive' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        Http::fake(['wpvulnerability.net/*' => Http::response('', 503)]);
+
+        $this->artisan('clockwork:refresh-plugin-vulnerabilities')
+            ->expectsOutputToContain('Refresh failed: every plugin lookup failed')
+            ->assertFailed();
+
+        expect(DB::table('plugin_vulnerabilities')->pluck('wordfence_id')->all())->toBe(['cf7-vuln']);
+    });
+
     it('de-duplicates unique plugin slugs across multiple sites into a single fetch each', function () {
         $snapshot = [
             'plugins' => [

@@ -110,6 +110,10 @@ class PerformanceScanRecorder
             ->where('site_id', $r->site->id)
             ->where('strategy', $r->strategy)
             ->where('engine', $r->engine)
+            // Compare with the last report we stored, not the last row: a
+            // failed read in between would otherwise make the same old report
+            // look new and store it again.
+            ->whereNotNull('source_generated_at')
             ->orderByDesc('id')
             ->value('source_generated_at');
 

@@ -2,10 +2,10 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-10-04
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
-tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
+tracks: [routes/console.php, modules/*/src/*ServiceProvider.php]
 ---
 
 Every artisan command the scheduler runs, in chronological order through a UTC day. `php artisan schedule:list` is the actual source of truth — most entries are declared directly in `routes/console.php`, but as of Phase 7 of the modularization roadmap, a module can contribute its own via a `scheduledTasks()` override on its service provider (`clockwork:import-spinupwp` and the three `clockwork:pressable-*-report` commands below now live in `SpinupWpServiceProvider`/`PressableServiceProvider` this way; `routes/console.php` calls `ModuleRegistry::scheduleAll()` once, at the end, to pull all of them in). Their listed times and behavior are unchanged by the move. The scheduler not running is a load-bearing failure mode — if any of these stop firing, [Runbooks → Scheduler stuck](/docs/runbooks/scheduler-stuck) is your starting point. That runbook covers cron itself dying; for whether a *specific* job is actually succeeding tick-to-tick (not just that cron is alive), see [Scheduled Jobs Dashboard](/docs/features/scheduled-jobs-dashboard) at `/settings/scheduled-jobs`.
@@ -87,7 +87,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | Time | Command | What it does |
 |---|---|---|
 | 02:00 | `clockwork:scan-sitecheck` | Sucuri SiteCheck remote scan. Care-plan only. (Daily now, not weekly Mon — all care-plan scans match the once-a-day expectation.) |
-| 02:15 | `clockwork:check-blacklists` | URLhaus + Spamhaus DBL + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Hosting-tier (every site). |
+| 02:15 | `clockwork:check-blacklists` | URLhaus + Spamhaus DBL + optional Google Web Risk (legacy Safe Browsing v4 if the Web Risk key is empty). Hosting-tier: every host-monitored site (`Site::hostMonitored()`), including serverless Pressable / WP Engine / Kinsta / custom sites, which were skipped before 2026-10-15. |
 | 02:30 | `clockwork:verify-wp-core-checksums` | `wp core verify-checksums` per site — SSH for SpinupWP, Pressable's async command API for Pressable. Care-plan only. |
 | 02:45 | `clockwork:run-companion-malware-scans` | In-WP malware probe (Companion plugin endpoint, SSH wp-cli fallback). Bypasses Cloudflare. Care-plan only. |
 
@@ -98,30 +98,36 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 03:00 | `clockwork:sync-allowed-bots` | Refresh the Arcjet bot allowlist into `allowed_bots`. |
 | 03:15 | `clockwork:refresh-plugin-vulnerabilities` | Refresh the wpvulnerability.net CVE mirror for every installed plugin slug. Feeds the Issues page's vulnerable-plugin flags. |
 | 03:20 | `clockwork:refresh-cisa-kev` | Sync the CISA Known Exploited Vulnerabilities catalog (JSON feed) into `cisa_kev_entries` for actively exploited CVE badging. |
-| 03:30 | `clockwork:import-spinupwp` | Idempotent server + site import. Refreshes cert dates. |
+| hourly :30 | `clockwork:import-spinupwp` | Idempotent server + site import. Refreshes cert dates. Hourly (`SpinupWpServiceProvider`) so new, deleted and moved sites show up within the hour; the 03:30 run is the one the daily jobs below rely on. |
 | hourly :32 | `clockwork:import-turnkeywp` | Idempotent TurnkeyWP server + site import (`TurnkeyWpServiceProvider`). Runs after the SpinupWP import so a site released by SpinupWP is adopted before `find-orphan-sites`. |
-| 03:35 | `clockwork:find-orphan-sites` | Reclassify sites whose SpinupWP linkage was lost. |
+| hourly :35 | `clockwork:find-orphan-sites` | Reclassify sites whose SpinupWP linkage was lost. Hourly (`SpinupWpServiceProvider`), 5 minutes after each SpinupWP import. |
+| 03:40 | `clockwork:import-gridpane` | Idempotent GridPane server + site import (`GridPaneServiceProvider`). |
 | 03:45 | `clockwork:reconcile-provider` | Link servers import-spinupwp couldn't IP-cross-reference (manual adds, unknown-to-SpinupWP boxes). |
 | 03:50 | `clockwork:refresh-companion-snapshot --pending-updates-only` | Closes the SpinupWP/Companion snapshot gap: `import-spinupwp` (03:30) marks `wp_plugin_updates=true` for sites that have new updates, but the full snapshot refresh (01:30 ET) already ran using Companion's pre-update cached state. This targeted re-pull refreshes only sites flagged pending so the Updates page sees fresh data without requiring a full fleet refresh. |
 | 04:00 | `clockwork:check-ssl-certs` | Per-site SSL state + Mattermost transitions. |
 | 04:15 | `clockwork:poll-system-updates` | SSH `apt-check` + `reboot-required.pkgs` + `apt list --upgradable` → `server_update_snapshots`. Runs against (a) SpinupWP-managed servers SpinupWP flagged with `upgrade_required=true`, and (b) every non-SpinupWP-managed server unconditionally, since nothing else sets that flag for GridPane/Hetzner/custom-VPS boxes. See the weekly `--all` sweep below, now a safety net rather than the primary mechanism for non-SpinupWP servers. |
 | 04:30 | `clockwork:prune-server-metrics` | Drop `server_metrics` rows older than 90 days. |
+| 04:30 | `clockwork:backup-relay-run --direct-only` | External-agent mode only (`BackupRelayServiceProvider`): backs up the sites the droplet can't reach, which are unhosted/custom sites where Companion uploads straight to S3. Like any sweep, it skips a site that's mid-restore or already running Backup Now. It writes no `backup_relay_runs` row, so failures are posted to chat. See [Features → Backup relay](/docs/features/backup-relay). |
 | 04:31 | `clockwork:prune-scheduled-job-runs` | Drop `scheduled_job_runs` rows older than the retention window (default 30 days, `CLOCKWORK_SCHEDULED_JOBS_RETENTION_DAYS`). Keeps [Settings → Scheduled Jobs](/docs/features/scheduled-jobs-dashboard) bounded. |
 | 04:32 | `clockwork:prune-threat-logs` | Drop `threat_logs` older than the `/settings/ingest` window (default 30 days). `DROP PARTITION` on monthly MySQL partitions, else chunked DELETE. `withoutOverlapping(240)`, `runInBackground()`. |
-| 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Lighthouse run for tonight's 1/7th of the care-plan fleet — GTmetrix primary, PSI fallback. Each site gets one scan per week. Scheduled at 04:45 to land just after GTmetrix's daily credit refill (credits don't bank). `--strategy` is display-only on GTmetrix's tier; kept for row continuity. |
+| 04:33 | `clockwork:prune-expired-bans` | Mark active bans older than the ban retention window as unbanned, keeping the active firewall list bounded. Default 12 months; 0 keeps bans indefinitely. |
+| 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Lighthouse run for tonight's 1/7th of the care-plan fleet, leaving out Pressable sites (read nightly at 05:05/05:15 instead). GTmetrix primary, PSI fallback. Each site gets one scan per week. Scheduled at 04:45 to land just after GTmetrix's daily credit refill (credits don't bank). `--strategy` is display-only on GTmetrix's tier; kept for row continuity. |
 | 04:45 | `clockwork:capture-site-screenshots` | Refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `withoutOverlapping(30)`, `runInBackground()`. |
 | 04:45 | `clockwork:detect-wp-plugins` | SSH wp-cli probe for active LLAR/Wordfence per WP site. |
 | 04:50 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. |
 | 04:55 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-picked form-test subscriptions (Companion wp-admin Forms tab) into `contact_form_tests`. Slots between detect (04:50) and test (06:00). |
-| 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Off-host archival to S3 Glacier IR. Per-site cadence (`sites.backup_relay_frequency`) is honoured in in-repo mode; custom/unhosted sites default to daily. `--force` / Backup Now skips the interval. External-agent mode still writes `targets.json`. See [Features → Backup relay](/docs/features/backup-relay). |
+| 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Off-host archival to S3 Glacier IR. Per-site cadence (`sites.backup_relay_frequency`) is honoured in in-repo mode; custom/unhosted sites default to daily. `--force` / Backup Now skips the interval. External-agent mode writes `targets.json` instead, leaving out direct-to-S3 (Companion) sites, which the 04:30 `--direct-only` pass covers. See [Features → Backup relay](/docs/features/backup-relay). |
 | 05:00 | `clockwork:check-cloudflare` | Per-site CF detection. (Promoted from weekly to daily — CF state changes too often to wait a week.) |
+| 05:05 / 05:15 | `clockwork:run-performance-scans --strategy=mobile --host-reports` / `--strategy=desktop --host-reports` | Reads Pressable's own Lighthouse report for every Pressable care-plan site (free; unchanged reports skipped), so a new monthly report lands within a day. |
 | 05:10 | `clockwork:refresh-runtime-eol` | Pull PHP and WordPress release lifecycle tables from endoflife.date into `app_settings` for the Capacity dashboard and site widgets. |
+| 05:30 | `clockwork:record-site-backups` | Record each active site's backups from its real source into `site_backups`: the Pressable API, SpinupWP's Spaces bucket, or our S3 archives for unhosted sites. Also writes one `site_backup_checks` row per site saying whether the read worked. Feeds the client-report Backups section. The run shows as failed if any site couldn't be read. See [Features → Client reports](/docs/features/client-reports). |
 
 ## Daily — Companion + form-tests (06:00 UTC)
 
 | Time | Command | What it does |
 |---|---|---|
 | 06:00 | `clockwork:test-contact-forms` | Run scheduled contact form tests per site. |
+| 06:00 | `clockwork:send-client-reports` | Compile and email due client reports for the previous calendar month, via `ClientReportsServiceProvider::scheduledTasks()`. Care-plan sites only. A report with something to review first is held as a draft instead of sent. See [Features → Client reports](/docs/features/client-reports). |
 | 06:05 | `clockwork:check-domain-expirations` | Poll ICANN RDAP registry APIs for domain expiration dates and registrar data. Weekly cadence for green sites, daily for yellow/red. |
 | 06:15 (ET) | `clockwork:nightly-update-summary` | Email summary of the previous night's auto-update run. |
 | 06:25 | `clockwork:refresh-companion-capabilities` | Re-pull `companion_capabilities` per site. Diff-aware. |
