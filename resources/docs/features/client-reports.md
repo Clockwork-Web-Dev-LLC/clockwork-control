@@ -2,7 +2,7 @@
 title: Client reports
 section: Features
 order: 101
-updated: 2026-10-15
+updated: 2026-10-22
 author: Aaron Reimann
 tags: [client-reports, reporting, email, care-plans, scheduling, templates]
 tracks: [modules/ClientReports/**]
@@ -16,7 +16,9 @@ Open issues, decisions and next steps are tracked separately in [Internal → Cl
 
 **Reports** (`/client-reports`) holds the history table and the manual **Generate** form. Pick a site, a template, a date range, and optionally a client name, email and a custom note. You land on a preview page with a **Print / Download PDF** button.
 
-The paper-plane button in the history table emails a report to every address in its `client_email`, which scheduled reports fill with all their recipients, comma-separated. If a report has no address saved, the button asks for one (you can enter several, comma-separated) and saves it on the report. A **superseded** report can't be sent.
+The preview's **Email version** button (`/client-reports/{report}/email`) shows the email exactly as the client gets it, with the To and Subject lines and any review reasons. The preview page lays some sections out differently (updates as a table, for one), so check the email version before sending.
+
+The paper-plane button in the history table emails a report to every address in its `client_email`, which scheduled reports fill with all their recipients, comma-separated. On a **Partly sent** report it only emails the addresses that don't have it yet; on a **Sent** one it sends to everyone again. If a report has no address saved, the button asks for one (you can enter several, comma-separated) and saves it on the report. A **superseded** report can't be sent. Sending a scheduled report by hand stamps its schedule's `last_sent_at`, the same as an automatic send.
 
 History statuses: **Generated** (compiled, not sent), **Needs review** (held, see below), **Partly sent** (some recipients got it), **Sent**, and **Superseded** (a newer report for the same schedule and period replaced it before it reached anyone).
 
@@ -24,7 +26,7 @@ History statuses: **Generated** (compiled, not sent), **Needs review** (held, se
 
 **Scheduling** (`/client-reports/schedules`) allows one schedule per site, enforced by a unique index on `site_id`. Each schedule has a frequency (`weekly` / `monthly`), a recipients list, a template, and a delivery mode:
 
-- **`auto`** compiles and emails every recipient, unless something needs a person first, in which case it's held as a draft (see **Hold for review**). It needs at least one recipient.
+- **`auto`** compiles and emails every recipient, unless something needs a person first, in which case it's held as a draft (see **Hold for review**). A schedule's **first** report is always held. It needs at least one recipient.
 - **`draft`** only compiles, so someone can review the report before sending it by hand. Drafts are flagged with the same review reasons.
 
 Schedules only send for **care-plan sites** (see below); the list marks the others **No care plan — won't send**.
@@ -50,11 +52,11 @@ The rule for every section: **if we didn't check it during the period, the repor
 | `security` blocklists | Latest completed `blacklist` scan in the period | In period | "Not checked this month" |
 | `security` malware | Latest completed `companion_malware` scan in the period, falling back to `sitecheck` | In period | "Not checked this month" |
 | `security` core files | Latest *completed* `core_checksums` scan in the period. A site counts as WordPress if `is_wordpress` is set **or** Companion reports a `wp_core`. | In period | "Not checked this month"; row left out for non-WordPress sites |
-| `security` vulnerabilities | `PluginVulnerabilityMatcher` (installed plugins from the Companion snapshot vs. the vulnerability feed). Matches in inactive plugins are noted separately. | **Snapshot date**, shown as "as of …" | "Not checked" when there's no plugin list, **or** the feed hasn't refreshed in 48h (an empty or stale feed would otherwise read as "None found") |
+| `security` vulnerabilities | `PluginVulnerabilityMatcher` (installed plugins from the Companion snapshot vs. the vulnerability feed). Matches in inactive plugins are noted separately. | **Snapshot date**, shown as "as of …" | "Not checked" when there's no plugin list, **or** the feed hasn't refreshed in 48h (an empty or stale feed would otherwise read as "None found"). A plugin whose lookup failed in the nightly refresh keeps its previous entries rather than dropping out. |
 | `performance` | Latest OK mobile/desktop `site_performance_scans` + phone `site_field_metrics`. **GTmetrix scans count as desktop** whatever strategy they were filed under: our GTmetrix plan has no phone emulation, so its "mobile" rows are desktop Chrome. Only Pressable's and Google's mobile results show as Mobile. Pressable's own report (read nightly, mobile and desktop) is **dated by when Pressable ran the test** (`source_generated_at`), not when we read it, and so is the "Tested …" label. | In period (by test date) | Section hidden |
 | `forms` | `contact_form_test_runs`. Only **live** runs test delivery: delivered = `status = 'success'` **and** `mail_outcome = 'sent'`. **Lab** runs suppress the email, so they're reported as "accepted N of M" and never as delivered. | In period | Section hidden (`pass_rate` is null) |
 | `traffic` | `site_traffic_daily` (visits, requests, bandwidth) | In period | Section hidden. "Data transferred" is left out when the host reports no byte counts (Pressable). |
-| `backups` | `site_backups`: what the site's **real** backup source reported, recorded daily by `clockwork:record-site-backups` (05:30). Pressable → Pressable's backup API (files daily, plus one database backup per day); SpinupWP → the DigitalOcean Spaces bucket SpinupWP writes to; unhosted sites → our own S3 archives (Companion uploads). The email lists the **last 10 days of the period**, one row per day, plus how many days that month had a backup. A day's size counts one backup of each kind (the newest scheduled one), so extra on-demand or hourly backups don't inflate it. | In period | Section hidden from the client. The preview shows **No backups found** (checked, none), **No backups in the last 10 days** (backups stopped mid-period) or **Could not check** (read failed, or no clean check in 48h), with the error. |
+| `backups` | `site_backups`: what the site's **real** backup source reported, recorded daily by `clockwork:record-site-backups` (05:30). Pressable → Pressable's backup API (files daily, plus one database backup per day); SpinupWP → the DigitalOcean Spaces bucket SpinupWP writes to; unhosted sites → our own S3 archives (Companion uploads). The email lists the **last 10 days of the period**, one row per day, plus how many days that month had a backup. That count is left out when our records for the site start after the period's first day (`covers_period` false): Pressable keeps only ~8 days, so the month we started recording would otherwise read as "backed up on 9 days". A day's size counts one backup of each kind (the newest scheduled one), so extra on-demand or hourly backups don't inflate it. | In period | Section hidden from the client. The preview shows **No backups found** (checked, none), **No backups in the last 10 days** (backups stopped mid-period) or **Could not check** (read failed, or no clean check in 48h), with the error. |
 | `work_log` | `site_work_logs` (hours entered on the site page) | In period | Section hidden |
 
 Every compiled report carries `meta.schema_version` (currently **3**: 2 = honesty fixes, 3 = recorded backups list). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
@@ -79,6 +81,7 @@ Section keys and labels are defined once in `ClientReportTemplate::SECTIONS`. Ad
    - backups: none found, stopped before the last 10 days, or couldn't be checked
    - the site was still down at the end of the month
    - a plugin with a known vulnerability has an update waiting (the update isn't going through, often an unlicensed premium plugin)
+   - it's the schedule's **first** report (`last_sent_at` is empty), so a new client's first email is always seen by a person. Send it by hand; after that, clean reports send themselves. This applies to `auto` schedules only, since a `draft` schedule's reports wait for a person anyway.
 
    Known plugin vulnerabilities don't hold a report (about a third of sites have one at any time).
 5. For `auto` schedules, it sends one email per recipient who isn't already in the report's `sent_to`. Once everyone has it, it marks the report `sent` and stamps `last_sent_at`.
