@@ -150,6 +150,9 @@
                                                 <input type="checkbox" name="enabled" value="1" @checked($recipient->enabled)>
                                                 <span class="text-[var(--color-ink-strong)]">Enabled (receives SMS alerts)</span>
                                             </label>
+                                            <p class="text-[10px] text-[var(--color-ink-muted)] col-span-2 leading-relaxed">
+                                                By providing a mobile number and enabling SMS, you consent to receive automated operational notifications (uptime, downtime, server alerts) from Clockwork Control. Msg &amp; data rates may apply. Msg frequency varies based on site health. Reply STOP to cancel, HELP for help. See our <a href="https://clockworkcontrol.com/terms#sms-terms" target="_blank" class="underline text-[var(--color-brand)]">Terms</a> and <a href="https://clockworkcontrol.com/privacy#sms-privacy" target="_blank" class="underline text-[var(--color-brand)]">Privacy Policy</a>.
+                                            </p>
                                         </div>
                                         <button type="submit" class="btn-pill-nav text-xs">Save Changes</button>
                                     </form>
@@ -294,6 +297,9 @@
                             <input type="checkbox" name="enabled" value="1" checked>
                             <span class="text-[var(--color-ink-strong)]">Enabled (participates in on-call rotation)</span>
                         </label>
+                        <p class="text-[11px] text-[var(--color-ink-muted)] col-span-2 leading-relaxed">
+                            By providing a mobile number and enabling SMS, you consent to receive automated operational notifications (uptime, downtime, server alerts) from Clockwork Control. Msg &amp; data rates may apply. Msg frequency varies based on site health. Reply STOP to cancel, HELP for help. See our <a href="https://clockworkcontrol.com/terms#sms-terms" target="_blank" class="underline text-[var(--color-brand)]">Terms</a> and <a href="https://clockworkcontrol.com/privacy#sms-privacy" target="_blank" class="underline text-[var(--color-brand)]">Privacy Policy</a>.
+                        </p>
                     </div>
                     <button type="submit" class="btn-pill-nav text-xs mt-1">Add Team Engineer</button>
                 </form>
@@ -412,6 +418,9 @@
                                                     <input type="checkbox" name="enabled" value="1" @checked($client->enabled)>
                                                     <span class="text-[var(--color-ink-strong)]">Enabled (active subscriber)</span>
                                                 </label>
+                                                <p class="text-[10px] text-[var(--color-ink-muted)] pt-1 leading-relaxed">
+                                                    SMS alerts are strictly transactional for site uptime/downtime. Msg &amp; data rates may apply. Reply STOP to cancel, HELP for help. See our <a href="https://clockworkcontrol.com/terms#sms-terms" target="_blank" class="underline text-[var(--color-brand)]">Terms</a> and <a href="https://clockworkcontrol.com/privacy#sms-privacy" target="_blank" class="underline text-[var(--color-brand)]">Privacy Policy</a>.
+                                                </p>
                                             </div>
                                             <div class="col-span-2 pt-1 border-t border-[var(--color-border-light)]">
                                                 <span class="text-[var(--color-ink-soft)] block mb-1">Subscribed Sites</span>
@@ -505,6 +514,9 @@
                                 <input type="checkbox" name="enabled" value="1" checked>
                                 <span class="text-[var(--color-ink-strong)]">Enabled (receives alerts immediately)</span>
                             </label>
+                            <p class="text-[10px] text-[var(--color-ink-muted)] pt-1 leading-relaxed">
+                                SMS alerts are strictly transactional for site uptime/downtime. Msg &amp; data rates may apply. Reply STOP to cancel, HELP for help. See our <a href="https://clockworkcontrol.com/terms#sms-terms" target="_blank" class="underline text-[var(--color-brand)]">Terms</a> and <a href="https://clockworkcontrol.com/privacy#sms-privacy" target="_blank" class="underline text-[var(--color-brand)]">Privacy Policy</a>.
+                            </p>
                         </div>
                         <div class="col-span-2 pt-1 border-t border-[var(--color-border-light)]">
                             <span class="text-xs text-[var(--color-ink-soft)] block mb-1">Assign to Sites:</span>
