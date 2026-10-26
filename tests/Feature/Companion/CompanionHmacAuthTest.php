@@ -338,3 +338,71 @@ describe('ClockworkCompanionClient SSRF guard', function () {
         Http::assertNothingSent();
     });
 });
+
+/*
+| Companion's get_route() excludes the query string, so the V1 signature
+| can't protect query params. Requests that carry them also send
+| X-Clockwork-Signature-V2 over the path + "?" + canonical query (params
+| sorted by key, RFC 3986 encoded, rest_route excluded). Companion 1.40.0+
+| rejects query-carrying requests without it.
+*/
+describe('ClockworkCompanionClient query-string signing (V2)', function () {
+    it('sends a V2 signature over the sorted, RFC 3986 encoded query alongside the unchanged V1 signature', function () {
+        $site = companionSite();
+        $secret = $site->companion_secret;
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/resource-report*" => Http::response(
+                ['ok' => true, 'rows' => []],
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        (new ClockworkCompanionClient($site))->resourceReport('2026-10-01T00:00:00+00:00', 50);
+
+        Http::assertSent(function ($request) use ($secret) {
+            $timestamp = (int) $request->header('X-Clockwork-Timestamp')[0];
+
+            // V1 is still the route-only signature, for older Companions.
+            expect($request->header('X-Clockwork-Signature')[0])
+                ->toBe(expectedCompanionSignature('GET', '/resource-report', $timestamp, '', $secret));
+
+            // V2 covers the query: keys sorted (_cw < limit < since), ':' and '+' percent-encoded.
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $cw = $query['_cw'] ?? '';
+            $expectedV2 = expectedCompanionSignature(
+                'GET',
+                "/resource-report?_cw={$cw}&limit=50&since=2026-10-01T00%3A00%3A00%2B00%3A00",
+                $timestamp,
+                '',
+                $secret,
+            );
+            expect($request->header('X-Clockwork-Signature-V2')[0] ?? null)->toBe($expectedV2);
+
+            return true;
+        });
+    });
+
+    it('omits the V2 header when the request has no query params', function () {
+        $site = companionSite();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(
+                ['ok' => true],
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        (new ClockworkCompanionClient($site))->pushBackupsReport(['summary' => 'ok']);
+
+        Http::assertSent(fn ($request) => $request->header('X-Clockwork-Signature-V2') === []);
+    });
+
+    it('excludes rest_route from the canonical query', function () {
+        expect(ClockworkCompanionClient::canonicalQuery(['rest_route' => '/clockwork/v1/x']))->toBe('');
+        expect(ClockworkCompanionClient::canonicalQuery(['b' => 'two words', 'a' => 1, 'rest_route' => '/x']))
+            ->toBe('a=1&b=two%20words');
+    });
+});

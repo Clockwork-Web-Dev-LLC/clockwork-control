@@ -28,6 +28,8 @@ use Modules\Pressable\PressableHostingProvider;
 use Modules\Slack\SlackCheck;
 use Modules\SpinupWp\SpinupWpCheck;
 use Modules\SpinupWp\SpinupWpHostingProvider;
+use Modules\TurnkeyWp\TurnkeyWpCheck;
+use Modules\TurnkeyWp\TurnkeyWpHostingProvider;
 use Modules\Twilio\TwilioCheck;
 use Modules\Vultr\VultrCheck;
 use Modules\Vultr\VultrCloudProvider;
@@ -46,10 +48,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 33 registered modules', function () {
+    it('aggregates a manifest from every one of the 34 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(33);
+        expect($manifests)->toHaveCount(34);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -66,6 +68,7 @@ describe('ModuleRegistry aggregation', function () {
             'kinsta',
             'cloudways',
             'gridpane',
+            'turnkeywp',
             'mattermost',
             'slack',
             'twilio',
@@ -107,10 +110,10 @@ describe('ModuleRegistry aggregation', function () {
         ]);
     });
 
-    it('collects exactly the 6 hosting providers, each the right concrete class', function () {
+    it('collects exactly the 7 hosting providers, each the right concrete class', function () {
         $providers = $this->registry->hostingProviders();
 
-        expect($providers)->toHaveCount(6);
+        expect($providers)->toHaveCount(7);
 
         $classes = array_map(fn ($p) => get_class($p), $providers);
 
@@ -121,6 +124,7 @@ describe('ModuleRegistry aggregation', function () {
             KinstaHostingProvider::class,
             CloudwaysHostingProvider::class,
             GridPaneHostingProvider::class,
+            TurnkeyWpHostingProvider::class,
         ]);
     });
 
@@ -150,6 +154,7 @@ describe('ModuleRegistry aggregation', function () {
             KinstaCheck::class,
             CloudwaysCheck::class,
             GridPaneCheck::class,
+            TurnkeyWpCheck::class,
             MattermostCheck::class,
             SlackCheck::class,
             TwilioCheck::class,

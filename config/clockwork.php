@@ -265,6 +265,17 @@ return [
         'view_only' => (bool) env('GRIDPANE_VIEW_ONLY', env('CLOCKWORK_GRIDPANE_VIEW_ONLY', true)),
     ],
 
+    'turnkeywp' => [
+        // Sanctum token issued in TurnkeyWP under Settings -> API tokens. Use an
+        // Owner's token: TurnkeyWP only lists what the token's user can see.
+        'token' => env('TURNKEYWP_TOKEN'),
+        'base_url' => env('TURNKEYWP_BASE_URL', 'https://app.turnkeywp.com/api/v1'),
+        'timeout' => (int) env('TURNKEYWP_TIMEOUT', 15),
+        // Clockwork's own platform, so writes (SSH, Companion installs, API
+        // actions) are on by default, like SpinupWP.
+        'view_only' => (bool) env('TURNKEYWP_VIEW_ONLY', false),
+    ],
+
     'pressable' => [
         // OAuth2 client_credentials — no per-site "server" concept, every
         // operation is addressed by site_id alone. See PressableClient.
@@ -311,7 +322,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.39.1'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.40.0'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.

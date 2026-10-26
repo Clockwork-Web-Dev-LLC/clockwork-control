@@ -427,6 +427,17 @@ class ImportSpinupWp extends Command
             return;
         }
 
+        // Same for a site TurnkeyWP currently tracks: SpinupWP keeps listing it
+        // until the old copy is deleted there, and must not take it back. Keyed
+        // on the id, not hosting_provider, so a site TurnkeyWP stopped listing
+        // can come back to SpinupWP.
+        if ($existed && $site->turnkeywp_site_id !== null) {
+            $this->line("  Skipping {$domain}: site is tracked under TurnkeyWP (turnkeywp_site_id: {$site->turnkeywp_site_id}).");
+            $stats['skipped_turnkeywp'] = ($stats['skipped_turnkeywp'] ?? 0) + 1;
+
+            return;
+        }
+
         // New staging/dev sites should never fire uptime alerts.
         // Only set this on creation — don't override a manual re-enable on
         // an existing site.
@@ -530,6 +541,8 @@ class ImportSpinupWp extends Command
             ->where('id', '!=', $site->id)
             ->where('server_id', $site->server_id)
             ->whereNull('consolidated_into_site_id')
+            // A row TurnkeyWP tracks is its own site, not an alias to fold in.
+            ->whereNull('turnkeywp_site_id')
             ->get();
 
         foreach ($duplicates as $dupe) {

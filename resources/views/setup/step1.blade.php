@@ -1263,8 +1263,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const FLEET_SOURCE_IDS = ['pressable', 'wpengine', 'kinsta', 'spinupwp', 'cloudways', 'gridpane'];
-            const PANEL_IDS = ['spinupwp', 'cloudways', 'gridpane'];
+            const FLEET_SOURCE_IDS = ['pressable', 'wpengine', 'kinsta', 'spinupwp', 'cloudways', 'gridpane', 'turnkeywp'];
+            const PANEL_IDS = ['spinupwp', 'cloudways', 'gridpane', 'turnkeywp'];
             const VPS_IDS = ['digitalocean', 'hetzner', 'vultr', 'linode', 'azure'];
 
             const counter = document.getElementById('active-counter');

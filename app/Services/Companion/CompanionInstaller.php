@@ -164,7 +164,7 @@ class CompanionInstaller implements CompanionInstallerContract
         if (! $site->site_user) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Site has no site_user; cannot drop privileges to install.'];
         }
-        if (! $site->server->ssh_password) {
+        if (! $site->server->hasSudoAccess()) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Server has no sudo password stored; cannot run wp-cli as the site user.'];
         }
 

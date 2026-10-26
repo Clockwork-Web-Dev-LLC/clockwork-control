@@ -48,7 +48,7 @@ class DiagnoseCompanionInstall extends Command
         $this->line("  table_prefix   = {$tablePrefix}".($site->table_prefix ? '' : ' (FALLBACK — site has no table_prefix set)'));
         $this->line('  secret_in_db   = '.($site->companion_secret ? substr($site->companion_secret, 0, 8).'…' : '(none)'));
 
-        if (! $site->server || ! $site->site_user || ! $site->server->ssh_password) {
+        if (! $site->server || ! $site->site_user || ! $site->server->hasSudoAccess()) {
             $this->error('Missing prerequisites (server / site_user / ssh_password). Cannot probe.');
 
             return self::FAILURE;

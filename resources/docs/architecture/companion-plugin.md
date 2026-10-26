@@ -101,8 +101,9 @@ Per-site shared secret, 32 random bytes. Generated Laravel-side at install, push
 
 Every Companion request includes:
 
-- `X-Clockwork Control-Signature` — hex SHA-256 HMAC of `METHOD\nPATH\nTIMESTAMP\nBODY`
-- `X-Clockwork Control-Timestamp` — unix seconds
+- `X-Clockwork-Signature` — hex SHA-256 HMAC of `METHOD\nPATH\nTIMESTAMP\nBODY`
+- `X-Clockwork-Timestamp` — unix seconds
+- `X-Clockwork-Signature-V2` — only when the request has query params: the same HMAC with `PATH` extended by `?` + the canonical query (params minus `rest_route`, sorted by key, RFC 3986 encoded). Companion 1.40.0+ requires it for any request with query params, because `get_route()` doesn't include the query string and V1 alone can't protect it.
 
 POST bodies use Laravel's `withBody($jsonBody, 'application/json')` to send the byte-exact JSON we signed. Re-encoding via `->post($url, $array)` would risk drift (key order, unicode escaping).
 

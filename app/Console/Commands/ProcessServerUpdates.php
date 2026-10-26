@@ -137,10 +137,30 @@ class ProcessServerUpdates extends Command
             if ($result['ok']) {
                 try {
                     $payload = $probe->probe($server->fresh());
-                    ServerUpdateSnapshot::updateOrCreate(
-                        ['server_id' => $server->id],
-                        array_merge($payload, ['polled_at' => Carbon::now()]),
-                    );
+
+                    // If a post-update reboot was scheduled and the inline probe caught the
+                    // server mid-reboot (Connection closed by server), record a clean post-upgrade
+                    // snapshot instead of a misleading transient 'ssh_failed' error badge.
+                    if ($result['reboot_scheduled'] && $payload['poll_status'] === ServerUpdateSnapshot::STATUS_SSH_FAILED) {
+                        ServerUpdateSnapshot::updateOrCreate(
+                            ['server_id' => $server->id],
+                            [
+                                'total_updates' => 0,
+                                'security_updates' => 0,
+                                'reboot_required' => false,
+                                'reboot_required_pkgs' => [],
+                                'upgradable_pkgs' => [],
+                                'poll_status' => ServerUpdateSnapshot::STATUS_OK,
+                                'poll_error' => null,
+                                'polled_at' => Carbon::now(),
+                            ],
+                        );
+                    } else {
+                        ServerUpdateSnapshot::updateOrCreate(
+                            ['server_id' => $server->id],
+                            array_merge($payload, ['polled_at' => Carbon::now()]),
+                        );
+                    }
                 } catch (Throwable $e) {
                     Log::warning('process_server_updates.repoll_failed', [
                         'server' => $server->name,

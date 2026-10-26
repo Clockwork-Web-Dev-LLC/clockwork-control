@@ -330,7 +330,7 @@ describe('HostingProvider capability matrix', function () {
             ->and($kinsta->commandRunner())->toBeNull();
     });
 
-    it('registers exactly the 7 real hosting providers via HostingProviderRegistry::all()', function () {
+    it('registers exactly the 8 real hosting providers via HostingProviderRegistry::all()', function () {
         $ids = collect(app(HostingProviderRegistry::class)->all())
             ->map(fn (HostingProvider $provider) => $provider->id())
             ->sort()
@@ -344,6 +344,7 @@ describe('HostingProvider capability matrix', function () {
             Site::HOSTING_PROVIDER_KINSTA,
             Site::HOSTING_PROVIDER_PRESSABLE,
             Site::HOSTING_PROVIDER_SPINUPWP,
+            Site::HOSTING_PROVIDER_TURNKEYWP,
             Site::HOSTING_PROVIDER_WPENGINE,
         ]);
     });

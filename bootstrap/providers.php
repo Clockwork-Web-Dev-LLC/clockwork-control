@@ -33,6 +33,7 @@ use Modules\SiteMaintenance\SiteMaintenanceServiceProvider;
 use Modules\Slack\SlackServiceProvider;
 use Modules\SpinupWp\SpinupWpServiceProvider;
 use Modules\Sucuri\SucuriServiceProvider;
+use Modules\TurnkeyWp\TurnkeyWpServiceProvider;
 use Modules\Twilio\TwilioServiceProvider;
 use Modules\Vultr\VultrServiceProvider;
 use Modules\WPEngine\WPEngineServiceProvider;
@@ -65,6 +66,8 @@ return [
     CloudwaysServiceProvider::class,
     // GridPane provisions and manages real servers on cloud VPS with full SSH access.
     GridPaneServiceProvider::class,
+    // TurnkeyWP is Clockwork's own hosting control plane: real servers reached over SSH.
+    TurnkeyWpServiceProvider::class,
     // Notification-channel modules — each tags itself into the
     // 'clockwork.notifiers' container tag from its own register(), same
     // mechanism ClientSlackServiceProvider (below) already used before these

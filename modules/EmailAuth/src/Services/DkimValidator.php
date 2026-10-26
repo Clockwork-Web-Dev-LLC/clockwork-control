@@ -11,6 +11,8 @@ class DkimValidator
         'selector1',
         'selector2',
         'k1',
+        'k2',
+        'k3',
         's1',
         's2',
         'mx',

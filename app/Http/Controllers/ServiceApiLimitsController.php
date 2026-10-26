@@ -66,6 +66,11 @@ class ServiceApiLimitsController extends Controller
                 'label' => 'GridPane',
                 'refresh_url' => route('servers.refreshFromGridPane'),
             ],
+            'turnkeywp' => [
+                'enabled' => $moduleResolver->isEnabled('turnkeywp'),
+                'label' => 'TurnkeyWP',
+                'refresh_url' => route('servers.refreshFromTurnkeyWp'),
+            ],
         ];
 
         $redirectUri = match ($canonicalId) {

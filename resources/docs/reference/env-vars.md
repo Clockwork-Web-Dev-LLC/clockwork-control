@@ -145,6 +145,17 @@ The one hosting provider that's also a `CloudProvider` — see [Integrations →
 
 Server management panel running on real VPS servers — see [Integrations → GridPane](/documentation/integrations/gridpane). Direct SSH access to servers and sites at `/var/www/{domain}/htdocs`.
 
+## TurnkeyWP
+
+| Var | Default | Notes |
+|---|---|---|
+| `TURNKEYWP_TOKEN` | unset | Sanctum token from TurnkeyWP → Settings → API tokens. Use an Owner's token; TurnkeyWP only lists what the token's user can see. |
+| `TURNKEYWP_BASE_URL` | `https://app.turnkeywp.com/api/v1` | Base URL for the TurnkeyWP API v1. |
+| `TURNKEYWP_TIMEOUT` | `15` | Seconds. |
+| `TURNKEYWP_VIEW_ONLY` | `false` | When `true`, blocks TurnkeyWP API writes, SSH command execution and Companion installs. |
+
+Clockwork's own hosting control plane — see [Integrations → TurnkeyWP](/documentation/integrations/turnkeywp).
+
 ## DigitalOcean Spaces (S3-compatible)
 
 | Variable | Default | Notes |

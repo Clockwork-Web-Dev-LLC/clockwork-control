@@ -76,7 +76,7 @@ class BlockUserAgent extends Command
             return self::SUCCESS;
         }
 
-        if (! $server->ssh_password) {
+        if (! $server->hasSudoAccess()) {
             $this->error("Server {$server->name} has no sudo password stored.");
 
             return self::FAILURE;

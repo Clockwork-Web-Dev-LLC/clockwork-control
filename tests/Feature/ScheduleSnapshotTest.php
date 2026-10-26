@@ -47,6 +47,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:find-orphan-sites',
         'clockwork:import-gridpane',
         'clockwork:import-spinupwp',
+        'clockwork:import-turnkeywp',
         'clockwork:nightly-update-summary',
         'clockwork:poll-servers',
         'clockwork:poll-system-updates',

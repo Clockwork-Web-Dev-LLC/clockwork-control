@@ -1,0 +1,15 @@
+{
+    "name": "clockwork/turnkeywp",
+    "description": "TurnkeyWP HostingProvider module for Clockwork Control Panel — imports servers and sites from Clockwork's self-hosted TurnkeyWP control plane and reaches them over SSH.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\TurnkeyWp\\": "src/"
+        }
+    }
+}

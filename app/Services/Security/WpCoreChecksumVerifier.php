@@ -125,7 +125,7 @@ class WpCoreChecksumVerifier
             );
         }
 
-        if (! $site->site_user || ! $site->server->ssh_password) {
+        if (! $site->site_user || ! $site->server->hasSudoAccess()) {
             return $this->result($site, SiteSecurityScan::STATUS_FAILED,
                 summary: 'Skipped — missing site_user or sudo password.',
                 error: 'missing_credentials',

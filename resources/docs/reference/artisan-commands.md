@@ -28,6 +28,8 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:kinsta-test` | Verify the Kinsta API key + test authentication. Supports `clockwork:test-kinsta` alias. | `php artisan clockwork:kinsta-test` |
 | `clockwork:cloudways-test` | Verify the Cloudways API credentials + list servers and apps. Supports `clockwork:test-cloudways` alias. | `php artisan clockwork:cloudways-test` |
 | `clockwork:test-gridpane` | Verify the GridPane API key + list servers and sites. | `php artisan clockwork:test-gridpane` |
+| `clockwork:test-turnkeywp` | Verify the TurnkeyWP API token and list the servers and sites it can see. Read-only. | `php artisan clockwork:test-turnkeywp` |
+| `clockwork:turnkeywp-authorize-ssh` | Add Clockwork Control's SSH public key to the `turnkey` user on TurnkeyWP servers through the TurnkeyWP API. Accepts `--server=`, `--public-key-file=`, `--force`. | `php artisan clockwork:turnkeywp-authorize-ssh` |
 | `clockwork:do-spaces-test` | Verify the DO Spaces HMAC creds. | `php artisan clockwork:do-spaces-test` |
 | `clockwork:bill-com-test` | Verify Bill.com auth + count customers. | `php artisan clockwork:bill-com-test` |
 | `clockwork:mattermost-test` | Post a test message to the configured channel. | `php artisan clockwork:mattermost-test` |
@@ -35,6 +37,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:import-spinupwp` | Idempotent server + site import + cert refresh. Skips domains / SpinupWP site ids listed in `site_ingest_exclusions` (`skipped_excluded`). Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-spinupwp --dry-run` |
 | `clockwork:import-pressable` | Idempotent Pressable site import (no `Server` rows — Pressable has no server concept). Skips domains still actively hosted on SpinupWP if the same domain appears in both platforms, and skips `site_ingest_exclusions` matches. Accepts `--dry-run`. Not scheduled — run manually. | `php artisan clockwork:import-pressable --dry-run` |
 | `clockwork:import-gridpane` | Idempotent GridPane server + site import, linking WordPress sites to their parent servers. Accepts `--dry-run` to simulate without writing to database. | `php artisan clockwork:import-gridpane --dry-run` |
+| `clockwork:import-turnkeywp` | Idempotent TurnkeyWP server + site import. Never takes over a site another host still tracks. Accepts `--dry-run`, `--include-staging`, and `--adopt=<domain>` (move a SpinupWP-tracked site now). | `php artisan clockwork:import-turnkeywp --dry-run` |
 | `clockwork:reconcile-provider` | Match `provider_id`-less servers against DO/Hetzner/Azure/Vultr/Linode inventory and fill provider + size columns. Idempotent. | `php artisan clockwork:reconcile-provider` |
 | `clockwork:find-orphan-sites` | Detect sites whose SpinupWP linkage was lost. | `php artisan clockwork:find-orphan-sites` |
 | `clockwork:installer:reopen` | Disaster recovery: remove the `storage/installed` sentinel so `/install` becomes reachable again on a live instance. | `php artisan clockwork:installer:reopen --force` |

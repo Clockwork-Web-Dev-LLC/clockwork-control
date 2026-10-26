@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "dffaddf1e3ea07a83ec80f42ecd915f3",
+    "content-hash": "134a88a540136afb9d74acfc763ff6fd",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -926,6 +926,33 @@
                 "MIT"
             ],
             "description": "Sucuri SiteCheck remote malware and blacklist scanning module for Clockwork Control Panel",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "clockwork/turnkeywp",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "modules/TurnkeyWp",
+                "reference": "c40d87501b3249e55e6379890cdceea123e67d38"
+            },
+            "require": {
+                "clockwork/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Modules\\TurnkeyWp\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "TurnkeyWP HostingProvider module for Clockwork Control Panel — imports servers and sites from Clockwork's self-hosted TurnkeyWP control plane and reaches them over SSH.",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -11798,6 +11825,7 @@
         "clockwork/slack": 20,
         "clockwork/spinupwp": 20,
         "clockwork/sucuri": 20,
+        "clockwork/turnkeywp": 20,
         "clockwork/twilio": 20,
         "clockwork/vultr": 20,
         "clockwork/wpengine": 20

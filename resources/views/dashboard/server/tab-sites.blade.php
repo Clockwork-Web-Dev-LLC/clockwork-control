@@ -23,6 +23,14 @@
                         <i class="fa-solid fa-rotate"></i> <span>Sync sites from GridPane</span>
                     </button>
                 </form>
+            @elseif ($server->turnkeywp_server_id && app(\Modules\Core\ModuleStateResolver::class)->isEnabled('turnkeywp'))
+                <form method="POST" action="{{ route('servers.refreshFromTurnkeyWp') }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="btn-pill-nav text-xs"
+                            onclick="this.disabled=true; this.querySelector('i').classList.add('fa-spin'); this.querySelector('span').textContent = 'Refreshing…';">
+                        <i class="fa-solid fa-rotate"></i> <span>Sync sites from TurnkeyWP</span>
+                    </button>
+                </form>
             @elseif (! $server->spinupwp_id && ! $server->isGridPane())
                 <div class="mt-4">
                     <form method="POST" action="{{ route('servers.destroy', $server) }}"

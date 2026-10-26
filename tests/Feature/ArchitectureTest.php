@@ -106,6 +106,7 @@ arch('every module service provider extends the shared base')
         'Modules\ContactForms\ContactFormsServiceProvider',
         'Modules\GTmetrix\GTmetrixServiceProvider',
         'Modules\GridPane\GridPaneServiceProvider',
+        'Modules\TurnkeyWp\TurnkeyWpServiceProvider',
         'Modules\AuthGoogle\GoogleAuthServiceProvider',
         'Modules\PageSpeedInsights\PageSpeedInsightsServiceProvider',
         'Modules\AuthGitHub\GitHubAuthServiceProvider',

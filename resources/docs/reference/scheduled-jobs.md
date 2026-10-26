@@ -99,6 +99,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 03:15 | `clockwork:refresh-plugin-vulnerabilities` | Refresh the wpvulnerability.net CVE mirror for every installed plugin slug. Feeds the Issues page's vulnerable-plugin flags. |
 | 03:20 | `clockwork:refresh-cisa-kev` | Sync the CISA Known Exploited Vulnerabilities catalog (JSON feed) into `cisa_kev_entries` for actively exploited CVE badging. |
 | 03:30 | `clockwork:import-spinupwp` | Idempotent server + site import. Refreshes cert dates. |
+| hourly :32 | `clockwork:import-turnkeywp` | Idempotent TurnkeyWP server + site import (`TurnkeyWpServiceProvider`). Runs after the SpinupWP import so a site released by SpinupWP is adopted before `find-orphan-sites`. |
 | 03:35 | `clockwork:find-orphan-sites` | Reclassify sites whose SpinupWP linkage was lost. |
 | 03:45 | `clockwork:reconcile-provider` | Link servers import-spinupwp couldn't IP-cross-reference (manual adds, unknown-to-SpinupWP boxes). |
 | 03:50 | `clockwork:refresh-companion-snapshot --pending-updates-only` | Closes the SpinupWP/Companion snapshot gap: `import-spinupwp` (03:30) marks `wp_plugin_updates=true` for sites that have new updates, but the full snapshot refresh (01:30 ET) already ran using Companion's pre-update cached state. This targeted re-pull refreshes only sites flagged pending so the Updates page sees fresh data without requiring a full fleet refresh. |

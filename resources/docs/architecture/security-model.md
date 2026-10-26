@@ -97,7 +97,7 @@ Signature payload (both sides must match exactly):
 METHOD\n/wp-json/clockwork/v1<route>\nTIMESTAMP\nBODY
 ```
 
-Headers on every request: `X-Clockwork Control-Signature` (hex), `X-Clockwork Control-Timestamp` (unix seconds). Verifier rejects on missing headers, `|now − ts| > 300s`, missing secret, or signature mismatch (`hash_equals` constant-time compare). Replay window is 5 minutes.
+Headers on every request: `X-Clockwork-Signature` (hex), `X-Clockwork-Timestamp` (unix seconds). Verifier rejects on missing headers, `|now − ts| > 300s`, missing secret, or signature mismatch (`hash_equals` constant-time compare). Replay window is 5 minutes. Requests with query params (other than `rest_route`) must also carry `X-Clockwork-Signature-V2`, signed over the path plus the canonical query, so a captured request can't be resent with altered params. Mutating requests are marked used with a single `INSERT IGNORE` into `wp_options`, so two concurrent copies of one signed request can't both pass.
 
 POST bodies use Laravel's `withBody($jsonBody, 'application/json')` so the byte-exact JSON we signed is what gets sent — `->post($url, $array)` would re-encode and could drift.
 
