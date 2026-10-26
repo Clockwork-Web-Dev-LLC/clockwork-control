@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Exploit Shield Module (`modules/ExploitShield`)**:
+  - **Automated Honeypot & Probe Defense**: Automatically inspects threat logs and probe attempts in real-time and retroactively (`clockwork:exploit-shield-scan`), matching high-confidence exploit signatures (environment files, webshells, sensitive configs) with zero false-positives.
+  - **Rolling Jail Bans & Expiration Pruning**: Automatically applies server firewall bans (`BlockedIp`) with configurable durations (1h, 24h, 7d, 30d, permanent) and prunes expired bans via scheduled `clockwork:exploit-shield-prune` (every 15m).
+  - **Exploit Shield Settings Hub (`/settings/exploit-shield`)**: Centralized management with global kill-switch, observe-only vs. enforcing modes, manual IP unbans, IP allowlists, and per-server override configurations.
+  - **GeoIP & IP Inspector**: Built-in inspector component (`x-exploit-shield-ip-inspector`) with IP lookup, country flags, and ASN organization details.
+- **TurnkeyWP Hosting Integration (`modules/TurnkeyWp`)**:
+  - Dedicated TurnkeyWP hosting module with API client (`TurnkeyWpClient`), server import command (`clockwork:import-turnkeywp`), and automatic cloud provider reconciliation.
+  - Settings modal, service rate limiting, and remote SSH key authorization (`clockwork:turnkeywp-authorize-ssh`).
+- **Server Credentials — Password View & Copy**:
+  - Added visibility toggle and instant clipboard copy button for stored server SSH passwords in `/dashboard/servers/{server}/credentials`.
+- **Companion Branding — Weekly Self-Heal (`clockwork:push-companion-branding --verify`, Mon 06:50)**:
+  - Detects and re-pushes drifted white-label branding across the fleet (`CompanionBrandingManager::DRIFT_KEYS`), and pushes branding during Renegade/standalone enrolment.
+- **SMS Compliance**:
+  - Added mandatory A2P 10DLC compliance disclosures to notification settings and a public `/sms-opt-in` redirect.
+- **Client Reports — Hold for review**: a report that hasn't reached anyone is checked first. An auto schedule keeps it as a draft, not emailed, when the malware scan, core files or blocklist check flagged something, backups weren't found or couldn't be checked, the site was still down at month end, or a plugin with a known vulnerability has an update waiting. History shows **Needs review** and the operator preview lists why; drafts get the same flags; re-running recompiles and marks the older unsent copy **superseded** (it can't be sent). Clean reports still send themselves.
+- **Backup history recording (`clockwork:record-site-backups`, daily 05:30)**: records each site's backups from its real source (Pressable's backup API, SpinupWP's DigitalOcean Spaces bucket, our own S3 archives) into the new `site_backups` table, plus a `site_backup_checks` row per site saying whether the read worked. Rows are kept after the source prunes them. The run exits as failed (and logs each site) when any read fails, so Scheduled Jobs shows it.
+- **Client Reports — Backups list**: the report now lists the last 10 days of the period's recorded backups (one row per day, with size) and how many days that month had one. The section is hidden from clients when none were found, when backups stopped before the last 10 days, or when the read failed, and the preview says which.
+- **Client Reports — Uptime outage list and blocklist check**: the 5 most recent outages with start time and length (flagged when one began before the period or was still open at its end), and a "Spam & malware blocklists" line from the latest in-period blacklist scan.
+- **Client Reports — A schedule's first report is always held for review**: so a new client's first email is checked before it goes out. Send it by hand from the history table; after that, clean reports send themselves. Draft-mode schedules are unaffected.
+- **Client Reports — Email version of a report** (`/client-reports/{report}/email`): the email exactly as the client gets it, with the To and Subject lines and any review reasons, linked from the report preview. The preview lays some sections out differently, so this is what to check before sending.
+- **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.
+
+### Changed
+- **Server Updates — Safe `apt-get upgrade`**: Switched the server update execution pipeline from `dist-upgrade` to standard `upgrade` to safeguard against unexpected kernel removals and breaking distro shifts, with targeted `--server` option support.
+- **Dependencies**: Bumped `vite` to `8.3.5` and `symfony/http-foundation` to `8.1.9` to resolve high-severity audit advisories.
+
 ### Fixed
+- **Companion — Query-String Signing (`X-Clockwork-Signature-V2`) & Cache Busting**:
+  - Signed GET requests now carry a unique `_cw` timestamp query parameter and `Cache-Control: no-cache` header to prevent intermediate proxy/FastCGI caching of signed REST responses.
+  - Added `X-Clockwork-Signature-V2` header signing canonicalized query parameters for Companion 1.40.0+ compatibility.
 - **Client Reports — Partial send failures no longer re-email everyone**:
   - Each successful delivery is recorded on the report (`client_reports.sent_to`) as it happens. A scheduled run that fails for some recipients keeps the schedule due, and the next run resumes the same report and emails only the recipients still missing, with no duplicate emails and no duplicate report rows. The history table shows **Partly sent**.
   - The `clockwork:send-client-reports` command and the schedule's **Send now** button now share one code path (`ScheduledReportRunner` + `ClientReportSender`).
@@ -49,15 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Client Reports — The plain-text email no longer HTML-escapes** client names, notes and plugin names ("O&#039;Brien &amp; Sons"). The Email version page now shows the plain-text part too.
 - **Client Reports — Sending a partly sent report by hand** only emails the recipients who don't have it yet, instead of everyone again. A held or draft report sent by hand now stamps its schedule's `last_sent_at`.
 - **Security — A partial vulnerability-feed refresh no longer drops matches**: `clockwork:refresh-plugin-vulnerabilities` keeps the existing entries of any plugin whose lookup failed (and lists them), instead of deleting the whole table and re-inserting only what it fetched. A run where every lookup fails changes nothing and exits as failed.
-
-### Added
-- **Client Reports — Hold for review**: a report that hasn't reached anyone is checked first. An auto schedule keeps it as a draft, not emailed, when the malware scan, core files or blocklist check flagged something, backups weren't found or couldn't be checked, the site was still down at month end, or a plugin with a known vulnerability has an update waiting. History shows **Needs review** and the operator preview lists why; drafts get the same flags; re-running recompiles and marks the older unsent copy **superseded** (it can't be sent). Clean reports still send themselves.
-- **Backup history recording (`clockwork:record-site-backups`, daily 05:30)**: records each site's backups from its real source (Pressable's backup API, SpinupWP's DigitalOcean Spaces bucket, our own S3 archives) into the new `site_backups` table, plus a `site_backup_checks` row per site saying whether the read worked. Rows are kept after the source prunes them. The run exits as failed (and logs each site) when any read fails, so Scheduled Jobs shows it.
-- **Client Reports — Backups list**: the report now lists the last 10 days of the period's recorded backups (one row per day, with size) and how many days that month had one. The section is hidden from clients when none were found, when backups stopped before the last 10 days, or when the read failed, and the preview says which.
-- **Client Reports — Uptime outage list and blocklist check**: the 5 most recent outages with start time and length (flagged when one began before the period or was still open at its end), and a "Spam & malware blocklists" line from the latest in-period blacklist scan.
-- **Client Reports — A schedule's first report is always held for review**: so a new client's first email is checked before it goes out. Send it by hand from the history table; after that, clean reports send themselves. Draft-mode schedules are unaffected.
-- **Client Reports — Email version of a report** (`/client-reports/{report}/email`): the email exactly as the client gets it, with the To and Subject lines and any review reasons, linked from the report preview. The preview lays some sections out differently, so this is what to check before sending.
-- **Docs**: new [Features → Client reports](resources/docs/features/client-reports.md) page and an internal tracker for the module's open issues.
 
 ## [1.11.0] - 2026-10-14
 
