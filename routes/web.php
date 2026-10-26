@@ -61,6 +61,11 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::get('/dev-login', DevLoginController::class)->name('dev-login');
 
+// Public legal redirects
+Route::redirect('/terms', 'https://clockworkcontrol.com/terms');
+Route::redirect('/privacy', 'https://clockworkcontrol.com/privacy');
+Route::redirect('/sms-opt-in', 'https://clockworkcontrol.com/sms-opt-in');
+
 // Everything below this line requires an authenticated, non-revoked user.
 // auth + active (revoked_at) are applied via this single group wrapper rather
 // than per-route so it's hard to forget. New routes go INSIDE the closure.

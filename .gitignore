@@ -44,6 +44,7 @@ Thumbs.db
 # desktop screenshots, and one-off scoping notes.
 /private/
 /docs/screenshots/
+/notebooklm_sources/
 
 # Database dumps and archives
 *.sql

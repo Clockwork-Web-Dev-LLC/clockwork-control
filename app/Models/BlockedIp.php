@@ -40,6 +40,8 @@ class BlockedIp extends Model
 
     public const SOURCE_MANUAL = 'manual';
 
+    public const SOURCE_EXPLOIT_SHIELD = 'exploit_shield';
+
     public const VERDICT_MALICIOUS = 'malicious';
 
     public const VERDICT_SUSPICIOUS = 'suspicious';

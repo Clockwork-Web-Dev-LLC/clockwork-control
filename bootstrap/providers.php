@@ -19,6 +19,7 @@ use Modules\ContactForms\ContactFormsServiceProvider;
 use Modules\Core\CoreServiceProvider;
 use Modules\DigitalOcean\DigitalOceanServiceProvider;
 use Modules\EmailAuth\EmailAuthServiceProvider;
+use Modules\ExploitShield\ExploitShieldServiceProvider;
 use Modules\Feedback\FeedbackServiceProvider;
 use Modules\Gatekeeper\GatekeeperServiceProvider;
 use Modules\GridPane\GridPaneServiceProvider;
@@ -81,6 +82,7 @@ return [
     // Security scanning & protection modules (ManageWP replacement suite, brute-force defense)
     SucuriServiceProvider::class,
     GatekeeperServiceProvider::class,
+    ExploitShieldServiceProvider::class,
     EmailAuthServiceProvider::class,
     // Maintenance & QA modules (synthetic form deliverability testing, offsite backup relay, in-app visual feedback)
     ContactFormsServiceProvider::class,

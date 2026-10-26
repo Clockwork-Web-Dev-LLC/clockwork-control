@@ -139,11 +139,8 @@ class ServerUpdater
         echo "[clockwork-update] apt-get update"
         do_sudo apt-get update -qq
 
-        echo "[clockwork-update] apt-get dist-upgrade"
-        do_sudo apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" dist-upgrade
-
-        echo "[clockwork-update] apt-get autoremove"
-        do_sudo apt-get -y autoremove
+        echo "[clockwork-update] apt-get upgrade"
+        do_sudo apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade
 
         # nginx postinst can return success even when the new daemon failed to
         # start — major version jumps (e.g. 1.28 → 1.30) bit the whole fleet on

@@ -59,6 +59,8 @@ class ActionLog extends Model
 
     public const TYPE_BAN_EXPIRED = 'ban_expired';
 
+    public const TYPE_EXPLOIT_SHIELD_BAN = 'exploit_shield_ban';
+
     public const TYPE_REVIEW_APPROVE = 'review_approve';
 
     public const TYPE_REVIEW_DISMISS = 'review_dismiss';
