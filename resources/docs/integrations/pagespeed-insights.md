@@ -2,7 +2,7 @@
 title: Google PageSpeed Insights
 section: Integrations
 order: 80
-updated: 2026-10-03
+updated: 2026-10-15
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, google, care-plan, pressable, modularization]
 tracks: [modules/PageSpeedInsights/src/PageSpeedInsightsClient.php, modules/PageSpeedInsights/src/PageSpeedInsightsServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
@@ -18,7 +18,7 @@ PSI originally served as our primary performance engine. It's free (25k req/day)
 
 ## Current role
 
-`RunPerformanceScans` tries GTmetrix first — for SpinupWP sites. On a GTmetrix failure it retries via PSI (unless the site is flagged `psi_unavailable_at`), and the resulting row is relabeled `engine='psi-fallback'` so the dashboard can distinguish "PSI ran because GTmetrix errored tonight" from a primary PSI scan. If the fallback also fails, the GTmetrix error is what gets recorded.
+`RunPerformanceScans` tries GTmetrix first — for every site not hosted on Pressable. On a GTmetrix failure it retries via PSI (unless the site is flagged `psi_unavailable_at`), and the resulting row is relabeled `engine='psi-fallback'` so the dashboard can distinguish "PSI ran because GTmetrix errored tonight" from a primary PSI scan. If the fallback also fails, the GTmetrix error is what gets recorded.
 
 Pressable sites never enter this chain at all — they use Pressable's own always-on Lighthouse report via `PressableLighthouseClient` (`engine='pressable'`). See [Features → Performance scans](/docs/features/performance-scans).
 
@@ -37,8 +37,7 @@ php artisan clockwork:run-performance-scans --site=42 --engine=psi
 
    ```
    CLOCKWORK_PSI_API_KEY=AIzaSy...
-   # Optional: specify a distinct key for CrUX, otherwise falls back to CLOCKWORK_PSI_API_KEY
-   CLOCKWORK_CRUX_API_KEY=AIzaSy...
+   # CrUX uses this same key (CLOCKWORK_CRUX_API_KEY is not wired into config/clockwork.php yet)
    ```
 
 No key required strictly speaking for basic PSI — the Google API permits anonymous calls at a lower rate limit, but the key avoids shared-IP throttling on busy agency networks. The Chrome UX Report API requires an enabled key.
@@ -76,7 +75,7 @@ Response is parsed via `ChromeUxReportClient`. We extract:
 
 ## Storage
 
-- `site_performance_scans` — one row per lab run. Columns: `site_id`, `scanned_at`, `status` (`ok|failed`), `strategy`, `engine` (`gtmetrix|psi|psi-fallback`), `performance_score` (0-100), `lcp_ms`, `fcp_ms`, `tbt_ms`, `si_ms`, **`cls_x1000`** (CLS × 1000 to avoid float drift in MySQL — divide on read), `accessibility_score`, `best_practices_score`, `seo_score`, `page_weight_bytes`, `request_count`, `page_url`, `region`, `error`, `elapsed_ms`.
+- `site_performance_scans` — one row per lab run. Columns: `site_id`, `scanned_at`, `status` (`ok|failed`), `strategy`, `engine` (`gtmetrix|psi|psi-fallback|pressable`), `source_generated_at` (report's own generation time; Pressable rows only), `performance_score` (0-100), `lcp_ms`, `fcp_ms`, `tbt_ms`, `si_ms`, **`cls_x1000`** (CLS × 1000 to avoid float drift in MySQL — divide on read), `accessibility_score`, `best_practices_score`, `seo_score`, `page_weight_bytes`, `request_count`, `page_url`, `region`, `error`, `elapsed_ms`.
 - `site_field_metrics` — one row per site × form factor × scope × collection period. Columns: `site_id`, `form_factor` (`phone|desktop`), `scope` (`origin|url`), `status` (`ok|no_data|failed`), `lcp_p75_ms`, `inp_p75_ms`, `fcp_p75_ms`, `ttfb_p75_ms`, `cls_p75_x1000`, `good_pct`, `cwv_pass`, `period_start`, `period_end`, `collected_at`, `error`. Unique on `(site_id, form_factor, scope, period_end)`.
 
 

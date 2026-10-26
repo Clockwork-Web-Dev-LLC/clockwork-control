@@ -3,6 +3,7 @@
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 
@@ -89,8 +90,26 @@ it('hides the contact-forms section when no form tests ran', function () {
     $html = (new ClientReportMail(clientReportMailFixture()))->render();
     expect($html)->not->toContain('Contact forms');
 
-    $html = (new ClientReportMail(clientReportMailFixture(['forms' => ['total_synthetic_tests' => 4, 'pass_rate' => 100]])))->render();
+    $html = (new ClientReportMail(clientReportMailFixture([
+        'meta' => ['schema_version' => 2],
+        'forms' => ['total_synthetic_tests' => 4, 'live_tests' => 4, 'pass_rate' => 100],
+    ])))->render();
     expect($html)->toContain('Contact forms')->toContain('100% delivered');
+});
+
+it('does not HTML-escape names and notes in the plain-text part', function () {
+    $report = clientReportMailFixture(['meta' => ['custom_notes' => "We've fixed the <contact> form & cache."]]);
+    $report->site->forceFill(['client_id' => Client::create(['name' => "O'Brien & Sons", 'email' => 'office@obrien.test'])->id])->save();
+    $mail = new ClientReportMail($report->fresh());
+    $content = $mail->content();
+
+    $text = view($content->text, $content->with)->render();
+
+    expect($text)->toContain("Hi O'Brien & Sons,")
+        ->toContain("We've fixed the <contact> form & cache.")
+        ->not->toContain('&amp;')->not->toContain('&#039;');
+    // The HTML part still escapes them.
+    expect($mail->render())->toContain('O&#039;Brien &amp; Sons')->not->toContain('<contact>');
 });
 
 it('has a client-friendly subject and replies go to support', function () {

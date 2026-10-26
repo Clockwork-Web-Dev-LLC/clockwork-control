@@ -29,5 +29,6 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
         ->name('client-reports.schedules.send-now');
 
     Route::get('/client-reports/{report}', [ClientReportsController::class, 'show'])->name('client-reports.show');
+    Route::get('/client-reports/{report}/email', [ClientReportsController::class, 'email'])->name('client-reports.email');
     Route::post('/client-reports/{report}/send', [ClientReportsController::class, 'send'])->name('client-reports.send');
 });

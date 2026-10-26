@@ -91,9 +91,11 @@ class CheckBlacklists extends Command
      */
     private function targetSites()
     {
+        // A lookup by domain needs no server, so serverless hosts (Pressable,
+        // custom) are covered too — before, they were silently skipped.
         $q = Site::query()
             ->with('server')
-            ->whereHas('server', fn ($q) => $q->monitored())
+            ->hostMonitored()
             ->orderBy('domain');
 
         if ($siteOpt = $this->option('site')) {
