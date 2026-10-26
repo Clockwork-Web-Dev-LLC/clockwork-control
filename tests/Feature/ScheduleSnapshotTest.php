@@ -65,6 +65,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:pull-site-metrics',
         'clockwork:pull-wordfence-blocks',
         'clockwork:push-companion-backups',
+        'clockwork:push-companion-branding --verify',
         'clockwork:push-companion-traffic',
         'clockwork:push-gatekeeper-settings',
         'clockwork:push-update-exceptions',

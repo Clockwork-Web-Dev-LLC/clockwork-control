@@ -88,14 +88,14 @@ class SiteTrafficCapabilityTest extends TestCase
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response([
                 'ok' => true,
                 'plugins' => ['active' => []],
             ]),
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response([
                 'ok' => true,
             ]),
-            "https://{$site->domain}/wp-json/clockwork/v1/traffic-report" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/traffic-report*" => Http::response([
                 'ok' => true,
                 'supported' => false,
             ]),

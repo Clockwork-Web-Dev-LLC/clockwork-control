@@ -57,7 +57,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         expect($secret)->toBeString()->not->toBe('');
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/detect" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/detect*" => Http::response(
                 ['ok' => true, 'is_wordpress' => true],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -71,7 +71,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         expect($result)->toBe(['ok' => true, 'is_wordpress' => true]);
 
         Http::assertSent(function ($request) use ($site, $secret, $before, $after) {
-            expect($request->url())->toBe("https://{$site->domain}/wp-json/clockwork/v1/detect");
+            expect(strtok($request->url(), '?'))->toBe("https://{$site->domain}/wp-json/clockwork/v1/detect");
 
             $timestampHeader = $request->header('X-Clockwork-Timestamp')[0] ?? null;
             $signatureHeader = $request->header('X-Clockwork-Signature')[0] ?? null;
@@ -100,7 +100,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         $secret = $site->companion_secret;
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(
                 ['ok' => true],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -111,7 +111,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         $client->pushBackupsReport(['summary' => 'all good', 'count' => 1]);
         $client->pushBackupsReport(['summary' => 'something changed', 'count' => 2]);
 
-        $sent = Http::recorded(fn ($request) => $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/backups-report");
+        $sent = Http::recorded(fn ($request) => strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/backups-report");
 
         expect($sent)->toHaveCount(2);
 
@@ -144,7 +144,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         $site = companionSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 ['ok' => true],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -215,7 +215,7 @@ describe('ClockworkCompanionClient HMAC request signing', function () {
         // real signed call, not just when signedRequest() is invoked in
         // isolation.
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/detect" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/detect*" => Http::response(
                 ['ok' => true],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -260,7 +260,7 @@ describe('ClockworkCompanionClient non-JSON response handling', function () {
         $site = companionSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 '<script type="text/javascript">window.location = "https://'.$site->domain.'/wp-json/clockwork/v1/health?timezone="+Intl.DateTimeFormat().resolvedOptions().timeZone;</script>{"ok":true,"version":"1.31.12"}',
                 200,
                 ['Content-Type' => 'application/json; charset=UTF-8'],
@@ -282,7 +282,7 @@ describe('ClockworkCompanionClient non-JSON response handling', function () {
         // entire routing bypasses WordPress (a JS SPA catch-all) serves the
         // identical body from both paths.
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']),
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']),
             "https://{$site->domain}/?rest_route=*" => Http::response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']),
         ]);
 
@@ -298,7 +298,7 @@ describe('ClockworkCompanionClient non-JSON response handling', function () {
         $capturedTs = null;
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork-renegade/v1/health" => function ($request) use (&$capturedSig, &$capturedTs) {
+            "https://{$site->domain}/wp-json/clockwork-renegade/v1/health*" => function ($request) use (&$capturedSig, &$capturedTs) {
                 $capturedSig = $request->header('X-Clockwork-Signature')[0] ?? null;
                 $capturedTs = (int) ($request->header('X-Clockwork-Timestamp')[0] ?? 0);
 
@@ -368,10 +368,12 @@ describe('ClockworkCompanionClient query-string signing (V2)', function () {
             expect($request->header('X-Clockwork-Signature')[0])
                 ->toBe(expectedCompanionSignature('GET', '/resource-report', $timestamp, '', $secret));
 
-            // V2 covers the query: keys sorted (limit < since), ':' and '+' percent-encoded.
+            // V2 covers the query: keys sorted (_cw < limit < since), ':' and '+' percent-encoded.
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $cw = $query['_cw'] ?? '';
             $expectedV2 = expectedCompanionSignature(
                 'GET',
-                '/resource-report?limit=50&since=2026-10-01T00%3A00%3A00%2B00%3A00',
+                "/resource-report?_cw={$cw}&limit=50&since=2026-10-01T00%3A00%3A00%2B00%3A00",
                 $timestamp,
                 '',
                 $secret,
@@ -386,14 +388,14 @@ describe('ClockworkCompanionClient query-string signing (V2)', function () {
         $site = companionSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(
                 ['ok' => true],
                 200,
                 ['Content-Type' => 'application/json'],
             ),
         ]);
 
-        (new ClockworkCompanionClient($site))->health();
+        (new ClockworkCompanionClient($site))->pushBackupsReport(['summary' => 'ok']);
 
         Http::assertSent(fn ($request) => $request->header('X-Clockwork-Signature-V2') === []);
     });

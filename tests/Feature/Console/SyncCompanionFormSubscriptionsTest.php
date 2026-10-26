@@ -26,7 +26,7 @@ function scfsSite(array $overrides = []): Site
 function scfsFakeSubscriptions(Site $site, array $subscriptions): void
 {
     Http::fake([
-        "https://{$site->domain}/wp-json/clockwork/v1/form-subscriptions" => Http::response(
+        "https://{$site->domain}/wp-json/clockwork/v1/form-subscriptions*" => Http::response(
             ['ok' => true, 'max' => 3, 'subscriptions' => $subscriptions],
             200,
             ['Content-Type' => 'application/json'],
@@ -196,7 +196,7 @@ describe('clockwork:sync-companion-form-subscriptions — targeting and failure 
     it('returns FAILURE overall and leaves the site untouched when the Companion call itself fails', function () {
         $site = scfsSite();
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/form-subscriptions" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/form-subscriptions*" => Http::response(
                 ['message' => 'error'],
                 500,
                 ['Content-Type' => 'application/json'],

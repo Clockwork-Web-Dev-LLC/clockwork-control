@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-10-04
+updated: 2026-10-14
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/SpinupWp/src/SpinupWpServiceProvider.php, modules/Pressable/src/PressableServiceProvider.php, modules/BackupRelay/src/BackupRelayServiceProvider.php, modules/CommentModeration/src/CommentModerationServiceProvider.php, modules/AiRemedy/src/AiRemedyServiceProvider.php]
@@ -152,6 +152,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | Mon 06:00 | `clockwork:composer-audit` | Composer dependency vulnerability scan. |
 | Mon 06:15 | `clockwork:send-telemetry` | Anonymous usage report to the project maintainer. On by default (`CLOCKWORK_TELEMETRY_ENABLED=true`); disable in Settings → Maintenance or via env. See [Reference → env vars](/docs/reference/env-vars). |
 | Mon 06:30 | `clockwork:security-check --ssh --quiet-ok` | System security audit. |
+| Mon 06:50 | `clockwork:push-companion-branding --verify` | Weekly white-label self-heal: read each Companion/Renegade site's live branding, re-push only where it drifted, read back to confirm; unreachable sites reported. See [Features → Companion branding](/docs/features/companion-branding). |
 
 ## Monthly
 

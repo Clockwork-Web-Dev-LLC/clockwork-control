@@ -46,7 +46,7 @@ describe('clockwork:backfill-companion-action-log', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:backfill-companion-action-log')
@@ -86,7 +86,7 @@ describe('clockwork:backfill-companion-action-log', function () {
         $row = ActionLog::factory()->create(['site_id' => $site->id, 'companion_pushed_at' => null]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append" => Http::response('Service Unavailable', 503),
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response('Service Unavailable', 503),
         ]);
 
         $this->artisan('clockwork:backfill-companion-action-log')
@@ -104,7 +104,7 @@ describe('clockwork:backfill-companion-action-log', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:backfill-companion-action-log', ['--limit' => 2])
@@ -129,7 +129,7 @@ describe('clockwork:backfill-companion-action-log', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:backfill-companion-action-log', ['--reset-since' => now()->subDays(1)->toDateString()])
@@ -155,7 +155,7 @@ describe('clockwork:backfill-companion-action-log', function () {
         ActionLog::factory()->create(['site_id' => $other->id, 'companion_pushed_at' => null]);
 
         Http::fake([
-            "https://{$target->domain}/wp-json/clockwork/v1/action-log/append" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$target->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:backfill-companion-action-log', ['--site' => 'backfill-target.test'])->assertSuccessful();

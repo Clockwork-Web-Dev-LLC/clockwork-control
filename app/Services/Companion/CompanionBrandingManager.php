@@ -505,6 +505,52 @@ class CompanionBrandingManager
     }
 
     /**
+     * Fields that define whether a site shows our branding. The plugin sanitizes
+     * free text and URLs on save, so comparing every pushed field would report
+     * false drift; these round-trip unchanged.
+     */
+    public const DRIFT_KEYS = [
+        'enabled',
+        'company_name',
+        'support_email',
+        'plugin_name',
+        'menu_title',
+        'logo_url',
+        'primary_color',
+        'accent_color',
+    ];
+
+    /**
+     * Compare a site's live branding with Control's. Returns [] when in sync,
+     * otherwise field => value currently on the site. Throws when the site
+     * can't be read (unreachable, bad signature) so callers can report it.
+     *
+     * @return array<string, mixed>
+     */
+    public function drift(Site $site): array
+    {
+        $live = (new ClockworkCompanionClient($site))->branding();
+        $want = $this->payload();
+
+        $drift = [];
+        foreach (self::DRIFT_KEYS as $key) {
+            $expected = $want[$key] ?? null;
+            $actual = $live[$key] ?? null;
+            if (is_bool($expected)) {
+                $actual = (bool) $actual;
+            } elseif (is_string($expected)) {
+                $expected = strtolower(trim($expected));
+                $actual = strtolower(trim((string) $actual));
+            }
+            if ($expected !== $actual) {
+                $drift[$key] = $live[$key] ?? null;
+            }
+        }
+
+        return $drift;
+    }
+
+    /**
      * Push current branding to a single site over HMAC REST.
      */
     public function syncSite(Site $site): bool

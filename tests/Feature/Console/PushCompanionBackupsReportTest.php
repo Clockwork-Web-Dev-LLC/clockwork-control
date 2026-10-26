@@ -67,7 +67,7 @@ describe('clockwork:push-companion-backups — happy path', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -105,7 +105,7 @@ describe('clockwork:push-companion-backups — happy path', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -133,7 +133,7 @@ describe('clockwork:push-companion-backups — happy path', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -165,7 +165,7 @@ describe('clockwork:push-companion-backups — offsite S3 archive enrichment', f
         $this->mock(SpacesClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -208,7 +208,7 @@ describe('clockwork:push-companion-backups — offsite S3 archive enrichment', f
         $this->mock(SpacesClient::class, fn ($mock) => $mock->shouldReceive('isConfigured')->andReturn(false));
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -330,7 +330,7 @@ describe('clockwork:push-companion-backups — skip and failure handling', funct
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['message' => 'error'], 500, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['message' => 'error'], 500, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
@@ -355,12 +355,12 @@ describe('clockwork:push-companion-backups — options', function () {
         });
 
         Http::fake([
-            "https://{$target->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$target->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups', ['--site' => $target->domain])->assertSuccessful();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$target->domain}/wp-json/clockwork/v1/backups-report");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$target->domain}/wp-json/clockwork/v1/backups-report");
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $other->domain));
     });
 
@@ -381,7 +381,7 @@ describe('clockwork:push-companion-backups — options', function () {
         });
 
         Http::fake([
-            "https://{$onA->domain}/wp-json/clockwork/v1/backups-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$onA->domain}/wp-json/clockwork/v1/backups-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:push-companion-backups', ['--server' => $serverA->name])->assertSuccessful();
