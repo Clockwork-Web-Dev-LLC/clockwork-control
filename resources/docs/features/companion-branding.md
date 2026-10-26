@@ -2,7 +2,7 @@
 title: Companion & White Label
 section: Features
 order: 93
-updated: 2026-09-28
+updated: 2026-10-14
 author: Aaron Reimann
 tags: [companion, branding, white-label, agency, wordpress]
 tracks: [app/Http/Controllers/CompanionSettingsController.php, app/Services/Companion/CompanionBrandingManager.php, app/Jobs/PushCompanionBrandingJob.php, app/Console/Commands/PushCompanionBranding.php, resources/views/settings/companion.blade.php, resources/views/settings/companion-preview.blade.php, resources/views/components/color-picker.blade.php]
@@ -44,6 +44,9 @@ A client-side segmented control (`activeTab` Alpine state) switches between the 
   - The dedicated **"Sync Fleet Now"** button in the page header launches `clockwork:push-companion-branding` in the background (`BackgroundArtisan`) and redirects immediately.
   - `php artisan clockwork:push-companion-branding [--site=<id-or-domain>]` does the same from the CLI, scoped to one site or the whole fleet.
   - **Every Companion install or update** (`CompanionInstaller`/`PressableCompanionInstaller::installOrUpdate()`) also pushes the current branding to that one site inline, best-effort — so a freshly-installed or re-installed Companion never briefly shows default Clockwork Control branding before the next fleet sync.
+  - **Standalone / Renegade enrolment** (`SitesController::store()` via connection key) pushes branding too (added 2026-10-14 — before that, 10 Renegade sites sat on plugin defaults).
+  - **Weekly self-heal — Monday 06:50:** `clockwork:push-companion-branding --verify` reads every site's live branding (`GET /branding`), compares `CompanionBrandingManager::DRIFT_KEYS` (enabled, company name, support email, plugin name, menu title, logo, primary/accent colour — the fields that round-trip unchanged through the plugin's sanitizers), re-pushes **only** sites that drifted, then reads back to confirm. Sites that can't be read (offline, signature mismatch) are reported, not pushed. Writes one `companion_branding_verified` action-log row when anything was healed/failed/unreachable; exits non-zero when anything is still wrong.
+- **Signed GETs are cache-busted.** Some hosts cache `/wp-json/*` GET responses at the edge or in a path-keyed page cache, so reads could return pre-push values. `ClockworkCompanionClient::get()` adds a unique `_cw` query param and `Cache-Control: no-cache` to every GET; the HMAC covers method + route + timestamp + body only, so the signature is unaffected.
 - Only sites with `companion_installed = true` and a non-empty `companion_secret` are eligible; everything else is silently skipped (not an error) since there's no signed channel to reach them yet.
 
 ## Vulnerability emails use the Plugin Notification Email tab

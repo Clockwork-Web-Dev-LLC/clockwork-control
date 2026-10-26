@@ -78,7 +78,7 @@ describe('clockwork:diagnose-companion-install — healthy site', function () {
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 ['version' => '1.30.4', 'capabilities' => ['resource-sampler']],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -123,7 +123,7 @@ describe('clockwork:diagnose-companion-install — broken site (Cluster 1: wp-cl
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response(
                 ['message' => 'invalid_signature'],
                 401,
                 ['Content-Type' => 'application/json'],
@@ -168,7 +168,7 @@ describe('clockwork:diagnose-companion-install — broken site (table_prefix mis
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/health" => Http::response([], 401, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/health*" => Http::response([], 401, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:diagnose-companion-install', ['site' => $site->domain])

@@ -144,7 +144,7 @@ describe('CompanionProtectedPlugins guard', function () {
         $site = gatekeeperSite(['domain' => 'gk.example']);
 
         Http::fake([
-            'https://gk.example/wp-json/clockwork/v1/plugins/delete' => Http::response(['ok' => true]),
+            'https://gk.example/wp-json/clockwork/v1/plugins/delete*' => Http::response(['ok' => true]),
         ]);
 
         $response = (new ClockworkCompanionClient($site))

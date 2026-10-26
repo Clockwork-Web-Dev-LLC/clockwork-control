@@ -54,7 +54,7 @@ describe('clockwork:pressable-security-summary-report — happy path', function 
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:pressable-security-summary-report')->assertSuccessful();
@@ -85,7 +85,7 @@ describe('clockwork:pressable-security-summary-report — happy path', function 
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:pressable-security-summary-report')->assertSuccessful();
@@ -155,7 +155,7 @@ describe('clockwork:pressable-security-summary-report — skip and failure handl
         });
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report" => Http::response(['message' => 'error'], 500, ['Content-Type' => 'application/json']),
+            "https://{$site->domain}/wp-json/clockwork/v1/security-summary-report*" => Http::response(['message' => 'error'], 500, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:pressable-security-summary-report')->assertSuccessful();
@@ -176,12 +176,12 @@ describe('clockwork:pressable-security-summary-report — options', function () 
         });
 
         Http::fake([
-            "https://{$target->domain}/wp-json/clockwork/v1/security-summary-report" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+            "https://{$target->domain}/wp-json/clockwork/v1/security-summary-report*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
         ]);
 
         $this->artisan('clockwork:pressable-security-summary-report', ['--site' => $target->domain])->assertSuccessful();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$target->domain}/wp-json/clockwork/v1/security-summary-report");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$target->domain}/wp-json/clockwork/v1/security-summary-report");
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $other->domain));
     });
 });

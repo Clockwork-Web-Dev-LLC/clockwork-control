@@ -49,7 +49,7 @@ use Illuminate\Support\Facades\Http;
 function fakeContactFormTestEndpoint(Site $site, bool $ok, string $error = ''): void
 {
     Http::fake([
-        "https://{$site->domain}/wp-json/clockwork/v1/test-contact-form" => Http::response([
+        "https://{$site->domain}/wp-json/clockwork/v1/test-contact-form*" => Http::response([
             'ok' => $ok,
             'accepted' => true,
             'mail_invoked' => true,
