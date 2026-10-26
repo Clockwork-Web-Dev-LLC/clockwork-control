@@ -332,6 +332,15 @@ Schedule::command('clockwork:refresh-companion-capabilities')
     ->withoutOverlapping(30)
     ->onOneServer();
 
+// Backup history for client reports: reads each site's real backups (Pressable
+// API, SpinupWP's Spaces bucket, our S3 archives) into site_backups. Before the
+// 06:00 report send would be ideal, but the send compiles the previous month,
+// whose backups were all recorded on earlier days, so 05:30 is simply early.
+Schedule::command('clockwork:record-site-backups')
+    ->dailyAt('05:30')
+    ->withoutOverlapping(60)
+    ->onOneServer();
+
 // clockwork:push-companion-backups (06:30, SpinupWP-only) moved to
 // Modules\SpinupWp\SpinupWpServiceProvider::scheduledTasks() (Phase 7 followup).
 
@@ -353,6 +362,15 @@ Schedule::command('clockwork:push-companion-traffic')
 Schedule::command('clockwork:push-gatekeeper-settings')
     ->dailyAt('06:40')
     ->withoutOverlapping()
+    ->onOneServer();
+
+// Weekly white-label self-heal: read each Companion/Renegade site's live branding
+// and re-push only where it drifted. Branding was otherwise pushed only on
+// settings save and at install, so a failed push or a Renegade enrolment left
+// sites unbranded indefinitely (10 found 2026-10-14).
+Schedule::command('clockwork:push-companion-branding --verify')
+    ->weeklyOn(1, '06:50')
+    ->withoutOverlapping(60)
     ->onOneServer();
 
 // Daily catch-up sync for update exceptions (paused auto-updates).
@@ -539,6 +557,26 @@ Schedule::command('clockwork:run-performance-scans --strategy=mobile --weekly-ro
     ->dailyAt('04:45')
     ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
     ->withoutOverlapping(60)
+    ->onOneServer()
+    ->runInBackground();
+
+// Pressable runs its own Lighthouse test about once a month per site (no way
+// to trigger one) and we can only read the latest. Reading it is free, so
+// every Pressable care-plan site is read nightly, mobile and desktop, and a
+// new report lands within a day — in time for the 1st-of-month client
+// reports. Unchanged reports are skipped. These sites are no longer in the
+// GTmetrix rotation above.
+Schedule::command('clockwork:run-performance-scans --strategy=mobile --host-reports')
+    ->dailyAt('05:05')
+    ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->runInBackground();
+
+Schedule::command('clockwork:run-performance-scans --strategy=desktop --host-reports')
+    ->dailyAt('05:15')
+    ->when(fn () => (bool) app(Settings::class)->get('performance_scans.enabled', true))
+    ->withoutOverlapping(30)
     ->onOneServer()
     ->runInBackground();
 

@@ -40,12 +40,12 @@ describe('clockwork:refresh-companion-snapshot — happy path', function () {
         $site = csSnapshotSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins*" => Http::response(
                 ['ok' => true, 'counts' => ['total' => 12, 'updates_available' => 2]],
                 200,
                 ['Content-Type' => 'application/json'],
             ),
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 [
                     'plugins' => ['counts' => ['total' => 12, 'updates_available' => 2]],
                     'admins' => ['count' => 3],
@@ -67,8 +67,8 @@ describe('clockwork:refresh-companion-snapshot — happy path', function () {
         expect($site->companion_snapshot_at)->not->toBeNull();
         expect($site->companion_last_seen_at)->not->toBeNull();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/plugins");
-        Http::assertSent(fn ($request) => $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/snapshot");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/plugins");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/snapshot");
     });
 
     it('skips sites that do not advertise the snapshot capability, without making any HTTP call', function () {
@@ -86,7 +86,7 @@ describe('clockwork:refresh-companion-snapshot — happy path', function () {
         $site = csSnapshotSite(['companion_capabilities' => ['snapshot']]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 1, 'updates_available' => 0]]],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -106,7 +106,7 @@ describe('clockwork:refresh-companion-snapshot — failure handling', function (
         $site = csSnapshotSite(['companion_capabilities' => ['snapshot']]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['message' => 'Internal Server Error'],
                 500,
                 ['Content-Type' => 'application/json'],
@@ -123,12 +123,12 @@ describe('clockwork:refresh-companion-snapshot — failure handling', function (
         $site = csSnapshotSite();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins*" => Http::response(
                 ['message' => 'gateway timeout'],
                 504,
                 ['Content-Type' => 'application/json'],
             ),
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 5, 'updates_available' => 1]]],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -148,7 +148,7 @@ describe('clockwork:refresh-companion-snapshot — Pressable edge-cache purge', 
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 1, 'updates_available' => 0]]],
                 200,
                 ['Content-Type' => 'application/json'],
@@ -170,7 +170,7 @@ describe('clockwork:refresh-companion-snapshot — Pressable edge-cache purge', 
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/snapshot" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
                 ['plugins' => ['counts' => ['total' => 1, 'updates_available' => 0]]],
                 200,
                 ['Content-Type' => 'application/json'],

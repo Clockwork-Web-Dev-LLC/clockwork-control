@@ -66,12 +66,14 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:pull-site-metrics',
         'clockwork:pull-wordfence-blocks',
         'clockwork:push-companion-backups',
+        'clockwork:push-companion-branding --verify',
         'clockwork:push-companion-traffic',
         'clockwork:push-gatekeeper-settings',
         'clockwork:push-update-exceptions',
         'clockwork:reap-stale-server-updates',
         'clockwork:reap-stale-update-jobs',
         'clockwork:reconcile-provider',
+        'clockwork:record-site-backups',
         'clockwork:refresh-cisa-kev',
         'clockwork:refresh-closed-plugins',
         'clockwork:refresh-cloudflare-real-ip',
@@ -83,12 +85,9 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:refresh-runtime-eol',
         'clockwork:rollup-traffic --backfill=2',
         'clockwork:run-companion-malware-scans',
-        // clockwork:run-nightly-plugin-updates intentionally absent — it's no
-        // longer its own Schedule::command() entry. It's chained via ->then()
-        // off clockwork:refresh-companion-snapshot's daily event instead, so
-        // it only starts once that refresh has actually finished rather than
-        // racing a fixed time offset (see routes/console.php for why).
         'clockwork:run-performance-scans --strategy=mobile --weekly-rotation',
+        'clockwork:run-performance-scans --strategy=mobile --host-reports',
+        'clockwork:run-performance-scans --strategy=desktop --host-reports',
         'clockwork:scan-sitecheck',
         'clockwork:scan-wp7-truncation --repair',
         'clockwork:scheduler-heartbeat',

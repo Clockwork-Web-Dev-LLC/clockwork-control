@@ -124,7 +124,28 @@ class SpacesClient
      */
     public function listSiteBackupObjects(Site $site): array
     {
-        if (! $this->isConfigured() || ! $site->domain) {
+        try {
+            return $this->listSiteBackupObjectsOrFail($site);
+        } catch (\Throwable) {
+            // Surface upstream as an empty list — the puller treats "no spaces
+            // history" as graceful degradation. Logging happens at the caller
+            // layer where we know the site context.
+            return [];
+        }
+    }
+
+    /**
+     * Same listing, but a bucket/credential/network failure throws instead of
+     * looking like "no backups" — for callers that must tell the two apart.
+     *
+     * @return list<array{key: string, size: int, last_modified: ?int}>
+     */
+    public function listSiteBackupObjectsOrFail(Site $site): array
+    {
+        if (! $this->isConfigured()) {
+            throw new RuntimeException('DigitalOcean Spaces is not configured.');
+        }
+        if (! $site->domain) {
             return [];
         }
 
@@ -135,23 +156,15 @@ class SpacesClient
         );
 
         $rows = [];
-        try {
-            $listing = $this->disk()->listContents($prefix, true);
-            foreach ($listing as $item) {
-                if (! $item instanceof FileAttributes) {
-                    continue;
-                }
-                $rows[] = [
-                    'key' => $item->path(),
-                    'size' => (int) ($item->fileSize() ?? 0),
-                    'last_modified' => $item->lastModified(),
-                ];
+        foreach ($this->disk()->listContents($prefix, true) as $item) {
+            if (! $item instanceof FileAttributes) {
+                continue;
             }
-        } catch (\Throwable $e) {
-            // Surface upstream as an empty list — the puller treats "no spaces
-            // history" as graceful degradation. Logging happens at the caller
-            // layer where we know the site context.
-            return [];
+            $rows[] = [
+                'key' => $item->path(),
+                'size' => (int) ($item->fileSize() ?? 0),
+                'last_modified' => $item->lastModified(),
+            ];
         }
 
         return $rows;

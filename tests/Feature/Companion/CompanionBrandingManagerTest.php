@@ -224,7 +224,7 @@ describe('CompanionBrandingManager', function () {
             ]);
 
             Http::fake([
-                "https://{$site->domain}/wp-json/clockwork/v1/branding" => function ($request) {
+                "https://{$site->domain}/wp-json/clockwork/v1/branding*" => function ($request) {
                     $hasSig = $request->hasHeader('X-Clockwork-Signature');
                     $hasTime = $request->hasHeader('X-Clockwork-Timestamp');
                     $data = $request->data();
@@ -252,7 +252,7 @@ describe('CompanionBrandingManager', function () {
             ]);
 
             Http::fake([
-                "https://{$site->domain}/wp-json/clockwork-renegade/v1/branding" => function ($request) {
+                "https://{$site->domain}/wp-json/clockwork-renegade/v1/branding*" => function ($request) {
                     $hasSig = $request->hasHeader('X-Clockwork-Signature');
                     $hasTime = $request->hasHeader('X-Clockwork-Timestamp');
                     $data = $request->data();
@@ -261,7 +261,7 @@ describe('CompanionBrandingManager', function () {
                         ? Http::response(['ok' => true, 'updated' => true], 200)
                         : Http::response(['ok' => false, 'error' => 'invalid_signature'], 401);
                 },
-                "https://{$site->domain}/wp-json/clockwork/v1/branding" => Http::response(['ok' => false, 'error' => 'wrong_namespace'], 404),
+                "https://{$site->domain}/wp-json/clockwork/v1/branding*" => Http::response(['ok' => false, 'error' => 'wrong_namespace'], 404),
             ]);
 
             expect($manager->syncSite($site))->toBeTrue();
@@ -275,7 +275,7 @@ describe('CompanionBrandingManager', function () {
             $manager = app(CompanionBrandingManager::class);
 
             Http::fake([
-                "https://{$site->domain}/wp-json/clockwork/v1/branding" => Http::response(['ok' => false, 'error' => 'server_error'], 500),
+                "https://{$site->domain}/wp-json/clockwork/v1/branding*" => Http::response(['ok' => false, 'error' => 'server_error'], 500),
             ]);
 
             Log::shouldReceive('warning')
@@ -299,8 +299,8 @@ describe('CompanionBrandingManager', function () {
             Site::factory()->withCompanionInstalled()->create(['domain' => 'delta.com', 'is_inactive' => true]);
 
             Http::fake([
-                'https://alpha.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => true], 200),
-                'https://beta.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => false], 500),
+                'https://alpha.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => true], 200),
+                'https://beta.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => false], 500),
             ]);
 
             $manager = app(CompanionBrandingManager::class);
@@ -325,10 +325,10 @@ describe('CompanionBrandingManager', function () {
             ]);
 
             Http::fake([
-                'https://classic.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => true], 200),
-                'https://renegade.com/wp-json/clockwork-renegade/v1/branding' => Http::response(['ok' => true], 200),
-                'https://classic.com/wp-json/clockwork-renegade/v1/branding' => Http::response(['ok' => false], 404),
-                'https://renegade.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => false], 404),
+                'https://classic.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => true], 200),
+                'https://renegade.com/wp-json/clockwork-renegade/v1/branding*' => Http::response(['ok' => true], 200),
+                'https://classic.com/wp-json/clockwork-renegade/v1/branding*' => Http::response(['ok' => false], 404),
+                'https://renegade.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => false], 404),
             ]);
 
             $results = app(CompanionBrandingManager::class)->syncFleet();
@@ -337,10 +337,10 @@ describe('CompanionBrandingManager', function () {
                 ->and($results['successful'])->toBe(2)
                 ->and($results['failed'])->toBe(0);
 
-            Http::assertSent(fn ($request) => $request->url() === 'https://classic.com/wp-json/clockwork/v1/branding');
-            Http::assertSent(fn ($request) => $request->url() === 'https://renegade.com/wp-json/clockwork-renegade/v1/branding');
-            Http::assertNotSent(fn ($request) => $request->url() === 'https://classic.com/wp-json/clockwork-renegade/v1/branding');
-            Http::assertNotSent(fn ($request) => $request->url() === 'https://renegade.com/wp-json/clockwork/v1/branding');
+            Http::assertSent(fn ($request) => strtok($request->url(), '?') === 'https://classic.com/wp-json/clockwork/v1/branding');
+            Http::assertSent(fn ($request) => strtok($request->url(), '?') === 'https://renegade.com/wp-json/clockwork-renegade/v1/branding');
+            Http::assertNotSent(fn ($request) => strtok($request->url(), '?') === 'https://classic.com/wp-json/clockwork-renegade/v1/branding');
+            Http::assertNotSent(fn ($request) => strtok($request->url(), '?') === 'https://renegade.com/wp-json/clockwork/v1/branding');
         });
     });
 
@@ -349,7 +349,7 @@ describe('CompanionBrandingManager', function () {
             $site = Site::factory()->withCompanionInstalled()->create(['domain' => 'cli-test.com', 'is_inactive' => false]);
 
             Http::fake([
-                'https://cli-test.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => true], 200),
+                'https://cli-test.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => true], 200),
             ]);
 
             $this->artisan('clockwork:push-companion-branding', ['--site' => 'cli-test.com'])
@@ -366,7 +366,7 @@ describe('CompanionBrandingManager', function () {
             $site = Site::factory()->withCompanionInstalled()->create(['domain' => 'job-test.com', 'is_inactive' => false]);
 
             Http::fake([
-                'https://job-test.com/wp-json/clockwork/v1/branding' => Http::response(['ok' => true], 200),
+                'https://job-test.com/wp-json/clockwork/v1/branding*' => Http::response(['ok' => true], 200),
             ]);
 
             $jobSingle = new PushCompanionBrandingJob($site->id);

@@ -76,7 +76,7 @@ function ptrMockPressable(Site $site, ?callable $configure = null): void
 function ptrFakeTraffic(Site $site, bool $ok = true, int $status = 200): void
 {
     Http::fake([
-        "https://{$site->domain}/wp-json/clockwork/v1/traffic-report" => Http::response(
+        "https://{$site->domain}/wp-json/clockwork/v1/traffic-report*" => Http::response(
             ['ok' => $ok],
             $status,
             ['Content-Type' => 'application/json'],
@@ -211,7 +211,7 @@ describe('clockwork:pressable-traffic-report — options', function () {
 
         $this->artisan('clockwork:pressable-traffic-report', ['--site' => $target->domain])->assertSuccessful();
 
-        Http::assertSent(fn ($request) => $request->url() === "https://{$target->domain}/wp-json/clockwork/v1/traffic-report");
+        Http::assertSent(fn ($request) => strtok($request->url(), '?') === "https://{$target->domain}/wp-json/clockwork/v1/traffic-report");
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $other->domain));
     });
 });

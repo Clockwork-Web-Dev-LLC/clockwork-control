@@ -12,7 +12,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/database/summary" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/database/summary*" => Http::response([
                 'ok' => true,
                 'revisions' => 15,
                 'auto_drafts' => 3,
@@ -32,7 +32,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             ->and($summary['overhead_bytes'])->toBe(40960);
 
         Http::assertSent(function (Request $request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/database/summary"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/database/summary"
                 && $request->method() === 'GET'
                 && $request->hasHeader('X-Clockwork-Signature')
                 && $request->hasHeader('X-Clockwork-Timestamp');
@@ -43,7 +43,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/database/optimize" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/database/optimize*" => Http::response([
                 'ok' => true,
                 'cleaned' => [
                     'revisions' => 15,
@@ -67,7 +67,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             ->and($result['cleaned']['optimized_tables'])->toBe(4);
 
         Http::assertSent(function (Request $request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/database/optimize"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/database/optimize"
                 && $request->method() === 'POST'
                 && $request['revisions'] === true
                 && $request['keep_revisions'] === 5;
@@ -78,7 +78,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle*" => Http::response([
                 'ok' => true,
                 'slug' => 'akismet/akismet.php',
                 'action' => 'activate',
@@ -96,7 +96,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             ->and($result['active'])->toBeTrue();
 
         Http::assertSent(function (Request $request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle"
                 && $request['slug'] === 'akismet/akismet.php'
                 && $request['action'] === 'activate';
         });
@@ -106,7 +106,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/delete" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/delete*" => Http::response([
                 'ok' => true,
                 'slug' => 'hello-dolly/hello.php',
                 'deleted' => true,
@@ -125,7 +125,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/install" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/install*" => Http::response([
                 'ok' => true,
                 'slug' => 'classic-editor',
                 'plugin_file' => 'classic-editor/classic-editor.php',
@@ -179,7 +179,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/debug-log" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/debug-log*" => Http::response([
                 'ok' => true,
                 'cleared' => true,
             ], 200),
@@ -193,7 +193,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
             ->and($result['cleared'])->toBeTrue();
 
         Http::assertSent(function (Request $request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork/v1/debug-log"
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/debug-log"
                 && $request->method() === 'DELETE'
                 && $request->hasHeader('X-Clockwork-Signature')
                 && $request->hasHeader('X-Clockwork-Timestamp');
@@ -204,7 +204,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/environment" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/environment*" => Http::response([
                 'ok' => true,
                 'php' => [
                     'version' => '8.3.4',
@@ -250,7 +250,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/toggle*" => Http::response([
                 'ok' => true,
                 'slug' => 'woocommerce/woocommerce.php',
                 'action' => 'activate',
@@ -273,7 +273,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         ]);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork-renegade/v1/database/summary" => Http::response([
+            "https://{$site->domain}/wp-json/clockwork-renegade/v1/database/summary*" => Http::response([
                 'ok' => true,
             ], 200),
         ]);
@@ -284,7 +284,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         expect($summary['ok'])->toBeTrue();
 
         Http::assertSent(function (Request $request) use ($site) {
-            return $request->url() === "https://{$site->domain}/wp-json/clockwork-renegade/v1/database/summary";
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork-renegade/v1/database/summary";
         });
     });
 
@@ -301,7 +301,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $prefix = '<script type="text/javascript">window.location = "https://'.$site->domain
             .'/wp-json/clockwork/v1/secret/rotate?timezone="+Intl.DateTimeFormat().resolvedOptions().timeZone;</script>';
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate*" => Http::response(
                 $prefix.json_encode(['ok' => true, 'secret' => $newSecret, 'rotated_at' => '2026-09-15T12:00:00+00:00']),
                 200,
                 ['Content-Type' => 'application/json'],
@@ -318,7 +318,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate*" => Http::response(
                 '<html><body>maintenance page</body></html>',
                 200,
                 ['Content-Type' => 'application/json'],
@@ -334,7 +334,7 @@ describe('ClockworkCompanionClient Extended Methods', function () {
         $site = Site::factory()->withCompanionInstalled()->create();
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/malware-scan" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/malware-scan*" => Http::response(
                 '<script>window.location="/?timezone=x";</script>'
                 .json_encode(['ok' => true, 'findings' => [], 'scanned_files_count' => 1234, 'scanned_at' => '2026-09-15T12:00:00+00:00', 'wall_seconds' => 2.5]),
                 200,

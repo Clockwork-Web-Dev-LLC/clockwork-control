@@ -45,12 +45,12 @@ describe('clockwork:rotate-companion-secret — successful rotation', function (
         $oldSecret = $site->companion_secret;
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate*" => Http::response(
                 ['secret' => 'brand-new-secret-value', 'rotated_at' => now()->toIso8601String()],
                 200,
                 ['Content-Type' => 'application/json'],
             ),
-            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append" => Http::response(['ok' => true], 200),
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200),
         ]);
 
         $this->artisan('clockwork:rotate-companion-secret', ['--site' => $site->domain])
@@ -116,7 +116,7 @@ describe('clockwork:rotate-companion-secret — secret_pinned (409)', function (
         $site = Site::factory()->withCompanionInstalled()->create(['companion_secret' => 'pinned-secret']);
 
         Http::fake([
-            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate" => Http::response(
+            "https://{$site->domain}/wp-json/clockwork/v1/secret/rotate*" => Http::response(
                 ['code' => 'secret_pinned', 'message' => 'Secret is pinned via wp-config.php constant.'],
                 409,
                 ['Content-Type' => 'application/json'],
