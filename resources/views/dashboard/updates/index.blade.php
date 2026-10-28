@@ -112,7 +112,7 @@
                     <span x-show="state.loaded && state.worker_idle"
                           x-text="`Queued · ${state.total} pending — no worker draining`"></span>
                     <span x-show="state.loaded && !state.complete && !state.worker_idle"
-                          x-text="`${state.complete_count} / ${state.total} done`"></span>
+                          x-text="`${state.complete_count} / ${state.total} done` + (state.queued_ahead > 0 && state.complete_count === 0 ? ` · waiting behind ${state.queued_ahead} other jobs` : '')"></span>
                     <span x-show="state.complete">Batch complete · reloading…</span>
                 </span>
                 <span x-show="state.failed_count > 0"
@@ -219,6 +219,7 @@
                         loaded: false,
                         complete: false,
                         worker_idle: false,
+                        queued_ahead: 0,
                         total: 0,
                         complete_count: 0,
                         failed_count: 0,
@@ -274,12 +275,13 @@
                             const done = d.complete + d.failed + d.skipped + d.cancelled;
                             const running = d.running_jobs || [];
                             const inFlight = (d.pending || 0) + running.length > 0;
-                            const workerIdle = d.total > 0 && running.length === 0 && done === 0;
+                            const workerIdle = d.total > 0 && running.length === 0 && done === 0 && !d.worker_active;
                             if (inFlight) this.sawInFlight = true;
                             this.state = {
                                 loaded: true,
                                 complete: !!d.complete_flag,
                                 worker_idle: workerIdle,
+                                queued_ahead: d.queued_ahead || 0,
                                 total: d.total,
                                 complete_count: done,
                                 failed_count: d.failed,

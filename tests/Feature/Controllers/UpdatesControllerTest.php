@@ -201,6 +201,37 @@ describe('UpdatesController', function () {
             ]);
     });
 
+    it('reports an active worker and queued-ahead count when this batch is parked behind another', function () {
+        $site = Site::factory()->create();
+        $mine = (string) Str::uuid();
+        $other = (string) Str::uuid();
+        PluginUpdateJob::factory()->count(2)->create([
+            'site_id' => $site->id, 'batch_id' => $mine, 'status' => PluginUpdateJob::STATUS_PENDING,
+        ]);
+        PluginUpdateJob::factory()->count(3)->create([
+            'site_id' => $site->id, 'batch_id' => $other, 'status' => PluginUpdateJob::STATUS_PENDING,
+        ]);
+        PluginUpdateJob::factory()->running()->create(['site_id' => $site->id, 'batch_id' => $other]);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('updates.batches.status', ['batchId' => $mine]))
+            ->assertOk()
+            ->assertJson(['worker_active' => true, 'queued_ahead' => 3]);
+    });
+
+    it('reports no active worker when nothing is running or recently finished', function () {
+        $site = Site::factory()->create();
+        $batchId = (string) Str::uuid();
+        PluginUpdateJob::factory()->count(2)->create([
+            'site_id' => $site->id, 'batch_id' => $batchId, 'status' => PluginUpdateJob::STATUS_PENDING,
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('updates.batches.status', ['batchId' => $batchId]))
+            ->assertOk()
+            ->assertJson(['worker_active' => false, 'queued_ahead' => 0]);
+    });
+
     it('rejects a non-UUID batchId at the routing layer', function () {
         $url = route('updates.batches.status', ['batchId' => 'not-a-real-uuid']);
 

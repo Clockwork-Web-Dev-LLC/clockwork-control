@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -416,8 +417,25 @@ class UpdatesController extends Controller
                 'messages' => is_array($r->messages) ? $r->messages : [],
             ]);
 
+        // Is *any* worker making progress? A single serial worker can have this
+        // batch parked behind other batches, so this batch's own counts can't
+        // tell "queued behind others" apart from "no worker".
+        $workerActive = PluginUpdateJob::query()
+            ->where(fn ($q) => $q
+                ->where('status', PluginUpdateJob::STATUS_RUNNING)
+                ->orWhere('completed_at', '>=', now()->subSeconds(90)))
+            ->exists()
+            || (Schema::hasTable('jobs') && DB::table('jobs')->whereNotNull('reserved_at')->exists());
+
+        $queuedAhead = PluginUpdateJob::query()
+            ->where('status', PluginUpdateJob::STATUS_PENDING)
+            ->where('batch_id', '!=', $batchId)
+            ->count();
+
         return response()->json([
             'batch_id' => $batchId,
+            'worker_active' => $workerActive,
+            'queued_ahead' => $queuedAhead,
             'total' => $rows->count(),
             'pending' => $byStatus->get(PluginUpdateJob::STATUS_PENDING, 0),
             // `running_count` is the integer status tally; the array of in-flight
