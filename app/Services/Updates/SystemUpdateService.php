@@ -5,6 +5,7 @@ namespace App\Services\Updates;
 use App\Models\Site;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -229,19 +230,39 @@ class SystemUpdateService
      *   needs_update: int,
      *   uninstalled: int,
      *   versions: array<string, int>,
+     *   renegade: array{bundled_version: string, total_sites: int, installed_sites: int, up_to_date: int, needs_update: int, uninstalled: int, versions: array<string, int>},
      * }
      */
     public function getCompanionFleetStatus(): array
     {
-        $bundledVersion = ltrim((string) config('clockwork.companion.version', '1.34.0'), 'v');
-
         $sites = Site::query()
             ->hostMonitored()
-            ->get(['id', 'domain', 'companion_installed', 'companion_version']);
+            ->get(['id', 'domain', 'companion_installed', 'companion_version', 'companion_variant']);
 
+        $isRenegade = fn (Site $site): bool => $site->companion_variant === 'renegade';
+
+        $companion = $this->fleetStatusFor(
+            $sites->reject($isRenegade),
+            ltrim((string) config('clockwork.companion.version', '1.34.0'), 'v'),
+        );
+        $renegade = $this->fleetStatusFor(
+            $sites->filter($isRenegade)->where('companion_installed', true),
+            ltrim((string) config('clockwork.renegade.version', '1.0.0'), 'v'),
+        );
+
+        // Top-level keys stay Companion-only (existing consumers); Renegade
+        // sites are tracked against their own plugin version under `renegade`.
+        return $companion + ['renegade' => $renegade];
+    }
+
+    /**
+     * @param  Collection<int, Site>  $sites
+     * @return array{bundled_version: string, total_sites: int, installed_sites: int, up_to_date: int, needs_update: int, uninstalled: int, versions: array<string, int>}
+     */
+    private function fleetStatusFor($sites, string $bundledVersion): array
+    {
         $totalSites = $sites->count();
         $installedSites = $sites->where('companion_installed', true);
-        $uninstalled = $totalSites - $installedSites->count();
 
         $upToDate = 0;
         $needsUpdate = 0;
@@ -268,7 +289,7 @@ class SystemUpdateService
             'installed_sites' => $installedSites->count(),
             'up_to_date' => $upToDate,
             'needs_update' => $needsUpdate,
-            'uninstalled' => $uninstalled,
+            'uninstalled' => $totalSites - $installedSites->count(),
             'versions' => $versions,
         ];
     }

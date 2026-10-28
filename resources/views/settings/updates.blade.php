@@ -106,7 +106,7 @@
         @endif
 
         {{-- Standard Roll-up Tiles --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <div class="card px-4 py-3">
                 <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">App Version</div>
                 <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">v{{ $updateInfo['current_version'] }}</div>
@@ -123,6 +123,17 @@
                 <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Bundled Companion</div>
                 <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">v{{ $companionStatus['bundled_version'] }}</div>
                 <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">For WordPress fleet</div>
+            </div>
+
+            <div class="card px-4 py-3">
+                <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Bundled Renegade</div>
+                <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">v{{ $companionStatus['renegade']['bundled_version'] }}</div>
+                <div class="text-[10px] text-[var(--color-ink-soft)] mt-0.5">
+                    {{ $companionStatus['renegade']['installed_sites'] }} {{ \Illuminate\Support\Str::plural('site', $companionStatus['renegade']['installed_sites']) }}
+                    @if ($companionStatus['renegade']['needs_update'] > 0)
+                        · <span class="text-[var(--color-status-yellow)]">{{ $companionStatus['renegade']['needs_update'] }} need update</span>
+                    @endif
+                </div>
             </div>
 
             <div class="card px-4 py-3">
@@ -301,6 +312,52 @@
                     </a>
                 </div>
             </div>
+        </div>
+
+        {{-- Section 2b: Clockwork Renegade Plugin (Fleet) --}}
+        @php $renegadeStatus = $companionStatus['renegade']; @endphp
+        <div class="card p-6 mb-6 max-w-5xl">
+            <div class="flex items-start justify-between gap-4 mb-4 flex-wrap">
+                <div>
+                    <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-1 flex items-center gap-2">
+                        <i class="fa-brands fa-wordpress text-[var(--color-ink-muted)]"></i>
+                        Clockwork Renegade Plugin (Fleet)
+                    </h2>
+                    <div class="text-xs text-[var(--color-ink-muted)] font-data">
+                        Bundled version: <strong>v{{ $renegadeStatus['bundled_version'] }}</strong>
+                        · {{ $renegadeStatus['installed_sites'] }} monitored {{ \Illuminate\Support\Str::plural('site', $renegadeStatus['installed_sites']) }} running Renegade
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    @if ($renegadeStatus['installed_sites'] === 0)
+                        <span class="status-pill status-unknown">
+                            <span class="status-dot"></span> No Renegade sites
+                        </span>
+                    @elseif ($renegadeStatus['needs_update'] > 0)
+                        <span class="status-pill status-yellow">
+                            <span class="status-dot"></span> {{ $renegadeStatus['needs_update'] }} sites need update
+                        </span>
+                    @else
+                        <span class="status-pill status-green">
+                            <span class="status-dot"></span> Fleet up to date
+                        </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="text-sm text-[var(--color-ink-muted)] space-y-2 mb-4">
+                <p>
+                    Renegade is the standard WordPress plugin variant (installed from <code class="font-data">wp-content/plugins</code>) for hosts where mu-plugins aren't available. It exposes the same signed REST endpoints under <code class="font-data">/wp-json/clockwork-renegade/v1/</code>.
+                </p>
+            </div>
+
+            @if (! empty($renegadeStatus['versions']))
+                <div class="flex flex-wrap gap-2 pt-3 border-t border-[var(--color-border-light)] text-xs font-data">
+                    @foreach ($renegadeStatus['versions'] as $ver => $count)
+                        <span class="px-2 py-1 rounded bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">v{{ $ver }} &times; {{ $count }}</span>
+                    @endforeach
+                </div>
+            @endif
         </div>
 
         {{-- Section 3: Module Directory Catalog --}}

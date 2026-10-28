@@ -262,6 +262,32 @@ it('displays companion plugin fleet breakdown properly', function () {
         ->assertSee('Older Version Pending');
 });
 
+it('tracks Renegade sites against the Renegade version, not Companion', function () {
+    Http::fake();
+    $this->mockIssueCounterZero();
+
+    config(['clockwork.companion.version' => '1.41.0', 'clockwork.renegade.version' => '1.1.0']);
+
+    Site::factory()->create(['companion_installed' => true, 'companion_version' => '1.41.0', 'companion_variant' => 'companion']);
+    Site::factory()->create(['companion_installed' => true, 'companion_version' => '1.1.0', 'companion_variant' => 'renegade']);
+    Site::factory()->create(['companion_installed' => true, 'companion_version' => '1.0.4', 'companion_variant' => 'renegade']);
+
+    $status = app(SystemUpdateService::class)->getCompanionFleetStatus();
+
+    expect($status['installed_sites'])->toBe(1)
+        ->and($status['needs_update'])->toBe(0)
+        ->and($status['renegade']['installed_sites'])->toBe(2)
+        ->and($status['renegade']['up_to_date'])->toBe(1)
+        ->and($status['renegade']['needs_update'])->toBe(1);
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('settings.updates.index'))
+        ->assertOk()
+        ->assertSee('Clockwork Renegade Plugin (Fleet)')
+        ->assertSee('Bundled Renegade')
+        ->assertSee('v1.1.0');
+});
+
 it('enriches subprocess PATH with Homebrew, Herd, Composer, and Node paths', function () {
     $env = app(SystemUpdateService::class)->subprocessEnv();
 
