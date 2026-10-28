@@ -119,19 +119,30 @@ class ArchiveSiteBackupJob implements ShouldQueue
             $presigned = $uploader->presignedUploadUrl($destinationKey, ttlMinutes: 120);
             $directResult = $adapter->uploadDirectToS3($site, $destinationKey, $presigned);
             if (! ($directResult['ok'] ?? false)) {
-                // Timed-out request may still have completed the PUT. If the
-                // object is there, treat as success rather than minting a new key.
-                if ($this->objectExists($disk, $destinationKey)) {
-                    $this->markArchived($site, [
-                        'size_bytes' => $this->objectSize($disk, $destinationKey),
-                        'sha256' => $directResult['sha256'] ?? null,
-                    ], $disk, $destinationKey);
-                    Log::warning("BackupRelay: Companion reported failure for {$site->domain} but {$destinationKey} exists; treating as archived.");
+                $errorMsg = (string) ($directResult['error'] ?? 'Direct S3 upload failed');
 
-                    return 'archived';
+                // Timed-out request (or upstream 502/504/524 while ignore_user_abort(true)
+                // continues uploading in the background on the WP host) may still complete
+                // the PUT to S3. Check immediately, and in production poll briefly when
+                // the failure was a gateway/curl timeout.
+                $isGatewayTimeout = (bool) preg_match('/\b(502|504|524)\b|timed out|cURL error 28/i', $errorMsg);
+                $maxChecks = ($isGatewayTimeout && ! app()->runningUnitTests()) ? 6 : 1;
+
+                for ($attempt = 1; $attempt <= $maxChecks; $attempt++) {
+                    if ($this->objectExists($disk, $destinationKey)) {
+                        $this->markArchived($site, [
+                            'size_bytes' => $this->objectSize($disk, $destinationKey),
+                            'sha256' => $directResult['sha256'] ?? null,
+                        ], $disk, $destinationKey);
+                        Log::warning("BackupRelay: Companion reported failure for {$site->domain} but {$destinationKey} exists in S3 (attempt {$attempt}); treating as archived.");
+
+                        return 'archived';
+                    }
+                    if ($attempt < $maxChecks) {
+                        sleep(10);
+                    }
                 }
 
-                $errorMsg = $directResult['error'] ?? 'Direct S3 upload failed';
                 throw new RuntimeException("BackupRelay: Failed direct backup for {$site->domain}: {$errorMsg}");
             }
 
