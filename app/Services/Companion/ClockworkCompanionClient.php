@@ -311,6 +311,30 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Pull client-configured notification settings (report recipients, frequency,
+     * enabled state, and Slack webhook URL).
+     *
+     * @return array<string, mixed>
+     */
+    public function clientNotifications(): array
+    {
+        return $this->getJson('/client-notifications');
+    }
+
+    /**
+     * Push Care Plan report schedule settings (recipients, frequency, enabled
+     * state, last_sent_at) to WordPress so site administrators can view and edit
+     * where their reports are delivered on the Clockwork → Notifications page.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function pushClientNotifications(array $payload): array
+    {
+        return $this->postJson('/client-notifications', $payload);
+    }
+
+    /**
      * Flush object / page caches on the origin (Companion cache-flush capability).
      *
      * @return array<string, mixed>

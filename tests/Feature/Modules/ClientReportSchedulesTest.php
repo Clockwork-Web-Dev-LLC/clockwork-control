@@ -11,6 +11,7 @@ use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\ClientReports\Services\ScheduledReportRunner;
 use Tests\Concerns\RendersAuthenticatedPages;
 
@@ -949,5 +950,87 @@ describe('sending a partly sent report by hand', function () {
         $this->actingAs($user)->post(route('client-reports.send', $report))->assertSessionHas('status');
 
         Mail::assertSent(ClientReportMail::class, 2);
+    });
+});
+
+describe('bidirectional WordPress report recipient sync', function () {
+    it('updates an existing ClientReportSchedule when WP admin saves newer recipients in Companion/Renegade', function () {
+        $site = reportableSite(['domain' => 'wp-sync.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['old@wp-sync.test'],
+            'is_enabled' => true,
+        ]);
+
+        // Travel forward 10 seconds so WP admin edit is newer than schedule.updated_at
+        $this->travel(10)->seconds();
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => [
+                'slack_webhook_url' => '',
+                'report_recipients' => ['new1@wp-sync.test', 'NEW2@wp-sync.test', 'not-an-email'],
+                'report_frequency' => 'weekly',
+                'report_enabled' => true,
+                'report_recipients_updated_at' => now()->toIso8601String(),
+                'report_recipients_updated_by' => 'wp_admin',
+            ],
+        ]);
+
+        $schedule->refresh();
+        expect($schedule->recipients)->toBe(['new1@wp-sync.test', 'new2@wp-sync.test'])
+            ->and($schedule->frequency)->toBe('weekly')
+            ->and($schedule->is_enabled)->toBeTrue();
+    });
+
+    it('creates a new ClientReportSchedule when a care-plan site adds recipients in WP Admin', function () {
+        $site = reportableSite(['domain' => 'new-wp-schedule.test']);
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => [
+                'slack_webhook_url' => '',
+                'report_recipients' => ['owner@new-wp-schedule.test'],
+                'report_frequency' => 'monthly',
+                'report_enabled' => true,
+                'report_recipients_updated_at' => now()->toIso8601String(),
+                'report_recipients_updated_by' => 'wp_admin',
+            ],
+        ]);
+
+        $schedule = ClientReportSchedule::where('site_id', $site->id)->first();
+        expect($schedule)->not->toBeNull()
+            ->and($schedule->recipients)->toBe(['owner@new-wp-schedule.test'])
+            ->and($schedule->frequency)->toBe('monthly')
+            ->and($schedule->is_enabled)->toBeTrue();
+    });
+
+    it('ignores older WP admin edits when Control schedule was updated more recently', function () {
+        $site = reportableSite(['domain' => 'control-wins.test']);
+        $wpEditTime = now()->subMinutes(10);
+
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['control-latest@control-wins.test'],
+            'is_enabled' => true,
+        ]);
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => [
+                'slack_webhook_url' => '',
+                'report_recipients' => ['stale-wp@control-wins.test'],
+                'report_frequency' => 'weekly',
+                'report_enabled' => false,
+                'report_recipients_updated_at' => $wpEditTime->toIso8601String(),
+                'report_recipients_updated_by' => 'wp_admin',
+            ],
+        ]);
+
+        $schedule->refresh();
+        expect($schedule->recipients)->toBe(['control-latest@control-wins.test'])
+            ->and($schedule->frequency)->toBe('monthly')
+            ->and($schedule->is_enabled)->toBeTrue();
     });
 });

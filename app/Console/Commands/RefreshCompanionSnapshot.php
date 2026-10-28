@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\Pressable\PressableClient;
 use Throwable;
 
@@ -101,6 +102,16 @@ class RefreshCompanionSnapshot extends Command
                 'companion_snapshot_at' => Carbon::now(),
                 'companion_last_seen_at' => Carbon::now(),
             ])->save();
+
+            try {
+                app(ReportRecipientsSyncService::class)
+                    ->reconcileFromSnapshot($site, $payload);
+            } catch (Throwable $e) {
+                Log::warning('companion.snapshot.report_recipients_reconcile_failed', [
+                    'site' => $site->domain,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             $stats['ok']++;
             $counts = $payload['plugins']['counts'] ?? [];

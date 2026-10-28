@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
+use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\ClientReports\Services\ScheduledReportRunner;
 use Throwable;
 
@@ -115,6 +116,10 @@ class SchedulesController extends Controller
             'next_run_at' => $nextRun,
         ]);
 
+        if ($schedule->site) {
+            app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
+        }
+
         return redirect()->route('client-reports.schedules.index')
             ->with('status', "Reporting schedule for {$schedule->site->domain} created successfully.");
     }
@@ -176,14 +181,23 @@ class SchedulesController extends Controller
 
         $schedule->update($updates);
 
+        if ($schedule->site) {
+            app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
+        }
+
         return redirect()->route('client-reports.schedules.index')
             ->with('status', "Schedule for {$schedule->site->domain} updated successfully.");
     }
 
     public function destroy(ClientReportSchedule $schedule): RedirectResponse
     {
-        $domain = $schedule->site->domain;
+        $site = $schedule->site;
+        $domain = $site?->domain ?? 'site';
         $schedule->delete();
+
+        if ($site) {
+            app(ReportRecipientsSyncService::class)->pushToSite($site, null);
+        }
 
         return redirect()->route('client-reports.schedules.index')
             ->with('status', "Reporting schedule for {$domain} deleted.");
@@ -194,6 +208,10 @@ class SchedulesController extends Controller
         $schedule->update([
             'is_enabled' => ! $schedule->is_enabled,
         ]);
+
+        if ($schedule->site) {
+            app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
+        }
 
         $state = $schedule->is_enabled ? 'enabled' : 'paused';
 

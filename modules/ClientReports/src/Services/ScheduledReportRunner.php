@@ -80,6 +80,10 @@ class ScheduledReportRunner
                 $schedule->update(['last_sent_at' => now()]);
             }
             $schedule->advanceNextRun();
+
+            if ($schedule->site) {
+                app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
+            }
         }
 
         return new ScheduledReportRun(

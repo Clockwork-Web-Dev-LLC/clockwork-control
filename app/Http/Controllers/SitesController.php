@@ -50,6 +50,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
+use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleStateResolver;
 use Modules\Pressable\PressableClient;
@@ -1128,6 +1129,13 @@ class SitesController extends Controller
             'companion_last_seen_at' => now(),
         ])->save();
 
+        try {
+            app(ReportRecipientsSyncService::class)
+                ->reconcileFromSnapshot($site, $payload);
+        } catch (Throwable) {
+            // non-fatal
+        }
+
         $counts = $payload['plugins']['counts'] ?? [];
 
         return response()->json([
@@ -1213,6 +1221,12 @@ class SitesController extends Controller
                     'companion_snapshot_at' => now(),
                     'companion_last_seen_at' => now(),
                 ])->save();
+                try {
+                    app(ReportRecipientsSyncService::class)
+                        ->reconcileFromSnapshot($site, $payload);
+                } catch (Throwable) {
+                    // non-fatal
+                }
                 $results['snapshot'] = ['ok' => true, 'plugins' => (int) ($payload['plugins']['counts']['total'] ?? 0)];
             } catch (Throwable $e) {
                 $results['snapshot'] = ['ok' => false, 'error' => $e->getMessage()];
@@ -2370,6 +2384,8 @@ class SitesController extends Controller
                     'companion_snapshot' => $snapshot,
                     'companion_snapshot_at' => now(),
                 ])->save();
+                app(ReportRecipientsSyncService::class)
+                    ->reconcileFromSnapshot($site, $snapshot);
             } catch (Throwable) {
                 // non-fatal
             }
