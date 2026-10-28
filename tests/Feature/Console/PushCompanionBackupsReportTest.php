@@ -279,9 +279,54 @@ describe('clockwork:push-companion-backups — skip and failure handling', funct
             return str_contains($request->url(), 'backups-report')
                 && ($body['source'] ?? null) === 'clockwork-companion'
                 && ($body['history_scope'] ?? null) === 'combined'
-                && is_array($body['config'] ?? null) // plugin 400s on a missing/non-array config
+                && ($body['config']['files'] ?? null) === true
+                && ($body['config']['database'] ?? null) === true
+                && ! empty($body['config']['next_run_time'])
                 && ($body['history'][0]['type'] ?? null) === 'full'
                 && ($body['history'][0]['size_bytes'] ?? null) === 85_128_567;
+        });
+    });
+
+    it('pushes source=clockwork-renegade and active config to a Renegade custom site', function () {
+        $site = Site::factory()->custom()->withCompanionInstalled()->create([
+            'companion_variant' => 'renegade',
+            'companion_capabilities' => ['backups-report'],
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+        ]);
+
+        $this->mock(SpinupWpClient::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(false);
+        });
+
+        $this->mock(BackupArchiveEnumerator::class, function ($mock) use ($site) {
+            $mock->shouldReceive('forSite')->with(\Mockery::on(fn ($s) => $s->is($site)))->andReturn([
+                'archives' => [[
+                    'type' => 'full',
+                    'size_bytes' => 42_000_000,
+                    'archived_at' => now()->subHours(2)->toIso8601String(),
+                    'download_url' => 'https://s3.example/renegade-presigned.zip',
+                ]],
+                'last_archived_at' => now()->subHours(2)->toIso8601String(),
+            ]);
+            $mock->shouldReceive('supportsPresignedUrls')->andReturn(true);
+        });
+
+        Http::fake(["https://{$site->domain}/*" => Http::response(['ok' => true])]);
+
+        $this->artisan('clockwork:push-companion-backups')->assertSuccessful();
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return str_contains($request->url(), 'backups-report')
+                && ($body['source'] ?? null) === 'clockwork-renegade'
+                && ($body['history_scope'] ?? null) === 'combined'
+                && ($body['config']['files'] ?? null) === true
+                && ($body['config']['database'] ?? null) === true
+                && ! empty($body['config']['next_run_time'])
+                && ($body['offsite_archive']['active'] ?? null) === true
+                && ($body['offsite_archive']['fs_download_url'] ?? null) === 'https://s3.example/renegade-presigned.zip';
         });
     });
 

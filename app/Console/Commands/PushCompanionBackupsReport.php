@@ -218,12 +218,18 @@ class PushCompanionBackupsReport extends Command
             $history = BackupHistoryRetention::filter($history, $retentionDays);
 
             $report = [
-                'source' => 'clockwork-companion',
+                'source' => $site->isRenegade() ? 'clockwork-renegade' : 'clockwork-companion',
                 'history_scope' => 'combined',
                 'fetched_at' => now()->toIso8601String(),
-                // The plugin 400s unless config is an array — there is no
-                // host backup config for a custom site, so send empty.
-                'config' => [],
+                'config' => [
+                    'files' => (bool) $site->backup_relay_enabled,
+                    'database' => (bool) $site->backup_relay_enabled,
+                    'next_run_time' => $site->backupRelayNextScheduledAt()?->toIso8601String(),
+                    'storage_provider' => [
+                        'bucket' => 'Amazon S3 Glacier (Off-Site)',
+                        'region' => (string) config('filesystems.disks.s3-backup-relay.region', 'us-east-2'),
+                    ],
+                ],
                 'schedules' => [],
                 'history' => $history,
                 'care_plan_enabled' => $onCarePlan,
