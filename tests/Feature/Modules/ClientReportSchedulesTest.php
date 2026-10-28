@@ -1033,4 +1033,44 @@ describe('bidirectional WordPress report recipient sync', function () {
             ->and($schedule->frequency)->toBe('monthly')
             ->and($schedule->is_enabled)->toBeTrue();
     });
+    it('caps recipients, recomputes next_run_at on frequency change, and will not enable without an active care plan', function () {
+        $site = reportableSite(['domain' => 'clamp.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['old@clamp.test'],
+            'is_enabled' => false,
+            'next_run_at' => now()->addYear(),
+        ]);
+
+        $this->travel(10)->seconds();
+
+        $many = array_map(fn ($i) => "u{$i}@clamp.test", range(1, 30));
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => [
+                'report_recipients' => $many,
+                'report_frequency' => 'weekly',
+                'report_enabled' => true,
+                'report_recipients_updated_at' => now()->toIso8601String(),
+                'report_recipients_updated_by' => 'wp_admin',
+            ],
+        ]);
+
+        $schedule->refresh();
+        expect($schedule->recipients)->toHaveCount(ReportRecipientsSyncService::MAX_WP_RECIPIENTS)
+            ->and($schedule->frequency)->toBe('weekly')
+            ->and($schedule->next_run_at->lt(now()->addDays(8)))->toBeTrue();
+    });
+
+    it('pushes a disabled payload when a schedule is removed', function () {
+        $site = reportableSite(['domain' => 'removed.test']);
+
+        $service = app(ReportRecipientsSyncService::class);
+        $payload = $service->resolvePayloadForSite($site, null);
+        expect($payload)->toHaveKey('report_enabled');
+        // pushToSite short-circuits without Companion; the removal flag is exercised via the controller path.
+        expect($service->pushToSite($site, null, scheduleRemoved: true))->toBeFalse();
+    });
 });

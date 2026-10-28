@@ -19,6 +19,12 @@ use Throwable;
 class ReportRecipientsSyncService
 {
     /**
+     * Upper bound on recipients accepted from a site. WordPress is an untrusted
+     * source, so a compromised site can't turn report delivery into a mass mailer.
+     */
+    public const MAX_WP_RECIPIENTS = 10;
+
+    /**
      * Build the payload to push to WordPress `/client-notifications`.
      *
      * @return array{
@@ -65,13 +71,18 @@ class ReportRecipientsSyncService
      * Push the site's current report schedule settings to WordPress.
      * Best-effort: logs warnings on transport failure without throwing.
      */
-    public function pushToSite(Site $site, ?ClientReportSchedule $schedule = null): bool
+    public function pushToSite(Site $site, ?ClientReportSchedule $schedule = null, bool $scheduleRemoved = false): bool
     {
         if (! $site->companion_installed || empty($site->companion_secret)) {
             return false;
         }
 
         $payload = $this->resolvePayloadForSite($site, $schedule);
+
+        // A deleted schedule means no reports go out, so WordPress must not show "Active".
+        if ($scheduleRemoved) {
+            $payload['report_enabled'] = false;
+        }
 
         try {
             $client = new ClockworkCompanionClient($site);
@@ -112,11 +123,17 @@ class ReportRecipientsSyncService
             return;
         }
 
-        $wpRecipients = $this->sanitizeEmails($cn['report_recipients'] ?? []);
+        $wpRecipients = array_slice(
+            $this->sanitizeEmails($cn['report_recipients'] ?? []),
+            0,
+            self::MAX_WP_RECIPIENTS,
+        );
         $wpFrequency = in_array($cn['report_frequency'] ?? 'monthly', ['weekly', 'monthly'], true)
             ? (string) $cn['report_frequency']
             : ClientReportSchedule::FREQUENCY_MONTHLY;
         $wpEnabled = array_key_exists('report_enabled', $cn) ? (bool) $cn['report_enabled'] : true;
+        // WordPress may pause a schedule but can't enable one for a site without an active care plan.
+        $wpEnabled = $wpEnabled && $site->isCarePlanActive();
         $updatedBy = $cn['report_recipients_updated_by'] ?? null;
         $updatedAtRaw = is_string($cn['report_recipients_updated_at'] ?? null) && $cn['report_recipients_updated_at'] !== ''
             ? $cn['report_recipients_updated_at']
@@ -153,7 +170,7 @@ class ReportRecipientsSyncService
                         ? ClientReportSchedule::MODE_AUTO
                         : ClientReportSchedule::MODE_DRAFT,
                     'recipients' => $wpRecipients,
-                    'is_enabled' => $wpEnabled && $site->isCarePlanActive(),
+                    'is_enabled' => $wpEnabled,
                     'next_run_at' => (new ClientReportSchedule(['frequency' => $wpFrequency]))->computeNextRun(),
                 ]);
 
@@ -167,6 +184,12 @@ class ReportRecipientsSyncService
                 || $wpUpdatedAt->gt($schedule->updated_at);
 
             if (! $isNewer) {
+                // Control is newer. If WordPress still shows older values (e.g. an
+                // earlier push failed), push Control's state down again.
+                if ($this->wordpressDiffers($schedule, $cn)) {
+                    $this->pushToSite($site, $schedule);
+                }
+
                 return;
             }
 
@@ -182,6 +205,10 @@ class ReportRecipientsSyncService
                     'is_enabled' => $wpEnabled,
                 ];
 
+                if ($frequencyChanged) {
+                    $updates['next_run_at'] = (new ClientReportSchedule(['frequency' => $wpFrequency]))->computeNextRun();
+                }
+
                 if ($wpRecipients === [] && $schedule->delivery_mode === ClientReportSchedule::MODE_AUTO) {
                     $updates['delivery_mode'] = ClientReportSchedule::MODE_DRAFT;
                 }
@@ -191,6 +218,11 @@ class ReportRecipientsSyncService
                 $schedule->save();
 
                 $this->logWpSync($site, $currentRecipients, $wpRecipients, $wpFrequency, $wpEnabled);
+
+                // Echo back anything we clamped (recipient cap, care-plan gate) so WordPress shows the truth.
+                if ($this->wordpressDiffers($schedule, $cn)) {
+                    $this->pushToSite($site, $schedule);
+                }
             } else {
                 // Advance schedule updated_at so we don't re-evaluate on future snapshots
                 $schedule->touch();
@@ -207,6 +239,22 @@ class ReportRecipientsSyncService
                 $this->pushToSite($site, $schedule);
             }
         }
+    }
+
+    /**
+     * Whether the WordPress-reported settings differ from the Control schedule.
+     *
+     * @param  array<string, mixed>  $cn
+     */
+    private function wordpressDiffers(ClientReportSchedule $schedule, array $cn): bool
+    {
+        $wpFrequency = in_array($cn['report_frequency'] ?? 'monthly', ['weekly', 'monthly'], true)
+            ? (string) $cn['report_frequency']
+            : ClientReportSchedule::FREQUENCY_MONTHLY;
+
+        return $this->sanitizeEmails($cn['report_recipients'] ?? []) !== $this->sanitizeEmails($schedule->recipients ?? [])
+            || $wpFrequency !== $schedule->frequency
+            || (array_key_exists('report_enabled', $cn) ? (bool) $cn['report_enabled'] : true) !== (bool) $schedule->is_enabled;
     }
 
     /**

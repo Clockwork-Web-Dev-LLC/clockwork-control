@@ -196,7 +196,7 @@ class SchedulesController extends Controller
         $schedule->delete();
 
         if ($site) {
-            app(ReportRecipientsSyncService::class)->pushToSite($site, null);
+            app(ReportRecipientsSyncService::class)->pushToSite($site, null, scheduleRemoved: true);
         }
 
         return redirect()->route('client-reports.schedules.index')
