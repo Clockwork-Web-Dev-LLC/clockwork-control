@@ -14,12 +14,14 @@ tracks: [modules/Seo/**]
 
 **`/seo`** (gear menu → **SEO**) lists every active, monitored site with its search engine indexability:
 
-- **Blocking Search Engines** (red): a production site sending `noindex` or blocking crawlers in `robots.txt`. These sort to the top.
-- **Protected from Search** (gray): the same block on a staging-tagged server. That's expected, so it isn't an alarm.
+- **Blocking Search Engines** (red): the site is sending `noindex` or blocking crawlers in `robots.txt`. These sort to the top.
 - **Not checked yet** (yellow): monitoring is on but no probe has run yet.
-- **Indexable** (green) and **Disabled** (gray): all clear, or SEO monitoring is off for the site.
+- **Indexable** (green): all clear.
+- **Disabled** (gray): SEO monitoring is off for the site.
 
 The tiles across the top count each state, and the Reason column says which signal tripped (meta `noindex`, `X-Robots-Tag`, or `robots.txt` Disallow).
+
+Sites on staging-tagged servers aren't listed. Monitoring skips those servers, so the watchdog never checks them.
 
 ## Where the data comes from
 

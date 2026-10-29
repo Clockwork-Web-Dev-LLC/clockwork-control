@@ -38,42 +38,50 @@ describe('GET /seo', function () {
             'seo_checked_at' => now(),
         ]);
         Site::factory()->create([
-            'server_id' => $this->stagingServer->id,
-            'domain' => 'staging-clone.com',
-            'seo_indexable' => false,
-            'seo_blocked_reason' => 'robots_disallow_all',
-            'seo_checked_at' => now(),
+            'server_id' => $this->server->id,
+            'domain' => 'mmm-new.com',
+            'seo_indexable' => true,
+            'seo_checked_at' => null,
+        ]);
+        Site::factory()->create([
+            'server_id' => $this->server->id,
+            'domain' => 'bbb-off.com',
+            'seo_monitoring_enabled' => false,
         ]);
 
         $response = $this->actingAs(User::factory()->create())->get(route('seo.index'));
 
         $response->assertOk();
-        $response->assertSeeInOrder(['zzz-blocked.com', 'staging-clone.com', 'aaa-healthy.com']);
+        $response->assertSeeInOrder(['zzz-blocked.com', 'mmm-new.com', 'aaa-healthy.com', 'bbb-off.com']);
         $response->assertSee('Blocking Search Engines');
-        $response->assertSee('Protected from Search');
         $response->assertSee('Meta noindex');
-        $response->assertSee('robots.txt Disallow');
+        $response->assertSee('Not checked yet');
         expect($response->viewData('totals'))->toMatchArray([
-            'sites' => 3,
+            'sites' => 4,
             'indexable' => 1,
             'blocking' => 1,
-            'protected' => 1,
-            'unchecked' => 0,
-            'disabled' => 0,
+            'unchecked' => 1,
+            'disabled' => 1,
         ]);
     });
 
-    it('leaves inactive sites out', function () {
+    it('leaves out inactive sites and sites on staging servers', function () {
         Site::factory()->create([
             'server_id' => $this->server->id,
             'domain' => 'retired.com',
             'is_inactive' => true,
         ]);
+        Site::factory()->create([
+            'server_id' => $this->stagingServer->id,
+            'domain' => 'staging-clone.com',
+            'seo_indexable' => false,
+        ]);
 
         $this->actingAs(User::factory()->create())
             ->get(route('seo.index'))
             ->assertOk()
-            ->assertDontSee('retired.com');
+            ->assertDontSee('retired.com')
+            ->assertDontSee('staging-clone.com');
     });
 });
 

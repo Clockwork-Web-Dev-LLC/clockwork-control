@@ -6,10 +6,9 @@
 <x-page-header title="SEO"
     subtitle="Search engine indexability across the fleet, checked on every uptime probe (robots.txt daily)." />
 
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <x-stat-box label="Indexable" :value="$totals['indexable']" icon="fa-circle-check" />
-    <x-stat-box label="Blocking search" :value="$totals['blocking']" icon="fa-triangle-exclamation" subtext="Production sites" />
-    <x-stat-box label="Protected" :value="$totals['protected']" icon="fa-flask" subtext="Staging sites" />
+    <x-stat-box label="Blocking search" :value="$totals['blocking']" icon="fa-triangle-exclamation" />
     <x-stat-box label="Not checked yet" :value="$totals['unchecked']" icon="fa-hourglass-half" />
     <x-stat-box label="Monitoring off" :value="$totals['disabled']" icon="fa-eye-slash" />
 </div>
@@ -42,13 +41,12 @@
                 <tbody class="divide-y divide-[var(--color-border-light)]">
                     @foreach ($sites as $s)
                         @php
-                            $isStaging = $s->server?->isStaging() ?? false;
                             $unchecked = $s->seo_monitoring_enabled && $s->seo_checked_at === null;
-                            $pillClass = match (true) {
-                                ! $s->seo_monitoring_enabled => 'status-gray',
-                                ! $s->seo_indexable => $isStaging ? 'status-gray' : 'status-red',
-                                $unchecked => 'status-yellow',
-                                default => 'status-green',
+                            [$pillClass, $statusLabel] = match (true) {
+                                ! $s->seo_monitoring_enabled => ['status-unknown', 'Disabled'],
+                                ! $s->seo_indexable => ['status-red', 'Blocking Search Engines'],
+                                $unchecked => ['status-yellow', 'Not checked yet'],
+                                default => ['status-green', 'Indexable'],
                             };
                             $reasonLabel = match ($s->seo_blocked_reason) {
                                 'meta_noindex' => 'Meta noindex',
@@ -68,7 +66,7 @@
                                 @endif
                             </td>
                             <td class="px-5 py-2">
-                                <span class="status-pill {{ $pillClass }} text-[10px]">{{ $unchecked ? 'Not checked yet' : $s->seoStatusLabel() }}</span>
+                                <span class="status-pill {{ $pillClass }} text-[10px] whitespace-nowrap">{{ $statusLabel }}</span>
                             </td>
                             <td class="px-5 py-2 text-xs text-[var(--color-ink)]">
                                 @if (! $s->seo_indexable && $reasonLabel)
