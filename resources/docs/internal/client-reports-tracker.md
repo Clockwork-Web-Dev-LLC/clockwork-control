@@ -2,7 +2,7 @@
 title: Client reports tracker
 section: Internal
 order: 30
-updated: 2026-10-22
+updated: 2026-10-29
 author: Aaron Reimann
 tags: [client-reports, tracker, roadmap, known-issues]
 ---
@@ -59,6 +59,7 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 - [ ] Set the report colour in production: **Settings → Companion & White Label → Client Reports → Primary `#5B21B6`** (it's a setting, not code).
 - [ ] Mark the known-safe "PHP in uploads" paths with `clockwork:suppress-malware-path` (#17), and look at anything that isn't a known plugin's files by hand.
 - [ ] Set `is_wordpress = 1` for the 4 misflagged sites (#15): `UPDATE sites SET is_wordpress = 1 WHERE id IN (315, 330, 331, 332);` (check the ids match the domains first).
+- [ ] **Load the ManageWP report recipients.** Copy the ManageWP export CSV to the server (outside the repo: it holds client emails and must never be committed), then run `php artisan clockwork:import-report-recipients ~/managewp-recipients.csv` for a dry run and check the table. If it looks right, run it again with `--apply`. Add any sites it lists as "Site not found in Control" by hand on the **Scheduling** page.
 - [ ] Optional: log any October extra work on the site pages (#10) before Nov 1, or the Additional work section stays hidden.
 
 ## Ideas and backlog

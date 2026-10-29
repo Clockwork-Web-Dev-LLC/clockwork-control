@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Client Reports — Import report recipients (`clockwork:import-report-recipients`)**: loads per-site report recipients from a CSV (site domain + email columns, e.g. the ManageWP export) into report schedules; dry run unless `--apply`.
 - **Exploit Shield Module (`modules/ExploitShield`)**:
   - **Automated Honeypot & Probe Defense**: Automatically inspects threat logs and probe attempts in real-time and retroactively (`clockwork:exploit-shield-scan`), matching high-confidence exploit signatures (environment files, webshells, sensitive configs) with zero false-positives.
   - **Rolling Jail Bans & Expiration Pruning**: Automatically applies server firewall bans (`BlockedIp`) with configurable durations (1h, 24h, 7d, 30d, permanent) and prunes expired bans via scheduled `clockwork:exploit-shield-prune` (every 15m).
