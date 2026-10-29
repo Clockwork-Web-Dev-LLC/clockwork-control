@@ -3,6 +3,7 @@
 namespace Modules\BackupRelay\Jobs;
 
 use App\Models\Site;
+use App\Models\SiteBackup;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -133,6 +134,7 @@ class ArchiveSiteBackupJob implements ShouldQueue
                         $this->markArchived($site, [
                             'size_bytes' => $this->objectSize($disk, $destinationKey),
                             'sha256' => $directResult['sha256'] ?? null,
+                            'manifest' => $directResult['manifest'] ?? null,
                         ], $disk, $destinationKey);
                         Log::warning("BackupRelay: Companion reported failure for {$site->domain} but {$destinationKey} exists in S3 (attempt {$attempt}); treating as archived.");
 
@@ -149,6 +151,7 @@ class ArchiveSiteBackupJob implements ShouldQueue
             $this->markArchived($site, [
                 'size_bytes' => $directResult['size_bytes'] ?? null,
                 'sha256' => $directResult['sha256'] ?? null,
+                'manifest' => $directResult['manifest'] ?? null,
             ], $disk, $destinationKey);
         } else {
             $stream = $adapter->openBackupStream($site, $ref);
@@ -204,13 +207,10 @@ class ArchiveSiteBackupJob implements ShouldQueue
     }
 
     /**
-     * When $disk and $destinationKey are given and a sha256 is present, also
-     * writes the {key}.sha256.json sidecar (non-fatal) — every archived
-     * outcome that records a hash must leave a sidecar, including the
-     * "object already exists" and "Companion reported failure but object
-     * landed" recovery paths, or restores of those archives get refused.
+     * When $disk and $destinationKey are given and a sha256 or manifest is present,
+     * also writes the sidecars ({key}.sha256.json and {key}.manifest.json).
      *
-     * @param  array{size_bytes?: int|null, sha256?: string|null}  $meta
+     * @param  array{size_bytes?: int|null, sha256?: string|null, manifest?: array<string, mixed>|null}  $meta
      */
     private function markArchived(Site $site, array $meta = [], mixed $disk = null, ?string $destinationKey = null): void
     {
@@ -227,10 +227,59 @@ class ArchiveSiteBackupJob implements ShouldQueue
             $updates['backup_relay_last_sha256'] = $sha;
         }
 
+        $manifest = isset($meta['manifest']) && is_array($meta['manifest']) ? $meta['manifest'] : null;
+        if ($manifest !== null) {
+            $updates['backup_relay_last_manifest'] = $manifest;
+        }
+
         $site->update($updates);
 
         if ($sha !== '' && $disk !== null && $destinationKey !== null) {
             $this->writeSha256Sidecar($disk, $destinationKey, $sha, (int) ($meta['size_bytes'] ?? 0));
+        }
+
+        if ($manifest !== null && $disk !== null && $destinationKey !== null) {
+            $this->writeManifestSidecar($disk, $destinationKey, $manifest);
+        }
+
+        if ($destinationKey !== null) {
+            $this->recordSiteBackup($site, $destinationKey, (int) ($meta['size_bytes'] ?? 0), $manifest);
+        }
+    }
+
+    private function writeManifestSidecar(mixed $disk, string $destinationKey, array $manifest): void
+    {
+        try {
+            $sidecarKey = "{$destinationKey}.manifest.json";
+            $payload = json_encode($manifest, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            $disk->put($sidecarKey, $payload);
+        } catch (Throwable $e) {
+            Log::warning("BackupRelay: Failed writing manifest sidecar for {$destinationKey}: {$e->getMessage()}");
+        }
+    }
+
+    private function recordSiteBackup(Site $site, string $destinationKey, int $sizeBytes, ?array $manifest): void
+    {
+        try {
+            $isManual = (bool) preg_match('/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}/', basename($destinationKey));
+            SiteBackup::query()->updateOrCreate(
+                [
+                    'site_id' => $site->id,
+                    'source' => SiteBackup::SOURCE_S3_ARCHIVE,
+                    'kind' => SiteBackup::KIND_FULL,
+                    'external_ref' => $destinationKey,
+                ],
+                [
+                    'backup_at' => now(),
+                    'bytes' => $sizeBytes > 0 ? $sizeBytes : null,
+                    'is_manual' => $isManual,
+                    'manifest' => $manifest,
+                    'first_seen_at' => now(),
+                    'last_seen_at' => now(),
+                ]
+            );
+        } catch (Throwable $e) {
+            Log::warning("BackupRelay: Failed creating SiteBackup record for {$site->domain}: {$e->getMessage()}");
         }
     }
 

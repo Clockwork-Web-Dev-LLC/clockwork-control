@@ -437,6 +437,13 @@
                                                                         <td class="px-4 py-2.5 font-mono text-[11px] text-[var(--color-ink-muted)] truncate max-w-xs" :title="archive.key" x-text="archive.filename"></td>
                                                                         <td class="px-4 py-2.5 text-right font-medium text-[var(--color-ink-strong)] whitespace-nowrap" x-text="archive.size_formatted"></td>
                                                                         <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                                                                            <button type="button"
+                                                                                    @click="openInspect(archive)"
+                                                                                    x-show="archive.manifest"
+                                                                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-sky-500/10 text-sky-600 hover:bg-sky-500 hover:text-white transition-all cursor-pointer shadow-xs mr-1">
+                                                                                <i class="fa-solid fa-magnifying-glass-chart"></i>
+                                                                                <span>Inspect</span>
+                                                                            </button>
                                                                             <a :href="archive.download_url"
                                                                                target="_blank"
                                                                                rel="noopener noreferrer"
@@ -699,6 +706,173 @@
             </div>
         </div>
     </div>
+
+    {{-- Backup Manifest Inspector Modal --}}
+    <template x-teleport="body">
+        <div x-show="inspectModalOpen"
+             x-cloak
+             @keydown.escape.window="inspectModalOpen = false"
+             class="fixed inset-0 z-50 overflow-y-auto"
+             role="dialog"
+             aria-modal="true">
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+                 @click="inspectModalOpen = false"></div>
+
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="relative w-full max-w-3xl rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl p-6 transition-all"
+                     @click.stop>
+                    <div class="flex items-center justify-between pb-4 border-b border-[var(--color-border-light)] mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+                                <i class="fa-solid fa-magnifying-glass-chart text-sm"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-2">
+                                    <span>Backup Inspector</span>
+                                    <span class="text-xs font-mono font-normal text-[var(--color-ink-muted)]" x-text="inspectArchive?.filename || inspectArchive?.key"></span>
+                                </h3>
+                                <p class="text-xs text-[var(--color-ink-muted)]">
+                                    Generated: <span x-text="inspectArchive?.manifest?.created_at || inspectArchive?.archived_at_formatted || '—'"></span> ·
+                                    WordPress <span x-text="inspectArchive?.manifest?.site?.wp_version || 'unknown'"></span> ·
+                                    PHP <span x-text="inspectArchive?.manifest?.site?.php_version || '—'"></span>
+                                </p>
+                            </div>
+                        </div>
+                        <button type="button"
+                                @click="inspectModalOpen = false"
+                                class="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    {{-- 4 Stat Cards --}}
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                        <div class="p-3 rounded-xl bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                            <span class="text-[10px] uppercase font-semibold text-[var(--color-ink-muted)] tracking-wider">Archive Size</span>
+                            <div class="font-data font-semibold text-sm text-[var(--color-ink-strong)] mt-0.5" x-text="inspectArchive?.size_formatted || formatBytes(inspectArchive?.size_bytes || 0)"></div>
+                            <div class="text-[10px] text-emerald-600 mt-0.5" x-text="(inspectArchive?.manifest?.summary?.compression_ratio || '0%') + ' compression'"></div>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                            <span class="text-[10px] uppercase font-semibold text-[var(--color-ink-muted)] tracking-wider">Database</span>
+                            <div class="font-data font-semibold text-sm text-[var(--color-ink-strong)] mt-0.5" x-text="(inspectArchive?.manifest?.database?.tables_count || 0) + ' Tables'"></div>
+                            <div class="text-[10px] text-[var(--color-ink-muted)] mt-0.5" x-text="Number(inspectArchive?.manifest?.database?.total_rows || 0).toLocaleString() + ' Rows'"></div>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                            <span class="text-[10px] uppercase font-semibold text-[var(--color-ink-muted)] tracking-wider">Media Library</span>
+                            <div class="font-data font-semibold text-sm text-[var(--color-ink-strong)] mt-0.5" x-text="Number(inspectArchive?.manifest?.files?.uploads?.file_count || 0).toLocaleString() + ' Files'"></div>
+                            <div class="text-[10px] text-[var(--color-ink-muted)] mt-0.5" x-text="formatBytes(inspectArchive?.manifest?.files?.uploads?.bytes || 0)"></div>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[var(--color-surface-alt)]/60 border border-[var(--color-border-light)]">
+                            <span class="text-[10px] uppercase font-semibold text-[var(--color-ink-muted)] tracking-wider">Plugins & Themes</span>
+                            <div class="font-data font-semibold text-sm text-[var(--color-ink-strong)] mt-0.5" x-text="(inspectArchive?.manifest?.files?.plugins?.count || 0) + ' Plugins'"></div>
+                            <div class="text-[10px] text-[var(--color-ink-muted)] mt-0.5" x-text="(inspectArchive?.manifest?.files?.themes?.count || 0) + ' Themes (active: ' + (inspectArchive?.manifest?.files?.themes?.active || '—') + ')'"></div>
+                        </div>
+                    </div>
+
+                    {{-- Navigation Tabs --}}
+                    <div class="border-b border-[var(--color-border-light)] flex gap-4 text-xs font-medium mb-4">
+                        <button type="button"
+                                @click="inspectTab = 'database'"
+                                :class="inspectTab === 'database' ? 'border-b-2 border-[var(--color-brand)] text-[var(--color-brand)] pb-2 font-semibold' : 'text-[var(--color-ink-muted)] pb-2 hover:text-[var(--color-ink-strong)]'">
+                            Database Tables (<span x-text="inspectArchive?.manifest?.database?.tables_count || 0"></span>)
+                        </button>
+                        <button type="button"
+                                @click="inspectTab = 'plugins'"
+                                :class="inspectTab === 'plugins' ? 'border-b-2 border-[var(--color-brand)] text-[var(--color-brand)] pb-2 font-semibold' : 'text-[var(--color-ink-muted)] pb-2 hover:text-[var(--color-ink-strong)]'">
+                            Plugins & Themes (<span x-text="(inspectArchive?.manifest?.files?.plugins?.count || 0) + (inspectArchive?.manifest?.files?.themes?.count || 0)"></span>)
+                        </button>
+                        <button type="button"
+                                @click="inspectTab = 'exclusions'"
+                                :class="inspectTab === 'exclusions' ? 'border-b-2 border-[var(--color-brand)] text-[var(--color-brand)] pb-2 font-semibold' : 'text-[var(--color-ink-muted)] pb-2 hover:text-[var(--color-ink-strong)]'">
+                            Exclusions (<span x-text="inspectArchive?.manifest?.exclusions?.skipped_directories_count || 0"></span>)
+                        </button>
+                    </div>
+
+                    {{-- Tab 1: Database Tables --}}
+                    <div x-show="inspectTab === 'database'" class="max-h-72 overflow-y-auto border border-[var(--color-border-light)] rounded-xl">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[var(--color-surface-alt)] font-semibold text-[var(--color-ink-soft)] sticky top-0 border-b border-[var(--color-border-light)]">
+                                <tr>
+                                    <th class="px-3 py-2">Table Name</th>
+                                    <th class="px-3 py-2 text-right">Rows</th>
+                                    <th class="px-3 py-2 text-right">Table Size</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[var(--color-border-light)] font-mono text-[11px]">
+                                <template x-for="tbl in (inspectArchive?.manifest?.database?.tables || [])" :key="tbl.name">
+                                    <tr class="hover:bg-[var(--color-surface-alt)]/40 transition-colors">
+                                        <td class="px-3 py-1.5 font-medium text-[var(--color-ink-strong)]" x-text="tbl.name"></td>
+                                        <td class="px-3 py-1.5 text-right text-[var(--color-ink-muted)] font-data" x-text="Number(tbl.rows || 0).toLocaleString()"></td>
+                                        <td class="px-3 py-1.5 text-right text-[var(--color-ink-muted)] font-data" x-text="formatBytes(tbl.size_bytes || 0)"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="!inspectArchive?.manifest?.database?.tables?.length">
+                                    <td colspan="3" class="px-3 py-6 text-center text-xs text-[var(--color-ink-muted)] font-sans">
+                                        No table breakdown available in manifest.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {{-- Tab 2: Plugins & Themes --}}
+                    <div x-show="inspectTab === 'plugins'" class="space-y-4 max-h-72 overflow-y-auto">
+                        <div>
+                            <h4 class="text-xs font-semibold text-[var(--color-ink-strong)] mb-2 flex items-center justify-between">
+                                <span>Included Plugins (<span x-text="inspectArchive?.manifest?.files?.plugins?.count || 0"></span>)</span>
+                                <span class="text-[10px] text-[var(--color-ink-muted)] font-normal" x-text="formatBytes(inspectArchive?.manifest?.files?.plugins?.bytes || 0)"></span>
+                            </h4>
+                            <div class="flex flex-wrap gap-1.5">
+                                <template x-for="slug in (inspectArchive?.manifest?.files?.plugins?.list || [])" :key="slug">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20" x-text="slug"></span>
+                                </template>
+                                <span x-show="!inspectArchive?.manifest?.files?.plugins?.list?.length" class="text-xs text-[var(--color-ink-muted)]">None recorded</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-[var(--color-border-light)]">
+                            <h4 class="text-xs font-semibold text-[var(--color-ink-strong)] mb-2 flex items-center justify-between">
+                                <span>Included Themes (<span x-text="inspectArchive?.manifest?.files?.themes?.count || 0"></span>)</span>
+                                <span class="text-[10px] text-[var(--color-ink-muted)] font-normal" x-text="formatBytes(inspectArchive?.manifest?.files?.themes?.bytes || 0)"></span>
+                            </h4>
+                            <div class="flex flex-wrap gap-1.5 items-center">
+                                <template x-for="slug in (inspectArchive?.manifest?.files?.themes?.list || [])" :key="slug">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono"
+                                          :class="slug === inspectArchive?.manifest?.files?.themes?.active ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 font-semibold' : 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] border border-[var(--color-border-light)]'">
+                                        <i class="fa-solid fa-star text-[9px] text-amber-500" x-show="slug === inspectArchive?.manifest?.files?.themes?.active"></i>
+                                        <span x-text="slug"></span>
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Tab 3: Exclusions --}}
+                    <div x-show="inspectTab === 'exclusions'" class="space-y-3 max-h-72 overflow-y-auto">
+                        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-200">
+                            <span class="font-semibold" x-text="inspectArchive?.manifest?.exclusions?.skipped_directories_count || 0"></span> directories were safely excluded during archive compilation to prevent bloated backups.
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold text-[var(--color-ink-strong)] block mb-2">Exclusion Rules Applied:</span>
+                            <div class="flex flex-wrap gap-1.5 font-mono text-[11px]">
+                                <template x-for="rule in (inspectArchive?.manifest?.exclusions?.rules || [])" :key="rule">
+                                    <span class="px-2 py-0.5 rounded bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-muted)]" x-text="rule"></span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 pt-3 border-t border-[var(--color-border-light)] flex justify-end">
+                        <button type="button"
+                                @click="inspectModalOpen = false"
+                                class="btn-pill text-xs py-1.5 px-4 cursor-pointer">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
 </div>
 
 <script>
@@ -726,6 +900,24 @@ function backupRelaySettings() {
         siteArchives: {},
         loadingArchives: {},
         errorArchives: {},
+
+        inspectModalOpen: false,
+        inspectArchive: null,
+        inspectTab: 'database',
+
+        openInspect(archive) {
+            this.inspectArchive = archive;
+            this.inspectModalOpen = true;
+            this.inspectTab = 'database';
+        },
+
+        formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        },
 
         get frequencyLabel() {
             if (this.frequency === 'weekly') return '1 a week (Weekly)';

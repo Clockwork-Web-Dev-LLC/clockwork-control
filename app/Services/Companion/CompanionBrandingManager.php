@@ -34,6 +34,12 @@ class CompanionBrandingManager
 
     public const DEFAULT_BRAND_TEXT = 'Companion';
 
+    public const DEFAULT_RENEGADE_PLUGIN_NAME = 'Clockwork Renegade';
+
+    public const DEFAULT_RENEGADE_BRAND_TEXT = 'Renegade';
+
+    public const DEFAULT_RENEGADE_PLUGIN_DESCRIPTION = 'Monitors WordPress health, synthetic form testing, security scans, and maintenance telemetry for Clockwork Control.';
+
     public const DEFAULT_LOGO_URL = 'https://clockworkwd.com/wp-content/mu-plugins/clockwork-companion/assets/clockwork-logo.png';
 
     public const DEFAULT_PRIMARY_COLOR = '#2D2062';
@@ -376,6 +382,103 @@ class CompanionBrandingManager
     }
 
     /**
+     * Get Renegade branding settings merged with agency defaults.
+     *
+     * @return array<string, mixed>
+     */
+    public function getRenegade(): array
+    {
+        $shared = $this->get();
+        $enabled = (bool) $this->settings->get('renegade.branding.enabled', false);
+        $pluginName = (string) $this->settings->get('renegade.branding.plugin_name', '');
+        $brandText = (string) $this->settings->get('renegade.branding.brand_text', '');
+        $pluginDesc = (string) $this->settings->get('renegade.branding.plugin_description', '');
+        $menuTitle = (string) $this->settings->get('renegade.branding.menu_title', '');
+        $menuIcon = (string) $this->settings->get('renegade.branding.menu_icon', '');
+        $logoUrl = (string) $this->settings->get('renegade.branding.logo_url', '');
+        $primaryColor = self::normalizeHexColor(
+            $this->settings->get('renegade.branding.primary_color', $shared['primary_color']),
+            $shared['primary_color'],
+        );
+        $accentColor = self::normalizeHexColor(
+            $this->settings->get('renegade.branding.accent_color', $shared['accent_color']),
+            $shared['accent_color'],
+        );
+        $hidePluginRow = (bool) $this->settings->get('renegade.branding.hide_plugin_row', false);
+        $hideHelpLinks = (bool) $this->settings->get('renegade.branding.hide_help_links', false);
+
+        $isCustom = $enabled || $pluginName !== '' || $brandText !== '';
+
+        return [
+            'enabled' => $enabled,
+            'company_name' => $shared['company_name'],
+            'company_url' => $shared['company_url'],
+            'support_email' => $shared['support_email'],
+            'support_url' => $shared['support_url'],
+            'plugin_name' => $pluginName !== '' ? $pluginName : self::DEFAULT_RENEGADE_PLUGIN_NAME,
+            'plugin_description' => $pluginDesc !== '' ? $pluginDesc : self::DEFAULT_RENEGADE_PLUGIN_DESCRIPTION,
+            'menu_title' => $menuTitle !== '' ? $menuTitle : $shared['menu_title'],
+            'menu_icon' => $menuIcon !== '' ? $menuIcon : $shared['menu_icon'],
+            'brand_text' => $brandText !== '' ? $brandText : self::DEFAULT_RENEGADE_BRAND_TEXT,
+            'logo_url' => $logoUrl !== '' ? $logoUrl : $shared['logo_url'],
+            'primary_color' => $primaryColor,
+            'accent_color' => $accentColor,
+            'hide_plugin_row' => $hidePluginRow,
+            'hide_help_links' => $hideHelpLinks,
+            'footer_text' => $shared['footer_text'],
+            'unlock_hub_domain' => $shared['unlock_hub_domain'],
+            'is_custom' => $isCustom,
+        ];
+    }
+
+    /**
+     * Save Renegade branding configuration.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function saveRenegade(array $data): void
+    {
+        $payload = [
+            'renegade.branding.enabled' => ! empty($data['enabled']),
+            'renegade.branding.plugin_name' => trim((string) ($data['plugin_name'] ?? '')),
+            'renegade.branding.brand_text' => trim((string) ($data['brand_text'] ?? '')),
+            'renegade.branding.plugin_description' => trim((string) ($data['plugin_description'] ?? '')),
+            'renegade.branding.menu_title' => trim((string) ($data['menu_title'] ?? '')),
+            'renegade.branding.menu_icon' => trim((string) ($data['menu_icon'] ?? '')),
+            'renegade.branding.primary_color' => self::normalizeHexColor($data['primary_color'] ?? null, self::DEFAULT_PRIMARY_COLOR),
+            'renegade.branding.accent_color' => self::normalizeHexColor($data['accent_color'] ?? null, self::DEFAULT_ACCENT_COLOR),
+            'renegade.branding.hide_plugin_row' => ! empty($data['hide_plugin_row']),
+            'renegade.branding.hide_help_links' => ! empty($data['hide_help_links']),
+        ];
+
+        if (array_key_exists('logo_url', $data)) {
+            $payload['renegade.branding.logo_url'] = trim((string) $data['logo_url']);
+        }
+
+        $this->settings->putMany($payload);
+    }
+
+    /**
+     * Reset Renegade branding back to shared agency defaults.
+     */
+    public function resetRenegade(): void
+    {
+        $this->settings->putMany([
+            'renegade.branding.enabled' => false,
+            'renegade.branding.plugin_name' => null,
+            'renegade.branding.brand_text' => null,
+            'renegade.branding.plugin_description' => null,
+            'renegade.branding.menu_title' => null,
+            'renegade.branding.menu_icon' => null,
+            'renegade.branding.primary_color' => null,
+            'renegade.branding.accent_color' => null,
+            'renegade.branding.logo_url' => null,
+            'renegade.branding.hide_plugin_row' => false,
+            'renegade.branding.hide_help_links' => false,
+        ]);
+    }
+
+    /**
      * Get Plugin Notification Email branding merged with shared agency defaults.
      *
      * @return array{
@@ -477,9 +580,9 @@ class CompanionBrandingManager
      *
      * @return array<string, mixed>
      */
-    public function payload(): array
+    public function payload(?Site $site = null): array
     {
-        $data = $this->get();
+        $data = ($site && $site->isRenegade()) ? $this->getRenegade() : $this->get();
 
         return [
             'enabled' => $data['enabled'],
@@ -530,7 +633,7 @@ class CompanionBrandingManager
     public function drift(Site $site): array
     {
         $live = (new ClockworkCompanionClient($site))->branding();
-        $want = $this->payload();
+        $want = $this->payload($site);
 
         $drift = [];
         foreach (self::DRIFT_KEYS as $key) {
@@ -561,7 +664,7 @@ class CompanionBrandingManager
 
         try {
             $client = new ClockworkCompanionClient($site);
-            $res = $client->pushBranding($this->payload());
+            $res = $client->pushBranding($this->payload($site));
 
             return ! empty($res['ok']);
         } catch (Throwable $e) {

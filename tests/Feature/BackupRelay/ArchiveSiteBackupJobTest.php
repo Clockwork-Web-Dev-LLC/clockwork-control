@@ -4,6 +4,7 @@ namespace Tests\Feature\BackupRelay;
 
 use App\Models\BackupRelayRun;
 use App\Models\Site;
+use App\Models\SiteBackup;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -11,6 +12,7 @@ use Modules\BackupRelay\Jobs\ArchiveSiteBackupJob;
 use Modules\BackupRelay\Services\GlacierUploader;
 use Modules\Core\Contracts\BackupRef;
 use Modules\Core\Contracts\BackupRelayAdapter;
+use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
 use Modules\Core\Contracts\HostingProvider;
 use Tests\TestCase;
 
@@ -208,6 +210,98 @@ class ArchiveSiteBackupJobTest extends TestCase
         $job = new ArchiveSiteBackupJob($site);
 
         $this->assertSame('skipped', $job->handle($uploader));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_direct_archive_job_writes_manifest_sidecar_and_saves_site_backup(): void
+    {
+        Storage::fake('s3-backup-relay');
+        Carbon::setTestNow(Carbon::parse('2026-10-28 22:00:00'));
+
+        $site = Site::query()->create([
+            'domain' => 'direct-manifest.example.com',
+            'hosting_provider' => 'custom',
+            'backup_relay_enabled' => true,
+            'is_wordpress' => true,
+        ]);
+
+        $manifestPayload = [
+            'version' => '1.0',
+            'created_at' => '2026-10-28T22:00:00Z',
+            'site' => ['domain' => 'direct-manifest.example.com'],
+            'summary' => ['total_files' => 150, 'total_uncompressed_bytes' => 5000000],
+            'database' => ['tables_count' => 12, 'total_rows' => 450],
+            'files' => ['uploads' => ['file_count' => 120, 'bytes' => 4000000]],
+        ];
+
+        $fakeDirectAdapter = new class($manifestPayload) implements BackupRelayAdapter, DirectS3BackupRelayAdapter
+        {
+            public function __construct(private readonly array $manifest) {}
+
+            public function latestBackupRef(Site $site): ?BackupRef
+            {
+                return new BackupRef(
+                    provider: 'companion',
+                    externalId: 'direct',
+                    createdAt: Carbon::parse('2026-10-28 22:00:00'),
+                );
+            }
+
+            public function openBackupStream(Site $site, BackupRef $ref)
+            {
+                return null;
+            }
+
+            public function uploadDirectToS3(Site $site, string $destinationKey, array $presigned): array
+            {
+                return [
+                    'ok' => true,
+                    'size_bytes' => 1234567,
+                    'sha256' => 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+                    'manifest' => $this->manifest,
+                ];
+            }
+        };
+
+        $mockHost = \Mockery::mock(HostingProvider::class);
+        $mockHost->shouldReceive('id')->andReturn('custom');
+        $mockHost->shouldReceive('supports')->with(HostingProvider::CAP_BACKUP_RELAY)->andReturn(true);
+        $mockHost->shouldReceive('backupRelayAdapter')->andReturn($fakeDirectAdapter);
+
+        $site = \Mockery::mock($site)->makePartial();
+        $site->shouldReceive('host')->andReturn($mockHost);
+
+        $uploader = new GlacierUploader('s3-backup-relay');
+        $job = new ArchiveSiteBackupJob($site);
+
+        $result = $job->handle($uploader);
+
+        $this->assertSame('archived', $result);
+
+        $expectedArchiveKey = "archives/{$site->domain}/2026-10-28.zip";
+        $expectedManifestKey = "{$expectedArchiveKey}.manifest.json";
+        $expectedShaKey = "{$expectedArchiveKey}.sha256.json";
+
+        // Sidecars exist in S3
+        Storage::disk('s3-backup-relay')->assertExists($expectedManifestKey);
+        Storage::disk('s3-backup-relay')->assertExists($expectedShaKey);
+
+        $sidecarJson = json_decode(Storage::disk('s3-backup-relay')->get($expectedManifestKey), true);
+        $this->assertSame('1.0', $sidecarJson['version']);
+        $this->assertSame(12, $sidecarJson['database']['tables_count']);
+
+        // Site has manifest and sha
+        $freshSite = $site->fresh();
+        $this->assertSame($manifestPayload, $freshSite->backup_relay_last_manifest);
+        $this->assertSame('abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789', $freshSite->backup_relay_last_sha256);
+
+        // SiteBackup record was created
+        $backupRecord = SiteBackup::query()->where('site_id', $site->id)->first();
+        $this->assertNotNull($backupRecord);
+        $this->assertSame(SiteBackup::SOURCE_S3_ARCHIVE, $backupRecord->source);
+        $this->assertSame(1234567, $backupRecord->bytes);
+        $this->assertSame($manifestPayload, $backupRecord->manifest);
 
         Carbon::setTestNow();
     }

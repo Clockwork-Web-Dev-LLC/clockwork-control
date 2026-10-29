@@ -210,6 +210,7 @@ class PushCompanionBackupsReport extends Command
                         'date' => $arch['archived_at'],
                         'type' => 'full',
                         'size_bytes' => $arch['size_bytes'],
+                        'manifest' => $arch['manifest'] ?? null,
                     ];
                 }
             } catch (Throwable $e) {

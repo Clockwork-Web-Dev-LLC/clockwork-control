@@ -43,7 +43,7 @@ class CompanionBackupRelayAdapter implements BackupRelayAdapter, DirectS3BackupR
 
     /**
      * @param  array{url: string, headers: array<string, string>}  $presigned
-     * @return array{ok: bool, size_bytes?: int, sha256?: string, error?: string}
+     * @return array{ok: bool, size_bytes?: int, sha256?: string, manifest?: array<string, mixed>|null, error?: string}
      */
     public function uploadDirectToS3(Site $site, string $destinationKey, array $presigned): array
     {
@@ -79,6 +79,7 @@ class CompanionBackupRelayAdapter implements BackupRelayAdapter, DirectS3BackupR
             'ok' => true,
             'size_bytes' => (int) ($response['size_bytes'] ?? 0),
             'sha256' => (string) ($response['sha256'] ?? ''),
+            'manifest' => is_array($response['manifest'] ?? null) ? $response['manifest'] : null,
         ];
     }
 

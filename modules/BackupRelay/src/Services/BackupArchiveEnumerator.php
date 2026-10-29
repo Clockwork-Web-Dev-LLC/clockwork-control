@@ -3,6 +3,7 @@
 namespace Modules\BackupRelay\Services;
 
 use App\Models\Site;
+use App\Models\SiteBackup;
 use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
@@ -93,8 +94,20 @@ class BackupArchiveEnumerator
         ];
 
         $seenKeys = [];
+        $manifestSidecars = [];
 
         $manifestLinks = $this->loadManifestLinks($domain);
+
+        $dbManifests = [];
+        try {
+            $dbManifests = SiteBackup::query()
+                ->where('site_id', $site->id)
+                ->whereNotNull('manifest')
+                ->pluck('manifest', 'external_ref')
+                ->all();
+        } catch (Throwable) {
+            // DB not ready or running in test without SiteBackup
+        }
 
         foreach ($searchPrefixes as $prefix) {
             try {
@@ -110,6 +123,12 @@ class BackupArchiveEnumerator
                 }
 
                 $file = $item->path();
+                if (str_ends_with($file, '.manifest.json')) {
+                    $manifestSidecars[$file] = true;
+
+                    continue;
+                }
+
                 if (isset($seenKeys[$file])) {
                     continue;
                 }
@@ -151,6 +170,18 @@ class BackupArchiveEnumerator
                     $downloadUrl = $this->getDownloadUrl($site, $file);
                 }
 
+                $manifest = $dbManifests[$file] ?? null;
+                if ($manifest === null && isset($manifestSidecars["{$file}.manifest.json"])) {
+                    try {
+                        $raw = $disk->get("{$file}.manifest.json");
+                        if ($raw) {
+                            $manifest = json_decode($raw, true);
+                        }
+                    } catch (Throwable) {
+                        // Non-fatal
+                    }
+                }
+
                 $archives[] = [
                     'id' => md5($file),
                     'key' => $file,
@@ -165,6 +196,7 @@ class BackupArchiveEnumerator
                     'archived_at_formatted' => $archivedAt ? $archivedAt->format('M j, Y H:i \U\T\C') : null,
                     'archived_at_diff' => $archivedAt?->diffForHumans(),
                     'download_url' => $downloadUrl,
+                    'manifest' => $manifest,
                 ];
             }
         }
@@ -326,6 +358,52 @@ class BackupArchiveEnumerator
             if (! empty($archives) && ($archives[0]['key'] ?? '') === $key) {
                 return trim((string) $site->backup_relay_last_sha256);
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the manifest for a given archive key.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function resolveArchiveManifest(Site $site, string $key): ?array
+    {
+        if (! $this->belongsToSite($site, $key)) {
+            return null;
+        }
+
+        try {
+            $dbManifest = SiteBackup::query()
+                ->where('site_id', $site->id)
+                ->where('external_ref', $key)
+                ->whereNotNull('manifest')
+                ->value('manifest');
+
+            if (is_array($dbManifest)) {
+                return $dbManifest;
+            }
+        } catch (Throwable) {
+            // DB non-fatal
+        }
+
+        try {
+            $disk = $this->disk();
+            $sidecarKey = "{$key}.manifest.json";
+            if ($disk->exists($sidecarKey)) {
+                $raw = (string) $disk->get($sidecarKey);
+                $data = json_decode($raw, true);
+                if (is_array($data)) {
+                    return $data;
+                }
+            }
+        } catch (Throwable) {
+            // S3 non-fatal
+        }
+
+        if (is_array($site->backup_relay_last_manifest)) {
+            return $site->backup_relay_last_manifest;
         }
 
         return null;

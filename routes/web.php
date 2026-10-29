@@ -384,6 +384,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/settings/companion/logo', [CompanionSettingsController::class, 'uploadLogo'])->name('settings.companion.logo');
     Route::post('/settings/companion/sync', [CompanionSettingsController::class, 'sync'])->name('settings.companion.sync');
     Route::post('/settings/companion/reset', [CompanionSettingsController::class, 'reset'])->name('settings.companion.reset');
+    Route::post('/settings/companion/reset-renegade', [CompanionSettingsController::class, 'resetRenegade'])->name('settings.companion.reset-renegade');
     Route::post('/settings/companion/reset-reports', [CompanionSettingsController::class, 'resetReports'])->name('settings.companion.reset-reports');
     Route::post('/settings/companion/reset-email', [CompanionSettingsController::class, 'resetEmail'])->name('settings.companion.reset-email');
     Route::post('/settings/companion/test-email', [CompanionSettingsController::class, 'sendTestEmail'])->name('settings.companion.test-email');

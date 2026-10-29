@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $backup_at
  * @property ?int $bytes
  * @property bool $is_manual
+ * @property ?array $manifest
  * @property Carbon $first_seen_at
  * @property Carbon $last_seen_at
  * @property-read Site $site
@@ -43,6 +44,7 @@ class SiteBackup extends Model
         'backup_at',
         'bytes',
         'is_manual',
+        'manifest',
         'first_seen_at',
         'last_seen_at',
     ];
@@ -53,6 +55,7 @@ class SiteBackup extends Model
             'backup_at' => 'datetime',
             'bytes' => 'integer',
             'is_manual' => 'boolean',
+            'manifest' => 'array',
             'first_seen_at' => 'datetime',
             'last_seen_at' => 'datetime',
         ];

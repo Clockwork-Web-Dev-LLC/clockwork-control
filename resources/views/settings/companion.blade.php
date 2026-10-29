@@ -27,6 +27,18 @@
         previewTab: 'screen',
         syncing: false,
 
+        {{-- Renegade state --}}
+        renegadeEnabled: @js((bool) ($renegadeBranding['enabled'] ?? false)),
+        renegadePluginName: @js($renegadeBranding['plugin_name'] ?? 'Clockwork Renegade'),
+        renegadeBrandText: @js($renegadeBranding['brand_text'] ?? 'Renegade'),
+        renegadePluginDesc: @js($renegadeBranding['plugin_description'] ?? ''),
+        renegadeMenuTitle: @js($renegadeBranding['menu_title'] ?? 'Clockwork'),
+        renegadeMenuIcon: @js($renegadeBranding['menu_icon'] ?? 'dashicons-clock'),
+        renegadePrimaryColor: @js($renegadeBranding['primary_color'] ?? '#2D2062'),
+        renegadeAccentColor: @js($renegadeBranding['accent_color'] ?? '#7EFF83'),
+        renegadeHidePluginRow: @js((bool) ($renegadeBranding['hide_plugin_row'] ?? false)),
+        renegadeHideHelpLinks: @js((bool) ($renegadeBranding['hide_help_links'] ?? false)),
+
         {{-- Master Agency Palette state --}}
         masterPrimaryColor: @js($masterPalette['primary_color'] ?? '#2D2062'),
         masterAccentColor: @js($masterPalette['accent_color'] ?? '#7EFF83'),
@@ -36,6 +48,8 @@
         applyMasterToAll() {
             this.primaryColor = this.masterPrimaryColor;
             this.accentColor = this.masterAccentColor;
+            this.renegadePrimaryColor = this.masterPrimaryColor;
+            this.renegadeAccentColor = this.masterAccentColor;
             this.reportsPrimaryColor = this.masterPrimaryColor;
             this.reportsAccentColor = this.masterAccentColor;
             this.emailHeaderBg = this.masterPrimaryColor;
@@ -302,6 +316,15 @@
                 <i class="fa-brands fa-wordpress text-xs"></i>
                 <span>Companion (wp-admin)</span>
                 <span class="w-1.5 h-1.5 rounded-full" :class="enabled ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+            </button>
+            <button type="button" @click="activeTab = 'renegade'"
+                class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer"
+                :class="activeTab === 'renegade'
+                    ? 'bg-[var(--color-surface)] text-[var(--color-ink-strong)] shadow-xs'
+                    : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)]'">
+                <i class="fa-solid fa-shield-halved text-xs"></i>
+                <span>Renegade (Custom Host)</span>
+                <span class="w-1.5 h-1.5 rounded-full" :class="renegadeEnabled ? 'bg-emerald-500' : 'bg-slate-300'"></span>
             </button>
             <button type="button" @click="activeTab = 'reports'"
                 class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer"
@@ -782,7 +805,221 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- TAB 2: CLIENT REPORTS (REPORTS WHITE-LABELING)                            --}}
+        {{-- TAB: RENEGADE (CUSTOM HOST WP-ADMIN PLUGIN)                              --}}
+        {{-- ========================================================================= --}}
+        <div x-show="activeTab === 'renegade'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-6xl">
+            {{-- Left column: Renegade Form (7 cols) --}}
+            <div class="lg:col-span-7 space-y-6">
+                <form method="POST" action="{{ route('settings.companion.update') }}" class="card p-6 space-y-6">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="tab" value="renegade">
+
+                    {{-- Master Switch --}}
+                    <div class="flex items-center justify-between pb-5 border-b border-[var(--color-border-light)]">
+                        <div>
+                            <div class="font-display text-base font-semibold text-[var(--color-ink-strong)]">Enable Renegade White-Labeling</div>
+                            <div class="text-xs text-[var(--color-ink-soft)] mt-0.5">Customize plugin name, brand badge, and admin colors specifically for Renegade sites.</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="enabled" value="1" x-model="renegadeEnabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-brand)]"></div>
+                        </label>
+                    </div>
+
+                    {{-- Plugin Listing Metadata --}}
+                    <div class="space-y-4">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">1. Plugin Listing Metadata</h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Plugin Name</label>
+                                <input type="text" name="plugin_name" x-model="renegadePluginName" required
+                                    class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
+                                    placeholder="Clockwork Renegade">
+                                <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Displayed in the WordPress Plugins table.</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Brand Badge Text</label>
+                                <input type="text" name="brand_text" x-model="renegadeBrandText" required
+                                    class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
+                                    placeholder="Renegade">
+                                <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Badge rendered in header next to logo.</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Plugin Description</label>
+                            <textarea name="plugin_description" x-model="renegadePluginDesc" rows="2"
+                                class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)]"
+                                placeholder="Short description for the WordPress plugins table"></textarea>
+                        </div>
+                    </div>
+
+                    {{-- WordPress Admin Menu & Visuals --}}
+                    <div class="border-t border-[var(--color-border-light)] pt-5 space-y-4">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">2. WordPress Admin Menu &amp; Visuals</h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Sidebar Menu Label</label>
+                                <input type="text" name="menu_title" x-model="renegadeMenuTitle" required
+                                    class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)]"
+                                    placeholder="Clockwork">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Menu Dashicon</label>
+                                <select name="menu_icon" x-model="renegadeMenuIcon"
+                                    class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data">
+                                    <option value="dashicons-clock">dashicons-clock (Default)</option>
+                                    <option value="dashicons-shield">dashicons-shield (Security)</option>
+                                    <option value="dashicons-hammer">dashicons-hammer (Maintenance)</option>
+                                    <option value="dashicons-admin-tools">dashicons-admin-tools (Tools)</option>
+                                    <option value="dashicons-heart">dashicons-heart (Care)</option>
+                                    <option value="dashicons-cloud">dashicons-cloud (Cloud)</option>
+                                    <option value="dashicons-chart-area">dashicons-chart-area (Telemetry)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {{-- Color Palette --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Primary Color (Header Background)</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="renegadePrimaryColor" class="w-9 h-9 p-0.5 rounded border border-[var(--color-border)] cursor-pointer">
+                                    <input type="text" name="primary_color" x-model="renegadePrimaryColor"
+                                        class="flex-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data uppercase"
+                                        placeholder="#2D2062">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-[var(--color-ink-strong)] mb-1">Accent Color (Buttons &amp; Highlights)</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="renegadeAccentColor" class="w-9 h-9 p-0.5 rounded border border-[var(--color-border)] cursor-pointer">
+                                    <input type="text" name="accent_color" x-model="renegadeAccentColor"
+                                        class="flex-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data uppercase"
+                                        placeholder="#7EFF83">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Visibility & Privacy --}}
+                    <div class="border-t border-[var(--color-border-light)] pt-5 space-y-3">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">3. Privacy &amp; Lockout</h3>
+
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" name="hide_plugin_row" value="1" x-model="renegadeHidePluginRow"
+                                class="mt-1 rounded border-slate-300 text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
+                            <div>
+                                <div class="text-xs font-medium text-[var(--color-ink-strong)]">Hide from standard Plugins list</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)]">Hides the plugin row from non-agency WordPress administrators.</div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" name="hide_help_links" value="1" x-model="renegadeHideHelpLinks"
+                                class="mt-1 rounded border-slate-300 text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
+                            <div>
+                                <div class="text-xs font-medium text-[var(--color-ink-strong)]">Hide documentation and support links</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)]">Suppresses links to external agency knowledge bases and ticketing systems.</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="border-t border-[var(--color-border-light)] pt-5 flex items-center justify-between">
+                        <button type="submit"
+                            class="px-5 py-2.5 rounded-lg bg-[var(--color-brand)] text-white text-xs font-semibold hover:opacity-95 transition-opacity cursor-pointer shadow-sm">
+                            Save Renegade Settings
+                        </button>
+                    </div>
+                </form>
+
+                {{-- Reset Box --}}
+                <div class="card p-5 border-dashed flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-xs text-[var(--color-ink-strong)]">Reset Renegade Branding</div>
+                        <div class="text-[11px] text-[var(--color-ink-soft)]">Clear Renegade overrides and revert to Clockwork Control defaults.</div>
+                    </div>
+                    <form method="POST" action="{{ route('settings.companion.reset-renegade') }}" onsubmit="return confirm('Revert Renegade branding to agency defaults?');">
+                        @csrf
+                        <button type="submit" class="px-3.5 py-1.5 rounded-md border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-surface-alt)] cursor-pointer">
+                            Reset to Defaults
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Right column: Live Preview (5 cols) --}}
+            <div class="lg:col-span-5 space-y-6">
+                <div class="sticky top-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-soft)]">Live wp-admin Header Preview</span>
+                        <span class="text-[10px] text-emerald-600 font-mono">Real-time</span>
+                    </div>
+
+                    <div class="rounded-xl overflow-hidden border border-slate-700 shadow-xl bg-slate-900">
+                        {{-- Simulated Browser Chrome --}}
+                        <div class="bg-slate-800 px-3 py-2 flex items-center gap-2 border-b border-slate-700 text-xs text-slate-400">
+                            <div class="flex gap-1.5">
+                                <div class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></div>
+                                <div class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></div>
+                                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+                            </div>
+                            <span class="text-[10px] font-mono text-slate-400 truncate">wp-admin/admin.php?page=clockwork</span>
+                        </div>
+
+                        {{-- WP-Admin Header Live Simulation --}}
+                        <div class="p-4 transition-colors" :style="'background-color: ' + (renegadePrimaryColor || '#2D2062')">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <template x-if="logoUrl">
+                                        <img :src="logoUrl" alt="Logo" class="h-6 w-auto object-contain">
+                                    </template>
+                                    <template x-if="!logoUrl">
+                                        <span class="text-white font-bold text-base" x-text="companyName || 'Clockwork'"></span>
+                                    </template>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider text-slate-900 uppercase"
+                                          :style="'background-color: ' + (renegadeAccentColor || '#7EFF83')"
+                                          x-text="renegadeBrandText || 'Renegade'"></span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-900"
+                                          :style="'background-color: ' + (renegadeAccentColor || '#7EFF83')">
+                                        Get Support
+                                    </span>
+                                    <span class="text-[10px] font-mono text-white/60">v1.1.1</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Simulated Page Content --}}
+                        <div class="bg-slate-50 dark:bg-slate-950 p-4 border-t border-slate-200 dark:border-slate-800 text-xs">
+                            <div class="flex gap-3 border-b border-slate-200 dark:border-slate-800 pb-2 mb-3 text-[11px] font-medium text-slate-500">
+                                <span class="text-indigo-600 border-b-2 border-indigo-600 pb-2 -mb-2">Activity</span>
+                                <span>Uptime</span>
+                                <span>Security</span>
+                                <span>Performance</span>
+                                <span>Backups</span>
+                            </div>
+                            <div class="p-3 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                                <div class="font-semibold text-slate-800 dark:text-slate-200" x-text="renegadePluginName || 'Clockwork Renegade'"></div>
+                                <p class="text-[11px] text-slate-500" x-text="renegadePluginDesc || 'Care plan maintenance & security active.'"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-4 bg-sky-50/70 border-sky-200 text-xs text-sky-950 space-y-1 leading-relaxed">
+                        <div class="font-semibold text-sm text-sky-900 flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-sky-700"></i>
+                            <span>Renegade Independent Fleet</span>
+                        </div>
+                        <p>Renegade sites operate with autonomous self-updating directly from GitHub Releases and stream backups to S3 Glacier IR. Saving here broadcasts your custom brand payload immediately via HMAC REST.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
         {{-- ========================================================================= --}}
         <div x-show="activeTab === 'reports'" class="space-y-6 max-w-6xl">
             @if ($reportsModuleEnabled)

@@ -657,5 +657,70 @@ describe('CompanionSettingsController', function () {
             ])->assertUnprocessable()
                 ->assertJsonValidationErrors(['accent_color']);
         });
+
+        it('saves and resets renegade branding settings and returns variant payload for renegade sites', function () {
+            $user = User::factory()->create();
+
+            $response = $this->actingAs($user)->patchJson(route('settings.companion.update'), [
+                'tab' => 'renegade',
+                'enabled' => true,
+                'plugin_name' => 'Custom Shield Renegade',
+                'brand_text' => 'Shield',
+                'plugin_description' => 'Custom renegade protection.',
+                'menu_title' => 'Security Hub',
+                'primary_color' => '#1e293b',
+                'accent_color' => '#10b981',
+                'hide_plugin_row' => true,
+                'hide_help_links' => true,
+                'push_immediately' => false,
+            ]);
+
+            $response->assertOk()
+                ->assertJson([
+                    'success' => true,
+                    'branding' => [
+                        'enabled' => true,
+                        'plugin_name' => 'Custom Shield Renegade',
+                        'brand_text' => 'Shield',
+                    ],
+                ]);
+
+            $manager = app(CompanionBrandingManager::class);
+            $renegade = $manager->getRenegade();
+            expect($renegade['plugin_name'])->toBe('Custom Shield Renegade');
+            expect($renegade['brand_text'])->toBe('Shield');
+            expect($renegade['primary_color'])->toBe('#1e293b');
+            expect($renegade['accent_color'])->toBe('#10b981');
+
+            // Verify variant-aware payload
+            $renegadeSite = Site::factory()->create([
+                'domain' => 'renegade-test.com',
+                'companion_variant' => 'renegade',
+                'hosting_provider' => 'custom',
+            ]);
+            expect($renegadeSite->isRenegade())->toBeTrue();
+
+            $companionSite = Site::factory()->create([
+                'domain' => 'pressable-test.com',
+                'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE,
+            ]);
+            expect($companionSite->isRenegade())->toBeFalse();
+
+            $renegadePayload = $manager->payload($renegadeSite);
+            $companionPayload = $manager->payload($companionSite);
+
+            expect($renegadePayload['plugin_name'])->toBe('Custom Shield Renegade');
+            expect($renegadePayload['brand_text'])->toBe('Shield');
+            expect($companionPayload['plugin_name'])->not->toBe('Custom Shield Renegade');
+
+            // Reset renegade branding
+            $resetResponse = $this->actingAs($user)->post(route('settings.companion.reset-renegade'));
+            $resetResponse->assertRedirect(route('settings.companion.index', ['tab' => 'renegade']));
+
+            $resetRenegade = $manager->getRenegade();
+            expect($resetRenegade['enabled'])->toBeFalse();
+            expect($resetRenegade['plugin_name'])->toBe('Clockwork Renegade');
+            expect($resetRenegade['brand_text'])->toBe('Renegade');
+        });
     });
 });

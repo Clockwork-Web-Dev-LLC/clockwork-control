@@ -92,6 +92,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?Carbon $backup_relay_last_archived_at
  * @property ?int $backup_relay_last_size_bytes
  * @property ?string $backup_relay_last_sha256
+ * @property ?array $backup_relay_last_manifest
  * @property ?string $bill_com_customer_id
  * @property ?string $bill_com_customer_name
  * @property ?string $bill_com_linked_via_invoice
@@ -326,6 +327,7 @@ class Site extends Model
         'backup_relay_last_archived_at',
         'backup_relay_last_size_bytes',
         'backup_relay_last_sha256',
+        'backup_relay_last_manifest',
         'bill_com_customer_id',
         'bill_com_customer_name',
         'bill_com_linked_via_invoice',
@@ -429,6 +431,7 @@ class Site extends Model
             'backup_relay_enabled' => 'boolean',
             'backup_relay_last_archived_at' => 'datetime',
             'backup_relay_last_size_bytes' => 'integer',
+            'backup_relay_last_manifest' => 'array',
             'bill_com_linked_at' => 'datetime',
             'care_plan_override' => 'boolean',
             'auto_updates_paused' => 'boolean',

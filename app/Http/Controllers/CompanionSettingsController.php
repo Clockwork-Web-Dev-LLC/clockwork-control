@@ -32,12 +32,13 @@ class CompanionSettingsController extends Controller
             ->count();
 
         $activeTab = (string) $request->query('tab', 'companion');
-        if (! in_array($activeTab, ['companion', 'reports', 'email'], true)) {
+        if (! in_array($activeTab, ['companion', 'renegade', 'reports', 'email'], true)) {
             $activeTab = 'companion';
         }
 
         return view('settings.companion', [
             'branding' => $branding,
+            'renegadeBranding' => $brandingManager->getRenegade(),
             'reportsBranding' => $reportsBranding,
             'emailBranding' => $emailBranding,
             'masterPalette' => $brandingManager->getMasterPalette(),
@@ -87,6 +88,50 @@ class CompanionSettingsController extends Controller
             }
 
             return redirect()->route('settings.companion.index', ['tab' => $request->input('current_tab', 'companion')])->with('status', $msg);
+        }
+
+        if ($tab === 'renegade') {
+            $validated = $request->validate([
+                'enabled' => 'nullable|boolean',
+                'plugin_name' => 'nullable|string|max:120',
+                'brand_text' => 'nullable|string|max:60',
+                'plugin_description' => 'nullable|string|max:500',
+                'menu_title' => 'nullable|string|max:60',
+                'menu_icon' => 'nullable|string|max:60',
+                'primary_color' => CompanionBrandingManager::hexColorRules(),
+                'accent_color' => CompanionBrandingManager::hexColorRules(),
+                'hide_plugin_row' => 'nullable|boolean',
+                'hide_help_links' => 'nullable|boolean',
+            ]);
+
+            $brandingManager->saveRenegade([
+                'enabled' => $request->boolean('enabled'),
+                'plugin_name' => $validated['plugin_name'] ?? null,
+                'brand_text' => $validated['brand_text'] ?? null,
+                'plugin_description' => $validated['plugin_description'] ?? null,
+                'menu_title' => $validated['menu_title'] ?? null,
+                'menu_icon' => $validated['menu_icon'] ?? null,
+                'primary_color' => $validated['primary_color'] ?? null,
+                'accent_color' => $validated['accent_color'] ?? null,
+                'hide_plugin_row' => $request->boolean('hide_plugin_row'),
+                'hide_help_links' => $request->boolean('hide_help_links'),
+            ]);
+
+            if ($request->boolean('push_immediately', true)) {
+                PushCompanionBrandingJob::dispatch();
+            }
+
+            $msg = 'Clockwork Renegade branding saved successfully.';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'branding' => $brandingManager->getRenegade(),
+                ]);
+            }
+
+            return redirect()->route('settings.companion.index', ['tab' => 'renegade'])->with('status', $msg);
         }
 
         if ($tab === 'reports') {
@@ -281,6 +326,14 @@ class CompanionSettingsController extends Controller
 
         return redirect()->route('settings.companion.index')
             ->with('status', 'Companion branding reset to Clockwork Control defaults.');
+    }
+
+    public function resetRenegade(CompanionBrandingManager $brandingManager): RedirectResponse
+    {
+        $brandingManager->resetRenegade();
+
+        return redirect()->route('settings.companion.index', ['tab' => 'renegade'])
+            ->with('status', 'Renegade branding reset to agency defaults.');
     }
 
     public function resetReports(CompanionBrandingManager $brandingManager): RedirectResponse
