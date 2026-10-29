@@ -19,6 +19,7 @@ class ImportReportRecipients extends Command
 {
     protected $signature = 'clockwork:import-report-recipients
         {path : Path to the CSV file (header row required)}
+        {--site-column= : Explicit header name of the column containing site domains}
         {--apply : Write the changes. Without it the command only shows what it would do}
         {--replace : Replace a schedule\'s existing recipients instead of adding to them}
         {--no-push : Don\'t push the updated recipients to the sites\' WordPress plugin}';
@@ -26,7 +27,7 @@ class ImportReportRecipients extends Command
     protected $description = 'Import client report recipients from a CSV (site domain + email columns). Dry run unless --apply.';
 
     /** Header names (lowercased, trimmed) accepted for the site column, in order of preference. */
-    private const DOMAIN_HEADERS = ['domain', 'website', 'site', 'site url', 'site_url', 'url', 'managewp'];
+    private const DOMAIN_HEADERS = ['domain', 'url', 'site url', 'site_url', 'website', 'site', 'managewp'];
 
     public function handle(ReportRecipientsSyncService $sync): int
     {
@@ -58,11 +59,25 @@ class ImportReportRecipients extends Command
         $header = array_map(fn ($h) => strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $h) ?? '')), $header);
 
         $domainIndex = null;
-        foreach (self::DOMAIN_HEADERS as $name) {
-            $found = array_search($name, $header, true);
+        $explicitColumn = $this->option('site-column');
+        if (is_string($explicitColumn) && trim($explicitColumn) !== '') {
+            $found = array_search(strtolower(trim($explicitColumn)), $header, true);
             if ($found !== false) {
                 $domainIndex = $found;
-                break;
+            } else {
+                fclose($handle);
+                $this->error("Specified site column '{$explicitColumn}' was not found in header.");
+                $this->line('Found: '.implode(', ', $header));
+
+                return self::FAILURE;
+            }
+        } else {
+            foreach (self::DOMAIN_HEADERS as $name) {
+                $found = array_search($name, $header, true);
+                if ($found !== false) {
+                    $domainIndex = $found;
+                    break;
+                }
             }
         }
 

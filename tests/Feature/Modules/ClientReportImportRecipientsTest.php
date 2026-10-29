@@ -79,4 +79,19 @@ describe('clockwork:import-report-recipients', function () {
 
         $this->artisan('clockwork:import-report-recipients', ['path' => $csv])->assertFailed();
     });
+
+    it('prioritizes URL over Website when both are present and respects --site-column', function () {
+        $site = Site::factory()->carePlan()->create(['domain' => 'matched.test', 'companion_installed' => false]);
+        $csv = recipientsCsv("Website,URL,Report email\n\"Site Title\",matched.test,user@matched.test\n");
+
+        $this->artisan('clockwork:import-report-recipients', ['path' => $csv, '--apply' => true])
+            ->expectsOutputToContain('1 created')
+            ->assertSuccessful();
+
+        expect(ClientReportSchedule::where('site_id', $site->id)->exists())->toBeTrue();
+
+        // With explicit invalid --site-column
+        $this->artisan('clockwork:import-report-recipients', ['path' => $csv, '--site-column' => 'nonexistent'])
+            ->assertFailed();
+    });
 });
