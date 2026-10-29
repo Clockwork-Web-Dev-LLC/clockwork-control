@@ -192,7 +192,7 @@ class SchedulesController extends Controller
     public function destroy(ClientReportSchedule $schedule): RedirectResponse
     {
         $site = $schedule->site;
-        $domain = $site?->domain ?? 'site';
+        $domain = $site->domain ?? 'site';
         $schedule->delete();
 
         if ($site) {

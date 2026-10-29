@@ -3,7 +3,7 @@
 namespace Modules\ClientReports\Services;
 
 use App\Models\Site;
-use App\Services\ActionLogger;
+use App\Services\ActionLog\ActionLogger;
 use App\Services\Companion\ClockworkCompanionClient;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -278,7 +278,7 @@ class ReportRecipientsSyncService
             }
         }
 
-        return array_values($clean);
+        return $clean;
     }
 
     /**
