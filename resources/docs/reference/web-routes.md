@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-10-04
+updated: 2026-10-29
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -228,6 +228,12 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/email-auth/domains/{domain}/ignore` | Toggle advisory ignore state for a domain (silences degradation alerts for externally-managed client DNS). |
 | POST | `/email-auth/domains/{domain}/selectors` | Update custom DKIM selector probing list for a specific client domain. |
 | DELETE | `/email-auth/domains/{domain}` | Soft-delete a domain from tracking, removing it from views and scheduled weekly checks. |
+
+### SEO
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/seo` | Fleet SEO overview: indexability state for every active, monitored site, blocking production sites first (`modules/Seo`). |
 
 ### Docs (this site)
 

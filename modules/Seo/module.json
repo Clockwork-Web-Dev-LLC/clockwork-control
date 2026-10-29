@@ -1,0 +1,10 @@
+{
+  "id": "seo",
+  "name": "SEO",
+  "version": "1.0.0",
+  "description": "Fleet-wide SEO overview: search engine indexability for every monitored site, and the home for future SEO tooling.",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["seo"],
+  "namespace": "Modules\\Seo"
+}

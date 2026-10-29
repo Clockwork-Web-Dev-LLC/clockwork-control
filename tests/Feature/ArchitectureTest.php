@@ -112,6 +112,7 @@ arch('every module service provider extends the shared base')
         'Modules\AuthGitHub\GitHubAuthServiceProvider',
         'Modules\AuthMicrosoft\MicrosoftAuthServiceProvider',
         'Modules\EmailAuth\EmailAuthServiceProvider',
+        'Modules\Seo\SeoServiceProvider',
     ])
     ->toExtend('Modules\Core\ModuleServiceProvider');
 

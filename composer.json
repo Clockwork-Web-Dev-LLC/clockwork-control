@@ -271,7 +271,8 @@
             "Modules\\Feedback\\": "modules/Feedback/src/",
             "Modules\\AiRemedy\\": "modules/AiRemedy/src/",
             "Modules\\EmailAuth\\": "modules/EmailAuth/src/",
-            "Modules\\ExploitShield\\": "modules/ExploitShield/src/"
+            "Modules\\ExploitShield\\": "modules/ExploitShield/src/",
+            "Modules\\Seo\\": "modules/Seo/src/"
         }
     },
     "autoload-dev": {

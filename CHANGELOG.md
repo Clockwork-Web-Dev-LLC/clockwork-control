@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SEO module (`modules/Seo`)**: new home for SEO tooling. Its first page, `/seo` (gear menu → SEO), lists every monitored site's search engine indexability, with blocking production sites first and counts of each state. It reads the existing indexability watchdog's data, so it makes no new requests to client sites. See [Features → SEO module](resources/docs/features/seo.md).
 - **Client Reports — Import report recipients (`clockwork:import-report-recipients`)**: loads per-site report recipients from a CSV (site domain + email columns, e.g. the ManageWP export) into report schedules; dry run unless `--apply`.
 - **Exploit Shield Module (`modules/ExploitShield`)**:
   - **Automated Honeypot & Probe Defense**: Automatically inspects threat logs and probe attempts in real-time and retroactively (`clockwork:exploit-shield-scan`), matching high-confidence exploit signatures (environment files, webshells, sensitive configs) with zero false-positives.

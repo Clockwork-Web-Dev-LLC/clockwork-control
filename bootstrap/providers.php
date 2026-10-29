@@ -30,6 +30,7 @@ use Modules\Linode\LinodeServiceProvider;
 use Modules\Mattermost\MattermostServiceProvider;
 use Modules\PageSpeedInsights\PageSpeedInsightsServiceProvider;
 use Modules\Pressable\PressableServiceProvider;
+use Modules\Seo\SeoServiceProvider;
 use Modules\SiteMaintenance\SiteMaintenanceServiceProvider;
 use Modules\Slack\SlackServiceProvider;
 use Modules\SpinupWp\SpinupWpServiceProvider;
@@ -79,6 +80,8 @@ return [
     // Performance scanning modules (Lighthouse, Core Web Vitals)
     GTmetrixServiceProvider::class,
     PageSpeedInsightsServiceProvider::class,
+    // SEO (fleet indexability overview)
+    SeoServiceProvider::class,
     // Security scanning & protection modules (ManageWP replacement suite, brute-force defense)
     SucuriServiceProvider::class,
     GatekeeperServiceProvider::class,
