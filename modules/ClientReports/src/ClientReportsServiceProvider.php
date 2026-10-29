@@ -3,6 +3,7 @@
 namespace Modules\ClientReports;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Modules\ClientReports\Console\Commands\ImportReportRecipients;
 use Modules\ClientReports\Console\Commands\SendScheduledClientReports;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
@@ -21,6 +22,7 @@ class ClientReportsServiceProvider extends ModuleServiceProvider
 
         $this->commands([
             SendScheduledClientReports::class,
+            ImportReportRecipients::class,
         ]);
     }
 
