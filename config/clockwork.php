@@ -322,7 +322,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.41.0'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.42.0'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
