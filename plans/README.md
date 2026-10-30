@@ -8,12 +8,17 @@ this index is a map, not a claim that everything below is still unbuilt.
 ## Current focus: SEO module (2026-10-30, Claude)
 
 - [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): grow `modules/Seo` so the agency can
-  cancel Semrush. Nightly Search Console + GA4 sync (free, one agency OAuth connection as systems@)
-  replaces the Chrome pulls behind the monthly SEO report; a DataForSEO driver (about $2 to $24/month)
-  plus an in-app keyword map (existing client sheets imported, dated tabs exported) replaces Semrush
-  Keyword Overview and the Sheets paste hacks. Phases 1, 1b and 2 to 5, a last round of Semrush
-  exports in November 2026, scope matrix, cost math, an exit criterion for cancelling (earliest about
-  mid-January 2027), and 10 decisions for Aaron.
+  cancel Semrush, with Claude as the main consumer. Nightly Search Console + GA4 sync (free, one agency
+  OAuth connection as systems@) replaces the Chrome pulls behind the monthly SEO report; a DataForSEO
+  driver (about $2 to $24/month) plus a keyword map in Control (existing client sheets imported, dated
+  tabs exported) replaces Semrush Keyword Overview and the Sheets paste hacks. Everything is reachable
+  from Claude through one MCP server (`laravel/mcp`) in a new `modules/Mcp` host that other modules
+  can add tools to: 15 tools shipped phase by phase, per-user OAuth through Passport, and a
+  path-restricted public hostname on the existing Cloudflare Tunnel so claude.ai and Cowork can reach
+  it. Both SEO skills are rewritten to call the tools. Phases 1, 1b, 2, 2b and 3 to 5, a last round of
+  Semrush exports in November 2026, scope matrix, cost math, an exit criterion for cancelling
+  (earliest about mid-January 2027), and 14 decisions for Aaron (reachability, auth and Claude
+  surfaces among them).
 
 ---
 
@@ -61,7 +66,8 @@ rest) → **theme-system** → **installer** → **backup-relay-generalization**
   similar) to diagnose and auto-remediate problems on customer servers, potentially as a premium tier.
   Covers: what self-healing already exists in this codebase (more than expected), why a bespoke
   tool-calling loop beats MCP for this specific use case (but a separate read-only `laravel/mcp` server
-  is a good, lower-risk idea), model/quantization recommendations, a tiered-autonomy safety architecture
+  is a good, lower-risk idea; the MCP host in `seo-semrush-replacement.md` is where its fleet tools
+  would go), model/quantization recommendations, a tiered-autonomy safety architecture
   (rule-based → LLM-assisted-with-human-approval → opt-in trusted auto-execute), six concrete playbook
   candidates ranked by safety, and an honest business-case assessment against the RMM/AI-SRE market.
   **Paused at the user's request — research/architecture only, not being built next.**
