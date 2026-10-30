@@ -5,6 +5,18 @@ have already shipped (installer, theme system, SemVer/release cadence, backup re
 domain expiration, SEO indexability). Treat each file's own status notes as authoritative;
 this index is a map, not a claim that everything below is still unbuilt.
 
+## Current focus: SEO module (2026-10-30, Claude)
+
+- [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): grow `modules/Seo` so the agency can
+  cancel Semrush. Nightly Search Console + GA4 sync (free, one agency OAuth connection as systems@)
+  replaces the Chrome pulls behind the monthly SEO report; a DataForSEO driver (about $2 to $24/month)
+  plus an in-app keyword map (existing client sheets imported, dated tabs exported) replaces Semrush
+  Keyword Overview and the Sheets paste hacks. Phases 1, 1b and 2 to 5, a last round of Semrush
+  exports in November 2026, scope matrix, cost math, an exit criterion for cancelling (earliest about
+  mid-January 2027), and 10 decisions for Aaron.
+
+---
+
 Recommended build order: **versioning** (mostly process, unblocks tagging real releases for the
 rest) → **theme-system** → **installer** → **backup-relay-generalization**.
 
