@@ -180,19 +180,24 @@ class KinstaCompanionInstaller implements CompanionInstallerContract
         // the right user for this one environment.
         $script = <<<BASH
 set -euo pipefail
+PLUGINS="{$wpPath}/wp-content/plugins"
 MU="{$wpPath}/wp-content/mu-plugins"
-mkdir -p "\$MU"
-cd "\$MU"
+mkdir -p "\$PLUGINS"
+cd "\$PLUGINS"
 rm -rf .clockwork-stage
 mkdir .clockwork-stage
 base64 -d < {$escapedB64Path} | tar -xzf - -C .clockwork-stage
-rm -f clockwork-companion.php
+if [ -f .clockwork-stage/clockwork-companion.php ] && [ -d .clockwork-stage/clockwork-companion ]; then
+    mv .clockwork-stage/clockwork-companion.php .clockwork-stage/clockwork-companion/clockwork-companion.php
+fi
 rm -rf clockwork-companion
-mv .clockwork-stage/clockwork-companion.php .
 mv .clockwork-stage/clockwork-companion .
 rm -rf .clockwork-stage
+rm -f "\$MU/clockwork-companion.php"
+rm -rf "\$MU/clockwork-companion"
 rm -f {$escapedB64Path}
-echo "OK: companion staged at \$MU"
+wp --path="{$wpPath}" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
+echo "OK: companion staged at \$PLUGINS/clockwork-companion"
 BASH;
 
         $sentinel = '__CLOCKWORK_KINSTA_EXIT__';
