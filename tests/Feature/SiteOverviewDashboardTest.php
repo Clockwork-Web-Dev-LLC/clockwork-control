@@ -274,6 +274,64 @@ describe('Site Overview Command Center Dashboard', function () {
             ->assertSee('unhosted-client.example.com');
     });
 
+    it('shows the last failed backup attempt on custom unhosted sites', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'failing-relay.example.com',
+            'backup_relay_enabled' => true,
+            'backup_relay_frequency' => 'daily',
+            'backup_relay_last_archived_at' => now()->subDays(4),
+            'backup_relay_last_attempt_at' => now()->subHours(2),
+            'backup_relay_last_error' => 'BackupRelay: Failed direct backup for failing-relay.example.com: HTTP 502 error code: 502',
+            'backup_relay_failing_since' => '2026-10-27 04:30:00',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('sites.show', $site))
+            ->assertOk()
+            ->assertSee('Failing since 2026-10-27, 04:30')
+            ->assertSee('BackupRelay: Failed direct backup for failing-relay.example.com: HTTP 502 error code: 502');
+    });
+
+    it('explains why relay cannot be turned on when the site plugin lacks backup-create', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->withCompanionInstalled()->create([
+            'domain' => 'old-plugin-widget.example.com',
+            'companion_variant' => 'companion',
+            'companion_version' => '1.30.3',
+            'companion_capabilities' => ['snapshot'],
+            'backup_relay_enabled' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('sites.show', $site))
+            ->assertOk()
+            ->assertSee('Companion 1.30.3 lacks the backup-create capability; update Companion or switch to Renegade.');
+    });
+
+    it('includes the last relay attempt in the backups-history schedule', function () {
+        $user = User::factory()->create();
+
+        $site = Site::factory()->custom()->create([
+            'domain' => 'history-failing.example.com',
+            'backup_relay_enabled' => true,
+            'backup_relay_last_attempt_at' => '2026-10-28 04:31:00',
+            'backup_relay_last_error' => 'HTTP 500 Database dump failed',
+            'backup_relay_failing_since' => '2026-10-27 04:30:00',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('sites.backups.history', $site))
+            ->assertOk()
+            ->assertJsonPath('schedule.last_error', 'HTTP 500 Database dump failed')
+            ->assertJsonPath('schedule.failing_since', $site->fresh()->backup_relay_failing_since->toIso8601String())
+            ->assertJsonPath('schedule.last_attempt_at', $site->fresh()->backup_relay_last_attempt_at->toIso8601String());
+    });
+
     it('renders companion only badge and disables server telemetry for custom standalone sites', function () {
         $this->mockIssueCounterZero();
         $user = User::factory()->create();

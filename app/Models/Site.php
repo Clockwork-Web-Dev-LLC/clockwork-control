@@ -93,6 +93,9 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?int $backup_relay_last_size_bytes
  * @property ?string $backup_relay_last_sha256
  * @property ?array $backup_relay_last_manifest
+ * @property ?Carbon $backup_relay_last_attempt_at last archive attempt (success or failure)
+ * @property ?string $backup_relay_last_error last failed attempt's error; null once an archive succeeds
+ * @property ?Carbon $backup_relay_failing_since first failure in the current unbroken failure streak
  * @property ?string $bill_com_customer_id
  * @property ?string $bill_com_customer_name
  * @property ?string $bill_com_linked_via_invoice
@@ -336,6 +339,9 @@ class Site extends Model
         'backup_relay_last_size_bytes',
         'backup_relay_last_sha256',
         'backup_relay_last_manifest',
+        'backup_relay_last_attempt_at',
+        'backup_relay_last_error',
+        'backup_relay_failing_since',
         'bill_com_customer_id',
         'bill_com_customer_name',
         'bill_com_linked_via_invoice',
@@ -442,6 +448,8 @@ class Site extends Model
             'backup_relay_last_archived_at' => 'datetime',
             'backup_relay_last_size_bytes' => 'integer',
             'backup_relay_last_manifest' => 'array',
+            'backup_relay_last_attempt_at' => 'datetime',
+            'backup_relay_failing_since' => 'datetime',
             'bill_com_linked_at' => 'datetime',
             'care_plan_override' => 'boolean',
             'auto_updates_paused' => 'boolean',

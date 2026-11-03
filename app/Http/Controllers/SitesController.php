@@ -51,6 +51,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
+use Modules\BackupRelay\Services\CompanionBackupRelayAdapter;
 use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleStateResolver;
@@ -2198,6 +2199,9 @@ class SitesController extends Controller
                 'last_archived_at' => $site->backup_relay_last_archived_at?->toIso8601String(),
                 'last_size_bytes' => $site->backup_relay_last_size_bytes,
                 'next_scheduled_at' => $site->backupRelayNextScheduledAt()?->toIso8601String(),
+                'last_attempt_at' => $site->backup_relay_last_attempt_at?->toIso8601String(),
+                'last_error' => $site->backup_relay_last_error,
+                'failing_since' => $site->backup_relay_failing_since?->toIso8601String(),
             ],
         ]);
     }
@@ -2349,7 +2353,9 @@ class SitesController extends Controller
             'is_multisite' => $isMultisite,
             'uptime_monitoring_enabled' => true,
             'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
-            'backup_relay_enabled' => true,
+            // Off-site backups need the plugin's /backup/create. Turning
+            // relay on without it only produces a failed backup every day.
+            'backup_relay_enabled' => CompanionBackupRelayAdapter::supportsBackupCreate($caps),
             'backup_relay_frequency' => 'daily',
             // Schema default is paused (opt-in flip). SpinupWP/Pressable
             // imports unpause on create; standalone enroll must do the same
@@ -2413,7 +2419,12 @@ class SitesController extends Controller
 
         $this->kickEnrollmentSecurityBaseline($site);
 
-        return redirect()->route('sites.show', $site)->with('flash', "Site {$site->domain} successfully connected and enrolled!");
+        $flash = "Site {$site->domain} successfully connected and enrolled!";
+        if (! $site->backup_relay_enabled) {
+            $flash .= ' Off-site backups were not turned on: '.CompanionBackupRelayAdapter::missingBackupCreateMessage($site);
+        }
+
+        return redirect()->route('sites.show', $site)->with('flash', $flash);
     }
 
     /**
@@ -2475,6 +2486,25 @@ class SitesController extends Controller
 
         $previousEnabled = (bool) $site->backup_relay_enabled;
         $previousFrequency = $site->backup_relay_frequency;
+
+        // Refuse only the off -> on switch. A site that is already on keeps
+        // its cadence editable, and its failures stay visible.
+        if ((bool) $validated['enabled'] && ! $previousEnabled
+            && ($blocked = CompanionBackupRelayAdapter::enableBlockedReason($site)) !== null) {
+            $msg = "Glacier backups for {$site->domain} were not turned on: {$blocked}";
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $msg,
+                    'enabled' => false,
+                    'frequency' => $site->backupRelayFrequency(),
+                    'domain' => $site->domain,
+                ], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
 
         $site->forceFill([
             'backup_relay_enabled' => (bool) $validated['enabled'],
