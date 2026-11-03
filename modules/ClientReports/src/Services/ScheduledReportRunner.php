@@ -5,12 +5,16 @@ namespace Modules\ClientReports\Services;
 use App\Models\Site;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 
 /**
  * One scheduled report cycle, shared by `clockwork:send-client-reports` and the
- * schedule's "Send now" button so the two can't drift apart.
+ * schedule's "Send now" button so the two can't drift apart. recompile() is the
+ * reports' Recompile action: the same compile and review check for an unsent
+ * report's own period, without ever sending.
  *
  * Callers are responsible for the guards (enabled, due, active site, auto mode
  * having recipients) — this only does the work.
@@ -95,6 +99,51 @@ class ScheduledReportRunner
         );
     }
 
+    /**
+     * Recompile a scheduled report that hasn't reached anyone, from current
+     * data, for the report's own period (not "last month", which is what
+     * run() compiles), so a held draft picks up whatever was fixed or added
+     * since: hours logged, a scan rerun, a backup recorded. The older copy is
+     * superseded and the new one is checked for review the way run() checks
+     * one: an auto schedule that has never sent holds it as its first
+     * report, a draft schedule doesn't add that reason.
+     *
+     * It never sends anything, even when the new copy is clean and the
+     * schedule has sent before, and it doesn't move the schedule on: it is
+     * not a scheduled cycle. A clean copy is sent by hand from the history
+     * table like any other.
+     *
+     * @throws InvalidArgumentException when the report isn't a scheduled one
+     *                                  that is still unsent
+     */
+    public function recompile(ClientReport $report): ScheduledReportRun
+    {
+        return DB::transaction(function () use ($report) {
+            // Re-read under a lock, so a second click can't recompile a copy
+            // the first one has just superseded.
+            $current = ClientReport::query()->lockForUpdate()->find($report->id);
+            $schedule = $current?->schedule;
+
+            if ($current === null || ! $current->canRecompile() || $schedule === null
+                || $schedule->site === null || $schedule->site_id !== $current->site_id) {
+                throw new InvalidArgumentException('Only a scheduled report that has not been sent to anyone can be recompiled.');
+            }
+
+            $start = $current->period_start->copy()->startOfDay();
+            $end = $current->period_end->copy()->startOfDay();
+            $recipients = array_values(array_filter((array) $schedule->recipients));
+            $notes = $current->sections_data['meta']['custom_notes'] ?? null;
+
+            $fresh = $this->compileFresh($schedule, $start, $end, $recipients, is_string($notes) ? $notes : null);
+            $reasons = $this->flagForReview(
+                $fresh,
+                firstReport: $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT && $schedule->last_sent_at === null,
+            );
+
+            return new ScheduledReportRun($fresh, isDraft: true, resumed: false, heldReasons: $reasons);
+        });
+    }
+
     protected function resumableReport(ClientReportSchedule $schedule, Carbon $start, Carbon $end): ?ClientReport
     {
         $report = $this->samePeriod($schedule, $start, $end)
@@ -114,7 +163,7 @@ class ScheduledReportRunner
      *
      * @param  list<string>  $recipients
      */
-    protected function compileFresh(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients): ClientReport
+    protected function compileFresh(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients, ?string $customNotes = null): ClientReport
     {
         $this->samePeriod($schedule, $start, $end)
             ->where('status', ClientReport::STATUS_GENERATED)
@@ -122,7 +171,7 @@ class ScheduledReportRunner
             ->filter(fn (ClientReport $r) => empty($r->sent_to))
             ->each(fn (ClientReport $r) => $r->update(['status' => ClientReport::STATUS_SUPERSEDED]));
 
-        return $this->compile($schedule, $start, $end, $recipients);
+        return $this->compile($schedule, $start, $end, $recipients, $customNotes);
     }
 
     /**
@@ -157,7 +206,7 @@ class ScheduledReportRunner
     /**
      * @param  list<string>  $recipients
      */
-    protected function compile(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients): ClientReport
+    protected function compile(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients, ?string $customNotes = null): ClientReport
     {
         $site = $schedule->site;
 
@@ -172,6 +221,7 @@ class ScheduledReportRunner
                 site: $site,
                 periodStart: $start,
                 periodEnd: $end,
+                customNotes: $customNotes,
                 sections: $schedule->template?->sections,
             ),
             'client_name' => $site->domain,

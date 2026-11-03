@@ -8,12 +8,16 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use InvalidArgumentException;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Modules\ClientReports\Services\ClientReportSender;
+use Modules\ClientReports\Services\ScheduledReportRunner;
+use Throwable;
 
 class ClientReportsController extends Controller
 {
@@ -133,6 +137,41 @@ class ClientReportsController extends Controller
             ->firstOrFail();
 
         return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false]);
+    }
+
+    /**
+     * Recompile an unsent scheduled report for its own period from current
+     * data, replacing (superseding) the old copy. It never sends anything:
+     * the new copy is checked for review like a scheduled run's, and goes
+     * out only when someone sends it from the history table.
+     */
+    public function recompile(ClientReport $report, ScheduledReportRunner $runner): RedirectResponse
+    {
+        if (! $report->canRecompile()) {
+            return back()->with('status_error', match (true) {
+                $report->schedule_id === null => 'Only scheduled reports can be recompiled. Generate a new report for this period instead.',
+                $report->status === ClientReport::STATUS_SUPERSEDED => 'A newer report for this period replaced this one. Recompile that one instead.',
+                default => 'This report has already been sent to someone, so it can\'t be recompiled.',
+            });
+        }
+
+        try {
+            $run = $runner->recompile($report);
+        } catch (InvalidArgumentException $e) {
+            return back()->with('status_error', $e->getMessage());
+        } catch (Throwable $e) {
+            Log::error("Recompiling client report #{$report->id} failed: {$e->getMessage()}", ['exception' => $e]);
+
+            return back()->with('status_error', "Recompiling failed, so the report was left as it was: {$e->getMessage()}");
+        }
+
+        $fresh = $run->report;
+        $message = 'Recompiled from current data for '.$fresh->period_start->format('M j').' – '.$fresh->period_end->format('M j, Y').'. Nothing was sent.';
+        $message .= $run->held()
+            ? ' It is held for review: '.implode(' ', $run->heldReasons)
+            : ' Nothing needs review; send it from the history table when ready.';
+
+        return redirect()->route('client-reports.show', $fresh)->with('status', $message);
     }
 
     /**

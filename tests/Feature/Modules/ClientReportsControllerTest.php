@@ -2,12 +2,17 @@
 
 use App\Models\Site;
 use App\Models\SiteTrafficDaily;
+use App\Models\SiteWorkLog;
 use App\Models\User;
 use App\Services\Companion\CompanionBrandingManager;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
+use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
@@ -335,5 +340,179 @@ describe('send', function () {
             ->assertOk()
             ->assertSee('Send this report to which email address(es)?')
             ->assertSee('Email report to saved@client.test?');
+    });
+});
+
+describe('recompile', function () {
+    /**
+     * A care-plan site whose report has nothing to hold on its own: no backup
+     * source, a running uptime probe, a host with no core-file check, and
+     * enrolled long before October.
+     */
+    function recompileSite(): Site
+    {
+        return Site::factory()->carePlan()->create([
+            'domain' => 'site-'.Str::lower(Str::random(6)).'.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
+            'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear(),
+        ]);
+    }
+
+    function recompileSchedule(Site $site, array $attributes = []): ClientReportSchedule
+    {
+        return ClientReportSchedule::create(array_merge([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@example.com'],
+            'is_enabled' => true, 'next_run_at' => Carbon::parse('2027-01-01 00:00:00'),
+        ], $attributes));
+    }
+
+    /** An October report from the schedule, held for review, as the Nov 1 run left it. */
+    function heldOctoberReport(ClientReportSchedule $schedule, array $attributes = []): ClientReport
+    {
+        $start = Carbon::parse('2026-10-01');
+        $end = Carbon::parse('2026-10-31');
+        $data = app(ClientReportCompiler::class)->compile($schedule->site, $start, $end);
+        $data['meta']['review_reasons'] = [ScheduledReportRunner::FIRST_REPORT_REASON];
+
+        return ClientReport::create(array_merge([
+            'site_id' => $schedule->site_id, 'schedule_id' => $schedule->id, 'title' => 'Maintenance Report (Oct 2026)',
+            'period_start' => $start, 'period_end' => $end, 'sections_data' => $data,
+            'client_email' => 'client@example.com', 'status' => ClientReport::STATUS_GENERATED,
+        ], $attributes));
+    }
+
+    beforeEach(function () {
+        // A month later than the reports: "last month" is November, not October.
+        $this->travelTo(Carbon::parse('2026-12-10 09:00:00'));
+    });
+
+    it('requires authentication', function () {
+        $report = heldOctoberReport(recompileSchedule(recompileSite()));
+
+        $this->post(route('client-reports.recompile', $report))->assertRedirect(route('login'));
+        expect(ClientReport::count())->toBe(1);
+    });
+
+    it('recompiles a held report for its own period, supersedes the old copy and holds the new one, without sending', function () {
+        Mail::fake();
+        $schedule = recompileSchedule(recompileSite());
+        $old = heldOctoberReport($schedule);
+        // Logged after the draft was compiled: the reason drafts need refreshing.
+        SiteWorkLog::create(['site_id' => $schedule->site_id, 'worked_on' => '2026-10-20', 'hours' => 1.5, 'description' => 'Example plugin cleanup']);
+        $nextRun = $schedule->next_run_at->toIso8601String();
+
+        $response = $this->actingAs(User::factory()->create())->post(route('client-reports.recompile', $old));
+
+        $fresh = ClientReport::query()->where('status', ClientReport::STATUS_GENERATED)->sole();
+        $response->assertRedirect(route('client-reports.show', $fresh))
+            ->assertSessionHas('status', fn ($m) => str_contains($m, 'Recompiled from current data for Oct 1 – Oct 31, 2026. Nothing was sent.')
+                && str_contains($m, ScheduledReportRunner::FIRST_REPORT_REASON));
+
+        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
+        expect($old->fresh()->status)->toBe(ClientReport::STATUS_SUPERSEDED)
+            ->and($fresh->id)->not->toBe($old->id)
+            ->and($fresh->schedule_id)->toBe($schedule->id)
+            ->and($fresh->period_start->toDateString())->toBe('2026-10-01')
+            ->and($fresh->period_end->toDateString())->toBe('2026-10-31')
+            ->and($fresh->sections_data['meta']['period_start'])->toBe('2026-10-01')
+            ->and($fresh->sections_data['work_log']['total_hours'])->toEqual(1.5)
+            ->and($fresh->sections_data['meta']['review_reasons'])->toBe([ScheduledReportRunner::FIRST_REPORT_REASON])
+            ->and($fresh->sent_to)->toBeNull()
+            // Not a scheduled cycle: the schedule is left exactly as it was.
+            ->and($schedule->fresh()->last_sent_at)->toBeNull()
+            ->and($schedule->fresh()->next_run_at->toIso8601String())->toBe($nextRun);
+    });
+
+    it('never sends, even when the new copy is clean and the schedule sends clean reports by itself', function () {
+        Mail::fake();
+        $schedule = recompileSchedule(recompileSite(), ['last_sent_at' => Carbon::parse('2026-10-01 06:00:00')]);
+        $old = heldOctoberReport($schedule);
+
+        $this->actingAs(User::factory()->create())->post(route('client-reports.recompile', $old))
+            ->assertSessionHas('status', fn ($m) => str_contains($m, 'Nothing needs review'));
+
+        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
+        $fresh = ClientReport::query()->where('status', ClientReport::STATUS_GENERATED)->sole();
+        expect($fresh->sections_data['meta'])->not->toHaveKey('review_reasons')
+            ->and($fresh->sent_to)->toBeNull()
+            ->and($schedule->fresh()->last_sent_at->toDateString())->toBe('2026-10-01');
+    });
+
+    it('does not add the first-report reason for a draft-mode schedule, like a scheduled run', function () {
+        Mail::fake();
+        $schedule = recompileSchedule(recompileSite(), ['delivery_mode' => ClientReportSchedule::MODE_DRAFT]);
+
+        $run = app(ScheduledReportRunner::class)->recompile(heldOctoberReport($schedule));
+
+        Mail::assertNothingSent();
+        expect($run->isDraft)->toBeTrue()
+            ->and($run->heldReasons)->toBe([])
+            ->and($run->report->sections_data['meta'])->not->toHaveKey('review_reasons');
+    });
+
+    it('keeps the report\'s custom note', function () {
+        $schedule = recompileSchedule(recompileSite());
+        $old = heldOctoberReport($schedule);
+        $old->update(['sections_data' => array_replace_recursive($old->sections_data, ['meta' => ['custom_notes' => 'Example note for the client.']])]);
+
+        $run = app(ScheduledReportRunner::class)->recompile($old->fresh());
+
+        expect($run->report->sections_data['meta']['custom_notes'])->toBe('Example note for the client.');
+    });
+
+    it('refuses reports that reached someone, were replaced, or have no schedule', function (Closure $makeReport, string $error) {
+        Mail::fake();
+        $report = $makeReport();
+        $before = ClientReport::count();
+
+        $this->actingAs(User::factory()->create())->post(route('client-reports.recompile', $report))
+            ->assertSessionHas('status_error', $error);
+
+        Mail::assertNothingSent();
+        expect(ClientReport::count())->toBe($before)
+            ->and($report->fresh()->status)->toBe($report->status);
+        expect(fn () => app(ScheduledReportRunner::class)->recompile($report))->toThrow(InvalidArgumentException::class);
+    })->with([
+        'sent' => [fn () => heldOctoberReport(recompileSchedule(recompileSite()), ['status' => ClientReport::STATUS_SENT, 'sent_to' => ['client@example.com']]), "This report has already been sent to someone, so it can't be recompiled."],
+        'partly sent' => [fn () => heldOctoberReport(recompileSchedule(recompileSite()), ['sent_to' => ['client@example.com']]), "This report has already been sent to someone, so it can't be recompiled."],
+        'superseded' => [fn () => heldOctoberReport(recompileSchedule(recompileSite()), ['status' => ClientReport::STATUS_SUPERSEDED]), 'A newer report for this period replaced this one. Recompile that one instead.'],
+        'generated by hand' => [fn () => heldOctoberReport(recompileSchedule(recompileSite()), ['schedule_id' => null]), 'Only scheduled reports can be recompiled. Generate a new report for this period instead.'],
+    ]);
+
+    it('leaves the old copy in place when compiling fails', function () {
+        Mail::fake();
+        $old = heldOctoberReport(recompileSchedule(recompileSite()));
+        $this->mock(ClientReportCompiler::class)->shouldReceive('compile')->andThrow(new RuntimeException('Example compile failure'));
+
+        $this->actingAs(User::factory()->create())->post(route('client-reports.recompile', $old))
+            ->assertSessionHas('status_error', fn ($m) => str_contains($m, 'Example compile failure'));
+
+        Mail::assertNothingSent();
+        expect($old->fresh()->status)->toBe(ClientReport::STATUS_GENERATED)
+            ->and(ClientReport::count())->toBe(1);
+    });
+
+    it('offers Recompile on unsent scheduled reports in the history and the preview, never on the public view', function () {
+        $this->mockIssueCounterZero();
+        $user = User::factory()->create();
+        $held = heldOctoberReport(recompileSchedule(recompileSite()));
+        $sent = heldOctoberReport(recompileSchedule(recompileSite()), ['status' => ClientReport::STATUS_SENT, 'sent_to' => ['client@example.com']]);
+        $manual = heldOctoberReport(recompileSchedule(recompileSite()), ['schedule_id' => null]);
+
+        $index = $this->actingAs($user)->get(route('client-reports.index'))->assertOk()->getContent();
+        expect($index)->toContain('action="'.route('client-reports.recompile', $held).'"')
+            ->not->toContain('action="'.route('client-reports.recompile', $sent).'"')
+            ->not->toContain('action="'.route('client-reports.recompile', $manual).'"');
+
+        $this->actingAs($user)->get(route('client-reports.show', $held))
+            ->assertOk()->assertSee(route('client-reports.recompile', $held))->assertSee('Recompile');
+        $this->actingAs($user)->get(route('client-reports.show', $sent))
+            ->assertOk()->assertDontSee(route('client-reports.recompile', $sent));
+
+        $this->post('/logout');
+        $this->get(route('client-reports.public', $held->public_token))
+            ->assertOk()->assertDontSee('/recompile', false)->assertDontSee('Recompile');
     });
 });

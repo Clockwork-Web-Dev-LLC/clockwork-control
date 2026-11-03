@@ -22,6 +22,20 @@
 
 @include('client-reports::_nav')
 
+@if (session('status'))
+    <div class="card p-4 mb-6 status-green text-xs flex items-center gap-2">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>{{ session('status') }}</span>
+    </div>
+@endif
+
+@if (session('status_error'))
+    <div class="card p-4 mb-6 status-red text-xs flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ session('status_error') }}</span>
+    </div>
+@endif
+
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
     {{-- Main Reports List --}}
     <div class="lg:col-span-8 xl:col-span-9 space-y-6">
@@ -94,6 +108,16 @@
                                             <a href="{{ route('client-reports.show', $r) }}" target="_blank" class="btn-pill-nav text-xs py-1.5 px-2" title="View / Print">
                                                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                             </a>
+                                            {{-- Unsent scheduled reports only: refresh from current data. Never sends. --}}
+                                            @if ($r->canRecompile())
+                                                <form method="POST" action="{{ route('client-reports.recompile', $r) }}" class="inline"
+                                                      onsubmit="return confirm('Recompile this report for {{ $r->period_start->format('M j') }} – {{ $r->period_end->format('M j, Y') }} from current data? The current copy is replaced. Nothing is sent.');">
+                                                    @csrf
+                                                    <button type="submit" class="btn-pill-nav text-xs py-1.5 px-2" title="Recompile from current data (never sends)">
+                                                        <i class="fa-solid fa-rotate"></i><span class="sr-only">Recompile</span>
+                                                    </button>
+                                                </form>
+                                            @endif
                                             {{-- No saved recipient: ask for one instead of failing server-side. --}}
                                             <form method="POST" action="{{ route('client-reports.send', $r) }}" class="inline"
                                                 @if ($r->recipients() === [])

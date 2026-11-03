@@ -31,4 +31,6 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/client-reports/{report}', [ClientReportsController::class, 'show'])->name('client-reports.show');
     Route::get('/client-reports/{report}/email', [ClientReportsController::class, 'email'])->name('client-reports.email');
     Route::post('/client-reports/{report}/send', [ClientReportsController::class, 'send'])->name('client-reports.send');
+    // Refreshes an unsent scheduled report from current data. Never sends.
+    Route::post('/client-reports/{report}/recompile', [ClientReportsController::class, 'recompile'])->name('client-reports.recompile');
 });

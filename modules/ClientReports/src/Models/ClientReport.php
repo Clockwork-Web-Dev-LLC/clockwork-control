@@ -104,6 +104,20 @@ class ClientReport extends Model
         return array_values(array_diff($this->recipients(), $this->sent_to ?? []));
     }
 
+    /**
+     * Whether the Recompile action may refresh this report from current
+     * data: only a scheduled report that hasn't reached anyone (still
+     * generated, nobody in sent_to). A sent or partly sent report is a
+     * record of what the client got, a superseded one has a newer copy, and
+     * a hand-generated one has no schedule to recompile it from.
+     */
+    public function canRecompile(): bool
+    {
+        return $this->schedule_id !== null
+            && $this->status === self::STATUS_GENERATED
+            && empty($this->sent_to);
+    }
+
     protected static function booted(): void
     {
         static::creating(function (ClientReport $report) {

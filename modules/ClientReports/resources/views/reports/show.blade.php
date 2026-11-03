@@ -70,12 +70,28 @@
                 <a href="{{ route('client-reports.email', $report) }}" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="The email exactly as the client gets it">
                     <i class="fa-solid fa-envelope"></i> Email version
                 </a>
+                {{-- Unsent scheduled reports only: refresh from current data. Never sends. --}}
+                @if ($report->canRecompile())
+                    <form method="POST" action="{{ route('client-reports.recompile', $report) }}"
+                          onsubmit="return confirm('Recompile this report for {{ $report->period_start->format('M j') }} – {{ $report->period_end->format('M j, Y') }} from current data? This copy is replaced. Nothing is sent.');">
+                        @csrf
+                        <button type="submit" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="Compile this period again from current data. Nothing is sent.">
+                            <i class="fa-solid fa-rotate"></i> Recompile
+                        </button>
+                    </form>
+                @endif
             @endif
             <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
                 <i class="fa-solid fa-print"></i> Print / Download PDF
             </button>
         </div>
     </div>
+
+    @if ($isOperatorPreview && (session('status') || session('status_error')))
+        <div class="no-print mb-6 rounded-xl p-4 text-sm border {{ session('status_error') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-900' }}">
+            {{ session('status_error') ?: session('status') }}
+        </div>
+    @endif
 
     @if ($isOperatorPreview && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
         <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
@@ -89,7 +105,13 @@
                     <li>{{ $reason }}</li>
                 @endforeach
             </ul>
-            <div class="mt-2 text-xs text-amber-800">Fix or confirm these, then send it from the history table (or generate a fresh one).</div>
+            <div class="mt-2 text-xs text-amber-800">
+                @if ($report->canRecompile())
+                    Fix or confirm these, then press <strong>Recompile</strong> to refresh this report from current data (it never sends), or send it from the history table.
+                @else
+                    Fix or confirm these, then send it from the history table (or generate a fresh one).
+                @endif
+            </div>
         </div>
     @endif
 
