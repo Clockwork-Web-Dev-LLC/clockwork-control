@@ -4,7 +4,7 @@ use App\Models\Site;
 use Illuminate\Support\Facades\DB;
 
 /*
-| 2026_11_03_120000_backfill_is_wordpress_on_custom_companion_sites: standalone
+| 2026_11_03_120300_backfill_is_wordpress_on_custom_companion_sites: standalone
 | (custom-host) sites enrolled before SitesController::store set is_wordpress
 | were left with the flag off even though Companion reports their WordPress
 | core. The Site saving hook would heal these rows on create, so the legacy
@@ -21,7 +21,7 @@ function legacyNonWordpressSite(array $attributes): Site
 
 function runIsWordpressBackfill(): void
 {
-    $migration = require database_path('migrations/2026_11_03_120000_backfill_is_wordpress_on_custom_companion_sites.php');
+    $migration = require database_path('migrations/2026_11_03_120300_backfill_is_wordpress_on_custom_companion_sites.php');
     $migration->up();
 }
 
