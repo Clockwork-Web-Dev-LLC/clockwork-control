@@ -4,10 +4,12 @@ namespace Tests\Feature\Console;
 
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
+use App\Models\PluginUpdateFailureStreak;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\PluginVulnerability;
 use App\Models\Site;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 
 /*
@@ -189,30 +191,385 @@ describe('filtering', function () {
 });
 
 describe('CVE-priority ordering', function () {
-    it('assigns the same nightly batch_id to every tuple queued in one run, with the vulnerable plugin present', function () {
+    it('dispatches the vulnerable plugin first, matching the snapshot\'s dir/file.php slug to the advisory\'s directory slug', function () {
+        Queue::fake();
+
+        // Advisories key on the plugin directory; Companion snapshots use
+        // "directory/file.php". The vulnerable plugin sits on the
+        // alphabetically later site and after a safe plugin, so only the
+        // CVE priority can put it first.
+        PluginVulnerability::factory()->create([
+            'slug' => 'vuln-plugin',
+            'from_version' => '0',
+            'to_version' => '1.0',
+            'to_inclusive' => true,
+            'patched_in' => '1.1',
+        ]);
+
+        $first = nightlySite([
+            'domain' => 'aaa.example.com',
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'safe-plugin/safe-plugin.php', 'name' => 'Safe Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+            ]),
+        ]);
+        $second = nightlySite([
+            'domain' => 'zzz.example.com',
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'other-plugin/other-plugin.php', 'name' => 'Other Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain('(1 vulnerable-first)')
+            ->assertSuccessful();
+
+        $dispatched = Queue::pushed(RunPluginUpdate::class)
+            ->map(fn ($job) => PluginUpdateJob::find($job->jobRowId))
+            ->values();
+
+        expect($dispatched->map(fn ($row) => [$row->site_id, $row->target_slug])->all())->toBe([
+            [$second->id, 'vuln-plugin/vuln-plugin.php'],
+            [$first->id, 'safe-plugin/safe-plugin.php'],
+            [$second->id, 'other-plugin/other-plugin.php'],
+        ]);
+
+        // One batch for the whole night.
+        expect($dispatched->pluck('batch_id')->unique())->toHaveCount(1);
+    });
+
+    it('marks the vulnerable plugin in the dry-run listing', function () {
         Queue::fake();
 
         PluginVulnerability::factory()->create([
             'slug' => 'vuln-plugin',
             'from_version' => '0',
-            'to_version' => '2.0.0',
+            'to_version' => '1.0',
+            'to_inclusive' => true,
+            'patched_in' => '1.1',
         ]);
+
+        nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--dry-run' => true])
+            ->expectsOutputToContain('!CVE')
+            ->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    });
+});
+
+/**
+ * Seed an auto-failure pause the way UpdateFailureStreakRecorder leaves it:
+ * an auto_failure ignore row plus a streak recording the version that kept
+ * failing. Pass null to leave the streak out.
+ */
+function pauseAfterFailures(Site $site, string $slug, ?string $failedVersion, string $kind = PluginUpdateJob::KIND_PLUGIN): PluginUpdateIgnore
+{
+    $ignore = PluginUpdateIgnore::create([
+        'site_id' => $site->id,
+        'target_kind' => $kind,
+        'target_slug' => $slug,
+        'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+        'failure_count' => 5,
+        'client_visible' => true,
+        'note' => 'Automatically paused after 5 consecutive nightly update failures.',
+    ]);
+
+    if ($failedVersion !== null) {
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => $kind,
+            'target_slug' => $slug,
+            'consecutive_failures' => 5,
+            'last_from_version' => '1.0.0',
+            'last_target_version' => $failedVersion,
+            'last_failed_at' => now()->subDay(),
+            'ignored_at' => now()->subDay(),
+            'ignore_id' => $ignore->id,
+        ]);
+    }
+
+    return $ignore;
+}
+
+function vulnerableAdvisory(string $dirSlug, string $affectedUpTo, string $patchedIn): PluginVulnerability
+{
+    return PluginVulnerability::factory()->create([
+        'slug' => $dirSlug,
+        'from_version' => '0',
+        'from_inclusive' => true,
+        'to_version' => $affectedUpTo,
+        'to_inclusive' => true,
+        'patched_in' => $patchedIn,
+    ]);
+}
+
+describe('auto-failure pauses', function () {
+    it('keeps an auto-paused plugin paused while the version that kept failing is still the one offered', function () {
+        Queue::fake();
 
         $site = nightlySite([
             'wp_plugin_updates' => true,
             'companion_snapshot' => pluginSnapshot([
-                ['slug' => 'safe-plugin', 'name' => 'Safe Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
-                ['slug' => 'vuln-plugin', 'name' => 'Vuln Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+                ['slug' => 'stuck-plugin/stuck-plugin.php', 'name' => 'Stuck Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
             ]),
+        ]);
+        pauseAfterFailures($site, 'stuck-plugin/stuck-plugin.php', '1.1.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(0);
+        Queue::assertNothingPushed();
+    });
+
+    it('retries an auto-paused plugin once a newer release than the failing version is offered, leaving the pause in place', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'stuck-plugin/stuck-plugin.php', 'name' => 'Stuck Plugin', 'version' => '1.0.0', 'new_version' => '1.2.0', 'update_available' => true],
+            ]),
+        ]);
+        $ignore = pauseAfterFailures($site, 'stuck-plugin/stuck-plugin.php', '1.1.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain('Retrying 1 auto-paused update (1 new release, 0 security fix)')
+            ->assertSuccessful();
+
+        $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+        expect($row->target_slug)->toBe('stuck-plugin/stuck-plugin.php')
+            ->and($row->target_version)->toBe('1.2.0')
+            ->and($row->batch_id)->toStartWith('nightly-');
+        Queue::assertPushed(RunPluginUpdate::class, fn ($job) => $job->jobRowId === $row->id);
+
+        // Only a successful update lifts the pause.
+        expect(PluginUpdateIgnore::query()->whereKey($ignore->id)->exists())->toBeTrue();
+    });
+
+    it('retries an auto-paused theme once a newer release is offered', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'stuck-theme', 'name' => 'Stuck Theme', 'version' => '2.0', 'new_version' => '2.2', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'stuck-theme', '2.1', PluginUpdateJob::KIND_THEME);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+        expect($row->target_kind)->toBe(PluginUpdateJob::KIND_THEME)
+            ->and($row->target_version)->toBe('2.2');
+        Queue::assertPushed(RunThemeUpdate::class, fn ($job) => $job->jobRowId === $row->id);
+    });
+
+    it('retries an auto-paused vulnerable plugin when the offered version contains the fix, even if that version failed before', function () {
+        Queue::fake();
+
+        vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain('Retrying 1 auto-paused update (0 new release, 1 security fix)')
+            ->assertSuccessful();
+
+        $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+        expect($row->target_version)->toBe('1.1.0');
+        Queue::assertPushed(RunPluginUpdate::class, 1);
+    });
+
+    it('keeps a vulnerable plugin paused when the offered version is below the highest patched_in', function () {
+        Queue::fake();
+
+        // Two advisories hit 1.0.0; the offered 1.5.0 fixes only the first.
+        vulnerableAdvisory('vuln-plugin', '1.4.0', '1.5.0');
+        vulnerableAdvisory('vuln-plugin', '1.9.0', '2.0.0');
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.5.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.5.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(0);
+        Queue::assertNothingPushed();
+    });
+
+    it('keeps an auto-pause that has no recorded failing version', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'stuck-plugin/stuck-plugin.php', 'name' => 'Stuck Plugin', 'version' => '1.0.0', 'new_version' => '1.2.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'stuck-plugin/stuck-plugin.php', null);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    });
+
+    it('never retries a manually ignored plugin, even for a new release that fixes a vulnerability', function () {
+        Queue::fake();
+
+        vulnerableAdvisory('held-plugin', '1.0.0', '1.1.0');
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'held-plugin/held-plugin.php', 'name' => 'Held Plugin', 'version' => '1.0.0', 'new_version' => '1.2.0', 'update_available' => true],
+            ]),
+        ]);
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'held-plugin/held-plugin.php',
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'client_visible' => false,
+            'note' => 'Hold for now',
+        ]);
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'held-plugin/held-plugin.php',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
         ]);
 
         $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
 
-        $rows = PluginUpdateJob::query()->where('site_id', $site->id)->get();
-        expect($rows)->toHaveCount(2);
-        $batchIds = $rows->pluck('batch_id')->unique();
-        expect($batchIds)->toHaveCount(1);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(0);
+        Queue::assertNothingPushed();
+    });
+});
+
+/**
+ * Mark every queued job failed so nothing is live: a second run would then
+ * re-queue everything if it were allowed to.
+ */
+function failAllNightlyJobs(): void
+{
+    PluginUpdateJob::query()->update(['status' => PluginUpdateJob::STATUS_FAILED]);
+}
+
+function pendingUpdateSite(): Site
+{
+    return nightlySite([
+        'wp_plugin_updates' => true,
+        'companion_snapshot' => pluginSnapshot([
+            ['slug' => 'some-plugin/some-plugin.php', 'name' => 'Some Plugin', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+        ]),
+    ]);
+}
+
+describe('once per local night', function () {
+    it('runs only once on the DST fall-back night, when 01:30 local happens twice', function () {
+        Queue::fake();
+        $site = pendingUpdateSite();
+
+        // 01:45 EDT, before the clocks go back.
+        $this->travelTo(Carbon::parse('2026-11-01 05:45:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        $firstBatch = PluginUpdateJob::query()->where('site_id', $site->id)->sole()->batch_id;
+        expect($firstBatch)->toStartWith('nightly-2026-11-01-');
+        failAllNightlyJobs();
+
+        // 01:45 EST, an hour later: the scheduler fires the chain again.
+        $this->travelTo(Carbon::parse('2026-11-01 06:45:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain("Nightly batch {$firstBatch} already ran for 2026-11-01")
+            ->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(1);
+
+        // The next night runs normally.
+        $this->travelTo(Carbon::parse('2026-11-02 06:45:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(2)
+            ->and(PluginUpdateJob::query()->latest('id')->first()->batch_id)->toStartWith('nightly-2026-11-02-');
         Queue::assertPushed(RunPluginUpdate::class, 2);
+    });
+
+    it('decides "today" by the local date, not the UTC date', function () {
+        Queue::fake();
+        $site = pendingUpdateSite();
+
+        // 21:30 EST on Nov 2 is already Nov 3 in UTC.
+        $this->travelTo(Carbon::parse('2026-11-03 02:30:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->batch_id)->toStartWith('nightly-2026-11-02-');
+        failAllNightlyJobs();
+
+        // 01:40 EST on Nov 3 is a new local night, so it runs.
+        $this->travelTo(Carbon::parse('2026-11-03 06:40:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(2)
+            ->and(PluginUpdateJob::query()->latest('id')->first()->batch_id)->toStartWith('nightly-2026-11-03-');
+    });
+
+    it('re-runs with --force, and only reports the skip under --dry-run', function () {
+        Queue::fake();
+        $site = pendingUpdateSite();
+
+        $this->travelTo(Carbon::parse('2026-11-04 06:40:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        failAllNightlyJobs();
+
+        $this->travelTo(Carbon::parse('2026-11-04 15:00:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--dry-run' => true])
+            ->expectsOutputToContain('a real run would be skipped')
+            ->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(1);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--force' => true])->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(2);
+    });
+
+    it('does not guard a --site run, and a --site run does not block the fleet-wide nightly', function () {
+        Queue::fake();
+        $site = pendingUpdateSite();
+
+        // Operator runs one site just after local midnight.
+        $this->travelTo(Carbon::parse('2026-11-04 05:10:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--site' => (string) $site->id])->assertSuccessful();
+        $siteBatch = PluginUpdateJob::query()->where('site_id', $site->id)->sole()->batch_id;
+        expect($siteBatch)->toStartWith('nightly-2026-11-04-site-');
+        failAllNightlyJobs();
+
+        // The scheduled fleet run that night still goes ahead.
+        $this->travelTo(Carbon::parse('2026-11-04 06:40:00', 'UTC'));
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        $fleetBatch = PluginUpdateJob::query()->latest('id')->first()->batch_id;
+        expect($fleetBatch)->toStartWith('nightly-2026-11-04-')
+            ->and($fleetBatch)->not->toContain('-site-');
+        failAllNightlyJobs();
+
+        // A later --site run is still allowed.
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--site' => (string) $site->id])->assertSuccessful();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(3);
     });
 });
 

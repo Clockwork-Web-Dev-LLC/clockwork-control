@@ -258,9 +258,13 @@ Schedule::command('clockwork:pull-wordfence-blocks')
 // stands at read time). ->then() guarantees the update loop only starts once
 // refresh has actually exited, however long that takes, instead of racing a
 // fixed offset. The chained call intentionally skips withoutOverlapping()/
-// onOneServer() of its own — it inherits both from this parent event, since
-// the whole refresh+then-update sequence only ever fires once per this
-// event's single daily occurrence.
+// onOneServer() of its own — it inherits both from this parent event.
+//
+// 01:30 local happens twice on the DST fall-back day, so this event fires
+// twice that night. The update command guards itself: it skips when a
+// fleet-wide nightly batch already exists for the local date (see
+// RunNightlyPluginUpdates::fleetBatchForLocalDate()), so failures are not
+// counted twice toward the auto-pause threshold.
 Schedule::command('clockwork:refresh-companion-snapshot')
     ->dailyAt('01:30')
     ->timezone('America/New_York')

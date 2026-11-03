@@ -24,7 +24,11 @@ use Throwable;
  * client_visible=true).
  *
  * Other plugins on the site continue their regular care-plan updates.
- * Any successful update (nightly or manual) resets the streak.
+ * Any successful update (nightly or manual) resets the streak. A successful
+ * update that reaches its target version also lifts an auto-failure pause
+ * for that slug and re-pushes the exceptions list, so the wp-admin notice
+ * clears. (The nightly loop retries auto-paused slugs when a new release or
+ * a security fix is offered; see RunNightlyPluginUpdates::filterIgnored.)
  */
 class UpdateFailureStreakRecorder
 {
@@ -48,6 +52,10 @@ class UpdateFailureStreakRecorder
         // On any success (nightly or manual), reset the streak to 0.
         if ($job->status === PluginUpdateJob::STATUS_COMPLETE) {
             $this->resetStreak($job->site_id, $job->target_kind, $job->target_slug);
+
+            if ($this->reachedTargetVersion($job)) {
+                $this->liftAutoPause($job);
+            }
 
             return;
         }
@@ -100,6 +108,62 @@ class UpdateFailureStreakRecorder
             ->where('target_kind', $targetKind)
             ->where('target_slug', $targetSlug)
             ->update(['consecutive_failures' => 0]);
+    }
+
+    /**
+     * Did the job land on (or past) the version it was queued for? Needs
+     * both versions: a completed job without them proves nothing about
+     * whether the version that kept failing is now installed.
+     */
+    private function reachedTargetVersion(PluginUpdateJob $job): bool
+    {
+        $target = trim((string) ($job->target_version ?? ''));
+        $after = trim((string) ($job->after_version ?? ''));
+
+        return $target !== '' && $after !== '' && version_compare($after, $target, '>=');
+    }
+
+    /**
+     * Remove this slug's auto-failure pause after a successful update:
+     * delete the ignore row (manual ignores are left alone), clear the
+     * streak's pause markers, and push the shorter exceptions list so the
+     * client's wp-admin stops showing the plugin as paused.
+     */
+    private function liftAutoPause(PluginUpdateJob $job): void
+    {
+        $deleted = PluginUpdateIgnore::query()
+            ->where('site_id', $job->site_id)
+            ->where('target_kind', $job->target_kind)
+            ->where('target_slug', $job->target_slug)
+            ->where('source', PluginUpdateIgnore::SOURCE_AUTO_FAILURE)
+            ->delete();
+
+        if ($deleted === 0) {
+            return;
+        }
+
+        PluginUpdateFailureStreak::query()
+            ->where('site_id', $job->site_id)
+            ->where('target_kind', $job->target_kind)
+            ->where('target_slug', $job->target_slug)
+            ->update([
+                'consecutive_failures' => 0,
+                'ignored_at' => null,
+                'ignore_id' => null,
+            ]);
+
+        Log::info('updates.auto_pause_lifted', [
+            'site_id' => $job->site_id,
+            'kind' => $job->target_kind,
+            'slug' => $job->target_slug,
+            'version' => $job->after_version,
+            'job_id' => $job->id,
+        ]);
+
+        $site = $job->site;
+        if ($site instanceof Site) {
+            $this->maybePushExceptions($site);
+        }
     }
 
     private function incrementStreak(PluginUpdateJob $job): void

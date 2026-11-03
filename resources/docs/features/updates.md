@@ -2,7 +2,7 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-09-28
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
 tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
@@ -110,8 +110,8 @@ When a stubborn plugin or theme fails the nightly update queue night after night
 - **Kill switch**: `updates.auto_ignore_enabled` (default `true`). When set to `false`, consecutive failure streaks are still tracked for operator visibility, but auto-ignore rows are never created.
 
 #### Reset and Resume
-- Any **successful update** (nightly or manual) resets `consecutive_failures` back to 0.
-- When an auto-ignored plugin ships a new version, it remains paused until resumed (badged as "New version available — still paused") to prevent endless retries on broken plugins.
+- Any **successful update** (nightly or manual) resets `consecutive_failures` back to 0. When it also lands on its target version, an auto-ignore for that slug is removed, the streak's pause markers are cleared, and the shorter exceptions list is pushed so the wp-admin notice clears. Manual ignores are never removed this way.
+- An auto-ignore does not block forever. The nightly loop still tries an auto-ignored plugin or theme when the snapshot offers a **different version** from the one that kept failing (`plugin_update_failure_streaks.last_target_version`), once per new version, since a failed retry records that version as the new last target. It also tries an auto-ignored plugin whose installed version is **vulnerable** when the offered version is at or above the highest `patched_in` of the matching advisories. Otherwise the slug stays paused until resumed or until one of those conditions is met.
 - Clicking **Resume** (or unignore) in Control deletes the ignore record, resets the consecutive failure streak to 0, and immediately pushes an updated exceptions payload to the WordPress site.
 - Converting an auto-ignore into a **manual ignore** keeps nightly retries paused but sets `client_visible=false` and pushes an updated exceptions list so the slug drops out of wp-admin.
 - Manual ignores are never rewritten as auto-failure, even if the slug later fails nightly.
@@ -165,8 +165,8 @@ Plugins-only, opt-in per site, runs every night between 02:00 and 06:00 ET. The 
 
 ### How it works
 
-1. `clockwork:run-nightly-plugin-updates` (02:00 ET) discovers every care-plan site with `auto_updates_paused = false` and `companion_installed = true`, queries its Companion snapshot for pending plugin updates, dedupes against existing `plugin_update_jobs` rows and `plugin_update_ignores`, and queues one `PluginUpdateJob` per plugin with `batch_id = "nightly-YYYY-MM-DD-..."`. The run reuses the same `plugin-updates` Supervisor queue as manual batches. At the end of every run — whether or not any jobs were queued — the loop stamps `auto_updates_last_run_at` on **all eligible** care-plan sites. This gives a daily heartbeat: "3 hours ago" means the loop ran and found nothing to do; a stale or null timestamp means the loop stopped firing, not that the site was up to date.
-2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher`) are sorted first so security patches land before cosmetic updates.
+1. `clockwork:run-nightly-plugin-updates` (02:00 ET) discovers every care-plan site with `auto_updates_paused = false` and `companion_installed = true`, queries its Companion snapshot for pending plugin updates, dedupes against existing `plugin_update_jobs` rows and `plugin_update_ignores`, and queues one `PluginUpdateJob` per plugin with `batch_id = "nightly-YYYY-MM-DD-..."` (the America/New_York date; a `--site` run uses `nightly-YYYY-MM-DD-site-...`). The fleet-wide run happens at most once per local date: if a fleet-wide nightly batch was already queued today (as on the DST fall-back night, when 01:30 happens twice), it logs and skips. `--force` overrides that, and `--site` runs are neither blocked nor counted. The run reuses the same `plugin-updates` Supervisor queue as manual batches. At the end of every run — whether or not any jobs were queued — the loop stamps `auto_updates_last_run_at` on **all eligible** care-plan sites. This gives a daily heartbeat: "3 hours ago" means the loop ran and found nothing to do; a stale or null timestamp means the loop stopped firing, not that the site was up to date.
+2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher` on the plugin's directory, the part of the snapshot's `dir/file.php` slug before the slash) are sorted first so security patches land before cosmetic updates.
 3. `clockwork:nightly-update-summary` (06:15 ET) reads every job whose `batch_id` starts with `nightly-` since the last summary run and emails the operator a success/failure breakdown. No jobs → no email.
 4. If any job ends in `failed` and its `batch_id` is a nightly batch, `AbstractRunUpdate` fires a Mattermost `pluginUpdateFailed()` ping immediately — manual bulk failures stay quiet since the operator is watching the page.
 

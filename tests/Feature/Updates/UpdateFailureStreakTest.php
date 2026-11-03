@@ -153,7 +153,7 @@ describe('Update failure streaks and auto-ignore', function () {
             ],
         ]);
 
-        PluginUpdateIgnore::create([
+        $ignore = PluginUpdateIgnore::create([
             'site_id' => $site->id,
             'target_kind' => PluginUpdateJob::KIND_PLUGIN,
             'target_slug' => 'stubborn-plugin',
@@ -163,10 +163,190 @@ describe('Update failure streaks and auto-ignore', function () {
             'note' => 'Auto-ignored',
         ]);
 
+        // The snapshot still offers the version that kept failing.
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_from_version' => '1.0.0',
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
         $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
 
         Queue::assertNothingPushed();
         expect(PluginUpdateJob::where('site_id', $site->id)->where('target_slug', 'stubborn-plugin')->count())->toBe(0);
+    });
+
+    it('lifts the auto-pause, clears the streak and re-pushes exceptions when an update reaches its target version', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        // A second paused plugin on the same site stays in the pushed list.
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'other-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        $streak = PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
+        ]);
+
+        // A nightly retry of a newer release that went through.
+        $job = fakeNightlyJob($site, 'stubborn-plugin', [
+            'target_version' => '1.2.0',
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => '1.2.0',
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, [
+            'ok' => true,
+            'slug' => 'stubborn-plugin',
+            'before_version' => '1.0.0',
+            'after_version' => '1.2.0',
+        ]);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'other-plugin')->exists())->toBeTrue();
+
+        $streak->refresh();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->toBeNull()
+            ->and($streak->ignore_id)->toBeNull();
+
+        Http::assertSent(function ($request) use ($site) {
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+                && collect($request['items'] ?? [])->pluck('slug')->all() === ['other-plugin'];
+        });
+    });
+
+    it('lifts the auto-pause when a nightly retry of a new release succeeds through the update job', function () {
+        $site = makeExampleSite();
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
+                'ok' => true,
+                'slug' => 'stubborn-plugin',
+                'before_version' => '1.0.0',
+                'after_version' => '1.2.0',
+                'was_active' => true,
+                'reactivated' => true,
+                'elapsed_ms' => 400,
+            ], 200),
+        ]);
+
+        $job = fakeNightlyJob($site, 'stubborn-plugin', ['target_version' => '1.2.0']);
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        expect($job->refresh()->status)->toBe(PluginUpdateJob::STATUS_COMPLETE)
+            ->and(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeFalse();
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->where('target_slug', 'stubborn-plugin')->first();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->toBeNull();
+    });
+
+    it('keeps the auto-pause when a completed job cannot show it reached the target version', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        $streak = PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake();
+
+        $job = fakeNightlyJob($site, 'stubborn-plugin', [
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => null,
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, ['ok' => true, 'slug' => 'stubborn-plugin']);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeTrue();
+        $streak->refresh();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->not->toBeNull()
+            ->and($streak->ignore_id)->toBe($ignore->id);
+        Http::assertNothingSent();
+    });
+
+    it('never lifts a manual ignore after a successful update', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'held-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'client_visible' => false,
+            'note' => 'Hold this one',
+        ]);
+
+        Http::fake();
+
+        $job = fakeNightlyJob($site, 'held-plugin', [
+            'requested_by_user_id' => User::factory()->create()->id,
+            'batch_id' => (string) Str::uuid(),
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => '1.1.0',
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, ['ok' => true, 'slug' => 'held-plugin', 'after_version' => '1.1.0']);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeTrue();
+        Http::assertNothingSent();
     });
 
     it('resets streak to 0 on any successful update after prior failures', function () {
