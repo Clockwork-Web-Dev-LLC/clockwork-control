@@ -163,6 +163,43 @@ describe('clockwork:backfill-companion-action-log', function () {
         Http::assertNotSent(fn ($request) => str_contains($request->url(), $other->domain));
     });
 
+    it('redacts licence keys and signed download URLs from old rows before pushing them again', function () {
+        // A row written before upgrader output was redacted at write time.
+        $site = backfillSite(['domain' => 'backfill-redact.test']);
+        $row = ActionLog::factory()->create([
+            'site_id' => $site->id,
+            'action_type' => ActionLog::TYPE_PLUGIN_UPDATE,
+            'summary' => 'Plugin update failed: Example Pro',
+            'details' => ['messages' => [
+                'Downloading update from https://vendor.example.com/dl.zip?license_key=FAKE-KEY-0000&token=FAKE-TOKEN-1111&#8230;',
+                'Unpacking the update&#8230;',
+            ], 'from_version' => '1.0.0'],
+            'error' => 'Download failed: https://vendor.example.com/dl.zip?token=FAKE-TOKEN-1111',
+            'companion_pushed_at' => now()->subDays(10),
+            'ran_at' => now()->subDays(10),
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/action-log/append*" => Http::response(['ok' => true], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $this->artisan('clockwork:backfill-companion-action-log', ['--reset-since' => now()->subDays(5)->toDateString()])
+            ->expectsOutputToContain('rows_ok=1')
+            ->assertSuccessful();
+
+        Http::assertSent(function ($request) {
+            $body = $request->body();
+
+            return str_contains($request->url(), 'action-log/append')
+                && ! str_contains($body, 'FAKE-KEY-0000')
+                && ! str_contains($body, 'FAKE-TOKEN-1111')
+                && str_contains($body, 'redacted')
+                && $request['details']['from_version'] === '1.0.0';
+        });
+        // The stored row is left as it is; only the mirror is redacted.
+        expect($row->refresh()->error)->toContain('FAKE-TOKEN-1111');
+    });
+
     it('exits successfully with a warning when no Companion-equipped site matches', function () {
         $this->artisan('clockwork:backfill-companion-action-log')
             ->expectsOutputToContain('No Companion-equipped sites matched.')

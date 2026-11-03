@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ActionLog;
 use App\Models\Site;
+use App\Services\ActionLog\ActionLogger;
 use App\Services\Companion\ClockworkCompanionClient;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
@@ -97,7 +98,10 @@ class BackfillCompanionActionLog extends Command
 
             foreach ($rows as $row) {
                 try {
-                    $client->appendActionLog([
+                    // Rows written before upgrader output was redacted still
+                    // hold licence keys and signed download URLs; never
+                    // write those back into the client's wp-admin.
+                    $client->appendActionLog(ActionLogger::forCompanionMirror([
                         'action_type' => $row->action_type,
                         'target' => $row->target,
                         'summary' => $row->summary,
@@ -108,7 +112,7 @@ class BackfillCompanionActionLog extends Command
                         'actor' => $row->actor,
                         'care_plan_enabled' => (bool) ($site->care_plan_enabled ?? false),
                         'ran_at' => $row->ran_at?->toIso8601String(),
-                    ]);
+                    ]));
                     $row->forceFill(['companion_pushed_at' => now()])->save();
                     $okCount++;
                 } catch (Throwable $e) {
