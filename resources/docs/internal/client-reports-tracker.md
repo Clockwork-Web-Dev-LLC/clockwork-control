@@ -2,7 +2,7 @@
 title: Client reports tracker
 section: Internal
 order: 30
-updated: 2026-10-29
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [client-reports, tracker, roadmap, known-issues]
 ---
@@ -28,7 +28,7 @@ None of them has ever sent, so the 06:00 UTC run holds **every** report for revi
 1. **06:00 UTC:** `clockwork:send-client-reports` compiles October for the 45 care-plan sites and holds each one. The 27 without a care plan are skipped and move on to Dec 1. An `auto` schedule with no recipients is skipped and retried daily, so give it one. **Expect 45 Needs review reports in history.** Scheduled Jobs only shows OK/failed and a duration; it goes red if any site's report crashed or any recipient's email failed. To see per-site results, run `php artisan clockwork:send-client-reports` by hand: handled sites print "skipped (not due until Dec 1)", and any site that crashed or has no recipients is still due and runs again (errors are also in `laravel.log`, "Failed sending scheduled client report for …").
 2. **Client reports → history:** every report shows **Needs review**. Open each one (↗). The amber box lists why it was held. Click **Email version** to see exactly what the client gets.
 3. **Only "first report" listed:** send it with the paper-plane button.
-4. **Other reasons too:** fix the cause (or confirm it's fine), then either send as-is, or press **Send now** on the schedule to recompile from current data. That copy is held again as a first report; check it and send by hand. The older copy is marked superseded. A recompile reads today's vulnerability list (shown "as of" today); updates applied since Oct 31 still count as waiting at month end, so the Updates section won't turn into "already up to date".
+4. **Other reasons too:** fix the cause (or confirm it's fine), then either send as-is, or press **Recompile** on the report (history ↻ or the preview) to compile its own period again from current data. Recompile never sends: the new copy is held again as a first report; check it and send by hand. The older copy is marked superseded. A recompile reads today's vulnerability list (shown "checked" today); updates applied since Oct 31 still count as waiting at month end, so the Updates section won't turn into "already up to date". Don't use **Send now** for this: it compiles last month only (from Dec 1 that's November), and once a schedule has sent it emails a clean report straight away. See [Refreshing held drafts](/docs/features/client-reports#refreshing-held-drafts-recompile).
 5. **From December:** sending a report by hand stamps the schedule's `last_sent_at`, so the Dec 1 run emails clean reports by itself and holds only flagged ones.
 
 ## Open issues
