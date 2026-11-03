@@ -464,6 +464,9 @@
                 <p class="text-xs text-slate-500">
                     Visits, requests and data served for your site during the reporting period.
                 </p>
+                @if ($isOperatorPreview && isset($traffic['days_covered']))
+                    <p class="no-print text-xs text-slate-500">Recorded on {{ (int) $traffic['days_covered'] }} of {{ (int) ($traffic['period_days'] ?? 0) }} days, from {{ ($traffic['source'] ?? null) === 'pressable' ? "Pressable's traffic feed" : "the server's access logs" }}.</p>
+                @endif
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_visits'] ?? 0) }}</div>

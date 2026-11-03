@@ -55,13 +55,31 @@ class ReportReviewFlags
         // A known hole with a fix waiting means an update isn't going through.
         array_push($reasons, ...self::vulnerablePluginReasons($security, (array) ($data['updates'] ?? [])));
 
-        $backupStatus = $data['backups']['status'] ?? null;
-        if (isset($data['backups']) && in_array($backupStatus, ['none_found', 'stale', 'not_checked'], true)) {
-            $reasons[] = match ($backupStatus) {
-                'none_found' => 'No backups were found this month.',
-                'stale' => 'Backups stopped before the last 10 days of the month.',
-                default => 'Backups could not be checked.',
-            };
+        if (isset($data['backups'])) {
+            array_push($reasons, ...self::backupReasons((array) $data['backups']));
+        }
+
+        // Missing days, a proxy's view or a feed with nothing in it: hidden
+        // from the client, so say why. A host we don't collect traffic from
+        // has nothing to check.
+        $trafficProblem = isset($data['traffic']) && in_array($data['traffic']['status'] ?? null, ['partial', 'suspect', 'no_data'], true)
+            ? ReportPhrases::trafficProblem((array) $data['traffic'])
+            : null;
+        if ($trafficProblem !== null) {
+            $reasons[] = ucfirst($trafficProblem).', so the Traffic section was left out.';
+        }
+
+        // The client would read "accepted 18 of 19" or "75% delivered" with no
+        // explanation, so a person should look at the failed tests first.
+        $forms = (array) ($data['forms'] ?? []);
+        $labTests = (int) ($forms['lab_tests'] ?? 0);
+        $labAccepted = (int) ($forms['lab_accepted'] ?? 0);
+        if ($labTests > $labAccepted) {
+            $reasons[] = "Contact-form checks failed: the forms accepted {$labAccepted} of {$labTests} automated check submissions this month.";
+        }
+        $liveTests = (int) ($forms['live_tests'] ?? 0);
+        if ($liveTests > 0 && (float) ($forms['pass_rate'] ?? 0) < 100) {
+            $reasons[] = 'Not every contact-form test email was delivered: '.(float) ($forms['pass_rate'] ?? 0)."% of {$liveTests} test submissions arrived.";
         }
 
         if (! empty($data['uptime']['probe_stopped'])) {
@@ -91,6 +109,43 @@ class ReportReviewFlags
         }
 
         return $reasons;
+    }
+
+    /**
+     * Backups the client won't see (none, stopped, unchecked, implausibly
+     * small), and a daily source that backed up on far fewer days than the
+     * period had, which the client would read as "backed up on 12 days".
+     *
+     * @param  array<string, mixed>  $backups
+     * @return list<string>
+     */
+    private static function backupReasons(array $backups): array
+    {
+        $status = $backups['status'] ?? null;
+
+        $reason = match ($status) {
+            'none_found' => 'No backups were found this month.',
+            'stale' => 'Backups stopped before the last 10 days of the month.',
+            'not_checked' => 'Backups could not be checked.',
+            'suspect' => is_numeric($backups['db_backup_bytes'] ?? null) && is_numeric($backups['db_size_bytes'] ?? null)
+                ? 'Database backups are '.ReportPhrases::bytes((int) $backups['db_backup_bytes'])
+                    .' but the database is '.ReportPhrases::bytes((int) $backups['db_size_bytes'])
+                    .', so they look empty or broken and the Backups section was left out.'
+                : 'Database backups are far smaller than the database, so they look empty or broken and the Backups section was left out.',
+            default => null,
+        };
+        if ($reason !== null) {
+            return [$reason];
+        }
+
+        $days = (int) ($backups['days_with_backups'] ?? 0);
+        $periodDays = (int) ($backups['period_days'] ?? 0);
+        if ($status === 'verified' && ($backups['covers_period'] ?? false) === true && ($backups['daily'] ?? false) === true
+            && $periodDays > 0 && $days < $periodDays - 3) {
+            return ["Backed up on only {$days} of {$periodDays} days this month."];
+        }
+
+        return [];
     }
 
     /**

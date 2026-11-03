@@ -74,6 +74,36 @@ describe('clockwork:import-report-recipients', function () {
         expect(ClientReportSchedule::count())->toBe(0);
     });
 
+    it('creates a schedule for a site without a care plan switched off, and says so in the dry run', function () {
+        $site = Site::factory()->create(['domain' => 'no-plan.example.com', 'care_plan_enabled' => false, 'companion_installed' => false]);
+        $csv = recipientsCsv("Website,Report email\nno-plan.example.com,owner@example.com\n");
+
+        $this->artisan('clockwork:import-report-recipients', ['path' => $csv])
+            ->expectsTable(['Site', 'Action', 'Recipients'], [['no-plan.example.com', 'Create schedule (no care plan: created disabled)', 'owner@example.com']])
+            ->expectsOutputToContain('Dry run: 1 created (1 disabled: no care plan), 0 updated')
+            ->assertSuccessful();
+        expect(ClientReportSchedule::count())->toBe(0);
+
+        $this->artisan('clockwork:import-report-recipients', ['path' => $csv, '--apply' => true])->assertSuccessful();
+
+        $schedule = ClientReportSchedule::where('site_id', $site->id)->sole();
+        expect($schedule->is_enabled)->toBeFalse()
+            ->and($schedule->recipients)->toBe(['owner@example.com']);
+    });
+
+    it('creates it enabled with --include-no-care-plan, and leaves care-plan sites enabled either way', function () {
+        $noPlan = Site::factory()->create(['domain' => 'no-plan.example.com', 'care_plan_enabled' => false, 'companion_installed' => false]);
+        $carePlan = Site::factory()->carePlan()->create(['domain' => 'care-plan.example.com', 'companion_installed' => false]);
+        $csv = recipientsCsv("Website,Report email\nno-plan.example.com,owner@example.com\ncare-plan.example.com,office@example.com\n");
+
+        $this->artisan('clockwork:import-report-recipients', ['path' => $csv, '--apply' => true, '--include-no-care-plan' => true])
+            ->expectsOutputToContain('Done: 2 created, 0 updated')
+            ->assertSuccessful();
+
+        expect(ClientReportSchedule::where('site_id', $noPlan->id)->sole()->is_enabled)->toBeTrue()
+            ->and(ClientReportSchedule::where('site_id', $carePlan->id)->sole()->is_enabled)->toBeTrue();
+    });
+
     it('fails when the CSV has no site or email column', function () {
         $csv = recipientsCsv("name,phone\nAcme,555\n");
 

@@ -40,13 +40,17 @@ final class ReportSections
             'security' => isset($data['security']),
             'performance' => isset($data['performance']) && ! empty($perf['has_performance'])
                 && (! empty($perf['mobile']) || ! empty($perf['desktop'])),
-            'traffic' => isset($data['traffic']) && ! empty($data['traffic']['has_traffic']),
+            // Only complete, believable figures; reports compiled before
+            // traffic had a status show as they always did.
+            'traffic' => isset($data['traffic']) && ! empty($data['traffic']['has_traffic'])
+                && ($data['traffic']['status'] ?? 'ok') === 'ok',
             // Reports compiled before schema 2 counted form passes wrongly
             // (always 0%), so their forms numbers are never shown.
             'forms' => self::hasCurrentFormsData($data) && isset($data['forms'])
                 && ((int) ($forms['live_tests'] ?? 0) > 0 || (int) ($forms['lab_tests'] ?? 0) > 0),
-            // Only backups we actually saw recently; "none found", "stopped"
-            // and "couldn't check" are for the operator, never the client.
+            // Only backups we actually saw recently; "none found", "stopped",
+            // "couldn't check" and implausibly small database backups are for
+            // the operator, never the client.
             'backups' => isset($data['backups']) && ! empty($data['backups']['verified']),
             'work_log' => isset($data['work_log']) && ! empty($data['work_log']['entries']),
         ];
@@ -91,7 +95,7 @@ final class ReportSections
                 default => "the uptime probe doesn't check this site",
             },
             'performance' => 'no speed test ran in this period',
-            'traffic' => 'no traffic was recorded for this period',
+            'traffic' => ReportPhrases::trafficProblem($section) ?? 'no traffic was recorded for this period',
             'forms' => self::hasCurrentFormsData($data)
                 ? 'no form tests ran in this period'
                 : 'compiled before form results were counted correctly',
@@ -100,6 +104,10 @@ final class ReportSections
                 'stale' => 'no backups in the last 10 days of the period'
                     .(! empty($section['last_backup_at']) ? " (last one {$section['last_backup_at']})" : ''),
                 'no_source' => 'there is no backup source for this host',
+                'suspect' => 'the newest database backup is far smaller than the database'
+                    .(is_numeric($section['db_backup_bytes'] ?? null) && is_numeric($section['db_size_bytes'] ?? null)
+                        ? ' ('.ReportPhrases::bytes((int) $section['db_backup_bytes']).' for '.ReportPhrases::bytes((int) $section['db_size_bytes']).')'
+                        : ''),
                 default => 'backups could not be checked',
             },
             'work_log' => 'no hours were logged this period',

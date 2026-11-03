@@ -114,14 +114,23 @@ describe('generate + show', function () {
 
     it('shows the Traffic Analytics section when the period had recorded traffic', function () {
         $site = Site::factory()->create(['domain' => 'traffic-report.test']);
-        $periodStart = now()->subMonth()->startOfMonth();
-        SiteTrafficDaily::factory()->create([
-            'site_id' => $site->id,
-            'date' => $periodStart->copy()->addDays(5)->toDateString(),
-            'visits' => 1234,
-            'requests' => 5678,
-            'bytes_sent' => 10 * 1024 * 1024,
-        ]);
+        $periodStart = now()->subMonthNoOverflow()->startOfMonth();
+        // Every day of the period, each row written after its day was over:
+        // a month with days missing is held back as partial.
+        $days = $periodStart->daysInMonth;
+        foreach (range(0, $days - 1) as $offset) {
+            $day = $periodStart->copy()->addDays($offset);
+            SiteTrafficDaily::factory()->create([
+                'site_id' => $site->id,
+                'date' => $day->toDateString(),
+                'visits' => 41,
+                'requests' => 1003,
+                'bytes_sent' => $offset === 0 ? 10 * 1024 * 1024 : 0,
+                'top_ips' => null,
+                'created_at' => $day->copy()->addDay()->setTime(5, 0),
+                'updated_at' => $day->copy()->addDay()->setTime(5, 0),
+            ]);
+        }
 
         $response = $this->actingAs(User::factory()->create())->post(route('client-reports.generate'), [
             'site_id' => $site->id,
@@ -135,9 +144,10 @@ describe('generate + show', function () {
             ->get(route('client-reports.show', $report))
             ->assertOk()
             ->assertSee('Traffic Analytics')
-            ->assertSee('1,234')
-            ->assertSee('5,678')
-            ->assertSee('10.0 MB');
+            ->assertSee(number_format(41 * $days))
+            ->assertSee(number_format(1003 * $days))
+            ->assertSee('10.0 MB')
+            ->assertSee("Recorded on {$days} of {$days} days", false);
     });
 
     it('hides the Traffic Analytics section entirely when no traffic was recorded for the period', function () {

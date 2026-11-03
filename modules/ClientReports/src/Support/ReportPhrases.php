@@ -6,6 +6,7 @@ use App\Models\SiteBackup;
 use DateTimeZone;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Modules\ClientReports\Services\ClientReportCompiler;
 use Throwable;
 
 /**
@@ -151,6 +152,55 @@ final class ReportPhrases
         // Older reports stored only the place ("Host Automated Snapshots"),
         // and the templates put "by" in front of it.
         return preg_match('/^(by|to|in|on)\s/i', $destination) ? $destination : 'by '.$destination;
+    }
+
+    /**
+     * "9 KB", "60 MB", "3.0 GB": a size the way the email's backups list shows it.
+     */
+    public static function bytes(int $bytes): string
+    {
+        return match (true) {
+            $bytes >= 1024 ** 3 => number_format($bytes / 1024 ** 3, 1).' GB',
+            $bytes >= 1024 ** 2 => number_format($bytes / 1024 ** 2, 0).' MB',
+            default => number_format(max(1, $bytes / 1024), 0).' KB',
+        };
+    }
+
+    /**
+     * What's wrong with a report's traffic figures, as a clause for the
+     * operator ("traffic was recorded on only 14 of 31 days"), or null when
+     * nothing is: the figures are complete and believable, or the report was
+     * compiled before traffic had a status.
+     *
+     * @param  array<string, mixed>  $traffic  sections_data['traffic']
+     */
+    public static function trafficProblem(array $traffic): ?string
+    {
+        $status = $traffic['status'] ?? null;
+        $days = (int) ($traffic['days_covered'] ?? 0);
+        $periodDays = (int) ($traffic['period_days'] ?? 0);
+        $coverage = "traffic was recorded on only {$days} of {$periodDays} days";
+        $fewDays = $periodDays > 0 && $days < $periodDays - 1;
+
+        return match ($status) {
+            'unsupported' => "traffic isn't collected for this host",
+            'no_data' => "no traffic was recorded for this period, although this host's traffic is collected",
+            'partial' => $fewDays ? $coverage : "the period's last day of traffic wasn't complete when the report was compiled",
+            'suspect' => self::suspectTraffic($traffic).($fewDays ? "; also, {$coverage}" : ''),
+            default => null,
+        };
+    }
+
+    /** @param  array<string, mixed>  $traffic */
+    private static function suspectTraffic(array $traffic): string
+    {
+        $share = $traffic['top_ip_share'] ?? null;
+        if (($traffic['source'] ?? null) === 'nginx' && is_numeric($share) && (float) $share > ClientReportCompiler::TRAFFIC_TOP_IP_SHARE_MAX) {
+            return (int) round((float) $share * 100).'% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors';
+        }
+
+        return number_format((int) ($traffic['total_visits'] ?? 0)).' visits for '.number_format((int) ($traffic['total_requests'] ?? 0))
+            ." requests doesn't look like real visitors";
     }
 
     /**

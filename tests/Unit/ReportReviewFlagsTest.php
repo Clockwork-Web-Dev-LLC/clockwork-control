@@ -177,3 +177,71 @@ describe('vulnerable plugins joined to waiting updates by slug', function () {
             ->toHaveCount(1);
     });
 });
+
+describe('backups', function () {
+    it('holds database backups far smaller than the database, with both sizes', function () {
+        expect(ReportReviewFlags::reasons(['backups' => ['status' => 'suspect', 'db_backup_bytes' => 9200, 'db_size_bytes' => 3 * 1024 ** 3]]))
+            ->toBe(['Database backups are 9 KB but the database is 3.0 GB, so they look empty or broken and the Backups section was left out.'])
+            ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'suspect']]))
+            ->toBe(['Database backups are far smaller than the database, so they look empty or broken and the Backups section was left out.']);
+    });
+
+    it('holds a daily source that backed up on far fewer days than the period had', function () {
+        $backups = ['status' => 'verified', 'verified' => true, 'covers_period' => true, 'daily' => true, 'days_with_backups' => 12, 'period_days' => 31];
+
+        expect(ReportReviewFlags::reasons(['backups' => $backups]))->toBe(['Backed up on only 12 of 31 days this month.'])
+            // A few days short is normal.
+            ->and(ReportReviewFlags::reasons(['backups' => ['days_with_backups' => 28] + $backups]))->toBe([])
+            // A weekly schedule, records that start part-way through, and older reports say nothing.
+            ->and(ReportReviewFlags::reasons(['backups' => ['daily' => false] + $backups]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['backups' => ['covers_period' => false] + $backups]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'verified', 'covers_period' => true, 'days_with_backups' => 3]]))->toBe([]);
+    });
+});
+
+describe('traffic', function () {
+    it('holds traffic the client won\'t see, saying why', function (array $traffic, string $reason) {
+        expect(ReportReviewFlags::reasons(['traffic' => $traffic]))->toBe([$reason]);
+    })->with([
+        'days missing' => [
+            ['status' => 'partial', 'source' => 'nginx', 'days_covered' => 12, 'period_days' => 31, 'last_day_complete' => true],
+            'Traffic was recorded on only 12 of 31 days, so the Traffic section was left out.',
+        ],
+        'last day unfinished' => [
+            ['status' => 'partial', 'source' => 'pressable', 'days_covered' => 31, 'period_days' => 31, 'last_day_complete' => false],
+            "The period's last day of traffic wasn't complete when the report was compiled, so the Traffic section was left out.",
+        ],
+        'a proxy in front of the site' => [
+            ['status' => 'suspect', 'source' => 'nginx', 'days_covered' => 12, 'period_days' => 31, 'top_ip_share' => 0.998, 'total_visits' => 40, 'total_requests' => 1500000],
+            '100% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors; also, traffic was recorded on only 12 of 31 days, so the Traffic section was left out.',
+        ],
+        'visits that cannot be real' => [
+            ['status' => 'suspect', 'source' => 'pressable', 'days_covered' => 31, 'period_days' => 31, 'top_ip_share' => 0.95, 'total_visits' => 33, 'total_requests' => 410000],
+            "33 visits for 410,000 requests doesn't look like real visitors, so the Traffic section was left out.",
+        ],
+        'nothing from a host we collect from' => [
+            ['status' => 'no_data', 'has_traffic' => false],
+            "No traffic was recorded for this period, although this host's traffic is collected, so the Traffic section was left out.",
+        ],
+    ]);
+
+    it('lets complete traffic, hosts we don\'t collect from and older reports through', function () {
+        expect(ReportReviewFlags::reasons(['traffic' => ['status' => 'ok', 'days_covered' => 31, 'period_days' => 31]]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['traffic' => ['status' => 'unsupported', 'has_traffic' => false]]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['traffic' => ['has_traffic' => true, 'total_visits' => 10, 'total_requests' => 900000]]))->toBe([]);
+    });
+});
+
+describe('contact forms', function () {
+    it('holds a report whose form checks or delivery tests failed', function () {
+        expect(ReportReviewFlags::reasons(['forms' => ['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 19, 'lab_accepted' => 18]]))
+            ->toBe(['Contact-form checks failed: the forms accepted 18 of 19 automated check submissions this month.'])
+            ->and(ReportReviewFlags::reasons(['forms' => ['live_tests' => 4, 'pass_rate' => 75.0, 'lab_tests' => 0, 'lab_accepted' => 0]]))
+            ->toBe(['Not every contact-form test email was delivered: 75% of 4 test submissions arrived.']);
+    });
+
+    it('lets passing and untested forms through', function () {
+        expect(ReportReviewFlags::reasons(['forms' => ['live_tests' => 2, 'pass_rate' => 100.0, 'lab_tests' => 5, 'lab_accepted' => 5]]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['forms' => ['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 0, 'lab_accepted' => 0]]))->toBe([]);
+    });
+});

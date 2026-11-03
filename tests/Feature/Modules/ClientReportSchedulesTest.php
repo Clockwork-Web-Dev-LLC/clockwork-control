@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActionLog;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Models\User;
@@ -7,6 +8,7 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Modules\ClientReports\Console\Commands\SendScheduledClientReports;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
@@ -703,6 +705,32 @@ describe('care-plan customers only', function () {
         Mail::assertNothingSent();
         expect(ClientReport::count())->toBe(0)
             ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
+    });
+
+    it('records the sites a run skipped for having no care plan, once per run', function () {
+        Mail::fake();
+        foreach (['first-no-plan.example.com', 'second-no-plan.example.com'] as $domain) {
+            $site = Site::factory()->create(['domain' => $domain, 'care_plan_enabled' => false, 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM]);
+            ClientReportSchedule::create([
+                'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+                'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@example.com'],
+                'is_enabled' => true, 'next_run_at' => now()->subHour(),
+            ]);
+        }
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('first-no-plan.example.com: skipped this month (care plan is off')
+            ->assertSuccessful();
+
+        $log = ActionLog::where('action_type', SendScheduledClientReports::ACTION_SKIPPED)->sole();
+        expect($log->site_id)->toBeNull()
+            ->and($log->details)->toBe(['domains' => ['first-no-plan.example.com', 'second-no-plan.example.com'], 'reason' => 'no_care_plan'])
+            ->and($log->summary)->toBe('Skipped 2 scheduled client reports (no care plan): first-no-plan.example.com, second-no-plan.example.com')
+            ->and($log->actor)->toBe('scheduled');
+
+        // Nothing due, nothing skipped: no entry.
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+        expect(ActionLog::where('action_type', SendScheduledClientReports::ACTION_SKIPPED)->count())->toBe(1);
     });
 
     it('refuses Send now for a site with no care plan', function () {

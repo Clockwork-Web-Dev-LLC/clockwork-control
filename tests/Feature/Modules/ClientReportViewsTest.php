@@ -428,3 +428,63 @@ describe('partial-month coverage', function () {
             ->and($views['text'])->not->toContain('HTTP 429');
     });
 });
+
+describe('traffic', function () {
+    /** A month of traffic as the compiler stores it now. */
+    function trafficSection(array $overrides = []): array
+    {
+        return array_replace(['has_traffic' => true, 'total_visits' => 1234, 'total_requests' => 56789, 'bandwidth_mb' => null, 'status' => 'ok',
+            'source' => 'nginx', 'days_covered' => 30, 'period_days' => 30, 'last_day_complete' => true, 'top_ip_share' => 0.2], $overrides);
+    }
+
+    it('shows complete traffic, and reports compiled before traffic had a status, in every view', function (array $section) {
+        $views = renderReportViews(viewsReport(['traffic' => $section]));
+
+        expect($views['html'])->toContain('>Traffic<')->toContain('56,789')
+            ->and($views['text'])->toContain("TRAFFIC\nVisits: 1,234\nRequests served: 56,789")
+            ->and($views['preview'])->toContain('Traffic Analytics')->toContain('56,789');
+    })->with([
+        'ok' => [trafficSection()],
+        'compiled before statuses' => [['has_traffic' => true, 'total_visits' => 1234, 'total_requests' => 56789, 'bandwidth_mb' => null]],
+    ]);
+
+    it('says where complete traffic came from only to the operator', function () {
+        $views = renderReportViews(viewsReport(['traffic' => trafficSection(['source' => 'pressable'])]));
+
+        expect($views['preview'])->toContain('Recorded on 30 of 30 days, from Pressable&#039;s traffic feed.')
+            ->and($views['public'])->toContain('Traffic Analytics')->not->toContain('Recorded on')
+            ->and($views['html'])->not->toContain('Recorded on');
+    });
+
+    it('hides incomplete or unbelievable traffic from the client, and tells the operator why', function (array $section, string $note) {
+        $report = viewsReport(['traffic' => trafficSection($section)]);
+        $views = renderReportViews($report);
+
+        expect(ReportSections::visibility($report->sections_data)['traffic'])->toBeFalse()
+            ->and($views['html'])->not->toContain('>Traffic<')->not->toContain('56,789')
+            ->and($views['text'])->not->toContain('TRAFFIC')
+            ->and($views['preview'])->not->toContain('Traffic Analytics')->toMatch(hiddenNotePattern($note))
+            ->and($views['public'])->not->toContain('Traffic')->not->toContain('56,789');
+    })->with([
+        'partial' => [['status' => 'partial', 'days_covered' => 12], 'Traffic hidden from the client: traffic was recorded on only 12 of 30 days.'],
+        'suspect' => [['status' => 'suspect', 'top_ip_share' => 0.97], 'Traffic hidden from the client: 97% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors.'],
+        'no data' => [['status' => 'no_data', 'has_traffic' => false, 'days_covered' => 0], "Traffic hidden from the client: no traffic was recorded for this period, although this host's traffic is collected."],
+        'unsupported' => [['status' => 'unsupported', 'has_traffic' => false, 'days_covered' => 0], "Traffic hidden from the client: traffic isn't collected for this host."],
+    ]);
+});
+
+describe('implausibly small backups', function () {
+    it('hides them from the client and gives the operator both sizes', function () {
+        $views = renderReportViews(viewsReport(['backups' => [
+            'verified' => false, 'status' => 'suspect', 'source' => 'spinupwp_spaces', 'days_with_backups' => 30, 'covers_period' => true,
+            'recent' => [['date' => '2026-09-30', 'kinds' => ['db'], 'bytes' => 9200, 'manual' => false]],
+            'db_backup_bytes' => 9200, 'db_size_bytes' => 3 * 1024 ** 3,
+        ]]));
+
+        expect($views['html'])->not->toContain('backed up')
+            ->and($views['text'])->not->toContain('BACKUPS')
+            ->and($views['preview'])->not->toContain('Backups & Recovery')
+            ->toMatch(hiddenNotePattern('Backups hidden from the client: the newest database backup is far smaller than the database (9 KB for 3.0 GB).'))
+            ->and($views['public'])->not->toContain('Backups');
+    });
+});

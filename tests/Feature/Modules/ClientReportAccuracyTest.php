@@ -349,6 +349,97 @@ describe('backups (#6)', function () {
             ->not->toContain('Backed up on');
     });
 
+    it('holds database backups far smaller than the database instead of showing them to the client', function () {
+        $site = accuracySite([
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'companion_snapshot' => ['plugins' => ['plugins' => []], 'environment' => ['db_size_bytes' => 3 * 1024 ** 3]],
+        ]);
+        foreach (range(1, 30) as $day) {
+            SiteBackup::create([
+                'site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'kind' => SiteBackup::KIND_DATABASE,
+                'external_ref' => "db-{$day}", 'backup_at' => Carbon::parse(sprintf('2026-09-%02d 07:00', $day)), 'bytes' => 9200,
+                'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+            ]);
+        }
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray([
+            'status' => 'suspect', 'verified' => false, 'days_with_backups' => 30, 'db_backup_bytes' => 9200, 'db_size_bytes' => 3 * 1024 ** 3,
+        ])
+            ->and($report['html'])->not->toContain('backed up')
+            ->and($report['text'])->not->toContain('BACKUPS')
+            ->and($report['preview'])->toContain('Backups hidden from the client: the newest database backup is far smaller than the database (9 KB for 3.0 GB).')
+            ->and($report['reasons'])->toContain('Database backups are 9 KB but the database is 3.0 GB, so they look empty or broken and the Backups section was left out.');
+    });
+
+    it('keeps database backups of a plausible size, and a small database\'s small backups', function (int $dbBytes, int $backupBytes) {
+        $site = accuracySite([
+            'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => (string) random_int(1000, 999999),
+            'companion_snapshot' => ['plugins' => ['plugins' => []], 'environment' => ['db_size_bytes' => $dbBytes]],
+        ]);
+        foreach (range(1, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_DATABASE, sprintf('2026-09-%02d 23:00:00', $day), $backupBytes);
+        }
+        recordCheck($site, true);
+
+        expect(compileSeptember($site)['data']['backups']['status'])->toBe('verified');
+    })->with([
+        'compressed to a few percent' => [100 * 1024 ** 2, 3 * 1024 ** 2],
+        'a small database' => [5 * 1024 ** 2, 60 * 1024],
+    ]);
+
+    it('draws the line at about 1% of the database', function () {
+        expect(ClientReportCompiler::backupTooSmall(9 * 1024, 3 * 1024 ** 3))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(500 * 1024, 100 * 1024 ** 2))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(90 * 1024, 11 * 1024 ** 2))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(2 * 1024 ** 2, 100 * 1024 ** 2))->toBeFalse()
+            // Under 100 KB is fine for a database that small.
+            ->and(ClientReportCompiler::backupTooSmall(90 * 1024, 8 * 1024 ** 2))->toBeFalse();
+    });
+
+    it('holds a month a daily source backed up on far fewer days than it had', function () {
+        $site = pressableBackupSite();
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-08-20 00:00:00'); // records go back before the period
+        foreach (range(15, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+        }
+        recordCheck($site, true);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'covers_period' => true, 'daily' => true, 'days_with_backups' => 16, 'period_days' => 30])
+            ->and($report['reasons'])->toContain('Backed up on only 16 of 30 days this month.')
+            // The client still reads the plain count, never a promise of daily backups.
+            ->and($report['html'])->toContain('backed up on <strong>16 days</strong> this month')->not->toContain('daily');
+    });
+
+    it('does not hold a weekly SpinupWP schedule or a month missing only a few days', function () {
+        $weekly = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        foreach (['2026-08-30', '2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27'] as $at) {
+            SiteBackup::create([
+                'site_id' => $weekly->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'kind' => SiteBackup::KIND_FULL,
+                'external_ref' => $at, 'backup_at' => Carbon::parse($at.' 08:00'), 'bytes' => 500 * 1024 ** 2,
+                'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+            ]);
+        }
+        SiteBackupCheck::create(['site_id' => $weekly->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'checked_at' => now(), 'ok' => true]);
+
+        $nearlyEveryDay = pressableBackupSite();
+        foreach (range(1, 30) as $day) {
+            if (! in_array($day, [5, 12, 19], true)) {
+                recordBackup($nearlyEveryDay, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+            }
+        }
+        recordCheck($nearlyEveryDay, true);
+
+        $weeklyReport = compileSeptember($weekly);
+        expect($weeklyReport['data']['backups'])->toMatchArray(['status' => 'verified', 'daily' => false, 'days_with_backups' => 4])
+            ->and(implode(' ', $weeklyReport['reasons']))->not->toContain('Backed up on only')
+            ->and(implode(' ', compileSeptember($nearlyEveryDay)['reasons']))->not->toContain('Backed up on only');
+    });
+
     it('treats a failed or stale check as "could not check", not as no backups', function () {
         $failing = pressableBackupSite();
         recordCheck($failing, false);
@@ -609,14 +700,141 @@ describe('threats blocked', function () {
 });
 
 describe('traffic', function () {
+    /**
+     * One row per day of September from $first to $last, each written early
+     * on the day after it (as the hourly rollup does).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    function recordTraffic(Site $site, int $first = 1, int $last = 30, array $row = []): void
+    {
+        foreach (range($first, $last) as $day) {
+            $date = Carbon::parse(sprintf('2026-09-%02d', $day));
+            DB::table('site_traffic_daily')->insert(array_replace([
+                'site_id' => $site->id, 'date' => $date->toDateString(), 'requests' => 5000, 'visits' => 80, 'bytes_sent' => 0,
+                'top_ips' => null, 'created_at' => $date->copy()->addDay()->setTime(5, 0), 'updated_at' => $date->copy()->addDay()->setTime(5, 0),
+            ], $row));
+        }
+    }
+
+    /** A site whose server we can read access logs from. */
+    function trafficSite(): Site
+    {
+        return accuracySite(['server_id' => Server::factory()->create(['last_ssh_ok_at' => now()])->id]);
+    }
+
     it('leaves out data transferred when the host reports no byte counts', function () {
         $site = accuracySite();
-        DB::table('site_traffic_daily')->insert(['site_id' => $site->id, 'date' => '2026-09-10', 'requests' => 5000, 'visits' => 80, 'bytes_sent' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        recordTraffic($site);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['traffic'])->toMatchArray(['has_traffic' => true, 'total_requests' => 5000, 'bandwidth_mb' => null])
-            ->and($report['html'])->toContain('Visits')->not->toContain('Data transferred');
+        expect($report['data']['traffic'])->toMatchArray([
+            'has_traffic' => true, 'total_requests' => 150000, 'bandwidth_mb' => null,
+            'status' => 'ok', 'source' => 'nginx', 'days_covered' => 30, 'period_days' => 30, 'last_day_complete' => true,
+        ])
+            ->and($report['html'])->toContain('Visits')->not->toContain('Data transferred')
+            ->and($report['preview'])->toContain('Recorded on 30 of 30 days, from the server&#039;s access logs.')
+            ->and($report['public'])->not->toContain('Recorded on 30 of 30 days')
+            ->and(implode(' ', $report['reasons']))->not->toContain('Traffic');
+    });
+
+    it('hides traffic recorded on only some days of the month, and holds the report', function () {
+        $site = accuracySite();
+        recordTraffic($site, 10, 10);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['has_traffic' => true, 'total_requests' => 5000, 'status' => 'partial', 'days_covered' => 1, 'period_days' => 30])
+            ->and($report['html'])->not->toContain('Visits')
+            ->and($report['text'])->not->toContain('TRAFFIC')
+            ->and($report['preview'])->not->toContain('Traffic Analytics')
+            ->toContain('Traffic hidden from the client: traffic was recorded on only 1 of 30 days.')
+            ->and($report['reasons'])->toContain('Traffic was recorded on only 1 of 30 days, so the Traffic section was left out.');
+    });
+
+    it('allows one missing day, but not a missing or unfinished last day', function () {
+        $missingMidMonth = accuracySite();
+        recordTraffic($missingMidMonth, 1, 14);
+        recordTraffic($missingMidMonth, 16, 30);
+
+        $missingLastDay = accuracySite();
+        recordTraffic($missingLastDay, 1, 29);
+
+        // The host's feed wrote the last day before it was over.
+        $unfinishedLastDay = accuracySite();
+        recordTraffic($unfinishedLastDay, 1, 29);
+        recordTraffic($unfinishedLastDay, 30, 30, ['updated_at' => Carbon::parse('2026-09-30 06:37')]);
+
+        expect(compileSeptember($missingMidMonth)['data']['traffic'])->toMatchArray(['status' => 'ok', 'days_covered' => 29]);
+
+        foreach ([$missingLastDay, $unfinishedLastDay] as $site) {
+            $report = compileSeptember($site);
+            expect($report['data']['traffic'])->toMatchArray(['status' => 'partial', 'last_day_complete' => false])
+                ->and($report['reasons'])->toContain("The period's last day of traffic wasn't complete when the report was compiled, so the Traffic section was left out.");
+        }
+    });
+
+    it('does not count days the feed had nothing for', function () {
+        $site = accuracySite();
+        recordTraffic($site, 1, 15);
+        recordTraffic($site, 16, 30, ['requests' => 0, 'visits' => 0]);
+
+        expect(compileSeptember($site)['data']['traffic'])->toMatchArray(['status' => 'partial', 'days_covered' => 15]);
+    });
+
+    it('treats access logs that see two IP addresses as a proxy, not visitors', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 1000, 'visits' => 2, 'top_ips' => json_encode([
+            ['ip' => '10.0.0.4', 'hits' => 480], ['ip' => '10.0.0.5', 'hits' => 470], ['ip' => '203.0.113.9', 'hits' => 50],
+        ])]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => 0.95])
+            ->and($report['html'])->not->toContain('Visits')
+            ->and($report['reasons'])->toContain('95% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.');
+    });
+
+    it('does not judge a host feed by its IP list, and keeps real spread-out visitors', function () {
+        $ips = json_encode([['ip' => '198.51.100.1', 'hits' => 900], ['ip' => '198.51.100.2', 'hits' => 90]]);
+        $pressable = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => '4242', 'server_id' => null]);
+        recordTraffic($pressable, row: ['requests' => 1000, 'top_ips' => $ips]);
+        $spread = accuracySite();
+        recordTraffic($spread, row: ['requests' => 1000, 'top_ips' => json_encode([['ip' => '198.51.100.1', 'hits' => 300], ['ip' => '198.51.100.2', 'hits' => 200]])]);
+
+        expect(compileSeptember($pressable)['data']['traffic'])->toMatchArray(['status' => 'ok', 'source' => 'pressable', 'top_ip_share' => 0.99])
+            ->and(compileSeptember($spread)['data']['traffic'])->toMatchArray(['status' => 'ok', 'top_ip_share' => 0.5]);
+    });
+
+    it('treats a busy site with almost no visits as suspect', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 70000, 'visits' => 1]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => null])
+            ->and($report['reasons'])->toContain("30 visits for 2,100,000 requests doesn't look like real visitors, so the Traffic section was left out.");
+    });
+
+    it('holds a report with no traffic from a host we collect it from, but not from one we don\'t', function () {
+        $collected = compileSeptember(trafficSite());
+        $notCollected = compileSeptember(accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null]));
+
+        expect($collected['data']['traffic'])->toMatchArray(['has_traffic' => false, 'status' => 'no_data', 'days_covered' => 0])
+            ->and($collected['reasons'])->toContain("No traffic was recorded for this period, although this host's traffic is collected, so the Traffic section was left out.")
+            ->and($notCollected['data']['traffic'])->toMatchArray(['has_traffic' => false, 'status' => 'unsupported'])
+            ->and(implode(' ', $notCollected['reasons']))->not->toContain('Traffic')
+            ->and($notCollected['preview'])->toContain('Traffic hidden from the client: traffic isn&#039;t collected for this host.');
+    });
+
+    it('reports traffic that exists even when the host can no longer be read', function () {
+        // The factory server has no SSH credentials, so the host reads as unsupported now.
+        $site = accuracySite();
+        recordTraffic($site);
+
+        expect($site->supportsTrafficReport())->toBeFalse()
+            ->and(compileSeptember($site)['data']['traffic']['status'])->toBe('ok');
     });
 });
 
@@ -686,6 +904,20 @@ describe('contact form tests (#4)', function () {
         expect($report['data']['forms'])->toMatchArray(['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 5, 'lab_accepted' => 5])
             ->and($report['html'])->toContain('accepted <strong>5 of 5</strong>')->not->toContain('% delivered')
             ->and($report['text'])->not->toContain('% delivered');
+    });
+
+    it('counts a lab run as accepted only when the form took the submission, and holds the report when one did not', function () {
+        $site = accuracySite();
+        $lab = ['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-07'), 'mode' => ContactFormTestRun::MODE_LAB, 'mail_outcome' => ContactFormTestRun::MAIL_SUPPRESSED];
+        ContactFormTestRun::factory()->count(2)->create($lab + ['accepted' => true, 'status' => ContactFormTestRun::STATUS_SUCCESS]);
+        // Companion answered, but the form refused the submission.
+        ContactFormTestRun::factory()->create($lab + ['accepted' => false, 'status' => ContactFormTestRun::STATUS_SUCCESS]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['forms'])->toMatchArray(['lab_tests' => 3, 'lab_accepted' => 2])
+            ->and($report['html'])->toContain('accepted <strong>2 of 3</strong>')
+            ->and($report['reasons'])->toContain('Contact-form checks failed: the forms accepted 2 of 3 automated check submissions this month.');
     });
 
     it('does not count a live run whose email failed as delivered', function () {

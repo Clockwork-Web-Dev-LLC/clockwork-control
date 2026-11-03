@@ -47,6 +47,32 @@ class ClientReportCompiler
     /** A clean read older than this can't vouch for "no backups found". */
     public const BACKUP_CHECK_MAX_AGE_HOURS = 48;
 
+    /**
+     * A database backup smaller than this share of the site's database, or
+     * under BACKUP_MIN_DB_BYTES of one over BACKUP_SIZEABLE_DB_BYTES, is an
+     * empty or failed dump, however many days it ran.
+     */
+    public const BACKUP_MIN_DB_RATIO = 0.01;
+
+    public const BACKUP_MIN_DB_BYTES = 100 * 1024;
+
+    public const BACKUP_SIZEABLE_DB_BYTES = 10 * 1024 * 1024;
+
+    /**
+     * The period's last day of traffic counts as complete only once its row
+     * was written this long after the day ended: a host's feed (Pressable)
+     * fills a day in after it's over.
+     */
+    public const TRAFFIC_LAST_DAY_SETTLE_HOURS = 2;
+
+    /** Above this share of requests from two IPs, access logs see a proxy or gateway, not visitors. */
+    public const TRAFFIC_TOP_IP_SHARE_MAX = 0.9;
+
+    /** On a site this busy, fewer visits per request than this means visits weren't counted from real visitors. */
+    public const TRAFFIC_BUSY_REQUESTS = 100000;
+
+    public const TRAFFIC_MIN_VISITS_PER_REQUEST = 0.001;
+
     /** The feed refreshes daily; allow one missed run before calling it stale. */
     public const VULNERABILITY_FEED_MAX_AGE_HOURS = 48;
 
@@ -878,20 +904,57 @@ class ClientReportCompiler
             'successful_tests' => $delivered,
             'pass_rate' => $live->isNotEmpty() ? round(($delivered / $live->count()) * 100, 1) : null,
             'lab_tests' => $lab->count(),
-            'lab_accepted' => $lab->where('status', ContactFormTestRun::STATUS_SUCCESS)->count(),
+            // Whether the form plugin took the submission. A run's status is
+            // Companion answering at all, which it can do while the form refuses.
+            'lab_accepted' => $lab->where('accepted', true)->count(),
         ];
     }
 
+    /**
+     * The period's traffic, with a status saying whether the figures can go
+     * to the client: 'ok', 'partial' (days missing, or the last day not yet
+     * complete), 'suspect' (the logs see a proxy, or visits can't be real),
+     * 'no_data' (a host we collect traffic from, but nothing for the period)
+     * or 'unsupported' (a host we don't collect traffic from). Only 'ok' is
+     * shown; the others are hidden and, except 'unsupported', held for review.
+     */
     protected function compileTraffic(Site $site, Carbon $start, Carbon $end): array
     {
+        // Half-open, so the last day matches however the date was written
+        // ("2026-10-31" or "2026-10-31 00:00:00").
         $traffic = SiteTrafficDaily::query()
             ->where('site_id', $site->id)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('date', '>=', $start->toDateString())
+            ->where('date', '<', $end->copy()->addDay()->toDateString())
             ->get();
 
         $visits = (int) $traffic->sum('visits');
         $requests = (int) $traffic->sum('requests');
         $bytes = (int) $traffic->sum('bytes_sent');
+
+        // A day with no requests and no visits is a placeholder for a day the
+        // feed had nothing for, not a measurement.
+        $measured = $traffic->filter(fn (SiteTrafficDaily $day) => $day->requests > 0 || $day->visits > 0);
+        $periodDays = max(1, (int) round($start->diffInDays($end)));
+        $daysCovered = $measured->map(fn (SiteTrafficDaily $day) => $day->date->toDateString())->unique()->count();
+
+        $lastDay = $measured->first(fn (SiteTrafficDaily $day) => $day->date->toDateString() === $end->toDateString());
+        $settledAt = $end->copy()->addDay()->startOfDay()->addHours(self::TRAFFIC_LAST_DAY_SETTLE_HOURS);
+        $lastDayComplete = $lastDay?->updated_at !== null && $lastDay->updated_at->greaterThanOrEqualTo($settledAt);
+
+        $source = $site->isPressable() ? 'pressable' : 'nginx';
+        $topIpShare = self::topIpShare($measured);
+        $suspect = ($source === 'nginx' && $topIpShare !== null && $topIpShare > self::TRAFFIC_TOP_IP_SHARE_MAX)
+            || ($requests > self::TRAFFIC_BUSY_REQUESTS && $visits < $requests * self::TRAFFIC_MIN_VISITS_PER_REQUEST);
+
+        $status = match (true) {
+            // supportsTrafficReport() is the host's state now, so it only
+            // names an empty period; rows that exist are always reported on.
+            $measured->isEmpty() => $this->collectsTraffic($site) ? 'no_data' : 'unsupported',
+            $suspect => 'suspect',
+            $daysCovered < $periodDays - 1 || ! $lastDayComplete => 'partial',
+            default => 'ok',
+        };
 
         return [
             'has_traffic' => $traffic->isNotEmpty(),
@@ -900,7 +963,58 @@ class ClientReportCompiler
             // Some hosts' traffic feeds (Pressable) carry no byte counts; 0 bytes
             // for real requests means "not measured", not "nothing sent".
             'bandwidth_mb' => $bytes > 0 ? round($bytes / (1024 * 1024), 1) : null,
+            'status' => $status,
+            'source' => $source,
+            'days_covered' => $daysCovered,
+            'period_days' => $periodDays,
+            'last_day_complete' => $lastDayComplete,
+            // Internal: the share of requests from the two busiest IPs over the
+            // period, where the rows name them (access logs do, Pressable doesn't).
+            'top_ip_share' => $topIpShare,
         ];
+    }
+
+    /** Whether this site's host is one we collect traffic from (its state now). */
+    protected function collectsTraffic(Site $site): bool
+    {
+        try {
+            return $site->supportsTrafficReport();
+        } catch (Throwable) {
+            // A host whose module isn't enabled isn't read either.
+            return false;
+        }
+    }
+
+    /**
+     * The two busiest IPs' share of the requests on the days that list their
+     * busiest IPs, or null when none do.
+     *
+     * @param  iterable<SiteTrafficDaily>  $days
+     */
+    protected static function topIpShare(iterable $days): ?float
+    {
+        $hitsByIp = [];
+        $requests = 0;
+
+        foreach ($days as $day) {
+            $ips = is_array($day->top_ips) ? array_filter($day->top_ips, fn ($row) => is_array($row) && isset($row['ip'])) : [];
+            if ($ips === []) {
+                continue;
+            }
+
+            $requests += $day->requests;
+            foreach ($ips as $row) {
+                $hitsByIp[(string) $row['ip']] = ($hitsByIp[(string) $row['ip']] ?? 0) + (int) ($row['hits'] ?? 0);
+            }
+        }
+
+        if ($requests <= 0) {
+            return null;
+        }
+
+        rsort($hitsByIp);
+
+        return round(min(1.0, array_sum(array_slice($hitsByIp, 0, 2)) / $requests), 3);
     }
 
     /**
@@ -908,7 +1022,9 @@ class ClientReportCompiler
      * (Pressable's API, SpinupWP's Spaces bucket, our S3 archives) reported,
      * recorded daily by clockwork:record-site-backups. A backup is only shown
      * if we saw it; "none found" and "couldn't check" are kept apart so the
-     * preview can flag them, and neither is shown to the client.
+     * preview can flag them, and neither is shown to the client. Nor are
+     * database backups far smaller than the database ('suspect'): a source
+     * can list an empty or failed dump every day.
      */
     protected function compileBackups(Site $site, Carbon $start, Carbon $end): array
     {
@@ -965,15 +1081,31 @@ class ClientReportCompiler
         $checkIsCurrent = $check !== null && $check->ok
             && $check->checked_at->greaterThanOrEqualTo(now()->subHours(self::BACKUP_CHECK_MAX_AGE_HOURS));
 
+        // A source can report a backup every day that holds next to nothing:
+        // compare the newest database backup with the size Companion reports
+        // for the site's database.
+        $dbSize = $site->companion_snapshot['environment']['db_size_bytes'] ?? null;
+        $dbSize = is_numeric($dbSize) && (int) $dbSize > 0 ? (int) $dbSize : null;
+        $dbBackup = $inPeriod->first(fn (SiteBackup $b) => $b->bytes !== null
+            && in_array($b->kind, [SiteBackup::KIND_DATABASE, SiteBackup::KIND_FULL], true));
+        $dbBackupTooSmall = $dbSize !== null && $dbBackup !== null && self::backupTooSmall((int) $dbBackup->bytes, $dbSize);
+
         $status = match (true) {
             $source === null => 'no_source',
             // Backups that stopped before the last 10 days are a problem to
             // look at, not something to show the client as fine.
-            $recent->isNotEmpty() => 'verified',
+            $recent->isNotEmpty() => $dbBackupTooSmall ? 'suspect' : 'verified',
             $days->isNotEmpty() => 'stale',
             $checkIsCurrent => 'none_found',
             default => 'not_checked',
         };
+
+        // Pressable and our S3 relay back up every day. SpinupWP's schedule is
+        // set per site (often weekly), so it counts as daily only when the
+        // period has backups on consecutive days. The days the period has had
+        // so far, for a report on a month still running.
+        $daily = $source !== null && ($source !== SiteBackup::SOURCE_SPINUPWP_SPACES || self::hasConsecutiveDays($days->keys()->all()));
+        $periodDays = max(1, (int) round($start->diffInDays($end->copy()->min(now()->endOfDay()))));
 
         return [
             'enabled' => $source !== null,
@@ -984,13 +1116,41 @@ class ClientReportCompiler
             'destination' => $source !== null ? (ReportPhrases::BACKUP_DESTINATIONS[$source] ?? null) : null,
             'days_with_backups' => $days->count(),
             'covers_period' => $coversPeriod,
+            // Internal, for the review flags: whether the source backs up every
+            // day, and how many days of the period have passed.
+            'daily' => $daily,
+            'period_days' => $periodDays,
             'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,
             'last_backup_at' => $inPeriod->first()?->backup_at->toDateString(),
             'list_from' => $windowStart->toDateString(),
             'recent' => $recent->all(),
             'check_error' => $check !== null && ! $check->ok ? $check->error : null,
             'checked_at' => $check?->checked_at->toIso8601String(),
+            // Internal: the newest database backup's size against the database's.
+            'db_backup_bytes' => $dbBackup?->bytes,
+            'db_size_bytes' => $dbSize,
         ];
+    }
+
+    /** A database backup this much smaller than the database is empty or broken. */
+    public static function backupTooSmall(int $backupBytes, int $dbBytes): bool
+    {
+        return $backupBytes < $dbBytes * self::BACKUP_MIN_DB_RATIO
+            || ($backupBytes < self::BACKUP_MIN_DB_BYTES && $dbBytes > self::BACKUP_SIZEABLE_DB_BYTES);
+    }
+
+    /** @param  list<string>  $dates  Y-m-d */
+    protected static function hasConsecutiveDays(array $dates): bool
+    {
+        sort($dates);
+
+        for ($i = 1; $i < count($dates); $i++) {
+            if (Carbon::parse($dates[$i - 1])->addDay()->toDateString() === $dates[$i]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function compileWorkLog(Site $site, Carbon $start, Carbon $end): array
