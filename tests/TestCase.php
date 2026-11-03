@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Services\Process\DetachedShell;
 use App\Support\SsrfGuard;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Process;
@@ -25,5 +26,14 @@ abstract class TestCase extends BaseTestCase
         Process::fake([
             'git *' => Process::result(output: 'main', exitCode: 0),
         ]);
+
+        // BackgroundArtisan launches detached `php artisan` jobs through a raw
+        // exec() that Process::fake() can't see. Swallow them so no Feature
+        // test can start a real background process; tests that assert the
+        // launched command mock DetachedShell or BackgroundArtisan themselves.
+        $this->instance(DetachedShell::class, new class extends DetachedShell
+        {
+            public function run(string $command): void {}
+        });
     }
 }

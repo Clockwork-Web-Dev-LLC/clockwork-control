@@ -84,6 +84,22 @@ class WpCoreChecksumVerifier
         private readonly PressableCommandRunner $pressableRunner,
     ) {}
 
+    /**
+     * Whether verify() has any way to run wp-cli on this site: root SSH to a
+     * tracked server, Pressable's command API, or the host's own command
+     * runner. Mirrors verify()'s dispatch. A site with none of these (a
+     * standalone site on a host we have no shell access to) can never be
+     * checked, so the nightly run skips it instead of recording a failure.
+     */
+    public function hasTransport(Site $site): bool
+    {
+        $host = $site->host();
+
+        return $host->supports(HostingProvider::CAP_SSH)
+            || $site->isPressable()
+            || $host->commandRunner() !== null;
+    }
+
     public function verify(Site $site): SecurityScanResult
     {
         $started = (int) (microtime(true) * 1000);

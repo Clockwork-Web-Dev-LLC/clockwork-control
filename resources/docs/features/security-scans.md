@@ -140,6 +140,8 @@ Output parsing (the modified / missing / should-not-exist regex logic + allowlis
 
 `clockwork:verify-wp-core-checksums`'s site-selection query uses `Site::hostMonitored()` (not the old SpinupWP-only server scope), so the nightly fleet-wide run reaches care-plan Pressable sites too.
 
+A site with **no transport at all** (no `CAP_SSH`, not Pressable, and no host `commandRunner()`, e.g. a standalone `custom` site) can never be checked. `WpCoreChecksumVerifier::hasTransport()` mirrors the dispatch above, and the command skips those sites, counting them as `skipped=` in its summary line and logging their ids, instead of writing a `failed` / `no_command_runner` row every night and exiting non-zero.
+
 ## Pressable-only: vulnerability alerts + Defensive Mode
 
 Two Pressable-native signals with no SpinupWP equivalent, pushed daily (06:39) by `clockwork:pressable-security-summary-report` to each Companion-equipped Pressable site's `/security-summary-report` endpoint, and rendered on Companion's Security admin page (v1.31.6+):

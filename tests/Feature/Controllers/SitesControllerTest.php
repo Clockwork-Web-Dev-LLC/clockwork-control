@@ -14,6 +14,8 @@ use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
 use App\Services\HostingProvider\HostingProviderRegistry;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Services\Sites\WpConfigExtractor;
 use App\Services\Sites\WpPluginDetector;
@@ -1178,6 +1180,51 @@ describe('clearCarePlanOverride', function () {
         $response->assertRedirect();
         $response->assertSessionHas('status', 'Care plan override cleared. The next Bill.com sync will re-derive the flag.');
         expect($site->fresh()->care_plan_override)->toBeNull();
+    });
+});
+
+describe('toggleCarePlan performance baseline', function () {
+    // The weekly rotation only reaches a site on its own weekday, so a site
+    // put on a care plan late in the month could have no speed test for
+    // that month's report.
+    it('starts one background performance scan when the care plan is switched on', function () {
+        [, $site] = spinupSite(['care_plan_enabled' => false]);
+        $this->mock(BackgroundArtisan::class, function ($mock) use ($site) {
+            $mock->shouldReceive('start')
+                ->once()
+                ->withArgs(fn (string $lockKey, array $commands) => $lockKey === 'performance-baseline:'.$site->id
+                    && $commands === ['clockwork:run-performance-scans --site='.$site->id.' --strategy=mobile'])
+                ->andReturn(BackgroundArtisanResult::ok());
+        });
+
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('sites.care-plan', $site), ['enabled' => '1'])
+            ->assertOk();
+    });
+
+    it('starts nothing when the care plan is switched off or was already on', function () {
+        [, $off] = spinupSite(['care_plan_enabled' => true]);
+        [, $alreadyOn] = spinupSite(['care_plan_enabled' => true]);
+        $this->mock(BackgroundArtisan::class)->shouldNotReceive('start');
+
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('sites.care-plan', $off), ['enabled' => '0'])
+            ->assertOk();
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('sites.care-plan', $alreadyOn), ['enabled' => '1'])
+            ->assertOk();
+    });
+
+    it('still saves the toggle when the background launch fails', function () {
+        [, $site] = spinupSite(['care_plan_enabled' => false]);
+        $this->mock(BackgroundArtisan::class)->shouldReceive('start')->once()->andThrow(new RuntimeException('no php binary'));
+
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('sites.care-plan', $site), ['enabled' => '1'])
+            ->assertOk()
+            ->assertJsonPath('care_plan_enabled', true);
+
+        expect($site->fresh()->care_plan_enabled)->toBeTrue();
     });
 });
 

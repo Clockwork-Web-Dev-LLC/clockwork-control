@@ -1641,6 +1641,10 @@ class SitesController extends Controller
             details: ['previous' => $previous, 'now' => $enabled, 'override' => true],
         );
 
+        if ($enabled && ! $previous) {
+            $this->kickPerformanceBaseline($site);
+        }
+
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
@@ -2350,6 +2354,11 @@ class SitesController extends Controller
             'companion_capabilities' => $caps,
             'companion_secret' => $secret,
             'companion_last_seen_at' => now(),
+            // The /health handshake above only answers from the Companion or
+            // Renegade WordPress plugin, so this is a WordPress site. Without
+            // the flag it sits out every WordPress-only job (core checksums,
+            // lockout and firewall pulls).
+            'is_wordpress' => true,
             'is_multisite' => $isMultisite,
             'uptime_monitoring_enabled' => true,
             'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
@@ -2418,6 +2427,7 @@ class SitesController extends Controller
         );
 
         $this->kickEnrollmentSecurityBaseline($site);
+        $this->kickPerformanceBaseline($site);
 
         $flash = "Site {$site->domain} successfully connected and enrolled!";
         if (! $site->backup_relay_enabled) {
@@ -2425,6 +2435,30 @@ class SitesController extends Controller
         }
 
         return redirect()->route('sites.show', $site)->with('flash', $flash);
+    }
+
+    /**
+     * One performance scan for a site that just came under care (standalone
+     * enrolment, or its care plan switched on). The nightly rotation only
+     * reaches a site on its own weekday, so a site enrolled late in the
+     * month could otherwise have no speed test for that month's report.
+     * Its own lock so a failed security baseline can't stop it, and detached
+     * because a scan takes 15-60s or more. `--site=` bypasses the care-plan
+     * gate.
+     */
+    private function kickPerformanceBaseline(Site $site): void
+    {
+        try {
+            app(BackgroundArtisan::class)->start(
+                lockKey: 'performance-baseline:'.$site->id,
+                commands: ['clockwork:run-performance-scans --site='.$site->id.' --strategy=mobile'],
+                ttlSeconds: 600,
+                logBasename: 'performance-baseline',
+            );
+        } catch (Throwable) {
+            // Non-fatal: the nightly rotation and its month-end catch-up
+            // still reach the site.
+        }
     }
 
     /**

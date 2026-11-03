@@ -543,6 +543,17 @@ class Site extends Model
                 CaptureSiteScreenshotJob::dispatch($site->id);
             }
         });
+
+        // A Companion snapshot that reports a WordPress core proves the site
+        // runs WordPress. Heal is_wordpress here rather than in each place
+        // that writes a snapshot, so a site enrolled without the flag doesn't
+        // stay out of the WordPress-only jobs (core checksums, lockout and
+        // firewall pulls) forever. Never clears the flag.
+        static::saving(function (Site $site) {
+            if (! $site->is_wordpress && isset($site->companion_snapshot['wp_core'])) {
+                $site->is_wordpress = true;
+            }
+        });
     }
 
     public function scopeNotArchived(Builder $query): void
