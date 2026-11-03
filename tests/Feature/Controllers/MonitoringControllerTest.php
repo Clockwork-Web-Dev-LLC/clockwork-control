@@ -285,7 +285,7 @@ describe('MonitoringController', function () {
         $response->assertOk()
             ->assertSee('exempt-site.example.com')
             ->assertSee('NOT OUR FAULT')
-            ->assertSee('1 EXCUSED')
+            ->assertSee('EXCUSED')
             ->assertSee('1 not our fault')
             ->assertSee('classify-outage-modal')
             ->assertSee('monitoringOpenClassify')

@@ -429,7 +429,7 @@ export function monitoringPage() {
                                         '<span class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 bg-[var(--color-status-green)]/15 text-[var(--color-status-green)]">UP</span>';
                                 }
                                 if (lastEventCell) {
-                                    lastEventCell.textContent = 'Up — checked just now';
+                                    lastEventCell.textContent = 'Up · checked just now';
                                 }
                                 if (actionsCell) {
                                     actionsCell

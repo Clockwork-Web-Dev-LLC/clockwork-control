@@ -1,5 +1,7 @@
 @php
-    // Shared tab strip for the unified Security section. Renders on /security/scans
+    // Shared header + tab strip for the unified Security section. The title and subtitle are
+    // identical on every tab so the tab bar never moves when switching tabs; per-tab text,
+    // actions and stat cards are rendered by each page *below* this strip (pass 'intro'). Renders on /security/scans
     // (scans subtab) and /bans/* (queue/active/history subtabs). Each calling view
     // sets $activeTab to one of: 'scans', 'admins', 'email-auth', 'queue', 'active', 'history'.
     $tabs = [
@@ -16,10 +18,13 @@
     $tabs[] = ['key' => 'history', 'label' => 'History', 'route' => 'bans.history',   'badge' => null];
 @endphp
 
-<div class="flex items-center gap-1 mb-6 border-b border-[var(--color-border-light)] overflow-x-auto scrollbar-none">
+<x-page-header title="Security"
+    subtitle="Malware scans, WordPress admins, email authentication and firewall bans across the fleet." />
+
+<div class="cw-tab-bar {{ empty($intro) ? 'mb-6' : 'mb-3' }}">
     @foreach ($tabs as $t)
         <a href="{{ route($t['route']) }}"
-           class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors
+           class="inline-flex items-center px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
                   {{ ($activeTab ?? '') === $t['key']
                         ? 'border-[var(--color-primary-500)] text-[var(--color-primary-600)]'
                         : 'border-transparent text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:border-[var(--color-border)]' }}">
@@ -35,3 +40,7 @@
         </a>
     @endforeach
 </div>
+
+@if (! empty($intro))
+    <p class="text-sm text-[var(--color-ink-muted)] mb-5">{{ $intro }}</p>
+@endif

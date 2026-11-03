@@ -3,8 +3,6 @@
 @section('title', 'Server tags · Settings')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Server tags"
         subtitle="Predefined labels for sorting and filtering servers (dedicated, shared, client-specific, etc.). Tag servers from each server's edit page.">
         <x-slot:actions>
@@ -14,6 +12,8 @@
             </a>
         </x-slot:actions>
     </x-page-header>
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

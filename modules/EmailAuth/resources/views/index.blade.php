@@ -116,9 +116,11 @@
         }
      }">
 
-    <x-page-header title="Security"
-        subtitle="Monitor SPF 10-lookup limits, recursive loop detection, DMARC enforcement policies, and DKIM selector validation across client domains.">
-        <x-slot:actions>
+    @include('security._tabs')
+
+    {{-- Per-tab intro + actions live below the shared tab strip so the tabs never move. --}}
+    <div class="flex items-start justify-between flex-wrap gap-3 mb-5">
+        <p class="text-sm text-[var(--color-ink-muted)] max-w-2xl">Monitor SPF 10-lookup limits, recursive loop detection, DMARC enforcement policies, and DKIM selector validation across client domains.</p>
             <div class="flex flex-wrap items-center gap-2">
                 <form method="POST" action="{{ route('email-auth.scan-all') }}">
                     @csrf
@@ -142,10 +144,7 @@
                     </button>
                 </form>
             </div>
-        </x-slot:actions>
-    </x-page-header>
-
-    @include('security._tabs')
+    </div>
 
     @if ($isGlobalScanning ?? false)
         <div class="mb-4 px-4 py-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-medium flex items-center justify-between gap-2">
@@ -186,7 +185,7 @@
     @endif
 
     {{-- Stats Cards --}}
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <a href="{{ route('email-auth.index') }}"
            class="card p-4 border transition-all {{ $status === null ? 'border-indigo-500/40 ring-1 ring-indigo-500/20' : 'hover:border-[var(--color-border)]' }}">
             <span class="text-[11px] font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider block">Monitored Domains</span>
@@ -228,6 +227,16 @@
             </div>
             <span class="text-2xl font-bold font-data text-slate-500 mt-1 block">{{ $totalIgnored }}</span>
         </a>
+
+        <a href="{{ route('email-auth.index', ['status' => 'unscanned']) }}"
+           class="card p-4 border transition-all {{ $status === 'unscanned' ? 'border-slate-500/40 ring-1 ring-slate-500/20' : 'hover:border-[var(--color-border)]' }}"
+           title="Not ignored and no pass / warning / fail result yet">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider block">Unscanned</span>
+                <i class="fa-regular fa-clock text-[var(--color-ink-soft)] text-xs"></i>
+            </div>
+            <span class="text-2xl font-bold font-data text-[var(--color-ink-muted)] mt-1 block">{{ $totalUnscanned ?? 0 }}</span>
+        </a>
     </div>
 
     {{-- Filter & Search Bar --}}
@@ -253,6 +262,10 @@
                class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition {{ $status === 'ignored' ? 'bg-slate-500/10 text-slate-600 border-slate-500/30' : 'border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
                 Ignored
             </a>
+            <a href="{{ route('email-auth.index', array_filter(['status' => 'unscanned', 'search' => $search])) }}"
+               class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition {{ $status === 'unscanned' ? 'bg-slate-500/10 text-slate-600 border-slate-500/30' : 'border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)]' }}">
+                Unscanned
+            </a>
         </div>
 
         <form method="GET" action="{{ route('email-auth.index') }}" class="flex items-center gap-2">
@@ -270,18 +283,18 @@
 
     {{-- Fleet Table --}}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
+        <div class="overflow-x-auto cw-sticky-actions">
+            <table class="w-full text-left text-xs [&_th]:px-3 [&_th]:py-2.5 [&_td]:px-3 [&_td]:py-2.5 [&_tr>:first-child]:pl-4 [&_tr>:last-child]:pr-4">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase text-[10px] tracking-wider border-b border-[var(--color-border)]">
                     <tr>
-                        <th class="p-3.5">Apex Domain</th>
-                        <th class="p-3.5">Sites</th>
-                        <th class="p-3.5">Posture</th>
-                        <th class="p-3.5">SPF Status</th>
-                        <th class="p-3.5">DMARC Policy</th>
-                        <th class="p-3.5">DKIM Selectors</th>
-                        <th class="p-3.5">Last Checked</th>
-                        <th class="p-3.5 text-right">Actions</th>
+                        <th class="whitespace-nowrap">Apex Domain</th>
+                        <th class="whitespace-nowrap">Sites</th>
+                        <th class="whitespace-nowrap">Posture</th>
+                        <th class="whitespace-nowrap">SPF</th>
+                        <th class="whitespace-nowrap">DMARC</th>
+                        <th class="whitespace-nowrap">DKIM</th>
+                        <th class="whitespace-nowrap">Checked</th>
+                        <th class="text-right whitespace-nowrap">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border)]">
@@ -290,20 +303,20 @@
                             $check = $domain->latestCheck;
                         @endphp
                         <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors {{ $domain->isIgnored() ? 'opacity-60 bg-slate-500/5' : '' }}">
-                            <td class="p-3.5 font-medium font-data text-sm">
-                                <span class="text-[var(--color-ink-strong)]">{{ $domain->domain }}</span>
+                            <td class="font-medium font-data text-sm">
+                                <span class="inline-block align-middle max-w-[14rem] truncate text-[var(--color-ink-strong)]" title="{{ $domain->domain }}">{{ $domain->domain }}</span>
                                 @if ($domain->isIgnored())
                                     <span class="ml-1 text-[10px] uppercase font-bold text-slate-400">(Ignored)</span>
                                 @endif
                             </td>
 
-                            <td class="p-3.5 font-data">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border)]">
+                            <td class="font-data whitespace-nowrap">
+                                <span class="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--color-surface-alt)] border border-[var(--color-border)]">
                                     {{ $siteCounts[$domain->domain] ?? 0 }} {{ ($siteCounts[$domain->domain] ?? 0) === 1 ? 'site' : 'sites' }}
                                 </span>
                             </td>
 
-                            <td class="p-3.5">
+                            <td class="whitespace-nowrap">
                                 @if ($domain->isIgnored())
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-data text-[11px] font-semibold border bg-slate-500/15 text-slate-500 border-slate-500/30">
                                         IGNORED
@@ -319,7 +332,7 @@
                                 @endif
                             </td>
 
-                            <td class="p-3.5 font-data">
+                            <td class="font-data whitespace-nowrap">
                                 @if ($check)
                                     <div class="flex items-center gap-1.5">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border {{ $check->statusBadgeClass($check->spf_status) }}">
@@ -334,7 +347,7 @@
                                 @endif
                             </td>
 
-                            <td class="p-3.5 font-data">
+                            <td class="font-data whitespace-nowrap">
                                 @if ($check)
                                     <div class="flex items-center gap-1.5">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border {{ $check->statusBadgeClass($check->dmarc_status) }}">
@@ -349,7 +362,7 @@
                                 @endif
                             </td>
 
-                            <td class="p-3.5 font-data">
+                            <td class="font-data whitespace-nowrap">
                                 @if ($check)
                                     <div class="flex items-center gap-1.5">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border {{ $check->statusBadgeClass($check->dkim_status) }}">
@@ -364,11 +377,11 @@
                                 @endif
                             </td>
 
-                            <td class="p-3.5 text-[var(--color-ink-muted)] font-data text-[11px]">
-                                {{ $domain->last_checked_at ? $domain->last_checked_at->diffForHumans() : 'Never' }}
+                            <td class="text-[var(--color-ink-muted)] font-data text-[11px] whitespace-nowrap" title="{{ $domain->last_checked_at }}">
+                                {{ $domain->last_checked_at ? $domain->last_checked_at->diffForHumans(['short' => true]) : 'Never' }}
                             </td>
 
-                            <td class="p-3.5 text-right">
+                            <td class="text-right whitespace-nowrap">
                                 <div class="inline-flex items-center gap-1.5 justify-end">
                                     <button type="button"
                                             @click="openDrawer({{ json_encode($domain->toArray() + ['latest_check' => $check?->toArray()]) }})"

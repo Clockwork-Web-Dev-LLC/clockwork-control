@@ -15,8 +15,6 @@
             return text.includes(q);
         }
     }">
-        @include('settings._tabs')
-
         <!-- Page Header -->
         <x-page-header title="Module directory"
             subtitle="Browse official bundled integrations and community extensions indexed in our directory feed. Official modules are tested and bundled; community packages can be added from GitHub.">
@@ -54,6 +52,8 @@
                 </a>
             </x-slot:actions>
         </x-page-header>
+
+        @include('settings._tabs')
 
         @if (session('status'))
             <div class="card p-4 mb-6 status-green flex items-center gap-2">

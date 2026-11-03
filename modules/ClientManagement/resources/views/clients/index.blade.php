@@ -73,7 +73,11 @@
                 {{ $totalReportsCount }}
             </div>
             <div class="text-[11px] text-[var(--color-ink-soft)] mt-0.5">
-                Executive reports tied to clients
+                @if (($allReportsCount ?? 0) > $totalReportsCount)
+                    of {{ number_format($allReportsCount) }} generated reports are tied to a client record
+                @else
+                    Executive reports tied to clients
+                @endif
             </div>
         </div>
     </div>
@@ -133,61 +137,61 @@
                 @endif
             </div>
         @else
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto cw-sticky-actions">
                 <table class="w-full text-xs text-left">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">
                         <tr>
-                            <th class="px-5 py-3 font-semibold">Client &amp; Company</th>
-                            <th class="px-5 py-3 font-semibold">Report Recipients</th>
-                            <th class="px-5 py-3 font-semibold">Assigned Fleet Sites</th>
-                            <th class="px-5 py-3 font-semibold">Reports</th>
-                            <th class="px-5 py-3 font-semibold text-right">Actions</th>
+                            <th class="pl-5 pr-3 py-3 font-semibold whitespace-nowrap">Client &amp; Company</th>
+                            <th class="px-3 py-3 font-semibold whitespace-nowrap">Report Recipients</th>
+                            <th class="px-3 py-3 font-semibold whitespace-nowrap">Assigned Sites</th>
+                            <th class="px-3 py-3 font-semibold whitespace-nowrap">Reports</th>
+                            <th class="pl-3 pr-5 py-3 font-semibold text-right whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
                         @foreach ($clients as $client)
                             <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors">
-                                <td class="px-5 py-3.5">
+                                <td class="pl-5 pr-3 py-3.5">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 rounded-full bg-[var(--color-brand)]/10 text-[var(--color-brand)] font-display font-bold text-xs flex items-center justify-center shrink-0">
                                             {{ strtoupper(substr($client->name, 0, 1)) }}{{ strtoupper(substr($client->company_name ?? '', 0, 1)) }}
                                         </div>
-                                        <div>
-                                            <a href="{{ route('clients.show', $client) }}" class="font-semibold text-sm text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] transition-colors">
+                                        <div class="min-w-0 max-w-[13rem]">
+                                            <a href="{{ route('clients.show', $client) }}" class="block truncate font-semibold text-sm text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] transition-colors" title="{{ $client->name }}">
                                                 {{ $client->name }}
                                             </a>
                                             @if ($client->company_name)
                                                 <div class="text-[11px] text-[var(--color-ink-muted)] flex items-center gap-1 mt-0.5">
                                                     <i class="fa-regular fa-building text-[10px]"></i>
-                                                    <span>{{ $client->company_name }}</span>
+                                                    <span class="truncate" title="{{ $client->company_name }}">{{ $client->company_name }}</span>
                                                 </div>
                                             @endif
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-5 py-3.5">
-                                    <div class="font-mono text-[11px] text-[var(--color-ink-strong)] flex items-center gap-1.5">
-                                        <i class="fa-regular fa-envelope text-[10px] text-[var(--color-ink-soft)]"></i>
-                                        <span>{{ $client->email }}</span>
+                                <td class="px-3 py-3.5">
+                                    <div class="font-mono text-[11px] text-[var(--color-ink-strong)] flex items-center gap-1.5 max-w-[15rem]">
+                                        <i class="fa-regular fa-envelope text-[10px] text-[var(--color-ink-soft)] shrink-0"></i>
+                                        <span class="truncate" title="{{ $client->email }}">{{ $client->email }}</span>
                                     </div>
                                     @if (!empty($client->additional_emails))
                                         <div class="text-[10px] text-[var(--color-ink-muted)] mt-1 flex items-center gap-1">
                                             <span class="px-1.5 py-0.2 rounded bg-[var(--color-surface-alt)] font-medium text-[9px]">
                                                 +{{ count($client->additional_emails) }} CC
                                             </span>
-                                            <span class="truncate max-w-xs" title="{{ implode(', ', $client->additional_emails) }}">
+                                            <span class="truncate max-w-[11rem]" title="{{ implode(', ', $client->additional_emails) }}">
                                                 {{ implode(', ', $client->additional_emails) }}
                                             </span>
                                         </div>
                                     @endif
                                 </td>
-                                <td class="px-5 py-3.5">
+                                <td class="px-3 py-3.5">
                                     @if ($client->sites->isNotEmpty())
-                                        <div class="flex flex-wrap gap-1.5 max-w-md">
+                                        <div class="flex flex-wrap gap-1.5 max-w-[18rem]">
                                             @foreach ($client->sites as $site)
                                                 <a href="{{ route('sites.show', $site) }}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono bg-[var(--color-surface-alt)] border border-[var(--color-border-light)] text-[var(--color-ink-strong)] hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] transition-colors">
                                                     <i class="fa-solid fa-globe text-[9px] text-[var(--color-ink-soft)]"></i>
-                                                    <span>{{ $site->domain }}</span>
+                                                    <span class="max-w-[13rem] truncate" title="{{ $site->domain }}">{{ $site->domain }}</span>
                                                 </a>
                                             @endforeach
                                         </div>
@@ -195,14 +199,14 @@
                                         <span class="text-[var(--color-ink-soft)] italic text-[11px]">No sites assigned yet</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-3.5 whitespace-nowrap">
+                                <td class="px-3 py-3.5 whitespace-nowrap">
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-surface-alt)] text-[var(--color-ink-strong)]">
                                         <i class="fa-solid fa-file-invoice text-[9px] text-[var(--color-brand)]"></i>
                                         {{ $client->reports_count }} {{ \Illuminate\Support\Str::plural('report', $client->reports_count) }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-3.5 text-right whitespace-nowrap">
-                                    <div class="flex items-center justify-end gap-2">
+                                <td class="pl-3 pr-5 py-3.5 text-right whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
                                         <a href="{{ route('clients.show', $client) }}" class="btn-pill-secondary text-xs py-1 px-3">
                                             <i class="fa-solid fa-eye text-[10px]"></i>
                                             <span>View</span>

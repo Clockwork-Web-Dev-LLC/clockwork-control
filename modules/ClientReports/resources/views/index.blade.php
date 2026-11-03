@@ -3,28 +3,20 @@
 @section('title', 'Client Reports · Clockwork')
 
 @section('content')
-<div class="mb-6 flex items-center justify-between flex-wrap gap-4">
-    <div>
-        <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] flex items-center gap-2">
-            <i class="fa-solid fa-file-lines text-[var(--color-brand)]"></i>
-            Client Reports
-        </h1>
-        <p class="text-xs text-[var(--color-ink-soft)] mt-1">
-            Automated, executive-ready white-labeled maintenance and performance reports for your agency clients.
-        </p>
-    </div>
-    <div class="flex items-center gap-2">
-        <a href="#generate-modal" onclick="document.getElementById('generate-panel').scrollIntoView({behavior: 'smooth'})" class="btn-pill-primary text-xs">
+<x-page-header title="Client Reports"
+    subtitle="Automated, executive-ready white-labeled maintenance and performance reports for your agency clients.">
+    <x-slot:actions>
+        <a href="#generate-panel" onclick="document.getElementById('generate-panel').scrollIntoView({behavior: 'smooth'}); return false;" class="btn-pill-primary text-xs">
             <i class="fa-solid fa-plus mr-1"></i> Generate New Report
         </a>
-    </div>
-</div>
+    </x-slot:actions>
+</x-page-header>
 
 @include('client-reports::_nav')
 
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<div class="space-y-6">
     {{-- Main Reports List --}}
-    <div class="lg:col-span-8 xl:col-span-9 space-y-6">
+    <div class="space-y-6">
         <div class="card p-5">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-2">
@@ -40,7 +32,7 @@
                     No reports generated yet. Use the generator on the right to compile your first client report!
                 </div>
             @else
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto cw-sticky-actions">
                     <table class="w-full text-xs text-left">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">
                             <tr>
@@ -63,7 +55,7 @@
                                                 </span>
                                             @endif
                                         </div>
-                                        <div class="text-[11px] text-[var(--color-ink-muted)] font-mono">{{ $r->site->domain }}</div>
+                                        <div class="text-[11px] text-[var(--color-ink-muted)] font-mono max-w-[18rem] truncate" title="{{ $r->site->domain }}">{{ $r->site->domain }}</div>
                                     </td>
                                     <td class="px-4 py-3 text-[var(--color-ink-soft)] whitespace-nowrap">
                                         {{ $r->period_start->format('M j') }} &ndash; {{ $r->period_end->format('M j, Y') }}
@@ -71,10 +63,10 @@
                                     <td class="px-4 py-3 text-[var(--color-ink-soft)]">
                                         {{ $r->client_name ?: '—' }}
                                         @if ($r->client_email)
-                                            <div class="text-[10px] text-[var(--color-ink-muted)]">{{ $r->client_email }}</div>
+                                            <div class="text-[10px] text-[var(--color-ink-muted)] max-w-[14rem] truncate" title="{{ $r->client_email }}">{{ $r->client_email }}</div>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-3">
+                                    <td class="px-4 py-3 whitespace-nowrap">
                                         @if ($r->status === 'generated' && empty($r->sent_to) && ! empty($r->sections_data['meta']['review_reasons']))
                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="{{ implode(' ', $r->sections_data['meta']['review_reasons']) }}">
                                                 Needs review
@@ -123,8 +115,8 @@
         </div>
     </div>
 
-    {{-- Right Column: Generate Report Form & Schedules --}}
-    <div class="lg:col-span-4 xl:col-span-3 space-y-6" id="generate-panel">
+    {{-- Generate Report Form (full width below the history table) --}}
+    <div class="space-y-6 scroll-mt-24" id="generate-panel">
         {{-- Generate Report Panel --}}
         <div class="card p-5">
             <h2 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] mb-1 flex items-center gap-2">
@@ -135,7 +127,7 @@
                 Compile data from updates, uptime, security scans, and performance benchmarks.
             </p>
 
-            <form method="POST" action="{{ route('client-reports.generate') }}" class="space-y-4">
+            <form method="POST" action="{{ route('client-reports.generate') }}" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 @csrf
                 <div>
                     <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">Target Site</label>
@@ -160,13 +152,13 @@
                     </div>
                 @endif
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                    <div class="min-w-0">
                         <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">From Date</label>
                         <input type="date" name="period_start" value="{{ now()->subMonthNoOverflow()->startOfMonth()->toDateString() }}" required
                                class="w-full text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">To Date</label>
                         <input type="date" name="period_end" value="{{ now()->subMonthNoOverflow()->endOfMonth()->toDateString() }}" required
                                class="w-full text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
@@ -185,15 +177,17 @@
                            class="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
                 </div>
 
-                <div>
+                <div class="md:col-span-2 xl:col-span-3">
                     <label class="block text-xs font-semibold text-[var(--color-ink-strong)] mb-1">Custom Notes</label>
-                    <textarea name="custom_notes" rows="2" placeholder="Everything is running smoothly! Next month we will..."
+                    <textarea name="custom_notes" rows="3" placeholder="Everything is running smoothly! Next month we will..."
                               class="w-full text-xs px-3 py-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]"></textarea>
                 </div>
 
-                <button type="submit" class="w-full btn-pill-primary text-xs py-2">
-                    <i class="fa-solid fa-file-export mr-1"></i> Generate & Preview Report
-                </button>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full btn-pill-primary text-xs py-2">
+                        <i class="fa-solid fa-file-export mr-1"></i> Generate & Preview Report
+                    </button>
+                </div>
             </form>
         </div>
     </div>

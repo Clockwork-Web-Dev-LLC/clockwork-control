@@ -3,24 +3,16 @@
 @section('title', 'Code Snippets · Clockwork')
 
 @section('content')
-<div class="mb-6">
-    <div class="flex items-center justify-between flex-wrap gap-4">
-        <div>
-            <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] flex items-center gap-2">
-                <i class="fa-solid fa-code text-[var(--color-brand)]"></i>
-                PHP Code Snippets
-            </h1>
-            <p class="text-xs text-[var(--color-ink-soft)] mt-1">
-                Execute sandboxed PHP snippets across one or multiple WordPress sites in your fleet.
-            </p>
-        </div>
-        @if ($canManage)
-        <button type="button" @click="isCreating = true; editingSnippet = { id: null, name: '', description: '', code: '' }" class="btn-pill-primary text-xs">
-            <i class="fa-solid fa-plus mr-1"></i> New Snippet
-        </button>
-        @endif
-    </div>
-</div>
+<x-page-header title="Code Snippets"
+    subtitle="Execute sandboxed PHP snippets across one or multiple WordPress sites in your fleet.">
+    @if ($canManage)
+        <x-slot:actions>
+            <button type="button" @click="isCreating = true; editingSnippet = { id: null, name: '', description: '', code: '' }" class="btn-pill-primary text-xs">
+                <i class="fa-solid fa-plus mr-1"></i> New Snippet
+            </button>
+        </x-slot:actions>
+    @endif
+</x-page-header>
 
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6" x-data="snippetWorkbench({
     snippets: {{ json_encode($snippets) }},
@@ -40,7 +32,7 @@
                 <span class="text-[10px] text-[var(--color-ink-muted)]" x-text="snippets.length + ' available'"></span>
             </div>
 
-            <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            <div class="space-y-1.5">
                 <template x-for="s in snippets" :key="s.id">
                     <div @click="selectSnippet(s)"
                          :class="selectedSnippet?.id === s.id ? 'bg-[var(--color-surface-alt)] border-[var(--color-brand)] shadow-sm' : 'border-transparent hover:bg-[var(--color-surface-alt)]/50'"
@@ -57,24 +49,24 @@
 
         {{-- Target Sites Card --}}
         <div class="card p-4">
-            <div class="flex items-center justify-between mb-3">
-                <div>
+            <div class="flex items-start justify-between gap-x-3 gap-y-1 flex-wrap mb-3">
+                <div class="min-w-0">
                     <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-server text-[var(--color-ink-soft)] mr-1"></i> Target Sites
                     </h3>
-                    <p class="text-[10px] text-[var(--color-ink-muted)]">Select up to 15 sites per run — more than that times out the request</p>
+                    <p class="text-[11px] text-[var(--color-ink-muted)]">Up to 15 sites per run (more times out the request)</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" @click="selectAllSites()" class="text-[10px] text-[var(--color-brand)] hover:underline">Select first 15</button>
+                <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+                    <button type="button" @click="selectAllSites()" class="text-xs text-[var(--color-brand)] hover:underline" title="Select the first 15 sites in the list">First 15</button>
                     <span class="text-[var(--color-border)]">|</span>
-                    <button type="button" @click="selectedSites = []" class="text-[10px] text-[var(--color-ink-soft)] hover:underline">Clear</button>
+                    <button type="button" @click="selectedSites = []" class="text-xs text-[var(--color-ink-muted)] hover:underline">Clear</button>
                 </div>
             </div>
 
             <input type="text" x-model="siteSearch" placeholder="Filter sites..."
                    class="text-xs w-full px-2.5 py-1.5 mb-2 rounded border border-[var(--color-border-light)] bg-[var(--color-surface)] outline-none focus:border-[var(--color-brand)]">
 
-            <div class="space-y-1 max-h-60 overflow-y-auto pr-1">
+            <div class="space-y-1 max-h-80 overflow-y-auto overscroll-contain pr-1">
                 <template x-for="site in filteredSites" :key="site.id">
                     <label class="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--color-surface-alt)] cursor-pointer text-xs">
                         <input type="checkbox" :value="site.id" x-model="selectedSites" :disabled="selectedSites.length >= 15 && !selectedSites.map(Number).includes(Number(site.id))" class="rounded text-[var(--color-brand)] focus:ring-0">

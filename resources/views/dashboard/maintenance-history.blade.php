@@ -23,7 +23,12 @@
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Total actions</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ number_format($totalCount) }}</div>
-            <div class="text-xs text-[var(--color-ink-soft)] mt-1 font-data">{{ $month->format('F Y') }}</div>
+            <div class="text-xs text-[var(--color-ink-soft)] mt-1 font-data">
+                {{ $month->format('F Y') }}
+                @if ($carePlansEnabled && ($serverOnlyCount ?? 0) > 0)
+                    · incl. {{ number_format($serverOnlyCount) }} server-level
+                @endif
+            </div>
         </div>
         @if ($carePlansEnabled)
             <div class="card px-4 py-3">
@@ -141,6 +146,11 @@
     <div class="card overflow-hidden mb-6">
         <div class="px-5 py-4 border-b border-[var(--color-border-light)]">
             <h2 class="font-display text-base font-semibold text-[var(--color-ink-strong)]">Per-site rollup</h2>
+            @if ($entriesCapped ?? false)
+                <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">
+                    Built from the latest {{ number_format($entryLimit) }} of {{ number_format($totalCount) }} actions. Narrow the filters to see the rest.
+                </p>
+            @endif
         </div>
         @if ($bySite->isEmpty())
             <div class="p-6 text-center text-sm text-[var(--color-ink-soft)]">

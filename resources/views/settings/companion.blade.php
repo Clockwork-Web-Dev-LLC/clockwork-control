@@ -146,8 +146,6 @@
             }
         }
     }">
-        @include('settings._tabs')
-
         <x-page-header title="White Label & Styling Hub"
             subtitle="Centralize all client-facing agency branding, WordPress Companion mu-plugin styling, automated Client Reports, and vulnerability notification emails in one place.">
             <x-slot:actions>
@@ -164,6 +162,8 @@
                 </form>
             </x-slot:actions>
         </x-page-header>
+
+        @include('settings._tabs')
 
         @if (session('status'))
             <div class="card p-4 mb-6 status-green flex items-center gap-2">

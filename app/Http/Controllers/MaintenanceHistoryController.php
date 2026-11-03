@@ -68,6 +68,9 @@ class MaintenanceHistoryController extends Controller
      */
     private const FILTER_ALL_UPDATES = '_updates';
 
+    /** Most rows listed on the page (the summary tiles count everything). */
+    private const ENTRY_LIMIT = 500;
+
     public function index(Request $request): View
     {
         // Default to current calendar month. month=YYYY-MM in URL.
@@ -98,11 +101,24 @@ class MaintenanceHistoryController extends Controller
             $query->whereIn('site_id', Site::withoutGlobalScopes()->where('care_plan_enabled', $careValue)->pluck('id'));
         }
 
+        // The rows on the page are capped; the summary tiles are not. They are computed
+        // with aggregate queries over the whole filtered month so "Total actions" is not
+        // stuck at the display cap and Covered + Non-care-plan + Server-level = Total.
         $entries = (clone $query)
             ->with(['site', 'server'])
             ->orderByDesc('ran_at')
-            ->limit(500)
+            ->limit(self::ENTRY_LIMIT)
             ->get();
+
+        $totalCount = (clone $query)->count();
+        $failedCount = (clone $query)->where('ok', false)->count();
+        $serverOnlyCount = (clone $query)->whereNull('site_id')->count();
+        $perSiteCounts = (clone $query)
+            ->whereNotNull('site_id')
+            ->selectRaw('site_id, COUNT(*) as aggregate')
+            ->groupBy('site_id')
+            ->pluck('aggregate', 'site_id')
+            ->map(fn ($count) => (int) $count);
 
         // Per-site rollup — one row per site that has activity in the window,
         // with action-type counts and care-plan flag (so we can render
@@ -131,11 +147,17 @@ class MaintenanceHistoryController extends Controller
         $serverOnly = $entries->whereNull('site_id');
 
         // Grand totals split by care plan (or unified if care plans disabled fleet-wide).
+        // Sites that no longer exist count as non-care-plan, as in the per-site rollup.
         if (Site::areCarePlansEnabled()) {
-            $coveredCount = $bySite->where('care_plan_enabled', true)->sum('total');
-            $billableCount = $bySite->where('care_plan_enabled', false)->sum('total');
+            $carePlanSiteIds = Site::withoutGlobalScopes()
+                ->whereIn('id', $perSiteCounts->keys())
+                ->where('care_plan_enabled', true)
+                ->pluck('id')
+                ->flip();
+            $coveredCount = $perSiteCounts->filter(fn ($count, $siteId) => $carePlanSiteIds->has($siteId))->sum();
+            $billableCount = $perSiteCounts->sum() - $coveredCount;
         } else {
-            $coveredCount = $bySite->sum('total');
+            $coveredCount = $perSiteCounts->sum();
             $billableCount = 0;
         }
 
@@ -170,9 +192,11 @@ class MaintenanceHistoryController extends Controller
             'serverOnly' => $serverOnly,
             'coveredCount' => $coveredCount,
             'billableCount' => $billableCount,
-            'serverOnlyCount' => $serverOnly->count(),
-            'totalCount' => $entries->count(),
-            'failedCount' => $entries->where('ok', false)->count(),
+            'serverOnlyCount' => $serverOnlyCount,
+            'totalCount' => $totalCount,
+            'failedCount' => $failedCount,
+            'entriesCapped' => $totalCount > $entries->count(),
+            'entryLimit' => self::ENTRY_LIMIT,
             'allSites' => $allSites,
             'actorOptions' => $actorOptions,
             'siteFilter' => $siteFilter,

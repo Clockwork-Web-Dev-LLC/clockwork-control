@@ -111,7 +111,8 @@
     <!-- ================================================================= -->
     <!-- TELEMETRY & FLEET KPI METRICS                                     -->
     <!-- ================================================================= -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="@container mb-6">
+    <div class="cw-kpi-grid grid grid-cols-2 @4xl:grid-cols-4 gap-3 @lg:gap-4">
         <!-- Metric 1: Fleet Health Score -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
@@ -120,10 +121,16 @@
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $healthPct }}%</span>
-                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Optimal</span>
+                @if ($alertCount > 0)
+                    <span class="text-xs font-semibold text-[var(--color-status-red)]">Needs attention</span>
+                @elseif ($watchCount > 0 || $healthyCount < $totalCount)
+                    <span class="text-xs font-semibold text-[var(--color-status-yellow)]">Watch</span>
+                @else
+                    <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Optimal</span>
+                @endif
             </div>
-            <div class="flex items-center gap-1.5 mt-2 text-xs font-data">
-                <span class="inline-flex items-center gap-1 text-[var(--color-status-green)] font-semibold">
+            <div class="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 mt-2 text-xs font-data">
+                <span class="inline-flex items-center gap-1 text-[var(--color-status-green)] font-semibold whitespace-nowrap">
                     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-status-green)]"></span>
                     {{ $healthyCount }} Healthy
                 </span>
@@ -147,19 +154,19 @@
         <!-- Metric 2: Active Hosted Sites -->
         <div class="cw-kpi-card flex flex-col justify-between">
             <div class="flex items-center justify-between text-xs text-[var(--color-ink-soft)] font-medium mb-1">
-                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold">Managed Sites</span>
+                <span class="font-mono uppercase tracking-wider text-[11px] font-semibold" title="Sites on the servers listed here (SpinupWP / GridPane / VPS). The Sites page also lists sites on managed hosts such as Pressable.">Server Sites</span>
                 <i class="fa-solid fa-globe text-xs text-[var(--color-ink-muted)]"></i>
             </div>
             <div class="flex items-baseline gap-2 mt-1">
                 <span class="text-3xl font-display font-bold text-[var(--color-ink-strong)] font-data">{{ $totalSites }}</span>
-                <span class="text-xs text-[var(--color-ink-soft)]">Active Domains</span>
+                <span class="text-xs text-[var(--color-ink-soft)]">on these servers</span>
             </div>
-            <div class="flex items-center justify-between text-xs text-[var(--color-ink-muted)] mt-2">
-                <a href="{{ route('sites.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1">
-                    <span>Sites Directory</span>
+            <div class="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-ink-muted)] mt-2">
+                <a href="{{ route('sites.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1 whitespace-nowrap">
+                    <span>All sites</span>
                     <i class="fa-solid fa-arrow-right text-[10px]"></i>
                 </a>
-                <span class="font-data text-[11px] text-[var(--color-ink-soft)]">{{ $totalCount > 0 ? round($totalSites / $totalCount, 1) : 0 }} / node</span>
+                <span class="font-data text-[11px] text-[var(--color-ink-soft)] whitespace-nowrap">{{ $totalCount > 0 ? round($totalSites / $totalCount, 1) : 0 }} / node</span>
             </div>
         </div>
 
@@ -193,8 +200,8 @@
                 </span>
                 <span class="text-xs text-[var(--color-ink-soft)]">{{ $pendingUpdates > 0 ? 'Pending Tasks' : 'All Up to Date' }}</span>
             </div>
-            <div class="flex items-center justify-between text-xs text-[var(--color-ink-muted)] mt-2">
-                <div class="flex items-center gap-1.5 font-data text-[11px]">
+            <div class="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-ink-muted)] mt-2">
+                <div class="flex items-center gap-1.5 font-data text-[11px] whitespace-nowrap">
                     <span class="{{ ($patchCounts['patches'] ?? 0) > 0 ? 'text-[var(--color-status-yellow)] font-semibold' : 'text-[var(--color-ink-soft)]' }}">
                         {{ $patchCounts['patches'] ?? 0 }} {{ Str::plural('patch', $patchCounts['patches'] ?? 0) }}
                     </span>
@@ -205,12 +212,13 @@
                         </span>
                     @endif
                 </div>
-                <a href="{{ route('operations.server-updates.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1 text-[11px]">
+                <a href="{{ route('operations.server-updates.index') }}" class="text-[var(--color-brand)] font-medium hover:underline flex items-center gap-1 text-[11px] whitespace-nowrap">
                     <span>Fleet Updates</span>
                     <i class="fa-solid fa-arrow-right text-[9px]"></i>
                 </a>
             </div>
         </div>
+    </div>
     </div>
 
     <!-- Status Flashes -->
@@ -237,7 +245,7 @@
                     <span class="text-[var(--color-ink-muted)]"> missing SSH credentials. Telemetry and IP banning are offline for these.</span>
                 </div>
             </div>
-            <a href="{{ route('servers.credentials.bulk') }}" class="btn-pill-nav text-xs font-semibold">
+            <a href="{{ route('servers.credentials.bulk') }}" class="btn-pill-nav text-xs font-semibold whitespace-nowrap shrink-0">
                 Set Credentials
             </a>
         </div>
@@ -322,7 +330,8 @@
         <!-- ============================================================= -->
         <!-- VIEW 1: CARDS GRID (Polymorphic: Modern SaaS or Dense HUD)    -->
         <!-- ============================================================= -->
-        <div x-show="viewMode === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div x-show="viewMode === 'cards'" x-cloak class="@container">
+        <div class="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-6">
             @foreach ($servers as $server)
                 @php
                     $meta = $statusMeta[$server->status] ?? $statusMeta[Server::STATUS_UNKNOWN];
@@ -388,7 +397,7 @@
                                 <a href="{{ route('servers.show', $server) }}" class="font-display font-bold text-base text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] truncate block transition-colors" title="{{ $server->name }}">
                                     {{ $server->display_name }}
                                 </a>
-                                <p class="text-xs text-[var(--color-ink-soft)] font-mono truncate mt-0.5">{{ $server->hostname }}</p>
+                                <p class="text-xs text-[var(--color-ink-soft)] font-mono truncate mt-0.5" title="{{ $server->hostname }}">{{ $server->hostname }}</p>
                             </div>
                             <span class="status-pill {{ $cardPill['class'] }} text-xs shrink-0">
                                 <span class="status-dot"></span>
@@ -397,7 +406,7 @@
                         </div>
 
                         <!-- Staging, Patches, SpinupWP/GridPane & Tags -->
-                        <div class="flex items-center gap-1.5 flex-wrap mb-3">
+                        <div class="flex items-center gap-1.5 flex-wrap mb-3 min-h-[1.5rem]">
                             @if ($server->spinupwp_id)
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border border-[var(--color-border-light)] bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]" title="SpinupWP server #{{ $server->spinupwp_id }}">
                                     <i class="fa-solid fa-bolt text-[10px] text-[var(--color-ink-muted)]"></i>
@@ -582,6 +591,7 @@
                     </div>
                 </div>
             @endforeach
+        </div>
         </div>
 
         <!-- ============================================================= -->

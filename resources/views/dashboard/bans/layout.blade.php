@@ -3,8 +3,9 @@
 @section('title', 'Bans · Clockwork')
 
 @section('content')
-    <x-page-header title="Bans"
-        subtitle="Triage the review queue, inspect currently banned IP addresses, and audit recent firewall decisions." />
+    {{-- Shared Security header + tab strip, above the stats so the tabs sit at the same
+         height on every Security tab. --}}
+    @include('security._tabs', ['intro' => 'Triage the review queue, inspect currently banned IP addresses, and audit recent firewall decisions.'])
 
     {{-- Stats strip — consistent across tabs. The auto-approve toggle from the
          queue page is hoisted up here so it's reachable from any tab. --}}
@@ -19,14 +20,14 @@
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Active bans</div>
             <div class="text-2xl font-display font-data text-[var(--color-ink-strong)]">{{ number_format($activeBansCount ?? 0) }}</div>
         </a>
-        <div class="card px-4 py-3 flex items-center justify-between gap-3">
-            <div>
+        <div class="card px-4 py-3 flex flex-col items-start justify-between gap-2">
+            <div class="min-w-0">
                 <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Auto-approve repeats</div>
-                <div class="text-sm mt-1">
+                <div class="text-sm mt-1 flex items-center gap-1.5 flex-wrap">
                     @if ($autoApproveEnabled ?? false)
                         <span class="status-pill status-green text-xs"><span class="status-dot"></span> On</span>
                         @if (! empty($autoApprovedRecently))
-                            <span class="text-xs text-[var(--color-ink-soft)] ml-1 font-data">{{ $autoApprovedRecently }} in last 24h</span>
+                            <span class="text-xs text-[var(--color-ink-soft)] font-data whitespace-nowrap" title="Auto-approved in the last 24 hours">{{ $autoApprovedRecently }} / 24h</span>
                         @endif
                     @else
                         <span class="status-pill status-unknown text-xs"><span class="status-dot"></span> Manual</span>
@@ -60,9 +61,6 @@
             </button>
         </div>
     </div>
-
-    {{-- Shared Security tab strip — Scans / Queue / Active / History. --}}
-    @include('security._tabs')
 
     {{-- Status banners (shared across tabs — both queue and IPs flash to these). --}}
     @if (session('queue_status') || session('ban_status'))

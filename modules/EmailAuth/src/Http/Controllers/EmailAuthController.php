@@ -51,7 +51,11 @@ class EmailAuthController extends Controller
             $query->whereNull('ignored_at')
                 ->where('last_overall_status', $status);
         } elseif ($status === 'unscanned') {
-            $query->whereNull('last_checked_at');
+            // Everything not ignored that has no pass/warn/fail result yet, so the summary
+            // cards (pass + warn + fail + ignored + unscanned) add up to the monitored total.
+            $query->whereNull('ignored_at')
+                ->where(fn ($q) => $q->whereNull('last_overall_status')
+                    ->orWhereNotIn('last_overall_status', ['pass', 'warn', 'fail']));
         }
 
         $domains = $query->orderBy('domain')->paginate(30)->withQueryString();
@@ -63,6 +67,7 @@ class EmailAuthController extends Controller
         $totalWarn = (clone $baseCountQuery)->whereNull('ignored_at')->where('last_overall_status', 'warn')->count();
         $totalFail = (clone $baseCountQuery)->whereNull('ignored_at')->where('last_overall_status', 'fail')->count();
         $totalIgnored = (clone $baseCountQuery)->whereNotNull('ignored_at')->count();
+        $totalUnscanned = max(0, $totalMonitored - $totalPass - $totalWarn - $totalFail - $totalIgnored);
 
         // Sites mapping per domain for count pills
         $siteCounts = Site::query()
@@ -83,6 +88,7 @@ class EmailAuthController extends Controller
             'totalWarn',
             'totalFail',
             'totalIgnored',
+            'totalUnscanned',
             'siteCounts',
             'isGlobalScanning'
         ));

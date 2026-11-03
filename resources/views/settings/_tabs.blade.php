@@ -78,7 +78,7 @@
             ['label' => 'Database Maintenance', 'icon' => 'fa-solid fa-database', 'route' => 'settings.maintenance.index', 'active' => request()->routeIs('settings.maintenance.*')],
             ['label' => 'Diagnostics & Health', 'icon' => 'fa-solid fa-stethoscope', 'route' => 'settings.diagnostics.index', 'active' => request()->routeIs('settings.diagnostics.*')],
             ['label' => 'Scheduled Jobs', 'icon' => 'fa-solid fa-clock', 'route' => 'settings.scheduled-jobs.index', 'active' => request()->routeIs('settings.scheduled-jobs.*')],
-            ['label' => 'Weird Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
+            ['label' => 'Fleet Stats', 'icon' => 'fa-solid fa-chart-pie', 'route' => 'settings.weird-stats.index', 'active' => request()->routeIs('settings.weird-stats.*')],
         ])),
     ];
 
@@ -123,7 +123,7 @@
     </div>
 
     {{-- Desktop: underline tab row --}}
-    <div class="hidden lg:flex items-center gap-1 border-b border-[var(--color-border-light)]">
+    <div class="hidden lg:flex cw-tab-bar">
         @foreach ($tabs as $t)
             <a href="{{ route($t['route']) }}"
                class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap

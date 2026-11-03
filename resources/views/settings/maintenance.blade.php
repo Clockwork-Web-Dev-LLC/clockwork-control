@@ -3,8 +3,6 @@
 @section('title', 'Maintenance · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Maintenance"
         subtitle="Operator utilities for keeping the Clockwork app itself healthy. Database backup is the big one today — download a snapshot here and store it securely.">
         <x-slot:actions>
@@ -18,6 +16,8 @@
             </a>
         </x-slot:actions>
     </x-page-header>
+
+    @include('settings._tabs')
 
     {{-- Roll-up metric tiles --}}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-3xl">

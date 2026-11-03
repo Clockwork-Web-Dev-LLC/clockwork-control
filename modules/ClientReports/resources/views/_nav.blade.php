@@ -24,7 +24,7 @@
     ];
 @endphp
 
-<div class="flex items-center gap-1 mb-6 border-b border-[var(--color-border-light)] overflow-x-auto">
+<div class="cw-tab-bar mb-6">
     @foreach ($navTabs as $tab)
         <a href="{{ route($tab['route']) }}"
            class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap

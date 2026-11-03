@@ -22,10 +22,10 @@
 @endphp
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Scheduling"
         subtitle="Plugin pull window plus how long raw nginx rows stay in threat_logs. Daily traffic rollups are kept forever." />
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
