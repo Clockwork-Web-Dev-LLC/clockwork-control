@@ -442,3 +442,209 @@ describe('SecurityScanRecorder', function () {
         expect($row->summary)->toBe('Core file integrity issue — 2 unexpected.');
     });
 });
+
+/**
+ * A Companion malware result carrying the given findings. Review-tier only
+ * (php_in_uploads etc.), so has_malware_hit stays false and only the
+ * new-PHP-in-uploads notice is in play.
+ *
+ * @param  list<array{kind: string, path: string}>  $findings
+ */
+function companionMalwareResult(Site $site, array $findings, string $status = SiteSecurityScan::STATUS_WARNING): SecurityScanResult
+{
+    return new SecurityScanResult(
+        site: $site,
+        scanType: SiteSecurityScan::TYPE_COMPANION_MALWARE,
+        status: $status,
+        modifiedFilesCount: count($findings),
+        summary: count($findings).' finding(s) via companion',
+        details: [
+            'transport' => 'companion',
+            'findings' => array_map(fn ($f) => $f + ['evidence' => 'PHP file under wp-content/uploads'], $findings),
+            'scanned_files_count' => 100,
+            'scan_aborted' => false,
+            'abort_reason' => null,
+        ],
+    );
+}
+
+function priorCompanionScan(Site $site, array $attributes): SiteSecurityScan
+{
+    return SiteSecurityScan::factory()->create(array_merge([
+        'site_id' => $site->id,
+        'scan_type' => SiteSecurityScan::TYPE_COMPANION_MALWARE,
+        'status' => SiteSecurityScan::STATUS_WARNING,
+        'has_malware_hit' => false,
+    ], $attributes));
+}
+
+describe('SecurityScanRecorder — failed scans and the malware alert', function () {
+    it('does not re-alert when a failed scan sits between two malware hits', function () {
+        $site = Site::factory()->create();
+        SiteSecurityScan::factory()->malwareFound()->create([
+            'site_id' => $site->id,
+            'scan_type' => SiteSecurityScan::TYPE_SITECHECK,
+            'scanned_at' => now()->subHours(2),
+        ]);
+        SiteSecurityScan::factory()->create([
+            'site_id' => $site->id,
+            'scan_type' => SiteSecurityScan::TYPE_SITECHECK,
+            'status' => SiteSecurityScan::STATUS_FAILED,
+            'has_malware_hit' => false,
+            'scanned_at' => now()->subHour(),
+        ]);
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('malwareFindingDetected');
+
+        $row = app(SecurityScanRecorder::class)->record(new SecurityScanResult(
+            site: $site,
+            scanType: SiteSecurityScan::TYPE_SITECHECK,
+            status: SiteSecurityScan::STATUS_ISSUES_FOUND,
+            hasMalwareHit: true,
+        ));
+
+        expect($row->has_malware_hit)->toBeTrue();
+    });
+
+    it('still alerts on clean → hit when a failed scan sits between them', function () {
+        $site = Site::factory()->create();
+        SiteSecurityScan::factory()->create([
+            'site_id' => $site->id,
+            'scan_type' => SiteSecurityScan::TYPE_SITECHECK,
+            'status' => SiteSecurityScan::STATUS_CLEAN,
+            'scanned_at' => now()->subHours(2),
+        ]);
+        SiteSecurityScan::factory()->create([
+            'site_id' => $site->id,
+            'scan_type' => SiteSecurityScan::TYPE_SITECHECK,
+            'status' => SiteSecurityScan::STATUS_FAILED,
+            'scanned_at' => now()->subHour(),
+        ]);
+
+        $this->mock(ChatNotifier::class)->shouldReceive('malwareFindingDetected')->once()->andReturn(true);
+
+        app(SecurityScanRecorder::class)->record(new SecurityScanResult(
+            site: $site,
+            scanType: SiteSecurityScan::TYPE_SITECHECK,
+            status: SiteSecurityScan::STATUS_ISSUES_FOUND,
+            hasMalwareHit: true,
+        ));
+    });
+});
+
+describe('SecurityScanRecorder — new PHP file in uploads notice', function () {
+    it('notifies only the paths the previous scan did not report, comparing normalized paths', function () {
+        $site = Site::factory()->create();
+        // An older row that stored the absolute path a managed host reported.
+        priorCompanionScan($site, [
+            'scanned_at' => now()->subDay(),
+            'details' => ['findings' => [
+                ['kind' => 'php_in_uploads', 'path' => '/srv/htdocs/wp-content/uploads/known.php', 'evidence' => 'x'],
+            ]],
+        ]);
+
+        $this->mock(ChatNotifier::class, function ($mock) use ($site) {
+            $mock->shouldNotReceive('malwareFindingDetected');
+            $mock->shouldReceive('phpInUploadsDetected')
+                ->once()
+                ->withArgs(fn (Site $s, SiteSecurityScan $scan, array $paths) => $s->is($site)
+                    && $scan->scan_type === SiteSecurityScan::TYPE_COMPANION_MALWARE
+                    && $paths === ['wp-content/uploads/2026/01/new.php'])
+                ->andReturn(true);
+        });
+
+        app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/known.php'],
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/2026/01/new.php'],
+        ]));
+    });
+
+    it('stays quiet when every path was already on the previous scan', function () {
+        $site = Site::factory()->create();
+        priorCompanionScan($site, [
+            'scanned_at' => now()->subDay(),
+            'details' => ['findings' => [
+                ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/known.php', 'evidence' => 'x'],
+            ]],
+        ]);
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('phpInUploadsDetected');
+
+        app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/known.php'],
+        ]));
+    });
+
+    it('diffs against the latest non-failed scan, so a failed scan in between does not re-alert', function () {
+        $site = Site::factory()->create();
+        priorCompanionScan($site, [
+            'scanned_at' => now()->subDays(2),
+            'details' => ['findings' => [
+                ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/known.php', 'evidence' => 'x'],
+            ]],
+        ]);
+        priorCompanionScan($site, [
+            'status' => SiteSecurityScan::STATUS_FAILED,
+            'scanned_at' => now()->subDay(),
+            'details' => ['error' => 'transport unavailable'],
+        ]);
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('phpInUploadsDetected');
+
+        app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/known.php'],
+        ]));
+    });
+
+    it('notifies every path on a site\'s first scan, since nobody has reviewed them yet', function () {
+        $site = Site::factory()->create();
+
+        $this->mock(ChatNotifier::class)->shouldReceive('phpInUploadsDetected')
+            ->once()
+            ->withArgs(fn (Site $s, SiteSecurityScan $scan, array $paths) => $paths === ['wp-content/uploads/a.php', 'wp-content/uploads/b.php'])
+            ->andReturn(true);
+
+        app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/a.php'],
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/b.php'],
+        ]));
+    });
+
+    it('ignores new paths of other finding kinds', function () {
+        $site = Site::factory()->create();
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('phpInUploadsDetected');
+
+        app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'preg_replace_e_modifier', 'path' => 'wp-content/plugins/legacy-vendor/x.php'],
+            ['kind' => 'wp_config_recently_modified', 'path' => 'wp-config.php'],
+        ]));
+    });
+
+    it('only applies to Companion malware scans', function () {
+        $site = Site::factory()->create();
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('phpInUploadsDetected');
+
+        app(SecurityScanRecorder::class)->record(new SecurityScanResult(
+            site: $site,
+            scanType: SiteSecurityScan::TYPE_SITECHECK,
+            status: SiteSecurityScan::STATUS_WARNING,
+            details: ['findings' => [['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/a.php']]],
+        ));
+    });
+
+    it('swallows a notifier exception so the scan row is still persisted', function () {
+        $site = Site::factory()->create();
+        $this->mock(ChatNotifier::class)
+            ->shouldReceive('phpInUploadsDetected')
+            ->once()
+            ->andThrow(new RuntimeException('webhook down'));
+
+        $row = app(SecurityScanRecorder::class)->record(companionMalwareResult($site, [
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/a.php'],
+        ]));
+
+        $this->assertDatabaseHas('site_security_scans', ['id' => $row->id, 'status' => SiteSecurityScan::STATUS_WARNING]);
+    });
+});

@@ -730,6 +730,64 @@ abstract class WebhookChatNotifier implements ChatNotifier
     }
 
     /**
+     * PHP files under wp-content/uploads that the previous scan of the site
+     * did not report (see SecurityScanRecorder). A review-tier signal, not a
+     * confirmed compromise, so it is amber rather than red. Paths come from
+     * the site's filesystem, so they are defanged before being posted:
+     * backticks and angle brackets could otherwise break the code span or
+     * form chat control sequences such as mentions.
+     *
+     * @param  list<string>  $paths
+     */
+    public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool
+    {
+        if (! $this->isEventEnabled('php_in_uploads_detected')) {
+            return false;
+        }
+
+        $paths = array_values(array_filter(
+            array_map(fn ($p) => is_string($p) ? trim($p) : '', $paths),
+            fn (string $p) => $p !== '',
+        ));
+        if ($paths === []) {
+            return false;
+        }
+
+        $domain = $site->domain;
+        $count = count($paths);
+        $shownLimit = 10;
+
+        $lines = array_map(
+            fn (string $p) => '• `'.mb_strimwidth(
+                str_replace(['`', '<', '>'], ["'", '‹', '›'], preg_replace('/[\x00-\x1F\x7F]/u', '', $p) ?? $p),
+                0,
+                200,
+                '…',
+            ).'`',
+            array_slice($paths, 0, $shownLimit),
+        );
+        if ($count > $shownLimit) {
+            $lines[] = sprintf('…and %d more', $count - $shownLimit);
+        }
+
+        $title = sprintf(':warning: %d new PHP file%s in uploads on %s', $count, $count === 1 ? '' : 's', $domain);
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#f59e0b',
+            'title' => $title,
+            'text' => implode("\n", $lines)."\n\nNot present on the previous scan. Review each file before suppressing it.",
+            'fields' => [
+                ['title' => 'Site', 'value' => $domain, 'short' => true],
+                ['title' => 'Server', 'value' => $site->server !== null ? $site->server->name : 'n/a', 'short' => true],
+                ['title' => 'Scan status', 'value' => (string) $scan->status, 'short' => true],
+                ['title' => 'Scan', 'value' => '#'.$scan->id, 'short' => true],
+            ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    /**
      * Fleet-level, not site-scoped — the backup relay droplet has no
      * connection back to this app (see PushBackupRelayTargets's docblock),
      * so PullBackupRelayReport can only infer silence from "no new

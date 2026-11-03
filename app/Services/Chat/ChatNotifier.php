@@ -91,6 +91,11 @@ interface ChatNotifier
             'description' => 'A security scan (Sucuri SiteCheck or the Companion in-WP probe) found malware on a site that was clean on its last scan.',
             'default' => true,
         ],
+        'php_in_uploads_detected' => [
+            'label' => 'New PHP file in uploads',
+            'description' => 'The Companion in-WP probe found a PHP file under wp-content/uploads that was not there on the site\'s previous scan. Each new path alerts once; files already present on the last scan stay quiet.',
+            'default' => true,
+        ],
         'backup_relay_stale' => [
             'label' => 'Backup relay silent',
             'description' => 'The offsite (S3 Glacier) backup relay droplet hasn\'t reported a new run in longer than its Sun+Wed cadence allows.',
@@ -198,6 +203,13 @@ interface ChatNotifier
     public function pluginUpdateAutoIgnored(Site $site, PluginUpdateJob $job, int $failures): bool;
 
     public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool;
+
+    /**
+     * @param  list<string>  $paths  PHP files under wp-content/uploads that the
+     *                               previous scan did not report, relative to
+     *                               the WordPress root
+     */
+    public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool;
 
     public function backupRelayStale(int $daysSinceLastRun, ?Carbon $lastRunAt = null): bool;
 

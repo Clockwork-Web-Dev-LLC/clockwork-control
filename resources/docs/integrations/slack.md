@@ -53,7 +53,7 @@ The webhook URL is the credential, same trust model as Mattermost's — don't co
 
 ### What we POST
 
-Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `serverWentRed`, `serverRecovered`, `aiRemedyTriaged`, `aiRemedyExecuted`, `ipBlocked`, `sslStateChanged`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`, `schedulerStale`/`schedulerRecovered`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
+Slack's incoming-webhook payload shape (`text` + `attachments`), same semantic helpers as `MattermostNotifier` (`send`, `siteWentDown`, `siteWentUp`, `serverWentRed`, `serverRecovered`, `aiRemedyTriaged`, `aiRemedyExecuted`, `ipBlocked`, `sslStateChanged`, `contactFormTestFailed`, `contactFormTestRecovered`, `companionUnreachable`/`companionReachable`, `pluginUpdateFailed`, `malwareFindingDetected`, `phpInUploadsDetected`, `serverUpdateFailed`, `backupRelayStale`/`backupRelayRecovered`, `queueWorkerRestartFailed`, `schedulerStale`/`schedulerRecovered`) since both implement the same `ChatNotifier` contract — see [Mattermost](/docs/integrations/mattermost) for what each one covers.
 
 ### Files
 
@@ -77,7 +77,7 @@ Clients don't need to know an IP got blocked or a plugin auto-update failed — 
 - `siteWentDown` / `siteWentUp` — "Your website example.com is currently unreachable" / "...is back online," with a link to your configured support URL (`CLOCKWORK_OPERATOR_SUPPORT_URL`) on the down message. No status codes, no server names.
 - `contactFormTestFailed` / `contactFormTestRecovered` — same tone, for the contact-form smoke test.
 
-Every other `ChatNotifier` method (`ipBlocked`, `sslStateChanged`, `pluginUpdateFailed`, `companionUnreachable`, `malwareFindingDetected`, generic `send`) is implemented as a hard `return false` — not gated by a setting, just a no-op by design. This is the one channel in the fan-out where "doesn't send most events" is intentional, not a missing feature.
+Every other `ChatNotifier` method (`ipBlocked`, `sslStateChanged`, `pluginUpdateFailed`, `companionUnreachable`, `malwareFindingDetected`, `phpInUploadsDetected`, generic `send`) is implemented as a hard `return false` — not gated by a setting, just a no-op by design. This is the one channel in the fan-out where "doesn't send most events" is intentional, not a missing feature.
 
 ### Why a site-level webhook instead of a Clockwork setting
 

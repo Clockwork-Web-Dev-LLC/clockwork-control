@@ -182,6 +182,14 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatch(fn (ChatNotifier $n) => $n->malwareFindingDetected($site, $scan));
     }
 
+    // Same reasoning as malwareFindingDetected: a PHP file newly dropped into
+    // uploads is a possible compromise, not a maintenance nag, so it is not
+    // gated on is_inactive either.
+    public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->phpInUploadsDetected($site, $scan, $paths));
+    }
+
     /**
      * Same as dispatch(), but short-circuits entirely for a site marked
      * is_inactive — used only by the "routine maintenance" event methods

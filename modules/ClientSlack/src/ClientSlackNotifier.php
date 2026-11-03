@@ -112,6 +112,11 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool
+    {
+        return false;
+    }
+
     public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool
     {
         return false;
