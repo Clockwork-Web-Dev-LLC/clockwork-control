@@ -183,6 +183,24 @@ describe('email version', function () {
             ->assertSee(route('client-reports.email', $report), false);
     });
 
+    it('shows the From line the client will see: the sending address under the report brand name', function () {
+        config(['mail.from.address' => 'reports@example.com', 'mail.from.name' => 'Internal Control App']);
+        app(CompanionBrandingManager::class)->saveReportsBranding(['company_name' => 'Example Agency']);
+        $user = User::factory()->create();
+        $site = Site::factory()->create(['domain' => 'from-line.example.com']);
+        $report = ClientReport::create([
+            'site_id' => $site->id, 'title' => 'From line', 'period_start' => now()->subMonth()->startOfMonth(),
+            'period_end' => now()->subMonth()->endOfMonth(),
+            'sections_data' => app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()),
+            'client_email' => 'a@example.com', 'status' => 'generated',
+        ]);
+
+        $this->actingAs($user)->get(route('client-reports.email', $report))
+            ->assertOk()
+            ->assertSee('Example Agency <reports@example.com>')
+            ->assertDontSee('Internal Control App');
+    });
+
     it('shows the plain-text part too, and says so when everyone already has the report', function () {
         $user = User::factory()->create();
         $site = Site::factory()->create(['domain' => 'text-part.test']);

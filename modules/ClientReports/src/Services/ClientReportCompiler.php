@@ -18,12 +18,11 @@ use App\Models\SiteWorkLog;
 use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\PluginVulnerabilityMatcher;
-use App\Support\Settings;
 use Illuminate\Support\Carbon;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     /** How many of the period's final days the backups list shows. */
     public const BACKUP_LIST_DAYS = 10;
@@ -42,7 +41,6 @@ class ClientReportCompiler
     protected ?bool $vulnerabilityFeedFresh = null;
 
     public function __construct(
-        protected Settings $settings,
         protected PluginVulnerabilityMatcher $vulnerabilities,
         protected SiteBackupRecorder $backups,
     ) {}
@@ -74,7 +72,9 @@ class ClientReportCompiler
                 'compiled_at' => now()->toIso8601String(),
                 'period_start' => $start->toDateString(),
                 'period_end' => $end->toDateString(),
-                'period_days' => $start->diffInDays($end) + 1,
+                // Carbon 3's diffInDays is a float, and $end is the last
+                // microsecond of the day, so round to whole days (31 for October).
+                'period_days' => (int) round($start->diffInDays($end)),
                 'custom_notes' => $customNotes,
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
@@ -119,30 +119,28 @@ class ClientReportCompiler
         return $data;
     }
 
+    /**
+     * The report's branding, captured at compile time. The support URL falls
+     * back to the agency website and never to Control's own URL: Control runs
+     * on a private host (often localhost) that clients can't reach. A blank
+     * Companion support URL is meaningful there (it hides the support
+     * button), so the fallback lives here rather than in the branding manager.
+     */
     protected function compileBranding(): array
     {
-        if (class_exists(CompanionBrandingManager::class)) {
-            $reportsBranding = app(CompanionBrandingManager::class)->getReportsBranding();
+        $reportsBranding = app(CompanionBrandingManager::class)->getReportsBranding();
 
-            return [
-                'company_name' => $reportsBranding['company_name'] ?: config('app.name', 'Clockwork Control'),
-                'support_url' => $reportsBranding['support_url'] ?: config('app.url'),
-                'support_email' => $reportsBranding['support_email'] ?: config('mail.from.address'),
-                'logo_url' => $reportsBranding['logo_url'],
-                'primary_color' => $reportsBranding['primary_color'],
-                'accent_color' => $reportsBranding['accent_color'],
-                'footer_text' => $reportsBranding['footer_text'],
-            ];
-        }
+        $supportUrl = trim($reportsBranding['support_url']);
+        $companyUrl = trim($reportsBranding['company_url']);
 
         return [
-            'company_name' => $this->settings->get('companion.branding.company_name') ?: ($this->settings->get('companion.company_name') ?: config('app.name', 'Clockwork Control')),
-            'support_url' => $this->settings->get('companion.branding.support_url') ?: ($this->settings->get('companion.support_url') ?: config('app.url')),
-            'support_email' => $this->settings->get('companion.branding.support_email') ?: ($this->settings->get('companion.support_email') ?: config('mail.from.address')),
-            'logo_url' => $this->settings->get('companion.branding.logo_url') ?: $this->settings->get('companion.logo_url'),
-            'primary_color' => '#2D2062',
-            'accent_color' => '#7EFF83',
-            'footer_text' => '',
+            'company_name' => $reportsBranding['company_name'] ?: config('app.name', 'Clockwork Control'),
+            'support_url' => $supportUrl !== '' ? $supportUrl : ($companyUrl !== '' ? $companyUrl : null),
+            'support_email' => $reportsBranding['support_email'] ?: config('mail.from.address'),
+            'logo_url' => $reportsBranding['logo_url'],
+            'primary_color' => $reportsBranding['primary_color'],
+            'accent_color' => $reportsBranding['accent_color'],
+            'footer_text' => $reportsBranding['footer_text'],
         ];
     }
 
@@ -295,7 +293,8 @@ class ClientReportCompiler
      */
     protected function compileUptime(Site $site, Carbon $start, Carbon $end): array
     {
-        $totalMinutes = max(1, (int) $start->diffInMinutes($end));
+        // $end is the last microsecond of the day: round, or a 31-day month is 44,639 minutes.
+        $totalMinutes = max(1, (int) round($start->diffInMinutes($end)));
         $periodEnd = $end->copy()->min(now());
 
         $priorEvent = SiteUptimeEvent::query()

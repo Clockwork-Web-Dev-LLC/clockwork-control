@@ -3,6 +3,7 @@
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
@@ -117,6 +118,43 @@ it('has a client-friendly subject and replies go to support', function () {
 
     $mail->assertHasSubject('Your September 2026 website report — example-client.org');
     $mail->assertHasReplyTo('support@clockwork.test');
+});
+
+it('sends from the configured address under the report brand name, not MAIL_FROM_NAME', function () {
+    config(['mail.from.address' => 'reports@example.com', 'mail.from.name' => 'Internal Control App']);
+    $mail = new ClientReportMail(clientReportMailFixture(['branding' => ['company_name' => 'Example Agency']]));
+
+    $mail->assertFrom('reports@example.com', 'Example Agency');
+    expect($mail->envelope()->from?->name)->toBe('Example Agency');
+
+    // The header that actually goes out, through the array transport.
+    Mail::to('client@example.com')->send($mail);
+    $from = app('mail.manager')->mailer()->getSymfonyTransport()->messages()->last()->getOriginalMessage()->getFrom();
+
+    expect($from)->toHaveCount(1)
+        ->and($from[0]->getAddress())->toBe('reports@example.com')
+        ->and($from[0]->getName())->toBe('Example Agency');
+});
+
+it('leaves the global From in place when no sending address is configured', function () {
+    config(['mail.from.address' => null]);
+
+    expect((new ClientReportMail(clientReportMailFixture()))->envelope()->from)->toBeNull();
+});
+
+it('prints the footer text in the plain-text part when one is set', function () {
+    $mail = new ClientReportMail(clientReportMailFixture(['branding' => ['footer_text' => 'Example Agency, 1 Example Street']]));
+    $content = $mail->content();
+    $text = view($content->text, $content->with)->render();
+
+    expect($text)->toContain("Example Agency, 1 Example Street\n\nQuestions about anything in this report?")
+        ->and($mail->render())->toContain('Example Agency, 1 Example Street');
+
+    // No footer set: no stray blank block before the sign-off.
+    $plain = new ClientReportMail(clientReportMailFixture());
+    $content = $plain->content();
+
+    expect(view($content->text, $content->with)->render())->not->toContain("\n\n\nQuestions about anything");
 });
 
 it('cleans raw action-log summaries', function (string $summary, ?string $target, string $expected) {

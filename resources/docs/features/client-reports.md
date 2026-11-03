@@ -2,7 +2,7 @@
 title: Client reports
 section: Features
 order: 101
-updated: 2026-10-22
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [client-reports, reporting, email, care-plans, scheduling, templates]
 tracks: [modules/ClientReports/**]
@@ -59,7 +59,7 @@ The rule for every section: **if we didn't check it during the period, the repor
 | `backups` | `site_backups`: what the site's **real** backup source reported, recorded daily by `clockwork:record-site-backups` (05:30). Pressable → Pressable's backup API (files daily, plus one database backup per day); SpinupWP → the DigitalOcean Spaces bucket SpinupWP writes to; unhosted sites → our own S3 archives (Companion uploads). The email lists the **last 10 days of the period**, one row per day, plus how many days that month had a backup. That count is left out when our records for the site start after the period's first day (`covers_period` false): Pressable keeps only ~8 days, so the month we started recording would otherwise read as "backed up on 9 days". A day's size counts one backup of each kind (the newest scheduled one), so extra on-demand or hourly backups don't inflate it. | In period | Section hidden from the client. The preview shows **No backups found** (checked, none), **No backups in the last 10 days** (backups stopped mid-period) or **Could not check** (read failed, or no clean check in 48h), with the error. |
 | `work_log` | `site_work_logs` (hours entered on the site page) | In period | Section hidden |
 
-Every compiled report carries `meta.schema_version` (currently **3**: 2 = honesty fixes, 3 = recorded backups list). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
+Every compiled report carries `meta.schema_version` (currently **4**: 2 = honesty fixes, 3 = recorded backups list, 4 = whole-number period lengths and the support URL fix below). `meta.period_days` is the period's length in whole days (31 for October). Reports compiled before the honesty fixes have no version. The views treat their vulnerability line as "Not checked" and hide their forms numbers, because those were computed wrongly.
 
 ### Backup recording
 
@@ -107,13 +107,13 @@ Careful: `--force` and **Send now** send for real on an `auto` schedule. On a de
 
 ## The email
 
-`ClientReportMail` puts the whole report in the email body: an HTML view plus a plain-text one (`emails/report*.blade.php`). The logo is embedded inline via `BrandLogo` so it still shows when remote images are blocked. Update rows are cleaned up into client-friendly lines ("TranslatePress 3.3.6 → 3.3.7"). Reply-To is the report brand's support email.
+`ClientReportMail` puts the whole report in the email body: an HTML view plus a plain-text one (`emails/report*.blade.php`). The logo is embedded inline via `BrandLogo` so it still shows when remote images are blocked. Update rows are cleaned up into client-friendly lines ("TranslatePress 3.3.6 → 3.3.7"). The From line is the configured sending address (`MAIL_FROM_ADDRESS`) under the report brand's company name, so the inbox shows the agency whatever `MAIL_FROM_NAME` says; the **Email version** page shows it. Reply-To is the report brand's support email. The footer text, when set, appears in both the HTML and plain-text parts.
 
 There's deliberately **no "view online" link**: Control lives on a private network clients can't reach. That's also why the public `/reports/view/{token}` route exists but isn't linked anywhere useful.
 
 ## Branding
 
-Colours, logo, company name and support details come from **Settings → Companion & White Label → Client Reports** (`/settings/companion?tab=reports`, stored as `reports.branding.*`). Blank fields fall back to the shared Companion identity. See [Companion & White Label](/docs/features/companion-branding).
+Colours, logo, company name and support details come from **Settings → Companion & White Label → Client Reports** (`/settings/companion?tab=reports`, stored as `reports.branding.*`). Blank fields fall back to the shared Companion identity. The support URL falls back from the reports value to the shared Companion support URL, then to the Agency Website; it never falls back to Control's own URL (`APP_URL`), which is private. The settings form only accepts public http(s) addresses there, not localhost or private-network hosts. The email doesn't link to it today; it's stored with each report. See [Companion & White Label](/docs/features/companion-branding).
 
 The **primary colour** fills the header banner of both the email and the operator preview (and the section underlines); the logo sits on it, so use a logo that reads on that colour. The preview keeps the colours when printed or saved as a PDF. Because branding is captured in the snapshot, regenerate a report to see a colour change.
 

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Process\BackgroundArtisan;
 use App\Services\Process\BackgroundArtisanResult;
+use App\Support\Settings;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -323,7 +324,8 @@ describe('CompanionSettingsController', function () {
                 ->assertSee('Primary Brand Color')
                 ->assertSee('Accent Strip')
                 ->assertSee('Website Care Report')
-                ->assertSee('Email Header Background', false);
+                ->assertSee('Email Header Background', false)
+                ->assertSee('Leave empty to use the Companion Support Portal URL, then your Agency Website', false);
         });
 
         it('saves custom reports branding and redirects to reports tab', function () {
@@ -380,6 +382,73 @@ describe('CompanionSettingsController', function () {
             ]);
 
             $response->assertSessionHasErrors(['support_email']);
+        });
+
+        it('rejects a reports support URL clients could not reach', function (string $url) {
+            $user = User::factory()->create();
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'reports',
+                'support_url' => $url,
+            ])->assertSessionHasErrors(['support_url']);
+
+            expect(app(CompanionBrandingManager::class)->getReportsBranding()['support_url'])->not->toBe($url);
+        })->with([
+            'localhost' => 'http://localhost:8000',
+            'loopback IPv4' => 'http://127.0.0.1:8000/support',
+            'loopback IPv6' => 'http://[::1]:8000/',
+            'private network' => 'http://10.0.0.5/help',
+            'link-local' => 'http://169.254.10.10/',
+            'single-label host' => 'http://intranet/help',
+            'internal-only name' => 'https://control.internal/help',
+            'mDNS name' => 'https://office.local/help',
+            'not http(s)' => 'ftp://example.com/support',
+            'not a URL' => 'support page',
+        ]);
+
+        it('rejects this app\'s own URL as the reports support URL', function () {
+            config(['app.url' => 'https://control.example.com']);
+            $user = User::factory()->create();
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'reports',
+                'support_url' => 'https://control.example.com/help',
+            ])->assertSessionHasErrors(['support_url']);
+        });
+
+        it('accepts a blank reports support URL, and a public one', function () {
+            $user = User::factory()->create();
+            $manager = app(CompanionBrandingManager::class);
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'reports',
+                'support_url' => '',
+            ])->assertSessionHasNoErrors()->assertRedirect(route('settings.companion.index', ['tab' => 'reports']));
+            expect(app(Settings::class)->get('reports.branding.support_url'))->toBe('');
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'tab' => 'reports',
+                'support_url' => 'https://example.com/support',
+            ])->assertSessionHasNoErrors();
+            expect($manager->getReportsBranding()['support_url'])->toBe('https://example.com/support');
+        });
+
+        it('rejects localhost for the shared support and agency website URLs but still allows a blank support URL', function () {
+            $user = User::factory()->create();
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'company_url' => 'http://localhost:8000',
+                'support_url' => 'http://127.0.0.1/help',
+            ])->assertSessionHasErrors(['company_url', 'support_url']);
+
+            $this->actingAs($user)->patch(route('settings.companion.update'), [
+                'company_url' => 'https://example.com',
+                'support_url' => '',
+            ])->assertSessionHasNoErrors();
+
+            $branding = app(CompanionBrandingManager::class)->get();
+            expect($branding['company_url'])->toBe('https://example.com')
+                ->and($branding['support_url'])->toBe('');
         });
 
         it('resets reports styling to defaults', function () {

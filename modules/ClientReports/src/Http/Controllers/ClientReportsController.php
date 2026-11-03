@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 use Modules\ClientReports\Mail\ClientReportMail;
@@ -107,10 +108,14 @@ class ClientReportsController extends Controller
         $report->load('site.client', 'schedule');
         $mail = new ClientReportMail($report);
         $content = $mail->content();
+        $envelope = $mail->envelope();
+        // With no From on the envelope, Laravel sends from the global address.
+        $from = $envelope->from ?? new Address((string) config('mail.from.address'), (string) config('mail.from.name'));
 
         return view('client-reports::reports.email', [
             'report' => $report,
-            'subject' => $mail->envelope()->subject,
+            'from' => $from->name !== null && $from->name !== '' ? "{$from->name} <{$from->address}>" : $from->address,
+            'subject' => $envelope->subject,
             'html' => $mail->render(),
             // Plain-text clients get this part instead.
             'text' => view($content->text, $content->with)->render(),

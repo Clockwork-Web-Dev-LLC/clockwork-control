@@ -7,6 +7,7 @@ use App\Mail\SiteVulnerabilityReportMail;
 use App\Models\Site;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Process\BackgroundArtisan;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -139,7 +140,7 @@ class CompanionSettingsController extends Controller
                 'enabled' => 'nullable|boolean',
                 'company_name' => 'nullable|string|max:120',
                 'support_email' => 'nullable|email|max:120',
-                'support_url' => 'nullable|string|max:255',
+                'support_url' => self::publicUrlRules(),
                 'primary_color' => CompanionBrandingManager::hexColorRules(),
                 'accent_color' => CompanionBrandingManager::hexColorRules(),
                 'footer_text' => 'nullable|string|max:500',
@@ -209,9 +210,9 @@ class CompanionSettingsController extends Controller
         $validated = $request->validate([
             'enabled' => 'nullable|boolean',
             'company_name' => 'nullable|string|max:120',
-            'company_url' => 'nullable|string|max:255',
+            'company_url' => self::publicUrlRules(),
             'support_email' => 'nullable|email|max:120',
-            'support_url' => 'nullable|string|max:255',
+            'support_url' => self::publicUrlRules(),
             'plugin_name' => 'nullable|string|max:120',
             'plugin_description' => 'nullable|string|max:500',
             'menu_title' => 'nullable|string|max:60',
@@ -418,5 +419,60 @@ class CompanionSettingsController extends Controller
                 'error' => 'Mail send failed: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Rules for an address clients are sent to (agency website, support
+     * portal). Blank is allowed. A value must be a public http(s) URL: not
+     * localhost, a private or reserved IP, an internal-only name, or
+     * Control's own URL (APP_URL), which runs on a private host clients
+     * can't reach.
+     *
+     * @return list<mixed>
+     */
+    private static function publicUrlRules(): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:255',
+            'url:http,https',
+            function (string $attribute, mixed $value, Closure $fail): void {
+                $host = is_string($value) ? parse_url($value, PHP_URL_HOST) : null;
+
+                // Not a URL at all: the url rule already says so.
+                if (! is_string($host) || $host === '') {
+                    return;
+                }
+
+                if (! self::isPublicHost($host)) {
+                    $fail('The :attribute must be a public web address clients can reach, not localhost, a private network address or this app\'s own URL.');
+                }
+            },
+        ];
+    }
+
+    private static function isPublicHost(string $host): bool
+    {
+        $host = rtrim(strtolower(trim($host, '[]')), '.');
+
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_GLOBAL_RANGE) !== false;
+        }
+
+        // Single-label names (localhost, intranet hosts) don't resolve publicly.
+        if (! str_contains($host, '.')) {
+            return false;
+        }
+
+        foreach (['.localhost', '.local', '.internal', '.lan', '.home.arpa', '.test', '.invalid'] as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return false;
+            }
+        }
+
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+        return ! is_string($appHost) || $host !== rtrim(strtolower($appHost), '.');
     }
 }

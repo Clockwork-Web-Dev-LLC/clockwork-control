@@ -25,6 +25,7 @@
     </div>
 
     <div class="bg-white rounded-xl border border-slate-200 p-4 text-sm space-y-1.5">
+        <div><span class="inline-block w-20 text-slate-500">From</span>{{ $from ?? '' }}</div>
         <div><span class="inline-block w-20 text-slate-500">To</span>{{ $toLabel }}</div>
         @if (! empty($report->sent_to))
             <div><span class="inline-block w-20 text-slate-500">Sent to</span>{{ implode(', ', $report->sent_to) }}</div>

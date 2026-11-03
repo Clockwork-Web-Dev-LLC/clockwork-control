@@ -114,6 +114,10 @@ ADDITIONAL WORK THIS MONTH
 - {!! \Illuminate\Support\Carbon::parse($entry['worked_on'])->format('M j') !!}: {!! $entry['description'] !!} ({!! $entry['hours'] !!}h)
 @endforeach
 @endif
+@if ($branding['footer_text'] !== '')
+
+{!! $branding['footer_text'] !!}
+@endif
 
 Questions about anything in this report? Just reply to this email{!! $branding['support_email'] !== '' ? ' or write to '.$branding['support_email'] : '' !!}.
 

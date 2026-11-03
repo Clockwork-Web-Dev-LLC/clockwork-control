@@ -36,9 +36,25 @@ class ClientReportMail extends Mailable
             : [];
 
         return new Envelope(
+            from: $this->fromAddress(),
             subject: sprintf('Your %s website report — %s', $this->report->period_start->format('F Y'), $this->domain()),
             replyTo: $replyTo,
         );
+    }
+
+    /**
+     * The configured sending address under the report brand's company name,
+     * so the inbox shows the agency rather than whatever MAIL_FROM_NAME says
+     * (by default the internal product name). Null leaves Laravel's global
+     * From in place when no sending address is configured.
+     */
+    public function fromAddress(): ?Address
+    {
+        $address = (string) config('mail.from.address');
+
+        return filter_var($address, FILTER_VALIDATE_EMAIL)
+            ? new Address($address, $this->branding()['company_name'])
+            : null;
     }
 
     public function content(): Content
