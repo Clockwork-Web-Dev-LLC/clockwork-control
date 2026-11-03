@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Console\Commands\RunNightlyPluginUpdates;
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
 use App\Models\PluginUpdateFailureStreak;
@@ -9,7 +10,11 @@ use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\PluginVulnerability;
 use App\Models\Site;
+use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
+use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 
 /*
@@ -271,8 +276,14 @@ describe('CVE-priority ordering', function () {
  * an auto_failure ignore row plus a streak recording the version that kept
  * failing. Pass null to leave the streak out.
  */
-function pauseAfterFailures(Site $site, string $slug, ?string $failedVersion, string $kind = PluginUpdateJob::KIND_PLUGIN): PluginUpdateIgnore
-{
+function pauseAfterFailures(
+    Site $site,
+    string $slug,
+    ?string $failedVersion,
+    string $kind = PluginUpdateJob::KIND_PLUGIN,
+    ?Carbon $lastFailedAt = null,
+    ?string $reasonCode = null,
+): PluginUpdateIgnore {
     $ignore = PluginUpdateIgnore::create([
         'site_id' => $site->id,
         'target_kind' => $kind,
@@ -291,7 +302,8 @@ function pauseAfterFailures(Site $site, string $slug, ?string $failedVersion, st
             'consecutive_failures' => 5,
             'last_from_version' => '1.0.0',
             'last_target_version' => $failedVersion,
-            'last_failed_at' => now()->subDay(),
+            'last_failed_at' => $lastFailedAt ?? now()->subDay(),
+            'reason_code' => $reasonCode,
             'ignored_at' => now()->subDay(),
             'ignore_id' => $ignore->id,
         ]);
@@ -374,7 +386,7 @@ describe('auto-failure pauses', function () {
         Queue::assertPushed(RunThemeUpdate::class, fn ($job) => $job->jobRowId === $row->id);
     });
 
-    it('retries an auto-paused vulnerable plugin when the offered version contains the fix, even if that version failed before', function () {
+    it('retries an auto-paused vulnerable plugin when the offered version contains the fix, even if that version failed before, once the back-off has passed', function () {
         Queue::fake();
 
         vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
@@ -385,7 +397,7 @@ describe('auto-failure pauses', function () {
                 ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
             ]),
         ]);
-        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0');
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0', lastFailedAt: now()->subDays(RunNightlyPluginUpdates::SECURITY_RETRY_BACKOFF_DAYS + 1));
 
         $this->artisan('clockwork:run-nightly-plugin-updates')
             ->expectsOutputToContain('Retrying 1 auto-paused update (0 new release, 1 security fix)')
@@ -394,6 +406,86 @@ describe('auto-failure pauses', function () {
         $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
         expect($row->target_version)->toBe('1.1.0');
         Queue::assertPushed(RunPluginUpdate::class, 1);
+    });
+
+    it('keeps a security fix paused when that same version already failed within the back-off', function () {
+        Queue::fake();
+
+        vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0', lastFailedAt: now()->subDay());
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(0);
+        Queue::assertNothingPushed();
+    });
+
+    it('never retries the same security fix version that failed for a licence or offer reason, however long ago', function (string $reason) {
+        Queue::fake();
+
+        vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0', lastFailedAt: now()->subDays(30), reasonCode: $reason);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    })->with([UpgraderOutput::REASON_DOWNLOAD_UNAUTHORIZED, UpgraderOutput::REASON_NO_PACKAGE, UpgraderOutput::REASON_NOT_OFFERED]);
+
+    it('tries a newer security fix version at once, whatever the last failure was', function () {
+        Queue::fake();
+
+        vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.2.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.1.0', lastFailedAt: now()->subDay(), reasonCode: UpgraderOutput::REASON_DOWNLOAD_UNAUTHORIZED);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain('Retrying 1 auto-paused update (0 new release, 1 security fix)')
+            ->assertSuccessful();
+
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->target_version)->toBe('1.2.0');
+    });
+
+    it('tries a security fix only once a week when every retry fails, not every night', function () {
+        Queue::fake();
+
+        vulnerableAdvisory('vuln-plugin', '1.0.0', '1.1.0');
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'vuln-plugin/vuln-plugin.php', 'name' => 'Vuln Plugin', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'vuln-plugin/vuln-plugin.php', '1.0.5', lastFailedAt: now()->subDay());
+
+        $queuedOn = [];
+        for ($night = 0; $night < 9; $night++) {
+            $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+            if (PluginUpdateJob::query()->where('site_id', $site->id)->where('status', PluginUpdateJob::STATUS_PENDING)->exists()) {
+                $queuedOn[] = $night;
+            }
+            failAllNightlyJobs();
+            $this->travel(1)->days();
+        }
+
+        // Night 0 is the first try of 1.1.0; the next is a week later.
+        expect($queuedOn)->toBe([0, RunNightlyPluginUpdates::SECURITY_RETRY_BACKOFF_DAYS]);
     });
 
     it('keeps a vulnerable plugin paused when the offered version is below the highest patched_in', function () {
@@ -432,6 +524,66 @@ describe('auto-failure pauses', function () {
 
         Queue::assertNothingPushed();
     });
+
+    it('records a queued new-release retry as that version\'s attempt', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'stuck-plugin/stuck-plugin.php', 'name' => 'Stuck Plugin', 'version' => '1.0.0', 'new_version' => '1.2.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'stuck-plugin/stuck-plugin.php', '1.1.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        $streak = PluginUpdateFailureStreak::query()->where('site_id', $site->id)->sole();
+        expect($streak->last_target_version)->toBe('1.2.0')
+            ->and($streak->last_from_version)->toBe('1.0.0')
+            ->and($streak->last_retry_queued_at)->not->toBeNull()
+            // Queueing isn't a failure.
+            ->and($streak->consecutive_failures)->toBe(5);
+    });
+
+    it('tries a new release once, even when the retry ends without a counted failure', function (string $ending) {
+        Queue::fake();
+        $this->mock(ChatNotifier::class)->shouldIgnoreMissing();
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_secret' => 'example-secret-for-tests',
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'stuck-plugin/stuck-plugin.php', 'name' => 'Stuck Plugin', 'version' => '1.0.0', 'new_version' => '2.1.0', 'update_available' => true],
+            ]),
+        ]);
+        pauseAfterFailures($site, 'stuck-plugin/stuck-plugin.php', '2.0.0');
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+
+        match ($ending) {
+            // Companion answered 504: a transport error, never counted.
+            'transport' => (function () use ($site, $row) {
+                Http::fake(["https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response(['message' => 'gateway timeout'], 504)]);
+                (new RunPluginUpdate($row->id))->handle(app(ActionLogger::class));
+            })(),
+            // The worker timed out: only failed() runs.
+            'timeout' => (new RunPluginUpdate($row->id))->failed(new \RuntimeException('timed out')),
+            // Never picked up: the reaper marks it failed.
+            'reaped' => (function () use ($row) {
+                $row->forceFill(['queued_at' => now()->subHours(2)])->save();
+                $this->artisan('clockwork:reap-stale-update-jobs')->assertSuccessful();
+            })(),
+        };
+
+        expect($row->fresh()->status)->toBe(PluginUpdateJob::STATUS_FAILED);
+
+        $this->travel(1)->days();
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(1);
+    })->with(['transport', 'timeout', 'reaped']);
 
     it('never retries a manually ignored plugin, even for a new release that fixes a vulnerability', function () {
         Queue::fake();

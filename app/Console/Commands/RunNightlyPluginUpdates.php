@@ -9,6 +9,7 @@ use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\Site;
 use App\Services\Security\PluginVulnerabilityMatcher;
+use App\Support\UpgraderOutput;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -46,6 +47,23 @@ class RunNightlyPluginUpdates extends Command
     public const BYPASS_NEW_VERSION = 'new_version';
 
     public const BYPASS_SECURITY_FIX = 'security_fix';
+
+    /**
+     * A security fix whose version already failed (or was already retried)
+     * is retried at most once in this many days, so a pause that a retry
+     * cannot clear doesn't become a nightly failure ping again.
+     */
+    public const SECURITY_RETRY_BACKOFF_DAYS = 7;
+
+    /**
+     * Failures a retry of the same version can't fix: the licence or the
+     * update offer needs an operator. Only a new version is tried again.
+     */
+    public const OPERATOR_ONLY_REASONS = [
+        UpgraderOutput::REASON_DOWNLOAD_UNAUTHORIZED,
+        UpgraderOutput::REASON_NO_PACKAGE,
+        UpgraderOutput::REASON_NOT_OFFERED,
+    ];
 
     public function handle(PluginVulnerabilityMatcher $vulnMatcher): int
     {
@@ -267,6 +285,21 @@ class RunNightlyPluginUpdates extends Command
                         'queued_at' => Carbon::now(),
                     ]);
 
+                    // A retry of an auto-paused slug counts as that version's
+                    // attempt from now, however the job ends: a timeout, the
+                    // reaper or a transport error never reaches the streak
+                    // recorder, and the pause must still hold for it tomorrow.
+                    if ($t['pause_bypass'] !== null) {
+                        PluginUpdateFailureStreak::updateOrCreate(
+                            ['site_id' => $t['site']->id, 'target_kind' => $t['kind'], 'target_slug' => $t['slug']],
+                            [
+                                'last_target_version' => $t['target_version'],
+                                'last_from_version' => $t['before_version'],
+                                'last_retry_queued_at' => Carbon::now(),
+                            ],
+                        );
+                    }
+
                     match ($t['kind']) {
                         PluginUpdateJob::KIND_THEME => RunThemeUpdate::dispatch($row->id),
                         default => RunPluginUpdate::dispatch($row->id),
@@ -457,11 +490,15 @@ class RunNightlyPluginUpdates extends Command
      * Manual ignores always win. An auto-failure pause (the slug failed the
      * nightly loop N times in a row) is let through, and the tuple tagged
      * with why, when either:
-     *   - the offered version differs from the version that kept failing
-     *     (a new release since the pause; one attempt per new version,
-     *     because a failed attempt records it as the new last target), or
+     *   - the offered version differs from the version last tried (a new
+     *     release since the pause). One attempt per new version: queueing
+     *     the retry records it as the last target, however the job ends.
      *   - the installed version is vulnerable and the offered version is
-     *     at or above the highest patched_in, so the update is the fix.
+     *     at or above the highest patched_in, so the update is the fix. A
+     *     fix version not tried yet is tried at once; one that was tried is
+     *     retried at most once every SECURITY_RETRY_BACKOFF_DAYS, and never
+     *     when it last failed for a licence or offer reason (an operator
+     *     has to sort that out first).
      *
      * @param  list<array<string, mixed>>  $tuples
      * @return list<array<string, mixed>>
@@ -493,7 +530,7 @@ class RunNightlyPluginUpdates extends Command
                     $q,
                     $autoPaused->map(fn ($row) => [$row->site_id, $row->target_kind, $row->target_slug])->values()->all(),
                 ))
-                ->get(['site_id', 'target_kind', 'target_slug', 'last_target_version'])
+                ->get(['site_id', 'target_kind', 'target_slug', 'last_target_version', 'reason_code', 'last_failed_at', 'last_retry_queued_at'])
                 ->keyBy(fn ($row) => "{$row->target_kind}:{$row->site_id}:{$row->target_slug}");
 
         $kept = [];
@@ -533,19 +570,29 @@ class RunNightlyPluginUpdates extends Command
             return null;
         }
 
+        // Without a recorded version there is nothing to compare against,
+        // so a new release can't be told apart and the pause stands.
+        $triedVersion = trim((string) ($streak?->last_target_version ?? ''));
+        $isNewVersion = $triedVersion !== '' && $offered !== $triedVersion;
+
         $patchedIn = (string) ($tuple['patched_in'] ?? '');
         if ($tuple['is_vulnerable'] && $patchedIn !== '' && version_compare($offered, $patchedIn, '>=')) {
-            return self::BYPASS_SECURITY_FIX;
+            if ($isNewVersion) {
+                return self::BYPASS_SECURITY_FIX;
+            }
+
+            if (in_array($streak?->reason_code, self::OPERATOR_ONLY_REASONS, true)) {
+                return null;
+            }
+
+            $lastTried = collect([$streak?->last_failed_at, $streak?->last_retry_queued_at])->filter()->max();
+
+            return $lastTried === null || $lastTried->lessThanOrEqualTo(Carbon::now()->subDays(self::SECURITY_RETRY_BACKOFF_DAYS))
+                ? self::BYPASS_SECURITY_FIX
+                : null;
         }
 
-        // Without a recorded failing version there is nothing to compare
-        // against, so the pause stands.
-        $failedVersion = trim((string) ($streak?->last_target_version ?? ''));
-        if ($failedVersion !== '' && $offered !== $failedVersion) {
-            return self::BYPASS_NEW_VERSION;
-        }
-
-        return null;
+        return $isNewVersion ? self::BYPASS_NEW_VERSION : null;
     }
 
     /**

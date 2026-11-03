@@ -24,7 +24,10 @@ class PluginUpdateFailureStreak extends Model
         'last_from_version',
         'last_error',
         'reason_code',
+        'consecutive_fs_failures',
+        'fs_streak_started_job_id',
         'last_failed_at',
+        'last_retry_queued_at',
         'last_job_id',
         'ignored_at',
         'ignore_id',
@@ -33,7 +36,10 @@ class PluginUpdateFailureStreak extends Model
 
     protected $casts = [
         'consecutive_failures' => 'integer',
+        'consecutive_fs_failures' => 'integer',
+        'fs_streak_started_job_id' => 'integer',
         'last_failed_at' => 'datetime',
+        'last_retry_queued_at' => 'datetime',
         'ignored_at' => 'datetime',
         'companion_pushed_at' => 'datetime',
     ];

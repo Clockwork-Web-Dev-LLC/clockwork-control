@@ -35,6 +35,9 @@ class UpdateFailureStreakRecorder
 {
     public const DEFAULT_THRESHOLD = 5;
 
+    /** Clears the run of file-permission failures along with a streak. */
+    public const FS_RUN_RESET = ['consecutive_fs_failures' => 0, 'fs_streak_started_job_id' => null];
+
     public const MIN_THRESHOLD = 3;
 
     public const MAX_THRESHOLD = 20;
@@ -108,7 +111,7 @@ class UpdateFailureStreakRecorder
             ->where('site_id', $siteId)
             ->where('target_kind', $targetKind)
             ->where('target_slug', $targetSlug)
-            ->update(['consecutive_failures' => 0]);
+            ->update(['consecutive_failures' => 0, ...self::FS_RUN_RESET]);
     }
 
     /**
@@ -149,6 +152,7 @@ class UpdateFailureStreakRecorder
             ->where('target_slug', $job->target_slug)
             ->update([
                 'consecutive_failures' => 0,
+                ...self::FS_RUN_RESET,
                 'ignored_at' => null,
                 'ignore_id' => null,
             ]);
@@ -169,9 +173,12 @@ class UpdateFailureStreakRecorder
 
     /**
      * Count one more plugin-level nightly failure and, at the threshold,
-     * pause it. A file-permission failure (reason_code fs_permission) that
-     * affects the whole site pauses the site once instead of auto-ignoring
-     * the plugin — see pauseSiteForFilesystemFailure().
+     * pause it. A run of file-permission failures (reason_code
+     * fs_permission) as long as the threshold that affects the whole site
+     * pauses the site once instead of auto-ignoring the plugin — see
+     * pauseSiteForFilesystemFailure(). Failures for any other reason break
+     * that run, so a plugin paused for, say, licence failures doesn't pause
+     * the whole site on its first file-permission failure.
      *
      * @param  array<string, mixed>|null  $result
      */
@@ -191,6 +198,15 @@ class UpdateFailureStreakRecorder
         // columns even if the job error was written by another path.
         $streak->last_error = mb_strimwidth(UpgraderOutput::redactText((string) ($job->error ?? 'unknown error')), 0, 500, '…');
         $streak->reason_code = $job->reason_code ?? ($result['reason_code'] ?? null);
+        if ($streak->reason_code === UpgraderOutput::REASON_FS_PERMISSION) {
+            if ((int) $streak->consecutive_fs_failures === 0) {
+                $streak->fs_streak_started_job_id = $job->id;
+            }
+            $streak->consecutive_fs_failures = (int) $streak->consecutive_fs_failures + 1;
+        } else {
+            $streak->consecutive_fs_failures = 0;
+            $streak->fs_streak_started_job_id = null;
+        }
         $streak->last_failed_at = Carbon::now();
         $streak->last_job_id = $job->id;
         $streak->save();
@@ -202,6 +218,7 @@ class UpdateFailureStreakRecorder
         if ($enabled && $streak->consecutive_failures >= $threshold) {
             if (
                 $streak->reason_code === UpgraderOutput::REASON_FS_PERMISSION
+                && (int) $streak->consecutive_fs_failures >= $threshold
                 && $this->isSiteWideFilesystemFailure($job, $streak)
             ) {
                 $this->pauseSiteForFilesystemFailure($job, $streak);
@@ -215,29 +232,26 @@ class UpdateFailureStreakRecorder
 
     /**
      * A file-permission failure is a site problem when no plugin or theme
-     * update on the site has succeeded since this streak began. If one has,
-     * the site's files are writable in general and only this plugin's own
-     * files are off, so the plugin keeps the normal per-plugin auto-ignore
-     * rather than stopping updates for every other plugin on the site.
+     * update on the site has succeeded since this run of file-permission
+     * failures began (the job recorded when it did; uncounted transport or
+     * reaped failures in between don't move it). If one has, the site's
+     * files are writable in general and only this plugin's own files are
+     * off, so the plugin keeps the normal per-plugin auto-ignore rather than
+     * stopping updates for every other plugin on the site. A run with no
+     * recorded start (from before it was kept) gets the per-plugin ignore.
      */
     private function isSiteWideFilesystemFailure(PluginUpdateJob $job, PluginUpdateFailureStreak $streak): bool
     {
-        // The oldest nightly failure still inside the current streak.
-        $streakStartJobId = PluginUpdateJob::query()
-            ->where('site_id', $job->site_id)
-            ->where('target_kind', $job->target_kind)
-            ->where('target_slug', $job->target_slug)
-            ->where('status', PluginUpdateJob::STATUS_FAILED)
-            ->where('batch_id', 'like', 'nightly-%')
-            ->orderByDesc('id')
-            ->skip(max(0, (int) $streak->consecutive_failures - 1))
-            ->value('id') ?? $job->id;
+        $runStartJobId = $streak->fs_streak_started_job_id;
+        if ($runStartJobId === null) {
+            return false;
+        }
 
         return ! PluginUpdateJob::query()
             ->where('site_id', $job->site_id)
             ->whereIn('target_kind', [PluginUpdateJob::KIND_PLUGIN, PluginUpdateJob::KIND_THEME])
             ->where('status', PluginUpdateJob::STATUS_COMPLETE)
-            ->where('id', '>', $streakStartJobId)
+            ->where('id', '>', $runStartJobId)
             ->exists();
     }
 
@@ -263,7 +277,7 @@ class UpdateFailureStreakRecorder
 
         $reason = mb_strimwidth(sprintf(
             'Filesystem not writable: %d nightly updates in a row failed with a file-permission error. Fix file ownership/permissions, then resume.',
-            $streak->consecutive_failures,
+            $streak->consecutive_fs_failures,
         ), 0, 255, '…');
 
         // Conditional update: the recorder runs after the per-site update
@@ -291,7 +305,7 @@ class UpdateFailureStreakRecorder
         try {
             app(ActionLogger::class)->record(
                 actionType: ActionLog::TYPE_AUTO_UPDATES_TOGGLED,
-                summary: "Paused nightly auto-updates on {$site->domain}: filesystem not writable ({$streak->consecutive_failures} failed nightly updates in a row)",
+                summary: "Paused nightly auto-updates on {$site->domain}: filesystem not writable ({$streak->consecutive_fs_failures} failed nightly updates in a row)",
                 site: $site,
                 target: 'paused',
                 details: [
@@ -301,7 +315,7 @@ class UpdateFailureStreakRecorder
                     'reason_code' => UpgraderOutput::REASON_FS_PERMISSION,
                     'target_kind' => $job->target_kind,
                     'target_slug' => $job->target_slug,
-                    'streak' => $streak->consecutive_failures,
+                    'streak' => $streak->consecutive_fs_failures,
                     'from_version' => $streak->last_from_version,
                     'target_version' => $streak->last_target_version,
                     'last_error' => $streak->last_error,
@@ -331,7 +345,7 @@ class UpdateFailureStreakRecorder
                 'title' => $title,
                 'text' => sprintf(
                     '%d nightly updates in a row failed because WordPress could not write the files, so nightly updates are paused for the whole site instead of plugin by plugin. Make wp-content/plugins and wp-content/upgrade writable by the PHP user, then resume auto-updates for the site.',
-                    $streak->consecutive_failures,
+                    $streak->consecutive_fs_failures,
                 ),
                 'fields' => [
                     ['title' => 'Site', 'value' => $site->domain, 'short' => true],

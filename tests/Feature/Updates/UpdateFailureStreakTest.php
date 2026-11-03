@@ -1014,6 +1014,113 @@ describe('File-permission failures pause the site, not each plugin', function ()
             ->and(PluginUpdateIgnore::where('site_id', $site->id)->count())->toBe(0);
     });
 
+    /** One counted (or, with $result null, uncounted transport) nightly failure, each its own job. */
+    function recordNightlyFailure(Site $site, string $slug, ?string $reasonCode, ?array $result = []): PluginUpdateJob
+    {
+        $error = $reasonCode === 'fs_permission'
+            ? "Could not copy file. {$slug}/includes/class-main.php — Error: Could not copy file."
+            : 'The update is not offered to this site.';
+        $job = fakeNightlyJob($site, $slug, ['status' => PluginUpdateJob::STATUS_FAILED, 'error' => $error, 'reason_code' => $reasonCode]);
+        app(UpdateFailureStreakRecorder::class)->record($job, $result === null ? null : ['ok' => false, 'error' => $error, 'reason_code' => $reasonCode]);
+
+        return $job;
+    }
+
+    it('does not pause the site on the first file-permission failure of a plugin already paused for another reason', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        for ($i = 1; $i <= 5; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'not_offered');
+        }
+        // A retry of a new release, weeks later, fails once in its own folder.
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->sole();
+        expect($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and($streak->consecutive_failures)->toBe(6)
+            ->and($streak->consecutive_fs_failures)->toBe(1)
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->value('source'))->toBe(PluginUpdateIgnore::SOURCE_AUTO_FAILURE);
+    });
+
+    it('auto-ignores the plugin, not the site, when only the last of the failures was a file-permission one', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        for ($i = 1; $i <= 4; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'download_unauthorized');
+        }
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+
+        expect($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'alpha-plugin')->exists())->toBeTrue();
+    });
+
+    it('sees a success on the site inside the run even when an uncounted failure came between', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        $first = recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        // Another plugin on the site updated fine: its files are writable.
+        PluginUpdateJob::factory()->for($site)->complete()->create([
+            'batch_id' => 'nightly-'.now()->format('Y-m-d'),
+            'target_slug' => 'healthy-plugin',
+            'before_version' => '2.0.0',
+            'after_version' => '2.1.0',
+            'target_version' => '2.1.0',
+        ]);
+        // A transport failure: never counted, and must not move the run's start.
+        recordNightlyFailure($site, 'alpha-plugin', null, result: null);
+        for ($i = 1; $i <= 4; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        }
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->sole();
+        expect($streak->consecutive_fs_failures)->toBe(5)
+            ->and($streak->fs_streak_started_job_id)->toBe($first->id)
+            ->and($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'alpha-plugin')->exists())->toBeTrue();
+    });
+
+    it('counts only the file-permission run in the site pause reason', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            // Five failures in all come first: the plugin is paused on its own.
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->once()->andReturn(true);
+        });
+
+        recordNightlyFailure($site, 'alpha-plugin', 'not_offered');
+        for ($i = 1; $i <= 5; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        }
+
+        expect(PluginUpdateFailureStreak::where('site_id', $site->id)->value('consecutive_failures'))->toBe(6)
+            ->and($site->refresh()->auto_updates_paused)->toBeTrue()
+            ->and($site->auto_updates_paused_reason)->toContain('5 nightly updates in a row failed with a file-permission error');
+    });
+
+    it('clears the file-permission run when the plugin updates', function () {
+        $site = makeExampleSite();
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        $ok = fakeNightlyJob($site, 'alpha-plugin', ['status' => PluginUpdateJob::STATUS_COMPLETE, 'after_version' => '1.1.0']);
+        app(UpdateFailureStreakRecorder::class)->record($ok, ['ok' => true]);
+
+        expect(PluginUpdateFailureStreak::where('site_id', $site->id)->sole())
+            ->consecutive_failures->toBe(0)
+            ->consecutive_fs_failures->toBe(0)
+            ->fs_streak_started_job_id->toBeNull();
+    });
+
     it('honors the auto-pause kill switch for the site-level pause too', function () {
         $site = makeExampleSite();
         app(Settings::class)->put('updates.auto_ignore_enabled', false);
