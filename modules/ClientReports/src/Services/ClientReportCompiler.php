@@ -30,6 +30,9 @@ class ClientReportCompiler
 
     public const UPTIME_OUTAGE_LIST_MAX = 5;
 
+    /** "Too Many Requests": the host rate-limited the uptime probe, so it couldn't see the site. */
+    public const PROBE_BLOCKED_STATUS = 429;
+
     /** A clean read older than this can't vouch for "no backups found". */
     public const BACKUP_CHECK_MAX_AGE_HOURS = 48;
 
@@ -68,6 +71,10 @@ class ClientReportCompiler
         // Companion; trust the snapshot so their core-file row isn't dropped.
         $isWordPress = (bool) $site->is_wordpress || isset($site->companion_snapshot['wp_core']);
 
+        // A site enrolled part-way through the period was only watched from
+        // then; null when it was watched for the whole period.
+        $coverageStart = $this->coverageStart($site, $start, $end);
+
         $data = [
             'meta' => [
                 'compiled_at' => now()->toIso8601String(),
@@ -77,6 +84,9 @@ class ClientReportCompiler
                 // microsecond of the day, so round to whole days (31 for October).
                 'period_days' => (int) round($start->diffInDays($end)),
                 'custom_notes' => $customNotes,
+                // When monitoring began, if that was after the period started
+                // (ISO 8601). The views say so and the report is held for review.
+                'coverage_start' => $coverageStart?->toIso8601String(),
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
                 'schema_version' => self::SCHEMA_VERSION,
@@ -96,7 +106,7 @@ class ClientReportCompiler
             $data['updates'] = $this->compileUpdates($site, $start, $end);
         }
         if ($shouldInclude('uptime')) {
-            $data['uptime'] = $this->compileUptime($site, $start, $end);
+            $data['uptime'] = $this->compileUptime($site, $start, $end, $coverageStart);
         }
         if ($shouldInclude('security')) {
             $data['security'] = $this->compileSecurity($site, $start, $end, $isWordPress);
@@ -118,6 +128,41 @@ class ClientReportCompiler
         }
 
         return $data;
+    }
+
+    /**
+     * When monitoring of this site began, if that was after the period
+     * started, so a site enrolled late in the month isn't reported as watched
+     * for all of it. Monitoring begins with the first successful uptime probe,
+     * which leaves a seed transition in the action log. A backfilled seed is
+     * dated when the backfill ran, not when monitoring began, and a site
+     * whose first probes failed gets no seed at all, so those fall back to
+     * when the site was added, if that was inside the period.
+     *
+     * Starting on the period's first day counts as covering the whole period,
+     * as it does for backups (covers_period).
+     */
+    protected function coverageStart(Site $site, Carbon $start, Carbon $end): ?Carbon
+    {
+        $seed = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->where('action_type', ActionLog::TYPE_UPTIME_TRANSITION)
+            ->where('details->seed', true)
+            ->orderBy('ran_at')
+            ->orderBy('id')
+            ->first(['ran_at', 'details']);
+
+        $began = match (true) {
+            $seed !== null && $seed->ran_at !== null && empty($seed->details['backfilled']) => $seed->ran_at,
+            $site->created_at !== null && $site->created_at->betweenIncluded($start, $end) => $site->created_at,
+            default => null,
+        };
+
+        if ($began === null || $began->lessThan($start->copy()->addDay())) {
+            return null;
+        }
+
+        return $began->copy();
     }
 
     /**
@@ -291,52 +336,81 @@ class ClientReportCompiler
      * `maintenance`) event, clamped to the period. Events only record state
      * changes, so the last event before the period tells us whether the site
      * was already down when it began. SLA-exempt outages don't count.
+     *
+     * A site whose monitoring began part-way through the period is measured
+     * from then ($coverageStart): the days before weren't watched, so they
+     * can't count as up time.
+     *
+     * A host that rate-limits the monitor answers HTTP 429. That says the
+     * probe was blocked, not that visitors couldn't reach the site, so a
+     * `down` opened by a 429 is kept out of the downtime and the outages and
+     * counted separately (probe_blocked_minutes, for the operator). Events
+     * only record state changes, so a real outage that began while the probe
+     * was already blocked can't be told apart and is left out with it.
      */
-    protected function compileUptime(Site $site, Carbon $start, Carbon $end): array
+    protected function compileUptime(Site $site, Carbon $start, Carbon $end, ?Carbon $coverageStart = null): array
     {
+        $from = $coverageStart !== null ? $coverageStart->copy()->max($start) : $start->copy();
         // $end is the last microsecond of the day: round, or a 31-day month is 44,639 minutes.
-        $totalMinutes = max(1, (int) round($start->diffInMinutes($end)));
+        $totalMinutes = max(1, (int) round($from->diffInMinutes($end)));
         $periodEnd = $end->copy()->min(now());
 
         $priorEvent = SiteUptimeEvent::query()
             ->where('site_id', $site->id)
-            ->where('event_at', '<', $start)
+            ->where('event_at', '<', $from)
             ->orderByDesc('event_at')
             ->orderByDesc('id')
             ->first();
 
         $events = SiteUptimeEvent::query()
             ->where('site_id', $site->id)
-            ->whereBetween('event_at', [$start, $end])
+            ->whereBetween('event_at', [$from, $end])
             ->orderBy('event_at')
             ->orderBy('id')
             ->get();
 
         $isCountedDown = fn (SiteUptimeEvent $e) => $e->event_type === SiteUptimeEvent::TYPE_DOWN && ! $e->is_sla_exempt;
+        $isProbeBlocked = fn (SiteUptimeEvent $e) => (int) $e->status_code === self::PROBE_BLOCKED_STATUS;
 
+        // The interval currently open: where it's counted from, when it really
+        // began (before the period, for one carried in), and why.
+        $open = $priorEvent !== null && $isCountedDown($priorEvent) ? [
+            'from' => $from->copy(),
+            'began' => $priorEvent->event_at->copy(),
+            'carried_in' => true,
+            'blocked' => $isProbeBlocked($priorEvent),
+        ] : null;
         $intervals = [];
-        $downSince = $priorEvent !== null && $isCountedDown($priorEvent) ? $start->copy() : null;
 
         foreach ($events as $event) {
             if ($isCountedDown($event)) {
-                $downSince ??= $event->event_at->copy();
+                $open ??= [
+                    'from' => $event->event_at->copy(),
+                    'began' => $event->event_at->copy(),
+                    'carried_in' => false,
+                    'blocked' => $isProbeBlocked($event),
+                ];
 
                 continue;
             }
 
-            if ($downSince !== null) {
-                $intervals[] = [$downSince, $event->event_at->copy()];
-                $downSince = null;
+            if ($open !== null) {
+                $intervals[] = [...$open, 'to' => $event->event_at->copy(), 'ongoing' => false];
+                $open = null;
             }
         }
 
-        $stillDown = $downSince !== null;
-        if ($stillDown && $periodEnd->greaterThan($downSince)) {
-            $intervals[] = [$downSince, $periodEnd->copy()];
+        if ($open !== null && $periodEnd->greaterThan($open['from'])) {
+            $intervals[] = [...$open, 'to' => $periodEnd->copy(), 'ongoing' => true];
         }
 
-        $outages = count($intervals) + ($stillDown && ! $periodEnd->greaterThan($downSince) ? 1 : 0);
-        $downtimeSeconds = array_sum(array_map(fn (array $i) => max(0, (int) $i[0]->diffInSeconds($i[1])), $intervals));
+        $seconds = fn (array $i) => max(0, (int) $i['from']->diffInSeconds($i['to']));
+        $outageIntervals = array_values(array_filter($intervals, fn (array $i) => ! $i['blocked']));
+        $blockedSeconds = array_sum(array_map($seconds, array_filter($intervals, fn (array $i) => $i['blocked'])));
+
+        $outages = count($outageIntervals)
+            + ($open !== null && ! $open['blocked'] && ! $periodEnd->greaterThan($open['from']) ? 1 : 0);
+        $downtimeSeconds = array_sum(array_map($seconds, $outageIntervals));
 
         $downtimeMinutes = min($totalMinutes, (int) round($downtimeSeconds / 60));
         $uptimePercentage = max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
@@ -344,30 +418,38 @@ class ClientReportCompiler
         // No events reads as 100%, so the flag alone isn't enough: the probe
         // skips ignored and staging servers and ignore-listed domains (the
         // same query as clockwork:check-site-uptime), and one that stopped
-        // checking the site leaves no events either.
+        // checking the site leaves no events either. Monitoring that only
+        // began after the period has nothing to say about it.
         $inProbe = $site->uptime_monitoring_enabled
             && Site::query()->whereKey($site->id)->hostMonitored()->notDomainIgnored()->exists();
         $lastChecked = $site->uptime_last_checked_at;
         $checkedRecently = $lastChecked !== null && $lastChecked->greaterThanOrEqualTo($periodEnd->copy()->subDay());
 
         return [
-            'monitored' => $inProbe && $checkedRecently,
+            'monitored' => $inProbe && $checkedRecently && ($coverageStart === null || $coverageStart->lessThan($periodEnd)),
             // On, in the probe, but not checked lately: a person should look.
             'probe_stopped' => $inProbe && ! $checkedRecently,
             'last_checked_at' => $lastChecked?->toDateString(),
+            // When monitoring began, if that was after the period started.
+            'monitored_since' => $coverageStart?->toIso8601String(),
             'uptime_percentage' => $uptimePercentage,
             'outages_count' => $outages,
             'downtime_minutes' => $downtimeMinutes,
             'total_period_minutes' => $totalMinutes,
+            // Internal: time the monitor was blocked (HTTP 429), not counted as
+            // downtime. probe_blocked_since is when a block still in place at
+            // the period end began, so the report is held for a person to check.
+            'probe_blocked_minutes' => (int) round($blockedSeconds / 60),
+            'probe_blocked_since' => $open !== null && $open['blocked'] ? $open['began']->toIso8601String() : null,
             // Newest first, capped: the email lists the most recent outages. An
             // outage carried in from before the period starts at the period
             // start, so it's flagged rather than shown as starting then.
             'outages' => array_slice(array_reverse(array_map(fn (array $i) => [
-                'started_at' => $i[0]->toIso8601String(),
-                'minutes' => (int) round($i[0]->diffInSeconds($i[1]) / 60),
-                'started_before_period' => $i[0]->equalTo($start) && $priorEvent !== null && $isCountedDown($priorEvent),
-                'ongoing' => $stillDown && $i[1]->equalTo($periodEnd),
-            ], $intervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
+                'started_at' => $i['from']->toIso8601String(),
+                'minutes' => (int) round($seconds($i) / 60),
+                'started_before_period' => $i['carried_in'],
+                'ongoing' => $i['ongoing'],
+            ], $outageIntervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
         ];
     }
 

@@ -26,17 +26,90 @@ final class ReportPhrases
     /**
      * The timezone times in a report are shown in (clockwork.reports.timezone).
      * Stored times are UTC, which reads as the wrong time of day to clients.
-     * An invalid setting falls back to UTC rather than breaking the email.
+     * An invalid setting falls back to UTC rather than breaking the email, as
+     * does having no app config at all (the review flags are plain functions).
      */
     public static function timezone(): string
     {
-        $zone = trim((string) config('clockwork.reports.timezone', 'America/New_York'));
-
         try {
+            $zone = trim((string) config('clockwork.reports.timezone', 'America/New_York'));
+
             return (new DateTimeZone($zone !== '' ? $zone : 'UTC'))->getName();
         } catch (Throwable) {
             return 'UTC';
         }
+    }
+
+    /**
+     * "Oct 30, 2:05 PM EDT": a stored time in the report timezone.
+     */
+    public static function time(string $at): string
+    {
+        return Carbon::parse($at)->setTimezone(self::timezone())->format('M j, g:i A T');
+    }
+
+    /**
+     * "Oct 19": the day monitoring of the site began, in the report timezone,
+     * from meta.coverage_start or uptime.monitored_since. Null when it
+     * covered the whole period, and for reports compiled before it was kept.
+     */
+    public static function monitoringBeganOn(mixed $at): ?string
+    {
+        if (! is_string($at) || trim($at) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($at)->setTimezone(self::timezone())->format('M j');
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Whether monitoring began only after the report's period had ended, so
+     * the report covers none of it (a report compiled late for a past month).
+     *
+     * @param  array<string, mixed>  $data  a report's sections_data
+     */
+    public static function monitoringBeganAfterPeriod(array $data): bool
+    {
+        $began = $data['meta']['coverage_start'] ?? $data['uptime']['monitored_since'] ?? null;
+        $periodEnd = $data['meta']['period_end'] ?? null;
+        if (self::monitoringBeganOn($began) === null || ! is_string($periodEnd) || $periodEnd === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($began)->greaterThan(Carbon::parse($periodEnd)->endOfDay());
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * "Monitoring began Oct 19, so this report covers Oct 19 – Oct 31." for a
+     * site whose monitoring began after the period started, so a late
+     * enrolment doesn't read as a whole month of care. Null otherwise.
+     *
+     * @param  array<string, mixed>  $data  a report's sections_data
+     */
+    public static function coverageNote(array $data): ?string
+    {
+        $began = self::monitoringBeganOn($data['meta']['coverage_start'] ?? null);
+        if ($began === null) {
+            return null;
+        }
+
+        if (self::monitoringBeganAfterPeriod($data)) {
+            return "Monitoring began {$began}, after the end of this report's period.";
+        }
+
+        $periodEnd = $data['meta']['period_end'] ?? null;
+
+        return is_string($periodEnd) && $periodEnd !== ''
+            ? "Monitoring began {$began}, so this report covers {$began} – ".Carbon::parse($periodEnd)->format('M j').'.'
+            : "Monitoring began {$began}.";
     }
 
     /**

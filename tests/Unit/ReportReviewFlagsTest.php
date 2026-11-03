@@ -40,3 +40,41 @@ it('flags an uptime probe that stopped and a Companion that stopped reporting', 
         "Companion hasn't reported since 2026-08-20, so waiting updates and plugin vulnerabilities are out of date.",
     ]);
 });
+
+it('flags a report that covers only part of the month', function () {
+    expect(ReportReviewFlags::reasons([
+        'meta' => ['period_start' => '2026-10-01', 'period_end' => '2026-10-31', 'coverage_start' => '2026-10-19T16:30:00+00:00'],
+        'uptime' => ['monitored_since' => '2026-10-19T16:30:00+00:00', 'outages' => []],
+    ]))->toBe(['Monitoring began Oct 19, so this report covers only part of the month.']);
+});
+
+it('flags a report whose monitoring began only after its period', function () {
+    expect(ReportReviewFlags::reasons([
+        'meta' => ['period_start' => '2026-09-01', 'period_end' => '2026-09-30', 'coverage_start' => '2026-10-05T16:00:00+00:00'],
+    ]))->toBe(["Monitoring began Oct 5, after the end of this report's period, so it covers none of it."]);
+});
+
+it('says the monitor was blocked, not that the site was down, when only a 429 is still open', function () {
+    $reasons = ReportReviewFlags::reasons([
+        'uptime' => ['outages' => [['ongoing' => false]], 'probe_blocked_since' => '2026-10-30T14:05:00+00:00'],
+    ]);
+
+    // The time is shown in the report timezone, which needs the app config; the wording doesn't.
+    expect($reasons)->toHaveCount(1)
+        ->and($reasons[0])->toStartWith('The uptime monitor was blocked (HTTP 429) from Oct 30, ')
+        ->toEndWith('; the site was not necessarily down.');
+});
+
+it('still says the site was down when a real outage is open at the end of the month', function () {
+    expect(ReportReviewFlags::reasons([
+        'uptime' => ['outages' => [['ongoing' => true]], 'probe_blocked_since' => null],
+    ]))->toBe(['The site was still down at the end of the month.']);
+});
+
+it('adds nothing for a full month or a report compiled before coverage was recorded', function () {
+    expect(ReportReviewFlags::reasons([
+        'meta' => ['period_start' => '2026-10-01', 'period_end' => '2026-10-31', 'coverage_start' => null],
+        'uptime' => ['monitored_since' => null, 'probe_blocked_minutes' => 30, 'probe_blocked_since' => null, 'outages' => []],
+    ]))->toBe([])
+        ->and(ReportReviewFlags::reasons(['meta' => ['period_end' => '2026-10-31'], 'uptime' => ['outages' => []]]))->toBe([]);
+});

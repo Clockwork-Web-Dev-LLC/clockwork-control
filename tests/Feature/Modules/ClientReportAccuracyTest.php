@@ -10,6 +10,10 @@ use App\Models\SiteBackupCheck;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteUptimeEvent;
+use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
+use App\Services\Uptime\UptimeProbeResult;
+use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -17,6 +21,7 @@ use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Modules\ClientReports\Services\ReportReviewFlags;
+use Modules\Core\Contracts\SmsNotifier;
 
 /*
 |--------------------------------------------------------------------------
@@ -504,9 +509,9 @@ describe('performance (#7)', function () {
 });
 
 describe('uptime', function () {
-    function uptimeEvent(Site $site, string $type, string $at, bool $exempt = false): void
+    function uptimeEvent(Site $site, string $type, string $at, bool $exempt = false, ?int $status = null): void
     {
-        SiteUptimeEvent::create(['site_id' => $site->id, 'event_type' => $type, 'event_at' => Carbon::parse($at), 'is_sla_exempt' => $exempt]);
+        SiteUptimeEvent::create(['site_id' => $site->id, 'event_type' => $type, 'event_at' => Carbon::parse($at), 'is_sla_exempt' => $exempt, 'status_code' => $status]);
     }
 
     it('measures real outage length from down to up instead of 5 minutes per outage', function () {
@@ -550,6 +555,79 @@ describe('uptime', function () {
             ->and($report['text'])->toContain('(still down at period end)');
     });
 
+    it('holds the report when a real outage is still open at the end of the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00', status: 503);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 120, 'probe_blocked_minutes' => 0, 'probe_blocked_since' => null])
+            ->and(ReportReviewFlags::reasons($report['data']))->toContain('The site was still down at the end of the month.')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('HTTP 429');
+    });
+
+    it('does not count time the monitor was rate-limited (HTTP 429) as downtime', function () {
+        // A host that rate-limits the monitor answers 429: the probe was
+        // blocked, which says nothing about whether visitors reached the site.
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-12 08:00:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-12 20:00:00', status: 200);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 10:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 10:30:00', status: 200);
+
+        $report = compileSeptember($site);
+        $uptime = $report['data']['uptime'];
+
+        expect($uptime)->toMatchArray([
+            'outages_count' => 1,
+            'downtime_minutes' => 30,
+            'uptime_percentage' => 99.93,
+            'probe_blocked_minutes' => 720,
+            'probe_blocked_since' => null,
+        ])
+            ->and($uptime['outages'])->toHaveCount(1)
+            ->and($uptime['outages'][0])->toMatchArray(['started_at' => '2026-09-20T10:00:00+00:00', 'minutes' => 30])
+            ->and($report['html'])->not->toContain('Down Sep 12')->not->toContain('12h 0m')
+            ->and($report['text'])->not->toContain('Sep 12')
+            ->and(ReportReviewFlags::reasons(['meta' => $report['data']['meta'], 'uptime' => $uptime]))->toBe([]);
+    });
+
+    it('says the monitor was blocked, not that the site was still down, when a 429 is open at the end of the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 19:40:00', status: 429);
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+        $public = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => false])->render();
+
+        expect($report['data']['uptime'])->toMatchArray([
+            'outages_count' => 0,
+            'downtime_minutes' => 0,
+            'uptime_percentage' => 100,
+            'outages' => [],
+            'probe_blocked_minutes' => 260,
+            'probe_blocked_since' => '2026-09-30T19:40:00+00:00',
+        ])
+            ->and($report['html'])->not->toContain('still down')
+            ->and($report['text'])->not->toContain('still down')
+            ->and(ReportReviewFlags::reasons(['meta' => $report['data']['meta'], 'uptime' => $report['data']['uptime']]))->toBe([
+                'The uptime monitor was blocked (HTTP 429) from Sep 30, 3:40 PM EDT; the site was not necessarily down.',
+            ])
+            // The blocked time is for the operator only.
+            ->and($preview)->toContain('The uptime monitor was blocked (HTTP 429) for 260 min this period.')
+            ->and($public)->not->toContain('HTTP 429');
+    });
+
+    it('treats a 429 block carried in from before the period as blocked, not down', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-08-31 22:00:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 03:00:00', status: 200);
+
+        expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
+            'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
+        ]);
+    });
+
     it('leaves uptime out for a site the probe skips, instead of claiming 100%', function () {
         // CheckSiteUptime skips ignored and staging servers, so there are no events to read.
         $site = accuracySite(['uptime_monitoring_enabled' => true, 'server_id' => Server::factory()->ignored()]);
@@ -584,6 +662,133 @@ describe('uptime', function () {
         uptimeEvent($site, SiteUptimeEvent::TYPE_MAINTENANCE, '2026-09-06 10:30:00');
 
         expect(compileSeptember($site)['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 30]);
+    });
+});
+
+describe('partial-month coverage', function () {
+    /** The seed transition the uptime probe (or the one-off backfill) writes. */
+    function uptimeSeed(Site $site, string $at, bool $backfilled = false): void
+    {
+        app(ActionLogger::class)->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: "{$site->domain} monitoring started — confirmed up",
+            site: $site,
+            target: 'up',
+            details: ['status_code' => 200, 'seed' => true] + ($backfilled ? ['backfilled' => true] : []),
+            ok: true,
+            actor: $backfilled ? 'backfill' : 'scheduled',
+            ranAt: Carbon::parse($at),
+        );
+    }
+
+    it('measures uptime from when monitoring began for a site enrolled part-way through the month', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'unknown']);
+
+        // The first successful probe seeds the start of monitoring, exactly as the probe does.
+        $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->travelTo(Carbon::parse('2026-09-26 18:20:00'));
+        app(UptimeStateUpdater::class)->update($site, UptimeProbeResult::success(200, 150));
+        $this->travelBack();
+        $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-27 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-27 11:42:00', status: 200);
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+        $note = 'Monitoring began Sep 26, so this report covers Sep 26 – Sep 30.';
+
+        // 102 minutes down out of the 6,100 it was watched, not out of the whole month's 43,200.
+        expect($report['data']['meta']['coverage_start'])->toBe('2026-09-26T18:20:00+00:00')
+            ->and($report['data']['uptime'])->toMatchArray([
+                'monitored' => true,
+                'monitored_since' => '2026-09-26T18:20:00+00:00',
+                'total_period_minutes' => 6100,
+                'downtime_minutes' => 102,
+                'uptime_percentage' => 98.33,
+                'outages_count' => 1,
+            ])
+            ->and($report['html'])->toContain($note)->toContain('(monitoring began Sep 26)')->toContain('98.33%')
+            ->and($report['text'])->toContain($note)->toContain('Availability: 98.33% (monitoring began Sep 26)')
+            ->and($preview)->toContain($note)->toContain('Monitoring began')->not->toContain('24 / 7 / 365')
+            ->and(ReportReviewFlags::reasons($report['data']))->toContain('Monitoring began Sep 26, so this report covers only part of the month.');
+    });
+
+    it('falls back to when the site was added when its monitoring has no seed', function () {
+        // A site whose first probes failed goes straight to down and never gets a seed.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-09-20 15:00:00')]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 15:10:00', status: 500);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 16:10:00', status: 200);
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBe('2026-09-20T15:00:00+00:00')
+            ->and($data['uptime'])->toMatchArray([
+                'monitored_since' => '2026-09-20T15:00:00+00:00',
+                'total_period_minutes' => 14940,
+                'downtime_minutes' => 60,
+                'uptime_percentage' => 99.6,
+            ])
+            ->and(ReportReviewFlags::reasons($data))->toContain('Monitoring began Sep 20, so this report covers only part of the month.');
+    });
+
+    it('leaves a site watched for the whole month unchanged', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-06-01 09:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-10 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-10 14:00:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray([
+                'monitored' => true,
+                'monitored_since' => null,
+                'total_period_minutes' => 30 * 24 * 60,
+                'downtime_minutes' => 240,
+                'uptime_percentage' => 99.44,
+            ])
+            ->and($report['html'])->not->toContain('Monitoring began')->not->toContain('monitoring began')
+            ->and($report['text'])->not->toContain('onitoring began')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Monitoring began');
+    });
+
+    it('counts monitoring that began on the first day as the whole month', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeSeed($site, '2026-09-01 14:00:00');
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBeNull()
+            ->and($data['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60])
+            ->and(ReportReviewFlags::reasons(['meta' => $data['meta'], 'uptime' => $data['uptime']]))->toBe([]);
+    });
+
+    it('ignores a backfilled seed, which is dated when the backfill ran rather than when monitoring began', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-09-15 12:00:00', backfilled: true);
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBeNull()
+            ->and($data['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60]);
+    });
+
+    it('leaves uptime out and says so when monitoring began only after the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-10-05 16:00:00');
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+
+        expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false, 'monitored_since' => '2026-10-05T16:00:00+00:00'])
+            ->and($report['html'])->not->toContain('Uptime &amp; availability')
+            ->and($report['text'])->not->toContain('UPTIME')
+            ->toContain("Monitoring began Oct 5, after the end of this report's period.")
+            ->and($preview)->toContain('Uptime hidden from the client: uptime monitoring began Oct 5, after this period.')
+            ->and(ReportReviewFlags::reasons($report['data']))
+            ->toContain("Monitoring began Oct 5, after the end of this report's period, so it covers none of it.");
     });
 });
 

@@ -11,6 +11,9 @@
     $period = $report->period_start->format('F Y');
     // Which sections the client sees: one rule for this, the HTML part and the preview.
     $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
+    // A site enrolled part-way through the month: say when monitoring began.
+    $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
+    $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
 @endphp
 WEBSITE CARE REPORT — {!! $domain !!}
 {!! $period !!} ({!! $report->period_start->format('M j') !!} – {!! $report->period_end->format('M j, Y') !!})
@@ -18,6 +21,9 @@ WEBSITE CARE REPORT — {!! $domain !!}
 Hi{!! $contactName ? ' '.$contactName : '' !!},
 
 Here's your website care summary for {!! $domain !!} for {!! $period !!}.
+@if ($coverageNote)
+{!! $coverageNote !!}
+@endif
 @if (! empty($data['meta']['custom_notes']))
 
 A NOTE FROM YOUR SUPPORT TEAM
@@ -35,7 +41,7 @@ UPDATES APPLIED ({!! count($updateRows) !!})
 @if ($sections['uptime'])
 
 UPTIME
-Availability: {!! $uptime['uptime_percentage'] ?? '—' !!}%
+Availability: {!! $uptime['uptime_percentage'] ?? '—' !!}%{!! $monitoredSince ? ' (monitoring began '.$monitoredSince.')' : '' !!}
 Outages: {!! (int) ($uptime['outages_count'] ?? 0) !!}
 Total downtime: {!! (int) ($uptime['downtime_minutes'] ?? 0) !!} min
 @foreach ($uptime['outages'] ?? [] as $outage)

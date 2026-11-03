@@ -86,6 +86,9 @@
         in_array('db', $kinds, true) => 'Database',
         default => 'Files',
     };
+    // A site enrolled part-way through the month: say when monitoring began.
+    $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
+    $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
     $outageWhen = fn (array $o) => \Modules\ClientReports\Support\ReportPhrases::outageStart($o).(! empty($o['ongoing']) ? ' (still down at period end)' : '');
     $outageLength = fn (int $m) => $m < 1 ? '<1 min' : ($m >= 60 ? floor($m / 60).'h '.($m % 60).'m' : $m.' min');
     $formatBytes = fn (int $b) => $b >= 1024 ** 3 ? number_format($b / 1024 ** 3, 1).' GB' : ($b >= 1024 ** 2 ? number_format($b / 1024 ** 2, 0).' MB' : number_format(max(1, $b / 1024), 0).' KB');
@@ -145,6 +148,9 @@
     <tr><td style="padding:28px 32px 8px 32px; font-size:15px; line-height:1.6; color:#334155;">
         <p style="margin:0 0 12px 0;">Hi{{ $contactName ? ' '.$contactName : '' }},</p>
         <p style="margin:0;">Here's your website care summary for <strong class="cw-nolink" style="color:{{ $ink }}; text-decoration:none;">{!! $plainDomain !!}</strong> for {{ $period }} — what we updated, how the site performed, and how we kept it secure.</p>
+        @if ($coverageNote)
+            <p style="margin:12px 0 0 0;">{{ $coverageNote }}</p>
+        @endif
     </td></tr>
 
     @if (! empty($meta['custom_notes']))
@@ -208,7 +214,7 @@
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Uptime &amp; availability</div>
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We check your site around the clock and are alerted the moment it stops responding.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $good }};">{{ $uptimeLabel }}</td></tr>
+                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability @if ($monitoredSince)<span style="font-size:11px; color:#94a3b8;">(monitoring began {{ $monitoredSince }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $good }};">{{ $uptimeLabel }}</td></tr>
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Outages</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ (int) ($uptime['outages_count'] ?? 0) }}</td></tr>
                 <tr><td style="padding:8px 0; color:#334155;">Total downtime</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $downtimeLabel }}</td></tr>
             </table>

@@ -36,6 +36,10 @@
     $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
     $hiddenNotes = $isOperatorPreview ? \Modules\ClientReports\Support\ReportSections::hiddenNotes($data) : [];
     $showUptime = $sections['uptime'];
+    // A site enrolled part-way through the month: say when monitoring began.
+    $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
+    $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
+    $probeBlockedMinutes = (int) ($uptime['probe_blocked_minutes'] ?? 0);
     // Core, theme and plugin updates, cleaned up exactly as the email lists them.
     $updateRows = (new \Modules\ClientReports\Mail\ClientReportMail($report))->updateRows();
     $updateCount = count($updateRows);
@@ -123,6 +127,10 @@
         <div style="height: 4px; background: {{ $accentColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;"></div>
 
         <div class="p-8 sm:p-12 space-y-10">
+
+        @if ($coverageNote)
+            <p class="text-sm text-slate-700 leading-relaxed">{{ $coverageNote }}</p>
+        @endif
 
         {{-- Custom Operator Notes if Provided --}}
         @if (!empty($meta['custom_notes']))
@@ -258,10 +266,18 @@
                         <div class="text-[11px] text-slate-500">Total Downtime</div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
-                        <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
+                        @if ($monitoredSince)
+                            <div class="text-sm font-bold text-slate-900">{{ $monitoredSince }}</div>
+                            <div class="text-[11px] text-slate-500">Monitoring began</div>
+                        @else
+                            <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
+                            <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
+                        @endif
                     </div>
                 </div>
+                @if ($isOperatorPreview && $probeBlockedMinutes > 0)
+                    <p class="no-print text-xs text-slate-500">The uptime monitor was blocked (HTTP 429) for {{ $probeBlockedMinutes }} min this period. That time isn't counted as downtime, and the client doesn't see this note.</p>
+                @endif
             </div>
         @elseif (isset($hiddenNotes['uptime']))
             @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['uptime']])

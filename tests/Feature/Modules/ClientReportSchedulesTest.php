@@ -17,10 +17,14 @@ use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
 
-/** A care-plan site whose compiled report has nothing to hold for review (no backup source to check, uptime probe running). */
+/**
+ * A care-plan site whose compiled report has nothing to hold for review (no
+ * backup source to check, uptime probe running, and enrolled long before any
+ * period a test compiles, so no report covers only part of a month).
+ */
 function reportableSite(array $attributes = []): Site
 {
-    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now()], $attributes));
+    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear()], $attributes));
 }
 
 it('requires authentication for schedule management routes', function () {

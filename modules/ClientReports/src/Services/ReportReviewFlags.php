@@ -2,6 +2,8 @@
 
 namespace Modules\ClientReports\Services;
 
+use Modules\ClientReports\Support\ReportPhrases;
+
 /**
  * Things in a compiled report that a person should see before the client
  * does. An auto schedule whose report has any of these is held as a draft
@@ -23,6 +25,14 @@ class ReportReviewFlags
     {
         $reasons = [];
         $security = (array) ($data['security'] ?? []);
+
+        // A site enrolled part-way through the month was only watched from then.
+        $coverageStart = ReportPhrases::monitoringBeganOn($data['meta']['coverage_start'] ?? null);
+        if ($coverageStart !== null) {
+            $reasons[] = ReportPhrases::monitoringBeganAfterPeriod($data)
+                ? "Monitoring began {$coverageStart}, after the end of this report's period, so it covers none of it."
+                : "Monitoring began {$coverageStart}, so this report covers only part of the month.";
+        }
 
         if (in_array($security['malware_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
             $reasons[] = 'The malware scan flagged something.';
@@ -62,11 +72,20 @@ class ReportReviewFlags
             $reasons[] = 'Companion '.($since ? "hasn't reported since {$since}" : 'has no snapshot date').', so waiting updates and plugin vulnerabilities are out of date.';
         }
 
+        $stillDown = false;
         foreach ((array) ($data['uptime']['outages'] ?? []) as $outage) {
             if (! empty($outage['ongoing'])) {
                 $reasons[] = 'The site was still down at the end of the month.';
+                $stillDown = true;
                 break;
             }
+        }
+
+        // A host rate-limiting the monitor (HTTP 429) isn't an outage, but
+        // nobody could see the site, so a person should check before it goes out.
+        $blockedSince = $data['uptime']['probe_blocked_since'] ?? null;
+        if (! $stillDown && is_string($blockedSince) && $blockedSince !== '') {
+            $reasons[] = 'The uptime monitor was blocked (HTTP 429) from '.ReportPhrases::time($blockedSince).'; the site was not necessarily down.';
         }
 
         return $reasons;

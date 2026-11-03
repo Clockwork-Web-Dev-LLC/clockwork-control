@@ -359,3 +359,43 @@ describe('backup destination', function () {
             ->and($views['public'])->not->toContain('Our records for this site start');
     });
 });
+
+describe('partial-month coverage', function () {
+    it('says when monitoring began in every view of a site enrolled part-way through the month', function () {
+        // Late evening UTC is still the same day in the report timezone.
+        $views = renderReportViews(viewsReport([
+            'meta' => ['schema_version' => ClientReportCompiler::SCHEMA_VERSION, 'custom_notes' => null, 'period_start' => '2026-09-01', 'period_end' => '2026-09-30', 'coverage_start' => '2026-09-26T18:20:00+00:00'],
+            'uptime' => [
+                'monitored' => true, 'probe_stopped' => false, 'monitored_since' => '2026-09-26T18:20:00+00:00', 'uptime_percentage' => 98.33,
+                'outages_count' => 1, 'downtime_minutes' => 102, 'total_period_minutes' => 6100,
+                'outages' => [['started_at' => '2026-09-27T10:00:00+00:00', 'minutes' => 102, 'started_before_period' => false, 'ongoing' => false]],
+            ],
+        ]));
+        $note = 'Monitoring began Sep 26, so this report covers Sep 26 – Sep 30.';
+
+        expect($views['html'])->toContain($note)->toContain('(monitoring began Sep 26)')
+            ->and($views['text'])->toContain("for September 2026.\n".$note)->toContain('Availability: 98.33% (monitoring began Sep 26)')
+            ->and($views['preview'])->toContain($note)->toContain('Monitoring began')->not->toContain('24 / 7 / 365')
+            ->and($views['public'])->toContain($note)->toContain('Monitoring began');
+    });
+
+    it('keeps a full month, and reports compiled before coverage was recorded, as they were', function () {
+        $views = renderReportViews(viewsReport());
+
+        expect($views['html'])->not->toContain('onitoring began')
+            ->and($views['text'])->not->toContain('onitoring began')
+            ->and($views['preview'])->toContain('24 / 7 / 365')->not->toContain('onitoring began');
+    });
+
+    it('shows the time the monitor was blocked only to the operator', function () {
+        $views = renderReportViews(viewsReport(['uptime' => [
+            'monitored' => true, 'probe_stopped' => false, 'uptime_percentage' => 100, 'outages_count' => 0, 'downtime_minutes' => 0,
+            'outages' => [], 'probe_blocked_minutes' => 720, 'probe_blocked_since' => null,
+        ]]));
+
+        expect($views['preview'])->toContain('The uptime monitor was blocked (HTTP 429) for 720 min this period.')
+            ->and($views['public'])->not->toContain('HTTP 429')
+            ->and($views['html'])->not->toContain('HTTP 429')
+            ->and($views['text'])->not->toContain('HTTP 429');
+    });
+});

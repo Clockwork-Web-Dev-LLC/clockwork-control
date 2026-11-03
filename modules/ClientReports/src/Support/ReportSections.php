@@ -85,9 +85,11 @@ final class ReportSections
     private static function hiddenReason(string $key, array $section, array $data): ?string
     {
         return match ($key) {
-            'uptime' => ! empty($section['probe_stopped'])
-                ? 'the uptime probe '.(! empty($section['last_checked_at']) ? "hasn't checked the site since {$section['last_checked_at']}" : 'has never checked the site')
-                : "the uptime probe doesn't check this site",
+            'uptime' => match (true) {
+                ! empty($section['probe_stopped']) => 'the uptime probe '.(! empty($section['last_checked_at']) ? "hasn't checked the site since {$section['last_checked_at']}" : 'has never checked the site'),
+                ReportPhrases::monitoringBeganAfterPeriod($data) => 'uptime monitoring began '.ReportPhrases::monitoringBeganOn($section['monitored_since'] ?? $data['meta']['coverage_start'] ?? null).', after this period',
+                default => "the uptime probe doesn't check this site",
+            },
             'performance' => 'no speed test ran in this period',
             'traffic' => 'no traffic was recorded for this period',
             'forms' => self::hasCurrentFormsData($data)
