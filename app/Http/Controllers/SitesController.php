@@ -36,6 +36,7 @@ use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeStateUpdater;
 use App\Support\CompanionExclusion;
 use App\Support\FleetSelfIps;
+use App\Support\UpgraderOutput;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -1567,7 +1568,9 @@ class SitesController extends Controller
         }
 
         try {
-            $result = (new ClockworkCompanionClient($site))->updatePlugin($slug);
+            // Redacted before it is logged or returned: the upgrader's
+            // download lines carry licence keys and signed URLs.
+            $result = UpgraderOutput::redact((new ClockworkCompanionClient($site))->updatePlugin($slug));
         } catch (Throwable $e) {
             $logger->record(
                 actionType: ActionLog::TYPE_PLUGIN_UPDATE,

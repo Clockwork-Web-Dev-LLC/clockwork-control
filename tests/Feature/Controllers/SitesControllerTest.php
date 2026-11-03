@@ -939,6 +939,39 @@ describe('updatePlugin', function () {
         $response->assertOk()->assertJsonPath('ok', true)->assertJsonPath('after_version', '5.4');
         expect(ActionLog::query()->where('site_id', $site->id)->where('action_type', ActionLog::TYPE_PLUGIN_UPDATE)->exists())->toBeTrue();
     });
+
+    it('keeps the licence key in the upgrader download line out of the action log and the response', function () {
+        $site = companionSite(['companion_capabilities' => ['updates']]);
+        $fakeLicense = 'FAKE-LICENSE-1234-5678-9012';
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
+                'ok' => true,
+                'slug' => 'sample-pro/sample-pro.php',
+                'before_version' => '2.0.0',
+                'after_version' => '2.1.0',
+                'was_active' => true,
+                'reactivated' => true,
+                'messages' => [
+                    "Downloading update from https://updates.example.com/?action=package_download&amp;license={$fakeLicense}&amp;domain=client.example.org&#8230;",
+                    'Unpacking the update&#8230;',
+                    'Plugin updated successfully.',
+                ],
+                'elapsed_ms' => 1500,
+            ], 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('sites.companion.plugin-update', $site), ['slug' => 'sample-pro/sample-pro.php']);
+
+        $response->assertOk()
+            ->assertJsonPath('messages.0', 'Downloading update from https://updates.example.com/[redacted]&#8230;');
+        expect($response->getContent())->not->toContain($fakeLicense);
+
+        $log = ActionLog::query()->where('site_id', $site->id)->where('action_type', ActionLog::TYPE_PLUGIN_UPDATE)->first();
+        expect($log->details['messages'][0])->toBe('Downloading update from https://updates.example.com/[redacted]&#8230;')
+            ->and(json_encode($log->details))->not->toContain($fakeLicense);
+    });
 });
 
 describe('flushPressableObjectCache', function () {

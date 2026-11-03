@@ -23,6 +23,7 @@ class PluginUpdateFailureStreak extends Model
         'last_target_version',
         'last_from_version',
         'last_error',
+        'reason_code',
         'last_failed_at',
         'last_job_id',
         'ignored_at',

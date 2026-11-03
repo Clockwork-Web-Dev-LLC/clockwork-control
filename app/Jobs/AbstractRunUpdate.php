@@ -8,6 +8,7 @@ use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Updates\UpdateFailureStreakRecorder;
+use App\Support\UpgraderOutput;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -125,7 +126,14 @@ abstract class AbstractRunUpdate implements ShouldQueue
             }
 
             $client = new ClockworkCompanionClient($site);
-            $result = $this->run($site, $row, $client);
+
+            // Redact before anything is derived from or persisted out of the
+            // result: the upgrader's "Downloading update from <url>" lines
+            // carry licence keys and signed download URLs, and everything
+            // below (messages + error columns, action_log details/summary,
+            // the Companion activity mirror, the failure streak, chat) reads
+            // from $result.
+            $result = UpgraderOutput::redact($this->run($site, $row, $client));
 
             $ok = (bool) ($result['ok'] ?? false);
 
@@ -148,6 +156,16 @@ abstract class AbstractRunUpdate implements ShouldQueue
             // while target_version was 9.0.1. Only applies when we had a
             // real target_version to compare against (core/plugin/theme;
             // translations has none, so this never fires for that kind).
+            //
+            // Not every stalled no-op is a stale update offer, though. The
+            // Companion/Renegade versions in the field also report ok=true
+            // (and upgrade_completed=true) when the WordPress upgrader
+            // itself failed and logged "Error: …" — "Could not copy file",
+            // "Could not create directory", "Download failed. Unauthorized",
+            // a bad zip. Those must surface as what they are (file
+            // permissions, licence, package), not as "no longer offered",
+            // or ops chase a premium licence while the real problem is
+            // file ownership. reason_code records the cause for grouping.
             $afterVersion = $result['after_version'] ?? null;
             $beforeVersion = $result['before_version'] ?? $row->before_version;
             if (
@@ -158,11 +176,38 @@ abstract class AbstractRunUpdate implements ShouldQueue
                 && $afterVersion !== $row->target_version
             ) {
                 $ok = false;
-                $result['error'] = sprintf(
-                    "WordPress's own update-checker no longer offered this update when the job ran (still on %s, expected %s). Common for premium/licensed plugins whose update source went stale or unreachable between our last check and now. Nothing was changed on the site.",
-                    $afterVersion,
-                    $row->target_version,
-                );
+                $errorLines = UpgraderOutput::errorLines($result['messages'] ?? null);
+
+                if ($errorLines !== []) {
+                    $result['reason_code'] = UpgraderOutput::classify($errorLines);
+                    $result['error'] = sprintf(
+                        '%s (WordPress upgrader error; still on %s, expected %s.)',
+                        implode(' — ', $errorLines),
+                        $afterVersion,
+                        $row->target_version,
+                    );
+                    // The upgrader stopped with an error and the version did
+                    // not move, so the file swap did not happen whatever
+                    // Companion claimed — there is nothing to verify/repair.
+                    $result['upgrade_completed'] = false;
+                } else {
+                    $result['reason_code'] = UpgraderOutput::REASON_NOT_OFFERED;
+                    $result['error'] = sprintf(
+                        "WordPress's own update-checker no longer offered this update when the job ran (still on %s, expected %s). Common for premium/licensed plugins whose update source went stale or unreachable between our last check and now. Nothing was changed on the site.",
+                        $afterVersion,
+                        $row->target_version,
+                    );
+                }
+            } elseif (! $ok && ! isset($result['reason_code'])) {
+                // Companion already reported the failure itself (ok=false,
+                // its own error text kept as-is). Still record the cause
+                // when the upgrader output says what it was, so a failure
+                // reported correctly is grouped the same way as one caught
+                // by the stalled check above.
+                $errorLines = UpgraderOutput::errorLines($result['messages'] ?? null);
+                if ($errorLines !== []) {
+                    $result['reason_code'] = UpgraderOutput::classify($errorLines);
+                }
             }
 
             // 'upgrade_completed' (Companion >= 1.30.2) tells us the file
@@ -228,10 +273,14 @@ abstract class AbstractRunUpdate implements ShouldQueue
                 'messages' => $result['messages'] ?? null,
                 'repairs' => $result['repairs'] ?? null,
                 'error' => $ok ? null : (string) ($result['error'] ?? 'unknown error'),
+                'reason_code' => $ok ? null : ($result['reason_code'] ?? null),
                 'completed_at' => now(),
             ])->save();
 
-            $summary = $this->actionLogSummary($row, $result);
+            // The summary follows the job's own verdict, not Companion's raw
+            // `ok`: a stalled no-op or an upgrader error must not be logged
+            // (and mirrored to wp-admin) as "Plugin updated: 1.0.0 → 1.0.0".
+            $summary = $this->actionLogSummary($row, ['ok' => $ok] + $result);
             $repairs = $result['repairs'] ?? [];
             if (is_array($repairs) && $repairs !== []) {
                 $repairCount = count($repairs);
@@ -258,19 +307,22 @@ abstract class AbstractRunUpdate implements ShouldQueue
             );
         } catch (Throwable $e) {
             $caughtException = $e;
+            // A transport exception can quote the response body, which may
+            // hold upgrader output — redact it like any other result text.
+            $exceptionMessage = UpgraderOutput::redactText($e->getMessage());
             $row->forceFill([
                 'status' => PluginUpdateJob::STATUS_FAILED,
-                'error' => $e->getMessage(),
+                'error' => $exceptionMessage,
                 'completed_at' => now(),
             ])->save();
 
             $logger->record(
                 actionType: $this->actionLogType(),
-                summary: "Update threw: {$e->getMessage()}",
+                summary: "Update threw: {$exceptionMessage}",
                 site: $site,
                 target: $this->actionLogTarget($row),
                 ok: false,
-                error: $e->getMessage(),
+                error: $exceptionMessage,
                 actor: $row->requested_by_user_id !== null ? "user:{$row->requested_by_user_id}" : 'auto',
             );
 
