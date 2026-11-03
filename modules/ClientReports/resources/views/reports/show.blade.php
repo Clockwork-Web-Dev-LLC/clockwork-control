@@ -209,9 +209,10 @@
                 @if ($showFormsTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
                         @if ($liveTests > 0)
-                            {{-- Only live runs send an email, so only they say anything about delivery. --}}
+                            {{-- Only live runs send an email, and all we learn is that the site
+                                 reported it sent: nothing watches the inbox, so no "deliverability". --}}
                             <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 0 }}%</div>
-                            <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Emails Sent</div>
                         @else
                             <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ (int) ($forms['lab_accepted'] ?? 0) }}/{{ $labTests }}</div>
                             <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Checks Passed</div>

@@ -197,7 +197,7 @@ describe('contact forms in the preview', function () {
         $views = renderReportViews(viewsReport(['forms' => ['live_tests' => 4, 'lab_tests' => 0, 'lab_accepted' => 0, 'pass_rate' => 75]]));
 
         expect($views['preview'])->toContain('We sent <strong>4</strong> test submissions through your forms to confirm messages reach you')
-            ->toContain('75% delivered')->toContain('Form Deliverability')
+            ->toContain('75% delivered')->toMatch('/>75%<\/div>\s*<div[^>]*>Form Emails Sent/')->not->toContain('Deliverability')
             ->and($views['html'])->toContain('75% delivered');
     });
 
