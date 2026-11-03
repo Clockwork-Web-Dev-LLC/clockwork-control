@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
+use App\Models\PluginUpdateFailureStreak;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\Site;
@@ -11,20 +12,69 @@ use App\Services\Security\PluginVulnerabilityMatcher;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-#[Signature('clockwork:run-nightly-plugin-updates {--dry-run : print candidates only, no DB writes / dispatch} {--site= : limit to one site (id or domain)}')]
+#[Signature('clockwork:run-nightly-plugin-updates {--dry-run : print candidates only, no DB writes / dispatch} {--site= : limit to one site (id or domain)} {--force : queue even if a fleet-wide nightly batch already ran for today\'s local date}')]
 #[Description('Queue plugin AND theme updates for every care-plan site that has either pending. Fired nightly at 02:00 ET; workers chew through the queue during the 4-hour window. Name predates theme support (added 2026-08-31) — kept as-is to avoid renaming a live scheduled job.')]
 class RunNightlyPluginUpdates extends Command
 {
+    /**
+     * Timezone the nightly is scheduled in (routes/console.php). "Today"
+     * for the once-per-night guard and the date in the batch id both use
+     * this zone, so a night maps to exactly one local calendar date.
+     */
+    public const LOCAL_TIMEZONE = 'America/New_York';
+
+    /**
+     * Every nightly batch id starts with this. UpdateFailureStreakRecorder,
+     * AbstractRunUpdate's chat ping, the stale-job reaper and the summary
+     * mail all key off the prefix, so it must not change.
+     */
+    public const BATCH_PREFIX = 'nightly-';
+
+    /**
+     * Marks a batch queued by an operator's --site run, so it never counts
+     * as (or blocks) the fleet-wide nightly for that date.
+     */
+    public const SITE_BATCH_MARKER = 'site-';
+
+    public const BYPASS_NEW_VERSION = 'new_version';
+
+    public const BYPASS_SECURITY_FIX = 'security_fix';
+
     public function handle(PluginVulnerabilityMatcher $vulnMatcher): int
     {
         $isDryRun = (bool) $this->option('dry-run');
         $siteFilter = $this->option('site');
+
+        // Once per local night. The chained schedule fires at 01:30
+        // America/New_York, and on the DST fall-back day 01:30 happens
+        // twice, so the whole refresh + update chain ran twice and every
+        // failure was counted twice toward the auto-pause threshold.
+        // Operator --site runs are explicit and are not guarded; --force
+        // overrides the guard for a deliberate fleet-wide re-run.
+        if (! $siteFilter && ! $this->option('force')) {
+            $existingBatch = $this->fleetBatchForLocalDate();
+            if ($existingBatch !== null) {
+                $localDate = Carbon::now(self::LOCAL_TIMEZONE)->format('Y-m-d');
+                if ($isDryRun) {
+                    $this->warn("Nightly batch {$existingBatch} already ran for {$localDate}; a real run would be skipped (use --force to override).");
+                } else {
+                    $this->info("Nightly batch {$existingBatch} already ran for {$localDate}. Skipping (use --force to override).");
+                    Log::info('plugin_update.nightly_already_ran', [
+                        'local_date' => $localDate,
+                        'batch_id' => $existingBatch,
+                    ]);
+
+                    return self::SUCCESS;
+                }
+            }
+        }
 
         $candidates = $this->loadCandidateSites($siteFilter);
 
@@ -67,6 +117,10 @@ class RunNightlyPluginUpdates extends Command
                 if ($slug === '') {
                     continue;
                 }
+                // The snapshot slug is "directory/file.php"; the matcher keys
+                // on the directory only, so compare on that.
+                $dirSlug = self::directorySlug($slug);
+                $isVulnerable = array_key_exists($dirSlug, $vulnSlugs);
                 $tuples[] = [
                     'site' => $site,
                     'kind' => PluginUpdateJob::KIND_PLUGIN,
@@ -74,7 +128,9 @@ class RunNightlyPluginUpdates extends Command
                     'name' => $entry['name'] ?? null,
                     'before_version' => $entry['version'] ?? null,
                     'target_version' => $entry['new_version'] ?? null,
-                    'is_vulnerable' => isset($vulnSlugs[$slug]),
+                    'is_vulnerable' => $isVulnerable,
+                    'patched_in' => $isVulnerable ? $vulnSlugs[$dirSlug] : null,
+                    'pause_bypass' => null,
                 ];
             }
 
@@ -91,6 +147,8 @@ class RunNightlyPluginUpdates extends Command
                     'before_version' => $entry['version'] ?? null,
                     'target_version' => $entry['new_version'] ?? null,
                     'is_vulnerable' => false,
+                    'patched_in' => null,
+                    'pause_bypass' => null,
                 ];
             }
         }
@@ -101,7 +159,8 @@ class RunNightlyPluginUpdates extends Command
             return self::SUCCESS;
         }
 
-        // Drop tuples in PluginUpdateIgnore.
+        // Drop tuples in PluginUpdateIgnore (auto-failure pauses can be let
+        // through for a new release or a security fix; see filterIgnored).
         $tuples = $this->filterIgnored($tuples);
 
         // Drop tuples that already have a live PluginUpdateJob for this kind/slug.
@@ -128,6 +187,7 @@ class RunNightlyPluginUpdates extends Command
 
         $vulnerableCount = collect($tuples)->where('is_vulnerable', true)->count();
         $sitesTouched = collect($tuples)->pluck('site.id')->unique()->count();
+        $retried = array_values(array_filter($tuples, fn ($t) => $t['pause_bypass'] !== null));
 
         $this->info(sprintf(
             'Queue: %d tuples (%d vulnerable-first) across %d site%s.',
@@ -137,18 +197,29 @@ class RunNightlyPluginUpdates extends Command
             $sitesTouched === 1 ? '' : 's',
         ));
 
+        if ($retried !== []) {
+            $this->info(sprintf(
+                'Retrying %d auto-paused update%s (%d new release, %d security fix).',
+                count($retried),
+                count($retried) === 1 ? '' : 's',
+                count(array_filter($retried, fn ($t) => $t['pause_bypass'] === self::BYPASS_NEW_VERSION)),
+                count(array_filter($retried, fn ($t) => $t['pause_bypass'] === self::BYPASS_SECURITY_FIX)),
+            ));
+        }
+
         if ($isDryRun) {
             // Print the first ~25 tuples so the operator can sanity-check
             // ordering without flooding stdout on a 200-row night.
             foreach (array_slice($tuples, 0, 25) as $t) {
                 $this->line(sprintf(
-                    '  %s %s [%s] %s (%s → %s)',
+                    '  %s %s [%s] %s (%s → %s)%s',
                     $t['is_vulnerable'] ? '!CVE' : '    ',
                     str_pad((string) $t['site']->domain, 36),
                     $t['kind'],
                     $t['slug'],
                     $t['before_version'] ?: '?',
                     $t['target_version'] ?: '?',
+                    $t['pause_bypass'] !== null ? " [auto-paused, retry: {$t['pause_bypass']}]" : '',
                 ));
             }
             if (count($tuples) > 25) {
@@ -160,10 +231,25 @@ class RunNightlyPluginUpdates extends Command
 
         // Real run. One batch_id for the whole night so the summary command
         // can find them with a LIKE 'nightly-%' query and the dashboard can
-        // group them as a single batch.
-        $batchId = 'nightly-'.Carbon::now()->format('Y-m-d').'-'.Str::random(8);
+        // group them as a single batch. The date is the local night's date
+        // (same zone as the once-per-night guard above).
+        $batchId = self::BATCH_PREFIX
+            .Carbon::now(self::LOCAL_TIMEZONE)->format('Y-m-d')
+            .'-'.($siteFilter ? self::SITE_BATCH_MARKER : '')
+            .Str::random(8);
         $accepted = 0;
         $failed = 0;
+
+        foreach ($retried as $t) {
+            Log::info('plugin_update.nightly_retrying_auto_paused', [
+                'site_id' => $t['site']->id,
+                'kind' => $t['kind'],
+                'slug' => $t['slug'],
+                'target_version' => $t['target_version'],
+                'reason' => $t['pause_bypass'],
+                'batch_id' => $batchId,
+            ]);
+        }
 
         foreach ($tuples as $t) {
             try {
@@ -302,7 +388,12 @@ class RunNightlyPluginUpdates extends Command
     }
 
     /**
-     * @return array<string, true> slug => true map (for fast lookup)
+     * Plugins on this site whose installed version has a known
+     * vulnerability, keyed by directory slug (the matcher's plugin_slug).
+     * The value is the highest patched_in among those advisories that
+     * have a fix newer than the installed version, or null when none do.
+     *
+     * @return array<string, string|null> directory slug => highest patched_in
      */
     private function vulnerableSlugsForSite(Site $site, PluginVulnerabilityMatcher $matcher): array
     {
@@ -310,9 +401,19 @@ class RunNightlyPluginUpdates extends Command
         try {
             foreach ($matcher->forSite($site) as $row) {
                 $slug = (string) ($row['plugin_slug'] ?? '');
-                if ($slug !== '') {
-                    $hits[$slug] = true;
+                if ($slug === '') {
+                    continue;
                 }
+
+                $highest = $hits[$slug] ?? null;
+                $patchedIn = ($row['patch_available'] ?? false)
+                    ? trim((string) ($row['vulnerability']->patched_in ?? ''))
+                    : '';
+                if ($patchedIn !== '' && ($highest === null || version_compare($patchedIn, $highest, '>'))) {
+                    $highest = $patchedIn;
+                }
+
+                $hits[$slug] = $highest;
             }
         } catch (\Throwable $e) {
             // Vuln matcher failure is not fatal for the auto-update loop —
@@ -351,7 +452,16 @@ class RunNightlyPluginUpdates extends Command
     }
 
     /**
-     * Drop tuples whose (site, plugin) is in PluginUpdateIgnore.
+     * Drop tuples whose (site, kind, slug) is in PluginUpdateIgnore.
+     *
+     * Manual ignores always win. An auto-failure pause (the slug failed the
+     * nightly loop N times in a row) is let through, and the tuple tagged
+     * with why, when either:
+     *   - the offered version differs from the version that kept failing
+     *     (a new release since the pause; one attempt per new version,
+     *     because a failed attempt records it as the new last target), or
+     *   - the installed version is vulnerable and the offered version is
+     *     at or above the highest patched_in, so the update is the fix.
      *
      * @param  list<array<string, mixed>>  $tuples
      * @return list<array<string, mixed>>
@@ -366,22 +476,127 @@ class RunNightlyPluginUpdates extends Command
         // in principle share a slug string, and an ignore entry for one
         // kind must never suppress the other.
         $triples = collect($tuples)->map(fn ($t) => [$t['site']->id, $t['kind'], $t['slug']])->all();
-        $ignored = PluginUpdateIgnore::query()
-            ->where(function ($q) use ($triples) {
-                foreach ($triples as [$siteId, $kind, $slug]) {
-                    $q->orWhere(function ($qq) use ($siteId, $kind, $slug) {
-                        $qq->where('site_id', $siteId)->where('target_kind', $kind)->where('target_slug', $slug);
-                    });
-                }
-            })
-            ->get(['site_id', 'target_kind', 'target_slug'])
-            ->mapWithKeys(fn ($row) => ["{$row->target_kind}:{$row->site_id}:{$row->target_slug}" => true])
-            ->all();
+        $ignores = PluginUpdateIgnore::query()
+            ->where(fn ($q) => $this->whereAnyTriple($q, $triples))
+            ->get(['site_id', 'target_kind', 'target_slug', 'source'])
+            ->keyBy(fn ($row) => "{$row->target_kind}:{$row->site_id}:{$row->target_slug}");
 
-        return array_values(array_filter(
-            $tuples,
-            fn ($t) => ! isset($ignored["{$t['kind']}:{$t['site']->id}:{$t['slug']}"]),
-        ));
+        if ($ignores->isEmpty()) {
+            return $tuples;
+        }
+
+        $autoPaused = $ignores->filter(fn (PluginUpdateIgnore $row) => $row->isAutoFailure());
+        $streaks = $autoPaused->isEmpty()
+            ? collect()
+            : PluginUpdateFailureStreak::query()
+                ->where(fn ($q) => $this->whereAnyTriple(
+                    $q,
+                    $autoPaused->map(fn ($row) => [$row->site_id, $row->target_kind, $row->target_slug])->values()->all(),
+                ))
+                ->get(['site_id', 'target_kind', 'target_slug', 'last_target_version'])
+                ->keyBy(fn ($row) => "{$row->target_kind}:{$row->site_id}:{$row->target_slug}");
+
+        $kept = [];
+        foreach ($tuples as $t) {
+            $key = "{$t['kind']}:{$t['site']->id}:{$t['slug']}";
+            $ignore = $ignores->get($key);
+            if ($ignore === null) {
+                $kept[] = $t;
+
+                continue;
+            }
+
+            if (! $ignore->isAutoFailure()) {
+                continue;
+            }
+
+            $bypass = $this->autoPauseBypassReason($t, $streaks->get($key));
+            if ($bypass !== null) {
+                $t['pause_bypass'] = $bypass;
+                $kept[] = $t;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Why an auto-failure pause should not hold this tuple back tonight,
+     * or null to keep it paused.
+     *
+     * @param  array<string, mixed>  $tuple
+     */
+    private function autoPauseBypassReason(array $tuple, ?PluginUpdateFailureStreak $streak): ?string
+    {
+        $offered = trim((string) ($tuple['target_version'] ?? ''));
+        if ($offered === '') {
+            return null;
+        }
+
+        $patchedIn = (string) ($tuple['patched_in'] ?? '');
+        if ($tuple['is_vulnerable'] && $patchedIn !== '' && version_compare($offered, $patchedIn, '>=')) {
+            return self::BYPASS_SECURITY_FIX;
+        }
+
+        // Without a recorded failing version there is nothing to compare
+        // against, so the pause stands.
+        $failedVersion = trim((string) ($streak?->last_target_version ?? ''));
+        if ($failedVersion !== '' && $offered !== $failedVersion) {
+            return self::BYPASS_NEW_VERSION;
+        }
+
+        return null;
+    }
+
+    /**
+     * The first fleet-wide nightly batch already queued during the current
+     * local (LOCAL_TIMEZONE) calendar day, or null. Looks at created_at
+     * rather than the date in the batch id, so it is right on 23- and
+     * 25-hour DST days and for batches named before the id used the local
+     * date. --site batches are excluded so an operator's single-site run
+     * never stops the fleet's nightly.
+     */
+    private function fleetBatchForLocalDate(): ?string
+    {
+        $appTimezone = (string) config('app.timezone');
+        $localStart = Carbon::now(self::LOCAL_TIMEZONE)->startOfDay();
+        $localEnd = $localStart->copy()->addDay();
+
+        $batchId = PluginUpdateJob::query()
+            ->where('batch_id', 'like', self::BATCH_PREFIX.'%')
+            ->where('batch_id', 'not like', self::BATCH_PREFIX.'%-'.self::SITE_BATCH_MARKER.'%')
+            ->where('created_at', '>=', $localStart->copy()->setTimezone($appTimezone))
+            ->where('created_at', '<', $localEnd->copy()->setTimezone($appTimezone))
+            ->orderBy('id')
+            ->value('batch_id');
+
+        return is_string($batchId) ? $batchId : null;
+    }
+
+    /**
+     * Directory part of a Companion plugin slug ("dir/file.php" → "dir");
+     * a single-file plugin ("hello.php") is returned as-is. Same rule as
+     * PluginVulnerabilityMatcher.
+     */
+    private static function directorySlug(string $slug): string
+    {
+        $dir = strtok($slug, '/');
+
+        return $dir === false ? $slug : $dir;
+    }
+
+    /**
+     * OR together one (site_id, target_kind, target_slug) match per triple.
+     *
+     * @param  list<array{0: int, 1: string, 2: string}>  $triples
+     */
+    private function whereAnyTriple(QueryBuilder $query, array $triples): void
+    {
+        foreach ($triples as [$siteId, $kind, $slug]) {
+            $query->orWhere(function ($qq) use ($siteId, $kind, $slug) {
+                $qq->where('site_id', $siteId)->where('target_kind', $kind)->where('target_slug', $slug);
+            });
+        }
     }
 
     /**

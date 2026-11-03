@@ -322,7 +322,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.42.0'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.43.0'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
@@ -417,6 +417,11 @@ return [
         // this are usually pages Lighthouse can't measure stably anyway.
         'poll_interval_seconds' => (int) env('CLOCKWORK_GTMETRIX_POLL_INTERVAL', 5),
         'poll_max_attempts' => (int) env('CLOCKWORK_GTMETRIX_POLL_MAX_ATTEMPTS', 36),
+        // API credits the plan refills each day (Core tier: 10, at ~04:27
+        // UTC; unused credits don't carry over). One test costs one credit.
+        // The nightly rotation's month-end catch-up never schedules more
+        // scans than this; raise it if the plan changes.
+        'daily_credits' => (int) env('CLOCKWORK_GTMETRIX_DAILY_CREDITS', 10),
     ],
 
     'security_scans' => [

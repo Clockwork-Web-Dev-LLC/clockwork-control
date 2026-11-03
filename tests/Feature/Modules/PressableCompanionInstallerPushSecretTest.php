@@ -83,3 +83,29 @@ it('does not fail the secret push when only the cache flush fails', function () 
 
     expect($secret)->toBeString()->and(strlen($secret))->toBe(64);
 });
+
+it('extracts Companion into wp-content/plugins/clockwork-companion, cleans up legacy mu-plugins, and activates on Pressable', function () {
+    $runner = Mockery::mock(PressableCommandRunner::class);
+
+    $runner->shouldReceive('runOrFail')
+        ->once()
+        ->withArgs(function ($psId, string $cmd): bool {
+            return $psId === '12345'
+                && str_contains($cmd, '/srv/htdocs/wp-content/plugins')
+                && str_contains($cmd, 'clockwork-companion/clockwork-companion.php')
+                && str_contains($cmd, 'rm -f \'/srv/htdocs/wp-content/mu-plugins\'/clockwork-companion.php')
+                && str_contains($cmd, 'wp --skip-plugins --skip-themes plugin activate clockwork-companion');
+        })
+        ->andReturn('swapped');
+
+    $installer = new PressableCompanionInstaller(
+        $runner,
+        Mockery::mock(CompanionTarballBuilder::class),
+        Mockery::mock(PressableClient::class),
+    );
+
+    $method = new ReflectionMethod(PressableCompanionInstaller::class, 'extract');
+    $method->setAccessible(true);
+
+    $method->invoke($installer, '12345', '/srv/htdocs/wp-content/mu-plugins/.cw-stage-abc');
+});

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Modules\BackupRelay\Jobs\ArchiveSiteBackupJob;
 use Modules\BackupRelay\Services\GlacierUploader;
+use Modules\BackupRelay\Services\RelayAttemptRecorder;
 use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
@@ -120,6 +121,10 @@ class RunBackupRelayNow extends Command
                 ];
                 $this->error("  [fail] {$site->domain} — {$e->getMessage()}");
                 Log::error('backup_relay.site_failed', ['site_id' => $site->id, 'direct_only' => $directOnly, 'error' => $e->getMessage()]);
+                // The job records its own failures; this also covers anything
+                // that failed around it. Neither the log nor this command's
+                // output is kept anywhere an operator can see it.
+                RelayAttemptRecorder::recordFailure($site, $e->getMessage());
             } finally {
                 if ($locked) {
                     Cache::forget($lockKey);

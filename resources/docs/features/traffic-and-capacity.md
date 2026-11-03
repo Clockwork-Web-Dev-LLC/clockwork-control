@@ -2,7 +2,7 @@
 title: Traffic + capacity
 section: Features
 order: 120
-updated: 2026-09-28
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [traffic, capacity, visits, analytics, pressable, eol, php]
 tracks: [app/Console/Commands/RollupTraffic.php, app/Http/Controllers/CapacityController.php, app/Services/Runtime/**, app/Console/Commands/RefreshRuntimeEol.php, app/Console/Commands/PressableTrafficReport.php, modules/Pressable/src/PressableClient.php]
@@ -90,11 +90,11 @@ So if you need to backfill rollups for a date older than 30 days, the data isn't
 
 ## Pressable traffic reporting — pushed to Companion, not this page
 
-`clockwork:pressable-traffic-report` (daily 06:37) builds a 30-day **daily** rollup for each Companion-equipped Pressable site — sourced from Pressable's time-series metrics API (`POST /sites/{id}/metrics`, via `PressableClient::siteMetrics()`). Pressable's `/metrics` endpoint provides per-day requests (by HTTP status), daily unique visitors, and per-path request counts, enabling the command to build the standard `{totals: {today, month_30d}, daily: [...]}` payload shape expected by `PushCompanionTraffic`. Companion's `TrafficPage` renders the normal chart display seamlessly.
+`clockwork:pressable-traffic-report` (daily 04:45) builds a 30-day **daily** rollup for each Companion-equipped Pressable site — sourced from Pressable's time-series metrics API (`POST /sites/{id}/metrics`, via `PressableClient::siteMetrics()`). Pressable's `/metrics` endpoint provides per-day requests (by HTTP status), daily unique visitors, and per-path request counts, enabling the command to build the standard `{totals: {today, month_30d}, daily: [...]}` payload shape expected by `PushCompanionTraffic`. Companion's `TrafficPage` renders the normal chart display seamlessly.
 
 Two real Pressable API quirks the command has to work around: metrics/dimensions must come from the same "family" to combine (mixing `views` with `http_status` silently returns empty rather than erroring), and the auto-selected time resolution differs by family for the same date range (daily buckets for Uniques & Views, 8-hour buckets for Edge Logs — aggregated into calendar days here).
 
-This command also upserts the same daily rows into Clockwork's `site_traffic_daily` table, which is what `/capacity` reads for Pressable MTD / rolling / trending numbers. The dashboard itself makes **one** Pressable `GET /account` per hour (5-minute negative cache on failure) and otherwise stays on local SQL.
+Before any push, the command also upserts daily rows into Clockwork's `site_traffic_daily` table for **every** Pressable site with a Pressable site id, Companion or not. This is what `/capacity` reads for Pressable MTD / rolling / trending numbers, and what monthly client reports read, which is why it runs before the 06:00 report run. Only the days and metrics Pressable actually returned are written, over the last 28 days; the zero-filled days of the Companion chart are never stored, so a day Pressable has nothing for (for example before a site moved to Pressable) keeps its earlier row. `bytes_sent` and `top_paths` are never overwritten. The dashboard itself makes **one** Pressable `GET /account` per hour (5-minute negative cache on failure) and otherwise stays on local SQL.
 
 The per-site `/sites/{id}/traffic` tab still stays hidden for Pressable sites (no nginx access log to source it from). Clients see the chart in Companion wp-admin (`/traffic-report`) via this push; operators see Pressable quota on `/capacity` from the same `site_traffic_daily` rows.
 

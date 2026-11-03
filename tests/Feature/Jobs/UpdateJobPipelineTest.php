@@ -8,6 +8,7 @@ use App\Models\PluginUpdateJob;
 use App\Models\Site;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -189,6 +190,258 @@ describe('AbstractRunUpdate failure path (via RunPluginUpdate)', function () {
         $log = ActionLog::where('site_id', $site->id)->first();
         expect($log->ok)->toBeFalse()
             ->and($log->summary)->toContain('Plugin update failed');
+    });
+});
+
+/*
+| Realistic upgrader output as Companion returns it in `messages`. The
+| licence key and signature are invented; hosts are reserved example
+| domains. Field Companion/Renegade versions answer ok=true and
+| upgrade_completed=true for these even though the upgrader failed.
+*/
+const PIPELINE_FAKE_LICENSE = 'FAKE-LICENSE-9999-8888-7777';
+
+function licensedDownloadLine(): string
+{
+    return 'Downloading update from https://updates.example.com/?action=package_download&amp;license='
+        .PIPELINE_FAKE_LICENSE.'&amp;domain=client.example.org&#8230;';
+}
+
+/**
+ * @param  list<string>  $messages
+ * @return array<string, mixed>
+ */
+function stalledUpgraderResponse(array $messages, string $version = '1.0.0'): array
+{
+    return [
+        'ok' => true,
+        'upgrade_completed' => true,
+        'slug' => 'sample-plugin/sample-plugin.php',
+        'before_version' => $version,
+        'after_version' => $version,
+        'was_active' => true,
+        'reactivated' => true,
+        'messages' => $messages,
+        'elapsed_ms' => 900,
+    ];
+}
+
+function makeVerifyCapableSite(): Site
+{
+    // post-update-verify capability + a snapshot means verifyAndRepair()
+    // WOULD run whenever the job believes the upgrade completed.
+    return makeCompanionSite([
+        'companion_capabilities' => ['updates', 'post-update-verify'],
+        'companion_snapshot' => [
+            'plugins' => ['plugins' => [
+                ['slug' => 'sample-plugin/sample-plugin.php', 'name' => 'Sample Plugin', 'version' => '1.0.0', 'active' => true],
+            ]],
+            'themes' => ['items' => []],
+        ],
+        'companion_snapshot_at' => now(),
+    ]);
+}
+
+function fakeUpdateAndVerify(Site $site, array $updateResponse): void
+{
+    Http::fake([
+        "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response($updateResponse, 200),
+        "https://{$site->domain}/wp-json/clockwork/v1/post-update-verify*" => Http::response(['ok' => true, 'repairs' => []], 200),
+    ]);
+}
+
+describe('AbstractRunUpdate stalled no-op with a real upgrader error', function () {
+    it('records the upgrader error and fs_permission instead of "no longer offered", skips verify, and keeps the licence key out of everything it stores', function () {
+        $site = makeVerifyCapableSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-plugin/sample-plugin.php',
+            'target_name' => 'Sample Plugin',
+            'before_version' => '1.0.0',
+            'target_version' => '1.1.0',
+            'batch_id' => 'nightly-'.now()->format('Y-m-d'),
+        ]);
+
+        fakeUpdateAndVerify($site, stalledUpgraderResponse([
+            licensedDownloadLine(),
+            'Unpacking the update&#8230;',
+            'Could not copy file. sample-plugin/includes/class-admin.php',
+            'Error: Could not copy file.',
+        ]));
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateFailed')
+                ->once()
+                ->withArgs(fn (Site $s, PluginUpdateJob $j) => str_contains((string) $j->error, 'Could not copy file. sample-plugin/includes/class-admin.php')
+                    && ! str_contains((string) $j->error, PIPELINE_FAKE_LICENSE))
+                ->andReturn(true);
+        });
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_FAILED)
+            ->and($job->reason_code)->toBe('fs_permission')
+            ->and($job->error)->toBe('Could not copy file. sample-plugin/includes/class-admin.php — Error: Could not copy file. (WordPress upgrader error; still on 1.0.0, expected 1.1.0.)')
+            ->and($job->error)->not->toContain('no longer offered')
+            ->and($job->messages[0])->toBe('Downloading update from https://updates.example.com/[redacted]&#8230;')
+            ->and(json_encode($job->messages))->not->toContain(PIPELINE_FAKE_LICENSE);
+
+        // The upgrader failed, so there was no file swap to verify.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/post-update-verify'));
+
+        $log = ActionLog::where('action_type', ActionLog::TYPE_PLUGIN_UPDATE)->where('site_id', $site->id)->first();
+        expect($log->ok)->toBeFalse()
+            ->and($log->details['reason_code'])->toBe('fs_permission')
+            ->and($log->details['upgrade_completed'])->toBeFalse()
+            ->and($log->summary)->toContain('Could not copy file.')
+            ->and(json_encode($log->details))->not->toContain(PIPELINE_FAKE_LICENSE)
+            ->and($log->summary.$log->error)->not->toContain(PIPELINE_FAKE_LICENSE);
+    });
+
+    it('classifies a refused licensed download as download_unauthorized', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-pro/sample-pro.php',
+            'before_version' => '3.0.0',
+            'target_version' => '4.0.0',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        fakeUpdateAndVerify($site, stalledUpgraderResponse([
+            licensedDownloadLine(),
+            'Download failed. Unauthorized',
+            'Error: Download failed.',
+        ], '3.0.0'));
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_FAILED)
+            ->and($job->reason_code)->toBe('download_unauthorized')
+            ->and($job->error)->toStartWith('Download failed. Unauthorized — Error: Download failed.')
+            ->and($job->error)->not->toContain(PIPELINE_FAKE_LICENSE);
+    });
+
+    it('never copies the download line into the error, even when it directly precedes the Error: line', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-pro/sample-pro.php',
+            'before_version' => '3.0.0',
+            'target_version' => '4.0.0',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        fakeUpdateAndVerify($site, stalledUpgraderResponse([
+            licensedDownloadLine(),
+            'Error: Download failed.',
+        ], '3.0.0'));
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->error)->toStartWith('Error: Download failed. (WordPress upgrader error;')
+            ->and($job->error)->not->toContain('Downloading')
+            ->and($job->error)->not->toContain('updates.example.com')
+            ->and($job->reason_code)->toBe('upgrader_error');
+    });
+
+    it('keeps the "no longer offered" explanation, as reason not_offered, when the upgrader logged no error', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'js_composer/js_composer.php',
+            'before_version' => '8.7.2',
+            'target_version' => '9.0.1',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        fakeUpdateAndVerify($site, stalledUpgraderResponse(['Plugin is already up to date.'], '8.7.2'));
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_FAILED)
+            ->and($job->reason_code)->toBe('not_offered')
+            ->and($job->error)->toContain("WordPress's own update-checker no longer offered this update")
+            ->and($job->error)->toContain('still on 8.7.2, expected 9.0.1');
+
+        // Logged as the failure it is, not as "Plugin updated: 8.7.2 → 8.7.2".
+        $log = ActionLog::where('action_type', ActionLog::TYPE_PLUGIN_UPDATE)->where('site_id', $site->id)->first();
+        expect($log->ok)->toBeFalse()
+            ->and($log->summary)->toStartWith('Plugin update failed:');
+    });
+
+    it('does not fail an update that reached its target just because an Error: line is present', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-plugin/sample-plugin.php',
+            'before_version' => '1.0.0',
+            'target_version' => '1.1.0',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        fakeUpdateAndVerify($site, array_merge(stalledUpgraderResponse([
+            licensedDownloadLine(),
+            'Error: Could not remove the old translation file.',
+            'Plugin updated successfully.',
+        ]), ['after_version' => '1.1.0']));
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_COMPLETE)
+            ->and($job->error)->toBeNull()
+            ->and($job->reason_code)->toBeNull()
+            ->and(json_encode($job->messages))->not->toContain(PIPELINE_FAKE_LICENSE);
+    });
+
+    it('keeps Companion\'s own error when it reports ok=false, but still records the upgrader reason code', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-plugin/sample-plugin.php',
+            'before_version' => '1.0.0',
+            'target_version' => '1.1.0',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        fakeUpdateAndVerify($site, array_merge(stalledUpgraderResponse([
+            licensedDownloadLine(),
+            'Unpacking the update&#8230;',
+            'Could not create directory. /var/www/html/wp-content/upgrade/sample-plugin_1.1.0-AbC12d-x9Yz',
+            'Error: Could not create directory.',
+        ]), ['ok' => false, 'upgrade_completed' => false, 'error' => 'Could not create directory.']));
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_FAILED)
+            ->and($job->error)->toBe('Could not create directory.')
+            ->and($job->reason_code)->toBe('fs_permission');
+    });
+
+    it('redacts URLs quoted in a transport exception message', function () {
+        $site = makeCompanionSite();
+        $job = PluginUpdateJob::factory()->for($site)->create([
+            'target_slug' => 'sample-plugin/sample-plugin.php',
+            'batch_id' => (string) Str::uuid(),
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => function () {
+                throw new ConnectionException(
+                    'cURL error 28 while fetching https://updates.example.com/pkg.zip?license='.PIPELINE_FAKE_LICENSE
+                );
+            },
+        ]);
+
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        $job->refresh();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_FAILED)
+            ->and($job->error)->toContain('cURL error 28')
+            ->and($job->error)->not->toContain(PIPELINE_FAKE_LICENSE);
+
+        $log = ActionLog::where('site_id', $site->id)->first();
+        expect($log->summary.$log->error)->not->toContain(PIPELINE_FAKE_LICENSE);
     });
 });
 

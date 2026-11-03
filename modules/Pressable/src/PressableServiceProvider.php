@@ -68,8 +68,16 @@ class PressableServiceProvider extends ModuleServiceProvider
             ->withoutOverlapping(60)
             ->onOneServer();
 
+        // Also writes site_traffic_daily, which the 06:00 client-report run
+        // reads, so it must finish well before then: a run after the
+        // reports leaves the last day of the month with only the hours
+        // recorded the morning before. Times here are UTC; Pressable's
+        // buckets are UTC days, so by 04:45 yesterday is complete with
+        // margin for Pressable's own lag, and the ~15-20 min run ends long
+        // before 06:00. The capability check reads the previous day's 06:25
+        // refresh, which only matters the day a site first upgrades.
         $schedule->command('clockwork:pressable-traffic-report')
-            ->dailyAt('06:37')
+            ->dailyAt('04:45')
             ->withoutOverlapping(60)
             ->onOneServer();
 

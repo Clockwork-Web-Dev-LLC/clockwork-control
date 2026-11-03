@@ -11,6 +11,7 @@ use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Support\Settings;
+use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -24,7 +25,11 @@ use Throwable;
  * client_visible=true).
  *
  * Other plugins on the site continue their regular care-plan updates.
- * Any successful update (nightly or manual) resets the streak.
+ * Any successful update (nightly or manual) resets the streak. A successful
+ * update that reaches its target version also lifts an auto-failure pause
+ * for that slug and re-pushes the exceptions list, so the wp-admin notice
+ * clears. (The nightly loop retries auto-paused slugs when a new release or
+ * a security fix is offered; see RunNightlyPluginUpdates::filterIgnored.)
  */
 class UpdateFailureStreakRecorder
 {
@@ -48,6 +53,10 @@ class UpdateFailureStreakRecorder
         // On any success (nightly or manual), reset the streak to 0.
         if ($job->status === PluginUpdateJob::STATUS_COMPLETE) {
             $this->resetStreak($job->site_id, $job->target_kind, $job->target_slug);
+
+            if ($this->reachedTargetVersion($job)) {
+                $this->liftAutoPause($job);
+            }
 
             return;
         }
@@ -74,7 +83,7 @@ class UpdateFailureStreakRecorder
             return;
         }
 
-        $this->incrementStreak($job);
+        $this->incrementStreak($job, $result);
     }
 
     /**
@@ -102,7 +111,71 @@ class UpdateFailureStreakRecorder
             ->update(['consecutive_failures' => 0]);
     }
 
-    private function incrementStreak(PluginUpdateJob $job): void
+    /**
+     * Did the job land on (or past) the version it was queued for? Needs
+     * both versions: a completed job without them proves nothing about
+     * whether the version that kept failing is now installed.
+     */
+    private function reachedTargetVersion(PluginUpdateJob $job): bool
+    {
+        $target = trim((string) ($job->target_version ?? ''));
+        $after = trim((string) ($job->after_version ?? ''));
+
+        return $target !== '' && $after !== '' && version_compare($after, $target, '>=');
+    }
+
+    /**
+     * Remove this slug's auto-failure pause after a successful update:
+     * delete the ignore row (manual ignores are left alone), clear the
+     * streak's pause markers, and push the shorter exceptions list so the
+     * client's wp-admin stops showing the plugin as paused.
+     */
+    private function liftAutoPause(PluginUpdateJob $job): void
+    {
+        $deleted = PluginUpdateIgnore::query()
+            ->where('site_id', $job->site_id)
+            ->where('target_kind', $job->target_kind)
+            ->where('target_slug', $job->target_slug)
+            ->where('source', PluginUpdateIgnore::SOURCE_AUTO_FAILURE)
+            ->delete();
+
+        if ($deleted === 0) {
+            return;
+        }
+
+        PluginUpdateFailureStreak::query()
+            ->where('site_id', $job->site_id)
+            ->where('target_kind', $job->target_kind)
+            ->where('target_slug', $job->target_slug)
+            ->update([
+                'consecutive_failures' => 0,
+                'ignored_at' => null,
+                'ignore_id' => null,
+            ]);
+
+        Log::info('updates.auto_pause_lifted', [
+            'site_id' => $job->site_id,
+            'kind' => $job->target_kind,
+            'slug' => $job->target_slug,
+            'version' => $job->after_version,
+            'job_id' => $job->id,
+        ]);
+
+        $site = $job->site;
+        if ($site instanceof Site) {
+            $this->maybePushExceptions($site);
+        }
+    }
+
+    /**
+     * Count one more plugin-level nightly failure and, at the threshold,
+     * pause it. A file-permission failure (reason_code fs_permission) that
+     * affects the whole site pauses the site once instead of auto-ignoring
+     * the plugin — see pauseSiteForFilesystemFailure().
+     *
+     * @param  array<string, mixed>|null  $result
+     */
+    private function incrementStreak(PluginUpdateJob $job, ?array $result = null): void
     {
         $streak = PluginUpdateFailureStreak::firstOrNew([
             'site_id' => $job->site_id,
@@ -113,7 +186,11 @@ class UpdateFailureStreakRecorder
         $streak->consecutive_failures = (int) $streak->consecutive_failures + 1;
         $streak->last_target_version = $job->target_version;
         $streak->last_from_version = $job->before_version;
-        $streak->last_error = mb_strimwidth((string) ($job->error ?? 'unknown error'), 0, 500, '…');
+        // last_error is copied into the ignore row, the chat alerts and the
+        // site pause log, so it gets the same redaction as the job's own
+        // columns even if the job error was written by another path.
+        $streak->last_error = mb_strimwidth(UpgraderOutput::redactText((string) ($job->error ?? 'unknown error')), 0, 500, '…');
+        $streak->reason_code = $job->reason_code ?? ($result['reason_code'] ?? null);
         $streak->last_failed_at = Carbon::now();
         $streak->last_job_id = $job->id;
         $streak->save();
@@ -123,7 +200,150 @@ class UpdateFailureStreakRecorder
         $enabled = (bool) $settings->get('updates.auto_ignore_enabled', true);
 
         if ($enabled && $streak->consecutive_failures >= $threshold) {
+            if (
+                $streak->reason_code === UpgraderOutput::REASON_FS_PERMISSION
+                && $this->isSiteWideFilesystemFailure($job, $streak)
+            ) {
+                $this->pauseSiteForFilesystemFailure($job, $streak);
+
+                return;
+            }
+
             $this->applyAutoIgnore($job, $streak);
+        }
+    }
+
+    /**
+     * A file-permission failure is a site problem when no plugin or theme
+     * update on the site has succeeded since this streak began. If one has,
+     * the site's files are writable in general and only this plugin's own
+     * files are off, so the plugin keeps the normal per-plugin auto-ignore
+     * rather than stopping updates for every other plugin on the site.
+     */
+    private function isSiteWideFilesystemFailure(PluginUpdateJob $job, PluginUpdateFailureStreak $streak): bool
+    {
+        // The oldest nightly failure still inside the current streak.
+        $streakStartJobId = PluginUpdateJob::query()
+            ->where('site_id', $job->site_id)
+            ->where('target_kind', $job->target_kind)
+            ->where('target_slug', $job->target_slug)
+            ->where('status', PluginUpdateJob::STATUS_FAILED)
+            ->where('batch_id', 'like', 'nightly-%')
+            ->orderByDesc('id')
+            ->skip(max(0, (int) $streak->consecutive_failures - 1))
+            ->value('id') ?? $job->id;
+
+        return ! PluginUpdateJob::query()
+            ->where('site_id', $job->site_id)
+            ->whereIn('target_kind', [PluginUpdateJob::KIND_PLUGIN, PluginUpdateJob::KIND_THEME])
+            ->where('status', PluginUpdateJob::STATUS_COMPLETE)
+            ->where('id', '>', $streakStartJobId)
+            ->exists();
+    }
+
+    /**
+     * WordPress cannot write the site's files ("Could not copy file",
+     * "Could not create directory …/wp-content/upgrade/…"), so every plugin
+     * on the site fails the same way, night after night. Pausing each plugin
+     * as it crosses the threshold turns one site problem into a pile of
+     * per-plugin pauses (each with its own chat alert and a client-visible
+     * "paused" notice in wp-admin) and hides the real cause. Instead, pause
+     * nightly updates for the whole site once, through the same
+     * auto_updates_paused flag operators use, with one action log and one
+     * ops alert. No per-plugin ignore is written and nothing is pushed to
+     * wp-admin. Ops fix the file ownership/permissions and resume the site
+     * with the existing per-site toggle.
+     */
+    private function pauseSiteForFilesystemFailure(PluginUpdateJob $job, PluginUpdateFailureStreak $streak): void
+    {
+        $site = $job->site;
+        if (! $site instanceof Site) {
+            return;
+        }
+
+        $reason = mb_strimwidth(sprintf(
+            'Filesystem not writable: %d nightly updates in a row failed with a file-permission error. Fix file ownership/permissions, then resume.',
+            $streak->consecutive_failures,
+        ), 0, 255, '…');
+
+        // Conditional update: the recorder runs after the per-site update
+        // lock is released, so two of the site's jobs can reach this point
+        // together; only the one that flips the flag logs and alerts. A site
+        // that is already paused (by an operator, or an earlier failure)
+        // keeps its existing reason and gets no second alert.
+        $flipped = Site::query()
+            ->whereKey($site->id)
+            ->where('auto_updates_paused', false)
+            ->update([
+                'auto_updates_paused' => true,
+                'auto_updates_paused_reason' => $reason,
+            ]);
+
+        if ($flipped === 0) {
+            return;
+        }
+
+        $site->refresh();
+
+        $name = $job->target_name ?: $job->target_slug;
+        $kindLabel = $job->target_kind === PluginUpdateJob::KIND_THEME ? 'theme' : 'plugin';
+
+        try {
+            app(ActionLogger::class)->record(
+                actionType: ActionLog::TYPE_AUTO_UPDATES_TOGGLED,
+                summary: "Paused nightly auto-updates on {$site->domain}: filesystem not writable ({$streak->consecutive_failures} failed nightly updates in a row)",
+                site: $site,
+                target: 'paused',
+                details: [
+                    'previous' => false,
+                    'now' => true,
+                    'reason' => $reason,
+                    'reason_code' => UpgraderOutput::REASON_FS_PERMISSION,
+                    'target_kind' => $job->target_kind,
+                    'target_slug' => $job->target_slug,
+                    'streak' => $streak->consecutive_failures,
+                    'from_version' => $streak->last_from_version,
+                    'target_version' => $streak->last_target_version,
+                    'last_error' => $streak->last_error,
+                    'job_id' => $job->id,
+                ],
+                ok: true,
+                actor: 'auto'
+            );
+        } catch (Throwable $e) {
+            Log::warning('updates.site_pause_action_log_failed', [
+                'site_id' => $site->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Same gate as the per-plugin alerts (ChatNotifierDispatcher::
+        // dispatchForSite): inactive sites stay quiet.
+        if ($site->is_inactive) {
+            return;
+        }
+
+        try {
+            $title = sprintf(':pause_button: Paused nightly auto-updates on %s: filesystem not writable', $site->domain);
+            app(ChatNotifier::class)->send($title, [[
+                'fallback' => $title,
+                'color' => '#f59e0b',
+                'title' => $title,
+                'text' => sprintf(
+                    '%d nightly updates in a row failed because WordPress could not write the files, so nightly updates are paused for the whole site instead of plugin by plugin. Make wp-content/plugins and wp-content/upgrade writable by the PHP user, then resume auto-updates for the site.',
+                    $streak->consecutive_failures,
+                ),
+                'fields' => [
+                    ['title' => 'Site', 'value' => $site->domain, 'short' => true],
+                    ['title' => 'Last failure', 'value' => sprintf('%s %s (%s → %s)', $kindLabel, $name, $streak->last_from_version ?: '?', $streak->last_target_version ?: '?'), 'short' => true],
+                    ['title' => 'Last error', 'value' => mb_strimwidth((string) $streak->last_error, 0, 280, '…'), 'short' => false],
+                ],
+            ]]);
+        } catch (Throwable $e) {
+            Log::warning('chat_notifier.site_auto_updates_paused_failed', [
+                'site_id' => $site->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

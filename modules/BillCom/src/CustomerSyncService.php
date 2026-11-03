@@ -2,7 +2,6 @@
 
 namespace Modules\BillCom;
 
-use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -17,6 +16,10 @@ use Illuminate\Support\Facades\Log;
  * Idempotent: re-running with no Bill.com changes is a no-op (apart from
  * touching `synced_at`). Re-linking the same site is fine — last-write-wins
  * and we always pick the most recent invoice as the source.
+ *
+ * Domains are matched through SiteDomainIndex, so a site stored as
+ * "www.example.com" links from an invoice that says "example.com" (and vice
+ * versa), and the extractor also recognises any TLD a non-archived site uses.
  *
  * Read-only on the Bill.com side; writes only to the local cache + sites.
  */
@@ -33,7 +36,15 @@ class CustomerSyncService
      *     sites_linked: int,
      *     sites_relinked: int,
      *     unmatched_domains: array<string, int>,
+     *     archived_site_domains: array<string, int>,
+     *     domain_collisions: array<string, int>,
      * }
+     *
+     * unmatched_domains: extracted from invoices, no Site row at all.
+     * archived_site_domains: extracted from invoices, only an archived Site
+     *   has it (never linked; listed apart so it doesn't read as missing).
+     * domain_collisions: normalized domain => number of non-archived sites
+     *   sharing it, where the sync had to pick one (exact match wins).
      */
     public function sync(int $windowDays, bool $dryRun = false): array
     {
@@ -43,7 +54,12 @@ class CustomerSyncService
             'sites_linked' => 0,
             'sites_relinked' => 0,
             'unmatched_domains' => [],
+            'archived_site_domains' => [],
+            'domain_collisions' => [],
         ];
+
+        $siteIndex = SiteDomainIndex::build();
+        $extraTlds = $siteIndex->tlds();
 
         // 1. Cache customer list locally so per-site UI dropdowns are instant.
         $customerIndex = []; // id => row
@@ -86,7 +102,7 @@ class CustomerSyncService
                 $desc = (string) ($li['description'] ?? '');
                 // Extract ALL domains — some operators' "HOSTING WEBSITES:" lines often
                 // name two or three sites that all belong to the same customer.
-                foreach (InvoiceDomainExtractor::extractAll($desc) as $domain) {
+                foreach (InvoiceDomainExtractor::extractAll($desc, $extraTlds) as $domain) {
                     // Pick most recent invoice if we've seen this domain before.
                     $existing = $domainToBest[$domain] ?? null;
                     if ($existing === null
@@ -103,11 +119,12 @@ class CustomerSyncService
             }
         }
 
-        // 3. Apply links to matching sites.
+        // 3. Apply links to matching sites (normalized: www./case/scheme-insensitive).
         foreach ($domainToBest as $domain => $best) {
-            $site = Site::query()->where('domain', $domain)->first();
+            $site = $siteIndex->find($domain);
             if ($site === null) {
-                $stats['unmatched_domains'][$domain] = ($stats['unmatched_domains'][$domain] ?? 0) + 1;
+                $bucket = $siteIndex->belongsToArchivedSite($domain) ? 'archived_site_domains' : 'unmatched_domains';
+                $stats[$bucket][$domain] = ($stats[$bucket][$domain] ?? 0) + 1;
 
                 continue;
             }
@@ -133,6 +150,8 @@ class CustomerSyncService
 
             $isRelink ? $stats['sites_relinked']++ : $stats['sites_linked']++;
         }
+
+        $stats['domain_collisions'] = $siteIndex->collisions();
 
         return $stats;
     }

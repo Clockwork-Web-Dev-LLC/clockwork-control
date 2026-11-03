@@ -8,6 +8,7 @@ use App\Services\Performance\PageSpeedInsightsClient;
 use App\Services\Performance\PerformanceScanRecorder;
 use App\Services\Performance\PerformanceScanResult;
 use App\Support\Settings;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Core\Contracts\HostingProvider;
@@ -43,10 +44,17 @@ class RunPerformanceScans extends Command
         {--strategy=mobile : "mobile" or "desktop"}
         {--include-unavailable : Include sites currently marked psi_unavailable_at — useful when manually probing whether either engine has recovered}
         {--engine= : Force a specific engine ("gtmetrix" or "psi"). Default: gtmetrix primary, psi fallback.}
-        {--weekly-rotation : Scan only tonight\'s 1/7th slice of the fleet (sites ordered by domain, index % 7 == UTC weekday), so every site gets one scan per week within the GTmetrix daily credit budget. Ignored when --site is given.}
+        {--weekly-rotation : Scan only tonight\'s 1/7th slice of the fleet (each site has a fixed weekday, crc32(domain) % 7 == UTC weekday), so every site gets one scan per week within the GTmetrix daily credit budget. In the last 7 days of a month, sites with no scan that month are added within the same budget. Ignored when --site is given.}
         {--host-reports : Only sites whose host runs its own Lighthouse report (Pressable). Reading it is free, so these are read every night instead of joining the rotation. Ignored when --site is given.}';
 
     protected $description = 'Daily performance scan per care-plan site (GTmetrix primary, PSI fallback). Records performance score, Core Web Vitals, page weight.';
+
+    /**
+     * Month-end catch-up window: on each of a month's last this-many nights
+     * the rotation also takes care-plan sites with no OK scan that month.
+     * Seven, so every weekday's bucket comes round once inside the window.
+     */
+    public const CATCH_UP_DAYS = 7;
 
     public function handle(
         GtmetrixClient $gtmetrix,
@@ -276,26 +284,122 @@ class RunPerformanceScans extends Command
             $sites = $sites->reject($hasHostReport)->values();
         }
 
-        // Weekly rotation: slice the fleet into 7 near-equal buckets by
-        // domain-sorted position and scan only tonight's bucket. GTmetrix
-        // (Core tier) refills 10 API credits daily at ~04:27 UTC and credits
-        // do NOT accumulate, so a full-fleet nightly run exhausted the day's
-        // credits after ~10 sites and silently pushed the rest onto the PSI
-        // fallback (mobile-throttled scores that read 30-60 where GTmetrix
-        // desktop reads 70-95). ~75 sites / 7 nights ≈ 11 per night keeps
-        // (nearly) every scan on the primary engine. Position-based
-        // bucketing keeps bucket sizes even at the cost of a site's scan
-        // weekday shifting when sites are added/removed — fine, since
-        // scores are compared week-over-week either way.
+        // Weekly rotation: split the fleet into 7 buckets and scan only
+        // tonight's. GTmetrix (Core tier) refills 10 API credits daily at
+        // ~04:27 UTC and credits do NOT accumulate, so a full-fleet nightly
+        // run exhausted the day's credits after ~10 sites and silently pushed
+        // the rest onto the PSI fallback (mobile-throttled scores that read
+        // 30-60 where GTmetrix desktop reads 70-95). ~75 sites / 7 nights ≈ 11
+        // per night keeps (nearly) every scan on the primary engine.
+        //
+        // Each site's bucket comes from its own domain (rotationBucket), not
+        // its position in the list. Position-based buckets moved every site's
+        // weekday whenever a site was enrolled or removed, so some sites
+        // went more than a week without a scan and others were scanned twice.
         if ($this->option('weekly-rotation')) {
             $day = now('UTC')->dayOfWeek;
+            $tonight = $sites->filter(fn (Site $site) => self::rotationBucket($site) === $day)->values();
 
-            return $sites->values()
-                ->filter(fn (Site $site, int $i) => $i % 7 === $day)
-                ->values();
+            return $this->withMonthEndCatchUp($sites, $tonight);
         }
 
         return $sites;
+    }
+
+    /**
+     * A site's weekday in the weekly rotation (0 = Sunday, like Carbon's
+     * dayOfWeek). Depends on the domain alone, so enrolling or removing
+     * other sites never moves it.
+     */
+    public static function rotationBucket(Site $site): int
+    {
+        return crc32(strtolower((string) $site->domain)) % 7;
+    }
+
+    /**
+     * Month-end catch-up for the weekly rotation. A client report only shows
+     * a speed test run inside its month, and a site can miss its weekday: the
+     * scan failed, or the site came under care after its slot had passed. On
+     * each of the month's last CATCH_UP_DAYS nights, rotation sites with no
+     * OK scan since the 1st join tonight's run, within the daily GTmetrix
+     * credit budget:
+     *
+     *  - credits tonight's bucket leaves free go to those sites, the ones
+     *    whose own weekday won't come round again this month first;
+     *  - if those still don't fit, tonight's sites that already have a scan
+     *    this month give up their slot (most recently scanned first). Their
+     *    report is covered and they're scanned again next week;
+     *  - anything left waits for the next night. It is never pushed onto the
+     *    PSI fallback, whose mobile scores read far lower than GTmetrix's.
+     *
+     * Credits are spent in run order, so sites with no scan this month run
+     * before those that already have one.
+     *
+     * @param  Collection<int, Site>  $eligible  every site in the rotation
+     * @param  Collection<int, Site>  $tonight  tonight's bucket
+     * @return Collection<int, Site>
+     */
+    private function withMonthEndCatchUp(Collection $eligible, Collection $tonight): Collection
+    {
+        $now = now('UTC');
+        $nightsLeft = $now->daysInMonth - $now->day; // after tonight
+        if ($nightsLeft >= self::CATCH_UP_DAYS || $eligible->isEmpty()) {
+            return $tonight;
+        }
+
+        $lastOk = $this->lastOkScanSince($eligible, $now->copy()->startOfMonth());
+        $candidates = $eligible
+            ->reject(fn (Site $site) => isset($lastOk[$site->id]) || $tonight->contains($site))
+            ->values();
+        if ($candidates->isEmpty()) {
+            return $tonight;
+        }
+
+        // A candidate isn't in tonight's bucket, so its weekday is 1-6 nights
+        // away; it still gets its own slot this month if that's within the
+        // nights left.
+        [$slotLeft, $noSlotLeft] = $candidates->partition(
+            fn (Site $site) => (self::rotationBucket($site) - $now->dayOfWeek + 7) % 7 <= $nightsLeft
+        );
+        $noSlotLeft = $noSlotLeft->values();
+        [$covered, $uncovered] = $tonight->partition(fn (Site $site) => isset($lastOk[$site->id]));
+
+        $budget = max(0, (int) config('clockwork.gtmetrix.daily_credits', 10));
+        $free = max(0, $budget - $tonight->count());
+        $room = max(0, $budget - $uncovered->count());
+
+        $added = $noSlotLeft->concat($slotLeft)->take($free)->values();
+        $swappedIn = $noSlotLeft->slice($added->count())->take(max(0, $room - $added->count()))->values();
+        $deferred = $covered->sortByDesc(fn (Site $site) => $lastOk[$site->id])->take($swappedIn->count());
+        $keptCovered = $covered->reject(fn (Site $site) => $deferred->contains($site));
+        $waiting = $candidates->count() - $added->count() - $swappedIn->count();
+
+        $this->line(sprintf(
+            'Month-end catch-up: %d site(s) with no scan this month added, %d already-scanned site(s) moved to next week to make room, %d waiting for the next night.',
+            $added->count() + $swappedIn->count(), $deferred->count(), $waiting,
+        ));
+
+        return $uncovered->concat($added)->concat($swappedIn)->concat($keptCovered)->values();
+    }
+
+    /**
+     * Latest OK scan per site since $since, keyed by site id. Dated the way
+     * the client report dates a scan (the host's own run time when it has
+     * one), so "covered" here means covered in the report.
+     *
+     * @param  Collection<int, Site>  $sites
+     * @return array<int, string>
+     */
+    private function lastOkScanSince(Collection $sites, CarbonInterface $since): array
+    {
+        return SitePerformanceScan::query()
+            ->whereIn('site_id', $sites->modelKeys())
+            ->where('status', SitePerformanceScan::STATUS_OK)
+            ->whereRaw('COALESCE(source_generated_at, scanned_at) >= ?', [$since])
+            ->groupBy('site_id')
+            ->selectRaw('site_id, MAX(COALESCE(source_generated_at, scanned_at)) AS last_ok_at')
+            ->pluck('last_ok_at', 'site_id')
+            ->all();
     }
 
     /**

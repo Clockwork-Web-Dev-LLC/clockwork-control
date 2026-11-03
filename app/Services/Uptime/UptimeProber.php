@@ -29,7 +29,8 @@ use Throwable;
  *     job; uptime is reachability only.
  *
  * Treats 2xx, 3xx, and auth-protected 4xx (401 with WWW-Authenticate, 403)
- * as success; everything else as failure.
+ * as success; 429 as "probe blocked" (neither success nor failure — see
+ * UptimeProbeResult::blocked()); everything else as failure.
  */
 class UptimeProber
 {
@@ -98,6 +99,20 @@ class UptimeProber
         }
         if ($status === 403) {
             return UptimeProbeResult::authProtected($status, $elapsed, 'HTTP 403 (forbidden — likely WAF or allowlist)', $body, $xRobotsTag);
+        }
+
+        // Rate-limited (RFC 6585 §4). A host rate limiter or a security
+        // plugin's anti-bot challenge is refusing the probe itself, which
+        // tells us nothing about whether real visitors get through. Report it
+        // as blocked so the state machine neither opens an outage on it nor
+        // treats it as proof the site is up.
+        if ($status === 429) {
+            // Capped: the header is remote-controlled and the reason lands in
+            // a 500-char column.
+            $retryAfter = $response->header('Retry-After') !== '' ? mb_substr($response->header('Retry-After'), 0, 64) : null;
+            $reason = 'HTTP 429 (rate-limited — probe blocked'.($retryAfter !== null ? " · Retry-After: {$retryAfter}" : '').')';
+
+            return UptimeProbeResult::blocked($status, $elapsed, $reason, $retryAfter, $body, $xRobotsTag);
         }
 
         // Scheduled maintenance mode (RFC 7231 §6.6.4): WordPress core and

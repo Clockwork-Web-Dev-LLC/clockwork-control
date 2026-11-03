@@ -23,7 +23,7 @@ Contact Form Testing is decoupled into a standalone module (`modules/ContactForm
 1. The site is on a **care plan** (gate enforced at the service, command, and controller).
 2. Companion is installed on the site with the `'contact-form-test'` capability advertised.
 3. Operator opens the per-site **Forms** tab and adds up to 3 form-tests (form ID, frequency: weekly default, optional URL).
-4. Daily at 06:00 UTC, `clockwork:test-contact-forms` walks every `contact_form_tests` row whose frequency makes it due (weekly ≥ 7 days since last run; daily ≥ 1 day) and POSTs to Companion's `/test-contact-form`.
+4. Daily at 06:00 UTC, `clockwork:test-contact-forms` walks every `contact_form_tests` row whose frequency makes it due and POSTs to Companion's `/test-contact-form`. Never-tested rows are always due; daily rows are due once the last run is more than 20 hours old, weekly rows once it is more than 7 days minus 4 hours old. The grace window absorbs the few minutes each run takes, so a test that finished at 06:12 yesterday is still due when today's run starts.
 5. Companion submits the form with a marker string in the message body, in **lab** mode (the scheduled default): the outgoing email is suppressed. The run passes when the form plugin accepts the submission and fails when it rejects it or Companion can't be reached.
 
 Each run writes a row to `contact_form_test_runs` keyed by `contact_form_test_id` so per-form history is preserved. Per-form state (pass/fail/streak/last_test_at) lives on the `contact_form_tests` row.

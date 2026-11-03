@@ -2,7 +2,7 @@
 title: Pressable
 section: Integrations
 order: 21
-updated: 2026-10-04
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [integrations, pressable, hosting, wordpress]
 tracks: [modules/Pressable/src/**, app/Console/Commands/{ImportPressable,PressableTest,InstallCompanionPressable,PressableBackupsReport,PressableTrafficReport,PressableSecuritySummaryReport}.php]
@@ -110,7 +110,7 @@ Handles Pressable's 30-second no-output kill. Live-tested both the success path 
 | Cadence | Command |
 |---|---|
 | daily 06:32 | `clockwork:pressable-backups-report` — pushes real backup run history to Companion's Backups page. |
-| daily 06:37 | `clockwork:pressable-traffic-report` — pushes period-total traffic stats to Companion's Traffic page. |
+| daily 04:45 | `clockwork:pressable-traffic-report` — records each Pressable site's daily traffic into `site_traffic_daily` (read by client reports, so it runs before the 06:00 report run), then pushes the 30-day chart to Companion's Traffic page where supported. |
 | daily 06:39 | `clockwork:pressable-security-summary-report` — pushes plugin/theme vulnerability alerts + Defensive Mode status to Companion's Security page. Pressable-only capability, no SpinupWP parity intent. |
 
 `clockwork:import-pressable` and `clockwork:install-companion-pressable` are **not** scheduled — the site inventory doesn't churn the way it needs a daily re-import yet, and Companion rollout to new Pressable sites is still a deliberate per-site/per-batch step. Run them manually as needed. See [Reference → Scheduled jobs](/docs/reference/scheduled-jobs) and [Reference → Artisan commands](/docs/reference/artisan-commands).

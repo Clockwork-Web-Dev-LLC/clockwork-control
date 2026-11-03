@@ -43,6 +43,10 @@ class MonitoringController extends Controller
 
     public const DEFAULT_FAILURE_THRESHOLD = UptimeStateUpdater::FAILURE_THRESHOLD_FOR_DOWN;
 
+    public const SETTING_PROBE_BLOCKED_ALERT_HOURS = UptimeStateUpdater::SETTING_PROBE_BLOCKED_ALERT_HOURS;
+
+    public const DEFAULT_PROBE_BLOCKED_ALERT_HOURS = UptimeStateUpdater::PROBE_BLOCKED_ALERT_HOURS;
+
     public function index(UptimeStatsCalculator $calc): View
     {
         // Sites whose servers aren't ignored AND have monitoring enabled —
@@ -64,7 +68,8 @@ class MonitoringController extends Controller
             $excused = $this->siteOutageIsExcused($site, $latestDownEvents);
             $tier = match (true) {
                 $site->uptime_state === 'down' && $site->uptime_ignored_at === null && ! $excused => 1,
-                $site->uptime_state === 'unknown' => 2,
+                // Rate-limiting the probe: like unknown, we can't see it.
+                $site->uptime_state === 'unknown', $site->uptime_state === Site::UPTIME_STATE_PROBE_BLOCKED => 2,
                 $site->uptime_state === 'down' && $excused => 3,
                 $site->uptime_state === 'down' => 4,
                 $site->uptime_state === 'maintenance' => 5,
@@ -94,6 +99,7 @@ class MonitoringController extends Controller
         $currentlyUp = $sites->where('uptime_state', 'up')->count();
         $currentlyMaintenance = $sites->where('uptime_state', 'maintenance')->count();
         $unknown = $sites->where('uptime_state', 'unknown')->count();
+        $currentlyProbeBlocked = $sites->where('uptime_state', Site::UPTIME_STATE_PROBE_BLOCKED)->count();
         $currentlyIgnored = $sites->whereNotNull('uptime_ignored_at')->count();
 
         // Fleet aggregate uptime: arithmetic mean of per-site uptimes,
@@ -123,6 +129,7 @@ class MonitoringController extends Controller
             'currentlyUp',
             'currentlyMaintenance',
             'unknown',
+            'currentlyProbeBlocked',
             'currentlyIgnored',
             'avg7d',
             'avg30d',
@@ -136,6 +143,7 @@ class MonitoringController extends Controller
     {
         $intervalMin = (int) $settings->get(self::SETTING_INTERVAL_MIN, self::DEFAULT_INTERVAL_MIN);
         $failureThreshold = (int) $settings->get(self::SETTING_FAILURE_THRESHOLD, self::DEFAULT_FAILURE_THRESHOLD);
+        $probeBlockedAlertHours = (int) $settings->get(self::SETTING_PROBE_BLOCKED_ALERT_HOURS, self::DEFAULT_PROBE_BLOCKED_ALERT_HOURS);
 
         // Sites toggled off (per-site override). Surface so the operator can quickly
         // re-enable from the same screen as the global settings.
@@ -164,6 +172,7 @@ class MonitoringController extends Controller
         return view('monitoring.settings', compact(
             'intervalMin',
             'failureThreshold',
+            'probeBlockedAlertHours',
             'disabledSites',
             'schedulerHeartbeat',
             'ignoredPatterns',
@@ -203,6 +212,8 @@ class MonitoringController extends Controller
         $validated = $request->validate([
             'interval_minutes' => 'required|integer|in:1,5,10,15',
             'failure_threshold' => 'required|integer|min:1|max:6',
+            // Optional so a form posted without it keeps the stored value.
+            'probe_blocked_alert_hours' => 'sometimes|integer|min:1|max:168',
             'ignored_domains' => 'nullable|string|max:10000',
         ]);
 
@@ -217,11 +228,13 @@ class MonitoringController extends Controller
                 ]);
         }
 
-        $settings->putMany([
+        $settings->putMany(array_merge([
             self::SETTING_INTERVAL_MIN => $validated['interval_minutes'],
             self::SETTING_FAILURE_THRESHOLD => $validated['failure_threshold'],
             DomainIgnoreList::SETTING_KEY => $parsed['patterns'],
-        ]);
+        ], isset($validated['probe_blocked_alert_hours']) ? [
+            self::SETTING_PROBE_BLOCKED_ALERT_HOURS => (int) $validated['probe_blocked_alert_hours'],
+        ] : []));
 
         return redirect()
             ->route('monitoring.settings')

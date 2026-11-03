@@ -39,13 +39,39 @@ use Throwable;
  *    "Past 1 month" returns clean daily (86400s) buckets, but Edge Logs
  *    metrics (requests, status, etc.) over the same range return 8-hour
  *    (28800s) buckets instead — aggregated into calendar days here.
+ *
+ * Two jobs, deliberately independent of each other:
+ *  1. History. Every Pressable site with a pressable_site_id gets the days
+ *     Pressable actually returned upserted into site_traffic_daily, which
+ *     is what the monthly client report and /capacity read. This runs
+ *     whether or not Companion is installed, reachable, or new enough, so a
+ *     Companion problem never leaves a report without traffic.
+ *  2. Companion push. Sites that can take it also get the zero-filled
+ *     30-day payload for their wp-admin Traffic page.
  */
 class PressableTrafficReport extends Command
 {
     protected $signature = 'clockwork:pressable-traffic-report
         {--site= : Limit to a single site (id or domain)}';
 
-    protected $description = 'Push a real daily traffic rollup (sourced from Pressable\'s own metrics API) to each Companion-equipped Pressable site.';
+    protected $description = 'Record daily traffic for every Pressable site from Pressable\'s own metrics API, and push the 30-day rollup to each Companion-equipped one.';
+
+    /** Days in the zero-filled Companion payload, today included. */
+    private const PAYLOAD_DAYS = 30;
+
+    /**
+     * Days written to site_traffic_daily, today included. Shorter than the
+     * payload on purpose: the API's "Past 1 month" window starts part-way
+     * through a day that can be as recent as 28 days ago (after February),
+     * and that first, partial day must not overwrite a complete row an
+     * earlier run wrote. Every day is still rewritten 28 times while it
+     * stays in the window, so history coverage is unchanged.
+     */
+    private const HISTORY_DAYS = 28;
+
+    private const REQUEST_COLUMNS = ['requests', 'status_2xx', 'status_3xx', 'status_4xx', 'status_5xx'];
+
+    private const VISIT_COLUMNS = ['unique_ips', 'visits'];
 
     /**
      * Path-categorisation rules ported from RollupTraffic::applyBucketFilter()
@@ -72,31 +98,51 @@ class PressableTrafficReport extends Command
 
         $sites = $this->resolveSites();
         if ($sites->isEmpty()) {
-            $this->warn('No Companion-equipped Pressable sites matched.');
+            $this->warn('No Pressable sites matched.');
 
             return self::SUCCESS;
         }
 
-        $stats = ['ok' => 0, 'failed' => 0, 'skipped' => 0];
+        // recorded = history written; pushed = also pushed to Companion;
+        // push_skipped = recorded, but the site can't take the push.
+        $stats = ['recorded' => 0, 'pushed' => 0, 'push_skipped' => 0, 'failed' => 0];
 
         foreach ($sites as $site) {
-            $caps = $site->companion_capabilities ?? [];
-            if (! in_array('traffic-report', $caps, true)) {
-                $stats['skipped']++;
-                $this->line("  [skip] {$site->domain} — capability 'traffic-report' not advertised (Companion 1.16.0+ required)");
+            try {
+                $requestsByDay = $this->requestsByDayAndStatus($pressable, $site->pressable_site_id);
+                $visitsByDay = $this->uniquesByDay($pressable, $site->pressable_site_id);
+            } catch (Throwable $e) {
+                $this->fetchFailed($site, $e, $stats);
 
                 continue;
             }
 
             try {
-                $report = $this->buildReport($pressable, $site);
+                $days = $this->recordDailyTraffic($site, $requestsByDay, $visitsByDay);
             } catch (Throwable $e) {
                 $stats['failed']++;
-                Log::warning('companion.pressable_traffic_report.fetch_failed', [
+                Log::warning('companion.pressable_traffic_report.record_failed', [
                     'site' => $site->domain,
                     'error' => $e->getMessage(),
                 ]);
-                $this->warn("  [fail] {$site->domain}: Pressable fetch failed — {$e->getMessage()}");
+                $this->warn("  [fail] {$site->domain}: recording daily traffic failed — {$e->getMessage()}");
+
+                continue;
+            }
+            $stats['recorded']++;
+
+            $skipReason = $this->pushSkipReason($site);
+            if ($skipReason !== null) {
+                $stats['push_skipped']++;
+                $this->line("  [rec]  {$site->domain} — days={$days}; push skipped: {$skipReason}");
+
+                continue;
+            }
+
+            try {
+                $report = $this->buildReport($pressable, $site, $requestsByDay, $visitsByDay);
+            } catch (Throwable $e) {
+                $this->fetchFailed($site, $e, $stats);
 
                 continue;
             }
@@ -114,42 +160,18 @@ class PressableTrafficReport extends Command
                 continue;
             }
 
-            if (! empty($report['daily'])) {
-                $now = now();
-                $upsertRows = array_map(fn (array $r) => [
-                    'site_id' => $site->id,
-                    'date' => $r['date'],
-                    'requests' => (int) ($r['requests'] ?? 0),
-                    'unique_ips' => (int) ($r['visits'] ?? 0),
-                    'visits' => (int) ($r['visits'] ?? 0),
-                    'bytes_sent' => 0,
-                    'status_2xx' => (int) ($r['status_2xx'] ?? 0),
-                    'status_3xx' => (int) ($r['status_3xx'] ?? 0),
-                    'status_4xx' => (int) ($r['status_4xx'] ?? 0),
-                    'status_5xx' => (int) ($r['status_5xx'] ?? 0),
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ], $report['daily']);
-
-                SiteTrafficDaily::upsert(
-                    $upsertRows,
-                    ['site_id', 'date'],
-                    ['requests', 'unique_ips', 'visits', 'status_2xx', 'status_3xx', 'status_4xx', 'status_5xx', 'updated_at']
-                );
-            }
-
-            $stats['ok']++;
+            $stats['pushed']++;
             $today = (int) ($report['totals']['today'] ?? 0);
             $month = (int) ($report['totals']['month_30d'] ?? 0);
-            $rows = count($report['daily']);
-            $this->line("  [ok]   {$site->domain} — today={$today} 30d={$month} rows={$rows}");
+            $this->line("  [ok]   {$site->domain} — today={$today} 30d={$month} days={$days}");
         }
 
         $msg = sprintf(
-            'companion.pressable_traffic_report.push complete: ok=%d failed=%d skipped=%d',
-            $stats['ok'],
+            'companion.pressable_traffic_report complete: recorded=%d pushed=%d push_skipped=%d failed=%d',
+            $stats['recorded'],
+            $stats['pushed'],
+            $stats['push_skipped'],
             $stats['failed'],
-            $stats['skipped'],
         );
         Log::info($msg);
         $this->info($msg);
@@ -158,13 +180,108 @@ class PressableTrafficReport extends Command
     }
 
     /**
+     * @param  array<string, int>  $stats
+     */
+    private function fetchFailed(Site $site, Throwable $e, array &$stats): void
+    {
+        $stats['failed']++;
+        Log::warning('companion.pressable_traffic_report.fetch_failed', [
+            'site' => $site->domain,
+            'error' => $e->getMessage(),
+        ]);
+        $this->warn("  [fail] {$site->domain}: Pressable fetch failed — {$e->getMessage()}");
+    }
+
+    /**
+     * Why this site can't take the Companion push, or null when it can.
+     */
+    private function pushSkipReason(Site $site): ?string
+    {
+        // Raw value: a null check doesn't need the encrypted secret decrypted.
+        if (! $site->companion_installed || $site->getRawOriginal('companion_secret') === null) {
+            return 'Companion not installed';
+        }
+
+        if (! in_array('traffic-report', $site->companion_capabilities ?? [], true)) {
+            return "capability 'traffic-report' not advertised (Companion 1.16.0+ required)";
+        }
+
+        return null;
+    }
+
+    /**
+     * Upsert into site_traffic_daily only what Pressable actually returned.
+     *
+     * A day the API has no bucket for (before the site moved to Pressable,
+     * or a gap on Pressable's side) is left alone rather than written as
+     * zeros, so it can't erase an earlier row — including one the previous
+     * host's access-log rollup wrote. The same goes per metric family: a
+     * day with request buckets but no uniques bucket updates only the
+     * request columns. bytes_sent and top_paths are never updated; Pressable
+     * has no per-day figure for either.
+     *
+     * @param  array<string, array{'2xx': int, '3xx': int, '4xx': int, '5xx': int}>  $requestsByDay
+     * @param  array<string, int>  $visitsByDay
+     * @return int days written
+     */
+    private function recordDailyTraffic(Site $site, array $requestsByDay, array $visitsByDay): int
+    {
+        $from = Carbon::today()->subDays(self::HISTORY_DAYS - 1)->toDateString();
+        $to = Carbon::today()->toDateString();
+
+        $dates = array_filter(
+            array_unique([...array_keys($requestsByDay), ...array_keys($visitsByDay)]),
+            fn ($date) => $date >= $from && $date <= $to,
+        );
+
+        $now = now();
+        $batches = [];
+        foreach ($dates as $date) {
+            $statuses = $requestsByDay[$date] ?? null;
+            $visits = $visitsByDay[$date] ?? null;
+
+            $update = [
+                ...($statuses !== null ? self::REQUEST_COLUMNS : []),
+                ...($visits !== null ? self::VISIT_COLUMNS : []),
+                'updated_at',
+            ];
+
+            $key = implode(',', $update);
+            $batches[$key]['update'] = $update;
+            // Columns outside $update only take effect when the row is new.
+            $batches[$key]['rows'][] = [
+                'site_id' => $site->id,
+                'date' => $date,
+                'requests' => $statuses !== null ? array_sum($statuses) : 0,
+                'unique_ips' => $visits ?? 0,
+                'visits' => $visits ?? 0,
+                'bytes_sent' => 0,
+                'status_2xx' => $statuses['2xx'] ?? 0,
+                'status_3xx' => $statuses['3xx'] ?? 0,
+                'status_4xx' => $statuses['4xx'] ?? 0,
+                'status_5xx' => $statuses['5xx'] ?? 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        foreach ($batches as $batch) {
+            SiteTrafficDaily::upsert($batch['rows'], ['site_id', 'date'], $batch['update']);
+        }
+
+        return count($dates);
+    }
+
+    /**
+     * @param  array<string, array{'2xx': int, '3xx': int, '4xx': int, '5xx': int}>  $requestsByDay
+     * @param  array<string, int>  $visitsByDay
      * @return array<string, mixed>
      */
-    private function buildReport(PressableClient $pressable, Site $site): array
+    private function buildReport(PressableClient $pressable, Site $site, array $requestsByDay, array $visitsByDay): array
     {
         $pressableSiteId = $site->pressable_site_id;
 
-        $daily = $this->buildDailyRows($pressable, $pressableSiteId);
+        $daily = $this->buildDailyRows($requestsByDay, $visitsByDay);
 
         $today = Carbon::today()->toDateString();
         $byDate = collect($daily)->keyBy('date');
@@ -196,15 +313,19 @@ class PressableTrafficReport extends Command
     }
 
     /**
+     * The Companion payload's `daily` array: every day of the window, with
+     * zeros for days Pressable returned nothing for, because the wp-admin
+     * chart expects a continuous series. Never written to the DB as-is —
+     * see recordDailyTraffic().
+     *
+     * @param  array<string, array{'2xx': int, '3xx': int, '4xx': int, '5xx': int}>  $requestsByDay
+     * @param  array<string, int>  $visitsByDay
      * @return array<int, array<string, mixed>>
      */
-    private function buildDailyRows(PressableClient $pressable, string $pressableSiteId): array
+    private function buildDailyRows(array $requestsByDay, array $visitsByDay): array
     {
-        $requestsByDay = $this->requestsByDayAndStatus($pressable, $pressableSiteId);
-        $visitsByDay = $this->uniquesByDay($pressable, $pressableSiteId);
-
         $today = Carbon::today();
-        $start = $today->copy()->subDays(29);
+        $start = $today->copy()->subDays(self::PAYLOAD_DAYS - 1);
 
         $daily = [];
         for ($cursor = $start->copy(); $cursor->lte($today); $cursor->addDay()) {
@@ -227,7 +348,8 @@ class PressableTrafficReport extends Command
     /**
      * Edge Logs family: requests × http_status, auto-resolved to 8-hour
      * buckets over a 1-month window (not daily) — aggregated into calendar
-     * days here.
+     * days here. A bucket with no counts in it is not data, so a day made
+     * only of empty buckets is left out, the same as a day with none.
      *
      * @return array<string, array{'2xx': int, '3xx': int, '4xx': int, '5xx': int}>
      */
@@ -237,10 +359,15 @@ class PressableTrafficReport extends Command
 
         $out = [];
         foreach ($periods as $period) {
+            $dimension = $period['dimension'] ?? [];
+            if (! is_array($dimension) || $dimension === []) {
+                continue;
+            }
+
             $date = gmdate('Y-m-d', (int) ($period['timestamp'] ?? 0));
             $out[$date] ??= ['2xx' => 0, '3xx' => 0, '4xx' => 0, '5xx' => 0];
 
-            foreach ($period['dimension'] ?? [] as $status => $count) {
+            foreach ($dimension as $status => $count) {
                 $bucket = match (true) {
                     (int) $status >= 200 && (int) $status < 300 => '2xx',
                     (int) $status >= 300 && (int) $status < 400 => '3xx',
@@ -260,7 +387,7 @@ class PressableTrafficReport extends Command
     /**
      * Uniques & Views family: uniques × hostname, real daily (86400s)
      * buckets. Summed across every hostname variant (bare + www) for one
-     * unified per-day visitor count.
+     * unified per-day visitor count. Empty buckets are skipped, as above.
      *
      * @return array<string, int>
      */
@@ -270,9 +397,14 @@ class PressableTrafficReport extends Command
 
         $out = [];
         foreach ($periods as $period) {
+            $counts = $period['hostname']['uniques'] ?? $period['dimension'] ?? [];
+            if (! is_array($counts) || $counts === []) {
+                continue;
+            }
+
             $date = gmdate('Y-m-d', (int) ($period['timestamp'] ?? 0));
             $sum = 0;
-            foreach ($period['hostname']['uniques'] ?? $period['dimension'] ?? [] as $count) {
+            foreach ($counts as $count) {
                 $sum += (int) $count;
             }
             $out[$date] = ($out[$date] ?? 0) + $sum;
@@ -342,13 +474,15 @@ class PressableTrafficReport extends Command
     }
 
     /**
+     * Every Pressable site the API can be asked about, Companion or not —
+     * the history write needs all of them; pushSkipReason() decides which
+     * also get the Companion push.
+     *
      * @return Collection<int, Site>
      */
     private function resolveSites(): Collection
     {
         $q = Site::query()
-            ->where('companion_installed', true)
-            ->whereNotNull('companion_secret')
             ->where('hosting_provider', Site::HOSTING_PROVIDER_PRESSABLE)
             ->whereNotNull('pressable_site_id');
 

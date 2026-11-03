@@ -2,7 +2,7 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-09-28
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
 tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
@@ -107,11 +107,19 @@ When a stubborn plugin or theme fails the nightly update queue night after night
 
 #### Threshold and Kill Switch
 - **Threshold**: Default 5 consecutive nightly failures (min 3, max 20), configurable via the `updates.auto_ignore_after_failures` setting.
-- **Kill switch**: `updates.auto_ignore_enabled` (default `true`). When set to `false`, consecutive failure streaks are still tracked for operator visibility, but auto-ignore rows are never created.
+- **Kill switch**: `updates.auto_ignore_enabled` (default `true`). When set to `false`, consecutive failure streaks are still tracked for operator visibility, but auto-ignore rows are never created (and the site-level pause below never fires).
+
+#### File-permission failures pause the site, not each plugin
+Each streak stores the `reason_code` of its latest failure (see *Stalled no-op detection*). When a streak reaches the threshold with `reason_code = fs_permission` ("Could not copy file", "Could not create directory …/wp-content/upgrade/…") and no plugin or theme update on that site has succeeded since the streak began, the problem is the site's file ownership, not the plugin. Instead of auto-ignoring each plugin in turn, Control:
+- sets `sites.auto_updates_paused = true` with a "Filesystem not writable…" reason (the same flag as the manual per-site pause, so the nightly loop skips the whole site);
+- writes one `auto_updates_toggled` action log (`actor = auto`, `details.reason_code = fs_permission`);
+- sends one ops chat alert.
+
+No per-plugin ignore is created and nothing is pushed to wp-admin. Fix the file ownership/permissions for the PHP user, then resume the site with the per-site auto-update toggle. If the site is already paused (by an operator or an earlier failure), nothing changes and no second alert is sent. If another update on the site did succeed during the streak, the plugin gets the normal per-plugin auto-ignore.
 
 #### Reset and Resume
-- Any **successful update** (nightly or manual) resets `consecutive_failures` back to 0.
-- When an auto-ignored plugin ships a new version, it remains paused until resumed (badged as "New version available — still paused") to prevent endless retries on broken plugins.
+- Any **successful update** (nightly or manual) resets `consecutive_failures` back to 0. When it also lands on its target version, an auto-ignore for that slug is removed, the streak's pause markers are cleared, and the shorter exceptions list is pushed so the wp-admin notice clears. Manual ignores are never removed this way.
+- An auto-ignore does not block forever. The nightly loop still tries an auto-ignored plugin or theme when the snapshot offers a **different version** from the one that kept failing (`plugin_update_failure_streaks.last_target_version`), once per new version, since a failed retry records that version as the new last target. It also tries an auto-ignored plugin whose installed version is **vulnerable** when the offered version is at or above the highest `patched_in` of the matching advisories. Otherwise the slug stays paused until resumed or until one of those conditions is met.
 - Clicking **Resume** (or unignore) in Control deletes the ignore record, resets the consecutive failure streak to 0, and immediately pushes an updated exceptions payload to the WordPress site.
 - Converting an auto-ignore into a **manual ignore** keeps nightly retries paused but sets `client_visible=false` and pushes an updated exceptions list so the slug drops out of wp-admin.
 - Manual ignores are never rewritten as auto-failure, even if the slug later fails nightly.
@@ -165,8 +173,8 @@ Plugins-only, opt-in per site, runs every night between 02:00 and 06:00 ET. The 
 
 ### How it works
 
-1. `clockwork:run-nightly-plugin-updates` (02:00 ET) discovers every care-plan site with `auto_updates_paused = false` and `companion_installed = true`, queries its Companion snapshot for pending plugin updates, dedupes against existing `plugin_update_jobs` rows and `plugin_update_ignores`, and queues one `PluginUpdateJob` per plugin with `batch_id = "nightly-YYYY-MM-DD-..."`. The run reuses the same `plugin-updates` Supervisor queue as manual batches. At the end of every run — whether or not any jobs were queued — the loop stamps `auto_updates_last_run_at` on **all eligible** care-plan sites. This gives a daily heartbeat: "3 hours ago" means the loop ran and found nothing to do; a stale or null timestamp means the loop stopped firing, not that the site was up to date.
-2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher`) are sorted first so security patches land before cosmetic updates.
+1. `clockwork:run-nightly-plugin-updates` (02:00 ET) discovers every care-plan site with `auto_updates_paused = false` and `companion_installed = true`, queries its Companion snapshot for pending plugin updates, dedupes against existing `plugin_update_jobs` rows and `plugin_update_ignores`, and queues one `PluginUpdateJob` per plugin with `batch_id = "nightly-YYYY-MM-DD-..."` (the America/New_York date; a `--site` run uses `nightly-YYYY-MM-DD-site-...`). The fleet-wide run happens at most once per local date: if a fleet-wide nightly batch was already queued today (as on the DST fall-back night, when 01:30 happens twice), it logs and skips. `--force` overrides that, and `--site` runs are neither blocked nor counted. The run reuses the same `plugin-updates` Supervisor queue as manual batches. At the end of every run — whether or not any jobs were queued — the loop stamps `auto_updates_last_run_at` on **all eligible** care-plan sites. This gives a daily heartbeat: "3 hours ago" means the loop ran and found nothing to do; a stale or null timestamp means the loop stopped firing, not that the site was up to date.
+2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher` on the plugin's directory, the part of the snapshot's `dir/file.php` slug before the slash) are sorted first so security patches land before cosmetic updates.
 3. `clockwork:nightly-update-summary` (06:15 ET) reads every job whose `batch_id` starts with `nightly-` since the last summary run and emails the operator a success/failure breakdown. No jobs → no email.
 4. If any job ends in `failed` and its `batch_id` is a nightly batch, `AbstractRunUpdate` fires a Mattermost `pluginUpdateFailed()` ping immediately — manual bulk failures stay quiet since the operator is watching the page.
 
@@ -231,6 +239,7 @@ WordPress's `validate_current_theme()` can fire during the filesystem replacemen
 |---|---|---|
 | `state_before` | JSON? | Active plugins + stylesheet/template captured from local snapshot before the update runs. |
 | `repairs` | JSON? | Array of `{type, slug, detail}` objects from the post-update verify call. `null` if no repairs were needed or the site doesn't support post-update-verify yet. |
+| `reason_code` | string? | Cause of a failed job: `fs_permission`, `download_unauthorized`, `bad_package`, `no_package`, `not_offered` or `upgrader_error`. `null` for successes and for failures with no upgrader evidence (transport, reactivation). Also stored on `plugin_update_failure_streaks` for the latest counted failure. |
 
 ### Stalled no-op detection
 
@@ -241,6 +250,21 @@ Root cause: for licensed plugins where update feeds may require an active licens
 `AbstractRunUpdate::handle()` catches this: if `ok === true` but `after_version === before_version` **and** that doesn't match the job's `target_version`, the job is reclassified as failed with an explicit error explaining why, instead of reporting a misleading success. Only fires when there's a real `target_version` to compare against — plugin/theme/core jobs have one; translations don't, so this never applies to that kind. A genuine "already at target" no-op (e.g. a duplicate queued job) is unaffected, since `after_version` matches `target_version` in that case.
 
 This is a Laravel-side reinterpretation of Companion's response — no Companion plugin change or fleet redeploy involved. The underlying flakiness (a premium plugin's own update source going stale) isn't something this app can fix directly; it usually means the plugin's license/purchase code needs attention in that site's wp-admin.
+
+**Upgrader errors are not "no longer offered".** Companion/Renegade builds in the field also return `ok: true` (and `upgrade_completed: true`) when the WordPress upgrader itself failed and logged an `Error: …` line. Inside the stalled-no-op branch, Control looks for that line in `messages`. When there is one, the job's `error` is the last `Error:` line plus the line before it (the detail, e.g. which file could not be copied), `upgrade_completed` is set to `false` so post-update verify/repair is skipped, and `reason_code` records the cause:
+
+| `reason_code` | Upgrader output | Usually means |
+|---|---|---|
+| `fs_permission` | "Could not copy file", "Could not create directory", "Could not remove the old …" | PHP cannot write `wp-content/plugins` or `wp-content/upgrade` (file ownership). A site problem: see the site-level pause above. |
+| `download_unauthorized` | "Download failed. Unauthorized / Forbidden", licence wording | Premium licence inactive or expired on that site. |
+| `bad_package` | PCLZIP errors, "The package could not be installed" | The vendor returned something that is not a zip (often a licence error page). |
+| `no_package` | "A valid URL was not provided", "Update package not available" | WordPress had no download URL (unlicensed premium plugin). |
+| `upgrader_error` | Any other `Error:` line | Read the error text. |
+| `not_offered` | No `Error:` line at all | The original stalled no-op described above. |
+
+When Companion reports the failure itself (`ok: false`), its own error text is kept and `reason_code` is still derived from the upgrader output. The action-log summary follows the job's verdict, so a stalled no-op is logged as "Plugin update failed", not "Plugin updated: 1.0 → 1.0".
+
+**Download URLs are redacted.** The upgrader's "Downloading update from <url>…" lines carry licence keys, vendor tokens/JWTs and signed download URLs. `App\Support\UpgraderOutput::redact()` runs on every update result before anything is stored or sent (`plugin_update_jobs.messages`/`error`, action-log details/summary/error and their Companion activity mirror, failure streaks, ignores, chat alerts): download URLs are cut to `scheme://host/[redacted]`, other URLs lose credentials, query string and fragment (token-like path segments are masked), and JWTs, bearer tokens and secret-named `key=value` pairs are masked anywhere. Download lines are never copied into error text. Rows written before this change still hold the unredacted lines.
 
 ## What's NOT here
 

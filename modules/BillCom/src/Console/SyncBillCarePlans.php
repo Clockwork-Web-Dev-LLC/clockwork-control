@@ -74,6 +74,20 @@ class SyncBillCarePlans extends Command
             }
         }
 
+        if (! empty($stats['archived_care_plan_domains'])) {
+            $this->line('Care-plan domains that only belong to archived sites:');
+            foreach ($stats['archived_care_plan_domains'] as $domain => $_) {
+                $this->line("  {$domain} (archived)");
+            }
+        }
+
+        if (! empty($stats['domain_collisions'])) {
+            $this->warn('Domains shared by more than one active site (used the exact match):');
+            foreach ($stats['domain_collisions'] as $domain => $count) {
+                $this->line("  {$domain} ({$count} sites)");
+            }
+        }
+
         $logger->record(
             actionType: ActionLog::TYPE_BILL_COM_SYNC,
             summary: sprintf(

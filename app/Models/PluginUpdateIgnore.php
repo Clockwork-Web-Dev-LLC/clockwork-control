@@ -10,9 +10,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * "This (site, target) pair should never appear as a pending update."
  * Exact analogue of ManageWP Orion's "Ignored" tab.
  *
- * No expiry semantics — a future migration can add `expires_at` if "ignore
- * this version only" becomes a use case. Today: ignore is forever until
- * removed.
+ * No expiry column. A manual ignore holds until an operator removes it. An
+ * auto_failure pause is softer: the nightly loop still tries a newly
+ * released version or a version that fixes a known vulnerability
+ * (RunNightlyPluginUpdates::filterIgnored), and a successful update to the
+ * target version deletes the row (UpdateFailureStreakRecorder::record).
  */
 class PluginUpdateIgnore extends Model
 {
