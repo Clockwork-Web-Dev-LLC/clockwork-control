@@ -931,11 +931,12 @@ class ClientReportCompiler
             ->get();
 
         // Only live runs actually send email, so only they say anything about
-        // delivery. Lab runs suppress the email and just prove the form accepts
-        // a submission.
+        // it, and even then only that the site reported the email as sent:
+        // nothing watches the inbox. Lab runs suppress the email and just
+        // prove the form accepts a submission.
         $live = $runs->where('mode', ContactFormTestRun::MODE_LIVE);
         $lab = $runs->where('mode', ContactFormTestRun::MODE_LAB);
-        $delivered = $live
+        $reportedSent = $live
             ->where('status', ContactFormTestRun::STATUS_SUCCESS)
             ->where('mail_outcome', ContactFormTestRun::MAIL_SENT)
             ->count();
@@ -943,8 +944,8 @@ class ClientReportCompiler
         return [
             'total_synthetic_tests' => $runs->count(),
             'live_tests' => $live->count(),
-            'successful_tests' => $delivered,
-            'pass_rate' => $live->isNotEmpty() ? round(($delivered / $live->count()) * 100, 1) : null,
+            'successful_tests' => $reportedSent,
+            'pass_rate' => $live->isNotEmpty() ? round(($reportedSent / $live->count()) * 100, 1) : null,
             'lab_tests' => $lab->count(),
             // Whether the form plugin took the submission. A run's status is
             // Companion answering at all, which it can do while the form refuses.

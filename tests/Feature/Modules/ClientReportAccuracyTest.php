@@ -1016,9 +1016,10 @@ describe('security scan counts', function () {
 });
 
 describe('contact form tests (#4)', function () {
-    it('counts runs recorded as "success" as delivered', function () {
+    it('counts runs recorded as "success" as reported sent', function () {
         // Regression: the compiler looked for status "ok", which is never
-        // written, so every tested site was told "0% delivered".
+        // written, so every tested site was told "0% delivered". Only the
+        // site's own "sent" is measured, so the wording claims no more.
         $site = accuracySite();
         ContactFormTestRun::factory()->count(3)->create(['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-05'), 'status' => ContactFormTestRun::STATUS_SUCCESS]);
         ContactFormTestRun::factory()->create(['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-06'), 'status' => ContactFormTestRun::STATUS_FAILED]);
@@ -1026,8 +1027,9 @@ describe('contact form tests (#4)', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['forms'])->toMatchArray(['total_synthetic_tests' => 4, 'successful_tests' => 3, 'pass_rate' => 75.0])
-            ->and($report['html'])->toContain('75% delivered')
-            ->and($report['text'])->toContain('4 test submissions, 75% delivered');
+            ->and($report['html'])->toContain('your site reported sending the notification email for')->toContain('75%</strong> of them.')
+            ->not->toContain('% delivered')
+            ->and($report['text'])->toContain('4 live test submissions, notification email reported sent for 75% (inbox delivery not checked)');
     });
 
     it('never claims delivery from lab runs, which suppress the email', function () {

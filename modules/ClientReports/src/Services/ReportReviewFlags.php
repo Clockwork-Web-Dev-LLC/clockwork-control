@@ -69,7 +69,7 @@ class ReportReviewFlags
             $reasons[] = ucfirst($trafficProblem).', so the Traffic section was left out.';
         }
 
-        // The client would read "accepted 18 of 19" or "75% delivered" with no
+        // The client would read "accepted 18 of 19" or "reported sending ... 75%" with no
         // explanation, so a person should look at the failed tests first.
         $forms = (array) ($data['forms'] ?? []);
         $labTests = (int) ($forms['lab_tests'] ?? 0);
@@ -79,7 +79,7 @@ class ReportReviewFlags
         }
         $liveTests = (int) ($forms['live_tests'] ?? 0);
         if ($liveTests > 0 && (float) ($forms['pass_rate'] ?? 0) < 100) {
-            $reasons[] = 'Not every contact-form test email was delivered: '.(float) ($forms['pass_rate'] ?? 0)."% of {$liveTests} test submissions arrived.";
+            $reasons[] = 'Not every live contact-form test reported its email as sent: '.(float) ($forms['pass_rate'] ?? 0)."% of {$liveTests} test submissions did.";
         }
 
         if (! empty($data['uptime']['probe_stopped'])) {

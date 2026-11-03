@@ -525,10 +525,10 @@
                     </h2>
                 </div>
                 @if ($liveTests > 0)
-                    <p class="text-sm text-slate-700">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms to confirm messages reach you — <strong class="{{ ($forms['pass_rate'] ?? 0) >= 100 ? 'text-emerald-600' : 'text-amber-600' }}">{{ $forms['pass_rate'] ?? 0 }}% delivered</strong>.</p>
+                    <p class="text-sm text-slate-700">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms — your site reported sending the notification email for <strong class="{{ ($forms['pass_rate'] ?? 0) >= 100 ? 'text-emerald-600' : 'text-amber-600' }}">{{ $forms['pass_rate'] ?? 0 }}%</strong> of them. <span class="text-slate-500">We don't check the inbox, so this doesn't confirm the emails arrived.</span></p>
                 @endif
                 @if ($labTests > 0)
-                    <p class="text-sm text-slate-700">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span class="text-slate-500">These checks confirm the form works without sending an email, so they don't test delivery.</span></p>
+                    <p class="text-sm text-slate-700">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span class="text-slate-500">These checks confirm the form works without sending an email, so they don't test the email.</span></p>
                 @endif
             </div>
         @elseif (isset($hiddenNotes['forms']))

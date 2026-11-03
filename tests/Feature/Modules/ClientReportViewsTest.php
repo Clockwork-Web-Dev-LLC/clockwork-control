@@ -187,18 +187,23 @@ describe('contact forms in the preview', function () {
         $views = renderReportViews(viewsReport(['forms' => ['live_tests' => 0, 'lab_tests' => 19, 'lab_accepted' => 18, 'pass_rate' => null]]));
 
         expect($views['preview'])->toContain('Your forms accepted <strong>18 of 19</strong> automated check submissions.')
-            ->toContain("These checks confirm the form works without sending an email, so they don't test delivery.")
+            ->toContain("These checks confirm the form works without sending an email, so they don't test the email.")
             ->toMatch('/>18\/19<\/div>\s*<div[^>]*>Form Checks Passed/')
             ->not->toContain('% delivered')->not->toContain('Form Deliverability')
             ->and($views['html'])->toContain('accepted <strong>18 of 19</strong> automated check submissions');
     });
 
-    it('shows live delivery tests with the email\'s wording', function () {
+    it('shows live tests with the email\'s wording, claiming only that the site reported sending', function () {
         $views = renderReportViews(viewsReport(['forms' => ['live_tests' => 4, 'lab_tests' => 0, 'lab_accepted' => 0, 'pass_rate' => 75]]));
 
-        expect($views['preview'])->toContain('We sent <strong>4</strong> test submissions through your forms to confirm messages reach you')
-            ->toContain('75% delivered')->toMatch('/>75%<\/div>\s*<div[^>]*>Form Emails Sent/')->not->toContain('Deliverability')
-            ->and($views['html'])->toContain('75% delivered');
+        expect($views['preview'])->toContain('We sent <strong>4</strong> test submissions through your forms — your site reported sending the notification email for')
+            ->toContain('>75%</strong> of them.')->toContain("We don't check the inbox, so this doesn't confirm the emails arrived.")
+            ->toMatch('/>75%<\/div>\s*<div[^>]*>Form Emails Sent/')->not->toContain('Deliverability')
+            ->not->toContain('% delivered')->not->toContain('reach you')
+            ->and($views['html'])->toContain('your site reported sending the notification email for')->toContain('75%</strong> of them.')
+            ->not->toContain('% delivered')->not->toContain('reach you')
+            ->and($views['text'])->toContain('4 live test submissions, notification email reported sent for 75% (inbox delivery not checked)')
+            ->not->toContain('% delivered');
     });
 
     it('leaves the section out when no form tests ran, with a note only the operator sees', function () {

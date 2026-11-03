@@ -112,10 +112,10 @@ Requests served: {!! number_format((int) ($traffic['total_requests'] ?? 0)) !!}
 
 CONTACT FORMS
 @if ((int) ($forms['live_tests'] ?? 0) > 0)
-{!! (int) $forms['live_tests'] !!} test submissions, {!! $forms['pass_rate'] ?? 0 !!}% delivered
+{!! (int) $forms['live_tests'] !!} live test submissions, notification email reported sent for {!! $forms['pass_rate'] ?? 0 !!}% (inbox delivery not checked)
 @endif
 @if ((int) ($forms['lab_tests'] ?? 0) > 0)
-Forms accepted {!! (int) ($forms['lab_accepted'] ?? 0) !!} of {!! (int) $forms['lab_tests'] !!} automated check submissions (no email sent, so delivery wasn't tested)
+Forms accepted {!! (int) ($forms['lab_accepted'] ?? 0) !!} of {!! (int) $forms['lab_tests'] !!} automated check submissions (no email sent, so the email wasn't tested)
 @endif
 @endif
 @if ($sections['work_log'])

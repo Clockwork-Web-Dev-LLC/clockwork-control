@@ -95,7 +95,8 @@ it('hides the contact-forms section when no form tests ran', function () {
         'meta' => ['schema_version' => 2],
         'forms' => ['total_synthetic_tests' => 4, 'live_tests' => 4, 'pass_rate' => 100],
     ])))->render();
-    expect($html)->toContain('Contact forms')->toContain('100% delivered');
+    expect($html)->toContain('Contact forms')->toContain('your site reported sending the notification email for')
+        ->toContain('100%</strong> of them.')->not->toContain('% delivered');
 });
 
 it('does not HTML-escape names and notes in the plain-text part', function () {

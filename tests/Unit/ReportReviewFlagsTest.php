@@ -271,7 +271,7 @@ describe('contact forms', function () {
         expect(ReportReviewFlags::reasons(['forms' => ['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 19, 'lab_accepted' => 18]]))
             ->toBe(['Contact-form checks failed: the forms accepted 18 of 19 automated check submissions this month.'])
             ->and(ReportReviewFlags::reasons(['forms' => ['live_tests' => 4, 'pass_rate' => 75.0, 'lab_tests' => 0, 'lab_accepted' => 0]]))
-            ->toBe(['Not every contact-form test email was delivered: 75% of 4 test submissions arrived.']);
+            ->toBe(['Not every live contact-form test reported its email as sent: 75% of 4 test submissions did.']);
     });
 
     it('lets passing and untested forms through', function () {

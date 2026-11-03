@@ -325,10 +325,10 @@
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Contact forms</div>
             @if ($liveTests > 0)
-                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms to confirm messages reach you — <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}% delivered</strong>.</p>
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms — your site reported sending the notification email for <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}%</strong> of them. <span style="color:{{ $muted }};">We don't check the inbox, so this doesn't confirm the emails arrived.</span></p>
             @endif
             @if ($labTests > 0)
-                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span style="color:{{ $muted }};">These checks confirm the form works without sending an email, so they don't test delivery.</span></p>
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span style="color:{{ $muted }};">These checks confirm the form works without sending an email, so they don't test the email.</span></p>
             @endif
         </td></tr>
     @endif
