@@ -2,7 +2,7 @@
 title: Scheduled jobs
 section: Reference
 order: 30
-updated: 2026-10-15
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [reference, scheduler, cron]
 tracks: [routes/console.php, modules/*/src/*ServiceProvider.php]
@@ -114,6 +114,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 04:45 | `clockwork:run-performance-scans --strategy=mobile --weekly-rotation` | Lighthouse run for tonight's 1/7th of the care-plan fleet, leaving out Pressable sites (read nightly at 05:05/05:15 instead). GTmetrix primary, PSI fallback. Each site gets one scan per week. Scheduled at 04:45 to land just after GTmetrix's daily credit refill (credits don't bank). `--strategy` is display-only on GTmetrix's tier; kept for row continuity. |
 | 04:45 | `clockwork:capture-site-screenshots` | Refresh each site's homepage screenshot via Automattic's mShots service, feeding the visual fleet grid view. `withoutOverlapping(30)`, `runInBackground()`. |
 | 04:45 | `clockwork:detect-wp-plugins` | SSH wp-cli probe for active LLAR/Wordfence per WP site. |
+| 04:45 | `clockwork:pressable-traffic-report` | Pressable's daily traffic from its metrics API, via `PressableServiceProvider::scheduledTasks()`. Writes the days Pressable returned into `site_traffic_daily` for every Pressable site, then pushes the 30-day chart to sites whose Companion supports it. Runs before the 06:00 client reports, which read those rows, so the last day of the month is complete. |
 | 04:50 | `clockwork:detect-contact-forms` | Companion-aware contact-form detection. |
 | 04:55 | `clockwork:sync-companion-form-subscriptions` | Reconcile client-picked form-test subscriptions (Companion wp-admin Forms tab) into `contact_form_tests`. Slots between detect (04:50) and test (06:00). |
 | 04:58 | `clockwork:backup-relay-run` (or `clockwork:push-backup-relay-targets`) | Off-host archival to S3 Glacier IR. Per-site cadence (`sites.backup_relay_frequency`) is honoured in in-repo mode; custom/unhosted sites default to daily. `--force` / Backup Now skips the interval. External-agent mode writes `targets.json` instead, leaving out direct-to-S3 (Companion) sites, which the 04:30 `--direct-only` pass covers. See [Features → Backup relay](/docs/features/backup-relay). |
@@ -134,7 +135,6 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 06:30 | `clockwork:push-companion-backups` | Fetch SpinupWP backup config + DO Spaces history → POST to each Companion site. |
 | 06:32 | `clockwork:pressable-backups-report` | Pressable counterpart — pulls real backup run history straight from Pressable's `/backups` API (no separate inventory-import dependency, unlike the SpinupWP version). |
 | 06:35 | `clockwork:push-companion-traffic` | Push yesterday's traffic rollup to each Companion-equipped site. |
-| 06:37 | `clockwork:pressable-traffic-report` | Pressable counterpart — pulls page-view period totals straight from Pressable's stats API (no nginx access-log rollup dependency). |
 | 06:39 | `clockwork:pressable-security-summary-report` | Pressable-only: known plugin/theme vulnerabilities + Defensive Mode status. No SpinupWP equivalent — pure additional capability, not a parity fix. |
 | 06:40 | `clockwork:push-gatekeeper-settings` | Daily catch-up sync for Gatekeeper login lockout settings. Pushes policy defaults and site overrides to Companion and Renegade across the fleet. |
 | 06:40 | `clockwork:pull-backup-relay-report` | External-agent mode only: reads the backup-relay droplet's last run summary back from S3 and records it into `backup_relay_runs`. Also alerts if no run has completed within 6 days. See [Features → Backup relay](/docs/features/backup-relay). |

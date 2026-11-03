@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-10-29
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**, modules/*/src/Console/*.php, modules/*/src/Console/Commands/**]
@@ -111,7 +111,7 @@ Every `clockwork:*` command, alphabetical, with a one-line summary and an exampl
 | `clockwork:push-companion-branding` | Push white-label branding (logo, company name, colours, support email) to Companion/Renegade sites. `--site=` limits to one; `--verify` reads live branding first and re-pushes only drifted sites (scheduled weekly, Mon 06:50). | `php artisan clockwork:push-companion-branding --verify` |
 | `clockwork:push-companion-backups` | Push SpinupWP config + DO Spaces history per site. | `php artisan clockwork:push-companion-backups` |
 | `clockwork:pressable-backups-report` | Pressable counterpart — pushes real backup run history from Pressable's own `/backups` endpoint. No 30/90-day retention filter applied (Pressable's API has no pagination to request more than it hands back). | `php artisan clockwork:pressable-backups-report` |
-| `clockwork:pressable-traffic-report` | Pushes Pressable's period-total traffic stats (today/yesterday/current+last month/last 12 months) to Companion's Traffic page. No daily breakdown — structurally different from the nginx-log rollup the SpinupWP command sources from. | `php artisan clockwork:pressable-traffic-report` |
+| `clockwork:pressable-traffic-report` | Reads daily requests (by status) and unique visitors from Pressable's metrics API. Writes the days Pressable returned into `site_traffic_daily` for every Pressable site, Companion or not, then pushes the 30-day chart to Companion's Traffic page on sites that support it. `--site=` limits to one site (id or domain). Runs daily at 04:45. | `php artisan clockwork:pressable-traffic-report --site=42` |
 | `clockwork:pressable-security-summary-report` | Pushes Pressable's own plugin/theme CVE feed + Defensive Mode status to Companion's Security page. Pressable-only capability, no SpinupWP equivalent. | `php artisan clockwork:pressable-security-summary-report` |
 | `clockwork:record-site-backups` | Record each active site's backups from its real source into `site_backups`: Pressable's backup API, SpinupWP's DigitalOcean Spaces bucket, or our S3 archives for unhosted relay sites. Also writes a `site_backup_checks` row for each site that has a backup source, saying whether the read worked. Sites with no source are skipped. Rows are kept after the source prunes them. Exits as failed if any site couldn't be read. `--site=` limits to one site (id or domain). Runs daily at 05:30. | `php artisan clockwork:record-site-backups --site=42` |
 | `clockwork:push-backup-relay-targets` | Writes the backup-relay-enabled site list to S3. Direct-to-S3 (Companion) sites are left out because the droplet can't reach them; Control backs those up with `clockwork:backup-relay-run --direct-only`. The file goes to (`{S3_BUCKET}/{prefix}/targets.json`) for the standalone backup-relay droplet to read — no direct connection to that droplet. See [Features → Backup relay](/docs/features/backup-relay). | `php artisan clockwork:push-backup-relay-targets` |

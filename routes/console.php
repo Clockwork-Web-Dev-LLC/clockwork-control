@@ -381,8 +381,10 @@ Schedule::command('clockwork:push-update-exceptions')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Pressable counterpart (06:37) moved to Modules\Pressable\PressableServiceProvider::scheduledTasks() (Phase 7)
-// — pulls page-view stats straight from Pressable's API (no nginx
+// Pressable counterpart (clockwork:pressable-traffic-report) moved to
+// Modules\Pressable\PressableServiceProvider::scheduledTasks() (Phase 7) and
+// now runs at 04:45, ahead of the 06:00 client reports that read its rows
+// — pulls daily traffic straight from Pressable's API (no nginx
 // access-log rollup dependency, unlike the SpinupWP version).
 
 // clockwork:pressable-security-summary-report (06:39, Pressable-only: known plugin/theme

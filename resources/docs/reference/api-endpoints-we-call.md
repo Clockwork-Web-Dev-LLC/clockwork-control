@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-09-28
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -108,7 +108,7 @@ Daily import at 03:30 (`clockwork:import-spinupwp`).
 | POST | `/sites/{id}/wordpress/commands`, `/sites/{id}/wordpress/wpcli` | Fire-and-forget shell / wp-cli commands — see `PressableCommandRunner` for how this becomes synchronous (result read back from the activity log, not the response body). |
 | GET | `/sites/{id}/backups`, `/backups/fs`, `/backups/db` | Backup run history — `clockwork:pressable-backups-report` (06:32 daily). |
 | GET | `/sites/{id}/reports/performance/latest` | Pressable's own Lighthouse report — see [Integrations → Pressable](/docs/integrations/pressable). |
-| GET | `/sites/{id}/statistics` | Page-view stats — `clockwork:pressable-traffic-report` (06:37 daily). |
+| GET | `/sites/{id}/statistics` | Page-view stats — `clockwork:pressable-traffic-report` (04:45 daily). |
 | GET | `/sites/{id}/security-alerts/{plugins,themes}` | Known-vulnerability + Defensive Mode status — `clockwork:pressable-security-summary-report` (06:39 daily), Pressable-only, no SpinupWP equivalent. |
 | POST | `/sites/{id}/metrics`, `/sites/{id}/logs/activity` | CPU/MySQL resource metrics and the activity-log poll `PressableCommandRunner` uses for command results. |
 
