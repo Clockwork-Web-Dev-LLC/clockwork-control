@@ -102,13 +102,15 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $auto_updates_paused_reason short note shown as a tooltip in the fleet listing
  * @property ?Carbon $auto_updates_last_run_at last time the nightly loop touched this site
  * @property bool $uptime_monitoring_enabled
- * @property string $uptime_state up|down|maintenance|unknown
+ * @property string $uptime_state up|down|maintenance|probe_blocked|unknown
  * @property ?Carbon $uptime_last_checked_at
  * @property ?Carbon $uptime_last_up_at
  * @property ?int $uptime_last_status_code
  * @property int $uptime_consecutive_failures
  * @property ?Carbon $uptime_down_since
  * @property ?Carbon $uptime_maintenance_since
+ * @property ?Carbon $uptime_probe_blocked_since start of the current unbroken run of HTTP 429 probe answers
+ * @property ?Carbon $uptime_probe_blocked_alerted_at when ops was told about that run (one notice per run)
  * @property ?Carbon $uptime_ignored_at
  * @property ?string $uptime_ignore_reason
  * @property bool $uptime_sla_exempt
@@ -255,6 +257,12 @@ class Site extends Model
 
     public const UPTIME_STATE_UNKNOWN = 'unknown';
 
+    /**
+     * The site rate-limits the probe (HTTP 429), so we can't tell whether it
+     * is up. Not an outage: it never counts as downtime.
+     */
+    public const UPTIME_STATE_PROBE_BLOCKED = 'probe_blocked';
+
     protected $fillable = [
         'spinupwp_id',
         'pressable_site_id',
@@ -344,6 +352,8 @@ class Site extends Model
         'uptime_consecutive_failures',
         'uptime_down_since',
         'uptime_maintenance_since',
+        'uptime_probe_blocked_since',
+        'uptime_probe_blocked_alerted_at',
         'uptime_ignored_at',
         'uptime_ignore_reason',
         'uptime_sla_exempt',
@@ -443,6 +453,8 @@ class Site extends Model
             'uptime_consecutive_failures' => 'integer',
             'uptime_down_since' => 'datetime',
             'uptime_maintenance_since' => 'datetime',
+            'uptime_probe_blocked_since' => 'datetime',
+            'uptime_probe_blocked_alerted_at' => 'datetime',
             'uptime_ignored_at' => 'datetime',
             'uptime_sla_exempt' => 'boolean',
             'uptime_skip_body_check' => 'boolean',
@@ -1404,6 +1416,11 @@ class Site extends Model
         return $this->uptime_state === self::UPTIME_STATE_MAINTENANCE;
     }
 
+    public function isUptimeProbeBlocked(): bool
+    {
+        return $this->uptime_state === self::UPTIME_STATE_PROBE_BLOCKED;
+    }
+
     /**
      * Return a consolidated status color for visual cards ('green', 'yellow', 'red').
      */
@@ -1417,7 +1434,7 @@ class Site extends Model
             return 'red';
         }
 
-        if ($this->uptime_state === 'unknown' || $this->uptime_state === self::UPTIME_STATE_MAINTENANCE || $this->sslState() === self::SSL_STATE_YELLOW) {
+        if ($this->uptime_state === 'unknown' || $this->uptime_state === self::UPTIME_STATE_MAINTENANCE || $this->uptime_state === self::UPTIME_STATE_PROBE_BLOCKED || $this->sslState() === self::SSL_STATE_YELLOW) {
             return 'yellow';
         }
 

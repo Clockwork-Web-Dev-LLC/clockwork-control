@@ -27,6 +27,15 @@ use Modules\Core\ModuleStateResolver;
  *   - unknown → up: instant, no event/alert (initial state, not a transition)
  *   - unknown → down: 2 failures, but emits a "first detected down" event
  *     (we still want to know about a site we've never seen up)
+ *   - any → probe_blocked: the site answered HTTP 429 (a rate limiter or
+ *     anti-bot challenge refused the probe). That is neither a failure nor
+ *     proof of life: the failure streak is not incremented, last-up is not
+ *     set, and the site never goes down on it. Entering the state records a
+ *     probe_blocked event (which closes an open outage: the server is
+ *     answering again, so the probe can no longer vouch it is down). Staying
+ *     blocked for the configured number of hours sends one ops chat notice.
+ *     A sub-threshold failure while blocked leaves the blocked stretch open;
+ *     a success, maintenance, or a real down transition ends it.
  */
 class UptimeStateUpdater
 {
@@ -37,6 +46,15 @@ class UptimeStateUpdater
      * displayed on the Monitoring → Settings page until the operator saves.
      */
     public const FAILURE_THRESHOLD_FOR_DOWN = 2;
+
+    /**
+     * Hours a site may keep rate-limiting the probe before ops gets a chat
+     * notice. Runtime value comes from the Settings key below (Monitoring →
+     * Settings); this is the default.
+     */
+    public const PROBE_BLOCKED_ALERT_HOURS = 6;
+
+    public const SETTING_PROBE_BLOCKED_ALERT_HOURS = 'monitoring.uptime_probe_blocked_alert_hours';
 
     public function __construct(
         protected ChatNotifier $mattermost,
@@ -50,7 +68,9 @@ class UptimeStateUpdater
         $now = Carbon::now();
         $previousState = $site->uptime_state ?? 'unknown';
 
-        if ($probe->isMaintenance) {
+        if ($probe->isProbeBlocked) {
+            $this->handleBlocked($site, $probe, $previousState, $now);
+        } elseif ($probe->isMaintenance) {
             $this->handleMaintenance($site, $probe, $previousState, $now);
         } elseif ($probe->succeeded) {
             $this->handleSuccess($site, $probe, $previousState, $now);
@@ -58,10 +78,122 @@ class UptimeStateUpdater
             $this->handleFailure($site, $probe, $previousState, $now);
         }
 
-        $site->forceFill([
+        $fields = [
             'uptime_last_checked_at' => $now,
             'uptime_last_status_code' => $probe->statusCode,
-        ])->save();
+        ];
+
+        // The blocked stretch ends once the site has left the probe_blocked
+        // state on a real answer (up, maintenance, or a confirmed outage).
+        if (! $probe->isProbeBlocked && $site->uptime_state !== Site::UPTIME_STATE_PROBE_BLOCKED) {
+            $fields['uptime_probe_blocked_since'] = null;
+            $fields['uptime_probe_blocked_alerted_at'] = null;
+        }
+
+        $site->forceFill($fields)->save();
+    }
+
+    /**
+     * HTTP 429: the site is refusing the probe, so we can't tell whether it is
+     * up. Never counts toward the failure streak, never sets last-up, never
+     * opens an outage.
+     */
+    private function handleBlocked(Site $site, UptimeProbeResult $probe, string $previousState, Carbon $now): void
+    {
+        $isTransition = $previousState !== Site::UPTIME_STATE_PROBE_BLOCKED;
+        $wasDown = $previousState === Site::UPTIME_STATE_DOWN;
+        $downSince = $site->uptime_down_since;
+        $blockedSince = $site->uptime_probe_blocked_since ?? $now;
+
+        $fields = [
+            'uptime_state' => Site::UPTIME_STATE_PROBE_BLOCKED,
+            'uptime_probe_blocked_since' => $blockedSince,
+            'uptime_down_since' => null,
+            'uptime_maintenance_since' => null,
+        ];
+
+        // Closing an outage resets the streak the way a success would;
+        // otherwise a single blip after this would count as the second
+        // failure of an outage that has already ended.
+        if ($wasDown) {
+            $fields['uptime_consecutive_failures'] = 0;
+        }
+
+        $site->forceFill($fields)->save();
+
+        if ($isTransition) {
+            $this->recordEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, $probe, $now);
+            $this->logProbeBlocked($site, $probe, $wasDown && $downSince !== null ? (int) abs($downSince->diffInSeconds($now)) : null);
+        }
+
+        $this->maybeNotifyProbeBlocked($site, $probe, $blockedSince, $now);
+    }
+
+    private function logProbeBlocked(Site $site, UptimeProbeResult $probe, ?int $closedOutageSec): void
+    {
+        $summary = $closedOutageSec !== null
+            ? sprintf('%s answers again but is blocking the uptime probe (HTTP %d) — outage closed after %d min; recovery not confirmed', $site->domain, (int) $probe->statusCode, (int) round($closedOutageSec / 60))
+            : sprintf('%s is blocking the uptime probe (HTTP %d) — not counted as downtime', $site->domain, (int) $probe->statusCode);
+
+        $this->actionLogger->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: $summary,
+            site: $site,
+            target: Site::UPTIME_STATE_PROBE_BLOCKED,
+            details: array_filter([
+                'status_code' => $probe->statusCode,
+                'retry_after' => $probe->retryAfter,
+                'closed_outage_sec' => $closedOutageSec,
+            ], fn ($v) => $v !== null),
+            ok: false,
+            error: $probe->error,
+            elapsedMs: $probe->responseTimeMs,
+            actor: 'scheduled',
+        );
+    }
+
+    /**
+     * One chat notice per blocked stretch, once it has lasted the configured
+     * number of hours. Ignored sites stay silent (same rule as down alerts);
+     * the dispatcher also silences inactive sites.
+     */
+    private function maybeNotifyProbeBlocked(Site $site, UptimeProbeResult $probe, Carbon $blockedSince, Carbon $now): void
+    {
+        if ($site->uptime_probe_blocked_alerted_at !== null || $site->isUptimeIgnored()) {
+            return;
+        }
+
+        $blockedSec = (int) abs($blockedSince->diffInSeconds($now));
+        if ($blockedSec < $this->probeBlockedAlertHours() * 3600) {
+            return;
+        }
+
+        $site->forceFill(['uptime_probe_blocked_alerted_at' => $now])->save();
+
+        try {
+            $this->mattermost->uptimeProbeBlocked($site, $blockedSec, $probe->statusCode, $probe->retryAfter);
+        } catch (\Throwable $e) {
+            Log::warning('uptime.mattermost_probe_blocked_failed', ['site_id' => $site->id, 'error' => $e->getMessage()]);
+        }
+
+        $this->actionLogger->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: sprintf('%s has blocked the uptime probe for %d h (HTTP %d) — ops notified', $site->domain, intdiv($blockedSec, 3600), (int) $probe->statusCode),
+            site: $site,
+            target: Site::UPTIME_STATE_PROBE_BLOCKED,
+            details: ['status_code' => $probe->statusCode, 'blocked_sec' => $blockedSec, 'notified' => true],
+            ok: false,
+            error: $probe->error,
+            elapsedMs: $probe->responseTimeMs,
+            actor: 'scheduled',
+        );
+    }
+
+    private function probeBlockedAlertHours(): int
+    {
+        $hours = (int) app(Settings::class)->get(self::SETTING_PROBE_BLOCKED_ALERT_HOURS, self::PROBE_BLOCKED_ALERT_HOURS);
+
+        return max(1, $hours);
     }
 
     private function handleMaintenance(Site $site, UptimeProbeResult $probe, string $previousState, Carbon $now): void
@@ -88,8 +220,10 @@ class UptimeStateUpdater
     {
         $isRecoveryFromDown = $previousState === 'down';
         $isRecoveryFromMaint = $previousState === 'maintenance';
+        $isRecoveryFromBlocked = $previousState === Site::UPTIME_STATE_PROBE_BLOCKED;
         $downSince = $site->uptime_down_since;
         $maintSince = $site->uptime_maintenance_since;
+        $blockedSince = $site->uptime_probe_blocked_since;
 
         $site->forceFill([
             'uptime_state' => 'up',
@@ -131,6 +265,22 @@ class UptimeStateUpdater
             if (! $site->isUptimeIgnored()) {
                 $this->fireMaintenanceRecoveryNotification($site, $maintSec, $probe);
             }
+        } elseif ($isRecoveryFromBlocked) {
+            // Closes the blocked stretch in the event log. No chat: nothing
+            // was down, and the stretch was never reported as an outage.
+            $blockedSec = $blockedSince !== null ? (int) abs($blockedSince->diffInSeconds($now)) : null;
+            $this->recordEvent($site, SiteUptimeEvent::TYPE_UP, $probe, $now);
+
+            $this->actionLogger->record(
+                actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+                summary: "{$site->domain} uptime probe gets through again (was blocked for ".($blockedSec !== null ? (int) round($blockedSec / 60) : 0).' min)',
+                site: $site,
+                target: 'up',
+                details: ['status_code' => $probe->statusCode, 'probe_blocked_sec' => $blockedSec],
+                ok: true,
+                elapsedMs: $probe->responseTimeMs,
+                actor: 'scheduled',
+            );
         }
     }
 

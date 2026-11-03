@@ -228,7 +228,7 @@
             <div class="text-xs text-[var(--color-ink-muted)] mt-1">
                 {{ $unknown }} unknown
                 @php
-                    $exemptTotal = $currentlyNotOurFault + $currentlyMaintenance + $currentlyIgnored;
+                    $exemptTotal = $currentlyNotOurFault + $currentlyMaintenance + $currentlyIgnored + ($currentlyProbeBlocked ?? 0);
                 @endphp
                 @if ($exemptTotal > 0)
                     · <span class="text-[var(--color-ink-soft)]">{{ $exemptTotal }} excused / other</span>
@@ -276,7 +276,7 @@
     </div>
 
     {{-- Quick filter chips for states --}}
-    @if ($currentlyDown > 0 || $currentlyNotOurFault > 0 || $currentlyMaintenance > 0 || $currentlyIgnored > 0)
+    @if ($currentlyDown > 0 || $currentlyNotOurFault > 0 || $currentlyMaintenance > 0 || $currentlyIgnored > 0 || ($currentlyProbeBlocked ?? 0) > 0)
         <div class="flex items-center gap-2 mb-6 flex-wrap text-xs">
             <span class="text-[var(--color-ink-soft)] font-semibold uppercase tracking-wider text-[10px]">Filter:</span>
             <button type="button" @click="clearSearch()"
@@ -303,6 +303,14 @@
                         title="Scheduled maintenance">
                     <i class="fa-solid fa-wrench text-[10px] mr-1"></i>
                     {{ $currentlyMaintenance }} maint
+                </button>
+            @endif
+            @if (($currentlyProbeBlocked ?? 0) > 0)
+                <button type="button" @click="filterSearch('probe_blocked')" onclick="window.monitoringFilterSearch('probe_blocked')"
+                        class="btn-pill-nav text-xs py-1 px-2.5 text-[var(--color-status-yellow)] cursor-pointer"
+                        title="Sites rate-limiting the uptime probe (HTTP 429) — not counted as down">
+                    <i class="fa-solid fa-hand text-[10px] mr-1"></i>
+                    {{ $currentlyProbeBlocked }} probe blocked
                 </button>
             @endif
             @if ($currentlyIgnored > 0)
@@ -362,11 +370,13 @@
                                     $state === 'up' => 'bg-[var(--color-status-green)]/15 text-[var(--color-status-green)]',
                                     $state === 'down' => 'bg-[var(--color-status-red)]/15 text-[var(--color-status-red)]',
                                     $state === 'maintenance' => 'bg-[var(--color-primary-500)]/15 text-[var(--color-primary-600)]',
+                                    $state === 'probe_blocked' => 'bg-[var(--color-status-yellow)]/15 text-[var(--color-status-yellow)]',
                                     default => 'bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)]',
                                 };
                                 $stateLabel = match (true) {
                                     $isNotOurFault => 'NOT OUR FAULT',
                                     $state === 'maintenance' => 'MAINT',
+                                    $state === 'probe_blocked' => 'BLOCKED',
                                     default => strtoupper($state ?? 'unknown'),
                                 };
                                 $u24 = $stats24h[$site->id] ?? null;
@@ -408,9 +418,12 @@
                                             {{ $stateLabel }}
                                         </button>
                                     @else
-                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }}">
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold font-data inline-flex items-center gap-1 {{ $statePill }}"
+                                              @if ($state === 'probe_blocked') title="The site answers the probe with HTTP 429 (rate-limited). Not counted as downtime; status can't be confirmed." @endif>
                                             @if ($state === 'maintenance')
                                                 <i class="fa-solid fa-wrench text-[10px]"></i>
+                                            @elseif ($state === 'probe_blocked')
+                                                <i class="fa-solid fa-hand text-[10px]"></i>
                                             @endif
                                             {{ $stateLabel }}
                                         </span>
@@ -447,6 +460,8 @@
                                         Down for {{ $site->uptime_down_since->diffForHumans(['parts' => 2, 'short' => true, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE]) }}
                                     @elseif ($state === 'maintenance' && $site->uptime_maintenance_since)
                                         In maintenance {{ $site->uptime_maintenance_since->diffForHumans(['parts' => 2, 'short' => true, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE]) }}
+                                    @elseif ($state === 'probe_blocked')
+                                        Probe blocked (HTTP 429){{ $site->uptime_probe_blocked_since ? ' for ' . $site->uptime_probe_blocked_since->diffForHumans(['parts' => 2, 'short' => true, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE]) : '' }}
                                     @elseif ($state === 'up' && $site->uptime_last_up_at)
                                         Up — checked {{ $site->uptime_last_checked_at?->diffForHumans() ?? 'never' }}
                                     @else
@@ -597,16 +612,18 @@
                                 $isUp = $event->event_type === 'up';
                                 $isMaint = $event->event_type === 'maintenance';
                                 $isDown = $event->event_type === 'down';
+                                $isBlocked = $event->event_type === 'probe_blocked';
                                 $isExempt = $event->is_sla_exempt;
-                                $arrow = $isUp ? '↑' : ($isMaint ? '🔧' : '↓');
+                                $arrow = $isUp ? '↑' : ($isMaint ? '🔧' : ($isBlocked ? '⊘' : '↓'));
                                 $arrowClass = $isUp
                                     ? 'text-[var(--color-status-green)]'
-                                    : ($isMaint ? 'text-[var(--color-primary-600)]' : ($isExempt ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-status-red)]'));
+                                    : ($isMaint ? 'text-[var(--color-primary-600)]' : ($isBlocked ? 'text-[var(--color-status-yellow)]' : ($isExempt ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-status-red)]')));
+                                $eventLabel = $isBlocked ? 'Probe blocked' : ucfirst($event->event_type);
                             @endphp
                             <tr class="event-row border-b border-[var(--color-border-light)] hover:bg-[var(--color-surface-alt)]"
                                 data-search="{{ strtolower(($event->site?->domain ?? '') . ' ' . $event->event_type . ' ' . ($isExempt ? 'not our fault exempt ' . ($event->exemptionReasonLabel() ?? '') : '') . ' ' . ($event->error ?? '')) }}">
                                 <td class="px-5 py-2 font-data font-semibold {{ $arrowClass }}">
-                                    {{ $arrow }} {{ ucfirst($event->event_type) }}
+                                    {{ $arrow }} {{ $eventLabel }}
                                     @if ($isExempt)
                                         <button type="button"
                                                 @click="filterSearch('not our fault')"
@@ -625,6 +642,8 @@
                                         Everything is OK{{ $event->status_code ? " · HTTP {$event->status_code}" : '' }}
                                     @elseif ($isMaint)
                                         {{ $event->error ?: 'Scheduled maintenance mode' }}
+                                    @elseif ($isBlocked)
+                                        {{ $event->error ?: 'Rate-limited (HTTP 429)' }} · not counted as downtime
                                     @else
                                         {{ $event->error ?: ($event->status_code ? "HTTP {$event->status_code}" : 'unreachable') }}
                                         @if ($isExempt && $event->exemption_reason)

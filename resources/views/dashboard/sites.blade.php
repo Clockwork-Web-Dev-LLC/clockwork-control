@@ -223,6 +223,7 @@
                                     'up' => ['class' => 'status-green', 'icon' => 'fa-circle-check', 'tooltip' => 'Uptime Online'],
                                     'down' => ['class' => 'status-red', 'icon' => 'fa-circle-exclamation', 'tooltip' => 'Site Down'],
                                     'maintenance' => ['class' => 'status-yellow', 'icon' => 'fa-wrench', 'tooltip' => 'In Maintenance'],
+                                    'probe_blocked' => ['class' => 'status-yellow', 'icon' => 'fa-hand', 'tooltip' => 'Uptime probe blocked (HTTP 429)'],
                                     default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
                                 };
                             @endphp

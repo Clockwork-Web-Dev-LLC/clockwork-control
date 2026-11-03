@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Uptime\UptimeProber;
 use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -583,6 +584,43 @@ abstract class WebhookChatNotifier implements ChatNotifier
                 ['title' => 'Server', 'value' => $site->server !== null ? $site->server->name : 'n/a', 'short' => true],
                 ['title' => 'Maintenance duration', 'value' => $durationLabel, 'short' => true],
             ],
+        ];
+
+        return $this->send($title, [$attachment]);
+    }
+
+    /**
+     * The uptime probe has been rate-limited (HTTP 429) for a long stretch.
+     * Not an outage alert: the state machine does not count this as
+     * downtime, but it can't confirm the site is up either, so a person
+     * should look. Fires once per blocked stretch.
+     */
+    public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool
+    {
+        if (! $this->isEventEnabled('uptime_probe_blocked')) {
+            return false;
+        }
+
+        $duration = $this->formatDowntime($blockedSec);
+        $detail = $statusCode !== null ? "HTTP {$statusCode}" : 'rate-limited';
+        $title = sprintf(':no_entry: %s is blocking the uptime probe (%s for %s)', $site->domain, $detail, $duration);
+
+        $body = 'The site has kept answering the uptime probe with "Too Many Requests" for this long, so Clockwork cannot tell whether it is up. '
+            .'This is not counted as downtime. A host rate limiter or a security plugin\'s anti-bot challenge is the usual cause: '
+            .'allowlist the uptime monitor\'s User-Agent ('.UptimeProber::userAgent().') there. '
+            .'If real visitors are being throttled too, treat it as an outage.';
+
+        $attachment = [
+            'fallback' => $title,
+            'color' => '#e0a800',
+            'title' => $title,
+            'text' => $body,
+            'fields' => array_values(array_filter([
+                ['title' => 'Site', 'value' => $site->domain, 'short' => true],
+                ['title' => 'Server', 'value' => $site->server !== null ? $site->server->name : 'n/a', 'short' => true],
+                ['title' => 'Blocked for', 'value' => $duration, 'short' => true],
+                $retryAfter !== null ? ['title' => 'Retry-After', 'value' => mb_strimwidth($retryAfter, 0, 64, '…'), 'short' => true] : null,
+            ])),
         ];
 
         return $this->send($title, [$attachment]);

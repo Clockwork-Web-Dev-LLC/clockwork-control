@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\SiteIngestExclusion;
 use App\Models\SiteUptimeEvent;
 use App\Models\User;
+use App\Services\Chat\ChatNotifier;
 use App\Services\Companion\CompanionInstaller;
 use App\Services\DigitalOcean\SpacesClient;
 use App\Services\Fail2ban\Fail2banClient;
@@ -464,6 +465,25 @@ describe('recheckUptime', function () {
         $response = $this->actingAs(User::factory()->create())->post(route('sites.uptime.recheck', $site));
 
         $response->assertOk()->assertJsonPath('ok', true)->assertJsonPath('status_code', 200);
+    });
+
+    it('reports a rate-limited probe as blocked rather than down', function () {
+        [, $site] = spinupSite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'up']);
+
+        $this->mock(UptimeProber::class)
+            ->shouldReceive('probe')
+            ->once()
+            ->andReturn(UptimeProbeResult::blocked(429, 90, 'HTTP 429 (rate-limited — probe blocked)'));
+
+        $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentDown');
+
+        $response = $this->actingAs(User::factory()->create())->post(route('sites.uptime.recheck', $site));
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('status_code', 429)
+            ->assertJsonPath('state', Site::UPTIME_STATE_PROBE_BLOCKED)
+            ->assertJsonPath('message', 'Probe blocked (HTTP 429) — not counted as down');
     });
 });
 

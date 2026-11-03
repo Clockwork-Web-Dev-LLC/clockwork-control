@@ -111,7 +111,7 @@ class SitesController extends Controller
                 break;
 
             case 'status':
-                $statusOrder = "CASE sites.uptime_state WHEN 'down' THEN 1 WHEN 'maintenance' THEN 2 WHEN 'unknown' THEN 3 WHEN 'up' THEN 4 ELSE 5 END";
+                $statusOrder = "CASE sites.uptime_state WHEN 'down' THEN 1 WHEN 'maintenance' THEN 2 WHEN 'unknown' THEN 3 WHEN 'probe_blocked' THEN 3 WHEN 'up' THEN 4 ELSE 5 END";
                 $sitesQuery->select('sites.*')
                     ->orderByRaw("{$statusOrder} ".($dir === 'desc' ? 'DESC' : 'ASC'))
                     ->orderBy('sites.domain', 'asc');
@@ -677,9 +677,11 @@ class SitesController extends Controller
 
             return response()->json([
                 'ok' => true,
-                'message' => $probe->succeeded
-                    ? "Up (HTTP {$probe->statusCode})"
-                    : 'Down ('.($probe->statusCode ? "HTTP {$probe->statusCode}" : ($probe->error ?? 'no response')).')',
+                'message' => match (true) {
+                    $probe->isProbeBlocked => "Probe blocked (HTTP {$probe->statusCode}) — not counted as down",
+                    $probe->succeeded => "Up (HTTP {$probe->statusCode})",
+                    default => 'Down ('.($probe->statusCode ? "HTTP {$probe->statusCode}" : ($probe->error ?? 'no response')).')',
+                },
                 'state' => $site->uptime_state,
                 'status_code' => $probe->statusCode,
             ]);

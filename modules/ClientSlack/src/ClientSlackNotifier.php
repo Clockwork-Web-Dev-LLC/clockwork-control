@@ -122,6 +122,11 @@ class ClientSlackNotifier implements ChatNotifier
         return false;
     }
 
+    public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool
+    {
+        return false;
+    }
+
     public function contactFormTestFailed(Site $site, string $reason, int $streak, ?string $formId = null): bool
     {
         $webhook = $this->webhookUrl($site);

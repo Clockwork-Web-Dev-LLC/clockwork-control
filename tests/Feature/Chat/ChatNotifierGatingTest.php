@@ -30,7 +30,7 @@ use Modules\AiRemedy\Models\AiRemedyRun;
 | an inactive site:
 |   sslStateChanged, contactFormTestFailed,
 |   contactFormTestRecovered, companionUnreachable, companionReachable,
-|   pluginUpdateFailed
+|   pluginUpdateFailed, uptimeProbeBlocked (a monitoring gap, not an outage)
 |
 | NEVER gated — routed straight through dispatch() even for an inactive
 | site, because the class's own comment block says these are active-incident
@@ -163,6 +163,13 @@ function fakeChatNotifier(bool $returns): ChatNotifier
             return $this->returns;
         }
 
+        public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
         public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
         {
             $this->calls[] = __FUNCTION__;
@@ -285,6 +292,7 @@ dataset('gatedMethods', [
         PluginUpdateJob::factory()->create(['site_id' => $s->id]),
         5
     )],
+    'uptimeProbeBlocked' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->uptimeProbeBlocked($s, 6 * 3600, 429, '120')],
 ]);
 
 /**

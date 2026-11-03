@@ -41,6 +41,11 @@ interface ChatNotifier
             'description' => 'Uptime probe detected the site finished scheduled maintenance and is back up.',
             'default' => true,
         ],
+        'uptime_probe_blocked' => [
+            'label' => 'Uptime probe blocked',
+            'description' => 'A site has rate-limited the uptime probe (HTTP 429) for longer than the hours set on Monitoring → Settings, so its real status cannot be confirmed. Sent once per blocked stretch.',
+            'default' => true,
+        ],
         'ssl_state_changed' => [
             'label' => 'SSL state changed',
             'description' => 'Certificate state moved between green / yellow / red.',
@@ -185,6 +190,8 @@ interface ChatNotifier
     public function siteEnteredMaintenance(Site $site, ?int $statusCode, ?string $reason, ?string $retryAfter = null): bool;
 
     public function siteExitedMaintenance(Site $site, ?int $maintenanceSec): bool;
+
+    public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool;
 
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool;
 
