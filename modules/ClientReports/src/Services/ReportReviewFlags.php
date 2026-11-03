@@ -61,6 +61,14 @@ class ReportReviewFlags
             $reasons[] = 'The site is on a spam or malware blocklist.';
         }
 
+        // Visitors were locked out but never banned, so the ban count left
+        // them out and is hidden; a person should see why the bans stopped.
+        $unbanned = (int) ($security['unbanned_lockouts'] ?? 0);
+        if ($unbanned > 0) {
+            $reasons[] = "{$unbanned} ".($unbanned === 1 ? 'lockout' : 'lockouts')
+                .' this month never became a ban (still waiting for review, or the ban failed: no server to ban at, or fail2ban not provisioned), so the blocked-visitors count is hidden.';
+        }
+
         // A known hole with a fix waiting means an update isn't going through.
         array_push($reasons, ...self::vulnerablePluginReasons($security, (array) ($data['updates'] ?? [])));
 

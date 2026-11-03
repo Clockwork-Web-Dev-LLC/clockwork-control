@@ -371,7 +371,7 @@
                     @elseif ($isOperatorPreview)
                         <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
                             <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                            <div class="text-sm font-bold text-slate-400 mt-1">Not measured (no blocker reports to Control for this site this period) — hidden from the client</div>
+                            <div class="text-sm font-bold text-slate-400 mt-1">{{ (int) ($security['unbanned_lockouts'] ?? 0) > 0 ? 'Not measured ('.(int) $security['unbanned_lockouts'].' lockouts this period never became a ban)' : 'Not measured (no blocker reports to Control for this site this period)' }} — hidden from the client</div>
                         </div>
                     @endif
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">

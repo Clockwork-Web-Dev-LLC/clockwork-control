@@ -70,6 +70,13 @@ class ClientReportCompiler
      */
     public const TRAFFIC_LAST_DAY_SETTLE_HOURS = 2;
 
+    /** Review-queue states of a lockout that hasn't become a ban (and may never). */
+    public const UNBANNED_LOCKOUT_STATUSES = [
+        ReviewQueueEntry::STATUS_PENDING,
+        ReviewQueueEntry::STATUS_QUEUED_FOR_BAN,
+        ReviewQueueEntry::STATUS_FAILED,
+    ];
+
     /** Above this share of requests from two IPs, access logs see a proxy or gateway, not visitors. */
     public const TRAFFIC_TOP_IP_SHARE_MAX = 0.9;
 
@@ -609,7 +616,16 @@ class ClientReportCompiler
             ->where('site_id', $site->id)
             ->whereBetween('banned_at', [$start, $end])
             ->count();
-        $blocksMeasured = $blockedIpsCount > 0 || $this->lockoutsIngested($site, $start, $end);
+        // Lockouts from the period that never became a ban: waiting for
+        // review, or failed (no server to ban at, fail2ban not provisioned).
+        // The ban count leaves those visitors out, so it can't be shown.
+        $unbannedLockouts = ReviewQueueEntry::query()
+            ->where('site_id', $site->id)
+            ->whereBetween('created_at', [$start, $end])
+            ->whereIn('status', self::UNBANNED_LOCKOUT_STATUSES)
+            ->count();
+        $blocksMeasured = $unbannedLockouts === 0
+            && ($blockedIpsCount > 0 || $this->lockoutsIngested($site, $start, $end));
 
         return [
             'total_scans' => $scans->count(),
@@ -625,8 +641,11 @@ class ClientReportCompiler
             'vulnerable_plugin_items' => $this->vulnerablePluginItems($site, $vulnerabilities),
             'inactive_plugin_vulnerabilities' => count(array_filter($vulnerabilities, fn (array $v) => ! $v['active'])),
             // Only a number when we know lockouts from this site actually reach
-            // us; otherwise 0 would read as "no attacks".
+            // us and were all turned into bans; otherwise 0 would read as "no
+            // attacks" (or a low count as all of them).
             'blocked_threats_count' => $blocksMeasured ? $blockedIpsCount : null,
+            // Internal: lockouts in the period that never became a ban.
+            'unbanned_lockouts' => $unbannedLockouts,
             // "At the server" only where a fail2ban jail can ban at the server.
             'blocks_at_server' => $blocksMeasured && $this->hasProvisionedJail($site),
             // Whether any transport can run the core-file check on this host.
@@ -845,32 +864,25 @@ class ClientReportCompiler
     }
 
     /**
-     * Evidence that lockouts from this site reached Control in the period, so
-     * a count of 0 bans is a measurement: lockouts or log hits from it went
-     * into the review queue, or it's in the lockout pull (a blocker reports
-     * its lockouts), sits on a server with a provisioned fail2ban jail, and
-     * that server's lockouts were pulled during or after the period. A
-     * capability string alone proves nothing: the blocker can be switched
-     * off, or the site left out of every pull.
+     * Evidence that lockouts from this site were turned into bans through the
+     * whole period, so a count of 0 bans is a measurement: it's in the
+     * lockout pull (a blocker reports its lockouts), sits on a server with a
+     * provisioned fail2ban jail, and that server's lockouts were pulled in
+     * the period's last day or after, so a pull that stopped mid-month can't
+     * vouch for the rest of it. A capability string alone proves nothing:
+     * the blocker can be switched off, or the site left out of every pull.
+     * Review-queue rows are no evidence either: they are the lockouts that
+     * did not become bans (see UNBANNED_LOCKOUT_STATUSES).
      */
     protected function lockoutsIngested(Site $site, Carbon $start, Carbon $end): bool
     {
-        $queued = ReviewQueueEntry::query()
-            ->where('site_id', $site->id)
-            ->where(fn ($q) => $q->whereBetween('created_at', [$start, $end])->orWhereBetween('updated_at', [$start, $end]))
-            ->exists();
-
-        if ($queued) {
-            return true;
-        }
-
         $pulledAt = $site->server?->last_llar_pull_at;
 
         return (bool) $site->is_wordpress
             && $this->reportsBlocks($site)
             && $this->hasProvisionedJail($site)
             && $pulledAt !== null
-            && $pulledAt->greaterThanOrEqualTo($start);
+            && $pulledAt->greaterThanOrEqualTo($end->copy()->subDay());
     }
 
     /** The site's server has Clockwork's fail2ban jail, so bans happen at the server. */

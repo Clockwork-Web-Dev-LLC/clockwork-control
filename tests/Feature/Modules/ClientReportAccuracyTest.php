@@ -862,15 +862,45 @@ describe('threats blocked', function () {
         expect(compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]))['data']['security']['blocked_threats_count'])->toBeNull();
     });
 
-    it('shows a real 0 without claiming the server when lockouts from a serverless site reached the review queue', function () {
+    // Was "shows a real 0 … when lockouts from a serverless site reached the
+    // review queue": those rows are the lockouts that never became a ban, so
+    // they prove the count left visitors out, not that 0 was measured.
+    it('hides the count and holds the report when lockouts in the period never became bans', function (string $status) {
         $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
-        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'source' => ReviewQueueEntry::SOURCE_LLAR, 'created_at' => Carbon::parse('2026-09-14'), 'updated_at' => Carbon::parse('2026-09-14')]);
+        ReviewQueueEntry::factory()->count(2)->create(['site_id' => $site->id, 'source' => ReviewQueueEntry::SOURCE_LLAR, 'status' => $status, 'created_at' => Carbon::parse('2026-09-14'), 'updated_at' => Carbon::parse('2026-09-14')]);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => 0, 'blocks_at_server' => false])
-            ->and($report['html'])->toContain('block malicious visitors')->not->toContain('at the server')
-            ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'unbanned_lockouts' => 2])
+            ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('block malicious visitors')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            ->and($report['preview'])->toContain('Not measured (2 lockouts this period never became a ban)')
+            ->and($report['reasons'])->toContain('2 lockouts this month never became a ban (still waiting for review, or the ban failed: no server to ban at, or fail2ban not provisioned), so the blocked-visitors count is hidden.');
+    })->with([ReviewQueueEntry::STATUS_PENDING, ReviewQueueEntry::STATUS_QUEUED_FOR_BAN, ReviewQueueEntry::STATUS_FAILED]);
+
+    it('hides the count even beside real bans when some lockouts were never banned', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $site = accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]);
+        BlockedIp::factory()->count(3)->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-09-10')]);
+        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'status' => ReviewQueueEntry::STATUS_FAILED, 'created_at' => Carbon::parse('2026-09-20'), 'updated_at' => Carbon::parse('2026-09-20')]);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'unbanned_lockouts' => 1]);
+    });
+
+    it('does not read a review-queue row from before the period, merely updated in it, as a measured 0', function () {
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
+        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'status' => ReviewQueueEntry::STATUS_FAILED, 'created_at' => Carbon::parse('2026-08-20'), 'updated_at' => Carbon::parse('2026-09-02')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'unbanned_lockouts' => 0])
+            ->and($report['text'])->not->toContain('Malicious visitors blocked');
+    });
+
+    it('does not count a jail whose lockouts stopped being pulled part-way through the period', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => Carbon::parse('2026-09-15')]);
+
+        expect(compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]))['data']['security']['blocked_threats_count'])->toBeNull();
     });
 
     it('counts real bans in the period whatever else is known', function () {
