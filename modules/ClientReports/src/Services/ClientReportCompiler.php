@@ -29,7 +29,7 @@ use Throwable;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 5;
+    public const SCHEMA_VERSION = 6;
 
     /**
      * security.malware_status for a clean scan that didn't cover the whole
@@ -107,28 +107,42 @@ class ClientReportCompiler
         $start = $periodStart->copy()->startOfDay();
         $end = $periodEnd->copy()->endOfDay();
 
+        // The same calendar days in the report timezone, as UTC instants. The
+        // uptime section and the coverage dates show times and dates in that
+        // zone, so they're measured over it: an outage at 01:00 UTC on the 1st
+        // reads "Sep 30, 9:00 PM EDT" and belongs to the month before. The
+        // other sections list whole days (UTC, as their sources record them).
+        $zone = ReportPhrases::timezone();
+        $localStart = Carbon::parse($periodStart->toDateString(), $zone)->startOfDay()->utc();
+        $localEnd = Carbon::parse($periodEnd->toDateString(), $zone)->endOfDay()->utc();
+
         $shouldInclude = fn (string $key) => $sections === null || in_array($key, $sections, true);
 
         // Some sites are flagged non-WordPress but report a WordPress core via
         // Companion; trust the snapshot so their core-file row isn't dropped.
         $isWordPress = (bool) $site->is_wordpress || isset($site->companion_snapshot['wp_core']);
 
-        // A site enrolled part-way through the period was only watched from
-        // then; null when it was watched for the whole period.
-        $coverageStart = $this->coverageStart($site, $start, $end);
+        // A site added part-way through the period was only looked after from
+        // then, which the whole report says; null when it was there for the
+        // whole period. Uptime monitoring can begin later still (switched on
+        // mid-month for a site added long before), which only the uptime
+        // section measures from.
+        $joinedAt = $this->joinedAt($site, $localStart, $localEnd);
+        $uptimeFrom = $this->uptimeMonitoringStart($site, $localStart, $localEnd);
 
         $data = [
             'meta' => [
                 'compiled_at' => now()->toIso8601String(),
-                'period_start' => $start->toDateString(),
-                'period_end' => $end->toDateString(),
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $periodEnd->toDateString(),
                 // Carbon 3's diffInDays is a float, and $end is the last
                 // microsecond of the day, so round to whole days (31 for October).
                 'period_days' => (int) round($start->diffInDays($end)),
                 'custom_notes' => $customNotes,
-                // When monitoring began, if that was after the period started
-                // (ISO 8601). The views say so and the report is held for review.
-                'coverage_start' => $coverageStart?->toIso8601String(),
+                // When the site was added, if that was after the period's first
+                // day in the report timezone (ISO 8601). The views say so and
+                // the report is held for review.
+                'coverage_start' => $joinedAt?->toIso8601String(),
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
                 'schema_version' => self::SCHEMA_VERSION,
@@ -148,7 +162,7 @@ class ClientReportCompiler
             $data['updates'] = $this->compileUpdates($site, $start, $end);
         }
         if ($shouldInclude('uptime')) {
-            $data['uptime'] = $this->compileUptime($site, $start, $end, $coverageStart);
+            $data['uptime'] = $this->compileUptime($site, $localStart, $localEnd, $uptimeFrom);
         }
         if ($shouldInclude('security')) {
             $data['security'] = $this->compileSecurity($site, $start, $end, $isWordPress);
@@ -173,18 +187,36 @@ class ClientReportCompiler
     }
 
     /**
-     * When monitoring of this site began, if that was after the period
-     * started, so a site enrolled late in the month isn't reported as watched
-     * for all of it. Monitoring begins with the first successful uptime probe,
-     * which leaves a seed transition in the action log. A backfilled seed is
-     * dated when the backfill ran, not when monitoring began, and a site
-     * whose first probes failed gets no seed at all, so those fall back to
-     * when the site was added, if that was inside the period.
-     *
-     * Starting on the period's first day counts as covering the whole period,
-     * as it does for backups (covers_period).
+     * When the site was added, if that was inside the period but after its
+     * first day, so a site enrolled late in the month isn't reported as
+     * looked after for all of it. $start and $end bound the period's days in
+     * the report timezone, so "after the first day" is the day the client
+     * reads. Being added on the first day counts as the whole period, as it
+     * does for backups (covers_period).
      */
-    protected function coverageStart(Site $site, Carbon $start, Carbon $end): ?Carbon
+    protected function joinedAt(Site $site, Carbon $start, Carbon $end): ?Carbon
+    {
+        $created = $site->created_at;
+        if ($created === null || ! $created->betweenIncluded($start, $end) || $created->lessThan($start->copy()->addDay())) {
+            return null;
+        }
+
+        return $created->copy();
+    }
+
+    /**
+     * When uptime monitoring of this site began, if that was after the
+     * period's first day (in the report timezone), so the uptime figures are
+     * measured from then. Monitoring begins with the first successful uptime
+     * probe, which leaves a seed transition in the action log; that can come
+     * long after the site was added, when monitoring is switched on
+     * mid-month. A backfilled seed is dated when the backfill ran, not when
+     * monitoring began, and a site whose first probes failed gets no seed at
+     * all, so those fall back to when the site was added, if that was inside
+     * the period. A seed after the period is kept: the uptime section is then
+     * left out, since monitoring had nothing to say about the period.
+     */
+    protected function uptimeMonitoringStart(Site $site, Carbon $start, Carbon $end): ?Carbon
     {
         $seed = ActionLog::query()
             ->where('site_id', $site->id)
@@ -389,9 +421,11 @@ class ClientReportCompiler
      * changes, so the last event before the period tells us whether the site
      * was already down when it began. SLA-exempt outages don't count.
      *
-     * A site whose monitoring began part-way through the period is measured
-     * from then ($coverageStart): the days before weren't watched, so they
-     * can't count as up time.
+     * $start and $end bound the period's days in the report timezone, the
+     * zone the outage times are shown in. A site whose uptime monitoring
+     * began part-way through the period is measured from then
+     * ($monitoringFrom): the days before weren't watched, so they can't
+     * count as up time.
      *
      * A host that rate-limits the monitor answers HTTP 429. That says the
      * probe was blocked, not that visitors couldn't reach the site, so the
@@ -405,9 +439,9 @@ class ClientReportCompiler
      * an outage. In those older rows a real outage that began while the
      * probe was already blocked left no event, so it can't be told apart.
      */
-    protected function compileUptime(Site $site, Carbon $start, Carbon $end, ?Carbon $coverageStart = null): array
+    protected function compileUptime(Site $site, Carbon $start, Carbon $end, ?Carbon $monitoringFrom = null): array
     {
-        $from = $coverageStart !== null ? $coverageStart->copy()->max($start) : $start->copy();
+        $from = $monitoringFrom !== null ? $monitoringFrom->copy()->max($start) : $start->copy();
         // $end is the last microsecond of the day: round, or a 31-day month is 44,639 minutes.
         $totalMinutes = max(1, (int) round($from->diffInMinutes($end)));
         $periodEnd = $end->copy()->min(now());
@@ -501,12 +535,12 @@ class ClientReportCompiler
         $checkedRecently = $lastChecked !== null && $lastChecked->greaterThanOrEqualTo($periodEnd->copy()->subDay());
 
         return [
-            'monitored' => $inProbe && $checkedRecently && ($coverageStart === null || $coverageStart->lessThan($periodEnd)),
+            'monitored' => $inProbe && $checkedRecently && ($monitoringFrom === null || $monitoringFrom->lessThan($periodEnd)),
             // On, in the probe, but not checked lately: a person should look.
             'probe_stopped' => $inProbe && ! $checkedRecently,
             'last_checked_at' => $lastChecked?->toDateString(),
-            // When monitoring began, if that was after the period started.
-            'monitored_since' => $coverageStart?->toIso8601String(),
+            // When uptime monitoring began, if that was after the period's first day.
+            'monitored_since' => $monitoringFrom?->toIso8601String(),
             'uptime_percentage' => $uptimePercentage,
             'outages_count' => $outages,
             'downtime_minutes' => $downtimeMinutes,

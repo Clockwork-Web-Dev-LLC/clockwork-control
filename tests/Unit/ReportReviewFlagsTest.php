@@ -54,6 +54,24 @@ it('flags a report whose monitoring began only after its period', function () {
     ]))->toBe(["Monitoring began Oct 5, after the end of this report's period, so it covers none of it."]);
 });
 
+it('says only the uptime is partial when uptime monitoring began after the site was added', function () {
+    expect(ReportReviewFlags::reasons([
+        'meta' => ['period_start' => '2026-10-01', 'period_end' => '2026-10-31', 'coverage_start' => null],
+        'uptime' => ['monitored_since' => '2026-10-17T14:00:00+00:00', 'outages' => []],
+    ]))->toBe(['Uptime monitoring began Oct 17, so uptime covers only part of the month.'])
+        ->and(ReportReviewFlags::reasons([
+            'meta' => ['period_start' => '2026-10-01', 'period_end' => '2026-10-31', 'coverage_start' => '2026-10-10T12:00:00+00:00'],
+            'uptime' => ['monitored_since' => '2026-10-17T14:00:00+00:00', 'outages' => []],
+        ]))->toBe([
+            'Monitoring began Oct 10, so this report covers only part of the month.',
+            'Uptime monitoring began Oct 17, so uptime covers only part of the month.',
+        ])
+        ->and(ReportReviewFlags::reasons([
+            'meta' => ['period_start' => '2026-09-01', 'period_end' => '2026-09-30', 'coverage_start' => null],
+            'uptime' => ['monitored_since' => '2026-10-05T16:00:00+00:00', 'outages' => []],
+        ]))->toBe(['Uptime monitoring began Oct 5, after this period, so the Uptime section was left out.']);
+});
+
 it('says the monitor was blocked, not that the site was down, when only a 429 is still open', function () {
     $reasons = ReportReviewFlags::reasons([
         'uptime' => ['outages' => [['ongoing' => false]], 'probe_blocked_since' => '2026-10-30T14:05:00+00:00'],

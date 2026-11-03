@@ -34,9 +34,18 @@ class ReportReviewFlags
         // A site enrolled part-way through the month was only watched from then.
         $coverageStart = ReportPhrases::monitoringBeganOn($data['meta']['coverage_start'] ?? null);
         if ($coverageStart !== null) {
-            $reasons[] = ReportPhrases::monitoringBeganAfterPeriod($data)
+            $reasons[] = ReportPhrases::beganAfterPeriod($data['meta']['coverage_start'], $data)
                 ? "Monitoring began {$coverageStart}, after the end of this report's period, so it covers none of it."
                 : "Monitoring began {$coverageStart}, so this report covers only part of the month.";
+        }
+        // Uptime monitoring switched on later than that (or for a site added
+        // long before): only the uptime figures are partial.
+        $uptimeSince = $data['uptime']['monitored_since'] ?? null;
+        if (ReportPhrases::laterDay($uptimeSince, $data['meta']['coverage_start'] ?? null)) {
+            $began = ReportPhrases::monitoringBeganOn($uptimeSince);
+            $reasons[] = ReportPhrases::monitoringBeganAfterPeriod($data)
+                ? "Uptime monitoring began {$began}, after this period, so the Uptime section was left out."
+                : "Uptime monitoring began {$began}, so uptime covers only part of the month.";
         }
 
         array_push($reasons, ...self::malwareReasons($security));

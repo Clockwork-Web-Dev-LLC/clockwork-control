@@ -27,6 +27,7 @@ use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Modules\ClientReports\Services\ReportReviewFlags;
+use Modules\ClientReports\Support\ReportPhrases;
 use Modules\Core\Contracts\SmsNotifier;
 
 /*
@@ -1147,9 +1148,11 @@ describe('uptime', function () {
     });
 
     it('counts an outage that started before the period from the start of the period', function () {
+        // The period is September's days in the report timezone (EDT): Sep 1
+        // begins at 04:00 UTC.
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-08-31 23:00:00');
-        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 01:30:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 03:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 05:30:00');
 
         $report = compileSeptember($site);
 
@@ -1161,19 +1164,20 @@ describe('uptime', function () {
     });
 
     it('runs an outage still open at the end of the period to the end', function () {
+        // Sep 30 ends at midnight EDT, 04:00 UTC on Oct 1.
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 02:00:00');
 
         $report = compileSeptember($site);
 
         expect($report['data']['uptime']['downtime_minutes'])->toBe(120)
             ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeTrue()
-            ->and($report['text'])->toContain('(still down at period end)');
+            ->and($report['text'])->toContain('- Down Sep 30, 10:00 PM EDT for 120 min (still down at period end)');
     });
 
     it('holds the report when a real outage is still open at the end of the period', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 02:00:00', status: 503);
 
         $report = compileSeptember($site);
 
@@ -1210,7 +1214,7 @@ describe('uptime', function () {
 
     it('says the monitor was blocked, not that the site was still down, when a 429 is open at the end of the period', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 19:40:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 23:40:00', status: 429);
 
         $report = compileSeptember($site);
         $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
@@ -1222,12 +1226,12 @@ describe('uptime', function () {
             'uptime_percentage' => 100,
             'outages' => [],
             'probe_blocked_minutes' => 260,
-            'probe_blocked_since' => '2026-09-30T19:40:00+00:00',
+            'probe_blocked_since' => '2026-09-30T23:40:00+00:00',
         ])
             ->and($report['html'])->not->toContain('still down')
             ->and($report['text'])->not->toContain('still down')
             ->and(ReportReviewFlags::reasons(['meta' => $report['data']['meta'], 'uptime' => $report['data']['uptime']]))->toBe([
-                'The uptime monitor was blocked (HTTP 429) from Sep 30, 3:40 PM EDT; the site was not necessarily down.',
+                'The uptime monitor was blocked (HTTP 429) from Sep 30, 7:40 PM EDT; the site was not necessarily down.',
             ])
             // The blocked time is for the operator only.
             ->and($preview)->toContain('The uptime monitor was blocked (HTTP 429) for 260 min this period.')
@@ -1236,8 +1240,8 @@ describe('uptime', function () {
 
     it('treats a 429 block carried in from before the period as blocked, not down', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-08-31 22:00:00', status: 429);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 03:00:00', status: 200);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 02:00:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 07:00:00', status: 200);
 
         expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
             'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
@@ -1295,17 +1299,17 @@ describe('uptime', function () {
 
         it('says the monitor was blocked, not that the site was down, when a probe_blocked stretch is open at the end of the month', function () {
             $site = accuracySite(['uptime_monitoring_enabled' => true]);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 18:00:00', status: 503);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 19:40:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00', status: 503);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 23:40:00', status: 429);
 
             $report = compileSeptember($site);
 
             expect($report['data']['uptime'])->toMatchArray([
-                'outages_count' => 1, 'downtime_minutes' => 100, 'probe_blocked_minutes' => 260, 'probe_blocked_since' => '2026-09-30T19:40:00+00:00',
+                'outages_count' => 1, 'downtime_minutes' => 100, 'probe_blocked_minutes' => 260, 'probe_blocked_since' => '2026-09-30T23:40:00+00:00',
             ])
                 ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeFalse()
                 ->and($report['text'])->not->toContain('still down')
-                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 30, 3:40 PM EDT; the site was not necessarily down.')
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 30, 7:40 PM EDT; the site was not necessarily down.')
                 ->not->toContain('The site was still down at the end of the month.');
         });
 
@@ -1323,8 +1327,8 @@ describe('uptime', function () {
 
         it('carries a probe_blocked stretch in from before the period as blocked', function () {
             $site = accuracySite(['uptime_monitoring_enabled' => true]);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-08-31 22:00:00', status: 429);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 03:00:00', status: 200);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-01 02:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 07:00:00', status: 200);
 
             expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
                 'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
@@ -1335,16 +1339,16 @@ describe('uptime', function () {
             // Deployed mid-block: the old row (down, 429) and the new one
             // (probe_blocked) are one stretch, which began with the old row.
             $site = accuracySite(['uptime_monitoring_enabled' => true]);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-29 06:00:00', status: 429);
-            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 06:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-29 10:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 10:00:00', status: 429);
 
             $report = compileSeptember($site);
 
             expect($report['data']['uptime'])->toMatchArray([
                 'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [],
-                'probe_blocked_minutes' => 42 * 60, 'probe_blocked_since' => '2026-09-29T06:00:00+00:00',
+                'probe_blocked_minutes' => 42 * 60, 'probe_blocked_since' => '2026-09-29T10:00:00+00:00',
             ])
-                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 29, 2:00 AM EDT; the site was not necessarily down.');
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 29, 6:00 AM EDT; the site was not necessarily down.');
         });
     });
 
@@ -1385,6 +1389,60 @@ describe('uptime', function () {
     });
 });
 
+describe('the period in the report timezone', function () {
+    it('keeps an outage at 01:00 UTC on the 1st in the month before, where its local time falls', function () {
+        // 01:00 UTC on Sep 1 is Aug 31, 9:00 PM EDT; 01:00 UTC on Oct 1 is Sep 30.
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 01:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 01:30:00', status: 200);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 01:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-10-01 01:30:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 30, 'total_period_minutes' => 30 * 24 * 60])
+            ->and($report['data']['uptime']['outages'][0])->toMatchArray(['started_at' => '2026-10-01T01:00:00+00:00', 'started_before_period' => false])
+            ->and($report['text'])->toContain('- Down Sep 30, 9:00 PM EDT for 30 min')->not->toContain('Aug 31')
+            ->and($report['html'])->toContain('Down Sep 30, 9:00 PM EDT')->not->toContain('Aug 31');
+    });
+
+    it('counts uptime monitoring that began late on the first day, local time, as the whole month', function () {
+        // 01:30 UTC on Sep 2 is still Sep 1 in New York.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-09-02 01:00:00')]);
+        uptimeSeed($site, '2026-09-02 01:30:00');
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60])
+            ->and($report['text'])->not->toContain('onitoring began')
+            ->and(implode(' ', $report['reasons']))->not->toContain('onitoring began');
+    });
+
+    it('reads a site added late on the last day, local time, as inside the period, not after it', function () {
+        // 02:00 UTC on Oct 1 is Sep 30, 10:00 PM EDT.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-10-01 02:00:00')]);
+        uptimeSeed($site, '2026-10-01 02:00:00');
+
+        $report = compileSeptember($site);
+        $note = 'Monitoring began Sep 30, so this report covers Sep 30 – Sep 30.';
+
+        expect($report['data']['meta']['coverage_start'])->toBe('2026-10-01T02:00:00+00:00')
+            ->and($report['data']['uptime'])->toMatchArray(['monitored' => true, 'monitored_since' => '2026-10-01T02:00:00+00:00', 'total_period_minutes' => 120])
+            ->and($report['text'])->toContain($note)->not->toContain('after the end')
+            ->and($report['reasons'])->toContain('Monitoring began Sep 30, so this report covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('after the end')->not->toContain('Uptime monitoring began');
+    });
+
+    it('shows an outage carried in from before the period as since before the local first day', function () {
+        expect(ReportPhrases::outageStart(['started_at' => '2026-09-01T04:00:00+00:00', 'started_before_period' => true]))
+            ->toBe('Down since before Sep 1')
+            // Reports compiled before the period was measured locally clamped to midnight UTC.
+            ->and(ReportPhrases::outageStart(['started_at' => '2026-09-01T00:00:00+00:00', 'started_before_period' => true]))
+            ->toBe('Down since before Sep 1');
+    });
+});
+
 describe('partial-month coverage', function () {
     /** The seed transition the uptime probe (or the one-off backfill) writes. */
     function uptimeSeed(Site $site, string $at, bool $backfilled = false): void
@@ -1402,7 +1460,7 @@ describe('partial-month coverage', function () {
     }
 
     it('measures uptime from when monitoring began for a site enrolled part-way through the month', function () {
-        $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'unknown']);
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'unknown', 'created_at' => Carbon::parse('2026-09-26 18:10:00')]);
 
         // The first successful probe seeds the start of monitoring, exactly as the probe does.
         $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentUp');
@@ -1419,20 +1477,23 @@ describe('partial-month coverage', function () {
         $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
         $note = 'Monitoring began Sep 26, so this report covers Sep 26 – Sep 30.';
 
-        // 102 minutes down out of the 6,100 it was watched, not out of the whole month's 43,200.
-        expect($report['data']['meta']['coverage_start'])->toBe('2026-09-26T18:20:00+00:00')
+        // 102 minutes down out of the 6,340 it was watched (to midnight EDT
+        // on Sep 30), not out of the whole month's 43,200.
+        expect($report['data']['meta']['coverage_start'])->toBe('2026-09-26T18:10:00+00:00')
             ->and($report['data']['uptime'])->toMatchArray([
                 'monitored' => true,
                 'monitored_since' => '2026-09-26T18:20:00+00:00',
-                'total_period_minutes' => 6100,
+                'total_period_minutes' => 6340,
                 'downtime_minutes' => 102,
-                'uptime_percentage' => 98.33,
+                'uptime_percentage' => 98.39,
                 'outages_count' => 1,
             ])
-            ->and($report['html'])->toContain($note)->toContain('(monitoring began Sep 26)')->toContain('98.33%')
-            ->and($report['text'])->toContain($note)->toContain('Availability: 98.33% (monitoring began Sep 26)')
+            ->and($report['html'])->toContain($note)->toContain('(monitoring began Sep 26)')->toContain('98.39%')
+            ->and($report['text'])->toContain($note)->toContain('Availability: 98.39% (monitoring began Sep 26)')
             ->and($preview)->toContain($note)->toContain('Monitoring began')->not->toContain('24 / 7 / 365')
-            ->and(ReportReviewFlags::reasons($report['data']))->toContain('Monitoring began Sep 26, so this report covers only part of the month.');
+            ->and(ReportReviewFlags::reasons($report['data']))->toContain('Monitoring began Sep 26, so this report covers only part of the month.')
+            // Uptime began the same day the site was added: one reason, not two.
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Uptime monitoring began');
     });
 
     it('falls back to when the site was added when its monitoring has no seed', function () {
@@ -1446,7 +1507,7 @@ describe('partial-month coverage', function () {
         expect($data['meta']['coverage_start'])->toBe('2026-09-20T15:00:00+00:00')
             ->and($data['uptime'])->toMatchArray([
                 'monitored_since' => '2026-09-20T15:00:00+00:00',
-                'total_period_minutes' => 14940,
+                'total_period_minutes' => 15180,
                 'downtime_minutes' => 60,
                 'uptime_percentage' => 99.6,
             ])
@@ -1502,13 +1563,48 @@ describe('partial-month coverage', function () {
         $report = compileSeptember($site);
         $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
 
-        expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false, 'monitored_since' => '2026-10-05T16:00:00+00:00'])
-            ->and($report['html'])->not->toContain('Uptime &amp; availability')
-            ->and($report['text'])->not->toContain('UPTIME')
-            ->toContain("Monitoring began Oct 5, after the end of this report's period.")
+        // The site was there all month, so only the uptime section is left
+        // out; nothing says the report covers none of the month.
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false, 'monitored_since' => '2026-10-05T16:00:00+00:00'])
+            ->and($report['html'])->not->toContain('Uptime &amp; availability')->not->toContain('Monitoring began')
+            ->and($report['text'])->not->toContain('UPTIME')->not->toContain('Monitoring began')
             ->and($preview)->toContain('Uptime hidden from the client: uptime monitoring began Oct 5, after this period.')
             ->and(ReportReviewFlags::reasons($report['data']))
-            ->toContain("Monitoring began Oct 5, after the end of this report's period, so it covers none of it.");
+            ->toContain('Uptime monitoring began Oct 5, after this period, so the Uptime section was left out.')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('covers none of it');
+    });
+
+    it('says only the uptime is partial when monitoring is switched on mid-month for a site added long before', function () {
+        // Added months ago with uptime monitoring off; an update ran on the
+        // 5th, then monitoring was switched on and first probed on the 17th.
+        $site = accuracySite([
+            'created_at' => Carbon::parse('2026-04-10 12:00:00'),
+            'uptime_monitoring_enabled' => false,
+            'uptime_state' => 'unknown',
+        ]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-forms/example-forms.php',
+            'summary' => 'Plugin updated: Example Forms 1.0 → 1.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-05 14:00'), 'actor' => 'test']);
+
+        $site->forceFill(['uptime_monitoring_enabled' => true])->save();
+        $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->travelTo(Carbon::parse('2026-09-17 14:00:00'));
+        app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 150));
+        $this->travelBack();
+        $site = $site->fresh();
+        $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime']['monitored_since'])->toBe('2026-09-17T14:00:00+00:00')
+            ->and($report['data']['updates']['plugins_count'])->toBe(1)
+            ->and($report['html'])->not->toContain('so this report covers')->toContain('(monitoring began Sep 17)')->toContain('Example Forms')
+            ->and($report['text'])->not->toContain('so this report covers')->toContain('(monitoring began Sep 17)')
+            ->and($report['preview'])->not->toContain('so this report covers')
+            ->and($report['reasons'])->toContain('Uptime monitoring began Sep 17, so uptime covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('this report covers only part');
     });
 });
 

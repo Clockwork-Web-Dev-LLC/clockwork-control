@@ -85,30 +85,61 @@ final class ReportPhrases
     }
 
     /**
-     * Whether monitoring began only after the report's period had ended, so
-     * the report covers none of it (a report compiled late for a past month).
+     * Whether uptime monitoring began only after the report's period had
+     * ended, so the uptime section has nothing to say about it (a report
+     * compiled late for a past month). Reports compiled before uptime kept
+     * its own start fall back to meta.coverage_start.
      *
      * @param  array<string, mixed>  $data  a report's sections_data
      */
     public static function monitoringBeganAfterPeriod(array $data): bool
     {
-        $began = $data['meta']['coverage_start'] ?? $data['uptime']['monitored_since'] ?? null;
+        return self::beganAfterPeriod($data['uptime']['monitored_since'] ?? $data['meta']['coverage_start'] ?? null, $data);
+    }
+
+    /**
+     * Whether a stored time falls after the period's last day, as the report
+     * timezone reads it (the zone its dates are shown in).
+     *
+     * @param  array<string, mixed>  $data  a report's sections_data
+     */
+    public static function beganAfterPeriod(mixed $began, array $data): bool
+    {
         $periodEnd = $data['meta']['period_end'] ?? null;
         if (self::monitoringBeganOn($began) === null || ! is_string($periodEnd) || $periodEnd === '') {
             return false;
         }
 
         try {
-            return Carbon::parse($began)->greaterThan(Carbon::parse($periodEnd)->endOfDay());
+            return Carbon::parse($began)->greaterThan(Carbon::parse($periodEnd, self::timezone())->endOfDay());
         } catch (Throwable) {
             return false;
         }
     }
 
     /**
+     * Whether two stored times fall on different days as the report
+     * timezone reads them, the first one later.
+     */
+    public static function laterDay(mixed $at, mixed $than): bool
+    {
+        if (self::monitoringBeganOn($at) === null) {
+            return false;
+        }
+        if (self::monitoringBeganOn($than) === null) {
+            return true;
+        }
+
+        $zone = self::timezone();
+
+        return Carbon::parse($at)->setTimezone($zone)->toDateString() > Carbon::parse($than)->setTimezone($zone)->toDateString();
+    }
+
+    /**
      * "Monitoring began Oct 19, so this report covers Oct 19 – Oct 31." for a
-     * site whose monitoring began after the period started, so a late
-     * enrolment doesn't read as a whole month of care. Null otherwise.
+     * site added after the period started, so a late enrolment doesn't read
+     * as a whole month of care. Null otherwise. Uptime monitoring switched on
+     * later than that isn't this: the uptime line says so on its own.
      *
      * @param  array<string, mixed>  $data  a report's sections_data
      */
@@ -119,7 +150,7 @@ final class ReportPhrases
             return null;
         }
 
-        if (self::monitoringBeganAfterPeriod($data)) {
+        if (self::beganAfterPeriod($data['meta']['coverage_start'], $data)) {
             return "Monitoring began {$began}, after the end of this report's period.";
         }
 
@@ -133,7 +164,10 @@ final class ReportPhrases
     /**
      * "Down Oct 5, 3:12 PM EDT", in the report timezone. An outage already
      * open when the period began has its start clamped to the period start,
-     * which isn't when it began, so it reads "Down since before Oct 1".
+     * which isn't when it began, so it reads "Down since before Oct 1": the
+     * period's first day in the report timezone. Reports compiled before the
+     * period was measured in that zone clamped to midnight UTC, which is
+     * read as the UTC date it is.
      *
      * @param  array<string, mixed>  $outage  one of sections_data['uptime']['outages']
      */
@@ -142,7 +176,10 @@ final class ReportPhrases
         $at = Carbon::parse((string) $outage['started_at']);
 
         if (! empty($outage['started_before_period'])) {
-            return 'Down since before '.$at->format('M j');
+            $utc = $at->copy()->utc();
+            $legacyUtcStart = $utc->format('H:i:s') === '00:00:00';
+
+            return 'Down since before '.($legacyUtcStart ? $utc : $at->setTimezone(self::timezone()))->format('M j');
         }
 
         return 'Down '.$at->setTimezone(self::timezone())->format('M j, g:i A T');

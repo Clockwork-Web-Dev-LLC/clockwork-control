@@ -109,6 +109,6 @@ describe('period length', function () {
 });
 
 it('stamps the current schema version', function () {
-    expect(ClientReportCompiler::SCHEMA_VERSION)->toBe(5)
-        ->and(compileMonth(Site::factory()->create(), '2026-10-01', '2026-10-31', [])['meta']['schema_version'])->toBe(5);
+    expect(ClientReportCompiler::SCHEMA_VERSION)->toBe(6)
+        ->and(compileMonth(Site::factory()->create(), '2026-10-01', '2026-10-31', [])['meta']['schema_version'])->toBe(6);
 });
