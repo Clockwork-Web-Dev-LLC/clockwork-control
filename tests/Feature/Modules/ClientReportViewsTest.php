@@ -317,6 +317,35 @@ describe('known plugin vulnerabilities', function () {
     });
 });
 
+describe('security', function () {
+    it('shows a partial malware scan, leaves out core files a host cannot check, and only claims the server where it bans', function () {
+        $views = renderReportViews(viewsReport(['security' => [
+            'total_scans' => 30, 'vulnerabilities_checked' => true, 'vulnerabilities_as_of' => '2026-10-01',
+            'active_vulnerabilities' => 0, 'vulnerable_plugins' => [], 'inactive_plugin_vulnerabilities' => 0,
+            'blocked_threats_count' => 2, 'blocks_at_server' => false,
+            'checksum_supported' => false, 'checksum_status' => null,
+            'malware_status' => 'incomplete', 'malware_checked_at' => '2026-09-30', 'blacklist_status' => 'clean',
+        ]]));
+
+        expect($views['html'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->not->toContain('WordPress core files')
+            ->toContain('block malicious visitors')->not->toContain('at the server')
+            ->and($views['text'])->toContain('Malware scan: Partial scan')->not->toContain('WordPress core files')
+            ->and($views['preview'])->toContain('Partial scan')
+            ->toContain('Not checked (no checksum path for this host) — hidden from the client')
+            ->and($views['public'])->toContain('Partial scan')->not->toContain('WordPress Core Files')->not->toContain('no checksum path');
+    });
+
+    it('keeps reports compiled before these keys were stored reading as they did', function () {
+        $views = renderReportViews(viewsReport());
+
+        expect($views['html'])->toContain('WordPress core files')->toContain('Verified clean')
+            ->toContain('block attackers at the server')->toContain('No malware found')
+            ->and($views['text'])->toContain('WordPress core files: Verified clean')
+            ->and($views['public'])->toContain('WordPress Core Files');
+    });
+});
+
 describe('backup destination', function () {
     it('reads as a whole phrase for every backup source', function (string $source, string $phrase) {
         $views = renderReportViews(viewsReport(['backups' => [

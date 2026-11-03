@@ -5,7 +5,9 @@ namespace Modules\ClientReports\Services;
 use App\Models\ActionLog;
 use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
+use App\Models\PluginUpdateIgnore;
 use App\Models\PluginVulnerability;
+use App\Models\ReviewQueueEntry;
 use App\Models\Site;
 use App\Models\SiteBackup;
 use App\Models\SiteBackupCheck;
@@ -19,11 +21,20 @@ use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Modules\ClientReports\Support\ReportPhrases;
+use Modules\Core\Contracts\HostingProvider;
+use Throwable;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 4;
+    public const SCHEMA_VERSION = 5;
+
+    /**
+     * security.malware_status for a clean scan that didn't cover the whole
+     * site (stopped at a limit, or run over SSH). Shown as "Partial scan".
+     */
+    public const MALWARE_INCOMPLETE = 'incomplete';
 
     /** How many of the period's final days the backups list shows. */
     public const BACKUP_LIST_DAYS = 10;
@@ -251,7 +262,10 @@ class ClientReportCompiler
      * waiting then and has since been applied, so those are counted
      * separately.
      *
-     * @return array{pending_plugins: ?list<string>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
+     * pending_plugin_items is the same list with each plugin's file slug and
+     * the version offered, for the review flags to join on (names repeat).
+     *
+     * @return array{pending_plugins: ?list<string>, pending_plugin_items: ?list<array{slug: string, name: string, new_version: ?string}>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
      */
     protected function pendingUpdates(Site $site, Carbon $end): array
     {
@@ -260,16 +274,18 @@ class ClientReportCompiler
         $stale = $site->companion_snapshot !== null
             && ($snapshotAt === null || $snapshotAt->lessThan($end->copy()->subHours(self::SNAPSHOT_MAX_AGE_HOURS)));
 
-        $waitingNames = function (mixed $items): ?array {
+        $waiting = function (mixed $items, callable $shape): ?array {
             if (! is_array($items)) {
                 return null;
             }
 
             return array_values(array_map(
-                fn (array $i) => (string) ($i['name'] ?? $i['slug'] ?? ''),
+                $shape,
                 array_filter($items, fn ($i) => is_array($i) && ! empty($i['update_available'])),
             ));
         };
+        $name = fn (array $i) => (string) ($i['name'] ?? $i['slug'] ?? '');
+        $plugins = $snapshot['plugins']['plugins'] ?? null;
         $core = $snapshot['wp_core'] ?? null;
 
         $updatedSince = ActionLog::query()
@@ -282,8 +298,13 @@ class ClientReportCompiler
             ->count();
 
         return [
-            'pending_plugins' => $stale ? null : $waitingNames($snapshot['plugins']['plugins'] ?? null),
-            'pending_themes' => $stale ? null : $waitingNames($snapshot['themes']['items'] ?? null),
+            'pending_plugins' => $stale ? null : $waiting($plugins, $name),
+            'pending_plugin_items' => $stale ? null : $waiting($plugins, fn (array $i) => [
+                'slug' => (string) ($i['slug'] ?? ''),
+                'name' => $name($i),
+                'new_version' => trim((string) ($i['new_version'] ?? '')) !== '' ? trim((string) $i['new_version']) : null,
+            ]),
+            'pending_themes' => $stale ? null : $waiting($snapshot['themes']['items'] ?? null, $name),
             'pending_core' => $stale || ! is_array($core) ? null : ! empty($core['update_available']),
             'updated_since_period' => $updatedSince,
             'snapshot_at' => $snapshotAt?->toDateString(),
@@ -456,6 +477,10 @@ class ClientReportCompiler
     /**
      * Anything we didn't actually check is reported as null / not-checked —
      * never as a passing default — because this goes to clients verbatim.
+     *
+     * The malware_* keys after malware_checked_at and vulnerable_plugin_items
+     * are internal, for the review flags. Nothing here holds a file path:
+     * stored data can reach the preview page, which is also the public view.
      */
     protected function compileSecurity(Site $site, Carbon $start, Carbon $end, bool $isWordPress): array
     {
@@ -466,6 +491,7 @@ class ClientReportCompiler
             ->whereBetween('scanned_at', [$start, $end])
             ->where('status', '!=', SiteSecurityScan::STATUS_FAILED)
             ->orderByDesc('scanned_at')
+            ->orderByDesc('id')
             ->get();
 
         $checksumScan = $isWordPress
@@ -473,9 +499,13 @@ class ClientReportCompiler
             : null;
 
         // Companion's in-WordPress malware probe is the deeper check; SiteCheck
-        // (remote, front-end only) stands in when it didn't run.
-        $malwareScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)
-            ?? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_SITECHECK);
+        // (remote, front-end only) stands in when it didn't run. The client
+        // sees the latest scan, but one earlier in the month that found
+        // malware is still something a person should look at.
+        $companionScans = $scans->where('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)->values();
+        $malwareScan = $companionScans->first() ?? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_SITECHECK);
+        $malwareDetails = self::malwareDetails($malwareScan);
+        $issueScans = $companionScans->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND);
         $blacklistScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_BLACKLIST);
 
         // The plugin list is the site's current Companion snapshot, so this is
@@ -491,6 +521,7 @@ class ClientReportCompiler
             ->where('site_id', $site->id)
             ->whereBetween('banned_at', [$start, $end])
             ->count();
+        $blocksMeasured = $blockedIpsCount > 0 || $this->lockoutsIngested($site, $start, $end);
 
         return [
             'total_scans' => $scans->count(),
@@ -500,17 +531,243 @@ class ClientReportCompiler
             'vulnerabilities_as_of' => $vulnerabilitiesChecked ? $site->companion_snapshot_at?->toDateString() : null,
             'active_vulnerabilities' => count($vulnerabilities),
             'vulnerable_plugins' => array_values(array_unique(array_column($vulnerabilities, 'plugin_name'))),
+            // Internal: each vulnerable plugin by its file slug, so the review
+            // flags can tell whether a waiting update fixes it or its updates
+            // are paused. Names aren't unique enough to join on.
+            'vulnerable_plugin_items' => $this->vulnerablePluginItems($site, $vulnerabilities),
             'inactive_plugin_vulnerabilities' => count(array_filter($vulnerabilities, fn (array $v) => ! $v['active'])),
-            // Only a number when something on the site reports its blocks to us;
-            // with no blocker reporting, 0 would read as "no attacks".
-            'blocked_threats_count' => $blockedIpsCount > 0 || $this->reportsBlocks($site) ? $blockedIpsCount : null,
+            // Only a number when we know lockouts from this site actually reach
+            // us; otherwise 0 would read as "no attacks".
+            'blocked_threats_count' => $blocksMeasured ? $blockedIpsCount : null,
+            // "At the server" only where a fail2ban jail can ban at the server.
+            'blocks_at_server' => $blocksMeasured && $this->hasProvisionedJail($site),
+            // Whether any transport can run the core-file check on this host.
+            // When none can, "Not checked this month" would be true every
+            // month, so the row is left out rather than shown.
+            'checksum_supported' => $isWordPress && $this->hasChecksumTransport($site),
             'checksum_status' => $checksumScan?->status,
             'checksum_checked_at' => $checksumScan?->scanned_at?->toDateString(),
-            'malware_status' => $malwareScan?->status,
+            'malware_status' => $this->malwareStatus($malwareScan, $malwareDetails),
             'malware_checked_at' => $malwareScan?->scanned_at?->toDateString(),
+            'malware_scan_id' => $malwareScan?->id,
+            // kind => count, from Companion's findings; null for SiteCheck.
+            'malware_finding_kinds' => self::findingKinds($malwareDetails),
+            'malware_transport' => $malwareDetails !== null ? ($malwareDetails['transport'] ?? null) : null,
+            'malware_scan_aborted' => $malwareDetails !== null && ! empty($malwareDetails['scan_aborted']),
+            'malware_abort_reason' => $malwareDetails !== null ? ($malwareDetails['abort_reason'] ?? null) : null,
+            'malware_scanned_files' => $malwareDetails !== null && isset($malwareDetails['scanned_files_count']) ? (int) $malwareDetails['scanned_files_count'] : null,
+            // The worst any Companion scan in the period found, and when one
+            // last found malware, so a month that started infected doesn't
+            // go out as clean on the strength of its last scan.
+            'malware_worst_in_period' => match (true) {
+                $issueScans->isNotEmpty() => SiteSecurityScan::STATUS_ISSUES_FOUND,
+                $companionScans->contains('status', SiteSecurityScan::STATUS_WARNING) => SiteSecurityScan::STATUS_WARNING,
+                $companionScans->isNotEmpty() => SiteSecurityScan::STATUS_CLEAN,
+                default => null,
+            },
+            'malware_last_issue_at' => $issueScans->first()?->scanned_at?->toDateString(),
+            'malware_issue_days' => $issueScans->map(fn (SiteSecurityScan $s) => $s->scanned_at->toDateString())->unique()->count(),
             'blacklist_status' => $blacklistScan?->status,
             'blacklist_checked_at' => $blacklistScan?->scanned_at?->toDateString(),
         ];
+    }
+
+    /**
+     * A Companion malware scan's recorded details, or null for SiteCheck and
+     * for rows that never recorded any (whose stored status is all there is).
+     *
+     * @return ?array<string, mixed>
+     */
+    protected static function malwareDetails(?SiteSecurityScan $scan): ?array
+    {
+        if ($scan === null || $scan->scan_type !== SiteSecurityScan::TYPE_COMPANION_MALWARE) {
+            return null;
+        }
+
+        $details = $scan->details;
+
+        return is_array($details) && is_array($details['findings'] ?? null) ? $details : null;
+    }
+
+    /**
+     * The scan's status, except that a clean result from a scan that didn't
+     * cover the whole site is "incomplete", never "clean": Companion stopped
+     * at its file or time limit, or it ran over SSH, whose output is capped
+     * and which can't say how many files it covered. A partial scan that
+     * found something still counts as flagged.
+     *
+     * @param  ?array<string, mixed>  $details
+     */
+    protected function malwareStatus(?SiteSecurityScan $scan, ?array $details): ?string
+    {
+        if ($scan?->status === SiteSecurityScan::STATUS_CLEAN && $details !== null) {
+            $partial = ! empty($details['scan_aborted'])
+                || (($details['transport'] ?? null) === 'ssh' && (int) ($details['scanned_files_count'] ?? 0) === 0);
+
+            if ($partial) {
+                return self::MALWARE_INCOMPLETE;
+            }
+        }
+
+        return $scan?->status;
+    }
+
+    /**
+     * How many findings of each kind the scan made, most first. Kinds only:
+     * the paths stay on the scan record.
+     *
+     * @param  ?array<string, mixed>  $details
+     * @return ?array<string, int>
+     */
+    protected static function findingKinds(?array $details): ?array
+    {
+        if ($details === null) {
+            return null;
+        }
+
+        $kinds = [];
+        foreach ($details['findings'] as $finding) {
+            $kind = is_array($finding) ? trim((string) ($finding['kind'] ?? '')) : '';
+            $kind = $kind !== '' ? $kind : 'unknown';
+            $kinds[$kind] = ($kinds[$kind] ?? 0) + 1;
+        }
+        arsort($kinds);
+
+        return $kinds;
+    }
+
+    /**
+     * One entry per installed plugin with a known vulnerability, keyed by its
+     * file slug as the snapshot, the updater and update pauses know it:
+     * fixed_in is the highest version any of its advisories is patched in,
+     * or null when one has no fix yet; update_offered is the version
+     * WordPress offered at the snapshot; paused says why updates to it are
+     * on hold, read now because a later unpause can't change this report.
+     *
+     * @param  list<array{plugin_slug: string, plugin_name: string, current_version: string, active: bool, vulnerability: PluginVulnerability, patch_available: bool}>  $vulnerabilities
+     * @return list<array{slug: string, name: string, version: string, fixed_in: ?string, update_offered: ?string, paused: ?array{source: string, since: ?string, failure_count: ?int, note: ?string}}>
+     */
+    protected function vulnerablePluginItems(Site $site, array $vulnerabilities): array
+    {
+        if ($vulnerabilities === []) {
+            return [];
+        }
+
+        // The matcher names a plugin by its directory; key its advisories the
+        // same way, with the version, to find the snapshot entry they came from.
+        $advisories = [];
+        foreach ($vulnerabilities as $v) {
+            $advisories[$v['plugin_slug']."\0".$v['current_version']][] = $v['vulnerability'];
+        }
+
+        $plugins = [];
+        foreach ((array) ($site->companion_snapshot['plugins']['plugins'] ?? []) as $plugin) {
+            $slug = is_array($plugin) ? (string) ($plugin['slug'] ?? '') : '';
+            $key = explode('/', $slug, 2)[0]."\0".(string) ($plugin['version'] ?? '');
+            if ($slug !== '' && isset($advisories[$key])) {
+                $plugins[$slug] = [$plugin, $advisories[$key]];
+            }
+        }
+
+        $pauses = $plugins === [] ? collect() : PluginUpdateIgnore::query()
+            ->where('site_id', $site->id)
+            ->where('target_kind', 'plugin')
+            ->whereIn('target_slug', array_keys($plugins))
+            ->get()
+            ->keyBy('target_slug');
+
+        $items = [];
+        foreach ($plugins as $slug => [$plugin, $vulns]) {
+            $fixedIn = null;
+            foreach ($vulns as $vuln) {
+                $patched = trim((string) $vuln->patched_in);
+                if ($patched === '') {
+                    $fixedIn = null;
+                    break;
+                }
+                if ($fixedIn === null || version_compare($patched, $fixedIn, '>')) {
+                    $fixedIn = $patched;
+                }
+            }
+
+            $offered = trim((string) ($plugin['new_version'] ?? ''));
+            $pause = $pauses->get($slug);
+
+            $items[] = [
+                'slug' => (string) $slug,
+                'name' => (string) ($plugin['name'] ?? $slug),
+                'version' => (string) ($plugin['version'] ?? ''),
+                'fixed_in' => $fixedIn,
+                'update_offered' => ! empty($plugin['update_available']) && $offered !== '' ? $offered : null,
+                'paused' => $pause instanceof PluginUpdateIgnore ? [
+                    'source' => (string) $pause->source,
+                    'since' => $pause->ignored_at?->toDateString(),
+                    'failure_count' => $pause->failure_count,
+                    'note' => $pause->note !== null && trim($pause->note) !== '' ? Str::limit(trim($pause->note), 120) : null,
+                ] : null,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Whether some transport can run `wp core verify-checksums` for this
+     * site, mirroring how WpCoreChecksumVerifier::verify() picks one: a host
+     * with server SSH needs a (monitored) server; one without uses Pressable's
+     * command API or the host's own command runner. Custom hosts have none.
+     */
+    protected function hasChecksumTransport(Site $site): bool
+    {
+        try {
+            $host = $site->host();
+
+            if ($host->supports(HostingProvider::CAP_SSH)) {
+                return $site->server !== null && ! $site->server->is_ignored;
+            }
+
+            return $site->isPressable() || $host->commandRunner() !== null;
+        } catch (Throwable) {
+            // A host whose module isn't enabled has no transport either.
+            return false;
+        }
+    }
+
+    /**
+     * Evidence that lockouts from this site reached Control in the period, so
+     * a count of 0 bans is a measurement: lockouts or log hits from it went
+     * into the review queue, or it's in the lockout pull (a blocker reports
+     * its lockouts), sits on a server with a provisioned fail2ban jail, and
+     * that server's lockouts were pulled during or after the period. A
+     * capability string alone proves nothing: the blocker can be switched
+     * off, or the site left out of every pull.
+     */
+    protected function lockoutsIngested(Site $site, Carbon $start, Carbon $end): bool
+    {
+        $queued = ReviewQueueEntry::query()
+            ->where('site_id', $site->id)
+            ->where(fn ($q) => $q->whereBetween('created_at', [$start, $end])->orWhereBetween('updated_at', [$start, $end]))
+            ->exists();
+
+        if ($queued) {
+            return true;
+        }
+
+        $pulledAt = $site->server?->last_llar_pull_at;
+
+        return (bool) $site->is_wordpress
+            && $this->reportsBlocks($site)
+            && $this->hasProvisionedJail($site)
+            && $pulledAt !== null
+            && $pulledAt->greaterThanOrEqualTo($start);
+    }
+
+    /** The site's server has Clockwork's fail2ban jail, so bans happen at the server. */
+    protected function hasProvisionedJail(Site $site): bool
+    {
+        $server = $site->server;
+
+        return $server !== null && ! $server->is_ignored && $server->clockwork_jail_provisioned_at !== null;
     }
 
     /** Gatekeeper (Companion) or Limit Login Attempts Reloaded sends this site's lockouts to Control. */

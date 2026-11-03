@@ -48,6 +48,9 @@
     $downtime = (int) ($uptime['downtime_minutes'] ?? 0);
     $downtimeLabel = $downtime >= 60 ? floor($downtime / 60).'h '.($downtime % 60).'m' : $downtime.' min';
     $isWordPress = (bool) ($data['site']['is_wordpress'] ?? true);
+    // No transport can run the core-file check on some hosts, so "Not checked"
+    // would be true every month: the row is left out. Older reports had the row.
+    $showChecksum = $isWordPress && (bool) ($security['checksum_supported'] ?? true);
     $checksum = $security['checksum_status'] ?? null;
     [$checksumLabel, $checksumColor] = match ($checksum) {
         'clean' => ['Verified clean', $good],
@@ -74,6 +77,8 @@
     [$malwareLabel, $malwareColor] = match ($security['malware_status'] ?? null) {
         'clean' => ['No malware found', $good],
         'warning', 'issues_found' => ['Issues flagged', $warn],
+        // A clean result from a scan that didn't cover the whole site.
+        'incomplete' => ['Partial scan', $muted],
         null => ['Not checked this month', $muted],
         default => [ucfirst((string) $security['malware_status']), $warn],
     };
@@ -238,9 +243,17 @@
     @if ($sections['security'])
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Security</div>
-            {{-- Only claim blocking where something on the site reports its blocks to us. --}}
-            @php $showBlocked = ($security['blocked_threats_count'] ?? null) !== null; @endphp
-            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">{{ $showBlocked ? 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.' : 'We scan for malware and tampered files and watch for known plugin vulnerabilities.' }}</p>
+            {{-- Only claim blocking where we know the site's lockouts reach us, and
+                 "at the server" only where a fail2ban jail bans there. --}}
+            @php
+                $showBlocked = ($security['blocked_threats_count'] ?? null) !== null;
+                $securityIntro = match (true) {
+                    $showBlocked && (bool) ($security['blocks_at_server'] ?? true) => 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.',
+                    $showBlocked => 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block malicious visitors.',
+                    default => 'We scan for malware and tampered files and watch for known plugin vulnerabilities.',
+                };
+            @endphp
+            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">{{ $securityIntro }}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Security scans run</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['total_scans'] ?? 0)) }}</td></tr>
                 @if ($showBlacklist)
@@ -249,7 +262,7 @@
                 @if ($showMalware)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Malware scan</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $malwareColor }};">{{ $malwareLabel }}</td></tr>
                 @endif
-                @if ($isWordPress)
+                @if ($showChecksum)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
                 @endif
                 <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsCheckedOn)<span style="font-size:11px; color:#94a3b8;">(checked {{ $vulnsCheckedOn }})</span>@endif

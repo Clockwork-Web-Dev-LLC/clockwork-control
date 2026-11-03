@@ -306,6 +306,8 @@
                     [$malwareLabel, $malwareClass] = match ($security['malware_status'] ?? null) {
                         'clean' => ['No malware found', 'text-emerald-600'],
                         'warning', 'issues_found' => ['Issues flagged', 'text-amber-600'],
+                        // A clean result from a scan that didn't cover the whole site.
+                        'incomplete' => ['Partial scan', 'text-slate-500'],
                         null => ['Not checked this period', 'text-slate-400'],
                         default => [ucfirst((string) $security['malware_status']), 'text-amber-600'],
                     };
@@ -321,9 +323,10 @@
                             @endif
                         </div>
                     @endif
-                    {{-- Like the email: no core-files row for a non-WordPress site, and no
-                         blocked count unless something on the site reports its blocks. --}}
-                    @if ((bool) ($data['site']['is_wordpress'] ?? true))
+                    {{-- Like the email: no core-files row for a non-WordPress site or a host
+                         with no way to run the check, and no blocked count unless we know
+                         the site's lockouts reach us. --}}
+                    @if ((bool) ($data['site']['is_wordpress'] ?? true) && (bool) ($security['checksum_supported'] ?? true))
                         <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                             <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
                             <div class="text-sm font-bold {{ $checksumClass }} mt-1">{{ $checksumLabel }}</div>
@@ -334,7 +337,7 @@
                     @elseif ($isOperatorPreview)
                         <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
                             <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
-                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked (no WordPress detected) — hidden from the client</div>
+                            <div class="text-sm font-bold text-slate-400 mt-1">{{ (bool) ($data['site']['is_wordpress'] ?? true) ? 'Not checked (no checksum path for this host)' : 'Not checked (no WordPress detected)' }} — hidden from the client</div>
                         </div>
                     @endif
                     @if (($security['blocked_threats_count'] ?? null) !== null)
@@ -345,7 +348,7 @@
                     @elseif ($isOperatorPreview)
                         <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
                             <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                            <div class="text-sm font-bold text-slate-400 mt-1">Not measured (no blocker reports to Control) — hidden from the client</div>
+                            <div class="text-sm font-bold text-slate-400 mt-1">Not measured (no blocker reports to Control for this site this period) — hidden from the client</div>
                         </div>
                     @endif
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">

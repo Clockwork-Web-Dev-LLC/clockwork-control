@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Site;
+use App\Models\SiteSecurityScan;
 use App\Models\User;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -25,6 +26,18 @@ uses(RendersAuthenticatedPages::class);
 function reportableSite(array $attributes = []): Site
 {
     return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear()], $attributes));
+}
+
+/**
+ * A clean core-file check last month, so a site whose host can run one isn't
+ * also held for "no check ran" when a test is about something else.
+ */
+function checkedCoreFiles(Site $site): void
+{
+    SiteSecurityScan::factory()->coreChecksums()->create([
+        'site_id' => $site->id,
+        'scanned_at' => now()->subMonthNoOverflow()->startOfMonth()->addDays(9),
+    ]);
 }
 
 it('requires authentication for schedule management routes', function () {
@@ -711,6 +724,7 @@ describe('hold for review', function () {
         Mail::fake();
         // A SpinupWP site whose backups were never checked: "Backups could not be checked."
         $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
+        checkedCoreFiles($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
@@ -739,6 +753,7 @@ describe('hold for review', function () {
     it('checks a draft-mode report too, and never emails it unchecked after switching to auto', function () {
         Mail::fake();
         $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
+        checkedCoreFiles($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@was-draft.test'],

@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\ActionLog;
+use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
+use App\Models\PluginUpdateIgnore;
 use App\Models\PluginVulnerability;
+use App\Models\ReviewQueueEntry;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteBackup;
@@ -51,7 +54,7 @@ function accuracySite(array $attributes = []): Site
     ], $attributes));
 }
 
-/** @return array{data: array<string, mixed>, html: string, text: string} */
+/** @return array{data: array<string, mixed>, html: string, text: string, preview: string, public: string, reasons: list<string>} */
 function compileSeptember(Site $site): array
 {
     $start = Carbon::parse('2026-09-01');
@@ -74,7 +77,38 @@ function compileSeptember(Site $site): array
         'data' => $data,
         'html' => $mail->render(),
         'text' => view($content->text, $content->with)->render(),
+        'preview' => view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => true])->render(),
+        'public' => view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false])->render(),
+        'reasons' => ReportReviewFlags::reasons($data),
     ];
+}
+
+/**
+ * A Companion malware scan with the details the scanner records.
+ *
+ * @param  list<array{kind: string, path: string, evidence: string}>  $findings
+ * @param  array<string, mixed>  $details
+ */
+function companionMalwareScan(Site $site, string $at, string $status, array $findings = [], array $details = []): SiteSecurityScan
+{
+    return SiteSecurityScan::factory()->create([
+        'site_id' => $site->id,
+        'scan_type' => SiteSecurityScan::TYPE_COMPANION_MALWARE,
+        'scanned_at' => Carbon::parse($at),
+        'status' => $status,
+        'details' => array_replace([
+            'transport' => 'companion', 'findings' => $findings, 'scanned_files_count' => 12000,
+            'scan_aborted' => false, 'abort_reason' => null,
+        ], $details),
+    ]);
+}
+
+/** A snapshot with Limit Login Attempts Reloaded active. */
+function llarSnapshot(): array
+{
+    return ['plugins' => ['plugins' => [
+        ['slug' => 'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php', 'active' => true],
+    ]]];
 }
 
 describe('known plugin vulnerabilities (#8)', function () {
@@ -129,6 +163,56 @@ describe('known plugin vulnerabilities (#8)', function () {
 
         expect($report['data']['security']['vulnerabilities_checked'])->toBeFalse()
             ->and($report['html'])->not->toContain('None found');
+    });
+
+    it('records each vulnerable plugin by its file slug, with the version that fixes it, the update offered and any pause', function () {
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '2.0.9', 'patched_in' => '2.1.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '1.9.0', 'patched_in' => '1.9.1']);
+        PluginVulnerability::factory()->create(['slug' => 'example-gallery', 'to_version' => '*', 'patched_in' => '2.0.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-gallery', 'to_version' => '*', 'patched_in' => null]);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'active' => true, 'update_available' => false],
+            // A backup copy with the same name and an update waiting: not the vulnerable plugin.
+            ['slug' => 'example-forms-old/example-forms.php', 'name' => 'Example Forms', 'version' => '1.0.0', 'active' => false, 'update_available' => true, 'new_version' => '2.1.0'],
+            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'active' => true, 'update_available' => true, 'new_version' => '3.1'],
+        ]]]]);
+        PluginUpdateIgnore::factory()->create([
+            'site_id' => $site->id,
+            'target_slug' => 'example-gallery/example-gallery.php',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 3,
+            'ignored_at' => Carbon::parse('2026-09-25 04:00'),
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security']['vulnerable_plugin_items'])->toBe([
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'fixed_in' => '2.1.0', 'update_offered' => null, 'paused' => null],
+            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'fixed_in' => null, 'update_offered' => '3.1', 'paused' => [
+                'source' => 'auto_failure', 'since' => '2026-09-25', 'failure_count' => 3, 'note' => null,
+            ]],
+        ])
+            ->and($report['data']['updates']['pending_plugin_items'])->toBe([
+                ['slug' => 'example-forms-old/example-forms.php', 'name' => 'Example Forms', 'new_version' => '2.1.0'],
+                ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'new_version' => '3.1'],
+            ])
+            // Matching by name would have said the vulnerable Example Forms had an update waiting.
+            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Gallery 3.0 (no fixed version yet; auto-paused on 2026-09-25 after 3 failed attempts; 3.1 is waiting).')
+            ->and(implode(' ', $report['reasons']))->not->toContain('Example Forms');
+    });
+
+    it('holds the report when a waiting update reaches the fixed version, but not when it falls short', function () {
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '1.1.9', 'patched_in' => '1.2.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-slider', 'to_version' => '2.0.0', 'to_inclusive' => false, 'patched_in' => '2.0.1']);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.0.0', 'active' => true, 'update_available' => true, 'new_version' => '1.2.0'],
+            ['slug' => 'example-slider/example-slider.php', 'name' => 'Example Slider', 'version' => '1.4.0', 'active' => true, 'update_available' => true, 'new_version' => '1.5.0'],
+        ]]]]);
+
+        $reasons = compileSeptember($site)['reasons'];
+
+        expect($reasons)->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0.0 → 1.2.0 (fixed in 1.2.0).")
+            ->and(implode(' ', $reasons))->not->toContain('Example Slider');
     });
 
     it('notes how many matches are in inactive plugins', function () {
@@ -306,6 +390,39 @@ describe('WordPress core file check (#5)', function () {
             ->and($report['html'])->toContain('Verified clean');
     });
 
+    it('leaves the row out of both emails on a host with no way to run the check, and says why only in the preview', function () {
+        // A custom host: no server SSH, no Pressable API, no command runner.
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'spinupwp_id' => null]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['checksum_supported' => false, 'checksum_status' => null])
+            ->and($report['html'])->not->toContain('WordPress core files')
+            ->and($report['text'])->not->toContain('WordPress core files')
+            ->and($report['preview'])->toContain('Not checked (no checksum path for this host) — hidden from the client')
+            ->and($report['public'])->not->toContain('WordPress Core Files')->not->toContain('no checksum path')
+            ->and(implode(' ', $report['reasons']))->not->toContain('core-file');
+    });
+
+    it('holds the report when the host can run the check but none ran this month', function () {
+        $report = compileSeptember(accuracySite());
+
+        expect($report['data']['security']['checksum_supported'])->toBeTrue()
+            ->and($report['html'])->toContain('WordPress core files')->toContain('Not checked this month')
+            ->and($report['reasons'])->toContain('No WordPress core-file check ran this month, although this host supports one, so the client would read "Not checked this month".');
+    });
+
+    it('knows which hosts can run the check', function (Closure $makeSite, bool $supported) {
+        expect(compileSeptember($makeSite())['data']['security']['checksum_supported'])->toBe($supported);
+    })->with([
+        'server with SSH' => [fn () => accuracySite(), true],
+        'Pressable' => [fn () => Site::factory()->pressable()->create(['is_wordpress' => true, 'uptime_last_checked_at' => now()]), true],
+        'SSH host with no server' => [fn () => accuracySite(['server_id' => null]), false],
+        'SSH host on an ignored server' => [fn () => accuracySite(['server_id' => Server::factory()->create(['is_ignored' => true])->id]), false],
+        'custom host' => [fn () => accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null]), false],
+        'not WordPress' => [fn () => accuracySite(['is_wordpress' => false, 'companion_snapshot' => null]), false],
+    ]);
+
     it('leaves the WordPress row out entirely for non-WordPress sites', function () {
         $report = compileSeptember(accuracySite(['is_wordpress' => false, 'companion_snapshot' => null]));
 
@@ -342,6 +459,95 @@ describe('malware scan', function () {
         expect($report['data']['security']['malware_status'])->toBeNull()
             ->and($report['text'])->toContain('Malware scan: Not checked this month');
     });
+
+    it('says "Partial scan", never "No malware found", when the latest clean scan stopped at its limit', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['scan_aborted' => true, 'abort_reason' => 'max_files_visited', 'scanned_files_count' => 75000]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_scan_id' => $scan->id, 'malware_scan_aborted' => true])
+            ->and($report['html'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['preview'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) stopped before it finished (limit: max_files_visited, 75,000 files checked), so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('treats a clean SSH scan, which can\'t say how many files it covered, as partial', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['transport' => 'ssh', 'scanned_files_count' => 0]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security']['malware_status'])->toBe('incomplete')
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH, which can't say how many files it covered, so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('keeps a finished clean scan as "No malware found", and a partial scan that flagged files as flagged', function () {
+        $clean = accuracySite();
+        companionMalwareScan($clean, '2026-09-28', SiteSecurityScan::STATUS_CLEAN);
+        $flagged = accuracySite();
+        companionMalwareScan($flagged, '2026-09-28', SiteSecurityScan::STATUS_WARNING, [['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/example/a.php', 'evidence' => 'x']], ['scan_aborted' => true, 'abort_reason' => 'max_files_visited']);
+
+        $cleanReport = compileSeptember($clean);
+        $flaggedReport = compileSeptember($flagged);
+
+        expect($cleanReport['data']['security']['malware_status'])->toBe('clean')
+            ->and($cleanReport['html'])->toContain('No malware found')
+            ->and(implode(' ', $cleanReport['reasons']))->not->toContain('malware')
+            ->and($flaggedReport['data']['security']['malware_status'])->toBe('warning')
+            ->and($flaggedReport['html'])->toContain('Issues flagged');
+    });
+
+    it('keeps the stored status of a SiteCheck scan standing in for Companion', function () {
+        $site = accuracySite();
+        SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => SiteSecurityScan::TYPE_SITECHECK, 'scanned_at' => Carbon::parse('2026-09-18'), 'status' => SiteSecurityScan::STATUS_CLEAN, 'details' => ['scan' => [], 'site' => []]]);
+
+        $security = compileSeptember($site)['data']['security'];
+
+        expect($security)->toMatchArray(['malware_status' => 'clean', 'malware_finding_kinds' => null, 'malware_worst_in_period' => null]);
+    });
+
+    it('names the finding kinds and the scan for the reviewer, and never stores the paths', function () {
+        $site = accuracySite();
+        $findings = [
+            ...array_map(fn (int $n) => ['kind' => 'php_in_uploads', 'path' => "wp-content/uploads/example-cache/file-{$n}.php", 'evidence' => 'PHP file under uploads'], range(1, 4)),
+            ['kind' => 'wp_config_recently_modified', 'path' => 'wp-config.php', 'evidence' => 'mtime within 30 days'],
+        ];
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_WARNING, $findings);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'warning',
+            'malware_scan_id' => $scan->id,
+            'malware_finding_kinds' => ['php_in_uploads' => 4, 'wp_config_recently_modified' => 1],
+        ])
+            ->and(json_encode($report['data']))->not->toContain('example-cache')->not->toContain('wp-config.php')
+            ->and($report['reasons'])->toContain("The malware scan flagged files to review: php_in_uploads ×4, wp_config_recently_modified ×1 (scan #{$scan->id}).")
+            // The client wording is unchanged.
+            ->and($report['text'])->toContain('Malware scan: Issues flagged');
+    });
+
+    it('holds a report whose earlier scans found malware even though the latest one is clean', function () {
+        $site = accuracySite();
+        $signature = [['kind' => 'eval_base64', 'path' => 'wp-content/themes/example/x.php', 'evidence' => 'Substring match']];
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature);
+        companionMalwareScan($site, '2026-09-06 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature, ['scan_aborted' => true, 'abort_reason' => 'max_files_visited']);
+        companionMalwareScan($site, '2026-09-06 15:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature);
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'clean',
+            'malware_worst_in_period' => 'issues_found',
+            'malware_last_issue_at' => '2026-09-06',
+            'malware_issue_days' => 2,
+        ])
+            ->and($report['reasons'])->toContain('An earlier malware scan this month flagged malware (on 2 days, last on 2026-09-06), but the latest scan did not: check it was cleaned up.');
+    });
 });
 
 describe('threats blocked', function () {
@@ -354,16 +560,51 @@ describe('threats blocked', function () {
             ->and($report['text'])->not->toContain('Malicious visitors blocked');
     });
 
-    it('shows a real 0 when a blocker reports to Control', function () {
-        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
-            ['slug' => 'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php', 'active' => true],
-        ]]]]);
+    // Was "shows a real 0 when a blocker reports to Control": an active blocker
+    // alone isn't evidence that its lockouts reach us (it can be switched off,
+    // or the site left out of every pull), so it no longer yields a 0.
+    it('leaves the count out when a blocker is installed but nothing shows its lockouts reach Control', function () {
+        $report = compileSeptember(accuracySite(['companion_snapshot' => llarSnapshot()]));
+
+        expect($report['data']['security']['blocked_threats_count'])->toBeNull()
+            ->and($report['html'])->not->toContain('Threats blocked')->not->toContain('Malicious visitors blocked')
+            ->not->toContain('block attackers')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            ->and($report['preview'])->toContain('Not measured (no blocker reports to Control for this site this period)');
+    });
+
+    it('shows a real 0, blocked at the server, when the server has a jail and its lockouts were pulled', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $report = compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]));
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => 0, 'blocks_at_server' => true])
+            ->and($report['html'])->toContain('block attackers at the server')
+            ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+    });
+
+    it('does not count a jail whose lockouts were last pulled before the period', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => Carbon::parse('2026-08-20')]);
+
+        expect(compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]))['data']['security']['blocked_threats_count'])->toBeNull();
+    });
+
+    it('shows a real 0 without claiming the server when lockouts from a serverless site reached the review queue', function () {
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
+        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'source' => ReviewQueueEntry::SOURCE_LLAR, 'created_at' => Carbon::parse('2026-09-14'), 'updated_at' => Carbon::parse('2026-09-14')]);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['security']['blocked_threats_count'])->toBe(0)
-            ->and($report['html'])->toContain('block attackers at the server')
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => 0, 'blocks_at_server' => false])
+            ->and($report['html'])->toContain('block malicious visitors')->not->toContain('at the server')
             ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+    });
+
+    it('counts real bans in the period whatever else is known', function () {
+        $site = accuracySite();
+        BlockedIp::factory()->count(2)->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-09-10')]);
+        BlockedIp::factory()->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-08-10')]);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['blocked_threats_count' => 2, 'blocks_at_server' => false]);
     });
 });
 

@@ -78,3 +78,102 @@ it('adds nothing for a full month or a report compiled before coverage was recor
     ]))->toBe([])
         ->and(ReportReviewFlags::reasons(['meta' => ['period_end' => '2026-10-31'], 'uptime' => ['outages' => []]]))->toBe([]);
 });
+
+describe('malware', function () {
+    it('names the finding kinds and the scan, and says when a flagged scan stopped early', function () {
+        expect(ReportReviewFlags::reasons(['security' => [
+            'malware_status' => 'warning', 'malware_scan_id' => 123, 'malware_finding_kinds' => ['php_in_uploads' => 4],
+        ]]))->toBe(['The malware scan flagged files to review: php_in_uploads ×4 (scan #123).'])
+            ->and(ReportReviewFlags::reasons(['security' => [
+                'malware_status' => 'issues_found', 'malware_scan_id' => 7, 'malware_scan_aborted' => true,
+                'malware_finding_kinds' => ['eval_base64' => 2, 'php_in_uploads' => 1],
+            ]]))->toBe(['The malware scan found suspected malware: eval_base64 ×2, php_in_uploads ×1 (scan #7). The scan also stopped before it finished.'])
+            // A SiteCheck result has no finding kinds.
+            ->and(ReportReviewFlags::reasons(['security' => ['malware_status' => 'issues_found', 'malware_scan_id' => 9, 'malware_finding_kinds' => null]]))
+            ->toBe(['The malware scan flagged something (scan #9).']);
+    });
+
+    it('holds a scan that did not cover the whole site', function () {
+        expect(ReportReviewFlags::reasons(['security' => [
+            'malware_status' => 'incomplete', 'malware_scan_id' => 5, 'malware_transport' => 'companion',
+            'malware_scan_aborted' => true, 'malware_abort_reason' => 'max_wall_seconds', 'malware_scanned_files' => 1200,
+        ]]))->toBe(['The latest malware scan (scan #5) stopped before it finished (limit: max_wall_seconds, 1,200 files checked), so the client sees "Partial scan" instead of an all-clear.'])
+            ->and(ReportReviewFlags::reasons(['security' => [
+                'malware_status' => 'incomplete', 'malware_scan_id' => 6, 'malware_transport' => 'ssh', 'malware_scan_aborted' => false,
+            ]]))->toBe(['The latest malware scan (scan #6) ran over SSH, which can\'t say how many files it covered, so the client sees "Partial scan" instead of an all-clear.']);
+    });
+
+    it('flags malware an earlier scan found when the latest scan is clean, and not twice when it still finds it', function () {
+        $earlier = ['malware_worst_in_period' => 'issues_found', 'malware_last_issue_at' => '2026-10-26', 'malware_issue_days' => 1];
+
+        expect(ReportReviewFlags::reasons(['security' => ['malware_status' => 'clean', ...$earlier]]))
+            ->toBe(['An earlier malware scan this month flagged malware (on 1 day, last on 2026-10-26), but the latest scan did not: check it was cleaned up.'])
+            ->and(ReportReviewFlags::reasons(['security' => ['malware_status' => 'issues_found', ...$earlier]]))
+            ->toBe(['The malware scan flagged something.'])
+            ->and(ReportReviewFlags::reasons(['security' => ['malware_status' => 'clean', 'malware_worst_in_period' => 'warning']]))->toBe([]);
+    });
+});
+
+describe('WordPress core files', function () {
+    it('flags a missing check only where the host can run one', function () {
+        expect(ReportReviewFlags::reasons(['security' => ['checksum_supported' => true, 'checksum_status' => null]]))
+            ->toBe(['No WordPress core-file check ran this month, although this host supports one, so the client would read "Not checked this month".'])
+            ->and(ReportReviewFlags::reasons(['security' => ['checksum_supported' => true, 'checksum_status' => 'clean']]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['security' => ['checksum_supported' => false, 'checksum_status' => null]]))->toBe([])
+            // Older reports didn't record it.
+            ->and(ReportReviewFlags::reasons(['security' => ['checksum_status' => null]]))->toBe([]);
+    });
+});
+
+describe('vulnerable plugins joined to waiting updates by slug', function () {
+    function vulnerableItem(array $overrides = []): array
+    {
+        return array_replace([
+            'slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.0',
+            'fixed_in' => '1.2', 'update_offered' => null, 'paused' => null,
+        ], $overrides);
+    }
+
+    it('holds when the update waiting reaches the fixed version', function () {
+        expect(ReportReviewFlags::reasons([
+            'security' => ['vulnerable_plugins' => ['Example Forms'], 'vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.3'])]],
+            'updates' => ['pending_plugins' => ['Example Forms'], 'pending_plugin_items' => [['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'new_version' => '1.3']]],
+        ]))->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 1.3 (fixed in 1.2)."]);
+    });
+
+    it('lets through an update that falls short of the fix, one with no fix yet, and a same-named plugin\'s update', function () {
+        expect(ReportReviewFlags::reasons([
+            'security' => ['vulnerable_plugin_items' => [
+                vulnerableItem(['update_offered' => '1.1']),
+                vulnerableItem(['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'fixed_in' => null, 'update_offered' => '9.0']),
+                vulnerableItem(['slug' => 'example-seo/example-seo.php', 'name' => 'Example SEO']),
+            ]],
+            'updates' => ['pending_plugins' => ['Example Forms', 'Example Gallery', 'Example SEO'], 'pending_plugin_items' => [
+                ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'new_version' => '1.1'],
+                ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'new_version' => '9.0'],
+                // A copy in another folder, with the same name and a fixing version.
+                ['slug' => 'example-seo-backup/example-seo.php', 'name' => 'Example SEO', 'new_version' => '5.0'],
+            ]],
+        ]))->toBe([]);
+    });
+
+    it('holds a vulnerable plugin whose updates are paused, naming the fix and why', function () {
+        expect(ReportReviewFlags::reasons([
+            'security' => ['vulnerable_plugin_items' => [
+                vulnerableItem(['paused' => ['source' => 'auto_failure', 'since' => '2026-10-30', 'failure_count' => 9, 'note' => null]]),
+                vulnerableItem(['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'fixed_in' => null,
+                    'paused' => ['source' => 'manual', 'since' => '2026-09-01', 'failure_count' => null, 'note' => 'Licence expired']]),
+            ]],
+            'updates' => ['pending_plugin_items' => []],
+        ]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in 1.2; auto-paused on 2026-10-30 after 9 failed attempts); Example Gallery 3.0 (no fixed version yet; paused by hand since 2026-09-01: Licence expired).']);
+    });
+
+    it('uses the version the plugin recorded as offered when there is no list of waiting updates', function () {
+        expect(ReportReviewFlags::reasons([
+            'security' => ['vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.2'])]],
+            'updates' => ['pending_plugins' => null, 'pending_plugin_items' => null],
+        ]))->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 1.2 (fixed in 1.2)."])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.2'])]]]))
+            ->toHaveCount(1);
+    });
+});

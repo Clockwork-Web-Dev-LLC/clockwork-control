@@ -9,9 +9,14 @@ use Modules\ClientReports\Support\ReportPhrases;
  * does. An auto schedule whose report has any of these is held as a draft
  * instead of being emailed; a clean report still sends itself.
  *
- * Plugin vulnerabilities are deliberately not here: about a third of sites
- * have one at any time, and holding every one of those reports would turn
- * "review the exceptions" back into "review everything".
+ * A plugin vulnerability on its own doesn't hold a report: about a third of
+ * sites have one at any time, and holding every one of those reports would
+ * turn "review the exceptions" back into "review everything". One that an
+ * update waiting at the end of the month would have fixed, or whose updates
+ * are paused, means the updates aren't going through, so that does.
+ *
+ * These are plain functions of the stored sections_data, so anything they
+ * need (a plugin's pause, a scan's finding kinds) is captured at compile time.
  */
 class ReportReviewFlags
 {
@@ -34,24 +39,21 @@ class ReportReviewFlags
                 : "Monitoring began {$coverageStart}, so this report covers only part of the month.";
         }
 
-        if (in_array($security['malware_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
-            $reasons[] = 'The malware scan flagged something.';
-        }
+        array_push($reasons, ...self::malwareReasons($security));
         if (in_array($security['checksum_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
             $reasons[] = 'WordPress core files differ from the official release.';
+        }
+        // A host we can check, but no check ran: the client would read "Not
+        // checked this month". Hosts with no way to check leave the row out.
+        if (($security['checksum_supported'] ?? false) === true && array_key_exists('checksum_status', $security) && $security['checksum_status'] === null) {
+            $reasons[] = 'No WordPress core-file check ran this month, although this host supports one, so the client would read "Not checked this month".';
         }
         if (in_array($security['blacklist_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
             $reasons[] = 'The site is on a spam or malware blocklist.';
         }
 
         // A known hole with a fix waiting means an update isn't going through.
-        $vulnerableAndWaiting = array_values(array_intersect(
-            (array) ($security['vulnerable_plugins'] ?? []),
-            (array) ($data['updates']['pending_plugins'] ?? []),
-        ));
-        if ($vulnerableAndWaiting !== []) {
-            $reasons[] = 'A plugin with a known vulnerability has an update waiting: '.implode(', ', array_unique($vulnerableAndWaiting)).'.';
-        }
+        array_push($reasons, ...self::vulnerablePluginReasons($security, (array) ($data['updates'] ?? [])));
 
         $backupStatus = $data['backups']['status'] ?? null;
         if (isset($data['backups']) && in_array($backupStatus, ['none_found', 'stale', 'not_checked'], true)) {
@@ -89,5 +91,171 @@ class ReportReviewFlags
         }
 
         return $reasons;
+    }
+
+    /**
+     * The latest scan's verdict, with its finding kinds and scan id so the
+     * reviewer knows what to open, and any malware an earlier scan in the
+     * period found that the latest one no longer does.
+     *
+     * @param  array<string, mixed>  $security
+     * @return list<string>
+     */
+    private static function malwareReasons(array $security): array
+    {
+        $reasons = [];
+        $status = $security['malware_status'] ?? null;
+        $scan = isset($security['malware_scan_id']) ? ' (scan #'.(int) $security['malware_scan_id'].')' : '';
+        $kinds = self::findingKinds($security['malware_finding_kinds'] ?? null);
+        $stoppedEarly = ! empty($security['malware_scan_aborted']) ? ' The scan also stopped before it finished.' : '';
+
+        if ($status === 'warning' && $kinds !== '') {
+            $reasons[] = "The malware scan flagged files to review: {$kinds}{$scan}.{$stoppedEarly}";
+        } elseif ($status === 'issues_found' && $kinds !== '') {
+            $reasons[] = "The malware scan found suspected malware: {$kinds}{$scan}.{$stoppedEarly}";
+        } elseif (in_array($status, self::BAD_SCAN_STATUSES, true)) {
+            $reasons[] = "The malware scan flagged something{$scan}.";
+        } elseif ($status === ClientReportCompiler::MALWARE_INCOMPLETE) {
+            $reasons[] = self::partialScanReason($security, $scan);
+        }
+
+        if (($security['malware_worst_in_period'] ?? null) === 'issues_found' && $status !== 'issues_found') {
+            $days = (int) ($security['malware_issue_days'] ?? 0);
+            $last = $security['malware_last_issue_at'] ?? null;
+            $when = array_filter([
+                $days > 0 ? 'on '.$days.' '.($days === 1 ? 'day' : 'days') : null,
+                is_string($last) && $last !== '' ? "last on {$last}" : null,
+            ]);
+            $reasons[] = 'An earlier malware scan this month flagged malware'.($when !== [] ? ' ('.implode(', ', $when).')' : '')
+                .', but the latest scan did not: check it was cleaned up.';
+        }
+
+        return $reasons;
+    }
+
+    /** @param  array<string, mixed>  $security */
+    private static function partialScanReason(array $security, string $scan): string
+    {
+        $outcome = ', so the client sees "Partial scan" instead of an all-clear.';
+
+        if (empty($security['malware_scan_aborted']) && ($security['malware_transport'] ?? null) === 'ssh') {
+            return "The latest malware scan{$scan} ran over SSH, which can't say how many files it covered{$outcome}";
+        }
+
+        $files = (int) ($security['malware_scanned_files'] ?? 0);
+        $detail = array_filter([
+            is_string($security['malware_abort_reason'] ?? null) && $security['malware_abort_reason'] !== '' ? 'limit: '.$security['malware_abort_reason'] : null,
+            $files > 0 ? number_format($files).' files checked' : null,
+        ]);
+
+        return "The latest malware scan{$scan} stopped before it finished".($detail !== [] ? ' ('.implode(', ', $detail).')' : '').$outcome;
+    }
+
+    /** "php_in_uploads ×4, wp_config_recently_modified ×1", or '' when there are none. */
+    private static function findingKinds(mixed $kinds): string
+    {
+        if (! is_array($kinds)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($kinds as $kind => $count) {
+            $parts[] = $kind.' ×'.(int) $count;
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * Reports compiled with vulnerable_plugin_items join them to the waiting
+     * updates by file slug: hold when the update waiting reaches the version
+     * that fixes the plugin, or when its updates are paused. Older reports
+     * only kept names, so they're matched by name.
+     *
+     * @param  array<string, mixed>  $security
+     * @param  array<string, mixed>  $updates
+     * @return list<string>
+     */
+    private static function vulnerablePluginReasons(array $security, array $updates): array
+    {
+        if (! array_key_exists('vulnerable_plugin_items', $security)) {
+            $vulnerableAndWaiting = array_values(array_unique(array_intersect(
+                (array) ($security['vulnerable_plugins'] ?? []),
+                (array) ($updates['pending_plugins'] ?? []),
+            )));
+
+            return $vulnerableAndWaiting !== []
+                ? ['A plugin with a known vulnerability has an update waiting: '.implode(', ', $vulnerableAndWaiting).'.']
+                : [];
+        }
+
+        // What was waiting at the end of the period, by slug. Without that
+        // list (a stale snapshot, or no updates section), use what the
+        // plugin's own entry recorded as offered.
+        $pending = $updates['pending_plugin_items'] ?? null;
+        $offeredBySlug = null;
+        if (is_array($pending)) {
+            $offeredBySlug = [];
+            foreach ($pending as $p) {
+                if (is_array($p) && (string) ($p['slug'] ?? '') !== '') {
+                    $offeredBySlug[(string) $p['slug']] = $p['new_version'] ?? null;
+                }
+            }
+        }
+
+        $waiting = [];
+        $paused = [];
+        foreach ((array) $security['vulnerable_plugin_items'] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $slug = (string) ($item['slug'] ?? '');
+            $label = trim(trim((string) ($item['name'] ?? '')) ?: $slug).(($item['version'] ?? '') !== '' ? ' '.$item['version'] : '');
+            $fixedIn = is_string($item['fixed_in'] ?? null) && $item['fixed_in'] !== '' ? $item['fixed_in'] : null;
+            $offered = match (true) {
+                $offeredBySlug === null => $item['update_offered'] ?? null,
+                array_key_exists($slug, $offeredBySlug) => $offeredBySlug[$slug] ?? $item['update_offered'] ?? null,
+                default => null,
+            };
+            $fix = $fixedIn !== null ? "fixed in {$fixedIn}" : 'no fixed version yet';
+
+            if (is_array($item['paused'] ?? null)) {
+                $paused[] = "{$label} ({$fix}; ".self::pause($item['paused']).($offered ? "; {$offered} is waiting" : '').')';
+            } elseif ($fixedIn !== null && $offered && version_compare((string) $offered, $fixedIn, '>=')) {
+                $waiting[] = "{$label} → {$offered} ({$fix})";
+            }
+        }
+
+        $reasons = [];
+        if ($waiting !== []) {
+            $reasons[] = "A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: ".implode('; ', $waiting).'.';
+        }
+        if ($paused !== []) {
+            $reasons[] = 'Updates are paused for a plugin with a known vulnerability: '.implode('; ', $paused).'.';
+        }
+
+        return $reasons;
+    }
+
+    /**
+     * "auto-paused on 2026-10-30 after 3 failed attempts" or "paused by hand since 2026-09-01".
+     *
+     * @param  array<string, mixed>  $pause
+     */
+    private static function pause(array $pause): string
+    {
+        $since = is_string($pause['since'] ?? null) && $pause['since'] !== '' ? $pause['since'] : null;
+
+        if (($pause['source'] ?? null) === 'auto_failure') {
+            $failures = (int) ($pause['failure_count'] ?? 0);
+
+            return 'auto-paused'.($since ? " on {$since}" : '')
+                .($failures > 0 ? " after {$failures} failed ".($failures === 1 ? 'attempt' : 'attempts') : '');
+        }
+
+        $note = is_string($pause['note'] ?? null) && trim($pause['note']) !== '' ? ': '.trim($pause['note']) : '';
+
+        return 'paused by hand'.($since ? " since {$since}" : '').$note;
     }
 }
