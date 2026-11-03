@@ -105,7 +105,7 @@ describe('UptimeProber on HTTP 429', function () {
 });
 
 describe('UptimeStateUpdater with blocked probes', function () {
-    it('moves an up site to probe_blocked without touching the failure streak or last-up, and records the event', function () {
+    it('moves an up site to probe_blocked after the threshold of 429s in a row, without touching the failure streak or last-up, dating the event at the first', function () {
         $lastUp = now()->subMinutes(10)->startOfSecond();
         $site = Site::factory()->create([
             'uptime_state' => 'up',
@@ -117,6 +117,12 @@ describe('UptimeStateUpdater with blocked probes', function () {
         $chat = quietUptimeChannels();
         $chat->shouldNotReceive('uptimeProbeBlocked');
 
+        $firstAt = now()->startOfSecond();
+        app(UptimeStateUpdater::class)->update($site, blockedProbe('120'));
+        expect($site->refresh()->uptime_state)->toBe('up')
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0);
+
+        $this->travel(5)->minutes();
         app(UptimeStateUpdater::class)->update($site, blockedProbe('120'));
         $site->refresh();
 
@@ -134,9 +140,60 @@ describe('UptimeStateUpdater with blocked probes', function () {
         expect($events)->toHaveCount(1)
             ->and($events->first()->event_type)->toBe(SiteUptimeEvent::TYPE_PROBE_BLOCKED)
             ->and($events->first()->status_code)->toBe(429)
-            ->and($events->first()->is_sla_exempt)->toBeFalse();
+            ->and($events->first()->event_at->timestamp)->toBe($firstAt->timestamp)
+            ->and($events->first()->is_sla_exempt)->toBeFalse()
+            ->and($site->uptime_probe_blocked_since?->timestamp)->toBe($firstAt->timestamp);
 
-        expect(ActionLog::where('site_id', $site->id)->where('target', Site::UPTIME_STATE_PROBE_BLOCKED)->count())->toBe(1);
+        $log = ActionLog::where('site_id', $site->id)->where('target', Site::UPTIME_STATE_PROBE_BLOCKED)->sole();
+        expect($log->ran_at->timestamp)->toBe($firstAt->timestamp);
+    });
+
+    it('leaves no trace of a single 429 followed by a success', function () {
+        $site = Site::factory()->create(['uptime_state' => 'up', 'uptime_consecutive_failures' => 0]);
+
+        quietUptimeChannels()->shouldNotReceive('uptimeProbeBlocked');
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::success(200, 80));
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('up')
+            ->and($site->uptime_consecutive_failures)->toBe(0)
+            ->and($site->uptime_consecutive_blocked)->toBe(0)
+            ->and($site->uptime_probe_blocked_since)->toBeNull()
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0)
+            ->and(ActionLog::where('site_id', $site->id)->count())->toBe(0);
+    });
+
+    it('does not block on 429s broken up by another answer', function () {
+        $site = Site::factory()->create(['uptime_state' => 'up', 'uptime_consecutive_failures' => 0]);
+
+        quietUptimeChannels();
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::transportFailed('Connection timed out'));
+        $this->travel(5)->minutes();
+        $updater->update($site, blockedProbe());
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('up')
+            ->and($site->uptime_consecutive_blocked)->toBe(1)
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0);
+    });
+
+    it('blocks on the first 429 when the threshold is set to 1', function () {
+        app(Settings::class)->put('monitoring.uptime_failure_threshold', 1);
+        $site = Site::factory()->create(['uptime_state' => 'up']);
+
+        quietUptimeChannels();
+
+        app(UptimeStateUpdater::class)->update($site, blockedProbe());
+
+        expect($site->refresh()->uptime_state)->toBe(Site::UPTIME_STATE_PROBE_BLOCKED);
     });
 
     it('never takes a site down however many 429s arrive in a row, and records the stretch once', function () {
@@ -149,6 +206,7 @@ describe('UptimeStateUpdater with blocked probes', function () {
         $updater->update($site, blockedProbe());
         $site->refresh();
         $blockedSince = $site->uptime_probe_blocked_since;
+        expect($blockedSince)->not->toBeNull();
 
         for ($i = 0; $i < 10; $i++) {
             $this->travel(10)->minutes();
@@ -172,13 +230,92 @@ describe('UptimeStateUpdater with blocked probes', function () {
         quietUptimeChannels();
 
         app(UptimeStateUpdater::class)->update($site, blockedProbe());
+        $this->travel(5)->minutes();
+        app(UptimeStateUpdater::class)->update($site, blockedProbe());
         $site->refresh();
 
         expect($site->uptime_state)->toBe(Site::UPTIME_STATE_PROBE_BLOCKED)
             ->and($site->uptime_last_up_at)->toBeNull();
     });
 
-    it('closes an open outage when a down site starts answering 429, without claiming recovery', function () {
+    it('keeps an outage open through a 429, so a later failure is the same outage', function () {
+        $downSince = now()->subMinutes(30)->startOfSecond();
+        $site = Site::factory()->create([
+            'uptime_state' => 'down',
+            'uptime_consecutive_failures' => 3,
+            'uptime_down_since' => $downSince,
+        ]);
+
+        quietUptimeChannels();
+        $updater = app(UptimeStateUpdater::class);
+
+        $updater->update($site, blockedProbe());
+        $site->refresh();
+        expect($site->uptime_state)->toBe('down')
+            ->and($site->uptime_down_since?->timestamp)->toBe($downSince->timestamp)
+            ->and($site->uptime_consecutive_failures)->toBe(3)
+            ->and($site->uptime_last_status_code)->toBe(429);
+
+        // 502, 502 after it: no new down event, no second alert.
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::badStatus(502, 90, 'HTTP 502'));
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::badStatus(502, 90, 'HTTP 502'));
+        $site->refresh();
+
+        expect($site->uptime_state)->toBe('down')
+            ->and($site->uptime_down_since?->timestamp)->toBe($downSince->timestamp)
+            ->and($site->uptime_probe_blocked_since)->toBeNull()
+            ->and($site->uptime_consecutive_blocked)->toBe(0)
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0);
+    });
+
+    it('recovers a down site normally when a success follows a 429, with the full downtime', function () {
+        $site = Site::factory()->create([
+            'uptime_state' => 'down',
+            'uptime_consecutive_failures' => 2,
+            'uptime_down_since' => now()->subMinutes(30),
+        ]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldReceive('siteWentUp')->once()
+            ->withArgs(fn (Site $s, ?int $sec) => $s->is($site) && $sec >= 35 * 60)
+            ->andReturn(true);
+        $chat->shouldNotReceive('siteWentDown');
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldReceive('siteWentUp')->once()->andReturn(false);
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::success(200, 80));
+
+        expect($site->refresh()->uptime_state)->toBe('up')
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->pluck('event_type')->all())->toBe([SiteUptimeEvent::TYPE_UP]);
+    });
+
+    it('alerts once for a real outage that the host rate-limits now and then (502, 502, 429, 502, 502, 429, ...)', function () {
+        $site = Site::factory()->create(['uptime_state' => 'up', 'uptime_consecutive_failures' => 0]);
+
+        $chat = $this->mock(ChatNotifier::class);
+        $chat->shouldReceive('siteWentDown')->once()->andReturn(true);
+        $chat->shouldNotReceive('siteWentUp');
+        $chat->shouldNotReceive('uptimeProbeBlocked');
+        $sms = $this->mock(SmsNotifier::class);
+        $sms->shouldReceive('siteWentDown')->once()->andReturn(false);
+        $sms->shouldNotReceive('siteWentUp');
+
+        $updater = app(UptimeStateUpdater::class);
+        foreach ([502, 502, 429, 502, 502, 429, 502, 502, 429, 502, 502] as $code) {
+            $updater->update($site, $code === 429 ? blockedProbe() : UptimeProbeResult::badStatus($code, 90, "HTTP {$code}"));
+            $this->travel(5)->minutes();
+        }
+
+        expect($site->refresh()->uptime_state)->toBe('down')
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->pluck('event_type')->all())->toBe([SiteUptimeEvent::TYPE_DOWN]);
+    });
+
+    it('closes an open outage at the first 429 once a down site has only answered 429 for the configured hours, without claiming recovery', function () {
         $site = Site::factory()->create([
             'uptime_state' => 'down',
             'uptime_consecutive_failures' => 3,
@@ -186,10 +323,22 @@ describe('UptimeStateUpdater with blocked probes', function () {
             'uptime_last_up_at' => now()->subMinutes(40),
         ]);
         $lastUp = $site->uptime_last_up_at;
+        $firstAt = now()->startOfSecond();
 
-        quietUptimeChannels();
+        $chat = quietUptimeChannels();
+        $chat->shouldReceive('uptimeProbeBlocked')->once()->andReturn(true);
 
-        app(UptimeStateUpdater::class)->update($site, blockedProbe());
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        for ($i = 0; $i < 11; $i++) {
+            $this->travel(30)->minutes();
+            $updater->update($site, blockedProbe());
+        }
+        expect($site->refresh()->uptime_state)->toBe('down');
+
+        // Six hours of nothing but 429s.
+        $this->travel(30)->minutes();
+        $updater->update($site, blockedProbe());
         $site->refresh();
 
         expect($site->uptime_state)->toBe(Site::UPTIME_STATE_PROBE_BLOCKED)
@@ -197,7 +346,9 @@ describe('UptimeStateUpdater with blocked probes', function () {
             ->and($site->uptime_consecutive_failures)->toBe(0)
             ->and($site->uptime_last_up_at?->timestamp)->toBe($lastUp->timestamp);
 
-        expect(SiteUptimeEvent::where('site_id', $site->id)->value('event_type'))->toBe(SiteUptimeEvent::TYPE_PROBE_BLOCKED);
+        $event = SiteUptimeEvent::where('site_id', $site->id)->sole();
+        expect($event->event_type)->toBe(SiteUptimeEvent::TYPE_PROBE_BLOCKED)
+            ->and($event->event_at->timestamp)->toBe($firstAt->timestamp);
 
         $log = ActionLog::where('site_id', $site->id)->where('target', Site::UPTIME_STATE_PROBE_BLOCKED)->first();
         expect($log)->not->toBeNull()
@@ -205,7 +356,7 @@ describe('UptimeStateUpdater with blocked probes', function () {
             ->and($log->summary)->toContain('recovery not confirmed');
     });
 
-    it('moves a site in maintenance to probe_blocked and clears the maintenance timestamp', function () {
+    it('keeps a site in maintenance through a 429, without a second maintenance notice', function () {
         $site = Site::factory()->create([
             'uptime_state' => 'maintenance',
             'uptime_maintenance_since' => now()->subMinutes(20),
@@ -213,8 +364,35 @@ describe('UptimeStateUpdater with blocked probes', function () {
 
         $chat = quietUptimeChannels();
         $chat->shouldNotReceive('siteExitedMaintenance');
+        $chat->shouldNotReceive('siteEnteredMaintenance');
 
-        app(UptimeStateUpdater::class)->update($site, blockedProbe());
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        expect($site->refresh()->uptime_state)->toBe('maintenance')
+            ->and($site->uptime_maintenance_since)->not->toBeNull();
+
+        $this->travel(5)->minutes();
+        $updater->update($site, UptimeProbeResult::maintenance(503, 90, 'HTTP 503 (maintenance)'));
+
+        expect($site->refresh()->uptime_state)->toBe('maintenance')
+            ->and(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0);
+    });
+
+    it('moves a site in maintenance to probe_blocked only after the configured hours of 429s', function () {
+        app(Settings::class)->put(UptimeStateUpdater::SETTING_PROBE_BLOCKED_ALERT_HOURS, 1);
+        $site = Site::factory()->create([
+            'uptime_state' => 'maintenance',
+            'uptime_maintenance_since' => now()->subMinutes(20),
+        ]);
+
+        $chat = quietUptimeChannels();
+        $chat->shouldNotReceive('siteExitedMaintenance');
+        $chat->shouldReceive('uptimeProbeBlocked')->once()->andReturn(true);
+
+        $updater = app(UptimeStateUpdater::class);
+        $updater->update($site, blockedProbe());
+        $this->travel(1)->hours();
+        $updater->update($site, blockedProbe());
         $site->refresh();
 
         expect($site->uptime_state)->toBe(Site::UPTIME_STATE_PROBE_BLOCKED)
@@ -469,11 +647,15 @@ describe('uptime stats with blocked stretches', function () {
             'event_at' => now()->subHours(12),
         ]);
 
-        quietUptimeChannels();
+        quietUptimeChannels()->shouldReceive('uptimeProbeBlocked')->andReturn(true);
 
-        // Down for 12h, then blocked for the following 12h.
-        app(UptimeStateUpdater::class)->update($site, blockedProbe());
-        $this->travel(12)->hours();
+        // Down for 12h, then blocked for the following 12h: once the 429s
+        // have lasted the configured hours, the outage ends at the first one.
+        $updater = app(UptimeStateUpdater::class);
+        for ($hour = 0; $hour < 12; $hour++) {
+            $updater->update($site, blockedProbe());
+            $this->travel(1)->hours();
+        }
 
         $pct = app(UptimeStatsCalculator::class)->siteUptime($site, now()->subDay(), now());
 
@@ -496,6 +678,11 @@ describe('clockwork:check-site-uptime with a rate-limited site', function () {
         $this->artisan('clockwork:check-site-uptime', ['--site' => $site->id])
             ->expectsOutputToContain('up=0 down=0 blocked=1')
             ->assertExitCode(0);
+        // One 429 could be a blip; the next one in a row confirms it.
+        expect($site->refresh()->uptime_state)->toBe('up');
+
+        $this->travel(5)->minutes();
+        $this->artisan('clockwork:check-site-uptime', ['--site' => $site->id])->assertExitCode(0);
 
         expect($site->refresh()->uptime_state)->toBe(Site::UPTIME_STATE_PROBE_BLOCKED);
     });

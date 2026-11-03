@@ -27,15 +27,24 @@ use Modules\Core\ModuleStateResolver;
  *   - unknown → up: instant, no event/alert (initial state, not a transition)
  *   - unknown → down: 2 failures, but emits a "first detected down" event
  *     (we still want to know about a site we've never seen up)
- *   - any → probe_blocked: the site answered HTTP 429 (a rate limiter or
- *     anti-bot challenge refused the probe). That is neither a failure nor
+ *   - up/unknown → probe_blocked: the site answered HTTP 429 (a rate
+ *     limiter or anti-bot challenge refused the probe) as many times in a
+ *     row as it takes failures to go down. That is neither a failure nor
  *     proof of life: the failure streak is not incremented, last-up is not
- *     set, and the site never goes down on it. Entering the state records a
- *     probe_blocked event (which closes an open outage: the server is
- *     answering again, so the probe can no longer vouch it is down). Staying
- *     blocked for the configured number of hours sends one ops chat notice.
- *     A sub-threshold failure while blocked leaves the blocked stretch open;
- *     a success, maintenance, or a real down transition ends it.
+ *     set, and the site never goes down on it. A shorter run of 429s leaves
+ *     no trace. Entering the state records a probe_blocked event dated at
+ *     the run's first 429. Staying blocked for the configured number of
+ *     hours sends one ops chat notice. A sub-threshold failure while
+ *     blocked leaves the blocked stretch open; a success, maintenance, or a
+ *     real down transition ends it.
+ *   - down/maintenance → probe_blocked: only after 429s for the configured
+ *     number of hours. Until then the outage (or maintenance) stays open
+ *     and nothing is recorded or sent: a 429 during a real outage is often
+ *     the overloaded origin's rate limiter, so a later failure belongs to
+ *     the same outage and a success is its normal recovery (with the
+ *     recovery alerts). A run that long closes the outage at the first 429,
+ *     so a site that only rate-limits the probe doesn't show days down.
+ *   Any answer other than a 429 ends a run of 429s.
  */
 class UptimeStateUpdater
 {
@@ -83,11 +92,15 @@ class UptimeStateUpdater
             'uptime_last_status_code' => $probe->statusCode,
         ];
 
-        // The blocked stretch ends once the site has left the probe_blocked
-        // state on a real answer (up, maintenance, or a confirmed outage).
-        if (! $probe->isProbeBlocked && $site->uptime_state !== Site::UPTIME_STATE_PROBE_BLOCKED) {
-            $fields['uptime_probe_blocked_since'] = null;
-            $fields['uptime_probe_blocked_alerted_at'] = null;
+        // Any real answer ends a run of 429s, and the blocked stretch ends
+        // once the site has left the probe_blocked state on one (up,
+        // maintenance, or a confirmed outage).
+        if (! $probe->isProbeBlocked) {
+            $fields['uptime_consecutive_blocked'] = 0;
+            if ($site->uptime_state !== Site::UPTIME_STATE_PROBE_BLOCKED) {
+                $fields['uptime_probe_blocked_since'] = null;
+                $fields['uptime_probe_blocked_alerted_at'] = null;
+            }
         }
 
         $site->forceFill($fields)->save();
@@ -96,18 +109,42 @@ class UptimeStateUpdater
     /**
      * HTTP 429: the site is refusing the probe, so we can't tell whether it is
      * up. Never counts toward the failure streak, never sets last-up, never
-     * opens an outage.
+     * opens an outage. See the class docblock for when a run of 429s becomes
+     * the probe_blocked state.
      */
     private function handleBlocked(Site $site, UptimeProbeResult $probe, string $previousState, Carbon $now): void
     {
+        $run = (int) $site->uptime_consecutive_blocked + 1;
+        // The first 429 of the run: anything else in between resets it.
+        $blockedSince = $site->uptime_probe_blocked_since ?? $now;
+
+        if ($previousState !== Site::UPTIME_STATE_PROBE_BLOCKED) {
+            $confirmedState = in_array($previousState, [Site::UPTIME_STATE_DOWN, 'maintenance'], true);
+            $proven = $confirmedState
+                ? abs($blockedSince->diffInSeconds($now)) >= $this->probeBlockedAlertHours() * 3600
+                : $run >= $this->failureThreshold();
+
+            if (! $proven) {
+                // Remember the run; change nothing else. A down site stays
+                // down and keeps its failure streak, so a failure after this
+                // is the same outage and a success its recovery.
+                $site->forceFill([
+                    'uptime_consecutive_blocked' => $run,
+                    'uptime_probe_blocked_since' => $blockedSince,
+                ])->save();
+
+                return;
+            }
+        }
+
         $isTransition = $previousState !== Site::UPTIME_STATE_PROBE_BLOCKED;
         $wasDown = $previousState === Site::UPTIME_STATE_DOWN;
         $downSince = $site->uptime_down_since;
-        $blockedSince = $site->uptime_probe_blocked_since ?? $now;
 
         $fields = [
             'uptime_state' => Site::UPTIME_STATE_PROBE_BLOCKED,
             'uptime_probe_blocked_since' => $blockedSince,
+            'uptime_consecutive_blocked' => $run,
             'uptime_down_since' => null,
             'uptime_maintenance_since' => null,
         ];
@@ -122,14 +159,27 @@ class UptimeStateUpdater
         $site->forceFill($fields)->save();
 
         if ($isTransition) {
-            $this->recordEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, $probe, $now);
-            $this->logProbeBlocked($site, $probe, $wasDown && $downSince !== null ? (int) abs($downSince->diffInSeconds($now)) : null);
+            // Dated at the run's first 429: only 429s came after it, so the
+            // event can't overlap another, and the outage it closes ends there.
+            $this->recordEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, $probe, $blockedSince);
+            $this->logProbeBlocked(
+                $site,
+                $probe,
+                $wasDown && $downSince !== null ? (int) abs($downSince->diffInSeconds($blockedSince)) : null,
+                $blockedSince,
+            );
         }
 
         $this->maybeNotifyProbeBlocked($site, $probe, $blockedSince, $now);
     }
 
-    private function logProbeBlocked(Site $site, UptimeProbeResult $probe, ?int $closedOutageSec): void
+    /** Consecutive failures (and, before probe_blocked, 429s) it takes to change state. */
+    private function failureThreshold(): int
+    {
+        return max(1, (int) app(Settings::class)->get('monitoring.uptime_failure_threshold', self::FAILURE_THRESHOLD_FOR_DOWN));
+    }
+
+    private function logProbeBlocked(Site $site, UptimeProbeResult $probe, ?int $closedOutageSec, Carbon $at): void
     {
         $summary = $closedOutageSec !== null
             ? sprintf('%s answers again but is blocking the uptime probe (HTTP %d) — outage closed after %d min; recovery not confirmed', $site->domain, (int) $probe->statusCode, (int) round($closedOutageSec / 60))
@@ -149,6 +199,7 @@ class UptimeStateUpdater
             error: $probe->error,
             elapsedMs: $probe->responseTimeMs,
             actor: 'scheduled',
+            ranAt: $at,
         );
     }
 
@@ -307,11 +358,7 @@ class UptimeStateUpdater
         // Transition to 'down' once threshold is crossed (and not already down).
         // Threshold comes from Settings (Monitoring → Settings page) and falls
         // back to the constant default for fresh installs.
-        $threshold = (int) app(Settings::class)->get(
-            'monitoring.uptime_failure_threshold',
-            self::FAILURE_THRESHOLD_FOR_DOWN,
-        );
-        if ($previousState !== 'down' && $newFailures >= $threshold) {
+        if ($previousState !== 'down' && $newFailures >= $this->failureThreshold()) {
             // Run the SSH diagnostic ONCE per outage at the transition point.
             // If the probe was a bare 503 without headers, but the SSH diagnostician
             // finds maintenance mode active (.maintenance file or nginx maintenance.conf),

@@ -113,6 +113,7 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?Carbon $uptime_down_since
  * @property ?Carbon $uptime_maintenance_since
  * @property ?Carbon $uptime_probe_blocked_since start of the current unbroken run of HTTP 429 probe answers
+ * @property int $uptime_consecutive_blocked HTTP 429 answers in a row (the run probe_blocked waits for)
  * @property ?Carbon $uptime_probe_blocked_alerted_at when ops was told about that run (one notice per run)
  * @property ?Carbon $uptime_ignored_at
  * @property ?string $uptime_ignore_reason
@@ -360,6 +361,7 @@ class Site extends Model
         'uptime_maintenance_since',
         'uptime_probe_blocked_since',
         'uptime_probe_blocked_alerted_at',
+        'uptime_consecutive_blocked',
         'uptime_ignored_at',
         'uptime_ignore_reason',
         'uptime_sla_exempt',
@@ -462,6 +464,7 @@ class Site extends Model
             'uptime_down_since' => 'datetime',
             'uptime_maintenance_since' => 'datetime',
             'uptime_probe_blocked_since' => 'datetime',
+            'uptime_consecutive_blocked' => 'integer',
             'uptime_probe_blocked_alerted_at' => 'datetime',
             'uptime_ignored_at' => 'datetime',
             'uptime_sla_exempt' => 'boolean',

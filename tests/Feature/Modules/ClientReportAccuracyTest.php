@@ -1282,19 +1282,49 @@ describe('uptime', function () {
             $chat = $this->mock(ChatNotifier::class);
             $chat->shouldNotReceive('siteWentUp');
             $chat->shouldNotReceive('siteWentDown');
+            $chat->shouldReceive('uptimeProbeBlocked')->once()->andReturn(true);
             $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
 
-            $this->travelTo(Carbon::parse('2026-09-15 10:40:00'));
-            app(UptimeStateUpdater::class)->update($site, UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)'));
-            $this->travelTo(Carbon::parse('2026-09-15 14:40:00'));
+            // A down site that then answers only 429 for the configured six
+            // hours: the outage is closed at the first 429.
+            $blocked = UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)');
+            for ($at = Carbon::parse('2026-09-15 10:40:00'); $at->lessThanOrEqualTo(Carbon::parse('2026-09-15 16:40:00')); $at->addMinutes(30)) {
+                $this->travelTo($at);
+                app(UptimeStateUpdater::class)->update($site->fresh(), $blocked);
+            }
+            $this->travelTo(Carbon::parse('2026-09-15 17:40:00'));
             app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 120));
             $this->travelBack();
+            $site = $site->fresh();
             $site->forceFill(['uptime_last_checked_at' => now()])->save();
 
-            expect(SiteUptimeEvent::where('site_id', $site->id)->orderBy('event_at')->pluck('event_type')->all())
-                ->toBe([SiteUptimeEvent::TYPE_DOWN, SiteUptimeEvent::TYPE_PROBE_BLOCKED, SiteUptimeEvent::TYPE_UP]);
-            expect(compileSeptember($site->fresh())['data']['uptime'])
-                ->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 240, 'probe_blocked_since' => null]);
+            expect(SiteUptimeEvent::where('site_id', $site->id)->orderBy('event_at')->get()->map(fn ($e) => [$e->event_type, $e->event_at->format('H:i')])->all())
+                ->toBe([[SiteUptimeEvent::TYPE_DOWN, '10:00'], [SiteUptimeEvent::TYPE_PROBE_BLOCKED, '10:40'], [SiteUptimeEvent::TYPE_UP, '17:40']]);
+            expect(compileSeptember($site)['data']['uptime'])
+                ->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 420, 'probe_blocked_since' => null]);
+        });
+
+        it('leaves a single 429 on the last probe of the month out of the report', function () {
+            // 03:55 UTC on Oct 1 is 11:55 PM EDT on Sep 30, the month's last probe.
+            $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'up']);
+            $chat = $this->mock(ChatNotifier::class);
+            $chat->shouldNotReceive('uptimeProbeBlocked');
+            $chat->shouldNotReceive('siteWentUp');
+
+            $this->travelTo(Carbon::parse('2026-10-01 03:55:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)'));
+            $this->travelTo(Carbon::parse('2026-10-01 04:00:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 120));
+            $this->travelBack();
+            $site = $site->fresh();
+            $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+            $report = compileSeptember($site);
+
+            expect(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0)
+                ->and(ActionLog::where('site_id', $site->id)->where('action_type', ActionLog::TYPE_UPTIME_TRANSITION)->count())->toBe(0)
+                ->and($report['data']['uptime'])->toMatchArray(['probe_blocked_since' => null, 'probe_blocked_minutes' => 0])
+                ->and(implode(' ', $report['reasons']))->not->toContain('HTTP 429');
         });
 
         it('says the monitor was blocked, not that the site was down, when a probe_blocked stretch is open at the end of the month', function () {
