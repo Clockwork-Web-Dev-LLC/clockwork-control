@@ -89,8 +89,11 @@ describe('known plugin vulnerabilities (#8)', function () {
                 'vulnerable_plugins' => ['Leaky Forms'],
                 'vulnerabilities_as_of' => '2026-10-01',
             ]);
-        expect($report['html'])->toContain('1 found in 1 plugin')->toContain('(as of Oct 1)')->not->toContain('None found');
-        expect($report['text'])->toContain('Known plugin vulnerabilities (as of Oct 1): 1 found in 1 plugin');
+        // The date is when the plugin list was checked (the snapshot date), so
+        // it says "checked", and the client is told which plugin it is.
+        expect($report['html'])->toContain('1 found in 1 plugin')->toContain('(checked Oct 1)')->not->toContain('as of')
+            ->toContain('Plugin affected: Leaky Forms')->not->toContain('None found');
+        expect($report['text'])->toContain("Known plugin vulnerabilities (checked Oct 1): 1 found in 1 plugin\nPlugin affected: Leaky Forms\n");
     });
 
     it('says "None found" only when the plugins were actually checked', function () {
@@ -223,7 +226,8 @@ describe('backups (#6)', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['backups']['recent'][0])->toMatchArray(['kinds' => ['db', 'full'], 'bytes' => 500 * 1024 ** 2])
-            ->and($report['html'])->toContain('by SpinupWP, stored in DigitalOcean Spaces')->toContain('Files &amp; database')->toContain('500 MB');
+            ->and($report['data']['backups']['destination'])->toBe('by SpinupWP to DigitalOcean Spaces')
+            ->and($report['html'])->toContain('by SpinupWP to DigitalOcean Spaces')->toContain('Files &amp; database')->toContain('500 MB');
     });
 
     it('flags backups that stopped before the last 10 days instead of showing them to the client', function () {
@@ -517,7 +521,8 @@ describe('uptime', function () {
         expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 240])
             ->and($uptime['outages'])->toHaveCount(1)
             ->and($uptime['outages'][0])->toBe(['started_at' => '2026-09-10T10:00:00+00:00', 'minutes' => 240, 'started_before_period' => false, 'ongoing' => false]);
-        expect(compileSeptember($site)['html'])->toContain('Down Sep 10, 10:00 AM UTC')->toContain('4h 0m');
+        // Shown in the report timezone (clockwork.reports.timezone), not UTC.
+        expect(compileSeptember($site)['html'])->toContain('Down Sep 10, 6:00 AM EDT')->toContain('4h 0m')->not->toContain('UTC');
     });
 
     it('counts an outage that started before the period from the start of the period', function () {
@@ -529,7 +534,9 @@ describe('uptime', function () {
 
         expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 90])
             ->and($report['data']['uptime']['outages'][0]['started_before_period'])->toBeTrue()
-            ->and($report['html'])->toContain('Down since before Sep 1, 12:00 AM UTC');
+            // Its start is clamped to the period start, which isn't when it began, so no time is given.
+            ->and($report['html'])->toContain('Down since before Sep 1<')->not->toContain('12:00 AM')
+            ->and($report['text'])->toContain('- Down since before Sep 1 for 90 min');
     });
 
     it('runs an outage still open at the end of the period to the end', function () {
@@ -553,7 +560,8 @@ describe('uptime', function () {
         expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false])
             ->and($report['html'])->not->toContain('around the clock')->not->toContain('Uptime')
             ->and($report['text'])->not->toContain('UPTIME')
-            ->and($preview)->not->toContain('Uptime &amp; Availability')
+            ->and($preview)->not->toContain('Uptime & Availability')
+            ->toContain('Uptime hidden from the client: the uptime probe doesn&#039;t check this site.')
             ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Uptime');
     });
 

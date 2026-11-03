@@ -19,6 +19,7 @@ use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use Illuminate\Support\Carbon;
+use Modules\ClientReports\Support\ReportPhrases;
 
 class ClientReportCompiler
 {
@@ -640,12 +641,8 @@ class ClientReportCompiler
             'verified' => $status === 'verified',
             'status' => $status,
             'source' => $source,
-            'destination' => match ($source) {
-                SiteBackup::SOURCE_PRESSABLE => 'your host, Pressable',
-                SiteBackup::SOURCE_SPINUPWP_SPACES => 'SpinupWP, stored in DigitalOcean Spaces',
-                SiteBackup::SOURCE_S3_ARCHIVE => 'independent off-site storage (Amazon S3)',
-                default => null,
-            },
+            // The whole phrase, preposition included ("by your host, Pressable").
+            'destination' => $source !== null ? (ReportPhrases::BACKUP_DESTINATIONS[$source] ?? null) : null,
             'days_with_backups' => $days->count(),
             'covers_period' => $coversPeriod,
             'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,

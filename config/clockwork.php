@@ -519,6 +519,13 @@ return [
         'enabled' => (bool) env('CLOCKWORK_CARE_PLANS_ENABLED', true),
     ],
 
+    // Client reports (modules/ClientReports). Times are stored in UTC, which
+    // reads as the wrong time of day to clients; the report emails show
+    // outage start times in this zone, with its abbreviation (e.g. "EDT").
+    'reports' => [
+        'timezone' => env('CLOCKWORK_REPORTS_TIMEZONE', 'America/New_York'),
+    ],
+
     // Anonymous usage telemetry — enabled by default, easily disabled anytime.
     // Sends only a bucketed site count and list of enabled module IDs.
     // Never domains, IPs, emails, database contents, or any identifying data.

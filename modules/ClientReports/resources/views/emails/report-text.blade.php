@@ -9,6 +9,8 @@
     $forms = $data['forms'] ?? [];
     $workLog = $data['work_log'] ?? [];
     $period = $report->period_start->format('F Y');
+    // Which sections the client sees: one rule for this, the HTML part and the preview.
+    $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
 @endphp
 WEBSITE CARE REPORT — {!! $domain !!}
 {!! $period !!} ({!! $report->period_start->format('M j') !!} – {!! $report->period_end->format('M j, Y') !!})
@@ -21,7 +23,7 @@ Here's your website care summary for {!! $domain !!} for {!! $period !!}.
 A NOTE FROM YOUR SUPPORT TEAM
 {!! $data['meta']['custom_notes'] !!}
 @endif
-@if (isset($data['updates']))
+@if ($sections['updates'])
 
 UPDATES APPLIED ({!! count($updateRows) !!})
 @forelse ($updateRows as $row)
@@ -30,20 +32,20 @@ UPDATES APPLIED ({!! count($updateRows) !!})
 {!! \Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates) ? 'No updates were applied this month.' : 'Everything was already up to date this month.' !!}
 @endforelse
 @endif
-@if (isset($data['uptime']) && ($uptime['monitored'] ?? true))
+@if ($sections['uptime'])
 
 UPTIME
 Availability: {!! $uptime['uptime_percentage'] ?? '—' !!}%
 Outages: {!! (int) ($uptime['outages_count'] ?? 0) !!}
 Total downtime: {!! (int) ($uptime['downtime_minutes'] ?? 0) !!} min
 @foreach ($uptime['outages'] ?? [] as $outage)
-- {!! ! empty($outage['started_before_period']) ? 'Down since before' : 'Down' !!} {!! \Illuminate\Support\Carbon::parse($outage['started_at'])->format('M j, g:i A') !!} UTC for {!! (int) $outage['minutes'] < 1 ? 'under a minute' : $outage['minutes'].' min' !!}{!! ! empty($outage['ongoing']) ? ' (still down at period end)' : '' !!}
+- {!! \Modules\ClientReports\Support\ReportPhrases::outageStart($outage) !!} for {!! (int) $outage['minutes'] < 1 ? 'under a minute' : $outage['minutes'].' min' !!}{!! ! empty($outage['ongoing']) ? ' (still down at period end)' : '' !!}
 @endforeach
 @if ((int) ($uptime['outages_count'] ?? 0) > count($uptime['outages'] ?? []) && ! empty($uptime['outages']))
 (Showing the {!! count($uptime['outages']) !!} most recent of {!! (int) $uptime['outages_count'] !!} outages.)
 @endif
 @endif
-@if (isset($data['security']))
+@if ($sections['security'])
 
 SECURITY
 Security scans run: {!! number_format((int) ($security['total_scans'] ?? 0)) !!}
@@ -57,23 +59,26 @@ Malware scan: {!! match ($security['malware_status']) { 'clean' => 'No malware f
 WordPress core files: {!! match ($security['checksum_status'] ?? null) { 'clean' => 'Verified clean', 'issues_found', 'warning' => 'Unexpected changes found', null => 'Not checked this month', default => ucfirst((string) $security['checksum_status']) } !!}
 @endif
 @php
-    $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
-    $vulnPlugins = count($security['vulnerable_plugins'] ?? []);
-    $inactiveVulns = (int) ($security['inactive_plugin_vulnerabilities'] ?? 0);
+    $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
+    $vulnPluginNames = \Modules\ClientReports\Support\ReportPhrases::vulnerablePlugins($security);
 @endphp
-Known plugin vulnerabilities{!! ! empty($security['vulnerabilities_as_of']) ? ' (as of '.\Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j').')' : '' !!}: {!! ! ($security['vulnerabilities_checked'] ?? false) ? 'Not checked' : ($vulns === 0 ? 'None found' : $vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : '')) !!}
+Known plugin vulnerabilities{!! $vulnsCheckedOn ? ' (checked '.$vulnsCheckedOn.')' : '' !!}: {!! \Modules\ClientReports\Support\ReportPhrases::vulnerabilities($security) !!}
+@if ($vulnPluginNames !== [])
+{!! \Illuminate\Support\Str::plural('Plugin', count($vulnPluginNames)) !!} affected: {!! implode(', ', $vulnPluginNames) !!}
+@endif
 @if (($security['blocked_threats_count'] ?? null) !== null)
 Malicious visitors blocked: {!! number_format((int) $security['blocked_threats_count']) !!}
 @endif
 @endif
-@if (! empty($data['backups']['verified']))
+@if ($sections['backups'])
+@php($backupDestination = \Modules\ClientReports\Support\ReportPhrases::backupDestination($data['backups']))
 
 BACKUPS
 @if (isset($data['backups']['status']))
 @if ($data['backups']['covers_period'] ?? true)
-Backed up on {!! (int) $data['backups']['days_with_backups'] !!} {!! \Illuminate\Support\Str::plural('day', (int) $data['backups']['days_with_backups']) !!} this month{!! ! empty($data['backups']['destination']) ? ' by '.$data['backups']['destination'] : '' !!}. Most recent:
+Backed up on {!! (int) $data['backups']['days_with_backups'] !!} {!! \Illuminate\Support\Str::plural('day', (int) $data['backups']['days_with_backups']) !!} this month{!! $backupDestination ? ' '.$backupDestination : '' !!}. Most recent:
 @else
-Backed up{!! ! empty($data['backups']['destination']) ? ' by '.$data['backups']['destination'] : '' !!}. Most recent:
+Backed up{!! $backupDestination ? ' '.$backupDestination : '' !!}. Most recent:
 @endif
 @foreach ($data['backups']['recent'] as $day)
 - {!! \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') !!}{!! ! empty($day['manual']) ? ' (manual)' : '' !!}
@@ -82,7 +87,7 @@ Backed up{!! ! empty($data['backups']['destination']) ? ' by '.$data['backups'][
 Your site's files and database were backed up to independent off-site storage this month.{!! ! empty($data['backups']['last_backup_at']) ? ' Most recent backup: '.\Illuminate\Support\Carbon::parse($data['backups']['last_backup_at'])->format('M j, Y').'.' : '' !!}
 @endif
 @endif
-@if (! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop'])))
+@if ($sections['performance'])
 
 SPEED & PERFORMANCE (Google Lighthouse, out of 100)
 @foreach (['mobile' => 'Mobile', 'desktop' => 'Desktop'] as $key => $label)
@@ -91,13 +96,13 @@ SPEED & PERFORMANCE (Google Lighthouse, out of 100)
 @endif
 @endforeach
 @endif
-@if (! empty($traffic['has_traffic']))
+@if ($sections['traffic'])
 
 TRAFFIC
 Visits: {!! number_format((int) ($traffic['total_visits'] ?? 0)) !!}
 Requests served: {!! number_format((int) ($traffic['total_requests'] ?? 0)) !!}
 @endif
-@if ((int) ($data['meta']['schema_version'] ?? 1) >= 2 && ((int) ($forms['live_tests'] ?? 0) > 0 || (int) ($forms['lab_tests'] ?? 0) > 0))
+@if ($sections['forms'])
 
 CONTACT FORMS
 @if ((int) ($forms['live_tests'] ?? 0) > 0)
@@ -107,7 +112,7 @@ CONTACT FORMS
 Forms accepted {!! (int) ($forms['lab_accepted'] ?? 0) !!} of {!! (int) $forms['lab_tests'] !!} automated check submissions (no email sent, so delivery wasn't tested)
 @endif
 @endif
-@if (! empty($workLog['entries']))
+@if ($sections['work_log'])
 
 ADDITIONAL WORK THIS MONTH
 @foreach ($workLog['entries'] as $entry)

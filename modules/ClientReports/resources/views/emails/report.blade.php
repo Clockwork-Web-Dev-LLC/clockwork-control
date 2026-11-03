@@ -32,15 +32,15 @@
     $period = $report->period_start->format('F Y');
     $range = $report->period_start->format('M j').' – '.$report->period_end->format('M j, Y');
 
-    $showUptime = isset($data['uptime']) && ($uptime['monitored'] ?? true);
-    // Reports compiled before schema 2 counted form passes wrongly (always 0%), so their forms data isn't shown.
-    $isCurrentSchema = (int) ($meta['schema_version'] ?? 1) >= 2;
+    // Which sections the client sees: one rule for this, the text part and the preview.
+    $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
+    $showUptime = $sections['uptime'];
     $liveTests = (int) ($forms['live_tests'] ?? 0);
     $labTests = (int) ($forms['lab_tests'] ?? 0);
-    $showForms = $isCurrentSchema && isset($data['forms']) && ($liveTests > 0 || $labTests > 0);
-    $showPerf = isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop']));
-    $showTraffic = isset($data['traffic']) && ! empty($traffic['has_traffic']);
-    $showWork = isset($data['work_log']) && ! empty($workLog['entries']);
+    $showForms = $sections['forms'];
+    $showPerf = $sections['performance'];
+    $showTraffic = $sections['traffic'];
+    $showWork = $sections['work_log'];
 
     $updateCount = count($updateRows);
     $uptimePct = $uptime['uptime_percentage'] ?? null;
@@ -56,15 +56,13 @@
         default => [ucfirst((string) $checksum), $warn],
     };
     // Older reports never actually checked vulnerabilities, so a missing flag means "not checked".
-    $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
-    $inactiveVulns = (int) ($security['inactive_plugin_vulnerabilities'] ?? 0);
-    $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
-    $vulnPlugins = count($security['vulnerable_plugins'] ?? []);
-    [$vulnLabel, $vulnColor] = match (true) {
-        ! $vulnsChecked => ['Not checked', $muted],
-        $vulns === 0 => ['None found', $good],
-        default => [$vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : ''), $warn],
+    $vulnLabel = \Modules\ClientReports\Support\ReportPhrases::vulnerabilities($security);
+    $vulnColor = match (true) {
+        ! ($security['vulnerabilities_checked'] ?? false) => $muted,
+        (int) ($security['active_vulnerabilities'] ?? 0) === 0 => $good,
+        default => $warn,
     };
+    $vulnPluginNames = \Modules\ClientReports\Support\ReportPhrases::vulnerablePlugins($security);
     $showMalware = array_key_exists('malware_status', $security);
     $showBlacklist = array_key_exists('blacklist_status', $security);
     [$blacklistLabel, $blacklistColor] = match ($security['blacklist_status'] ?? null) {
@@ -79,16 +77,16 @@
         null => ['Not checked this month', $muted],
         default => [ucfirst((string) $security['malware_status']), $warn],
     };
-    $vulnsAsOf = ! empty($security['vulnerabilities_as_of'])
-        ? \Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j')
-        : null;
-    $showBackups = isset($data['backups']) && ! empty($backups['verified']);
+    // The Companion snapshot date: when we looked, often just after the period.
+    $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
+    $showBackups = $sections['backups'];
+    $backupDestination = \Modules\ClientReports\Support\ReportPhrases::backupDestination($backups);
     $backupKindLabel = fn (array $kinds) => match (true) {
         in_array('full', $kinds, true), in_array('fs', $kinds, true) && in_array('db', $kinds, true) => 'Files & database',
         in_array('db', $kinds, true) => 'Database',
         default => 'Files',
     };
-    $outageWhen = fn (array $o) => (! empty($o['started_before_period']) ? 'Down since before ' : 'Down ').\Illuminate\Support\Carbon::parse($o['started_at'])->format('M j, g:i A').' UTC'.(! empty($o['ongoing']) ? ' (still down at period end)' : '');
+    $outageWhen = fn (array $o) => \Modules\ClientReports\Support\ReportPhrases::outageStart($o).(! empty($o['ongoing']) ? ' (still down at period end)' : '');
     $outageLength = fn (int $m) => $m < 1 ? '<1 min' : ($m >= 60 ? floor($m / 60).'h '.($m % 60).'m' : $m.' min');
     $formatBytes = fn (int $b) => $b >= 1024 ** 3 ? number_format($b / 1024 ** 3, 1).' GB' : ($b >= 1024 ** 2 ? number_format($b / 1024 ** 2, 0).' MB' : number_format(max(1, $b / 1024), 0).' KB');
 
@@ -102,11 +100,11 @@
     $compact = fn ($n) => $n >= 1000000 ? rtrim(rtrim(number_format($n / 1000000, 1), '0'), '.').'M'
         : ($n >= 10000 ? rtrim(rtrim(number_format($n / 1000, 1), '0'), '.').'K' : number_format($n));
     $tiles = [];
-    if (isset($data['updates'])) $tiles[] = [$updateCount, 'Updates applied', $ink];
+    if ($sections['updates']) $tiles[] = [$updateCount, 'Updates applied', $ink];
     if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $good];
-    if (isset($data['security'])) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
+    if ($sections['security']) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
     if ($showTraffic) $tiles[] = [$compact((int) ($traffic['total_visits'] ?? 0)), 'Visits', $ink];
-    elseif (isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
+    elseif ($sections['security'] && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
     $tiles = array_slice($tiles, 0, 4);
 @endphp
 <!DOCTYPE html>
@@ -179,7 +177,7 @@
     @endif
 
     {{-- Updates --}}
-    @if (isset($data['updates']))
+    @if ($sections['updates'])
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Updates applied</div>
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">Keeping WordPress, themes and plugins current closes known security holes and keeps everything compatible.</p>
@@ -231,7 +229,7 @@
     @endif
 
     {{-- Security --}}
-    @if (isset($data['security']))
+    @if ($sections['security'])
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Security</div>
             {{-- Only claim blocking where something on the site reports its blocks to us. --}}
@@ -248,7 +246,11 @@
                 @if ($isWordPress)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
                 @endif
-                <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
+                <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsCheckedOn)<span style="font-size:11px; color:#94a3b8;">(checked {{ $vulnsCheckedOn }})</span>@endif
+                    @if ($vulnPluginNames !== [])
+                        <div style="font-size:12px; color:{{ $muted }}; margin-top:2px; line-height:1.45;">{{ \Illuminate\Support\Str::plural('Plugin', count($vulnPluginNames)) }} affected: {{ implode(', ', $vulnPluginNames) }}</div>
+                    @endif
+                </td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
                 @if ($showBlocked)
                     <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) $security['blocked_threats_count']) }}</td></tr>
                 @endif
@@ -323,9 +325,9 @@
                 @php $backupDays = (int) ($backups['days_with_backups'] ?? 0); @endphp
                 <p style="margin:10px 0 12px 0; font-size:14px; line-height:1.6; color:#334155;">
                     @if ($backups['covers_period'] ?? true)
-                        Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                        Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ $backupDestination ? ' '.$backupDestination : '' }}, so it can be restored if anything goes wrong.
                     @else
-                        Your site is backed up{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                        Your site is backed up{{ $backupDestination ? ' '.$backupDestination : '' }}, so it can be restored if anything goes wrong.
                     @endif
                 </p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
