@@ -3,6 +3,7 @@
 use App\Models\ContactFormTest;
 use App\Models\Site;
 use App\Services\Forms\ContactFormTester;
+use Illuminate\Support\Carbon;
 
 /*
 |--------------------------------------------------------------------------
@@ -166,6 +167,50 @@ describe('clockwork:test-contact-forms — row selection', function () {
         });
 
         $this->artisan('clockwork:test-contact-forms')->assertSuccessful();
+    });
+
+    it('treats rows as due when the previous run finished later in the day than this run starts', function () {
+        // Regression: the scheduled run starts at a fixed time but
+        // last_test_at is stamped a few minutes later when each test
+        // finishes. A strict 24h / 7d cutoff skipped these rows.
+        $this->travelTo(Carbon::parse('2026-03-10 06:05:00', 'UTC'));
+
+        $site = Site::factory()->create(['care_plan_enabled' => true]);
+
+        $daily = ContactFormTest::factory()->create([
+            'site_id' => $site->id,
+            'slot' => 1,
+            'frequency' => ContactFormTest::FREQUENCY_DAILY,
+            'last_test_at' => Carbon::parse('2026-03-09 06:12:00', 'UTC'),
+        ]);
+        $weekly = ContactFormTest::factory()->create([
+            'site_id' => $site->id,
+            'slot' => 2,
+            'frequency' => ContactFormTest::FREQUENCY_WEEKLY,
+            'last_test_at' => Carbon::parse('2026-03-03 06:12:00', 'UTC'),
+        ]);
+        // The grace window must not turn weekly into every six days.
+        ContactFormTest::factory()->create([
+            'site_id' => $site->id,
+            'slot' => 3,
+            'frequency' => ContactFormTest::FREQUENCY_WEEKLY,
+            'last_test_at' => Carbon::parse('2026-03-04 06:12:00', 'UTC'),
+        ]);
+
+        $this->mock(ContactFormTester::class, function ($mock) use ($daily, $weekly) {
+            $mock->shouldReceive('test')
+                ->once()
+                ->withArgs(fn (ContactFormTest $t) => $t->is($daily))
+                ->andReturn(['result' => ContactFormTester::RESULT_SUCCESS, 'message' => 'ok']);
+            $mock->shouldReceive('test')
+                ->once()
+                ->withArgs(fn (ContactFormTest $t) => $t->is($weekly))
+                ->andReturn(['result' => ContactFormTester::RESULT_SUCCESS, 'message' => 'ok']);
+        });
+
+        $this->artisan('clockwork:test-contact-forms')
+            ->expectsOutputToContain('passed=2, failed=0, skipped=0, transitions=0')
+            ->assertSuccessful();
     });
 
     it('--force bypasses the due filter for an otherwise-fresh row', function () {
