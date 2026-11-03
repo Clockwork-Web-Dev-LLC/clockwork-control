@@ -416,9 +416,16 @@
                 @endif
             </div>
         @elseif (isset($hiddenNotes['backups']))
+            @php
+                // Our relay's own failure (internal: never on the public view).
+                $relayError = ! empty($backups['relay_failing_since']) && ! empty($backups['relay_error'])
+                    ? 'Last relay error: '.$backups['relay_error']
+                    : null;
+            @endphp
             @include('client-reports::reports._hidden-note', [
                 'note' => $hiddenNotes['backups'],
-                'detail' => ! empty($backups['check_error']) ? 'Last check failed: '.$backups['check_error'] : null,
+                'badge' => ($backups['status'] ?? null) === 'failing' ? 'Failing' : null,
+                'detail' => $relayError ?? (! empty($backups['check_error']) ? 'Last check failed: '.$backups['check_error'] : null),
             ])
         @endif
 

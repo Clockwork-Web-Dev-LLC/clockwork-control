@@ -451,6 +451,103 @@ describe('backups (#6)', function () {
     });
 });
 
+describe('backups from our relay that keeps failing', function () {
+    /** A standalone site whose off-site backups come from our relay (S3 archives). */
+    function failingRelaySite(array $attributes = []): Site
+    {
+        return accuracySite(array_merge([
+            'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'backup_relay_enabled' => true,
+        ], $attributes));
+    }
+
+    function failingRelayArchive(Site $site, string $at): void
+    {
+        SiteBackup::create([
+            'site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'kind' => SiteBackup::KIND_FULL,
+            'external_ref' => 'archive-'.$at, 'backup_at' => Carbon::parse($at), 'bytes' => 80 * 1024 ** 2,
+            'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+        ]);
+    }
+
+    it('reports "failing" with the relay\'s error, hidden from the client and held for review', function () {
+        $site = failingRelaySite([
+            'backup_relay_failing_since' => Carbon::parse('2026-09-20 05:10:00'),
+            'backup_relay_last_attempt_at' => Carbon::parse('2026-10-02 05:10:00'),
+            'backup_relay_last_error' => "BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz?X-Amz-Signature=abc123&X-Amz-Credential=key failed\n with HTTP 403",
+        ]);
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+        $backups = $report['data']['backups'];
+
+        expect($backups)->toMatchArray([
+            'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'status' => 'failing', 'verified' => false, 'days_with_backups' => 0,
+            'relay_failing_since' => '2026-09-20T05:10:00+00:00',
+            'relay_error' => 'BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz failed with HTTP 403',
+        ])
+            ->and(json_encode($report['data']))->not->toContain('X-Amz')->not->toContain('abc123')
+            ->and($report['reasons'])->toContain('Off-site backups have been failing since Sep 20, 2026: BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz failed with HTTP 403.')
+            ->and($report['html'])->not->toContain('backed up')->not->toContain('BackupRelay')
+            ->and($report['text'])->not->toContain('BACKUPS')->not->toContain('BackupRelay')
+            ->and($report['preview'])->toContain('Backups hidden from the client: no off-site archive this period; the backup relay has been failing since Sep 20, 2026.')
+            ->toContain('>Failing</span>')
+            ->toContain('Last relay error: BackupRelay: example.com')
+            ->and($report['public'])->not->toContain('Failing')->not->toContain('BackupRelay')->not->toContain('Backups');
+    });
+
+    it('keeps no more than about 200 characters of the error', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-01 05:00:00'), 'backup_relay_last_error' => str_repeat('Connection reset by peer. ', 40)]);
+
+        $error = compileSeptember($site)['data']['backups']['relay_error'];
+
+        expect(mb_strlen($error))->toBeLessThanOrEqual(ClientReportCompiler::RELAY_ERROR_MAX_LENGTH + 3)
+            ->and($error)->toStartWith('Connection reset by peer.')->toEndWith('...');
+    });
+
+    it('says nothing about a relay that only started failing after the period', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-10-02 05:00:00'), 'backup_relay_last_error' => 'Example timeout']);
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'none_found', 'relay_failing_since' => null, 'relay_error' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('failing');
+    });
+
+    it('names the failure when relay archives stopped part-way through the period', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-12 05:00:00'), 'backup_relay_last_error' => 'Example lacks the backup-create capability.']);
+        foreach (range(1, 11) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups']['status'])->toBe('stale')
+            ->and($report['reasons'])->toContain('Backups stopped before the last 10 days of the month. Off-site backups have been failing since Sep 12, 2026: Example lacks the backup-create capability.');
+    });
+
+    it('still shows archives made in the last days of the period, even if the relay fails now', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-30 05:00:00'), 'backup_relay_last_error' => 'Example timeout']);
+        foreach (range(1, 29) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+        failingRelayArchive($site, '2026-08-31 05:00:00');
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'verified' => true, 'days_with_backups' => 29])
+            ->and(implode(' ', $report['reasons']))->not->toContain('failing');
+    });
+
+    it('ignores relay state on a site whose backups come from its host', function () {
+        $site = pressableBackupSite();
+        $site->update(['backup_relay_failing_since' => Carbon::parse('2026-09-05'), 'backup_relay_last_error' => 'Example timeout']);
+        recordCheck($site, true);
+
+        expect(compileSeptember($site->fresh())['data']['backups'])->toMatchArray(['status' => 'none_found', 'relay_failing_since' => null]);
+    });
+});
+
 describe('WordPress core file check (#5)', function () {
     it('reports "Not checked" instead of "Ok" when no checksum scan ran in the period', function () {
         $site = accuracySite();

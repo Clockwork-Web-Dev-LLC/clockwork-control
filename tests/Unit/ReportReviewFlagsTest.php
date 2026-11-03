@@ -197,6 +197,30 @@ describe('backups', function () {
             ->and(ReportReviewFlags::reasons(['backups' => ['covers_period' => false] + $backups]))->toBe([])
             ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'verified', 'covers_period' => true, 'days_with_backups' => 3]]))->toBe([]);
     });
+
+    it('holds off-site backups that have been failing, with when it began and the error', function () {
+        $failing = ['status' => 'failing', 'verified' => false, 'relay_failing_since' => '2026-10-03T12:00:00+00:00'];
+
+        expect(ReportReviewFlags::reasons(['backups' => $failing + ['relay_error' => 'Upload to storage failed with HTTP 403']]))
+            ->toBe(['Off-site backups have been failing since Oct 3, 2026: Upload to storage failed with HTTP 403.'])
+            ->and(ReportReviewFlags::reasons(['backups' => $failing + ['relay_error' => null]]))
+            ->toBe(['Off-site backups have been failing since Oct 3, 2026.'])
+            ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'failing']]))
+            ->toBe(['Off-site backups were failing at the end of the month.'])
+            // Archives that stopped part-way: the stale reason says why.
+            ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'stale', 'relay_failing_since' => '2026-10-03T12:00:00+00:00', 'relay_error' => 'Example timeout.']]))
+            ->toBe(['Backups stopped before the last 10 days of the month. Off-site backups have been failing since Oct 3, 2026: Example timeout.']);
+    });
+
+    it('never repeats a URL query string from the relay error', function () {
+        $reasons = ReportReviewFlags::reasons(['backups' => [
+            'status' => 'failing', 'relay_failing_since' => '2026-10-03T12:00:00+00:00',
+            'relay_error' => 'PUT s3://example-bucket/site.tar.gz?X-Amz-Signature=abc123 and https://storage.example.com/a.zip?token=def456#frag failed',
+        ]]);
+
+        expect($reasons)->toBe(['Off-site backups have been failing since Oct 3, 2026: PUT s3://example-bucket/site.tar.gz and https://storage.example.com/a.zip failed.'])
+            ->and(implode(' ', $reasons))->not->toContain('abc123')->not->toContain('def456');
+    });
 });
 
 describe('traffic', function () {

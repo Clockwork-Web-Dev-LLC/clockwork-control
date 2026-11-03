@@ -50,6 +50,23 @@ final class ReportPhrases
     }
 
     /**
+     * "Oct 3, 2026": a stored time's date in the report timezone, or null
+     * when there's no (readable) time.
+     */
+    public static function date(mixed $at): ?string
+    {
+        if (! is_string($at) || trim($at) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($at)->setTimezone(self::timezone())->format('M j, Y');
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * "Oct 19": the day monitoring of the site began, in the report timezone,
      * from meta.coverage_start or uptime.monitored_since. Null when it
      * covered the whole period, and for reports compiled before it was kept.

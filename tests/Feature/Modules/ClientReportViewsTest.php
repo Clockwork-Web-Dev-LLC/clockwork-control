@@ -488,3 +488,21 @@ describe('implausibly small backups', function () {
             ->and($views['public'])->not->toContain('Backups');
     });
 });
+
+describe('off-site backups that keep failing', function () {
+    it('shows the operator a Failing badge and the relay error, and the client nothing', function () {
+        $views = renderReportViews(viewsReport(['backups' => [
+            'verified' => false, 'status' => 'failing', 'source' => 's3_archive', 'days_with_backups' => 0, 'recent' => [],
+            'relay_failing_since' => '2026-09-14T12:00:00+00:00', 'relay_error' => 'Example upload failed with HTTP 403',
+        ]]));
+
+        expect($views['preview'])
+            ->toMatch(hiddenNotePattern('Backups hidden from the client: no off-site archive this period; the backup relay has been failing since Sep 14, 2026.'))
+            ->toMatch('/<span class="[^"]*bg-red-100[^"]*">Failing<\/span>/')
+            ->toContain('Last relay error: Example upload failed with HTTP 403')
+            ->not->toContain('Backups &amp; Recovery')
+            ->and($views['html'])->not->toContain('backed up')->not->toContain('Example upload failed')
+            ->and($views['text'])->not->toContain('BACKUPS')->not->toContain('Example upload failed')
+            ->and($views['public'])->not->toContain('Failing')->not->toContain('Example upload failed')->not->toContain('Backups');
+    });
+});

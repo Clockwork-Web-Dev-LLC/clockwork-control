@@ -20,6 +20,7 @@ use App\Models\SiteWorkLog;
 use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\PluginVulnerabilityMatcher;
+use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Modules\ClientReports\Support\ReportPhrases;
@@ -57,6 +58,9 @@ class ClientReportCompiler
     public const BACKUP_MIN_DB_BYTES = 100 * 1024;
 
     public const BACKUP_SIZEABLE_DB_BYTES = 10 * 1024 * 1024;
+
+    /** How much of the backup relay's last error a report keeps. */
+    public const RELAY_ERROR_MAX_LENGTH = 200;
 
     /**
      * The period's last day of traffic counts as complete only once its row
@@ -1024,7 +1028,9 @@ class ClientReportCompiler
      * if we saw it; "none found" and "couldn't check" are kept apart so the
      * preview can flag them, and neither is shown to the client. Nor are
      * database backups far smaller than the database ('suspect'): a source
-     * can list an empty or failed dump every day.
+     * can list an empty or failed dump every day. A relay site with no
+     * archive in the period whose relay was already failing by its end is
+     * 'failing', with the relay's error kept for the operator.
      */
     protected function compileBackups(Site $site, Carbon $start, Carbon $end): array
     {
@@ -1090,12 +1096,19 @@ class ClientReportCompiler
             && in_array($b->kind, [SiteBackup::KIND_DATABASE, SiteBackup::KIND_FULL], true));
         $dbBackupTooSmall = $dbSize !== null && $dbBackup !== null && self::backupTooSmall((int) $dbBackup->bytes, $dbSize);
 
+        // Our own relay keeps its failure streak on the site row: when it was
+        // already failing by the end of the period, that's why there's
+        // nothing (or nothing recent) to show.
+        $relayFailure = $source === SiteBackup::SOURCE_S3_ARCHIVE ? self::relayFailure($site, $end) : null;
+
         $status = match (true) {
             $source === null => 'no_source',
             // Backups that stopped before the last 10 days are a problem to
             // look at, not something to show the client as fine.
             $recent->isNotEmpty() => $dbBackupTooSmall ? 'suspect' : 'verified',
             $days->isNotEmpty() => 'stale',
+            // No archive at all in the period, and the relay says why.
+            $relayFailure !== null => 'failing',
             $checkIsCurrent => 'none_found',
             default => 'not_checked',
         };
@@ -1129,7 +1142,53 @@ class ClientReportCompiler
             // Internal: the newest database backup's size against the database's.
             'db_backup_bytes' => $dbBackup?->bytes,
             'db_size_bytes' => $dbSize,
+            // Internal: when our relay's current failure streak began, if that
+            // was by the end of the period, and its last error (trimmed, URLs
+            // without query strings). For the review flags and the preview.
+            'relay_failing_since' => $relayFailure['since'] ?? null,
+            'relay_error' => $relayFailure['error'] ?? null,
         ];
+    }
+
+    /**
+     * The backup relay's current failure streak, when it began on or before
+     * the period end (a streak that began later says nothing about the
+     * period). A successful archive clears it, so this is the state now.
+     *
+     * @return ?array{since: string, error: ?string}
+     */
+    protected static function relayFailure(Site $site, Carbon $end): ?array
+    {
+        $since = $site->backup_relay_failing_since;
+        if ($since === null || $since->greaterThan($end)) {
+            return null;
+        }
+
+        return [
+            'since' => $since->toIso8601String(),
+            'error' => self::relayErrorSummary($site->backup_relay_last_error),
+        ];
+    }
+
+    /**
+     * A relay error short enough for a review reason. The recorder stores
+     * what the archive attempt threw; a signed storage URL can carry
+     * credentials in its query string, so query strings and fragments are
+     * stripped from every URL (and secrets masked) before it's kept here.
+     */
+    public static function relayErrorSummary(?string $error): ?string
+    {
+        $error = trim((string) $error);
+        if ($error === '') {
+            return null;
+        }
+
+        $error = UpgraderOutput::redactText($error);
+        // redactText only knows http(s)/ftp URLs; any scheme loses its query.
+        $error = preg_replace('~\b([a-z][a-z0-9+.\-]*://[^\s?#]*)[?#]\S*~i', '$1', $error) ?? '';
+        $error = trim(preg_replace('/\s+/u', ' ', $error) ?? '');
+
+        return $error === '' ? null : Str::limit($error, self::RELAY_ERROR_MAX_LENGTH);
     }
 
     /** A database backup this much smaller than the database is empty or broken. */

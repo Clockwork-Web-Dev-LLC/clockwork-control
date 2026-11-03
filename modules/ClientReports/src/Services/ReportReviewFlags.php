@@ -113,8 +113,9 @@ class ReportReviewFlags
 
     /**
      * Backups the client won't see (none, stopped, unchecked, implausibly
-     * small), and a daily source that backed up on far fewer days than the
-     * period had, which the client would read as "backed up on 12 days".
+     * small, or our relay failing, with its error), and a daily source that
+     * backed up on far fewer days than the period had, which the client
+     * would read as "backed up on 12 days".
      *
      * @param  array<string, mixed>  $backups
      * @return list<string>
@@ -122,10 +123,12 @@ class ReportReviewFlags
     private static function backupReasons(array $backups): array
     {
         $status = $backups['status'] ?? null;
+        $relayFailing = self::relayFailing($backups);
 
         $reason = match ($status) {
             'none_found' => 'No backups were found this month.',
-            'stale' => 'Backups stopped before the last 10 days of the month.',
+            'stale' => 'Backups stopped before the last 10 days of the month.'.($relayFailing !== null ? ' '.$relayFailing : ''),
+            'failing' => $relayFailing ?? 'Off-site backups were failing at the end of the month.',
             'not_checked' => 'Backups could not be checked.',
             'suspect' => is_numeric($backups['db_backup_bytes'] ?? null) && is_numeric($backups['db_size_bytes'] ?? null)
                 ? 'Database backups are '.ReportPhrases::bytes((int) $backups['db_backup_bytes'])
@@ -146,6 +149,30 @@ class ReportReviewFlags
         }
 
         return [];
+    }
+
+    /**
+     * "Off-site backups have been failing since Oct 3, 2026: <error>", from
+     * the relay's failure streak the compiler kept, or null when there was
+     * none by the end of the period. The error was already trimmed and
+     * stripped of URL query strings at compile time; it's re-checked here
+     * because this text is shown wherever the review reasons are.
+     *
+     * @param  array<string, mixed>  $backups
+     */
+    private static function relayFailing(array $backups): ?string
+    {
+        $since = ReportPhrases::date($backups['relay_failing_since'] ?? null);
+        if ($since === null) {
+            return null;
+        }
+
+        $error = ClientReportCompiler::relayErrorSummary(is_string($backups['relay_error'] ?? null) ? $backups['relay_error'] : null);
+        if ($error === null) {
+            return "Off-site backups have been failing since {$since}.";
+        }
+
+        return "Off-site backups have been failing since {$since}: {$error}".(preg_match('/[.!?…]$/u', $error) ? '' : '.');
     }
 
     /**
