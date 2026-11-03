@@ -118,7 +118,11 @@ describe('malware', function () {
         ]]))->toBe(['The latest malware scan (scan #5) stopped before it finished (limit: max_wall_seconds, 1,200 files checked), so the client sees "Partial scan" instead of an all-clear.'])
             ->and(ReportReviewFlags::reasons(['security' => [
                 'malware_status' => 'incomplete', 'malware_scan_id' => 6, 'malware_transport' => 'ssh', 'malware_scan_aborted' => false,
-            ]]))->toBe(['The latest malware scan (scan #6) ran over SSH before scans recorded whether they were cut short; it can\'t vouch for the whole site, so the client sees "Partial scan" instead of an all-clear.'])
+            ]]))->toBe(['The latest malware scan (scan #6) ran over SSH before scans recorded whether every check finished; it can\'t vouch for the whole site, so the client sees "Partial scan" instead of an all-clear.'])
+            ->and(ReportReviewFlags::reasons(['security' => [
+                'malware_status' => 'incomplete', 'malware_scan_id' => 7, 'malware_transport' => 'ssh', 'malware_scan_aborted' => true,
+                'malware_abort_reason' => 'ssh_check_incomplete', 'malware_incomplete_checks' => ['shell_wso'],
+            ]]))->toBe(['The latest malware scan (scan #7) ran over SSH and some checks didn\'t finish (shell_wso); they timed out or were cut off, so they can\'t vouch for the files they didn\'t list, so the client sees "Partial scan" instead of an all-clear.'])
             ->and(ReportReviewFlags::reasons(['security' => [
                 'malware_status' => 'incomplete', 'malware_scan_id' => 8, 'malware_transport' => 'ssh', 'malware_scan_aborted' => true,
                 'malware_abort_reason' => 'ssh_result_limit', 'malware_truncated_checks' => ['php_in_uploads', 'shell_c99'],

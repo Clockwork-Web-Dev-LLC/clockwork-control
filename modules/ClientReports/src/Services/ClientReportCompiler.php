@@ -649,6 +649,14 @@ class ClientReportCompiler
             'malware_truncated_checks' => $malwareDetails !== null && is_array($malwareDetails['truncated_checks'] ?? null)
                 ? array_values(array_filter($malwareDetails['truncated_checks'], 'is_string'))
                 : null,
+            // The SSH checks that didn't finish (timed out or cut off), and
+            // whether every check proved it finished; null when not recorded.
+            'malware_incomplete_checks' => $malwareDetails !== null && is_array($malwareDetails['incomplete_checks'] ?? null)
+                ? array_values(array_filter($malwareDetails['incomplete_checks'], 'is_string'))
+                : null,
+            'malware_ssh_checks_verified' => $malwareDetails !== null && array_key_exists('ssh_checks_verified', $malwareDetails)
+                ? (bool) $malwareDetails['ssh_checks_verified']
+                : null,
             // The worst any Companion scan in the period found, and when one
             // last found malware, so a month that started infected doesn't
             // go out as clean on the strength of its last scan.
@@ -690,13 +698,14 @@ class ClientReportCompiler
      * counts as flagged.
      *
      * An SSH scan never knows how many files it read (scanned_files_count is
-     * always 0), so that count says nothing. Its checks do cap their output,
-     * and since the scanner learned to notice a cap being hit it stores
-     * truncated_checks on every SSH scan (empty when none was). Older SSH
-     * rows have no truncated_checks and always said scan_aborted=false
-     * whether or not a check was cut short, so a clean one can't vouch for
-     * the whole site: those stay "incomplete". That's the safe reading for a
-     * report, and it only touches scans recorded before the change.
+     * always 0), so that count says nothing. Its checks can also run out of
+     * time, or stop at an odd file name, and still come back looking clean.
+     * Since the scanner makes every check prove it finished, it stores
+     * ssh_checks_verified on SSH scans; only a clean SSH scan with that set
+     * is complete. Older SSH rows (with or without truncated_checks) can't
+     * vouch for the whole site: those stay "incomplete". That's the safe
+     * reading for a report, and it only touches scans recorded before the
+     * change.
      *
      * @param  ?array<string, mixed>  $details
      */
@@ -704,7 +713,7 @@ class ClientReportCompiler
     {
         if ($scan?->status === SiteSecurityScan::STATUS_CLEAN && $details !== null) {
             $partial = ! empty($details['scan_aborted'])
-                || (($details['transport'] ?? null) === 'ssh' && ! array_key_exists('truncated_checks', $details));
+                || (($details['transport'] ?? null) === 'ssh' && empty($details['ssh_checks_verified']));
 
             if ($partial) {
                 return self::MALWARE_INCOMPLETE;

@@ -84,7 +84,7 @@ Match whatever sentinel/exit-code convention the real caller expects — read th
 
 **Service-class collaborators** (anything injected via the constructor, e.g. `ChatNotifier`, `Fail2banClient`, `CompanionInstaller`, a provider's own `*Client`) — `$this->mock(ClassName::class, fn ($mock) => $mock->shouldReceive('method')->once()->with(...)->andReturn(...))`. This is the single most common pattern in the suite. Always assert both directions where relevant: `->once()` (or `->times(N)`) for "this must fire," `->never()` (or `shouldNotReceive(...)`) for "this must NOT fire under this condition" — a test that only checks the happy path can't catch a regression that makes something fire unconditionally.
 
-**Filesystem** — `Storage::fake('disk-name')` for anything going through Laravel's Storage/Flysystem abstraction (e.g. DigitalOcean Spaces). Real temp-directory writes are fine for a check whose entire job is confirming real filesystem access works (`StorageWritableCheck`) — don't mock the thing you're testing.
+**Filesystem** — `Storage::fake('disk-name')` for anything going through Laravel's Storage/Flysystem abstraction (e.g. DigitalOcean Spaces). Real temp-directory writes are fine for a check whose entire job is confirming real filesystem access works (`StorageWritableCheck`) — don't mock the thing you're testing. The same goes for a shell command whose quoting is the thing under test: `CompanionMalwareScannerTest` runs the SSH uploads check's command in a local `/bin/sh` over a temp directory (no SSH, no network), because only a real shell shows that an odd file name can't stop it.
 
 ## Testing an Artisan command
 
