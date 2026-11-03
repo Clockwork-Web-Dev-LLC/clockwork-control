@@ -15,6 +15,9 @@ use App\Models\SiteSecurityScan;
 use App\Models\SiteUptimeEvent;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Security\CompanionMalwareScanner;
+use App\Services\Security\SecurityScanRecorder;
+use App\Services\Ssh\SshClient;
 use App\Services\Uptime\UptimeProbeResult;
 use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Support\Carbon;
@@ -661,15 +664,56 @@ describe('malware scan', function () {
             ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) stopped before it finished (limit: max_files_visited, 75,000 files checked), so the client sees \"Partial scan\" instead of an all-clear.");
     });
 
-    it('treats a clean SSH scan, which can\'t say how many files it covered, as partial', function () {
+    it('counts a clean SSH scan that wasn\'t cut short as complete, although SSH never counts files', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['transport' => 'ssh', 'scanned_files_count' => 0, 'truncated_checks' => []]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'clean', 'malware_transport' => 'ssh', 'malware_truncated_checks' => []])
+            ->and($report['html'])->toContain('No malware found')
+            ->and($report['text'])->not->toContain('Partial scan')
+            ->and(implode(' ', $report['reasons']))->not->toContain('malware');
+    });
+
+    it('says "Partial scan" for a clean SSH scan that hit its result limit', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], [
+            'transport' => 'ssh', 'scanned_files_count' => 0, 'scan_aborted' => true, 'abort_reason' => 'ssh_result_limit', 'truncated_checks' => ['php_in_uploads'],
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_truncated_checks' => ['php_in_uploads']])
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH and hit its result limit (php_in_uploads); files past the limit were not checked, so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('keeps an SSH scan recorded before cut-short scans were noticed as partial', function () {
+        // Those rows always said scan_aborted=false and have no truncated_checks.
         $site = accuracySite();
         $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['transport' => 'ssh', 'scanned_files_count' => 0]);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['security']['malware_status'])->toBe('incomplete')
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_truncated_checks' => null])
             ->and($report['text'])->toContain('Malware scan: Partial scan')
-            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH, which can't say how many files it covered, so the client sees \"Partial scan\" instead of an all-clear.");
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH before scans recorded whether they were cut short; it can't vouch for the whole site, so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('reads a real SSH scan of a SpinupWP-style server as complete in the next report', function () {
+        // End to end: the scanner's own SSH result, recorded, then compiled.
+        $server = Server::factory()->create(['ssh_password' => 'not-empty']);
+        $site = accuracySite(['server_id' => $server->id, 'companion_installed' => false, 'companion_secret' => null, 'wp_path' => '/sites/ssh.example.com/files']);
+        $this->mock(SshClient::class, fn ($mock) => $mock->shouldReceive('exec')->andReturn(''));
+        $this->travelTo(Carbon::parse('2026-09-28 06:00:00'));
+        app(SecurityScanRecorder::class)->record(app(CompanionMalwareScanner::class)->scanSite($site));
+        $this->travelBack();
+
+        $scan = SiteSecurityScan::query()->where('site_id', $site->id)->where('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)->sole();
+        expect($scan->details)->toMatchArray(['transport' => 'ssh', 'scan_aborted' => false, 'truncated_checks' => []]);
+
+        expect(compileSeptember($site)['data']['security']['malware_status'])->toBe('clean');
     });
 
     it('keeps a finished clean scan as "No malware found", and a partial scan that flagged files as flagged', function () {

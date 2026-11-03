@@ -220,8 +220,17 @@ class ReportReviewFlags
     {
         $outcome = ', so the client sees "Partial scan" instead of an all-clear.';
 
-        if (empty($security['malware_scan_aborted']) && ($security['malware_transport'] ?? null) === 'ssh') {
-            return "The latest malware scan{$scan} ran over SSH, which can't say how many files it covered{$outcome}";
+        if (($security['malware_transport'] ?? null) === 'ssh') {
+            // A complete SSH scan isn't partial, so one that didn't stop early
+            // was recorded before SSH scans noticed being cut short.
+            if (empty($security['malware_scan_aborted'])) {
+                return "The latest malware scan{$scan} ran over SSH before scans recorded whether they were cut short; it can't vouch for the whole site{$outcome}";
+            }
+
+            $checks = array_values(array_filter((array) ($security['malware_truncated_checks'] ?? []), fn ($c) => is_string($c) && $c !== ''));
+
+            return "The latest malware scan{$scan} ran over SSH and hit its result limit".($checks !== [] ? ' ('.implode(', ', $checks).')' : '')
+                .'; files past the limit were not checked'.$outcome;
         }
 
         $files = (int) ($security['malware_scanned_files'] ?? 0);

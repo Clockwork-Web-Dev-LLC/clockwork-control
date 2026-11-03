@@ -33,7 +33,8 @@ class ClientReportCompiler
 
     /**
      * security.malware_status for a clean scan that didn't cover the whole
-     * site (stopped at a limit, or run over SSH). Shown as "Partial scan".
+     * site (stopped at a limit, or an SSH scan cut short or recorded before
+     * that could be told). Shown as "Partial scan".
      */
     public const MALWARE_INCOMPLETE = 'incomplete';
 
@@ -586,6 +587,11 @@ class ClientReportCompiler
             'malware_scan_aborted' => $malwareDetails !== null && ! empty($malwareDetails['scan_aborted']),
             'malware_abort_reason' => $malwareDetails !== null ? ($malwareDetails['abort_reason'] ?? null) : null,
             'malware_scanned_files' => $malwareDetails !== null && isset($malwareDetails['scanned_files_count']) ? (int) $malwareDetails['scanned_files_count'] : null,
+            // The SSH checks that hit their result cap; null when the scan
+            // didn't record them (Companion, or an SSH scan from before).
+            'malware_truncated_checks' => $malwareDetails !== null && is_array($malwareDetails['truncated_checks'] ?? null)
+                ? array_values(array_filter($malwareDetails['truncated_checks'], 'is_string'))
+                : null,
             // The worst any Companion scan in the period found, and when one
             // last found malware, so a month that started infected doesn't
             // go out as clean on the strength of its last scan.
@@ -622,9 +628,18 @@ class ClientReportCompiler
     /**
      * The scan's status, except that a clean result from a scan that didn't
      * cover the whole site is "incomplete", never "clean": Companion stopped
-     * at its file or time limit, or it ran over SSH, whose output is capped
-     * and which can't say how many files it covered. A partial scan that
-     * found something still counts as flagged.
+     * at its file or time limit, or an SSH check hit its result cap
+     * (scan_aborted, either way). A partial scan that found something still
+     * counts as flagged.
+     *
+     * An SSH scan never knows how many files it read (scanned_files_count is
+     * always 0), so that count says nothing. Its checks do cap their output,
+     * and since the scanner learned to notice a cap being hit it stores
+     * truncated_checks on every SSH scan (empty when none was). Older SSH
+     * rows have no truncated_checks and always said scan_aborted=false
+     * whether or not a check was cut short, so a clean one can't vouch for
+     * the whole site: those stay "incomplete". That's the safe reading for a
+     * report, and it only touches scans recorded before the change.
      *
      * @param  ?array<string, mixed>  $details
      */
@@ -632,7 +647,7 @@ class ClientReportCompiler
     {
         if ($scan?->status === SiteSecurityScan::STATUS_CLEAN && $details !== null) {
             $partial = ! empty($details['scan_aborted'])
-                || (($details['transport'] ?? null) === 'ssh' && (int) ($details['scanned_files_count'] ?? 0) === 0);
+                || (($details['transport'] ?? null) === 'ssh' && ! array_key_exists('truncated_checks', $details));
 
             if ($partial) {
                 return self::MALWARE_INCOMPLETE;
