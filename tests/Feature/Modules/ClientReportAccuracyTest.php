@@ -1242,6 +1242,110 @@ describe('uptime', function () {
         ]);
     });
 
+    describe('the monitor\'s probe_blocked events', function () {
+        it('never counts a probe_blocked stretch as downtime', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-12 08:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-12 20:00:00', status: 200);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'uptime_percentage' => 100, 'outages' => [],
+                'probe_blocked_minutes' => 720, 'probe_blocked_since' => null,
+            ])
+                ->and($report['html'])->not->toContain('Down Sep 12')
+                ->and(implode(' ', $report['reasons']))->not->toContain('down')->not->toContain('HTTP 429');
+        });
+
+        it('ends an outage where the site starts answering 429, and counts the block apart (down → probe_blocked → up)', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-15 10:00:00', status: 502);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-15 10:40:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-15 14:40:00', status: 200);
+
+            $uptime = compileSeptember($site)['data']['uptime'];
+
+            expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 240, 'probe_blocked_since' => null])
+                ->and($uptime['outages'])->toBe([['started_at' => '2026-09-15T10:00:00+00:00', 'minutes' => 40, 'started_before_period' => false, 'ongoing' => false]]);
+        });
+
+        it('reads the same from events the real uptime state machine wrote', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'down', 'uptime_consecutive_failures' => 2, 'uptime_down_since' => Carbon::parse('2026-09-15 10:00:00')]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-15 10:00:00', status: 502);
+            $chat = $this->mock(ChatNotifier::class);
+            $chat->shouldNotReceive('siteWentUp');
+            $chat->shouldNotReceive('siteWentDown');
+            $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+
+            $this->travelTo(Carbon::parse('2026-09-15 10:40:00'));
+            app(UptimeStateUpdater::class)->update($site, UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)'));
+            $this->travelTo(Carbon::parse('2026-09-15 14:40:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 120));
+            $this->travelBack();
+            $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+            expect(SiteUptimeEvent::where('site_id', $site->id)->orderBy('event_at')->pluck('event_type')->all())
+                ->toBe([SiteUptimeEvent::TYPE_DOWN, SiteUptimeEvent::TYPE_PROBE_BLOCKED, SiteUptimeEvent::TYPE_UP]);
+            expect(compileSeptember($site->fresh())['data']['uptime'])
+                ->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 240, 'probe_blocked_since' => null]);
+        });
+
+        it('says the monitor was blocked, not that the site was down, when a probe_blocked stretch is open at the end of the month', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 18:00:00', status: 503);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 19:40:00', status: 429);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 1, 'downtime_minutes' => 100, 'probe_blocked_minutes' => 260, 'probe_blocked_since' => '2026-09-30T19:40:00+00:00',
+            ])
+                ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeFalse()
+                ->and($report['text'])->not->toContain('still down')
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 30, 3:40 PM EDT; the site was not necessarily down.')
+                ->not->toContain('The site was still down at the end of the month.');
+        });
+
+        it('starts a real outage when a blocked site goes down', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-10 08:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-10 09:00:00', status: 502);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-10 10:00:00', status: 200);
+
+            $uptime = compileSeptember($site)['data']['uptime'];
+
+            expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 60, 'probe_blocked_minutes' => 60])
+                ->and($uptime['outages'][0])->toMatchArray(['started_at' => '2026-09-10T09:00:00+00:00', 'minutes' => 60]);
+        });
+
+        it('carries a probe_blocked stretch in from before the period as blocked', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-08-31 22:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 03:00:00', status: 200);
+
+            expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
+            ]);
+        });
+
+        it('joins a 429 down recorded before the monitor had a blocked state to the probe_blocked event after it', function () {
+            // Deployed mid-block: the old row (down, 429) and the new one
+            // (probe_blocked) are one stretch, which began with the old row.
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-29 06:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 06:00:00', status: 429);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [],
+                'probe_blocked_minutes' => 42 * 60, 'probe_blocked_since' => '2026-09-29T06:00:00+00:00',
+            ])
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 29, 2:00 AM EDT; the site was not necessarily down.');
+        });
+    });
+
     it('leaves uptime out for a site the probe skips, instead of claiming 100%', function () {
         // CheckSiteUptime skips ignored and staging servers, so there are no events to read.
         $site = accuracySite(['uptime_monitoring_enabled' => true, 'server_id' => Server::factory()->ignored()]);

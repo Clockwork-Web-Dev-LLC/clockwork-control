@@ -394,11 +394,16 @@ class ClientReportCompiler
      * can't count as up time.
      *
      * A host that rate-limits the monitor answers HTTP 429. That says the
-     * probe was blocked, not that visitors couldn't reach the site, so a
-     * `down` opened by a 429 is kept out of the downtime and the outages and
-     * counted separately (probe_blocked_minutes, for the operator). Events
-     * only record state changes, so a real outage that began while the probe
-     * was already blocked can't be told apart and is left out with it.
+     * probe was blocked, not that visitors couldn't reach the site, so the
+     * time it was blocked is kept out of the downtime and the outages and
+     * counted separately (probe_blocked_minutes, for the operator). The
+     * monitor records that as a `probe_blocked` event, which runs until the
+     * next event of any other kind; before it had that state it recorded a
+     * `down` with status 429, which is read the same way. A `probe_blocked`
+     * event ends an open outage there (the site answers again; the monitor
+     * just can't see past the block), and a real `down` while blocked starts
+     * an outage. In those older rows a real outage that began while the
+     * probe was already blocked left no event, so it can't be told apart.
      */
     protected function compileUptime(Site $site, Carbon $start, Carbon $end, ?Carbon $coverageStart = null): array
     {
@@ -422,33 +427,51 @@ class ClientReportCompiler
             ->get();
 
         $isCountedDown = fn (SiteUptimeEvent $e) => $e->event_type === SiteUptimeEvent::TYPE_DOWN && ! $e->is_sla_exempt;
-        $isProbeBlocked = fn (SiteUptimeEvent $e) => (int) $e->status_code === self::PROBE_BLOCKED_STATUS;
+        // What an event opens: 'blocked' for a probe_blocked event, or a down
+        // the monitor recorded for a 429 before it had that state; 'down'
+        // for a real outage; null for one that ends whatever was open (up,
+        // maintenance, an SLA-exempt outage).
+        $opens = fn (SiteUptimeEvent $e): ?string => match (true) {
+            $e->event_type === SiteUptimeEvent::TYPE_PROBE_BLOCKED => 'blocked',
+            $isCountedDown($e) => (int) $e->status_code === self::PROBE_BLOCKED_STATUS ? 'blocked' : 'down',
+            default => null,
+        };
 
         // The interval currently open: where it's counted from, when it really
         // began (before the period, for one carried in), and why.
-        $open = $priorEvent !== null && $isCountedDown($priorEvent) ? [
+        $priorOpens = $priorEvent !== null ? $opens($priorEvent) : null;
+        $open = $priorOpens !== null ? [
             'from' => $from->copy(),
             'began' => $priorEvent->event_at->copy(),
             'carried_in' => true,
-            'blocked' => $isProbeBlocked($priorEvent),
+            'blocked' => $priorOpens === 'blocked',
         ] : null;
         $intervals = [];
 
         foreach ($events as $event) {
-            if ($isCountedDown($event)) {
-                $open ??= [
-                    'from' => $event->event_at->copy(),
-                    'began' => $event->event_at->copy(),
-                    'carried_in' => false,
-                    'blocked' => $isProbeBlocked($event),
-                ];
+            $kind = $opens($event);
 
+            // More of the same (a 429 down carried into a probe_blocked
+            // event, say) keeps the interval and when it began.
+            if ($kind !== null && $open !== null && $open['blocked'] === ($kind === 'blocked')) {
                 continue;
             }
 
+            // Anything else ends what was open where it happened: an outage
+            // ends when the site answers again, even if only with a 429, and
+            // a blocked stretch ends at a real outage.
             if ($open !== null) {
                 $intervals[] = [...$open, 'to' => $event->event_at->copy(), 'ongoing' => false];
                 $open = null;
+            }
+
+            if ($kind !== null) {
+                $open = [
+                    'from' => $event->event_at->copy(),
+                    'began' => $event->event_at->copy(),
+                    'carried_in' => false,
+                    'blocked' => $kind === 'blocked',
+                ];
             }
         }
 
