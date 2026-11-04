@@ -2,7 +2,7 @@
 title: Client reports
 section: Features
 order: 101
-updated: 2026-11-03
+updated: 2026-11-04
 author: Aaron Reimann
 tags: [client-reports, reporting, email, care-plans, scheduling, templates]
 tracks: [modules/ClientReports/**]

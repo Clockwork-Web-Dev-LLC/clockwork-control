@@ -2,7 +2,7 @@
 title: Artisan commands
 section: Reference
 order: 50
-updated: 2026-11-03
+updated: 2026-11-04
 author: Aaron Reimann
 tags: [reference, artisan, cli, modules]
 tracks: [app/Console/Commands/**, modules/*/src/Commands/**, modules/*/src/Console/*.php, modules/*/src/Console/Commands/**]
