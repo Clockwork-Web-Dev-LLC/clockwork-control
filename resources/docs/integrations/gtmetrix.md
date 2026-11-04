@@ -2,7 +2,7 @@
 title: GTmetrix
 section: Integrations
 order: 79
-updated: 2026-10-15
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [integrations, performance, lighthouse, gtmetrix, care-plan, pressable]
 tracks: [modules/GTmetrix/src/GtmetrixClient.php, modules/GTmetrix/src/GTmetrixServiceProvider.php, app/Console/Commands/RunPerformanceScans.php]
@@ -83,7 +83,7 @@ Gated on `Settings('performance_scans.enabled')`.
 
 ## Credit budget (why the weekly rotation exists)
 
-API credits refill daily at ~04:27 UTC and **don't accumulate**. To ensure coverage within credit limits, the scheduler passes `--weekly-rotation`: sites ordered by domain, sliced into 7 buckets by `index % 7 == UTC weekday`. Pressable sites aren't in the slices (as of 2026-10-15 they use Pressable's own report, read nightly), so the rotation is about 54 sites, ~8 a night. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for manual runs and retries.
+API credits refill daily at ~04:27 UTC and **don't accumulate**. The scheduler passes `--weekly-rotation`: each site has a fixed UTC weekday, `crc32(lowercased domain) % 7` (0 = Sunday), so enrolling or removing other sites never moves it. Pressable sites aren't in the rotation (they're read from Pressable's own report nightly), which leaves roughly 1/7th of the GTmetrix/PSI fleet per night. On each of a month's last 7 nights the rotation also adds care-plan sites with no OK scan since the 1st, within `CLOCKWORK_GTMETRIX_DAILY_CREDITS`: sites whose own weekday won't come round again that month go first, and if that isn't enough, tonight's already-scanned sites give up their slot. Anything left waits for the next night rather than falling back to PSI. The default budget (10) is the smallest (Core) plan's daily allowance; set the variable to your plan's daily credits so the catch-up can use them. See [Features → Performance scans](/docs/features/performance-scans).
 
 ## Storage
 

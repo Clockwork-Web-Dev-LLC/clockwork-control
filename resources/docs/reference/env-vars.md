@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-09-28
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -260,6 +260,7 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 | `CLOCKWORK_GTMETRIX_TIMEOUT` | `120` | Seconds, per HTTP call. |
 | `CLOCKWORK_GTMETRIX_POLL_INTERVAL` | `5` | Seconds between completion polls. |
 | `CLOCKWORK_GTMETRIX_POLL_MAX_ATTEMPTS` | `36` | 5s × 36 = 180s poll ceiling. |
+| `CLOCKWORK_GTMETRIX_DAILY_CREDITS` | `10` | API credits the GTmetrix plan refills each day (one test = one credit). The nightly rotation's month-end catch-up never schedules more scans than this in one night. The default is the smallest (Core) plan's allowance; set it to your plan's daily credits. See [Features → Performance scans](/documentation/features/performance-scans). |
 | `CLOCKWORK_PSI_API_KEY` | empty | Google PageSpeed Insights v5 — **fallback engine**, runs only when GTmetrix errors. Free 25k req/day. |
 | `CLOCKWORK_PSI_TIMEOUT` | `90` | Seconds. PSI can be genuinely slow. |
 
@@ -397,6 +398,12 @@ See [Features → System updates](/documentation/features/system-updates).
 |---|---|---|
 | `CLOCKWORK_SEO_MONITORING_ENABLED` | `true` | Global kill-switch for automated SEO indexability checks. |
 | `CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT` | `10` | Timeout in seconds when fetching `/robots.txt` or homepage pre-flight checks. |
+
+## Client reports
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_REPORTS_TIMEZONE` | `America/New_York` | Any IANA zone name (e.g. `Europe/London`). Client report emails, the text part and the preview show outage times and "monitoring began" dates in this zone with its abbreviation ("Down Oct 5, 3:12 PM EDT"), and the uptime figures are measured over the period's days in it. Stored times stay UTC. An empty or invalid value falls back to UTC. Run `php artisan config:clear` after changing it. See [Features → Client reports](/documentation/features/client-reports). |
 
 ## Misc
 

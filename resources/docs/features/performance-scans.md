@@ -2,7 +2,7 @@
 title: Performance scans
 section: Features
 order: 50
-updated: 2026-10-15
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [performance, lighthouse, gtmetrix, psi, care-plan, pressable]
 tracks: [app/Services/Performance/**, app/Console/Commands/RunPerformanceScans.php, modules/Pressable/src/PressableLighthouseClient.php, modules/Pressable/src/PressableClient.php]
@@ -44,11 +44,11 @@ CLS is stored as `cls_x1000` (CLS × 1000 as integer) to avoid float drift in My
 
 Why the rotation: GTmetrix refills API credits daily at ~04:27 UTC and **credits don't accumulate**. The full-fleet nightly run would burn credits quickly and fall back to PSI. The rotation gives each site a fixed weekday, `crc32(domain) % 7 == UTC weekday`, so roughly 1/7th of the GTmetrix/PSI fleet is scanned each night. The weekday depends on the site's own domain only: enrolling or removing other sites never moves it. (Until 2026-11 the bucket was the site's position in the domain-sorted list, so every enrolment shifted every site's weekday, and some sites went more than a week without a scan.)
 
-**Month-end catch-up.** A client report only shows a speed test run inside its month, and a site can miss its weekday (the scan failed, or it came under care after its slot had passed). On each of the last 7 nights of a month the rotation also takes care-plan sites with no OK scan since the 1st, within the daily credit budget (`CLOCKWORK_GTMETRIX_DAILY_CREDITS`, default 10; set it to the plan's daily credits): free credits go to sites whose own weekday won't come round again that month first; if that's not enough, tonight's sites that already have a scan this month give up their slot and are scanned again next week. Anything that still doesn't fit waits for the next night rather than falling back to PSI. The run prints a `Month-end catch-up:` line with the counts.
+**Month-end catch-up.** A client report only shows a speed test run inside its month, and a site can miss its weekday (the scan failed, or it came under care after its slot had passed). On each of the last 7 nights of a month the rotation also takes care-plan sites with no OK scan since the 1st, within the daily credit budget (`CLOCKWORK_GTMETRIX_DAILY_CREDITS`, default 10, the smallest (Core) plan's allowance; set it to your plan's daily credits): free credits go to sites whose own weekday won't come round again that month first; if that's not enough, tonight's sites that already have a scan this month give up their slot and are scanned again next week. Anything that still doesn't fit waits for the next night rather than falling back to PSI. The run prints a `Month-end catch-up:` line with the counts.
 
 **Baseline scan.** Standalone enrolment (`SitesController::store`) and switching a site's care plan on (`SitesController::toggleCarePlan`) each start one detached `clockwork:run-performance-scans --site=<id> --strategy=mobile`, so a new site doesn't wait up to a week for its first score.
 
-The run time is scheduled at 04:45 UTC to land just *after* the credit refill. The Advanced plan provides 50 credits/day, and the weekly rotation keeps generous headroom for on-demand manual scans.
+The run time is scheduled at 04:45 UTC to land just *after* the credit refill. Credits beyond tonight's rotation bucket are headroom for on-demand manual scans and the month-end catch-up, so `CLOCKWORK_GTMETRIX_DAILY_CREDITS` should match the plan's real daily allowance.
 
 It's one scan per site per run, not two. GTmetrix's tier doesn't expose device emulation (`/devices` + `/connections` return empty; `/browsers` only lists desktop Chrome and Firefox), so "mobile" and "desktop" strategies would submit identical desktop-Chrome scans. Running twice would double quota usage for identical data.
 

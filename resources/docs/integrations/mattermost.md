@@ -2,7 +2,7 @@
 title: Mattermost
 section: Integrations
 order: 60
-updated: 2026-10-04
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [integrations, mattermost, notifications, alerts, slack]
 tracks: [modules/Mattermost/src/**, app/Console/Commands/MattermostTest.php, app/Services/Chat/**]
@@ -43,7 +43,7 @@ $this->app->singleton(ChatNotifier::class, fn ($app) => new ChatNotifierDispatch
 
 (The tag array was a single hardcoded literal in `AppServiceProvider` before Phase 7 of the modularization roadmap — now each module's own service provider contributes its channel by tagging itself the same way it contributes a `CloudProvider` or `DiagnosticCheck`. An agency that doesn't want Mattermost at all can simply not require `clockwork/mattermost` in `composer.json` — no code to comment out, no dead settings page.)
 
-`ChatNotifier::EVENTS` is the canonical registry of notification types (site down/up, SSL state changed, plugin update failed, IP blocked, contact form failed/recovered, Companion unreachable/recovered, malware finding detected, new PHP file in uploads, backup relay silent/recovered, server update failed, queue worker restart failed, scheduler stale/recovered) — both `MattermostNotifier` and `SlackNotifier` implement the full set and gate each method on its own per-event setting. `companion_unreachable`/`companion_reachable` have two independent callers: `ContactFormTester` (form testing enabled but no response) and the daily `clockwork:detect-stuck-companion-state` sweep (a failed install never retried, or an installed Companion gone silent for days) — see [Reference → Scheduled jobs](/docs/reference/scheduled-jobs). Fleet-level events with no `Site` involved: `backup_relay_stale`/`backup_relay_recovered`, `queue_worker_restart_failed`, `scheduler_stale`/`scheduler_recovered`. `ClientSlackNotifier` implements the interface too but only actually sends for a handful of client-relevant events (see [Integrations → Slack](/docs/integrations/slack)); everything else is a silent no-op for that channel. Each channel independently no-ops when unconfigured, so having all three registered is always safe — a channel with no webhook URL simply never sends.
+`ChatNotifier::EVENTS` is the canonical registry of notification types (site down/up, uptime probe blocked (HTTP 429), SSL state changed, plugin update failed, IP blocked, contact form failed/recovered, Companion unreachable/recovered, malware finding detected, new PHP file in uploads, backup relay silent/recovered, server update failed, queue worker restart failed, scheduler stale/recovered) — both `MattermostNotifier` and `SlackNotifier` implement the full set and gate each method on its own per-event setting. `companion_unreachable`/`companion_reachable` have two independent callers: `ContactFormTester` (form testing enabled but no response) and the daily `clockwork:detect-stuck-companion-state` sweep (a failed install never retried, or an installed Companion gone silent for days) — see [Reference → Scheduled jobs](/docs/reference/scheduled-jobs). Fleet-level events with no `Site` involved: `backup_relay_stale`/`backup_relay_recovered`, `queue_worker_restart_failed`, `scheduler_stale`/`scheduler_recovered`. `ClientSlackNotifier` implements the interface too but only actually sends for a handful of client-relevant events (see [Integrations → Slack](/docs/integrations/slack)); everything else is a silent no-op for that channel. Each channel independently no-ops when unconfigured, so having all three registered is always safe — a channel with no webhook URL simply never sends.
 
 Adding a fourth channel means: implement `ChatNotifier`, gate each method with an `isEventEnabled()`-style check, and tag the class `clockwork.notifiers` (in `AppServiceProvider`, or in a module's own service provider). Callers never change.
 
@@ -93,6 +93,7 @@ Standard Mattermost incoming-webhook payload:
 - `send($text, $attachments = [])` — generic.
 - `siteWentDown(Site, status, detail)` — formatted down alert.
 - `siteWentUp(Site, downtimeMinutes)` — formatted recovery.
+- `uptimeProbeBlocked(Site, blockedSec, statusCode, retryAfter)` — the uptime monitor has been rate-limited (HTTP 429) for longer than the hours set on Monitoring → Settings (default 6). This is not an outage and the time is never counted as downtime. One notice per blocked stretch. Ignored sites stay silent, inactive sites are skipped, and it never pages SMS or client Slack. See [Features → Uptime monitoring](/docs/features/uptime-monitoring).
 - `serverWentRed(Server, reason, cpuPct)` — formatted server alert when a node spikes over threshold into critical status.
 - `serverRecovered(Server)` — formatted notification when a previously red server recovers to normal green telemetry.
 - `aiRemedyTriaged(AiRemedyRun)` — delivers root cause and proposed remediation commands upon completing incident triage.
