@@ -111,6 +111,14 @@ class ReportReviewFlags
             $reasons[] = 'Companion '.($since ? "hasn't reported since {$since}" : 'has no snapshot date').', so waiting updates and plugin vulnerabilities are out of date.';
         }
 
+        // The client would read "No updates were applied this month" with no
+        // explanation; something was waiting, so a person should see why
+        // (failing, paused, or a site-wide pause) first.
+        $noUpdatesReason = self::noUpdatesAppliedReason((array) ($data['updates'] ?? []));
+        if ($noUpdatesReason !== null) {
+            $reasons[] = $noUpdatesReason;
+        }
+
         $stillDown = false;
         foreach ((array) ($data['uptime']['outages'] ?? []) as $outage) {
             if (! empty($outage['ongoing'])) {
@@ -178,6 +186,43 @@ class ReportReviewFlags
         }
 
         return [];
+    }
+
+    /**
+     * Why nothing was applied although updates were waiting, or null. Counted
+     * from the rows the email lists (plugins, themes, core): translations
+     * count toward the total but aren't listed, so the email can say "No
+     * updates were applied" while the total is above 0. Only updates known
+     * to be waiting count (named in the snapshot, or applied after the
+     * period): a site with no snapshot says nothing either way, a stale
+     * snapshot has its own reason, and an updates section without items
+     * (older or partial data) says nothing.
+     *
+     * @param  array<string, mixed>  $updates
+     */
+    private static function noUpdatesAppliedReason(array $updates): ?string
+    {
+        if (! array_key_exists('items', $updates) || ! empty($updates['snapshot_stale'])) {
+            return null;
+        }
+
+        $applied = (int) ($updates['plugins_count'] ?? 0) + (int) ($updates['themes_count'] ?? 0) + (int) ($updates['core_count'] ?? 0);
+        $waiting = array_values(array_filter(array_merge(
+            (array) ($updates['pending_plugins'] ?? []),
+            (array) ($updates['pending_themes'] ?? []),
+            ($updates['pending_core'] ?? false) === true ? ['WordPress core'] : [],
+        ), fn ($name) => is_string($name) && trim($name) !== ''));
+        $knownWaiting = $waiting !== [] || (int) ($updates['updated_since_period'] ?? 0) > 0;
+
+        if ($applied > 0 || ! $knownWaiting || ! ClientReportCompiler::updatesWereWaiting($updates)) {
+            return null;
+        }
+
+        $named = array_slice($waiting, 0, 5);
+        $list = $waiting === [] ? '' : ': '.implode(', ', $named).(count($waiting) > 5 ? ' and '.(count($waiting) - 5).' more' : '');
+
+        return 'No updates were applied this month although updates were waiting'.$list
+            .', so the client would read "No updates were applied this month". Check why they are failing or paused.';
     }
 
     /**

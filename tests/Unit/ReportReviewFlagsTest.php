@@ -312,3 +312,39 @@ describe('contact forms', function () {
             ->and(ReportReviewFlags::reasons(['forms' => ['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 0, 'lab_accepted' => 0]]))->toBe([]);
     });
 });
+
+describe('nothing applied while updates were waiting', function () {
+    $updates = fn (array $over = []) => ['updates' => array_replace([
+        'total' => 0, 'plugins_count' => 0, 'themes_count' => 0, 'core_count' => 0, 'translations_count' => 0,
+        'items' => ['plugins' => [], 'themes' => [], 'core' => []],
+        'pending_plugins' => [], 'pending_themes' => [], 'pending_core' => false,
+        'updated_since_period' => 0, 'snapshot_at' => '2026-10-31', 'snapshot_stale' => false,
+    ], $over)];
+    $reason = 'No updates were applied this month although updates were waiting';
+
+    it('holds a report that applied nothing while plugins were waiting', function () use ($updates, $reason) {
+        expect(ReportReviewFlags::reasons($updates(['pending_plugins' => ['Example Forms', 'Example SEO']])))
+            ->toBe([$reason.': Example Forms, Example SEO, so the client would read "No updates were applied this month". Check why they are failing or paused.']);
+    });
+
+    it('holds a report when the only sign is an update applied after the period', function () use ($updates, $reason) {
+        expect(ReportReviewFlags::reasons($updates(['updated_since_period' => 2])))
+            ->toBe([$reason.', so the client would read "No updates were applied this month". Check why they are failing or paused.']);
+    });
+
+    it('names at most five and counts the rest', function () use ($updates) {
+        $names = array_map(fn ($i) => "Example {$i}", range(1, 7));
+
+        expect(ReportReviewFlags::reasons($updates(['pending_plugins' => $names]))[0])->toContain('Example 5 and 2 more,');
+    });
+
+    it('stays quiet when an update was applied, nothing was waiting, the snapshot is stale or the section is older', function () use ($updates, $reason) {
+        // A translations run counts toward the total but isn't a listed row, so it doesn't count as applied.
+        expect(ReportReviewFlags::reasons($updates(['pending_plugins' => ['Example Forms'], 'total' => 1, 'translations_count' => 1])))->toHaveCount(1)
+            ->and(ReportReviewFlags::reasons($updates(['pending_plugins' => ['Example Forms'], 'total' => 1, 'plugins_count' => 1])))->toBe([])
+            ->and(ReportReviewFlags::reasons($updates()))->toBe([])
+            ->and(ReportReviewFlags::reasons($updates(['pending_plugins' => null, 'pending_themes' => null, 'pending_core' => null])))->toBe([])
+            ->and(implode(' ', ReportReviewFlags::reasons($updates(['pending_plugins' => null, 'snapshot_stale' => true]))))->not->toContain($reason)
+            ->and(ReportReviewFlags::reasons(['updates' => ['total' => 0, 'pending_plugins' => ['Example Forms']]]))->toBe([]);
+    });
+});

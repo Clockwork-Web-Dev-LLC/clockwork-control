@@ -203,7 +203,8 @@ describe('known plugin vulnerabilities (#8)', function () {
             ])
             // Matching by name would have said the vulnerable Example Forms had an update waiting.
             ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Gallery 3.0 (no fixed version yet; auto-paused on 2026-09-25 after 3 failed attempts; 3.1 is waiting).')
-            ->and(implode(' ', $report['reasons']))->not->toContain('Example Forms');
+            // (The plugins still waiting are named once, in the "no updates applied" reason.)
+            ->and(implode(' ', array_filter($report['reasons'], fn ($r) => ! str_starts_with($r, 'No updates were applied'))))->not->toContain('Example Forms');
     });
 
     it('holds the report when a waiting update reaches the fixed version, but not when it falls short', function () {
@@ -217,7 +218,7 @@ describe('known plugin vulnerabilities (#8)', function () {
         $reasons = compileSeptember($site)['reasons'];
 
         expect($reasons)->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0.0 → 1.2.0 (fixed in 1.2.0).")
-            ->and(implode(' ', $reasons))->not->toContain('Example Slider');
+            ->and(implode(' ', array_filter($reasons, fn ($r) => ! str_starts_with($r, 'No updates were applied'))))->not->toContain('Example Slider');
     });
 
     it('notes how many matches are in inactive plugins', function () {
@@ -1927,6 +1928,35 @@ describe('updates and site facts', function () {
             ->and($report['html'])->toContain('No updates were applied this month.')
             ->and(ReportReviewFlags::reasons($report['data']))
             ->toContain("Companion hasn't reported since 2026-08-20, so waiting updates and plugin vulnerabilities are out of date.");
+    });
+
+    it('holds a report that applied nothing while updates were waiting, naming them', function () {
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [
+                ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'active' => true, 'update_available' => true, 'new_version' => '2.0'],
+                ['slug' => 'example-seo/example-seo.php', 'name' => 'Example SEO', 'active' => true, 'update_available' => false],
+            ]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => true],
+        ]]);
+
+        $report = compileSeptember($site);
+
+        expect($report['html'])->toContain('No updates were applied this month.')
+            ->and($report['reasons'])->toContain('No updates were applied this month although updates were waiting: Example Forms, WordPress core, so the client would read "No updates were applied this month". Check why they are failing or paused.');
+    });
+
+    it('does not hold a report for waiting updates when one was applied, or when nothing is known to be waiting', function () {
+        $applied = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'active' => true, 'update_available' => true, 'new_version' => '2.0']]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $applied->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-seo/example-seo.php',
+            'summary' => 'Plugin updated: Example SEO 1.0 → 1.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-12 06:00'), 'actor' => 'test']);
+        // No snapshot at all: nothing is known either way.
+        $unknown = accuracySite(['companion_snapshot' => null, 'companion_snapshot_at' => null]);
+
+        expect(implode(' ', compileSeptember($applied)['reasons']))->not->toContain('No updates were applied')
+            ->and(implode(' ', compileSeptember($unknown)['reasons']))->not->toContain('No updates were applied');
     });
 
     it('counts an update applied after the period as waiting at its end', function () {
