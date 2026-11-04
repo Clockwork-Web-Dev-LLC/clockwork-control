@@ -93,6 +93,16 @@
         </div>
     @endif
 
+    @if ($isOperatorPreview && $report->status !== \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED && empty($report->sent_to) && $report->isStale())
+        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            <div class="font-semibold"><i class="fa-solid fa-clock-rotate-left"></i> Outdated: compiled before the latest report fixes</div>
+            <div class="mt-1 text-xs text-amber-800">
+                Its figures were worked out under older rules, so it can't be sent as it is.
+                {{ $report->canRecompile() ? 'Press Recompile to refresh it from current data (it never sends), check the new copy, then send that one.' : 'Generate a new report for this period instead.' }}
+            </div>
+        </div>
+    @endif
+
     @if ($isOperatorPreview && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
         <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
             A newer report for this schedule and period replaced this one. It can't be sent.

@@ -56,7 +56,8 @@ class ScheduledReportRunner
         // outage doesn't pile up a new report every day. That includes one
         // already sent (say, finished by hand after a failed run). A held
         // report is the exception: it's recompiled, since someone may have
-        // fixed the problem.
+        // fixed the problem. So is an unsent one compiled under older report
+        // rules (ClientReport::isStale()).
         $report = $this->resumableReport($schedule, $start, $end);
         $resumed = $report !== null;
         $report ??= $this->compileFresh($schedule, $start, $end, $recipients);
@@ -151,9 +152,13 @@ class ScheduledReportRunner
             ->latest('id')
             ->first();
 
-        $held = $report !== null && empty($report->sent_to) && ! empty($report->sections_data['meta']['review_reasons']);
+        // Held, or compiled under older report rules: either way nobody has
+        // it yet, so recompile rather than send it as it is.
+        $unsent = $report !== null && empty($report->sent_to);
+        $held = $unsent && ! empty($report->sections_data['meta']['review_reasons']);
+        $outdated = $unsent && $report->isStale();
 
-        return $held ? null : $report;
+        return $held || $outdated ? null : $report;
     }
 
     /**

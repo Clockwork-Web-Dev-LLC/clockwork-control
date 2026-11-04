@@ -840,6 +840,32 @@ describe('hold for review', function () {
         expect(ClientReport::sole()->status)->toBe('sent');
     });
 
+    it('recompiles an unsent copy compiled under older report rules instead of emailing it as it is', function () {
+        Mail::fake();
+        $site = reportableSite(['domain' => 'outdated.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@outdated.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(), 'last_sent_at' => now()->subMonths(2),
+        ]);
+        // Last month's copy from before the latest rules: not held, nobody has it.
+        $data = app(ClientReportCompiler::class)->compile($site, now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth());
+        $data['meta']['schema_version'] = 3;
+        $old = ClientReport::create([
+            'site_id' => $site->id, 'schedule_id' => $schedule->id, 'title' => 'Old copy',
+            'period_start' => now()->subMonthNoOverflow()->startOfMonth(), 'period_end' => now()->subMonthNoOverflow()->endOfMonth(),
+            'sections_data' => $data, 'status' => ClientReport::STATUS_GENERATED,
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        $sent = ClientReport::query()->where('status', 'sent')->sole();
+        expect($old->fresh()->status)->toBe(ClientReport::STATUS_SUPERSEDED)
+            ->and($sent->id)->not->toBe($old->id)
+            ->and($sent->sections_data['meta']['schema_version'])->toBe(ClientReportCompiler::SCHEMA_VERSION);
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->report->is($sent));
+    });
+
     it('holds a schedule\'s first report, and sends the next clean one by itself once that was sent by hand', function () {
         Mail::fake();
         $user = User::factory()->create();

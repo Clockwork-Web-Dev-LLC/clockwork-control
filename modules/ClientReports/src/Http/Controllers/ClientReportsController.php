@@ -183,6 +183,16 @@ class ClientReportsController extends Controller
             return back()->with('status_error', 'A newer report for this period replaced this one. Send the newer one instead.');
         }
 
+        // Compiled under older report rules and not yet with anyone: its
+        // figures were worked out the old way. A partly sent or sent report
+        // can still finish delivering (or be resent) the copy its other
+        // recipients already have.
+        if (empty($report->sent_to) && $report->isStale()) {
+            return back()->with('status_error', $report->canRecompile()
+                ? 'This report was compiled before the latest report fixes. Press Recompile, check the new copy, then send that one.'
+                : 'This report was compiled before the latest report fixes. Generate a new report for this period instead.');
+        }
+
         $recipients = $request->filled('email')
             ? ClientReport::parseRecipients((string) $request->input('email'))
             : $report->recipientsToSend();

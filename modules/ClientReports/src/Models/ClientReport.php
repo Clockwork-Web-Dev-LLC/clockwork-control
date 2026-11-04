@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Modules\ClientReports\Services\ClientReportCompiler;
 
 /**
  * @property int $id
@@ -102,6 +103,19 @@ class ClientReport extends Model
         }
 
         return array_values(array_diff($this->recipients(), $this->sent_to ?? []));
+    }
+
+    /**
+     * Whether this report was compiled before the report rules it would be
+     * read under now (meta.schema_version below the compiler's). Its stored
+     * figures were worked out the old way, so it mustn't reach anyone who
+     * hasn't already got it: recompile it (or generate a new one) first.
+     */
+    public function isStale(): bool
+    {
+        $data = is_array($this->sections_data) ? $this->sections_data : [];
+
+        return (int) ($data['meta']['schema_version'] ?? 0) < ClientReportCompiler::SCHEMA_VERSION;
     }
 
     /**

@@ -263,17 +263,18 @@ describe('publicShow', function () {
 });
 
 describe('send', function () {
-    function sendableReport(?string $clientEmail): ClientReport
+    /** A report compiled under the current rules, so nothing stops it being sent. */
+    function sendableReport(?string $clientEmail, array $attributes = []): ClientReport
     {
-        return ClientReport::create([
+        return ClientReport::create(array_merge([
             'site_id' => Site::factory()->create()->id,
             'title' => 'Send Test Report',
             'period_start' => now()->subMonth()->startOfMonth(),
             'period_end' => now()->subMonth()->endOfMonth(),
-            'sections_data' => [],
+            'sections_data' => ['meta' => ['schema_version' => ClientReportCompiler::SCHEMA_VERSION]],
             'client_email' => $clientEmail,
             'status' => 'generated',
-        ]);
+        ], $attributes));
     }
 
     it('emails every address in a scheduled report\'s comma-joined recipient list', function () {
@@ -328,6 +329,78 @@ describe('send', function () {
             ->assertSessionHas('status_error', "Invalid email address: 'not-an-email'.");
 
         Mail::assertNothingSent();
+    });
+
+    it('refuses to send an unsent report compiled under older report rules, and leaves the schedule as it was', function () {
+        Mail::fake();
+        $site = Site::factory()->create();
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@example.com'],
+            'is_enabled' => true, 'next_run_at' => Carbon::parse('2027-01-01 00:00:00'),
+        ]);
+        $report = sendableReport('client@example.com', [
+            'site_id' => $site->id, 'schedule_id' => $schedule->id,
+            'sections_data' => ['meta' => ['schema_version' => 3, 'review_reasons' => ['Backups could not be checked.']]],
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status_error', 'This report was compiled before the latest report fixes. Press Recompile, check the new copy, then send that one.');
+
+        Mail::assertNothingSent();
+        expect($report->fresh()->status)->toBe('generated')
+            ->and($schedule->fresh()->last_sent_at)->toBeNull();
+    });
+
+    it('tells an operator to generate a new report when an outdated one has no schedule to recompile it from', function () {
+        Mail::fake();
+        $report = sendableReport('client@example.com', ['sections_data' => []]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status_error', 'This report was compiled before the latest report fixes. Generate a new report for this period instead.');
+
+        Mail::assertNothingSent();
+    });
+
+    it('still finishes delivering an outdated report that some recipients already have', function () {
+        Mail::fake();
+        $report = sendableReport('one@client.test, two@client.test', [
+            'sections_data' => ['meta' => ['schema_version' => 3]],
+            'sent_to' => ['one@client.test'],
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('client-reports.send', $report))
+            ->assertSessionHas('status', 'Report emailed to two@client.test.');
+
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('two@client.test'));
+        Mail::assertNotSent(ClientReportMail::class, fn ($mail) => $mail->hasTo('one@client.test'));
+    });
+
+    it('marks an outdated unsent report on the list and in the preview, without a send button', function () {
+        $this->mockIssueCounterZero();
+        $report = sendableReport('outdated@client.test', ['sections_data' => ['meta' => ['schema_version' => 3]]]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('client-reports.index'))
+            ->assertOk()
+            ->assertSee('Outdated: recompile')
+            ->assertDontSee('Email report to outdated@client.test?');
+
+        $site = Site::factory()->create();
+        $data = app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth());
+        $data['meta']['schema_version'] = 3;
+        $compiled = sendableReport('outdated@client.test', ['site_id' => $site->id, 'sections_data' => $data]);
+
+        $this->get(route('client-reports.show', $compiled))
+            ->assertOk()
+            ->assertSee('Outdated: compiled before the latest report fixes');
+        // The public view never shows it.
+        $this->get(route('client-reports.public', $compiled->public_token))
+            ->assertOk()
+            ->assertDontSee('Outdated');
     });
 
     it('asks for an address on the reports list when a report has none', function () {

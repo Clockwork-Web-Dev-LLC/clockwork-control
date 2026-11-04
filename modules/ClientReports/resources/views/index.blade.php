@@ -88,8 +88,13 @@
                                             <div class="text-[10px] text-[var(--color-ink-muted)]">{{ $r->client_email }}</div>
                                         @endif
                                     </td>
+                                    @php($outdated = empty($r->sent_to) && $r->status !== 'superseded' && $r->isStale())
                                     <td class="px-4 py-3">
-                                        @if ($r->status === 'generated' && empty($r->sent_to) && ! empty($r->sections_data['meta']['review_reasons']))
+                                        @if ($outdated)
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="Compiled before the latest report fixes. Recompile it (or generate a new one) before sending.">
+                                                Outdated: recompile
+                                            </span>
+                                        @elseif ($r->status === 'generated' && empty($r->sent_to) && ! empty($r->sections_data['meta']['review_reasons']))
                                             <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" title="{{ implode(' ', $r->sections_data['meta']['review_reasons']) }}">
                                                 Needs review
                                             </span>
@@ -118,7 +123,9 @@
                                                     </button>
                                                 </form>
                                             @endif
-                                            {{-- No saved recipient: ask for one instead of failing server-side. --}}
+                                            {{-- No saved recipient: ask for one instead of failing server-side.
+                                                 Outdated and unsent: no send button (the server refuses it too). --}}
+                                            @if (! $outdated)
                                             <form method="POST" action="{{ route('client-reports.send', $r) }}" class="inline"
                                                 @if ($r->recipients() === [])
                                                     onsubmit="const to = prompt('Send this report to which email address(es)?'); if (! to) return false; this.email.value = to; return true;"
@@ -133,6 +140,7 @@
                                                     <i class="fa-solid fa-paper-plane"></i>
                                                 </button>
                                             </form>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
