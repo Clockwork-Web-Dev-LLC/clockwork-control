@@ -878,6 +878,54 @@ describe('malware scan', function () {
         ])
             ->and($report['reasons'])->toContain('An earlier malware scan this month flagged malware (on 2 days, last on 2026-09-06), but the latest scan did not: check it was cleaned up.');
     });
+
+    it('does not count earlier scans that only flagged the scanner\'s own signature list', function () {
+        // Stored before the scanner skipped its own source: every signature
+        // it looks for, found in its own MalwareScanner.php.
+        $site = accuracySite(['wp_path' => '/srv/htdocs']);
+        $own = fn (string $path) => array_map(fn (string $kind) => ['kind' => $kind, 'path' => $path, 'evidence' => 'Substring match'],
+            ['eval_base64', 'shell_c99', 'shell_wso', 'preg_replace_e_modifier']);
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $own('wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php'));
+        companionMalwareScan($site, '2026-09-06 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $own('/srv/htdocs/wp-content/plugins/clockwork-companion/src\\SecurityScans\\MalwareScanner.php'));
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'clean',
+            'malware_worst_in_period' => 'clean',
+            'malware_last_issue_at' => null,
+            'malware_issue_days' => 0,
+        ])
+            ->and(implode(' ', $report['reasons']))->not->toContain('earlier malware scan');
+    });
+
+    it('still counts a scan that flagged real malware beside the scanner\'s own source', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, [
+            ['kind' => 'eval_base64', 'path' => 'wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php', 'evidence' => 'Substring match'],
+            ['kind' => 'eval_base64', 'path' => 'wp-content/themes/example/x.php', 'evidence' => 'Substring match'],
+        ]);
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['malware_worst_in_period' => 'issues_found', 'malware_issue_days' => 1]);
+    });
+
+    it('reads a latest scan whose only signatures were the scanner\'s own as the review-only findings it also had', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, [
+            ['kind' => 'shell_c99', 'path' => 'wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php', 'evidence' => 'c99shell'],
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/example/a.php', 'evidence' => 'PHP file under uploads'],
+        ]);
+
+        $security = compileSeptember($site)['data']['security'];
+
+        expect($security)->toMatchArray([
+            'malware_status' => 'warning',
+            'malware_worst_in_period' => 'warning',
+            'malware_finding_kinds' => ['php_in_uploads' => 1],
+        ]);
+    });
 });
 
 describe('threats blocked', function () {

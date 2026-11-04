@@ -19,6 +19,7 @@ use App\Models\SiteUptimeEvent;
 use App\Models\SiteWorkLog;
 use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
+use App\Services\Security\CompanionMalwareScanner;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
@@ -599,8 +600,13 @@ class ClientReportCompiler
         // malware is still something a person should look at.
         $companionScans = $scans->where('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)->values();
         $malwareScan = $companionScans->first() ?? $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_SITECHECK);
-        $malwareDetails = self::malwareDetails($malwareScan);
-        $issueScans = $companionScans->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND);
+        // Each Companion scan read with the scanner's own-source exemption
+        // applied again, so a scan stored before the scanner learned to skip
+        // its own signature list doesn't count as having found malware.
+        $normalize = CompanionMalwareScanner::findingPathNormalizer($site);
+        $effectiveStatus = fn (SiteSecurityScan $scan): ?string => self::statusWithoutOwnScanner($scan, $normalize)['status'];
+        $malwareDetails = self::malwareDetails($malwareScan, $normalize);
+        $issueScans = $companionScans->filter(fn (SiteSecurityScan $scan) => $effectiveStatus($scan) === SiteSecurityScan::STATUS_ISSUES_FOUND);
         $blacklistScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_BLACKLIST);
 
         // The plugin list is the site's current Companion snapshot, so this is
@@ -654,7 +660,7 @@ class ClientReportCompiler
             'checksum_supported' => $isWordPress && $this->hasChecksumTransport($site),
             'checksum_status' => $checksumScan?->status,
             'checksum_checked_at' => $checksumScan?->scanned_at?->toDateString(),
-            'malware_status' => $this->malwareStatus($malwareScan, $malwareDetails),
+            'malware_status' => $this->malwareStatus($malwareScan, $malwareDetails, $malwareScan !== null ? $effectiveStatus($malwareScan) : null),
             'malware_checked_at' => $malwareScan?->scanned_at?->toDateString(),
             'malware_scan_id' => $malwareScan?->id,
             // kind => count, from Companion's findings; null for SiteCheck.
@@ -681,7 +687,7 @@ class ClientReportCompiler
             // go out as clean on the strength of its last scan.
             'malware_worst_in_period' => match (true) {
                 $issueScans->isNotEmpty() => SiteSecurityScan::STATUS_ISSUES_FOUND,
-                $companionScans->contains('status', SiteSecurityScan::STATUS_WARNING) => SiteSecurityScan::STATUS_WARNING,
+                $companionScans->contains(fn (SiteSecurityScan $scan) => $effectiveStatus($scan) === SiteSecurityScan::STATUS_WARNING) => SiteSecurityScan::STATUS_WARNING,
                 $companionScans->isNotEmpty() => SiteSecurityScan::STATUS_CLEAN,
                 default => null,
             },
@@ -695,18 +701,52 @@ class ClientReportCompiler
     /**
      * A Companion malware scan's recorded details, or null for SiteCheck and
      * for rows that never recorded any (whose stored status is all there is).
+     * Findings in the scanner's own source are left out, as the scanner now
+     * does when it records a scan.
      *
+     * @param  ?\Closure(string): string  $normalize
      * @return ?array<string, mixed>
      */
-    protected static function malwareDetails(?SiteSecurityScan $scan): ?array
+    protected static function malwareDetails(?SiteSecurityScan $scan, ?\Closure $normalize = null): ?array
     {
         if ($scan === null || $scan->scan_type !== SiteSecurityScan::TYPE_COMPANION_MALWARE) {
             return null;
         }
 
         $details = $scan->details;
+        if (! is_array($details) || ! is_array($details['findings'] ?? null)) {
+            return null;
+        }
 
-        return is_array($details) && is_array($details['findings'] ?? null) ? $details : null;
+        $details['findings'] = self::statusWithoutOwnScanner($scan, $normalize ?? CompanionMalwareScanner::findingPathNormalizer())['findings'];
+
+        return $details;
+    }
+
+    /**
+     * A Companion scan's status and findings with the scanner's own source
+     * left out (CompanionMalwareScanner::isOwnScannerSource). Scans recorded
+     * before that exemption worked flagged the scanner's signature list as
+     * malware; this only re-applies the exemption the scanner makes today.
+     * A scan whose stored findings are all kept (or that has none recorded,
+     * like factory or SiteCheck rows) keeps its stored status.
+     *
+     * @param  \Closure(string): string  $normalize
+     * @return array{status: ?string, findings: ?array<int, mixed>}
+     */
+    protected static function statusWithoutOwnScanner(SiteSecurityScan $scan, \Closure $normalize): array
+    {
+        $findings = is_array($scan->details) && is_array($scan->details['findings'] ?? null) ? $scan->details['findings'] : null;
+        if ($scan->scan_type !== SiteSecurityScan::TYPE_COMPANION_MALWARE || $findings === null || $findings === []) {
+            return ['status' => $scan->status, 'findings' => $findings];
+        }
+
+        $kept = array_values(array_filter($findings, fn ($f) => ! (is_array($f) && is_string($f['path'] ?? null)
+            && CompanionMalwareScanner::isOwnScannerSource($normalize($f['path'])))));
+
+        return count($kept) === count($findings)
+            ? ['status' => $scan->status, 'findings' => $findings]
+            : ['status' => CompanionMalwareScanner::statusForFindings($kept), 'findings' => $kept];
     }
 
     /**
@@ -728,9 +768,10 @@ class ClientReportCompiler
      *
      * @param  ?array<string, mixed>  $details
      */
-    protected function malwareStatus(?SiteSecurityScan $scan, ?array $details): ?string
+    protected function malwareStatus(?SiteSecurityScan $scan, ?array $details, ?string $status = null): ?string
     {
-        if ($scan?->status === SiteSecurityScan::STATUS_CLEAN && $details !== null) {
+        $status ??= $scan?->status;
+        if ($status === SiteSecurityScan::STATUS_CLEAN && $details !== null) {
             $partial = ! empty($details['scan_aborted'])
                 || (($details['transport'] ?? null) === 'ssh' && empty($details['ssh_checks_verified']));
 
@@ -739,7 +780,7 @@ class ClientReportCompiler
             }
         }
 
-        return $scan?->status;
+        return $status;
     }
 
     /**
