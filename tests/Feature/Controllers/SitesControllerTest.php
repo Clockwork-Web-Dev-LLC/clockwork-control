@@ -474,16 +474,24 @@ describe('recheckUptime', function () {
 
         $this->mock(UptimeProber::class)
             ->shouldReceive('probe')
-            ->once()
+            ->twice()
             ->andReturn(UptimeProbeResult::blocked(429, 90, 'HTTP 429 (rate-limited — probe blocked)'));
 
         $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentDown');
 
-        $response = $this->actingAs(User::factory()->create())->post(route('sites.uptime.recheck', $site));
+        $user = User::factory()->create();
 
-        $response->assertOk()
+        // One 429 could be a blip: the state waits for the next in a row.
+        $this->actingAs($user)->post(route('sites.uptime.recheck', $site))
+            ->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('status_code', 429)
+            ->assertJsonPath('state', 'up')
+            ->assertJsonPath('message', 'Probe blocked (HTTP 429) — not counted as down');
+
+        $this->travel(5)->minutes();
+        $this->actingAs($user)->post(route('sites.uptime.recheck', $site->fresh()))
+            ->assertOk()
             ->assertJsonPath('state', Site::UPTIME_STATE_PROBE_BLOCKED)
             ->assertJsonPath('message', 'Probe blocked (HTTP 429) — not counted as down');
     });
