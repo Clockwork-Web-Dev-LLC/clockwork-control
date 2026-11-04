@@ -90,6 +90,7 @@ class CompanionInstaller implements CompanionInstallerContract
         // signs with $site->companion_secret, so it has to be set on the model
         // first.
         $previouslyInstalled = (bool) $site->companion_installed;
+        $site->companion_variant = 'companion';
         $site->companion_secret = $secret;
         $site->save();
 
@@ -214,6 +215,10 @@ mv .clockwork-stage/clockwork-companion .
 rm -rf .clockwork-stage
 rm -f "\$MU/clockwork-companion.php"
 rm -rf "\$MU/clockwork-companion"
+rm -f "\$MU/clockwork-renegade.php"
+rm -rf "\$MU/clockwork-renegade"
+rm -rf clockwork-renegade
+/usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true
 /usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
 echo "OK: companion staged at \$PLUGINS/clockwork-companion"
 BASH;

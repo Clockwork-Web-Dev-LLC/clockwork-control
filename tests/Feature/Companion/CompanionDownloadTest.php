@@ -3,6 +3,8 @@
 namespace Tests\Feature\Companion;
 
 use App\Models\User;
+use App\Services\Companion\CompanionTarballBuilder;
+use Illuminate\Support\Facades\Http;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ZipArchive;
@@ -120,15 +122,55 @@ describe('Companion Download', function () {
         @unlink($tempZip);
     });
 
-    it('returns 500 when local companion plugin source directory does not exist', function () {
-        config(['clockwork.companion.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8))]);
+    it('streams GitHub Release zip when local companion plugin source directory does not exist', function () {
+        $fakeZipBytes = (new CompanionTarballBuilder)->buildPluginZipBytes($this->fakeSourceDir);
+        Http::fake([
+            'github.com/*/clockwork-companion.zip' => Http::response($fakeZipBytes, 200),
+        ]);
+
+        config([
+            'clockwork.companion.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8)),
+            'clockwork.companion.release_zip_url' => 'https://github.com/Clockwork-Web-Dev-LLC/clockwork-companion/releases/latest/download/clockwork-companion.zip',
+        ]);
+
+        $response = $this->get(route('companion.download'));
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/zip');
+        expect($response->getContent())->toBe($fakeZipBytes);
+    });
+
+    it('streams GitHub Release zip when local renegade plugin source directory does not exist', function () {
+        $fakeZipBytes = (new CompanionTarballBuilder)->buildRenegadeZipBytes($this->fakeRenegadeDir);
+        Http::fake([
+            'github.com/*/clockwork-renegade.zip' => Http::response($fakeZipBytes, 200),
+        ]);
+
+        config([
+            'clockwork.renegade.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8)),
+            'clockwork.renegade.release_zip_url' => 'https://github.com/Clockwork-Web-Dev-LLC/clockwork-renegade/releases/latest/download/clockwork-renegade.zip',
+        ]);
+
+        $response = $this->get(route('renegade.download'));
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/zip');
+        expect($response->getContent())->toBe($fakeZipBytes);
+    });
+
+    it('returns 500 when local companion plugin source directory does not exist and no release zip is available', function () {
+        config([
+            'clockwork.companion.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8)),
+            'clockwork.companion.release_zip_url' => '',
+        ]);
 
         $response = $this->get(route('companion.download'));
         $response->assertStatus(500);
     });
 
-    it('returns 500 when local renegade plugin source directory does not exist', function () {
-        config(['clockwork.renegade.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8))]);
+    it('returns 500 when local renegade plugin source directory does not exist and no release zip is available', function () {
+        config([
+            'clockwork.renegade.local_path' => '/nonexistent/path/'.bin2hex(random_bytes(8)),
+            'clockwork.renegade.release_zip_url' => '',
+        ]);
 
         $response = $this->get(route('renegade.download'));
         $response->assertStatus(500);

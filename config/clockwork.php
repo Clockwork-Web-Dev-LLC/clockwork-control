@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.11.0',
+    'version' => '1.12.0',
 
     // Demo mode interlock for marketing screenshots and anonymized datasets.
     // Gates screenshot Dusk runs to prevent running against live production,
@@ -322,12 +322,18 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.43.0'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.43.1'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
         'dist_url' => env('CLOCKWORK_COMPANION_DIST_URL'),
         'dist_sha256' => env('CLOCKWORK_COMPANION_DIST_SHA256'),
+
+        // Public GitHub Release .zip fallback when local_path is absent on self-hosted instances.
+        'release_zip_url' => env(
+            'CLOCKWORK_COMPANION_RELEASE_ZIP_URL',
+            'https://github.com/Clockwork-Web-Dev-LLC/clockwork-companion/releases/latest/download/clockwork-companion.zip',
+        ),
 
         // Local path to the source repo for development (rsync mode). Defaults to
         // ~/Projects/clockwork-companion. env('HOME') is null under Herd's php-fpm
@@ -351,7 +357,13 @@ return [
     ],
 
     'renegade' => [
-        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.1.1'),
+        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.1.3'),
+
+        // Public GitHub Release .zip fallback when local_path is absent on self-hosted instances.
+        'release_zip_url' => env(
+            'CLOCKWORK_RENEGADE_RELEASE_ZIP_URL',
+            'https://github.com/Clockwork-Web-Dev-LLC/clockwork-renegade/releases/latest/download/clockwork-renegade.zip',
+        ),
 
         // Local path to the source repo for development. Defaults to
         // ~/Projects/clockwork-renegade.

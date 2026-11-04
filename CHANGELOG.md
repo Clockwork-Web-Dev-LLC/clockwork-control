@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-04
+
 ### Added
 - **Client Reports — Import report recipients (`clockwork:import-report-recipients`)**: loads per-site report recipients from a CSV (site domain + email columns, e.g. the ManageWP export) into report schedules; dry run unless `--apply`.
 - **Exploit Shield Module (`modules/ExploitShield`)**:
@@ -80,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Client Reports — The plain-text email no longer HTML-escapes** client names, notes and plugin names ("O&#039;Brien &amp; Sons"). The Email version page now shows the plain-text part too.
 - **Client Reports — Sending a partly sent report by hand** only emails the recipients who don't have it yet, instead of everyone again. A held or draft report sent by hand now stamps its schedule's `last_sent_at`.
 - **Security — A partial vulnerability-feed refresh no longer drops matches**: `clockwork:refresh-plugin-vulnerabilities` keeps the existing entries of any plugin whose lookup failed (and lists them), instead of deleting the whole table and re-inserting only what it fetched. A run where every lookup fails changes nothing and exits as failed.
+
+- **Companion & Renegade Downloads — GitHub Releases Fallback (`/renegade/download` & `/companion/download`)**: Self-hosted Clockwork Control instances without local `~/Projects/clockwork-renegade` or `~/Projects/clockwork-companion` source checkouts now automatically stream the latest official `.zip` release package from GitHub Releases (`clockwork.renegade.release_zip_url` / `clockwork.companion.release_zip_url`) instead of returning HTTP 500.
+- **Companion Installers — Automatic Renegade Cleanup on Migration**: `PressableCompanionInstaller` and `CompanionInstaller` now reset `companion_variant = 'companion'` and deactivate/remove any legacy `clockwork-renegade` files when a site is migrated from external hosting to Pressable or SpinupWP.
+- **Bundled Plugin Versions**: Bumped default Clockwork Companion version to `1.43.1` and Clockwork Renegade version to `1.1.3` (preserving active plugins in-place during upgrades and fixing WPForms contact form health checks).
 
 ## [1.11.0] - 2026-10-14
 

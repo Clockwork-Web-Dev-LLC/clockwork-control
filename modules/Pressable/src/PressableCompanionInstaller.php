@@ -116,6 +116,7 @@ class PressableCompanionInstaller implements CompanionInstallerContract
         // call ITSELF signs with $site->companion_secret.
         $previouslyInstalled = (bool) $site->companion_installed;
         $previousVersion = $site->companion_version;
+        $site->companion_variant = 'companion';
         $site->companion_secret = $bootstrapSecret;
         $site->save();
 
@@ -260,7 +261,9 @@ class PressableCompanionInstaller implements CompanionInstallerContract
             ." && rm -rf {$p}/clockwork-companion"
             ." && mv {$s}/x/clockwork-companion {$p}/"
             ." && rm -f {$m}/clockwork-companion.php && rm -rf {$m}/clockwork-companion"
+            ." && rm -f {$m}/clockwork-renegade.php && rm -rf {$m}/clockwork-renegade && rm -rf {$p}/clockwork-renegade"
             ." && rm -rf {$s}"
+            .' && (cd '.self::DOCROOT.' && wp --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true)'
             .' && (cd '.self::DOCROOT.' && wp --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true)'
             .' && echo swapped';
 
