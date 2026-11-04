@@ -4,6 +4,7 @@ namespace App\Services\Security;
 
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
+use Closure;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -49,11 +50,15 @@ class BlacklistChecker
 
     public const SOURCE_SPAMHAUS_DBL = 'spamhaus_dbl';
 
+    /**
+     * @param  (Closure(string): string)|null  $dnsResolver
+     */
     public function __construct(
         protected ?string $webRiskApiKey = null,
         protected ?string $gsbApiKey = null,
         protected ?string $urlhausAuthKey = null,
         protected ?int $httpTimeout = null,
+        protected ?Closure $dnsResolver = null,
     ) {
         $this->webRiskApiKey = trim((string) ($this->webRiskApiKey ?? config('clockwork.security_scans.google_web_risk_key', '')));
         $this->gsbApiKey = trim((string) ($this->gsbApiKey ?? config('clockwork.security_scans.google_safe_browsing_key', '')));
@@ -305,7 +310,9 @@ class BlacklistChecker
 
         // Suppress fopen-style notices; gethostbyname returns the input unchanged
         // on miss/error, which is the standard PHP idiom we rely on here.
-        $resolved = @gethostbyname($hostname);
+        $resolved = $this->dnsResolver !== null
+            ? ($this->dnsResolver)($hostname)
+            : @gethostbyname($hostname);
         if ($resolved === $hostname || ! filter_var($resolved, FILTER_VALIDATE_IP)) {
             return ['hit' => false];
         }
