@@ -970,7 +970,7 @@ describe('threats blocked', function () {
     // Was "shows a real 0 … when lockouts from a serverless site reached the
     // review queue": those rows are the lockouts that never became a ban, so
     // they prove the count left visitors out, not that 0 was measured.
-    it('hides the count and holds the report when lockouts in the period never became bans', function (string $status) {
+    it('hides the count, without holding the report, when lockouts in the period never became bans', function (string $status) {
         $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
         ReviewQueueEntry::factory()->count(2)->create(['site_id' => $site->id, 'source' => ReviewQueueEntry::SOURCE_LLAR, 'status' => $status, 'created_at' => Carbon::parse('2026-09-14'), 'updated_at' => Carbon::parse('2026-09-14')]);
 
@@ -980,7 +980,7 @@ describe('threats blocked', function () {
             ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('block malicious visitors')
             ->and($report['text'])->not->toContain('Malicious visitors blocked')
             ->and($report['preview'])->toContain('Not measured (2 lockouts this period never became a ban)')
-            ->and($report['reasons'])->toContain('2 lockouts this month never became a ban (still waiting for review, or the ban failed: no server to ban at, or fail2ban not provisioned), so the blocked-visitors count is hidden.');
+            ->and(implode(' ', $report['reasons']))->not->toContain('never became a ban');
     })->with([ReviewQueueEntry::STATUS_PENDING, ReviewQueueEntry::STATUS_QUEUED_FOR_BAN, ReviewQueueEntry::STATUS_FAILED]);
 
     it('hides the count even beside real bans when some lockouts were never banned', function () {
