@@ -230,6 +230,17 @@ describe('backups', function () {
             ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'verified', 'covers_period' => true, 'days_with_backups' => 3]]))->toBe([]);
     });
 
+    it('holds relay archives that began part-way through the month for a site enrolled before it', function () {
+        $backups = ['status' => 'verified', 'verified' => true, 'source' => 's3_archive', 'covers_period' => false, 'daily' => true,
+            'days_with_backups' => 3, 'period_days' => 31, 'archives_began' => '2026-10-29', 'expected_from' => '2026-10-01'];
+
+        expect(ReportReviewFlags::reasons(['backups' => $backups]))
+            ->toBe(['Off-site backups began on Oct 29, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 3 of 31 days).'])
+            // Without the marker (older reports, other sources) nothing changes.
+            ->and(ReportReviewFlags::reasons(['backups' => ['archives_began' => null] + $backups]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['backups' => ['source' => 'pressable'] + $backups]))->toBe([]);
+    });
+
     it('holds off-site backups that have been failing, with when it began and the error', function () {
         $failing = ['status' => 'failing', 'verified' => false, 'relay_failing_since' => '2026-10-03T12:00:00+00:00'];
 

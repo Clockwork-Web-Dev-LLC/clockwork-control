@@ -2,6 +2,8 @@
 
 namespace Modules\ClientReports\Services;
 
+use App\Models\SiteBackup;
+use Illuminate\Support\Carbon;
 use Modules\ClientReports\Support\ReportPhrases;
 
 /**
@@ -160,6 +162,16 @@ class ReportReviewFlags
 
         $days = (int) ($backups['days_with_backups'] ?? 0);
         $periodDays = (int) ($backups['period_days'] ?? 0);
+
+        // Our relay's archives began part-way through the month for a site
+        // that was there before: the days before had no off-site backup.
+        $began = is_string($backups['archives_began'] ?? null) ? $backups['archives_began'] : null;
+        if ($status === 'verified' && ($backups['source'] ?? null) === SiteBackup::SOURCE_S3_ARCHIVE && $began !== null) {
+            $beganOn = Carbon::parse($began)->format('M j, Y');
+
+            return ["Off-site backups began on {$beganOn}; none were made before that this month, although the site was enrolled earlier (backed up on {$days} of {$periodDays} days)."];
+        }
+
         if ($status === 'verified' && ($backups['covers_period'] ?? false) === true && ($backups['daily'] ?? false) === true
             && $periodDays > 0 && $days < $periodDays - 3) {
             return ["Backed up on only {$days} of {$periodDays} days this month."];

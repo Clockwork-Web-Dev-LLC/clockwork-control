@@ -413,7 +413,11 @@
                         @endif
                     </p>
                     @if (! ($backups['covers_period'] ?? true) && $isOperatorPreview)
-                        <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>
+                        @if (! empty($backups['archives_began']))
+                            <p class="no-print text-xs text-amber-700">Off-site backups began on {{ $backups['archives_began'] }}; none were made before that this period, although the site was enrolled by {{ $backups['expected_from'] ?? $backups['records_from'] }}. The email leaves out the day count.</p>
+                        @else
+                            <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>
+                        @endif
                     @endif
                 @else
                     {{-- Older reports, compiled before backups were recorded: the email's wording. --}}

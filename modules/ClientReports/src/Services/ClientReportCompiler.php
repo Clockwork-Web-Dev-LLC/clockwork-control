@@ -184,7 +184,7 @@ class ClientReportCompiler
             $data['traffic'] = $this->compileTraffic($site, $start, $end);
         }
         if ($shouldInclude('backups')) {
-            $data['backups'] = $this->compileBackups($site, $start, $end);
+            $data['backups'] = $this->compileBackups($site, $start, $end, $joinedAt);
         }
         if ($shouldInclude('work_log')) {
             $data['work_log'] = $this->compileWorkLog($site, $start, $end);
@@ -1126,7 +1126,7 @@ class ClientReportCompiler
      * archive in the period whose relay was already failing by its end is
      * 'failing', with the relay's error kept for the operator.
      */
-    protected function compileBackups(Site $site, Carbon $start, Carbon $end): array
+    protected function compileBackups(Site $site, Carbon $start, Carbon $end, ?Carbon $joinedAt = null): array
     {
         $source = $this->backups->sourceFor($site);
         $windowStart = $end->copy()->subDays(self::BACKUP_LIST_DAYS - 1)->startOfDay()->max($start);
@@ -1173,6 +1173,24 @@ class ClientReportCompiler
             ->where('source', $source)
             ->min('backup_at');
         $coversPeriod = $recordsFrom !== null && Carbon::parse($recordsFrom)->lessThan($start->copy()->addDay());
+
+        // Our relay's S3 listing is the whole history (90-day retention), so
+        // its oldest archive is when archiving actually began, not where our
+        // records start. A relay site that was there from the period start
+        // (or from when it joined) had no off-site backup on the days before
+        // that: a gap for a person to see, not "records start here".
+        // Enrolment turns the relay on, so when the site joined stands in for
+        // when protection was expected; if the relay was switched on later,
+        // the report is held for nothing worse than a look.
+        $archivesBegan = null;
+        $expectedFrom = null;
+        if ($source === SiteBackup::SOURCE_S3_ARCHIVE && $site->backup_relay_enabled && $recordsFrom !== null) {
+            $expectedFrom = ($joinedAt ?? $start)->copy()->startOfDay()->max($start);
+            $first = Carbon::parse($recordsFrom);
+            if ($first->greaterThanOrEqualTo($expectedFrom->copy()->addDays(2)) && $first->lessThanOrEqualTo($end)) {
+                $archivesBegan = $first->toDateString();
+            }
+        }
 
         $check = $source === null ? null : SiteBackupCheck::query()
             ->where('site_id', $site->id)
@@ -1228,6 +1246,11 @@ class ClientReportCompiler
             'daily' => $daily,
             'period_days' => $periodDays,
             'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,
+            // Internal: when a relay site's off-site archives first began,
+            // inside the period, and when they should have (the period start,
+            // or when the site joined); null when there's no such gap.
+            'archives_began' => $archivesBegan,
+            'expected_from' => $archivesBegan !== null ? $expectedFrom?->toDateString() : null,
             'last_backup_at' => $inPeriod->first()?->backup_at->toDateString(),
             'list_from' => $windowStart->toDateString(),
             'recent' => $recent->all(),

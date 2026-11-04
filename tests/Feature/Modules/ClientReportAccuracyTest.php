@@ -544,6 +544,62 @@ describe('backups from our relay that keeps failing', function () {
             ->and(implode(' ', $report['reasons']))->not->toContain('failing');
     });
 
+    it('holds a report whose relay archives only began at the end of the month for a site enrolled before it', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        foreach ([28, 29, 30] as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray([
+            'status' => 'verified', 'covers_period' => false, 'days_with_backups' => 3,
+            'archives_began' => '2026-09-28', 'expected_from' => '2026-09-01',
+        ])
+            ->and($report['reasons'])->toContain('Off-site backups began on Sep 28, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 3 of 30 days).')
+            ->and($report['preview'])->toContain('Off-site backups began on 2026-09-28; none were made before that this period')
+            ->and($report['public'])->not->toContain('Off-site backups began');
+    });
+
+    it('does not flag relay archives that began the day after a site joined part-way through the month', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-09-15 12:00:00')]);
+        foreach (range(16, 30) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'archives_began' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('Off-site backups began')->not->toContain('Backed up on only');
+    });
+
+    it('keeps the plain low-count flag for relay archives that reach back before the period', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        failingRelayArchive($site, '2026-08-20 05:00:00');
+        foreach ([28, 29, 30] as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['covers_period' => true, 'archives_began' => null])
+            ->and($report['reasons'])->toContain('Backed up on only 3 of 30 days this month.');
+    });
+
+    it('still treats a host\'s records that start mid-month as where our records start', function () {
+        $site = pressableBackupSite();
+        $site->update(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        foreach (range(24, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 03:00:00', $day));
+        }
+        recordCheck($site, true);
+
+        $report = compileSeptember($site->fresh());
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'covers_period' => false, 'archives_began' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('Off-site backups began');
+    });
+
     it('ignores relay state on a site whose backups come from its host', function () {
         $site = pressableBackupSite();
         $site->update(['backup_relay_failing_since' => Carbon::parse('2026-09-05'), 'backup_relay_last_error' => 'Example timeout']);
