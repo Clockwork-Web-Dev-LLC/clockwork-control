@@ -123,7 +123,23 @@ class ClientReportCompiler
         ActionLog::TYPE_BACKUP_RESTORE_APPLIED,
     ];
 
+    /** A ban lifted this soon after it was made was a mistake, not a malicious visitor stopped. */
+    public const BAN_FALSE_POSITIVE_MINUTES = 60;
+
+    /** Where lockouts reach Control from (the pull of Gatekeeper / LLAR / Wordfence lockouts). */
+    public const LOCKOUT_SOURCES = [BlockedIp::SOURCE_LLAR, BlockedIp::SOURCE_GATEKEEPER, BlockedIp::SOURCE_WORDFENCE];
+
+    /**
+     * Lockouts reach Control from across the fleet every day; none for this
+     * long before the period end means the feed stopped, so a count can't
+     * be the month's total.
+     */
+    public const LOCKOUT_INGEST_MAX_GAP_HOURS = 72;
+
     protected ?bool $vulnerabilityFeedFresh = null;
+
+    /** @var array<string, ?Carbon> lastIngestedLockout() by period end */
+    protected array $lastIngestedLockout = [];
 
     public function __construct(
         protected PluginVulnerabilityMatcher $vulnerabilities,
@@ -910,9 +926,13 @@ class ClientReportCompiler
         $vulnerabilitiesChecked = is_array($snapshotPlugins) && $this->vulnerabilityFeedIsFresh();
         $vulnerabilities = $vulnerabilitiesChecked ? $this->vulnerabilities->forSite($site) : [];
 
+        // Bans lifted as false positives (a rule that misfired, or a ban
+        // undone within the hour) blocked nobody malicious.
         $blockedIpsCount = BlockedIp::query()
             ->where('site_id', $site->id)
             ->whereBetween('banned_at', [$start, $end])
+            ->get(['banned_at', 'unbanned_at', 'decided_by'])
+            ->reject(fn (BlockedIp $ban) => self::liftedAsFalsePositive($ban))
             ->count();
         // Lockouts from the period that never became a ban: waiting for
         // review, or failed (no server to ban at, fail2ban not provisioned).
@@ -922,8 +942,19 @@ class ClientReportCompiler
             ->whereBetween('created_at', [$start, $end])
             ->whereIn('status', self::UNBANNED_LOCKOUT_STATUSES)
             ->count();
-        $blocksMeasured = $unbannedLockouts === 0
-            && ($blockedIpsCount > 0 || $this->lockoutsIngested($site, $start, $end));
+        // A count is a monthly total only when lockouts reached us all
+        // month: bans in the period prove some did, not that all did. The
+        // site must report its lockouts now (a Companion that stopped
+        // advertising its blocker mid-month doesn't), and lockouts must
+        // still have been arriving near the period end.
+        $lastIngested = $this->lastIngestedLockout($end);
+        $blocksUnmeasured = match (true) {
+            $unbannedLockouts > 0 => 'unbanned_lockouts',
+            ! $this->lockoutsIngested($site, $start, $end) => 'no_lockout_feed',
+            $lastIngested !== null && $lastIngested->lessThan($end->copy()->subHours(self::LOCKOUT_INGEST_MAX_GAP_HOURS)) => 'ingestion_stopped',
+            default => null,
+        };
+        $blocksMeasured = $blocksUnmeasured === null;
 
         return [
             'total_scans' => $scans->count(),
@@ -944,6 +975,12 @@ class ClientReportCompiler
             'blocked_threats_count' => $blocksMeasured ? $blockedIpsCount : null,
             // Internal: lockouts in the period that never became a ban.
             'unbanned_lockouts' => $unbannedLockouts,
+            // Internal: why the count is hidden (unbanned_lockouts,
+            // no_lockout_feed, ingestion_stopped), or null when it's shown,
+            // and when any site's lockout last reached us by the period end.
+            // For the operator note (ReportPhrases::blockedVisitorsNote).
+            'blocks_unmeasured' => $blocksUnmeasured,
+            'lockouts_last_ingested_at' => $lastIngested?->toIso8601String(),
             // "At the server" only where a fail2ban jail can ban at the server.
             'blocks_at_server' => $blocksMeasured && $this->hasProvisionedJail($site),
             // Whether any transport can run the core-file check on this host.
@@ -1216,6 +1253,44 @@ class ClientReportCompiler
             && $this->hasProvisionedJail($site)
             && $pulledAt !== null
             && $pulledAt->greaterThanOrEqualTo($end->copy()->subDay());
+    }
+
+    /**
+     * A ban that blocked nobody malicious: reversed as a false positive
+     * (decided_by false_positive_*), or lifted within
+     * BAN_FALSE_POSITIVE_MINUTES of being made.
+     */
+    protected static function liftedAsFalsePositive(BlockedIp $ban): bool
+    {
+        if (str_starts_with((string) $ban->decided_by, 'false_positive')) {
+            return true;
+        }
+
+        return $ban->banned_at !== null && $ban->unbanned_at !== null
+            && $ban->unbanned_at->lessThanOrEqualTo($ban->banned_at->copy()->addMinutes(self::BAN_FALSE_POSITIVE_MINUTES));
+    }
+
+    /**
+     * When a lockout from any site last reached Control (a ban from a
+     * lockout source) by $end, or null when none ever has. Lockouts arrive
+     * from across the fleet every day, so none for days means the feed
+     * stopped, even while the pull itself keeps running and stamping
+     * last_llar_pull_at.
+     */
+    protected function lastIngestedLockout(Carbon $end): ?Carbon
+    {
+        $key = $end->toIso8601String();
+        if (! array_key_exists($key, $this->lastIngestedLockout)) {
+            $this->lastIngestedLockout[$key] = BlockedIp::query()
+                ->whereIn('source', self::LOCKOUT_SOURCES)
+                ->where('banned_at', '<=', $end)
+                ->orderByDesc('banned_at')
+                ->first(['banned_at'])
+                ?->banned_at
+                ?->copy();
+        }
+
+        return $this->lastIngestedLockout[$key];
     }
 
     /** The site's server has Clockwork's fail2ban jail, so bans happen at the server. */

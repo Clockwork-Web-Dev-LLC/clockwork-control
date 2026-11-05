@@ -353,6 +353,33 @@ final class ReportPhrases
     }
 
     /**
+     * Why the "Malicious visitors blocked" count is hidden, as a note for
+     * the operator, or null when it's shown (or the report predates the
+     * reason being kept and has no unbanned lockouts to explain it).
+     *
+     * @param  array<string, mixed>  $security  sections_data['security']
+     */
+    public static function blockedVisitorsNote(array $security): ?string
+    {
+        if (($security['blocked_threats_count'] ?? null) !== null) {
+            return null;
+        }
+
+        $lockouts = (int) ($security['unbanned_lockouts'] ?? 0);
+        $reason = match ($security['blocks_unmeasured'] ?? ($lockouts > 0 ? 'unbanned_lockouts' : null)) {
+            'unbanned_lockouts' => $lockouts.' '.Str::plural('lockout', $lockouts).' this period never became a ban, so a count would leave those visitors out',
+            'ingestion_stopped' => 'no lockout from any site has reached Control since '
+                .(self::date($security['lockouts_last_ingested_at'] ?? null) ?? 'well before the period end')
+                .', so a count would cover only part of the period',
+            'no_lockout_feed' => "nothing shows this site's lockouts reached Control all period (no blocker reporting to Control now, "
+                ."no provisioned fail2ban jail, or the server's lockouts weren't pulled at the end of the period)",
+            default => null,
+        };
+
+        return $reason !== null ? 'Malicious visitors blocked hidden from the client: '.$reason.'.' : null;
+    }
+
+    /**
      * The names of the plugins with a known vulnerability, when any was found.
      *
      * @param  array<string, mixed>  $security  sections_data['security']
