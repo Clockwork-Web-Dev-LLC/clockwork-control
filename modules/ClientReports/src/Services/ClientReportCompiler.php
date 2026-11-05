@@ -32,7 +32,7 @@ use Throwable;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 6;
+    public const SCHEMA_VERSION = 7;
 
     /**
      * security.malware_status for a clean scan that didn't cover the whole
