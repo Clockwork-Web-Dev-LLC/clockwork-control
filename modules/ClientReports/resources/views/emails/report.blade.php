@@ -151,7 +151,7 @@
 
     {{-- Intro --}}
     <tr><td style="padding:28px 32px 8px 32px; font-size:15px; line-height:1.6; color:#334155;">
-        <p style="margin:0 0 12px 0;">Hi{{ $contactName ? ' '.$contactName : '' }},</p>
+        <p style="margin:0 0 12px 0;">Hi {{ $greetingName ?: 'there' }},</p>
         <p style="margin:0;">Here's your website care summary for <strong class="cw-nolink" style="color:{{ $ink }}; text-decoration:none;">{!! $plainDomain !!}</strong> for {{ $period }} — what we updated, how the site performed, and how we kept it secure.</p>
         @if ($coverageNote)
             <p style="margin:12px 0 0 0;">{{ $coverageNote }}</p>

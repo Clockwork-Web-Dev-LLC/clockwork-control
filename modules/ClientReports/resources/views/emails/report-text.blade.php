@@ -18,7 +18,7 @@
 WEBSITE CARE REPORT — {!! $domain !!}
 {!! $period !!} ({!! $report->period_start->format('M j') !!} – {!! $report->period_end->format('M j, Y') !!})
 
-Hi{!! $contactName ? ' '.$contactName : '' !!},
+Hi {!! $greetingName ?: 'there' !!},
 
 Here's your website care summary for {!! $domain !!} for {!! $period !!}.
 @if ($coverageNote)

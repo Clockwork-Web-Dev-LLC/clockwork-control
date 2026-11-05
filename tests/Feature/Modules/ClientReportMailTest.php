@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Mail;
 use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
+use Modules\ClientReports\Models\ClientReportSchedule;
 
 function clientReportMailFixture(array $overrides = []): ClientReport
 {
@@ -101,17 +102,100 @@ it('hides the contact-forms section when no form tests ran', function () {
 
 it('does not HTML-escape names and notes in the plain-text part', function () {
     $report = clientReportMailFixture(['meta' => ['custom_notes' => "We've fixed the <contact> form & cache."]]);
-    $report->site->forceFill(['client_id' => Client::create(['name' => "O'Brien & Sons", 'email' => 'office@obrien.test'])->id])->save();
+    $report->forceFill(['client_email' => 'darcy@obrien.test'])->save();
+    $report->site->forceFill(['client_id' => Client::create(['name' => "D'Arcy O'Brien", 'email' => 'darcy@obrien.test'])->id])->save();
     $mail = new ClientReportMail($report->fresh());
     $content = $mail->content();
 
     $text = view($content->text, $content->with)->render();
 
-    expect($text)->toContain("Hi O'Brien & Sons,")
+    expect($text)->toContain("Hi D'Arcy,")
         ->toContain("We've fixed the <contact> form & cache.")
         ->not->toContain('&amp;')->not->toContain('&#039;');
     // The HTML part still escapes them.
-    expect($mail->render())->toContain('O&#039;Brien &amp; Sons')->not->toContain('<contact>');
+    expect($mail->render())->toContain('Hi D&#039;Arcy,')->toContain('&lt;contact&gt; form &amp; cache')->not->toContain('<contact>');
+});
+
+describe('the greeting', function () {
+    /** @return array{html: string, text: string} */
+    function greetingParts(ClientReport $report): array
+    {
+        $mail = new ClientReportMail($report->fresh());
+        $content = $mail->content();
+
+        return ['html' => $mail->render(), 'text' => view($content->text, $content->with)->render()];
+    }
+
+    it('greets the one recipient by first name when they are the contact on file, in both parts', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'Jane@Example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi Jane,')->not->toContain('Hi Jane Example,')
+            ->and($parts['text'])->toContain('Hi Jane,');
+    });
+
+    it('greets a recipient by name when another client record holds their address', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'sam@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Alex Example', 'email' => 'alex@example.test'])->id])->save();
+        Client::create(['name' => 'Sam Sample', 'email' => 'sam@example.test']);
+
+        expect(greetingParts($report)['text'])->toContain('Hi Sam,')->not->toContain('Alex');
+    });
+
+    it('says "Hi there," when the one recipient is not a known contact, even though the site has one', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'someone-else@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Alex Example', 'email' => 'alex@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')->not->toContain('Alex')
+            ->and($parts['text'])->toContain('Hi there,')->not->toContain('Alex');
+    });
+
+    it('says "Hi there," to several recipients, even when the first is the contact on file', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'jane@example.test, colleague@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')->not->toContain('Hi Jane')
+            ->and($parts['text'])->toContain('Hi there,');
+    });
+
+    it('falls back to the schedule recipients when the report has none stored', function () {
+        $report = clientReportMailFixture();
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $report->site_id, 'frequency' => 'monthly', 'delivery_mode' => 'auto',
+            'recipients' => ['jane@example.test', 'colleague@example.test'], 'is_enabled' => true,
+        ]);
+        $report->forceFill(['schedule_id' => $schedule->id, 'client_email' => null])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        expect(greetingParts($report)['text'])->toContain('Hi there,');
+    });
+
+    it('says "Hi there," when the contact\'s stored name is not plainly a person\'s', function (string $name) {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'office@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => $name, 'email' => 'office@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')
+            ->and($parts['text'])->toContain('Hi there,');
+    })->with([
+        'an organisation' => 'Example Institute',
+        'an acronym' => 'EXCO',
+        'an initial' => 'J. Example',
+        'a note in brackets' => 'Jane (Example Strategy)',
+        'a company spelled out' => 'Example Girl Interior Design',
+    ]);
 });
 
 it('has a client-friendly subject and replies go to support', function () {

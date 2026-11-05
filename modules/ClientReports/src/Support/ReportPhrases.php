@@ -25,6 +25,58 @@ final class ReportPhrases
     ];
 
     /**
+     * Words that make a contact's stored name an organisation's rather than
+     * a person's ("St James Church", "Example Design Group"), lower case.
+     */
+    private const ORGANISATION_WORDS = [
+        'academy', 'agency', 'and', 'association', 'bank', 'board', 'cafe', 'capital', 'center', 'centre',
+        'church', 'cid', 'clinic', 'club', 'co', 'coalition', 'college', 'committee', 'company', 'consulting',
+        'corp', 'corporation', 'council', 'department', 'dept', 'design', 'designs', 'enterprises', 'firm',
+        'for', 'foundation', 'fund', 'gallery', 'global', 'group', 'health', 'holdings', 'hospital', 'hotel',
+        'inc', 'industries', 'info', 'inn', 'institute', 'interiors', 'international', 'law', 'library', 'llc',
+        'llp', 'ltd', 'marketing', 'media', 'ministries', 'ministry', 'museum', 'national', 'network', 'of',
+        'office', 'partners', 'pllc', 'program', 'programme', 'project', 'properties', 'realty', 'resort',
+        'restaurant', 'sales', 'salon', 'school', 'services', 'shop', 'society', 'solutions', 'spa', 'store',
+        'studio', 'studios', 'support', 'team', 'the', 'trust', 'university', 'web', 'website',
+    ];
+
+    /**
+     * The first name to greet a contact by ("Jane" for "Jane Example"), or
+     * null when the stored name isn't plainly one person's: an organisation
+     * ("Example Institute", an acronym, a name with an organisation word or
+     * more than three words), an initial ("J. Example"), a name with a note
+     * in brackets or with digits or symbols ("Jane (Example Co)"), or one
+     * not written as a name (all lower case, or run together with capitals
+     * inside, "ExampleSupply"). Null greets "Hi there,", which is never
+     * wrong; a guessed name can be.
+     */
+    public static function firstName(?string $name): ?string
+    {
+        $name = trim(preg_replace('/\s+/u', ' ', (string) $name) ?? '');
+        if ($name === '' || preg_match('/[()\[\]{}\/\\\\&@,+#:;!?"_\d]/u', $name)) {
+            return null;
+        }
+
+        $words = explode(' ', $name);
+        if (count($words) > 3) {
+            return null;
+        }
+
+        foreach ($words as $word) {
+            if (in_array(mb_strtolower(rtrim($word, '.')), self::ORGANISATION_WORDS, true)
+                || (mb_strlen($word) > 1 && preg_match('/^\p{Lu}+$/u', $word))) {
+                return null;
+            }
+        }
+
+        $first = $words[0];
+
+        return mb_strlen($first) >= 2 && preg_match("/^\p{Lu}\p{Ll}*(?:['’\-]\p{Lu}?\p{Ll}+)*$/u", $first)
+            ? $first
+            : null;
+    }
+
+    /**
      * The timezone times in a report are shown in (clockwork.reports.timezone).
      * Stored times are UTC, which reads as the wrong time of day to clients.
      * An invalid setting falls back to UTC rather than breaking the email, as
