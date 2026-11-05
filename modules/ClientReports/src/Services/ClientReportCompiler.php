@@ -23,14 +23,16 @@ use App\Services\Security\CompanionMalwareScanner;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Support\ReportPhrases;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 6;
+    public const SCHEMA_VERSION = 7;
 
     /**
      * security.malware_status for a clean scan that didn't cover the whole
@@ -92,7 +94,52 @@ class ClientReportCompiler
     /** A Companion snapshot older than this before the period end can't say what was waiting then. */
     public const SNAPSHOT_MAX_AGE_HOURS = 48;
 
+    /**
+     * The agency's own connector plugins, by directory. Updating them is
+     * our tooling, not the client's software, so they're never listed or
+     * counted as the client's updates.
+     */
+    public const AGENCY_PLUGIN_DIRS = ['clockwork-companion', 'clockwork-renegade'];
+
+    /**
+     * Version changes something other than Control made (WordPress's own
+     * auto-updates, the host, someone in wp-admin), recorded when Control
+     * sees them between snapshots, and the update kind each one is listed
+     * as. Their details: slug, name, from_version, to_version, observed_at.
+     */
+    public const OBSERVED_UPDATE_TYPES = [
+        'plugin_update_observed' => ActionLog::TYPE_PLUGIN_UPDATE,
+        'theme_update_observed' => ActionLog::TYPE_THEME_UPDATE,
+        'core_update_observed' => ActionLog::TYPE_CORE_UPDATE,
+    ];
+
+    /**
+     * Logged after an update to say it was undone or stopped: the nightly
+     * run pausing the plugin or theme, or a backup restored over the site.
+     */
+    protected const UNDO_LOG_TYPES = [
+        ActionLog::TYPE_PLUGIN_UPDATE_AUTO_IGNORED,
+        ActionLog::TYPE_THEME_UPDATE_AUTO_IGNORED,
+        ActionLog::TYPE_BACKUP_RESTORE_APPLIED,
+    ];
+
+    /** A ban lifted this soon after it was made was a mistake, not a malicious visitor stopped. */
+    public const BAN_FALSE_POSITIVE_MINUTES = 60;
+
+    /** Where lockouts reach Control from (the pull of Gatekeeper / LLAR / Wordfence lockouts). */
+    public const LOCKOUT_SOURCES = [BlockedIp::SOURCE_LLAR, BlockedIp::SOURCE_GATEKEEPER, BlockedIp::SOURCE_WORDFENCE];
+
+    /**
+     * Lockouts reach Control from across the fleet every day; none for this
+     * long before the period end means the feed stopped, so a count can't
+     * be the month's total.
+     */
+    public const LOCKOUT_INGEST_MAX_GAP_HOURS = 72;
+
     protected ?bool $vulnerabilityFeedFresh = null;
+
+    /** @var array<string, ?Carbon> lastIngestedLockout() by period end */
+    protected array $lastIngestedLockout = [];
 
     public function __construct(
         protected PluginVulnerabilityMatcher $vulnerabilities,
@@ -116,10 +163,11 @@ class ClientReportCompiler
         $end = $periodEnd->copy()->endOfDay();
 
         // The same calendar days in the report timezone, as UTC instants. The
-        // uptime section and the coverage dates show times and dates in that
-        // zone, so they're measured over it: an outage at 01:00 UTC on the 1st
-        // reads "Sep 30, 9:00 PM EDT" and belongs to the month before. The
-        // other sections list whole days (UTC, as their sources record them).
+        // uptime and updates sections and the coverage dates show times and
+        // dates in that zone, so they're measured over it: an outage at 01:00
+        // UTC on the 1st reads "Sep 30, 9:00 PM EDT" and belongs to the month
+        // before, and so does an update run then. The other sections list
+        // whole days (UTC, as their sources record them).
         $zone = ReportPhrases::timezone();
         $localStart = Carbon::parse($periodStart->toDateString(), $zone)->startOfDay()->utc();
         $localEnd = Carbon::parse($periodEnd->toDateString(), $zone)->endOfDay()->utc();
@@ -130,12 +178,13 @@ class ClientReportCompiler
         // Companion; trust the snapshot so their core-file row isn't dropped.
         $isWordPress = (bool) $site->is_wordpress || isset($site->companion_snapshot['wp_core']);
 
-        // A site added part-way through the period was only looked after from
-        // then, which the whole report says; null when it was there for the
+        // A site added part-way through the period, or whose care plan was
+        // switched on part-way through it, was only looked after from then,
+        // which the whole report says; null when it was looked after for the
         // whole period. Uptime monitoring can begin later still (switched on
         // mid-month for a site added long before), which only the uptime
         // section measures from.
-        $joinedAt = $this->joinedAt($site, $localStart, $localEnd);
+        [$joinedAt, $coverageSource] = $this->coverageStart($site, $localStart, $localEnd);
         $uptimeFrom = $this->uptimeMonitoringStart($site, $localStart, $localEnd);
 
         $data = [
@@ -147,10 +196,12 @@ class ClientReportCompiler
                 // microsecond of the day, so round to whole days (31 for October).
                 'period_days' => (int) round($start->diffInDays($end)),
                 'custom_notes' => $customNotes,
-                // When the site was added, if that was after the period's first
-                // day in the report timezone (ISO 8601). The views say so and
-                // the report is held for review.
+                // When the site was added or its care plan switched on, if that
+                // was after the period's first day in the report timezone (ISO
+                // 8601), and which it was ('site_added' or 'care_plan'). The
+                // views say so and the report is held for review.
                 'coverage_start' => $joinedAt?->toIso8601String(),
+                'coverage_source' => $coverageSource,
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
                 'schema_version' => self::SCHEMA_VERSION,
@@ -167,7 +218,7 @@ class ClientReportCompiler
         ];
 
         if ($shouldInclude('updates')) {
-            $data['updates'] = $this->compileUpdates($site, $start, $end);
+            $data['updates'] = $this->compileUpdates($site, $localStart, $localEnd);
         }
         if ($shouldInclude('uptime')) {
             $data['uptime'] = $this->compileUptime($site, $localStart, $localEnd, $uptimeFrom);
@@ -210,6 +261,64 @@ class ClientReportCompiler
         }
 
         return $created->copy();
+    }
+
+    /**
+     * Where the report's coverage begins, if after the period's first day:
+     * when the site was added (joinedAt) or when its care plan was switched
+     * on (carePlanStartedAt), whichever is later, with which it was.
+     *
+     * @return array{0: ?Carbon, 1: ?string}
+     */
+    protected function coverageStart(Site $site, Carbon $start, Carbon $end): array
+    {
+        $added = $this->joinedAt($site, $start, $end);
+        $carePlan = $this->carePlanStartedAt($site, $start, $end);
+
+        return match (true) {
+            $carePlan !== null && ($added === null || $carePlan->greaterThan($added)) => [$carePlan, 'care_plan'],
+            $added !== null => [$added, 'site_added'],
+            default => [null, null],
+        };
+    }
+
+    /**
+     * When the site's care plan was last switched on inside the period, if
+     * that was after its first day (in the report timezone): the period
+     * before wasn't a care-plan period, so the report covers only the rest.
+     * A switch-on is a care_plan_toggled row that turned the plan on from
+     * off: details.now (the site page's toggle) or details.enabled (a
+     * one-off command-line run) true, with details.previous false. Rows
+     * that re-sent the flag, cleared an override or found the plan already
+     * on aren't. With care plans switched off fleet-wide every site counts
+     * as on, so toggles say nothing.
+     */
+    protected function carePlanStartedAt(Site $site, Carbon $start, Carbon $end): ?Carbon
+    {
+        if (! Site::areCarePlansEnabled()) {
+            return null;
+        }
+
+        $switchedOn = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->where('action_type', ActionLog::TYPE_CARE_PLAN_TOGGLED)
+            ->whereBetween('ran_at', [$start, $end])
+            ->orderByDesc('ran_at')
+            ->orderByDesc('id')
+            ->get(['ran_at', 'details'])
+            ->first(function (ActionLog $log) {
+                $details = is_array($log->details) ? $log->details : [];
+
+                return ($details['now'] ?? $details['enabled'] ?? null) === true
+                    && array_key_exists('previous', $details) && $details['previous'] === false;
+            });
+
+        $at = $switchedOn?->ran_at;
+        if ($at === null || $at->lessThan($start->copy()->addDay())) {
+            return null;
+        }
+
+        return $at->copy();
     }
 
     /**
@@ -272,40 +381,65 @@ class ClientReportCompiler
         ];
     }
 
+    /**
+     * The updates applied in the period: Control's own update runs, and
+     * version changes something else made that Control saw between
+     * snapshots (OBSERVED_UPDATE_TYPES), each listed once. $start and $end
+     * bound the period's days in the report timezone, and each update is
+     * dated by its day there, so an update run at 9:30 PM on the 28th
+     * (01:30 UTC on the 29th) reads "Oct 28", as an outage then would.
+     *
+     * Left out: runs that changed nothing, the agency's own connector
+     * plugins (AGENCY_PLUGIN_DIRS), and updates that were undone after they
+     * ran (see undoneUpdates()), which are kept apart as not_kept for the
+     * review flags.
+     */
     protected function compileUpdates(Site $site, Carbon $start, Carbon $end): array
     {
+        $zone = ReportPhrases::timezone();
         $logs = ActionLog::query()
             ->where('site_id', $site->id)
             ->whereIn('action_type', ActionLog::UPDATE_TYPES)
             ->where('ok', true)
             ->whereBetween('ran_at', [$start, $end])
             ->orderByDesc('ran_at')
+            ->orderByDesc('id')
             ->get()
-            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary));
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary) || self::isAgencyPluginUpdate($log))
+            ->values();
 
-        $pluginUpdates = [];
-        $themeUpdates = [];
-        $coreUpdates = [];
-        $translationUpdates = [];
+        $undone = $this->undoneUpdates($site, $logs);
+        $logs = $logs->reject(fn (ActionLog $log) => isset($undone[$log->id]))->values();
 
-        foreach ($logs as $log) {
-            $item = [
+        $items = $logs->map(fn (ActionLog $log) => [
+            'type' => $log->action_type,
+            'at' => $log->ran_at,
+            'item' => [
                 'target' => $log->target,
                 'summary' => $log->summary,
-                'date' => $log->ran_at?->toDateString(),
-            ];
+                'date' => $log->ran_at?->copy()->setTimezone($zone)->toDateString(),
+                'observed' => false,
+            ],
+        ])->all();
 
-            match ($log->action_type) {
-                ActionLog::TYPE_PLUGIN_UPDATE => $pluginUpdates[] = $item,
-                ActionLog::TYPE_THEME_UPDATE => $themeUpdates[] = $item,
-                ActionLog::TYPE_CORE_UPDATE => $coreUpdates[] = $item,
-                ActionLog::TYPE_TRANSLATIONS_UPDATE => $translationUpdates[] = $item,
-                default => null,
-            };
+        foreach ($this->observedUpdates($site, $start, $end) as $observed) {
+            $items[] = $observed;
         }
 
+        // Newest first, as the rows were read.
+        usort($items, fn (array $a, array $b) => ($b['at']?->getTimestamp() ?? 0) <=> ($a['at']?->getTimestamp() ?? 0));
+
+        $byType = fn (string $type) => array_values(array_map(
+            fn (array $i) => $i['item'],
+            array_filter($items, fn (array $i) => $i['type'] === $type),
+        ));
+        $pluginUpdates = $byType(ActionLog::TYPE_PLUGIN_UPDATE);
+        $themeUpdates = $byType(ActionLog::TYPE_THEME_UPDATE);
+        $coreUpdates = $byType(ActionLog::TYPE_CORE_UPDATE);
+        $translationUpdates = $byType(ActionLog::TYPE_TRANSLATIONS_UPDATE);
+
         return [
-            'total' => $logs->count(),
+            'total' => count($items),
             'plugins_count' => count($pluginUpdates),
             'themes_count' => count($themeUpdates),
             'core_count' => count($coreUpdates),
@@ -315,11 +449,232 @@ class ClientReportCompiler
                 'themes' => $themeUpdates,
                 'core' => $coreUpdates,
             ],
+            // Internal: updates that ran in the period but were undone after
+            // (the site is on an older version now, and the update was paused
+            // or a backup restored), so they aren't listed. For the review flags.
+            'not_kept' => array_values($undone),
             // What was still waiting at the end of the period, so the email
-            // never says "already up to date" while something was. null means
+            // never says "up to date" while something was. null means
             // unknown (no snapshot, or one too old to say). See updatesWereWaiting().
             ...$this->pendingUpdates($site, $end),
         ];
+    }
+
+    /** Whether an update log is for one of the agency's own connector plugins. */
+    protected static function isAgencyPluginUpdate(ActionLog $log): bool
+    {
+        $type = self::OBSERVED_UPDATE_TYPES[$log->action_type] ?? $log->action_type;
+        if ($type !== ActionLog::TYPE_PLUGIN_UPDATE) {
+            return false;
+        }
+
+        $details = is_array($log->details) ? $log->details : [];
+
+        return self::isAgencyPlugin((string) ($details['slug'] ?? $log->target ?? ''));
+    }
+
+    /** Whether a plugin slug ("clockwork-companion/clockwork-companion.php") is one of the agency's own. */
+    public static function isAgencyPlugin(string $slug): bool
+    {
+        return in_array(strtolower(explode('/', trim($slug), 2)[0]), self::AGENCY_PLUGIN_DIRS, true);
+    }
+
+    /**
+     * Version changes something other than Control made, seen in the period,
+     * as update items. Each is dated by when it was seen (ran_at, the
+     * snapshot that showed the new version) in the report timezone. One that Control's own
+     * update run made (the same plugin, theme or core going to the same
+     * version) is already listed, so it's left out; so are the agency's own
+     * plugins and changes that ended on the version they started from.
+     *
+     * @return list<array{type: string, at: Carbon, item: array{target: ?string, summary: string, date: string, observed: bool}}>
+     */
+    protected function observedUpdates(Site $site, Carbon $start, Carbon $end): array
+    {
+        $zone = ReportPhrases::timezone();
+        $rows = $this->observedUpdateRows($site, $start)
+            ->filter(fn (array $row) => $row['at']->betweenIncluded($start, $end))
+            ->reject(fn (array $row) => $row['to'] === '' || $row['to'] === $row['from'])
+            ->values();
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        // Control's own runs to the same version, a little either side of
+        // the period: a snapshot can see a change a day after Control made it.
+        $applied = [];
+        ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', [ActionLog::TYPE_PLUGIN_UPDATE, ActionLog::TYPE_THEME_UPDATE, ActionLog::TYPE_CORE_UPDATE])
+            ->where('ok', true)
+            ->whereBetween('ran_at', [$start->copy()->subDays(31), $end->copy()->addDays(31)])
+            ->get(['action_type', 'target', 'summary', 'details'])
+            ->each(function (ActionLog $log) use (&$applied) {
+                $details = is_array($log->details) ? $log->details : [];
+                $to = trim((string) ($details['after_version'] ?? ''));
+                if ($to === '' && preg_match('/→\s*(\S+)\s*(?:\[|$)/u', (string) $log->summary, $m)) {
+                    $to = $m[1];
+                }
+                $applied[self::updateKey($log->action_type, (string) ($details['slug'] ?? $log->target ?? ''), $to)] = true;
+            });
+
+        $prefixes = [
+            ActionLog::TYPE_PLUGIN_UPDATE => 'Plugin updated: ',
+            ActionLog::TYPE_THEME_UPDATE => 'Theme updated: ',
+            ActionLog::TYPE_CORE_UPDATE => 'WordPress core updated: ',
+        ];
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (isset($applied[self::updateKey($row['type'], $row['slug'], $row['to'])])) {
+                continue;
+            }
+
+            $name = $row['type'] === ActionLog::TYPE_CORE_UPDATE ? '' : $row['name'];
+            $versions = ($row['from'] !== '' ? $row['from'].' → ' : '→ ').$row['to'];
+            $items[] = [
+                'type' => $row['type'],
+                'at' => $row['at'],
+                'item' => [
+                    'target' => $row['slug'] !== '' ? $row['slug'] : null,
+                    'summary' => $prefixes[$row['type']].trim($name.' '.$versions),
+                    'date' => $row['at']->copy()->setTimezone($zone)->toDateString(),
+                    'observed' => true,
+                ],
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * The site's observed version changes seen at or after $since, read
+     * into one shape, without the agency's own plugins. A row's ran_at is
+     * the snapshot that showed the new version. Names come from the
+     * snapshot as WordPress gives them, HTML entities and all ("Example
+     * &amp; Co"), so they're decoded for display.
+     *
+     * @return Collection<int, array{type: string, slug: string, name: string, from: string, to: string, at: Carbon}>
+     */
+    protected function observedUpdateRows(Site $site, Carbon $since): Collection
+    {
+        $decode = fn (mixed $text) => trim(html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        return ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', array_keys(self::OBSERVED_UPDATE_TYPES))
+            ->where('ok', true)
+            ->where('ran_at', '>=', $since)
+            ->get()
+            ->reject(fn (ActionLog $log) => self::isAgencyPluginUpdate($log))
+            ->map(function (ActionLog $log) use ($decode) {
+                $details = is_array($log->details) ? $log->details : [];
+                $slug = trim((string) ($details['slug'] ?? $log->target ?? ''));
+
+                return [
+                    'type' => self::OBSERVED_UPDATE_TYPES[$log->action_type],
+                    'slug' => $slug,
+                    'name' => $decode($details['name'] ?? '') ?: ($slug !== '' ? Str::headline(explode('/', $slug, 2)[0]) : 'WordPress'),
+                    'from' => trim((string) ($details['from_version'] ?? '')),
+                    'to' => trim((string) ($details['to_version'] ?? '')),
+                    'at' => $log->ran_at?->copy()->utc(),
+                ];
+            })
+            ->filter(fn (array $row) => $row['at'] !== null)
+            ->values();
+    }
+
+    /** "plugin_update|example-forms|2.1": an update by kind, plugin or theme directory and the version it reached. */
+    protected static function updateKey(string $type, string $slug, string $version): string
+    {
+        $dir = $type === ActionLog::TYPE_CORE_UPDATE ? '' : strtolower(explode('/', trim($slug), 2)[0]);
+
+        return $type.'|'.$dir.'|'.trim($version);
+    }
+
+    /**
+     * Plugin and theme updates that ran but didn't stick: the site's
+     * snapshot, taken after the update, shows a lower version than the
+     * update reached, and since the update the plugin or theme was paused
+     * (an update ignore, or the nightly run's auto-pause) or a backup was
+     * restored over the site. A lower version alone isn't enough (the
+     * snapshot may list the plugin under another slug, or a person may have
+     * rolled it back for a reason the client was told about), so without
+     * one of those the update is still listed.
+     *
+     * @param  Collection<int, ActionLog>  $logs
+     * @return array<int, array{type: string, label: string, date: ?string, installed_version: string}> keyed by log id
+     */
+    protected function undoneUpdates(Site $site, Collection $logs): array
+    {
+        $snapshotAt = $site->companion_snapshot_at;
+        $snapshot = (array) $site->companion_snapshot;
+        if ($snapshotAt === null || $snapshot === []) {
+            return [];
+        }
+
+        $installed = [];
+        foreach (['plugin' => $snapshot['plugins']['plugins'] ?? null, 'theme' => $snapshot['themes']['items'] ?? null] as $kind => $entries) {
+            foreach ((array) $entries as $entry) {
+                $slug = is_array($entry) ? trim((string) ($entry['slug'] ?? '')) : '';
+                $version = is_array($entry) ? trim((string) ($entry['version'] ?? '')) : '';
+                if ($slug !== '' && $version !== '') {
+                    $installed[$kind][$slug] = $version;
+                    $installed[$kind][strtolower(explode('/', $slug, 2)[0])] ??= $version;
+                }
+            }
+        }
+
+        $candidates = [];
+        foreach ($logs as $log) {
+            $kind = match ($log->action_type) {
+                ActionLog::TYPE_PLUGIN_UPDATE => 'plugin',
+                ActionLog::TYPE_THEME_UPDATE => 'theme',
+                default => null,
+            };
+            $details = is_array($log->details) ? $log->details : [];
+            $slug = trim((string) ($details['slug'] ?? $log->target ?? ''));
+            $after = trim((string) ($details['after_version'] ?? ''));
+            $now = $kind !== null ? ($installed[$kind][$slug] ?? $installed[$kind][strtolower(explode('/', $slug, 2)[0])] ?? null) : null;
+
+            if ($now !== null && $after !== '' && $log->ran_at !== null && $snapshotAt->greaterThan($log->ran_at)
+                && version_compare($now, $after, '<')) {
+                $candidates[$log->id] = [$log, $kind, $slug, $now];
+            }
+        }
+        if ($candidates === []) {
+            return [];
+        }
+
+        $earliest = collect($candidates)->min(fn (array $c) => $c[0]->ran_at);
+        $pauses = PluginUpdateIgnore::query()
+            ->where('site_id', $site->id)
+            ->whereIn('target_slug', array_unique(array_column($candidates, 2)))
+            ->get(['target_kind', 'target_slug', 'ignored_at']);
+        $undoLogs = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', self::UNDO_LOG_TYPES)
+            ->where('ran_at', '>=', $earliest)
+            ->get(['action_type', 'target', 'ran_at']);
+
+        $undone = [];
+        foreach ($candidates as $id => [$log, $kind, $slug, $now]) {
+            $paused = $pauses->contains(fn (PluginUpdateIgnore $p) => $p->target_kind === $kind && $p->target_slug === $slug
+                && $p->ignored_at !== null && $p->ignored_at->greaterThanOrEqualTo($log->ran_at));
+            $rolledBack = $undoLogs->contains(fn (ActionLog $u) => $u->ran_at !== null && $u->ran_at->greaterThanOrEqualTo($log->ran_at)
+                && ($u->action_type === ActionLog::TYPE_BACKUP_RESTORE_APPLIED || $u->target === $slug));
+
+            if ($paused || $rolledBack) {
+                $undone[$id] = [
+                    'type' => $kind,
+                    'label' => ClientReportMail::cleanUpdateSummary((string) $log->summary, $slug),
+                    'date' => $log->ran_at->copy()->setTimezone(ReportPhrases::timezone())->toDateString(),
+                    'installed_version' => $now,
+                ];
+            }
+        }
+
+        return $undone;
     }
 
     /**
@@ -335,6 +690,8 @@ class ClientReportCompiler
      *
      * pending_plugin_items is the same list with each plugin's file slug and
      * the version offered, for the review flags to join on (names repeat).
+     * The agency's own connector plugins are left out, as they are from the
+     * updates list.
      *
      * @return array{pending_plugins: ?list<string>, pending_plugin_items: ?list<array{slug: string, name: string, new_version: ?string}>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
      */
@@ -357,16 +714,24 @@ class ClientReportCompiler
         };
         $name = fn (array $i) => (string) ($i['name'] ?? $i['slug'] ?? '');
         $plugins = $snapshot['plugins']['plugins'] ?? null;
+        if (is_array($plugins)) {
+            $plugins = array_values(array_filter($plugins, fn ($p) => ! (is_array($p) && self::isAgencyPlugin((string) ($p['slug'] ?? '')))));
+        }
         $core = $snapshot['wp_core'] ?? null;
 
+        // Updates applied after the period (by Control, or seen changing
+        // since) were waiting at its end.
         $updatedSince = ActionLog::query()
             ->where('site_id', $site->id)
             ->whereIn('action_type', [ActionLog::TYPE_PLUGIN_UPDATE, ActionLog::TYPE_THEME_UPDATE, ActionLog::TYPE_CORE_UPDATE])
             ->where('ok', true)
             ->where('ran_at', '>', $end)
-            ->get(['summary'])
-            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary))
-            ->count();
+            ->get(['action_type', 'target', 'summary', 'details'])
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary) || self::isAgencyPluginUpdate($log))
+            ->count()
+            + $this->observedUpdateRows($site, $end)
+                ->filter(fn (array $row) => $row['at']->greaterThan($end) && $row['to'] !== '' && $row['to'] !== $row['from'])
+                ->count();
 
         return [
             'pending_plugins' => $stale ? null : $waiting($plugins, $name),
@@ -523,6 +888,12 @@ class ClientReportCompiler
 
         $seconds = fn (array $i) => max(0, (int) $i['from']->diffInSeconds($i['to']));
         $outageIntervals = array_values(array_filter($intervals, fn (array $i) => ! $i['blocked']));
+        $outageRow = fn (array $i) => [
+            'started_at' => $i['from']->toIso8601String(),
+            'minutes' => (int) round($seconds($i) / 60),
+            'started_before_period' => $i['carried_in'],
+            'ongoing' => $i['ongoing'],
+        ];
         $blockedSeconds = array_sum(array_map($seconds, array_filter($intervals, fn (array $i) => $i['blocked'])));
 
         $outages = count($outageIntervals)
@@ -561,12 +932,14 @@ class ClientReportCompiler
             // Newest first, capped: the email lists the most recent outages. An
             // outage carried in from before the period starts at the period
             // start, so it's flagged rather than shown as starting then.
-            'outages' => array_slice(array_reverse(array_map(fn (array $i) => [
-                'started_at' => $i['from']->toIso8601String(),
-                'minutes' => (int) round($seconds($i) / 60),
-                'started_before_period' => $i['carried_in'],
-                'ongoing' => $i['ongoing'],
-            ], $outageIntervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
+            'outages' => array_slice(array_reverse(array_map($outageRow, $outageIntervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
+            // Internal: every outage of ReportReviewFlags::LONG_OUTAGE_MINUTES
+            // or more, oldest first and uncapped, so one that dropped off the
+            // client's list still holds the report for a person to explain.
+            'long_outages' => array_values(array_filter(
+                array_map($outageRow, $outageIntervals),
+                fn (array $o) => $o['minutes'] >= ReportReviewFlags::LONG_OUTAGE_MINUTES,
+            )),
         ];
     }
 
@@ -618,9 +991,13 @@ class ClientReportCompiler
         $vulnerabilitiesChecked = is_array($snapshotPlugins) && $this->vulnerabilityFeedIsFresh();
         $vulnerabilities = $vulnerabilitiesChecked ? $this->vulnerabilities->forSite($site) : [];
 
+        // Bans lifted as false positives (a rule that misfired, or a ban
+        // undone within the hour) blocked nobody malicious.
         $blockedIpsCount = BlockedIp::query()
             ->where('site_id', $site->id)
             ->whereBetween('banned_at', [$start, $end])
+            ->get(['banned_at', 'unbanned_at', 'decided_by'])
+            ->reject(fn (BlockedIp $ban) => self::liftedAsFalsePositive($ban))
             ->count();
         // Lockouts from the period that never became a ban: waiting for
         // review, or failed (no server to ban at, fail2ban not provisioned).
@@ -630,8 +1007,19 @@ class ClientReportCompiler
             ->whereBetween('created_at', [$start, $end])
             ->whereIn('status', self::UNBANNED_LOCKOUT_STATUSES)
             ->count();
-        $blocksMeasured = $unbannedLockouts === 0
-            && ($blockedIpsCount > 0 || $this->lockoutsIngested($site, $start, $end));
+        // A count is a monthly total only when lockouts reached us all
+        // month: bans in the period prove some did, not that all did. The
+        // site must report its lockouts now (a Companion that stopped
+        // advertising its blocker mid-month doesn't), and lockouts must
+        // still have been arriving near the period end.
+        $lastIngested = $this->lastIngestedLockout($end);
+        $blocksUnmeasured = match (true) {
+            $unbannedLockouts > 0 => 'unbanned_lockouts',
+            ! $this->lockoutsIngested($site, $start, $end) => 'no_lockout_feed',
+            $lastIngested !== null && $lastIngested->lessThan($end->copy()->subHours(self::LOCKOUT_INGEST_MAX_GAP_HOURS)) => 'ingestion_stopped',
+            default => null,
+        };
+        $blocksMeasured = $blocksUnmeasured === null;
 
         return [
             'total_scans' => $scans->count(),
@@ -652,6 +1040,12 @@ class ClientReportCompiler
             'blocked_threats_count' => $blocksMeasured ? $blockedIpsCount : null,
             // Internal: lockouts in the period that never became a ban.
             'unbanned_lockouts' => $unbannedLockouts,
+            // Internal: why the count is hidden (unbanned_lockouts,
+            // no_lockout_feed, ingestion_stopped), or null when it's shown,
+            // and when any site's lockout last reached us by the period end.
+            // For the operator note (ReportPhrases::blockedVisitorsNote).
+            'blocks_unmeasured' => $blocksUnmeasured,
+            'lockouts_last_ingested_at' => $lastIngested?->toIso8601String(),
             // "At the server" only where a fail2ban jail can ban at the server.
             'blocks_at_server' => $blocksMeasured && $this->hasProvisionedJail($site),
             // Whether any transport can run the core-file check on this host.
@@ -849,17 +1243,7 @@ class ClientReportCompiler
 
         $items = [];
         foreach ($plugins as $slug => [$plugin, $vulns]) {
-            $fixedIn = null;
-            foreach ($vulns as $vuln) {
-                $patched = trim((string) $vuln->patched_in);
-                if ($patched === '') {
-                    $fixedIn = null;
-                    break;
-                }
-                if ($fixedIn === null || version_compare($patched, $fixedIn, '>')) {
-                    $fixedIn = $patched;
-                }
-            }
+            [$fixedIn, $fixedAfter] = self::fixedVersion($vulns);
 
             $offered = trim((string) ($plugin['new_version'] ?? ''));
             $pause = $pauses->get($slug);
@@ -869,6 +1253,7 @@ class ClientReportCompiler
                 'name' => (string) ($plugin['name'] ?? $slug),
                 'version' => (string) ($plugin['version'] ?? ''),
                 'fixed_in' => $fixedIn,
+                'fixed_after' => $fixedAfter,
                 'update_offered' => ! empty($plugin['update_available']) && $offered !== '' ? $offered : null,
                 'paused' => $pause instanceof PluginUpdateIgnore ? [
                     'source' => (string) $pause->source,
@@ -880,6 +1265,44 @@ class ClientReportCompiler
         }
 
         return $items;
+    }
+
+    /**
+     * The lowest version clear of every advisory, as [fixed_in, null] (that
+     * version fixes them) or [null, fixed_after] (only versions after that
+     * one do), or [null, null] when one has no fix. An advisory names its
+     * patched version, or failing that its range does: "below 3.0" is fixed
+     * in 3.0, "up to and including 4.2.0" (or exactly 4.2.0) by whatever
+     * comes after 4.2.0.
+     * One open-ended ("all versions") with no patched version has no fix yet.
+     *
+     * @param  list<PluginVulnerability>  $vulns
+     * @return array{0: ?string, 1: ?string}
+     */
+    protected static function fixedVersion(array $vulns): array
+    {
+        $best = null;
+        foreach ($vulns as $vuln) {
+            $patched = trim((string) $vuln->patched_in);
+            $bound = trim((string) $vuln->to_version);
+            // An advisory for exactly one version ("== X", stored from = to = X).
+            $exact = $bound !== '' && $bound !== '*' && trim((string) $vuln->from_version) === $bound;
+            $threshold = match (true) {
+                $patched !== '' => [$patched, false],
+                $bound !== '' && $bound !== '*' => [$bound, $exact || (bool) $vuln->to_inclusive],
+                default => null,
+            };
+            if ($threshold === null) {
+                return [null, null];
+            }
+
+            $cmp = $best === null ? 1 : version_compare($threshold[0], $best[0]);
+            if ($cmp > 0 || ($cmp === 0 && $threshold[1] && ! $best[1])) {
+                $best = $threshold;
+            }
+        }
+
+        return $best === null ? [null, null] : ($best[1] ? [null, $best[0]] : [$best[0], null]);
     }
 
     /**
@@ -924,6 +1347,44 @@ class ClientReportCompiler
             && $this->hasProvisionedJail($site)
             && $pulledAt !== null
             && $pulledAt->greaterThanOrEqualTo($end->copy()->subDay());
+    }
+
+    /**
+     * A ban that blocked nobody malicious: reversed as a false positive
+     * (decided_by false_positive_*), or lifted within
+     * BAN_FALSE_POSITIVE_MINUTES of being made.
+     */
+    protected static function liftedAsFalsePositive(BlockedIp $ban): bool
+    {
+        if (str_starts_with((string) $ban->decided_by, 'false_positive')) {
+            return true;
+        }
+
+        return $ban->banned_at !== null && $ban->unbanned_at !== null
+            && $ban->unbanned_at->lessThanOrEqualTo($ban->banned_at->copy()->addMinutes(self::BAN_FALSE_POSITIVE_MINUTES));
+    }
+
+    /**
+     * When a lockout from any site last reached Control (a ban from a
+     * lockout source) by $end, or null when none ever has. Lockouts arrive
+     * from across the fleet every day, so none for days means the feed
+     * stopped, even while the pull itself keeps running and stamping
+     * last_llar_pull_at.
+     */
+    protected function lastIngestedLockout(Carbon $end): ?Carbon
+    {
+        $key = $end->toIso8601String();
+        if (! array_key_exists($key, $this->lastIngestedLockout)) {
+            $this->lastIngestedLockout[$key] = BlockedIp::query()
+                ->whereIn('source', self::LOCKOUT_SOURCES)
+                ->where('banned_at', '<=', $end)
+                ->orderByDesc('banned_at')
+                ->first(['banned_at'])
+                ?->banned_at
+                ?->copy();
+        }
+
+        return $this->lastIngestedLockout[$key];
     }
 
     /** The site's server has Clockwork's fail2ban jail, so bans happen at the server. */
@@ -1082,7 +1543,7 @@ class ClientReportCompiler
         $lastDayComplete = $lastDay?->updated_at !== null && $lastDay->updated_at->greaterThanOrEqualTo($settledAt);
 
         $source = $site->isPressable() ? 'pressable' : 'nginx';
-        $topIpShare = self::topIpShare($measured);
+        [$topIpShare, $topIpCount] = self::topIps($measured);
         $suspect = ($source === 'nginx' && $topIpShare !== null && $topIpShare > self::TRAFFIC_TOP_IP_SHARE_MAX)
             || ($requests > self::TRAFFIC_BUSY_REQUESTS && $visits < $requests * self::TRAFFIC_MIN_VISITS_PER_REQUEST);
 
@@ -1108,8 +1569,10 @@ class ClientReportCompiler
             'period_days' => $periodDays,
             'last_day_complete' => $lastDayComplete,
             // Internal: the share of requests from the two busiest IPs over the
-            // period, where the rows name them (access logs do, Pressable doesn't).
+            // period, where the rows name them (access logs do, Pressable doesn't),
+            // and how many IPs that is (1 when every listed request came from one).
             'top_ip_share' => $topIpShare,
+            'top_ip_count' => $topIpCount,
         ];
     }
 
@@ -1126,11 +1589,13 @@ class ClientReportCompiler
 
     /**
      * The two busiest IPs' share of the requests on the days that list their
-     * busiest IPs, or null when none do.
+     * busiest IPs, and how many IPs that share is from (one or two), or
+     * nulls when no day lists them.
      *
      * @param  iterable<SiteTrafficDaily>  $days
+     * @return array{0: ?float, 1: ?int}
      */
-    protected static function topIpShare(iterable $days): ?float
+    protected static function topIps(iterable $days): array
     {
         $hitsByIp = [];
         $requests = 0;
@@ -1148,12 +1613,13 @@ class ClientReportCompiler
         }
 
         if ($requests <= 0) {
-            return null;
+            return [null, null];
         }
 
         rsort($hitsByIp);
+        $top = array_slice($hitsByIp, 0, 2);
 
-        return round(min(1.0, array_sum(array_slice($hitsByIp, 0, 2)) / $requests), 3);
+        return [round(min(1.0, array_sum($top) / $requests), 3), count($top)];
     }
 
     /**
@@ -1272,6 +1738,10 @@ class ClientReportCompiler
         // so far, for a report on a month still running.
         $daily = $source !== null && ($source !== SiteBackup::SOURCE_SPINUPWP_SPACES || self::hasConsecutiveDays($days->keys()->all()));
         $periodDays = max(1, (int) round($start->diffInDays($end->copy()->min(now()->endOfDay()))));
+        // The days backups were expected: from when the site's coverage began
+        // (it was added, or its care plan switched on, part-way through).
+        $expectedDays = max(1, (int) round(($joinedAt ?? $start)->copy()->startOfDay()->max($start)
+            ->diffInDays($end->copy()->min(now()->endOfDay()))));
 
         return [
             'enabled' => $source !== null,
@@ -1286,6 +1756,7 @@ class ClientReportCompiler
             // day, and how many days of the period have passed.
             'daily' => $daily,
             'period_days' => $periodDays,
+            'expected_days' => $expectedDays,
             'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,
             // Internal: when a relay site's off-site archives first began,
             // inside the period, and when they should have (the period start,

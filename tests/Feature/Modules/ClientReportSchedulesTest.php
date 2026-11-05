@@ -7,7 +7,9 @@ use App\Models\User;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Console\Commands\SendScheduledClientReports;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
@@ -1135,6 +1137,67 @@ describe('bidirectional WordPress report recipient sync', function () {
         expect($schedule->recipients)->toHaveCount(ReportRecipientsSyncService::MAX_WP_RECIPIENTS)
             ->and($schedule->frequency)->toBe('weekly')
             ->and($schedule->next_run_at->lt(now()->addDays(8)))->toBeTrue();
+    });
+
+    it('does not tell WordPress reports are active for a site with no Control schedule', function () {
+        $client = Client::create(['name' => 'Jane Example', 'email' => 'jane@no-schedule.example.com']);
+        $site = reportableSite(['domain' => 'no-schedule.example.com', 'client_id' => $client->id]);
+
+        $payload = app(ReportRecipientsSyncService::class)->resolvePayloadForSite($site);
+
+        // The client's addresses are still offered, but nothing will send.
+        expect($payload)->toMatchArray(['report_enabled' => false, 'report_recipients' => ['jane@no-schedule.example.com']]);
+    });
+
+    it('reports active only while the site\'s schedule is enabled', function () {
+        $site = reportableSite(['domain' => 'scheduled.example.com']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['owner@scheduled.example.com'], 'is_enabled' => true,
+        ]);
+        $service = app(ReportRecipientsSyncService::class);
+
+        expect($service->resolvePayloadForSite($site)['report_enabled'])->toBeTrue();
+
+        $schedule->update(['is_enabled' => false]);
+
+        expect($service->resolvePayloadForSite($site->fresh())['report_enabled'])->toBeFalse();
+    });
+
+    it('seeds a WordPress that has never had recipients with "not active" when Control has no schedule', function () {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $client = Client::create(['name' => 'Jane Example', 'email' => 'jane@unseeded.example.com']);
+        $site = Site::factory()->carePlan()->withCompanionInstalled()->create([
+            'domain' => 'unseeded.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'client_id' => $client->id,
+        ]);
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => ['report_recipients' => [], 'report_frequency' => 'monthly', 'report_enabled' => false],
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === false);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === true);
+        expect(ClientReportSchedule::where('site_id', $site->id)->exists())->toBeFalse();
+    });
+
+    it('corrects a WordPress that an earlier push left showing reports as active with no Control schedule', function () {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $site = Site::factory()->carePlan()->withCompanionInstalled()->create([
+            'domain' => 'seeded-active.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
+        ]);
+        $service = app(ReportRecipientsSyncService::class);
+        $seeded = ['report_recipients' => ['owner@seeded-active.example.com'], 'report_frequency' => 'monthly',
+            'report_recipients_updated_at' => now()->subMonth()->toIso8601String(), 'report_recipients_updated_by' => 'control'];
+
+        $service->reconcileFromSnapshot($site, ['client_notifications' => $seeded + ['report_enabled' => true]]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === false);
+
+        // Once WordPress says "not active", nothing more is pushed.
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $service->reconcileFromSnapshot($site->fresh(), ['client_notifications' => $seeded + ['report_enabled' => false]]);
+
+        Http::assertNothingSent();
     });
 
     it('pushes a disabled payload when a schedule is removed', function () {
