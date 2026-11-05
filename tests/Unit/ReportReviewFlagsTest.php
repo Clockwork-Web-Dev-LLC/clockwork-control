@@ -215,6 +215,17 @@ describe('vulnerable plugins joined to waiting updates by slug', function () {
         ]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in 1.2; auto-paused on 2026-10-30 after 9 failed attempts); Example Gallery 3.0 (no fixed version yet; paused by hand since 2026-09-01: Licence expired).']);
     });
 
+    it('reads a fix only known as "after" a closed bound, and holds only an update past it', function () {
+        $item = fn (string $offered) => vulnerableItem(['fixed_in' => null, 'fixed_after' => '2.0.6', 'update_offered' => $offered]);
+
+        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('2.0.7')]]]))
+            ->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 2.0.7 (fixed in the next version after 2.0.6)."])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('2.0.6')]]]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [
+                vulnerableItem(['fixed_in' => null, 'fixed_after' => '2.0.6', 'paused' => ['source' => 'manual', 'since' => null, 'failure_count' => null, 'note' => null]]),
+            ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in the next version after 2.0.6; paused by hand).']);
+    });
+
     it('uses the version the plugin recorded as offered when there is no list of waiting updates', function () {
         expect(ReportReviewFlags::reasons([
             'security' => ['vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.2'])]],
@@ -231,6 +242,17 @@ describe('backups', function () {
             ->toBe(['Database backups are 9 KB but the database is 3.0 GB, so they look empty or broken and the Backups section was left out.'])
             ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'suspect']]))
             ->toBe(['Database backups are far smaller than the database, so they look empty or broken and the Backups section was left out.']);
+    });
+
+    it('counts only the days backups were expected, from when the site\'s coverage began', function () {
+        $relay = ['status' => 'verified', 'verified' => true, 'source' => 's3_archive', 'covers_period' => false, 'daily' => true,
+            'days_with_backups' => 1, 'period_days' => 31, 'expected_days' => 4, 'archives_began' => '2026-10-31', 'expected_from' => '2026-10-28'];
+        $daily = ['status' => 'verified', 'verified' => true, 'covers_period' => true, 'daily' => true, 'days_with_backups' => 5, 'period_days' => 31, 'expected_days' => 12];
+
+        expect(ReportReviewFlags::reasons(['backups' => $relay]))
+            ->toBe(['Off-site backups began on Oct 31, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 1 of 4 days).'])
+            ->and(ReportReviewFlags::reasons(['backups' => $daily]))->toBe(['Backed up on only 5 of 12 days this month.'])
+            ->and(ReportReviewFlags::reasons(['backups' => ['days_with_backups' => 10] + $daily]))->toBe([]);
     });
 
     it('holds a daily source that backed up on far fewer days than the period had', function () {
@@ -296,6 +318,10 @@ describe('traffic', function () {
         'a proxy in front of the site' => [
             ['status' => 'suspect', 'source' => 'nginx', 'days_covered' => 12, 'period_days' => 31, 'top_ip_share' => 0.998, 'total_visits' => 40, 'total_requests' => 1500000],
             '100% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors; also, traffic was recorded on only 12 of 31 days, so the Traffic section was left out.',
+        ],
+        'a proxy seen as one address' => [
+            ['status' => 'suspect', 'source' => 'nginx', 'days_covered' => 31, 'period_days' => 31, 'top_ip_share' => 1.0, 'top_ip_count' => 1, 'total_visits' => 31, 'total_requests' => 90000],
+            '100% of requests came from one IP address, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.',
         ],
         'visits that cannot be real' => [
             ['status' => 'suspect', 'source' => 'pressable', 'days_covered' => 31, 'period_days' => 31, 'top_ip_share' => 0.95, 'total_visits' => 33, 'total_requests' => 410000],

@@ -190,7 +190,9 @@ class ReportReviewFlags
         }
 
         $days = (int) ($backups['days_with_backups'] ?? 0);
-        $periodDays = (int) ($backups['period_days'] ?? 0);
+        // The days backups were expected (from when the site's coverage
+        // began); reports compiled before that was kept use the period's.
+        $periodDays = (int) ($backups['expected_days'] ?? $backups['period_days'] ?? 0);
 
         // Our relay's archives began part-way through the month for a site
         // that was there before: the days before had no off-site backup.
@@ -463,16 +465,27 @@ class ReportReviewFlags
             $slug = (string) ($item['slug'] ?? '');
             $label = trim(trim((string) ($item['name'] ?? '')) ?: $slug).(($item['version'] ?? '') !== '' ? ' '.$item['version'] : '');
             $fixedIn = is_string($item['fixed_in'] ?? null) && $item['fixed_in'] !== '' ? $item['fixed_in'] : null;
+            // No patched version named, but the affected range is closed:
+            // any version after its upper bound is clear.
+            $fixedAfter = $fixedIn === null && is_string($item['fixed_after'] ?? null) && $item['fixed_after'] !== '' ? $item['fixed_after'] : null;
             $offered = match (true) {
                 $offeredBySlug === null => $item['update_offered'] ?? null,
                 array_key_exists($slug, $offeredBySlug) => $offeredBySlug[$slug] ?? $item['update_offered'] ?? null,
                 default => null,
             };
-            $fix = $fixedIn !== null ? "fixed in {$fixedIn}" : 'no fixed version yet';
+            $fix = match (true) {
+                $fixedIn !== null => "fixed in {$fixedIn}",
+                $fixedAfter !== null => "fixed in the next version after {$fixedAfter}",
+                default => 'no fixed version yet',
+            };
+            $offeredFixes = $offered && (
+                ($fixedIn !== null && version_compare((string) $offered, $fixedIn, '>='))
+                || ($fixedAfter !== null && version_compare((string) $offered, $fixedAfter, '>'))
+            );
 
             if (is_array($item['paused'] ?? null)) {
                 $paused[] = "{$label} ({$fix}; ".self::pause($item['paused']).($offered ? "; {$offered} is waiting" : '').')';
-            } elseif ($fixedIn !== null && $offered && version_compare((string) $offered, $fixedIn, '>=')) {
+            } elseif ($offeredFixes) {
                 $waiting[] = "{$label} → {$offered} ({$fix})";
             }
         }

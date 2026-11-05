@@ -383,7 +383,10 @@ final class ReportPhrases
     {
         $share = $traffic['top_ip_share'] ?? null;
         if (($traffic['source'] ?? null) === 'nginx' && is_numeric($share) && (float) $share > ClientReportCompiler::TRAFFIC_TOP_IP_SHARE_MAX) {
-            return (int) round((float) $share * 100).'% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors';
+            // Older reports didn't keep how many IPs the share is from.
+            $ips = (int) ($traffic['top_ip_count'] ?? 2) === 1 ? 'one IP address' : 'two IP addresses';
+
+            return (int) round((float) $share * 100)."% of requests came from {$ips}, which looks like a proxy or gateway in front of the site rather than visitors";
         }
 
         return number_format((int) ($traffic['total_visits'] ?? 0)).' visits for '.number_format((int) ($traffic['total_requests'] ?? 0))

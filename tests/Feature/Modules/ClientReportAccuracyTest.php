@@ -192,8 +192,8 @@ describe('known plugin vulnerabilities (#8)', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['security']['vulnerable_plugin_items'])->toBe([
-            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'fixed_in' => '2.1.0', 'update_offered' => null, 'paused' => null],
-            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'fixed_in' => null, 'update_offered' => '3.1', 'paused' => [
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'fixed_in' => '2.1.0', 'fixed_after' => null, 'update_offered' => null, 'paused' => null],
+            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'fixed_in' => null, 'fixed_after' => null, 'update_offered' => '3.1', 'paused' => [
                 'source' => 'auto_failure', 'since' => '2026-09-25', 'failure_count' => 3, 'note' => null,
             ]],
         ])
@@ -219,6 +219,31 @@ describe('known plugin vulnerabilities (#8)', function () {
 
         expect($reasons)->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0.0 → 1.2.0 (fixed in 1.2.0).")
             ->and(implode(' ', array_filter($reasons, fn ($r) => ! str_starts_with($r, 'No updates were applied'))))->not->toContain('Example Slider');
+    });
+
+    it('reads an advisory with no patched version but a closed upper bound as fixed in the next version after it', function () {
+        // Affects up to and including 2.0.6, no patched version named: 2.0.7 on is clear.
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.6', 'to_inclusive' => true, 'patched_in' => null]);
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.0', 'to_inclusive' => false, 'patched_in' => '2.0.1']);
+        // Affects versions below 3.0 (exclusive), no patched version named: 3.0 fixes it.
+        PluginVulnerability::factory()->create(['slug' => 'example-tabs', 'to_version' => '3.0', 'to_inclusive' => false, 'patched_in' => null]);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-widgets/example-widgets.php', 'name' => 'Example Widgets', 'version' => '1.5.0', 'active' => true, 'update_available' => true, 'new_version' => '1.5.141'],
+            ['slug' => 'example-tabs/example-tabs.php', 'name' => 'Example Tabs', 'version' => '2.2', 'active' => true, 'update_available' => true, 'new_version' => '3.0'],
+        ]]]]);
+        PluginUpdateIgnore::factory()->create([
+            'site_id' => $site->id, 'target_slug' => 'example-widgets/example-widgets.php', 'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'note' => 'Licence lapsed', 'ignored_at' => Carbon::parse('2026-09-02 04:00'),
+        ]);
+
+        $report = compileSeptember($site);
+        $items = collect($report['data']['security']['vulnerable_plugin_items'])->keyBy('slug');
+
+        expect($items['example-widgets/example-widgets.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '2.0.6'])
+            ->and($items['example-tabs/example-tabs.php'])->toMatchArray(['fixed_in' => '3.0', 'fixed_after' => null])
+            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Widgets 1.5.0 (fixed in the next version after 2.0.6; paused by hand since 2026-09-02: Licence lapsed; 1.5.141 is waiting).')
+            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0).")
+            ->and(implode(' ', $report['reasons']))->not->toContain('no fixed version yet');
     });
 
     it('notes how many matches are in inactive plugins', function () {
@@ -560,6 +585,17 @@ describe('backups from our relay that keeps failing', function () {
             ->and($report['reasons'])->toContain('Off-site backups began on Sep 28, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 3 of 30 days).')
             ->and($report['preview'])->toContain('Off-site backups began on 2026-09-28; none were made before that this period')
             ->and($report['public'])->not->toContain('Off-site backups began');
+    });
+
+    it('counts the days a site joined part-way through the month was expected to have backups, not the whole month', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-09-27 12:00:00')]);
+        failingRelayArchive($site, '2026-09-30 05:00:00');
+
+        $report = compileSeptember($site);
+
+        // Sep 27 – Sep 30.
+        expect($report['data']['backups'])->toMatchArray(['archives_began' => '2026-09-30', 'expected_from' => '2026-09-27', 'expected_days' => 4, 'period_days' => 30])
+            ->and($report['reasons'])->toContain('Off-site backups began on Sep 30, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 1 of 4 days).');
     });
 
     it('does not flag relay archives that began the day after a site joined part-way through the month', function () {
@@ -1166,6 +1202,16 @@ describe('traffic', function () {
         expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => 0.95])
             ->and($report['html'])->not->toContain('Visits')
             ->and($report['reasons'])->toContain('95% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.');
+    });
+
+    it('says "one IP address" when every listed request came from one', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 1000, 'visits' => 1, 'top_ips' => json_encode([['ip' => '10.0.0.4', 'hits' => 1000]])]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => 1.0, 'top_ip_count' => 1])
+            ->and($report['reasons'])->toContain('100% of requests came from one IP address, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.');
     });
 
     it('does not judge a host feed by its IP list, and keeps real spread-out visitors', function () {

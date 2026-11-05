@@ -1247,17 +1247,7 @@ class ClientReportCompiler
 
         $items = [];
         foreach ($plugins as $slug => [$plugin, $vulns]) {
-            $fixedIn = null;
-            foreach ($vulns as $vuln) {
-                $patched = trim((string) $vuln->patched_in);
-                if ($patched === '') {
-                    $fixedIn = null;
-                    break;
-                }
-                if ($fixedIn === null || version_compare($patched, $fixedIn, '>')) {
-                    $fixedIn = $patched;
-                }
-            }
+            [$fixedIn, $fixedAfter] = self::fixedVersion($vulns);
 
             $offered = trim((string) ($plugin['new_version'] ?? ''));
             $pause = $pauses->get($slug);
@@ -1267,6 +1257,7 @@ class ClientReportCompiler
                 'name' => (string) ($plugin['name'] ?? $slug),
                 'version' => (string) ($plugin['version'] ?? ''),
                 'fixed_in' => $fixedIn,
+                'fixed_after' => $fixedAfter,
                 'update_offered' => ! empty($plugin['update_available']) && $offered !== '' ? $offered : null,
                 'paused' => $pause instanceof PluginUpdateIgnore ? [
                     'source' => (string) $pause->source,
@@ -1278,6 +1269,41 @@ class ClientReportCompiler
         }
 
         return $items;
+    }
+
+    /**
+     * The lowest version clear of every advisory, as [fixed_in, null] (that
+     * version fixes them) or [null, fixed_after] (only versions after that
+     * one do), or [null, null] when one has no fix. An advisory names its
+     * patched version, or failing that its range does: "below 3.0" is fixed
+     * in 3.0, "up to and including 2.0.6" by whatever comes after 2.0.6.
+     * One open-ended ("all versions") with no patched version has no fix yet.
+     *
+     * @param  list<PluginVulnerability>  $vulns
+     * @return array{0: ?string, 1: ?string}
+     */
+    protected static function fixedVersion(array $vulns): array
+    {
+        $best = null;
+        foreach ($vulns as $vuln) {
+            $patched = trim((string) $vuln->patched_in);
+            $bound = trim((string) $vuln->to_version);
+            $threshold = match (true) {
+                $patched !== '' => [$patched, false],
+                $bound !== '' && $bound !== '*' => [$bound, (bool) $vuln->to_inclusive],
+                default => null,
+            };
+            if ($threshold === null) {
+                return [null, null];
+            }
+
+            $cmp = $best === null ? 1 : version_compare($threshold[0], $best[0]);
+            if ($cmp > 0 || ($cmp === 0 && $threshold[1] && ! $best[1])) {
+                $best = $threshold;
+            }
+        }
+
+        return $best === null ? [null, null] : ($best[1] ? [null, $best[0]] : [$best[0], null]);
     }
 
     /**
@@ -1518,7 +1544,7 @@ class ClientReportCompiler
         $lastDayComplete = $lastDay?->updated_at !== null && $lastDay->updated_at->greaterThanOrEqualTo($settledAt);
 
         $source = $site->isPressable() ? 'pressable' : 'nginx';
-        $topIpShare = self::topIpShare($measured);
+        [$topIpShare, $topIpCount] = self::topIps($measured);
         $suspect = ($source === 'nginx' && $topIpShare !== null && $topIpShare > self::TRAFFIC_TOP_IP_SHARE_MAX)
             || ($requests > self::TRAFFIC_BUSY_REQUESTS && $visits < $requests * self::TRAFFIC_MIN_VISITS_PER_REQUEST);
 
@@ -1544,8 +1570,10 @@ class ClientReportCompiler
             'period_days' => $periodDays,
             'last_day_complete' => $lastDayComplete,
             // Internal: the share of requests from the two busiest IPs over the
-            // period, where the rows name them (access logs do, Pressable doesn't).
+            // period, where the rows name them (access logs do, Pressable doesn't),
+            // and how many IPs that is (1 when every listed request came from one).
             'top_ip_share' => $topIpShare,
+            'top_ip_count' => $topIpCount,
         ];
     }
 
@@ -1562,11 +1590,13 @@ class ClientReportCompiler
 
     /**
      * The two busiest IPs' share of the requests on the days that list their
-     * busiest IPs, or null when none do.
+     * busiest IPs, and how many IPs that share is from (one or two), or
+     * nulls when no day lists them.
      *
      * @param  iterable<SiteTrafficDaily>  $days
+     * @return array{0: ?float, 1: ?int}
      */
-    protected static function topIpShare(iterable $days): ?float
+    protected static function topIps(iterable $days): array
     {
         $hitsByIp = [];
         $requests = 0;
@@ -1584,12 +1614,13 @@ class ClientReportCompiler
         }
 
         if ($requests <= 0) {
-            return null;
+            return [null, null];
         }
 
         rsort($hitsByIp);
+        $top = array_slice($hitsByIp, 0, 2);
 
-        return round(min(1.0, array_sum(array_slice($hitsByIp, 0, 2)) / $requests), 3);
+        return [round(min(1.0, array_sum($top) / $requests), 3), count($top)];
     }
 
     /**
@@ -1708,6 +1739,10 @@ class ClientReportCompiler
         // so far, for a report on a month still running.
         $daily = $source !== null && ($source !== SiteBackup::SOURCE_SPINUPWP_SPACES || self::hasConsecutiveDays($days->keys()->all()));
         $periodDays = max(1, (int) round($start->diffInDays($end->copy()->min(now()->endOfDay()))));
+        // The days backups were expected: from when the site's coverage began
+        // (it was added, or its care plan switched on, part-way through).
+        $expectedDays = max(1, (int) round(($joinedAt ?? $start)->copy()->startOfDay()->max($start)
+            ->diffInDays($end->copy()->min(now()->endOfDay()))));
 
         return [
             'enabled' => $source !== null,
@@ -1722,6 +1757,7 @@ class ClientReportCompiler
             // day, and how many days of the period have passed.
             'daily' => $daily,
             'period_days' => $periodDays,
+            'expected_days' => $expectedDays,
             'records_from' => $recordsFrom !== null ? Carbon::parse($recordsFrom)->toDateString() : null,
             // Internal: when a relay site's off-site archives first began,
             // inside the period, and when they should have (the period start,
