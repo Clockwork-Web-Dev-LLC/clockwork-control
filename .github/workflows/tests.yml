@@ -60,6 +60,17 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Check the client report stylesheet is up to date
+        # public/vendor/client-reports/report.css is Tailwind v3 output built
+        # from the report views and committed, so the report page needs no
+        # CDN. Rebuild it and fail if a view's classes changed without it.
+        run: |
+          npm run build:report-css
+          if ! git diff --exit-code -- public/vendor/client-reports/report.css; then
+            echo "::error file=public/vendor/client-reports/report.css::Out of date with modules/ClientReports/resources/views/reports. Run npm run build:report-css and commit the result."
+            exit 1
+          fi
+
       - name: Copy environment file
         run: cp .env.example .env
 

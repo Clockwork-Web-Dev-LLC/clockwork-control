@@ -2,7 +2,7 @@
 title: Client reports
 section: Features
 order: 101
-updated: 2026-10-22
+updated: 2026-11-05
 author: Aaron Reimann
 tags: [client-reports, reporting, email, care-plans, scheduling, templates]
 tracks: [modules/ClientReports/**]
@@ -117,8 +117,14 @@ Colours, logo, company name and support details come from **Settings → Compani
 
 The **primary colour** fills the header banner of both the email and the operator preview (and the section underlines); the logo sits on it, so use a logo that reads on that colour. The preview keeps the colours when printed or saved as a PDF. Because branding is captured in the snapshot, regenerate a report to see a colour change.
 
+## Styles, fonts and icons
+
+The report page (preview, public link, PDF) and the email preview load nothing from the internet, so they render and print with no connection. Everything they use is in `public/vendor/client-reports/`: `report.css` (Tailwind v3 utilities plus the Plus Jakarta Sans font) and Font Awesome 6.4.0 Free (solid icons only). They don't use the app's Vite bundle: that's Tailwind v4, whose defaults and base styles would change the client-facing look.
+
+`report.css` is generated from the report views (`reports/*.blade.php`). After adding or changing a class there, run `npm run build:report-css` and commit the result; CI fails if the committed file is out of date. The source, with the font rules, is `modules/ClientReports/resources/css/report.css`.
+
 ## Tests
 
-- `tests/Feature/Modules/`: `ClientReportsControllerTest`, `ClientReportTemplatesTest`, `ClientReportSchedulesTest` (scheduling, care-plan gate, hold for review, partial sends), `ClientReportMailTest`, `ClientReportAccuracyTest` (every section's numbers and wording against the "never claim what wasn't checked" rule) and `BackupRelayDirectOnlyTest`.
+- `tests/Feature/Modules/`: `ClientReportsControllerTest`, `ClientReportTemplatesTest`, `ClientReportSchedulesTest` (scheduling, care-plan gate, hold for review, partial sends), `ClientReportMailTest`, `ClientReportAccuracyTest` (every section's numbers and wording against the "never claim what wasn't checked" rule), `ClientReportAssetsTest` (the report pages load nothing from another host, and every class and icon they use is in the shipped files) and `BackupRelayDirectOnlyTest`.
 - `tests/Feature/Console/RecordSiteBackupsTest.php`: the backup recorder.
 - `tests/Unit/ReportReviewFlagsTest.php`: the hold-for-review rules.

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Client Reports — Report page works offline**: the preview, the public `/reports/view/{token}` page and the printed PDF no longer load Tailwind (Play CDN), Font Awesome (cdnjs) or Plus Jakarta Sans (Google Fonts) from the internet, so they no longer render unstyled when those hosts can't be reached. The same files are served from `public/vendor/client-reports/` and the pages look and print exactly as before. After changing a class in the report views, run `npm run build:report-css`; CI fails when the committed stylesheet is out of date.
+
 ## [1.12.0] - 2026-11-04
 
 ### Added
