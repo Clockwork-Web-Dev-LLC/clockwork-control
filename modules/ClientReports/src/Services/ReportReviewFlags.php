@@ -24,6 +24,9 @@ class ReportReviewFlags
 {
     private const BAD_SCAN_STATUSES = ['warning', 'issues_found'];
 
+    /** An outage at least this long holds the report so a person can add context. */
+    public const LONG_OUTAGE_MINUTES = 60;
+
     /**
      * @param  array<string, mixed>  $data  a report's sections_data
      * @return list<string>
@@ -138,6 +141,14 @@ class ReportReviewFlags
             }
         }
 
+        // A long outage that ended reads to the client as a bare figure; a
+        // person should say what happened first (one still open has its
+        // own reason above).
+        $longOutages = self::longOutagesReason((array) ($data['uptime'] ?? []));
+        if ($longOutages !== null) {
+            $reasons[] = $longOutages;
+        }
+
         // A host rate-limiting the monitor (HTTP 429) isn't an outage, but
         // nobody could see the site, so a person should check before it goes out.
         $blockedSince = $data['uptime']['probe_blocked_since'] ?? null;
@@ -233,6 +244,33 @@ class ReportReviewFlags
 
         return 'No updates were applied this month although updates were waiting'.$list
             .', so the client would read "No updates were applied this month". Check why they are failing or paused.';
+    }
+
+    /**
+     * The completed outages of LONG_OUTAGE_MINUTES or more, with when each
+     * began and how long it lasted, or null when there were none. Reports
+     * compiled before long_outages was kept are read from their (capped)
+     * outages list.
+     *
+     * @param  array<string, mixed>  $uptime
+     */
+    private static function longOutagesReason(array $uptime): ?string
+    {
+        $outages = array_key_exists('long_outages', $uptime) ? (array) $uptime['long_outages'] : array_reverse((array) ($uptime['outages'] ?? []));
+
+        $items = [];
+        foreach ($outages as $outage) {
+            $minutes = is_array($outage) ? (int) ($outage['minutes'] ?? 0) : 0;
+            if ($minutes < self::LONG_OUTAGE_MINUTES || ! empty($outage['ongoing']) || ! is_string($outage['started_at'] ?? null)) {
+                continue;
+            }
+
+            $items[] = preg_replace('/^Down /', '', ReportPhrases::outageStart($outage)).' for '.ReportPhrases::duration($minutes);
+        }
+
+        return $items === []
+            ? null
+            : 'The site was down for an hour or more: '.implode('; ', $items).'. Add context for the client before this goes out.';
     }
 
     /**

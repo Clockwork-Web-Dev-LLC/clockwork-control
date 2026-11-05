@@ -1361,6 +1361,39 @@ describe('uptime', function () {
         SiteUptimeEvent::create(['site_id' => $site->id, 'event_type' => $type, 'event_at' => Carbon::parse($at), 'is_sla_exempt' => $exempt, 'status_code' => $status]);
     }
 
+    it('holds a report with a completed outage of an hour or more, even one past the listed five, so a person adds context', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        // 6h 19m from 2:25 AM EDT on Sep 1.
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 06:25:09', status: 500);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 12:44:28', status: 200);
+        // Five short ones later in the month push it off the client's list.
+        foreach ([10, 12, 14, 16, 18] as $day) {
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, "2026-09-{$day} 10:00:00", status: 503);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, "2026-09-{$day} 10:20:00", status: 200);
+        }
+        // 59 minutes: under the bar.
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 10:59:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime']['outages'])->toHaveCount(5)
+            ->and($report['data']['uptime']['long_outages'])->toBe([
+                ['started_at' => '2026-09-01T06:25:09+00:00', 'minutes' => 379, 'started_before_period' => false, 'ongoing' => false],
+            ])
+            ->and($report['reasons'])->toContain('The site was down for an hour or more: Sep 1, 2:25 AM EDT for 6h 19m. Add context for the client before this goes out.');
+    });
+
+    it('does not add the long-outage reason for an outage still open at the end, which has its own', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 20:00:00', status: 500);
+
+        $reasons = compileSeptember($site)['reasons'];
+
+        expect($reasons)->toContain('The site was still down at the end of the month.')
+            ->and(implode(' ', $reasons))->not->toContain('an hour or more');
+    });
+
     it('measures real outage length from down to up instead of 5 minutes per outage', function () {
         // Regression: the compiler read a non-existent duration_seconds column
         // and counted every outage as 5 minutes.

@@ -892,6 +892,12 @@ class ClientReportCompiler
 
         $seconds = fn (array $i) => max(0, (int) $i['from']->diffInSeconds($i['to']));
         $outageIntervals = array_values(array_filter($intervals, fn (array $i) => ! $i['blocked']));
+        $outageRow = fn (array $i) => [
+            'started_at' => $i['from']->toIso8601String(),
+            'minutes' => (int) round($seconds($i) / 60),
+            'started_before_period' => $i['carried_in'],
+            'ongoing' => $i['ongoing'],
+        ];
         $blockedSeconds = array_sum(array_map($seconds, array_filter($intervals, fn (array $i) => $i['blocked'])));
 
         $outages = count($outageIntervals)
@@ -930,12 +936,14 @@ class ClientReportCompiler
             // Newest first, capped: the email lists the most recent outages. An
             // outage carried in from before the period starts at the period
             // start, so it's flagged rather than shown as starting then.
-            'outages' => array_slice(array_reverse(array_map(fn (array $i) => [
-                'started_at' => $i['from']->toIso8601String(),
-                'minutes' => (int) round($seconds($i) / 60),
-                'started_before_period' => $i['carried_in'],
-                'ongoing' => $i['ongoing'],
-            ], $outageIntervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
+            'outages' => array_slice(array_reverse(array_map($outageRow, $outageIntervals)), 0, self::UPTIME_OUTAGE_LIST_MAX),
+            // Internal: every outage of ReportReviewFlags::LONG_OUTAGE_MINUTES
+            // or more, oldest first and uncapped, so one that dropped off the
+            // client's list still holds the report for a person to explain.
+            'long_outages' => array_values(array_filter(
+                array_map($outageRow, $outageIntervals),
+                fn (array $o) => $o['minutes'] >= ReportReviewFlags::LONG_OUTAGE_MINUTES,
+            )),
         ];
     }
 

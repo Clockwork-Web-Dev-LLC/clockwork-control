@@ -258,6 +258,12 @@ final class ReportPhrases
             : 'No updates were applied this month.';
     }
 
+    /** "45 min", "6h 19m": a length of time the way the email's outage list shows it. */
+    public static function duration(int $minutes): string
+    {
+        return $minutes >= 60 ? intdiv($minutes, 60).'h '.($minutes % 60).'m' : max(0, $minutes).' min';
+    }
+
     /**
      * The end of "Your site was backed up …" as a whole phrase, preposition
      * included ("by your host, Pressable"), or null when the source is unknown.

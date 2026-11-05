@@ -1,6 +1,7 @@
 <?php
 
 use Modules\ClientReports\Services\ReportReviewFlags;
+use Modules\ClientReports\Support\ReportPhrases;
 
 it('flags what a person should see before the client does', function () {
     expect(ReportReviewFlags::reasons([
@@ -81,6 +82,20 @@ it('says the monitor was blocked, not that the site was down, when only a 429 is
     expect($reasons)->toHaveCount(1)
         ->and($reasons[0])->toStartWith('The uptime monitor was blocked (HTTP 429) from Oct 30, ')
         ->toEndWith('; the site was not necessarily down.');
+});
+
+it('holds completed outages of an hour or more, read from the outages list on reports compiled before long_outages', function () {
+    $long = ['started_at' => '2026-10-01T06:25:09+00:00', 'minutes' => 379, 'started_before_period' => false, 'ongoing' => false];
+    $carried = ['started_at' => '2026-10-01T04:00:00+00:00', 'minutes' => 60, 'started_before_period' => true, 'ongoing' => false];
+    $short = ['started_at' => '2026-10-09T10:00:00+00:00', 'minutes' => 59, 'started_before_period' => false, 'ongoing' => false];
+
+    // The time is shown in the report timezone, which needs the app config; the wording doesn't.
+    $when = fn (array $o) => preg_replace('/^Down /', '', ReportPhrases::outageStart($o));
+    $expected = 'The site was down for an hour or more: '.$when($carried).' for 1h 0m; '.$when($long).' for 6h 19m. Add context for the client before this goes out.';
+
+    expect(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short, $long, $carried]]]))->toBe([$expected])
+        ->and(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short], 'long_outages' => [$carried, $long]]]))->toBe([$expected])
+        ->and(ReportReviewFlags::reasons(['uptime' => ['outages' => [$long], 'long_outages' => []]]))->toBe([]);
 });
 
 it('still says the site was down when a real outage is open at the end of the month', function () {
