@@ -617,6 +617,11 @@ class ReportReviewFlags
     {
         $since = is_string($pause['since'] ?? null) && $pause['since'] !== '' ? $pause['since'] : null;
 
+        // The update offered is a different package that shares the slug.
+        if (($pause['source'] ?? null) === 'identity_mismatch') {
+            return 'update held back'.($since ? " since {$since}" : '').': the offered package appears to be a different theme';
+        }
+
         if (($pause['source'] ?? null) === 'auto_failure') {
             $failures = (int) ($pause['failure_count'] ?? 0);
 

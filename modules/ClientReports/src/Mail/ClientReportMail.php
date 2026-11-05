@@ -163,6 +163,9 @@ class ClientReportMail extends Mailable
 
     public static function cleanUpdateSummary(string $summary, ?string $target = null): string
     {
+        // Names come from WordPress with HTML entities ("Example &amp; Co");
+        // the views escape what they print, so decode them here.
+        $summary = html_entity_decode($summary, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $clean = preg_replace('/^\s*(plugin|theme|core|wordpress(?: core)?)\s+updated\s*:\s*/i', '', $summary) ?? $summary;
         $clean = trim(preg_replace('/\s*\[[^\]]*\]\s*$/', '', $clean) ?? $clean);
 

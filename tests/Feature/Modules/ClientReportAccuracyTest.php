@@ -225,11 +225,14 @@ describe('known plugin vulnerabilities (#8)', function () {
         // Affects up to and including 2.0.6, no patched version named: 2.0.7 on is clear.
         PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.6', 'to_inclusive' => true, 'patched_in' => null]);
         PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.0', 'to_inclusive' => false, 'patched_in' => '2.0.1']);
+        // An advisory for exactly one version (stored from = to): any later release fixes it.
+        PluginVulnerability::factory()->create(['slug' => 'example-seo-pro', 'from_version' => '3.0.123', 'to_version' => '3.0.123', 'to_inclusive' => true, 'patched_in' => null]);
         // Affects versions below 3.0 (exclusive), no patched version named: 3.0 fixes it.
         PluginVulnerability::factory()->create(['slug' => 'example-tabs', 'to_version' => '3.0', 'to_inclusive' => false, 'patched_in' => null]);
         $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
             ['slug' => 'example-widgets/example-widgets.php', 'name' => 'Example Widgets', 'version' => '1.5.0', 'active' => true, 'update_available' => true, 'new_version' => '1.5.141'],
             ['slug' => 'example-tabs/example-tabs.php', 'name' => 'Example Tabs', 'version' => '2.2', 'active' => true, 'update_available' => true, 'new_version' => '3.0'],
+            ['slug' => 'example-seo-pro/example-seo-pro.php', 'name' => 'Example SEO Pro', 'version' => '3.0.123', 'active' => true, 'update_available' => true, 'new_version' => '3.0.124'],
         ]]]]);
         PluginUpdateIgnore::factory()->create([
             'site_id' => $site->id, 'target_slug' => 'example-widgets/example-widgets.php', 'source' => PluginUpdateIgnore::SOURCE_MANUAL,
@@ -241,8 +244,9 @@ describe('known plugin vulnerabilities (#8)', function () {
 
         expect($items['example-widgets/example-widgets.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '2.0.6'])
             ->and($items['example-tabs/example-tabs.php'])->toMatchArray(['fixed_in' => '3.0', 'fixed_after' => null])
+            ->and($items['example-seo-pro/example-seo-pro.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '3.0.123'])
             ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Widgets 1.5.0 (fixed in the next version after 2.0.6; paused by hand since 2026-09-02: Licence lapsed; 1.5.141 is waiting).')
-            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0).")
+            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0); Example SEO Pro 3.0.123 → 3.0.124 (fixed in the next version after 3.0.123).")
             ->and(implode(' ', $report['reasons']))->not->toContain('no fixed version yet');
     });
 
@@ -2230,10 +2234,11 @@ describe('updates and site facts', function () {
         $observed = fn (string $type, string $slug, string $name, string $from, string $to, string $at) => ActionLog::create([
             'site_id' => $site->id, 'action_type' => $type, 'target' => $slug, 'summary' => "{$name} {$from} → {$to} (seen)", 'ok' => true,
             'details' => ['slug' => $slug, 'name' => $name, 'from_version' => $from, 'to_version' => $to, 'observed_at' => Carbon::parse($at)->toIso8601String()],
-            'ran_at' => Carbon::parse($at), 'actor' => 'system',
+            'ran_at' => Carbon::parse($at), 'actor' => 'observed',
         ]);
         $observed('plugin_update_observed', 'example-gallery/example-gallery.php', 'Example Gallery', '2.0', '2.1', '2026-09-12 07:00');
-        $observed('theme_update_observed', 'example-theme', 'Example Theme', '1.4', '1.5', '2026-09-14 07:00');
+        // WordPress gives theme names HTML-encoded.
+        $observed('theme_update_observed', 'example-theme', 'Example Theme &amp; Blocks', '1.4', '1.5', '2026-09-14 07:00');
         $observed('core_update_observed', 'wordpress', 'WordPress', '6.8.2', '6.8.3', '2026-09-20 07:00');
         // Control applied this one itself and the snapshot saw the change too: listed once.
         ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-seo/example-seo.php',
@@ -2249,11 +2254,11 @@ describe('updates and site facts', function () {
 
         expect($updates)->toMatchArray(['total' => 4, 'plugins_count' => 2, 'themes_count' => 1, 'core_count' => 1])
             ->and(array_column($updates['items']['plugins'], 'observed', 'target'))->toBe(['example-seo/example-seo.php' => false, 'example-gallery/example-gallery.php' => true])
-            ->and($report['html'])->toContain('Example Gallery 2.0 → 2.1')->toContain('Example Theme 1.4 → 1.5')->toContain('6.8.2 → 6.8.3')
+            ->and($report['html'])->toContain('Example Gallery 2.0 → 2.1')->toContain('Example Theme &amp; Blocks 1.4 → 1.5')->not->toContain('&amp;amp;')->toContain('6.8.2 → 6.8.3')
             ->not->toContain('(seen)')->not->toContain('Clockwork Companion')->not->toContain('Example Old')
             ->and(substr_count($report['html'], 'Example SEO 5.0 → 5.1'))->toBe(1)
             ->and($report['text'])->toContain('UPDATES APPLIED (4)')->toContain('- [Plugin] Example Gallery 2.0 → 2.1 (Sep 12)')
-            ->toContain('- [Theme] Example Theme 1.4 → 1.5 (Sep 14)');
+            ->toContain('- [Theme] Example Theme & Blocks 1.4 → 1.5 (Sep 14)');
     });
 
     it('counts a version change seen after the period as waiting at its end', function () {

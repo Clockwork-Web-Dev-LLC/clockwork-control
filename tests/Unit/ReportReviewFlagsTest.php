@@ -226,6 +226,12 @@ describe('vulnerable plugins joined to waiting updates by slug', function () {
             ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in the next version after 2.0.6; paused by hand).']);
     });
 
+    it('says an update held back as a different package is held back, not paused by hand', function () {
+        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [
+            vulnerableItem(['paused' => ['source' => 'identity_mismatch', 'since' => '2026-10-01', 'failure_count' => null, 'note' => 'Different package']]),
+        ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in 1.2; update held back since 2026-10-01: the offered package appears to be a different theme).']);
+    });
+
     it('uses the version the plugin recorded as offered when there is no list of waiting updates', function () {
         expect(ReportReviewFlags::reasons([
             'security' => ['vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.2'])]],

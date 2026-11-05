@@ -481,8 +481,8 @@ class ClientReportCompiler
 
     /**
      * Version changes something other than Control made, seen in the period,
-     * as update items. Each is dated by when it was seen (observed_at, else
-     * when it was logged) in the report timezone. One that Control's own
+     * as update items. Each is dated by when it was seen (ran_at, the
+     * snapshot that showed the new version) in the report timezone. One that Control's own
      * update run made (the same plugin, theme or core going to the same
      * version) is already listed, so it's left out; so are the agency's own
      * plugins and changes that ended on the version they started from.
@@ -548,40 +548,36 @@ class ClientReportCompiler
     }
 
     /**
-     * The site's observed version changes from $since on, read into one
-     * shape, without the agency's own plugins.
+     * The site's observed version changes seen at or after $since, read
+     * into one shape, without the agency's own plugins. A row's ran_at is
+     * the snapshot that showed the new version. Names come from the
+     * snapshot as WordPress gives them, HTML entities and all ("Example
+     * &amp; Co"), so they're decoded for display.
      *
      * @return Collection<int, array{type: string, slug: string, name: string, from: string, to: string, at: Carbon}>
      */
     protected function observedUpdateRows(Site $site, Carbon $since): Collection
     {
+        $decode = fn (mixed $text) => trim(html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
         return ActionLog::query()
             ->where('site_id', $site->id)
             ->whereIn('action_type', array_keys(self::OBSERVED_UPDATE_TYPES))
             ->where('ok', true)
-            // observed_at can come before the row was written, never after.
             ->where('ran_at', '>=', $since)
             ->get()
             ->reject(fn (ActionLog $log) => self::isAgencyPluginUpdate($log))
-            ->map(function (ActionLog $log) {
+            ->map(function (ActionLog $log) use ($decode) {
                 $details = is_array($log->details) ? $log->details : [];
                 $slug = trim((string) ($details['slug'] ?? $log->target ?? ''));
-
-                try {
-                    $at = is_string($details['observed_at'] ?? null) && trim($details['observed_at']) !== ''
-                        ? Carbon::parse($details['observed_at'])
-                        : $log->ran_at;
-                } catch (Throwable) {
-                    $at = $log->ran_at;
-                }
 
                 return [
                     'type' => self::OBSERVED_UPDATE_TYPES[$log->action_type],
                     'slug' => $slug,
-                    'name' => trim((string) ($details['name'] ?? '')) ?: ($slug !== '' ? Str::headline(explode('/', $slug, 2)[0]) : 'WordPress'),
+                    'name' => $decode($details['name'] ?? '') ?: ($slug !== '' ? Str::headline(explode('/', $slug, 2)[0]) : 'WordPress'),
                     'from' => trim((string) ($details['from_version'] ?? '')),
                     'to' => trim((string) ($details['to_version'] ?? '')),
-                    'at' => $at?->copy()->utc(),
+                    'at' => $log->ran_at?->copy()->utc(),
                 ];
             })
             ->filter(fn (array $row) => $row['at'] !== null)
@@ -1276,7 +1272,8 @@ class ClientReportCompiler
      * version fixes them) or [null, fixed_after] (only versions after that
      * one do), or [null, null] when one has no fix. An advisory names its
      * patched version, or failing that its range does: "below 3.0" is fixed
-     * in 3.0, "up to and including 2.0.6" by whatever comes after 2.0.6.
+     * in 3.0, "up to and including 2.0.6" (or exactly 2.0.6) by whatever
+     * comes after 2.0.6.
      * One open-ended ("all versions") with no patched version has no fix yet.
      *
      * @param  list<PluginVulnerability>  $vulns
@@ -1288,9 +1285,11 @@ class ClientReportCompiler
         foreach ($vulns as $vuln) {
             $patched = trim((string) $vuln->patched_in);
             $bound = trim((string) $vuln->to_version);
+            // An advisory for exactly one version ("== X", stored from = to = X).
+            $exact = $bound !== '' && $bound !== '*' && trim((string) $vuln->from_version) === $bound;
             $threshold = match (true) {
                 $patched !== '' => [$patched, false],
-                $bound !== '' && $bound !== '*' => [$bound, (bool) $vuln->to_inclusive],
+                $bound !== '' && $bound !== '*' => [$bound, $exact || (bool) $vuln->to_inclusive],
                 default => null,
             };
             if ($threshold === null) {

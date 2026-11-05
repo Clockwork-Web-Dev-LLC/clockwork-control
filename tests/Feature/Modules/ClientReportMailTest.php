@@ -292,6 +292,7 @@ it('cleans raw action-log summaries', function (string $summary, ?string $target
 })->with([
     ['Plugin updated: Yoast SEO 26.1 → 26.2', null, 'Yoast SEO 26.1 → 26.2'],
     ['Theme updated: Astra 4.1 → 4.2 [1 repair: x]', null, 'Astra 4.1 → 4.2'],
+    ['Theme updated: Example &amp; Co 1.0 → 1.1', null, 'Example & Co 1.0 → 1.1'],
     ['', 'wp-mail-smtp/wp_mail_smtp.php', 'Wp Mail Smtp'],
     ['', null, 'Software update'],
 ]);
