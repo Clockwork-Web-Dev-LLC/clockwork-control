@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
+use App\Services\Updates\ObservedUpdateRecorder;
 use App\Services\Uptime\UptimeStatsCalculator;
 use App\Support\Monitoring\DomainIgnoreList;
 use App\Support\Settings;
@@ -555,6 +556,17 @@ class Site extends Model
         static::saving(function (Site $site) {
             if (! $site->is_wordpress && isset($site->companion_snapshot['wp_core'])) {
                 $site->is_wordpress = true;
+            }
+        });
+
+        // Updates applied by something other than Control (WordPress
+        // auto-updates, another updater, wp-admin) only show up as version
+        // changes between two snapshots. Compared here, where the previous
+        // snapshot is still the original, rather than in each place that
+        // writes one. Informational rows only; never throws.
+        static::updated(function (Site $site) {
+            if ($site->wasChanged('companion_snapshot')) {
+                app(ObservedUpdateRecorder::class)->recordSnapshotChange($site);
             }
         });
     }

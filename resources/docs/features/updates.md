@@ -5,7 +5,7 @@ order: 35
 updated: 2026-11-05
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
-tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Services/Updates/ThemeIdentityGuard.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
+tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Services/Updates/ThemeIdentityGuard.php, app/Services/Updates/ObservedUpdateRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
 ---
 
 Fleet-wide page for plugin / theme / WP core / translation updates. Replaces the per-site click-through workflow with a single grouped-by-name view modeled after ManageWP Orion. Lives at **`/updates`** (top-nav between Issues and Security).
@@ -163,6 +163,14 @@ stdout_logfile=/var/log/clockwork/plugin-updates.log
 ## Audit trail
 
 Every completed update writes to `action_logs` with `action_type='plugin_update'` (or `theme_update` / `core_update` / `translations_update`). The `ActionLogger` mirrors to the per-site Companion endpoint, so the client's wp-admin "Activity" page shows what we've done.
+
+### Updates made outside Control
+
+WordPress's own auto-updates, another management tool or someone in wp-admin can update a plugin before Control does. Those updates leave no job, so `App\Services\Updates\ObservedUpdateRecorder` finds them in the snapshots instead: whenever a new Companion snapshot replaces the previous one (the `Site` model's `updated` hook, so every place that writes a snapshot is covered), each installed plugin, theme or WordPress core version that went **up** gets one `action_logs` row — `plugin_update_observed`, `theme_update_observed` or `core_update_observed`, `actor = observed`, `ran_at` = the new snapshot's time, details `{slug, name, from_version, to_version, observed_at, previous_snapshot_at}` (core uses the slug `wordpress`). The update happened somewhere between `previous_snapshot_at` and `observed_at`.
+
+A change is not logged when Control made it — a `plugin_update_jobs` row for the same site and slug (any core job for core) created in the last 48 hours, or since the previous snapshot if that is older, that completed, is still live, or ended on exactly the new version — nor for downgrades (rollbacks, restores), items added or removed, or a change already logged with the same new version (a snapshot that flips back and forth logs once).
+
+These rows are informational. They are in `ActionLog::OBSERVED_UPDATE_TYPES`, not `UPDATE_TYPES` (which means "updates Control ran"), and in `ActionLog::LOCAL_ONLY_TYPES`, so neither `ActionLogger` nor `clockwork:backfill-companion-action-log` mirrors them to the client's wp-admin. They never touch update jobs, failure streaks, auto-pauses or chat alerts.
 
 The `plugin_update_jobs` table is the **live** progress substrate — once a batch finishes, those rows are useful for "what just ran" forensics for a few days, then can be safely archived. Action logs are the immutable record.
 
