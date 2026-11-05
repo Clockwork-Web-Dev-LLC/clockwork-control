@@ -202,15 +202,19 @@ final class ReportPhrases
             return null;
         }
 
+        // A care plan switched on mid-month: the site may have been watched
+        // before, but it wasn't being looked after.
+        $subject = ($data['meta']['coverage_source'] ?? null) === 'care_plan' ? 'Your care plan' : 'Monitoring';
+
         if (self::beganAfterPeriod($data['meta']['coverage_start'], $data)) {
-            return "Monitoring began {$began}, after the end of this report's period.";
+            return "{$subject} began {$began}, after the end of this report's period.";
         }
 
         $periodEnd = $data['meta']['period_end'] ?? null;
 
         return is_string($periodEnd) && $periodEnd !== ''
-            ? "Monitoring began {$began}, so this report covers {$began} – ".Carbon::parse($periodEnd)->format('M j').'.'
-            : "Monitoring began {$began}.";
+            ? "{$subject} began {$began}, so this report covers {$began} – ".Carbon::parse($periodEnd)->format('M j').'.'
+            : "{$subject} began {$began}.";
     }
 
     /**

@@ -33,12 +33,16 @@ class ReportReviewFlags
         $reasons = [];
         $security = (array) ($data['security'] ?? []);
 
-        // A site enrolled part-way through the month was only watched from then.
+        // A site enrolled part-way through the month, or whose care plan was
+        // switched on then, was only looked after from then.
         $coverageStart = ReportPhrases::monitoringBeganOn($data['meta']['coverage_start'] ?? null);
         if ($coverageStart !== null) {
+            $began = ($data['meta']['coverage_source'] ?? null) === 'care_plan'
+                ? "The care plan was switched on {$coverageStart}"
+                : "Monitoring began {$coverageStart}";
             $reasons[] = ReportPhrases::beganAfterPeriod($data['meta']['coverage_start'], $data)
-                ? "Monitoring began {$coverageStart}, after the end of this report's period, so it covers none of it."
-                : "Monitoring began {$coverageStart}, so this report covers only part of the month.";
+                ? "{$began}, after the end of this report's period, so it covers none of it."
+                : "{$began}, so this report covers only part of the month.";
         }
         // Uptime monitoring switched on later than that (or for a site added
         // long before): only the uptime figures are partial.

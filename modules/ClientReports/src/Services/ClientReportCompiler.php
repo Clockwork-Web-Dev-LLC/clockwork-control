@@ -178,12 +178,13 @@ class ClientReportCompiler
         // Companion; trust the snapshot so their core-file row isn't dropped.
         $isWordPress = (bool) $site->is_wordpress || isset($site->companion_snapshot['wp_core']);
 
-        // A site added part-way through the period was only looked after from
-        // then, which the whole report says; null when it was there for the
+        // A site added part-way through the period, or whose care plan was
+        // switched on part-way through it, was only looked after from then,
+        // which the whole report says; null when it was looked after for the
         // whole period. Uptime monitoring can begin later still (switched on
         // mid-month for a site added long before), which only the uptime
         // section measures from.
-        $joinedAt = $this->joinedAt($site, $localStart, $localEnd);
+        [$joinedAt, $coverageSource] = $this->coverageStart($site, $localStart, $localEnd);
         $uptimeFrom = $this->uptimeMonitoringStart($site, $localStart, $localEnd);
 
         $data = [
@@ -195,10 +196,12 @@ class ClientReportCompiler
                 // microsecond of the day, so round to whole days (31 for October).
                 'period_days' => (int) round($start->diffInDays($end)),
                 'custom_notes' => $customNotes,
-                // When the site was added, if that was after the period's first
-                // day in the report timezone (ISO 8601). The views say so and
-                // the report is held for review.
+                // When the site was added or its care plan switched on, if that
+                // was after the period's first day in the report timezone (ISO
+                // 8601), and which it was ('site_added' or 'care_plan'). The
+                // views say so and the report is held for review.
                 'coverage_start' => $joinedAt?->toIso8601String(),
+                'coverage_source' => $coverageSource,
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
                 'schema_version' => self::SCHEMA_VERSION,
@@ -258,6 +261,64 @@ class ClientReportCompiler
         }
 
         return $created->copy();
+    }
+
+    /**
+     * Where the report's coverage begins, if after the period's first day:
+     * when the site was added (joinedAt) or when its care plan was switched
+     * on (carePlanStartedAt), whichever is later, with which it was.
+     *
+     * @return array{0: ?Carbon, 1: ?string}
+     */
+    protected function coverageStart(Site $site, Carbon $start, Carbon $end): array
+    {
+        $added = $this->joinedAt($site, $start, $end);
+        $carePlan = $this->carePlanStartedAt($site, $start, $end);
+
+        return match (true) {
+            $carePlan !== null && ($added === null || $carePlan->greaterThan($added)) => [$carePlan, 'care_plan'],
+            $added !== null => [$added, 'site_added'],
+            default => [null, null],
+        };
+    }
+
+    /**
+     * When the site's care plan was last switched on inside the period, if
+     * that was after its first day (in the report timezone): the period
+     * before wasn't a care-plan period, so the report covers only the rest.
+     * A switch-on is a care_plan_toggled row that turned the plan on from
+     * off: details.now (the site page's toggle) or details.enabled (a
+     * one-off command-line run) true, with details.previous false. Rows
+     * that re-sent the flag, cleared an override or found the plan already
+     * on aren't. With care plans switched off fleet-wide every site counts
+     * as on, so toggles say nothing.
+     */
+    protected function carePlanStartedAt(Site $site, Carbon $start, Carbon $end): ?Carbon
+    {
+        if (! Site::areCarePlansEnabled()) {
+            return null;
+        }
+
+        $switchedOn = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->where('action_type', ActionLog::TYPE_CARE_PLAN_TOGGLED)
+            ->whereBetween('ran_at', [$start, $end])
+            ->orderByDesc('ran_at')
+            ->orderByDesc('id')
+            ->get(['ran_at', 'details'])
+            ->first(function (ActionLog $log) {
+                $details = is_array($log->details) ? $log->details : [];
+
+                return ($details['now'] ?? $details['enabled'] ?? null) === true
+                    && array_key_exists('previous', $details) && $details['previous'] === false;
+            });
+
+        $at = $switchedOn?->ran_at;
+        if ($at === null || $at->lessThan($start->copy()->addDay())) {
+            return null;
+        }
+
+        return $at->copy();
     }
 
     /**

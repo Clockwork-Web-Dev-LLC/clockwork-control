@@ -1835,6 +1835,69 @@ describe('partial-month coverage', function () {
             ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('covers none of it');
     });
 
+    /** A care-plan toggle row, as the site page's toggle (or a one-off CLI run) writes it. */
+    function carePlanToggle(Site $site, string $at, array $details, string $target = 'on'): void
+    {
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_CARE_PLAN_TOGGLED, 'target' => $target,
+            'summary' => "Care plan toggled on {$site->domain}", 'details' => $details, 'ok' => true, 'ran_at' => Carbon::parse($at), 'actor' => 'manual']);
+    }
+
+    it('treats a care plan switched on mid-month as the start of what the report covers', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-08-03 23:42', ['now' => false, 'override' => true, 'previous' => true], 'off');
+        carePlanToggle($site, '2026-09-26 17:59', ['now' => true, 'override' => true, 'previous' => false]);
+
+        $report = compileSeptember($site);
+        $note = 'Your care plan began Sep 26, so this report covers Sep 26 – Sep 30.';
+
+        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-26T17:59:00+00:00', 'coverage_source' => 'care_plan'])
+            ->and($report['html'])->toContain($note)
+            ->and($report['text'])->toContain($note)
+            ->and($report['preview'])->toContain($note)
+            ->and($report['reasons'])->toContain('The care plan was switched on Sep 26, so this report covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('Monitoring began');
+    });
+
+    it('reads a care plan switched on from the command line the same way', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-09-20 15:00', ['enabled' => true, 'override' => true, 'previous' => false], '');
+
+        expect(compileSeptember($site)['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-20T15:00:00+00:00', 'coverage_source' => 'care_plan']);
+    });
+
+    it('takes the later of the site being added and its care plan being switched on', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-09-24 12:00:00')]);
+        carePlanToggle($site, '2026-09-10 12:00', ['now' => true, 'override' => true, 'previous' => false]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-24T12:00:00+00:00', 'coverage_source' => 'site_added'])
+            ->and($report['reasons'])->toContain('Monitoring began Sep 24, so this report covers only part of the month.');
+    });
+
+    it('does not read a care plan that was already on, re-synced, or switched on on the first day as a late start', function (array $details, string $at) {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, $at, $details);
+
+        expect(compileSeptember($site)['data']['meta'])->toMatchArray(['coverage_start' => null, 'coverage_source' => null]);
+    })->with([
+        'already on' => [['now' => true, 'override' => true, 'previous' => true, 'already_enabled' => true], '2026-09-20 15:00'],
+        're-synced' => [['source' => 'manual-resync'], '2026-09-20 15:00'],
+        'override cleared' => [['override' => null], '2026-09-20 15:00'],
+        'the first day' => [['now' => true, 'override' => true, 'previous' => false], '2026-09-01 15:00'],
+        // 10 PM EDT on Aug 31.
+        'the evening before the period' => [['now' => true, 'override' => true, 'previous' => false], '2026-09-01 02:00'],
+        'before the period' => [['now' => true, 'override' => true, 'previous' => false], '2026-08-20 15:00'],
+    ]);
+
+    it('ignores care-plan toggles while care plans are switched off fleet-wide', function () {
+        config(['clockwork.care_plans.enabled' => false]);
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-09-20 15:00', ['now' => true, 'override' => true, 'previous' => false]);
+
+        expect(compileSeptember($site)['data']['meta']['coverage_start'])->toBeNull();
+    });
+
     it('says only the uptime is partial when monitoring is switched on mid-month for a site added long before', function () {
         // Added months ago with uptime monitoring off; an update ran on the
         // 5th, then monitoring was switched on and first probed on the 17th.
