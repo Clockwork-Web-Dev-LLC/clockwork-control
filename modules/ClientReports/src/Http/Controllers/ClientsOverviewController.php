@@ -21,8 +21,7 @@ class ClientsOverviewController extends Controller
     public function index(Request $request, ClientDirectory $directory): View
     {
         $filters = ClientDirectory::filtersFrom($request->query());
-        $all = $directory->rows();
-        $rows = $directory->filter($all, $filters);
+        ['listed' => $rows, 'folded' => $folded] = $directory->arrange($directory->rows(), $filters);
 
         $page = max(1, (int) $request->query('page', 1));
         $paginator = new LengthAwarePaginator(
@@ -30,20 +29,25 @@ class ClientsOverviewController extends Controller
             $rows->count(),
             self::PER_PAGE,
             $page,
-            ['path' => route('client-reports.index'), 'query' => $filters],
+            ['path' => route('client-reports.index'), 'query' => ClientDirectory::queryFor($filters)],
         );
 
+        // The tiles count what the care-plan selection shows (search and the
+        // other filters aside), so they read as the list's own totals.
+        $selection = $directory->arrange($directory->rows(), ['care' => $filters['care']])['listed'];
         $totals = [
-            'clients' => $all->filter(fn (array $row) => $row['client'] !== null)->count(),
-            'care' => $all->sum(fn (array $row) => $row['counts']['care']),
-            'missing' => $all->sum(fn (array $row) => $row['counts']['missing']),
-            'waiting' => $all->sum(fn (array $row) => $row['counts']['waiting']),
-            'unassigned' => (int) ($all->firstWhere('key', ReportListFilters::UNASSIGNED)['counts']['sites'] ?? 0),
+            'clients' => $selection->filter(fn (array $row) => $row['client'] !== null)->count(),
+            'care' => $selection->sum(fn (array $row) => $row['counts']['care']),
+            'missing' => $selection->sum(fn (array $row) => $row['counts']['missing']),
+            'waiting' => $selection->sum(fn (array $row) => $row['counts']['waiting']),
+            'unassigned' => $selection->filter(fn (array $row) => $row['client'] === null)->sum(fn (array $row) => $row['counts']['sites']),
         ];
 
         return view('client-reports::clients.index', [
             'rows' => $paginator,
+            'folded' => $folded,
             'filters' => $filters,
+            'query' => ClientDirectory::queryFor($filters),
             'months' => $directory->months(),
             'totals' => $totals,
         ]);
@@ -57,15 +61,17 @@ class ClientsOverviewController extends Controller
         abort_if($row === null, 404);
 
         // Previous/next follow the list the operator came from (same filters,
-        // same alphabetical order); the switcher offers every client.
+        // same order, the folded "No care plan" clients after the others);
+        // the switcher offers every client.
         $filters = ClientDirectory::filtersFrom($request->query());
         $all = $directory->rows();
-        $list = $directory->filter($all, $filters)->pluck('key')->values();
+        ['listed' => $listed, 'folded' => $folded] = $directory->arrange($all, $filters);
+        $list = $listed->concat($folded)->pluck('key')->unique()->values();
         $position = $list->search($row['key'], true);
 
         return view('client-reports::clients.show', [
             'row' => $row,
-            'filters' => $filters,
+            'filters' => ClientDirectory::queryFor($filters),
             'months' => $directory->months(),
             'previousKey' => $position !== false && $position > 0 ? $list[$position - 1] : null,
             'nextKey' => $position !== false && $position < $list->count() - 1 ? $list[$position + 1] : null,

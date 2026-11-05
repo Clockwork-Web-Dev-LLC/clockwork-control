@@ -367,7 +367,7 @@
                     @elseif ($isOperatorPreview)
                         <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
                             <div class="text-xs font-medium text-slate-500">Malicious Visitors Blocked</div>
-                            <div class="text-sm font-bold text-slate-400 mt-1">{{ $blockedNote ?? 'Malicious visitors blocked hidden from the client: no blocker reports to Control for this site this period.' }}</div>
+                            <div class="text-xs text-slate-500 mt-1">{{ $blockedNote ?? 'Malicious visitors blocked hidden from the client: no blocker reports to Control for this site this period.' }}</div>
                         </div>
                     @endif
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">

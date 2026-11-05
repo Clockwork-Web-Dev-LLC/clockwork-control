@@ -155,9 +155,16 @@ class ClientDirectory
         })->values();
     }
 
+    /** The list's default care-plan selection: care-plan clients, the rest folded away below. */
+    public const CARE_DEFAULT = 'yes';
+
+    /** The list's default order: clients needing attention first. */
+    public const SORT_DEFAULT = 'attention';
+
     /**
-     * The list filters a request asks for, in the shape filter() takes, for
-     * the query string of every link that should keep them.
+     * The list filters a request asks for, defaults filled in: q, care
+     * (yes | no | all), sort (attention | az), waiting, missing. queryFor()
+     * turns them back into a query string without the defaults.
      *
      * @param  array<string, mixed>  $input
      * @return array<string, string>
@@ -166,10 +173,106 @@ class ClientDirectory
     {
         return array_filter([
             'q' => is_string($input['q'] ?? null) ? trim(mb_substr($input['q'], 0, 100)) : null,
-            'care' => in_array($input['care'] ?? null, ['yes', 'no'], true) ? $input['care'] : null,
+            'care' => in_array($input['care'] ?? null, ['yes', 'no', 'all'], true) ? $input['care'] : self::CARE_DEFAULT,
+            'sort' => in_array($input['sort'] ?? null, ['attention', 'az'], true) ? $input['sort'] : self::SORT_DEFAULT,
             'waiting' => ! empty($input['waiting']) ? '1' : null,
             'missing' => ! empty($input['missing']) ? '1' : null,
         ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    /**
+     * The filters as query parameters for links, leaving out the defaults.
+     *
+     * @param  array<string, string|null>  $filters
+     * @return array<string, string>
+     */
+    public static function queryFor(array $filters): array
+    {
+        return array_filter($filters, fn ($value, string $key) => $value !== null && $value !== ''
+            && ! ($key === 'care' && $value === self::CARE_DEFAULT)
+            && ! ($key === 'sort' && $value === self::SORT_DEFAULT), ARRAY_FILTER_USE_BOTH);
+    }
+
+    /**
+     * Split the rows into care-plan clients (any active site on a care plan)
+     * and the rest, each row tagged with its 'section' (care | other). The
+     * Unassigned group is split by site the same way, so care-plan sites
+     * without a client sit with the care-plan clients.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array{0: Collection<int, array<string, mixed>>, 1: Collection<int, array<string, mixed>>}
+     */
+    public function split(Collection $rows): array
+    {
+        $care = collect();
+        $other = collect();
+
+        foreach ($rows as $row) {
+            if ($row['client'] === null) {
+                [$careSites, $otherSites] = collect($row['sites'])
+                    ->partition(fn (array $s) => $s['eligible'] && ! $s['site']->is_inactive)
+                    ->map(fn (Collection $sites) => $sites->values()->all())
+                    ->all();
+                if ($careSites !== []) {
+                    $care->push(['section' => 'care'] + $this->row($row['key'], null, $careSites));
+                }
+                if ($otherSites !== []) {
+                    $other->push(['section' => 'other'] + $this->row($row['key'], null, $otherSites));
+                }
+
+                continue;
+            }
+
+            $row['counts']['care'] > 0
+                ? $care->push(['section' => 'care'] + $row)
+                : $other->push(['section' => 'other'] + $row);
+        }
+
+        return [$care, $other];
+    }
+
+    /**
+     * Order rows: 'attention' puts clients with a report waiting or a
+     * care-plan site missing a schedule first, then A–Z; 'az' is A–Z. The
+     * Unassigned group comes after the clients of its kind either way.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function sort(Collection $rows, string $sort = self::SORT_DEFAULT): Collection
+    {
+        return $rows->sortBy(fn (array $row) => sprintf(
+            '%d%d%s',
+            $sort === 'attention' && ($row['counts']['waiting'] > 0 || $row['counts']['missing'] > 0) ? 0 : 1,
+            $row['client'] === null ? 1 : 0,
+            Str::lower($row['name']),
+        ))->values();
+    }
+
+    /**
+     * The rows the list shows for its filters, in order, and the rows it
+     * folds away below them: with "Care plan" selected, the care-plan
+     * clients are listed and the others are folded into a collapsed "No care
+     * plan" section; "No care plan" lists only those; "All" lists both,
+     * care-plan clients first.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows  rows()
+     * @param  array<string, string>  $filters  filtersFrom()
+     * @return array{listed: Collection<int, array<string, mixed>>, folded: Collection<int, array<string, mixed>>}
+     */
+    public function arrange(Collection $rows, array $filters): array
+    {
+        [$care, $other] = $this->split($rows);
+        $narrow = ['care' => 'all'] + $filters;
+        $sort = $filters['sort'] ?? self::SORT_DEFAULT;
+        $care = $this->sort($this->filter($care, $narrow), $sort);
+        $other = $this->sort($this->filter($other, $narrow), $sort);
+
+        return match ($filters['care'] ?? self::CARE_DEFAULT) {
+            'no' => ['listed' => $other, 'folded' => collect()],
+            'all' => ['listed' => $care->concat($other)->values(), 'folded' => collect()],
+            default => ['listed' => $care, 'folded' => $other],
+        };
     }
 
     /**

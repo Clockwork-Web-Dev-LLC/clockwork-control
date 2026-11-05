@@ -4,6 +4,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Modules\ClientManagement\Models\Client;
+use Modules\ClientReports\Http\Controllers\ClientsOverviewController;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Services\ClientDirectory;
@@ -51,6 +52,21 @@ function clientsSchedule(Site $site, array $attributes = []): ClientReportSchedu
         'is_enabled' => true,
         'next_run_at' => Carbon::parse('2026-12-01'),
     ], $attributes));
+}
+
+/**
+ * The Clients page cut in two: the listed sections, and the collapsed "No
+ * care plan" section folded away below them ('' when there is none).
+ *
+ * @return array{listed: string, folded: string}
+ */
+function clientsSections(string $html): array
+{
+    $at = strpos($html, 'id="cr-no-care-plan"');
+
+    return $at === false
+        ? ['listed' => $html, 'folded' => '']
+        : ['listed' => substr($html, 0, $at), 'folded' => substr($html, $at)];
 }
 
 function clientsReport(Site $site, string $month, array $attributes = [], array $meta = []): ClientReport
@@ -115,17 +131,93 @@ describe('Clients tab', function () {
             ->assertSee('Aug 2026: no report');
     });
 
-    it('gathers sites without a client under Unassigned, after the clients', function () {
-        Client::create(['name' => 'Zed Example', 'email' => 'zed@example.com']);
+    it('splits sites without a client by care plan, each Unassigned group after the clients of its kind', function () {
+        $zed = Client::create(['name' => 'Zed Example', 'email' => 'zed@example.com']);
+        clientsSite($zed, 'zed.example.com');
+        Client::create(['name' => 'Empty Example', 'email' => 'empty@example.com']); // no sites: no care plan
         clientsSite(null, 'orphan.example.com');
+        clientsSite(null, 'orphan-nocare.example.com', carePlan: false);
 
-        $html = $this->actingAs($this->user)->get(route('client-reports.index'))->assertOk()->getContent();
+        $sections = clientsSections($this->actingAs($this->user)->get(route('client-reports.index', ['sort' => 'az']))->assertOk()->getContent());
 
-        expect($html)->toContain('Unassigned sites')->toContain('orphan.example.com')
-            ->and(strpos($html, 'Zed Example'))->toBeLessThan(strpos($html, 'Unassigned sites'));
+        expect($sections['listed'])->toContain('Zed Example')->toContain('Unassigned sites')->toContain('orphan.example.com')
+            ->not->toContain('orphan-nocare.example.com')->not->toContain('Empty Example')
+            ->and(strpos($sections['listed'], 'Zed Example'))->toBeLessThan(strpos($sections['listed'], 'Unassigned sites'))
+            ->and($sections['folded'])->toContain('Unassigned sites')->toContain('orphan-nocare.example.com')->toContain('Empty Example')
+            ->not->toContain('>orphan.example.com<');
     });
 
-    it('filters by search, care plan, waiting reports and missing schedules', function () {
+    it('lists care-plan clients first and folds the rest into a collapsed "No care plan" section by default', function () {
+        $care = Client::create(['name' => 'Care Example', 'email' => 'care@example.com']);
+        clientsSite($care, 'care.example.com');
+        clientsSite($care, 'care-extra.example.com', carePlan: false); // stays with its client, marked
+        $none = Client::create(['name' => 'Nocare Example', 'email' => 'nocare@example.com']);
+        clientsSite($none, 'nocare.example.com', carePlan: false);
+
+        $this->actingAs($this->user);
+        $html = $this->get(route('client-reports.index'))->assertOk()->getContent();
+        $sections = clientsSections($html);
+
+        expect($sections['listed'])->toContain('Care plan clients — reported monthly')->toContain('Care Example')
+            ->toContain('care-extra.example.com')->toContain('No care plan — reports won\'t send')
+            ->not->toContain('Nocare Example')
+            ->and($html)->toMatch('/<details class="[^"]*" id="cr-no-care-plan">/') // closed: no "open"
+            ->and($sections['folded'])->toContain('No care plan — reports aren\'t sent')->toContain('<span class="cr-chip">1</span>')->toContain('Nocare Example');
+
+        // "No care plan" lists only those, open; "All" lists both, care-plan first.
+        $no = $this->get(route('client-reports.index', ['care' => 'no']))->getContent();
+        expect($no)->toContain('Nocare Example')->not->toContain('Care plan clients — reported monthly')->not->toContain('id="cr-no-care-plan"');
+        $all = $this->get(route('client-reports.index', ['care' => 'all']))->getContent();
+        expect($all)->not->toContain('id="cr-no-care-plan"')
+            ->and(strpos($all, 'Care plan clients — reported monthly'))->toBeLessThan(strpos($all, 'No care plan — reports aren'))
+            ->and(strpos($all, 'Care Example'))->toBeLessThan(strpos($all, 'Nocare Example'));
+    });
+
+    it('puts clients needing attention first by default, or sorts A–Z', function () {
+        $alpha = Client::create(['name' => 'Alpha Example', 'email' => 'a@example.com']);
+        $alphaSite = clientsSite($alpha, 'alpha.example.com');
+        clientsSchedule($alphaSite); // scheduled, nothing waiting
+        $mike = Client::create(['name' => 'Mike Example', 'email' => 'm@example.com']);
+        clientsSite($mike, 'mike.example.com'); // care plan, no schedule
+        $zulu = Client::create(['name' => 'Zulu Example', 'email' => 'z@example.com']);
+        $zuluSite = clientsSite($zulu, 'zulu.example.com');
+        clientsReport($zuluSite, '2026-10', ['schedule_id' => clientsSchedule($zuluSite)->id], ['review_reasons' => ['No backups were found this month.']]);
+
+        $this->actingAs($this->user);
+        $attention = $this->get(route('client-reports.index'))->getContent();
+        $az = $this->get(route('client-reports.index', ['sort' => 'az']))->getContent();
+
+        expect(strpos($attention, 'Mike Example'))->toBeLessThan(strpos($attention, 'Zulu Example'))
+            ->and(strpos($attention, 'Zulu Example'))->toBeLessThan(strpos($attention, 'Alpha Example'))
+            ->and(strpos($az, 'Alpha Example'))->toBeLessThan(strpos($az, 'Mike Example'))
+            ->and(strpos($az, 'Mike Example'))->toBeLessThan(strpos($az, 'Zulu Example'));
+    });
+
+    it('keeps the care-plan selection, order and filters in every link, and counts the selection in the tiles', function () {
+        foreach (range(1, ClientsOverviewController::PER_PAGE + 1) as $i) {
+            clientsSite(Client::create(['name' => sprintf('Nocare %02d Example', $i), 'email' => "n{$i}@example.com"]), sprintf('nocare%02d.example.com', $i), carePlan: false);
+        }
+        $care = Client::create(['name' => 'Care Example', 'email' => 'care@example.com']);
+        clientsSite($care, 'care.example.com');
+
+        $this->actingAs($this->user);
+        $no = $this->get(route('client-reports.index', ['care' => 'no', 'sort' => 'az', 'q' => 'nocare']))->assertOk()->getContent();
+
+        expect($no)
+            // Pagination keeps every setting.
+            ->toContain(e(route('client-reports.index', ['q' => 'nocare', 'care' => 'no', 'sort' => 'az', 'page' => 2])))
+            // Switching the selection keeps the search and order; the form carries the selection.
+            ->toContain(e(route('client-reports.index', ['q' => 'nocare', 'sort' => 'az'])))
+            ->toContain('<input type="hidden" name="care" value="no">')
+            ->toContain('<input type="hidden" name="sort" value="az">')
+            // The tiles count the "No care plan" selection.
+            ->toMatch('/Clients<\/div>\s*<div[^>]*>'.(ClientsOverviewController::PER_PAGE + 1).'<\/div>/');
+
+        $yes = $this->get(route('client-reports.index'))->getContent();
+        expect($yes)->toMatch('/Clients<\/div>\s*<div[^>]*>1<\/div>/');
+    });
+
+    it('filters by search, waiting reports and missing schedules within each section', function () {
         $care = Client::create(['name' => 'Care Example', 'email' => 'care@example.com']);
         $careSite = clientsSite($care, 'care.example.com');
         clientsReport($careSite, '2026-10', ['schedule_id' => clientsSchedule($careSite)->id], ['review_reasons' => ['No backups were found this month.']]);
@@ -137,12 +229,17 @@ describe('Clients tab', function () {
         clientsSite($gap, 'gap.example.com');
 
         $this->actingAs($this->user);
+        $page = fn (array $query) => clientsSections($this->get(route('client-reports.index', $query))->assertOk()->getContent());
 
-        $this->get(route('client-reports.index', ['q' => 'nocare.example']))->assertSee('Nocare Example')->assertDontSee('Gap Example');
-        $this->get(route('client-reports.index', ['care' => 'no']))->assertSee('Nocare Example')->assertDontSee('Care Example');
-        $this->get(route('client-reports.index', ['care' => 'yes']))->assertSee('Care Example')->assertSee('Gap Example')->assertDontSee('Nocare Example');
-        $this->get(route('client-reports.index', ['waiting' => 1]))->assertSee('Care Example')->assertDontSee('Gap Example')->assertDontSee('Nocare Example');
-        $this->get(route('client-reports.index', ['missing' => 1]))->assertSee('Gap Example')->assertDontSee('Care Example')->assertDontSee('Nocare Example');
+        $search = $page(['q' => 'nocare.example']);
+        expect($search['listed'])->not->toContain('Gap Example')->not->toContain('Care Example')
+            ->and($search['folded'])->toContain('Nocare Example');
+        expect($page(['care' => 'no'])['listed'])->toContain('Nocare Example')->not->toContain('Care Example')->not->toContain('Gap Example');
+        expect($page([])['listed'])->toContain('Care Example')->toContain('Gap Example')->not->toContain('Nocare Example');
+        $waiting = $page(['waiting' => 1]);
+        expect($waiting['listed'])->toContain('Care Example')->not->toContain('Gap Example')
+            ->and($waiting['folded'])->toBe('');
+        expect($page(['missing' => 1])['listed'])->toContain('Gap Example')->not->toContain('Care Example')->not->toContain('Nocare Example');
     });
 
     it('does not count an inactive care-plan site as missing a schedule', function () {
@@ -202,7 +299,7 @@ describe('client reports page', function () {
             ->assertSee('Only you get it, with [TEST] in the subject');
     });
 
-    it('steps to the previous and next client of the filtered list, alphabetically, and offers every client in the switcher', function () {
+    it('steps to the previous and next client in the list\'s order, care-plan clients first, and offers every client in the switcher', function () {
         $alpha = Client::create(['name' => 'Alpha Example', 'email' => 'a@example.com']);
         $bravo = Client::create(['name' => 'Bravo Example', 'email' => 'b@example.com']);
         $charlie = Client::create(['name' => 'Charlie Example', 'email' => 'c@example.com']);
@@ -212,17 +309,25 @@ describe('client reports page', function () {
 
         $this->actingAs($this->user);
 
-        $this->get(route('client-reports.clients.show', $bravo->id))
+        // Default list: Alpha, Charlie (care plan), then the folded Bravo.
+        $this->get(route('client-reports.clients.show', $alpha->id))
             ->assertOk()
-            ->assertSee('href="'.route('client-reports.clients.show', $alpha->id).'" class="cr-btn" rel="prev"', false)
             ->assertSee('href="'.route('client-reports.clients.show', $charlie->id).'" class="cr-btn" rel="next"', false)
-            ->assertSee('2 of 3');
+            ->assertSee('1 of 3')
+            ->assertSee('<option value="Bravo Example">', false);
+        $this->get(route('client-reports.clients.show', $bravo->id))
+            ->assertSee('href="'.route('client-reports.clients.show', $charlie->id).'" class="cr-btn" rel="prev"', false)
+            ->assertDontSee('rel="next"', false)
+            ->assertSee('3 of 3');
 
-        // With "care plan: yes", Bravo drops out: Alpha's next is Charlie.
-        $this->get(route('client-reports.clients.show', [$alpha->id, 'care' => 'yes']))
-            ->assertSee('href="'.route('client-reports.clients.show', [$charlie->id, 'care' => 'yes']).'" class="cr-btn" rel="next"', false)
-            ->assertSee('<option value="Bravo Example">', false)
-            ->assertSee(route('client-reports.index', ['care' => 'yes']), false);
+        // "All", A–Z: the same grouping, and the settings ride along.
+        $this->get(route('client-reports.clients.show', [$charlie->id, 'care' => 'all', 'sort' => 'az']))
+            ->assertSee('href="'.e(route('client-reports.clients.show', [$alpha->id, 'care' => 'all', 'sort' => 'az'])).'" class="cr-btn" rel="prev"', false)
+            ->assertSee('href="'.e(route('client-reports.clients.show', [$bravo->id, 'care' => 'all', 'sort' => 'az'])).'" class="cr-btn" rel="next"', false)
+            ->assertSee(e(route('client-reports.index', ['care' => 'all', 'sort' => 'az'])), false);
+
+        // "No care plan": Bravo alone.
+        $this->get(route('client-reports.clients.show', [$bravo->id, 'care' => 'no']))->assertSee('1 of 1');
     });
 
     it('has a page for the Unassigned group and 404s for unknown clients', function () {

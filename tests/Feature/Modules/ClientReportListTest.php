@@ -249,6 +249,27 @@ describe('schedules page', function () {
             ->assertSee('Needs review');
     });
 
+    it('lists care-plan schedules first and folds the no-care-plan ones into a collapsed section', function () {
+        $care = Site::factory()->create(['domain' => 'care-sched.example.com', 'care_plan_enabled' => true]);
+        ClientReportSchedule::create(['site_id' => $care->id, 'frequency' => 'monthly', 'delivery_mode' => 'auto', 'recipients' => ['a@example.com'], 'is_enabled' => true]);
+        $noCare = Site::factory()->create(['domain' => 'nocare-sched.example.com', 'care_plan_enabled' => false]);
+        ClientReportSchedule::create(['site_id' => $noCare->id, 'frequency' => 'monthly', 'delivery_mode' => 'auto', 'recipients' => ['b@example.com'], 'is_enabled' => true]);
+
+        $this->actingAs($this->user);
+        $html = $this->get(route('client-reports.schedules.index'))->assertOk()->getContent();
+        $folded = strpos($html, 'id="cr-no-care-schedules"');
+
+        expect($folded)->not->toBeFalse()
+            ->and($html)->toMatch('/<details class="[^"]*" id="cr-no-care-schedules"\s*>/') // closed
+            ->and(strpos($html, '>care-sched.example.com<'))->toBeLessThan($folded)
+            ->and(strpos($html, '>nocare-sched.example.com<'))->toBeGreaterThan($folded);
+
+        // Asking for the ones that won't send opens it.
+        $this->get(route('client-reports.schedules.index', ['show' => 'wont_send']))
+            ->assertSee('id="cr-no-care-schedules"  open', false)
+            ->assertDontSee('>care-sched.example.com<', false);
+    });
+
     it('lists active care-plan sites without a schedule, with one-click create, and leaves out the rest', function () {
         $client = Client::create(['name' => 'Gap Person', 'email' => 'gap@example.com']);
         $gap = Site::factory()->create(['domain' => 'gap.example.com', 'care_plan_enabled' => true, 'client_id' => $client->id]);
