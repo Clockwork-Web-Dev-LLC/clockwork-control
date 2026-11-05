@@ -59,6 +59,30 @@ describe('clockwork:backfill-companion-action-log', function () {
         expect($alreadyPushed->refresh()->companion_pushed_at->timestamp)->toBe($alreadyPushedAt->timestamp);
     });
 
+    it('never pushes local-only rows (updates Control only observed or held back)', function () {
+        $site = backfillSite(['domain' => 'backfill-local-only.test']);
+        $observed = ActionLog::factory()->create([
+            'site_id' => $site->id,
+            'action_type' => ActionLog::TYPE_PLUGIN_UPDATE_OBSERVED,
+            'companion_pushed_at' => null,
+        ]);
+        $refused = ActionLog::factory()->create([
+            'site_id' => $site->id,
+            'action_type' => ActionLog::TYPE_THEME_UPDATE_REFUSED,
+            'companion_pushed_at' => null,
+        ]);
+
+        Http::fake();
+
+        $this->artisan('clockwork:backfill-companion-action-log')
+            ->expectsOutputToContain('sites_already_clean=1')
+            ->assertSuccessful();
+
+        Http::assertNothingSent();
+        expect($observed->refresh()->companion_pushed_at)->toBeNull()
+            ->and($refused->refresh()->companion_pushed_at)->toBeNull();
+    });
+
     it('skips sites whose Companion does not advertise the action-log capability, without any HTTP call', function () {
         $site = backfillSite(['domain' => 'backfill-nocap.test', 'companion_capabilities' => ['malware-scan']]);
         ActionLog::factory()->create(['site_id' => $site->id, 'companion_pushed_at' => null]);

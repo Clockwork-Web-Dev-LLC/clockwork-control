@@ -5,6 +5,7 @@ namespace Tests\Feature\Console;
 use App\Console\Commands\RunNightlyPluginUpdates;
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
+use App\Models\ActionLog;
 use App\Models\PluginUpdateFailureStreak;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
@@ -12,6 +13,7 @@ use App\Models\PluginVulnerability;
 use App\Models\Site;
 use App\Services\ActionLog\ActionLogger;
 use App\Services\Chat\ChatNotifier;
+use App\Services\Updates\ThemeIdentityGuard;
 use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -59,6 +61,26 @@ function themeSnapshot(array $themes): array
         'themes' => ['items' => $themes],
     ];
 }
+
+// Theme tuples are checked against the wordpress.org theme directory
+// (ThemeIdentityGuard). A test lists a theme there by adding its slug to
+// $this->themeDirectory; any other slug is not listed, as for a premium
+// theme with its own updater. $this->themeDirectoryDown makes it fail.
+beforeEach(function () {
+    $this->themeDirectory = [];
+    $this->themeDirectoryDown = false;
+    Http::fake(['api.wordpress.org/themes/*' => function ($request) {
+        if ($this->themeDirectoryDown) {
+            return Http::response('', 503);
+        }
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+        $listing = $this->themeDirectory[$query['request']['slug'] ?? ''] ?? null;
+
+        return $listing === null
+            ? Http::response(['error' => 'Theme not found'], 404)
+            : Http::response($listing);
+    }]);
+});
 
 describe('happy path: enumerating and dispatching', function () {
     it('queues a PluginUpdateJob and dispatches RunPluginUpdate for a site with a pending plugin update', function () {
@@ -773,5 +795,215 @@ describe('--site filter', function () {
 
         expect(PluginUpdateJob::query()->where('site_id', $target->id)->count())->toBe(1)
             ->and(PluginUpdateJob::query()->where('site_id', $other->id)->count())->toBe(0);
+    });
+});
+
+describe('theme slug collisions', function () {
+    it('holds back a custom child theme whose folder name matches an unrelated wordpress.org theme', function () {
+        Queue::fake();
+        $this->themeDirectory['studio'] = ['name' => 'Studio', 'slug' => 'studio', 'version' => '2.3.0'];
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('send')
+            ->once()
+            ->withArgs(fn (string $title) => str_contains($title, 'Held back a theme update') && str_contains($title, 'Studio Child Theme')));
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'studio', 'name' => 'Studio Child Theme', 'version' => '1.0.0', 'new_version' => '2.3.0', 'update_available' => true, 'active' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')
+            ->expectsOutputToContain('Holding back 1 theme update')
+            ->expectsOutputToContain('held_back=1')
+            ->assertSuccessful();
+
+        Queue::assertNotPushed(RunThemeUpdate::class);
+
+        // A skipped row with the reason, in tonight's batch for the summary mail.
+        $job = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+        expect($job->status)->toBe(PluginUpdateJob::STATUS_SKIPPED)
+            ->and($job->reason_code)->toBe(ThemeIdentityGuard::REASON_CODE)
+            ->and($job->batch_id)->toStartWith('nightly-')
+            ->and($job->error)->toContain('"Studio Child Theme"')
+            ->and($job->error)->toContain('"Studio"');
+
+        // Held from now on, privately, and not as a failure.
+        $ignore = PluginUpdateIgnore::query()->where('site_id', $site->id)->sole();
+        expect($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH)
+            ->and($ignore->target_kind)->toBe(PluginUpdateJob::KIND_THEME)
+            ->and($ignore->target_slug)->toBe('studio')
+            ->and($ignore->client_visible)->toBeFalse()
+            ->and(mb_strlen((string) $ignore->note))->toBeLessThanOrEqual(255);
+        expect(PluginUpdateFailureStreak::query()->count())->toBe(0);
+
+        $log = ActionLog::query()->where('site_id', $site->id)->where('action_type', ActionLog::TYPE_THEME_UPDATE_REFUSED)->sole();
+        expect($log->target)->toBe('studio')
+            ->and($log->details['reason_code'])->toBe(ThemeIdentityGuard::REASON_CODE)
+            ->and($log->companion_pushed_at)->toBeNull();
+    });
+
+    it('tells ops once: the next night the held theme is skipped quietly', function () {
+        Queue::fake();
+        $this->themeDirectory['studio'] = ['name' => 'Studio', 'slug' => 'studio', 'version' => '2.3.0'];
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('send')->once());
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'studio', 'name' => 'Studio Child Theme', 'version' => '1.0.0', 'new_version' => '2.3.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        $this->travel(1)->days();
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->count())->toBe(1)
+            ->and(ActionLog::query()->where('action_type', ActionLog::TYPE_THEME_UPDATE_REFUSED)->count())->toBe(1);
+    });
+
+    it('holds back a custom theme whose name differs from the wordpress.org theme in the same folder', function () {
+        Queue::fake();
+        $this->themeDirectory['example-custom'] = ['name' => 'Example Magazine', 'slug' => 'example-custom', 'version' => '3.0.0'];
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('send')->once());
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-custom', 'name' => 'Example Client Site', 'version' => '1.0', 'new_version' => '3.0.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNotPushed(RunThemeUpdate::class);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->status)->toBe(PluginUpdateJob::STATUS_SKIPPED);
+    });
+
+    it('queues a wordpress.org theme whose installed name matches the directory listing', function () {
+        Queue::fake();
+        $this->themeDirectory['twentytwentyfour'] = ['name' => 'Twenty Twenty-Four', 'slug' => 'twentytwentyfour', 'version' => '1.1'];
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldNotReceive('send'));
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'twentytwentyfour', 'name' => 'Twenty Twenty-Four', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->expectsOutputToContain('held_back=0')->assertSuccessful();
+
+        $row = PluginUpdateJob::query()->where('site_id', $site->id)->sole();
+        expect($row->status)->toBe(PluginUpdateJob::STATUS_PENDING);
+        Queue::assertPushed(RunThemeUpdate::class, fn ($job) => $job->jobRowId === $row->id);
+        expect(PluginUpdateIgnore::query()->count())->toBe(0);
+    });
+
+    it('queues a premium theme that is not on wordpress.org even when its name differs from its folder', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-builder-theme', 'name' => 'Example Page Builder', 'version' => '1.7.19', 'new_version' => '1.7.20', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertPushed(RunThemeUpdate::class);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->status)->toBe(PluginUpdateJob::STATUS_PENDING);
+    });
+
+    it('holds back a child theme offered an update by something other than wordpress.org', function () {
+        Queue::fake();
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldReceive('send')->once());
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-child', 'name' => 'Example Child', 'version' => '1.0', 'new_version' => '2.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNotPushed(RunThemeUpdate::class);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->error)->toContain('child theme');
+    });
+
+    it('stays quiet in chat for an inactive site but still holds the theme back', function () {
+        Queue::fake();
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldNotReceive('send'));
+
+        $site = nightlySite([
+            'is_inactive' => true,
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-child', 'name' => 'Example Child', 'version' => '1.0', 'new_version' => '2.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertNotPushed(RunThemeUpdate::class);
+        expect(PluginUpdateIgnore::query()->where('site_id', $site->id)->count())->toBe(1);
+    });
+
+    it('queues the theme when the directory cannot be reached and nothing marks it as a child theme', function () {
+        Queue::fake();
+        $this->themeDirectoryDown = true;
+
+        $site = nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-theme', 'name' => 'Example Theme', 'version' => '1.0', 'new_version' => '1.1', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertPushed(RunThemeUpdate::class);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->status)->toBe(PluginUpdateJob::STATUS_PENDING);
+    });
+
+    it('lists held-back themes in a dry run without writing anything', function () {
+        Queue::fake();
+        $this->mock(ChatNotifier::class, fn ($mock) => $mock->shouldNotReceive('send'));
+
+        nightlySite([
+            'wp_theme_updates' => true,
+            'companion_snapshot' => themeSnapshot([
+                ['slug' => 'example-child', 'name' => 'Example Child', 'version' => '1.0', 'new_version' => '2.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates', ['--dry-run' => true])
+            ->expectsOutputToContain('HOLD')
+            ->assertSuccessful();
+
+        Queue::assertNothingPushed();
+        expect(PluginUpdateJob::query()->count())->toBe(0)
+            ->and(PluginUpdateIgnore::query()->count())->toBe(0)
+            ->and(ActionLog::query()->where('action_type', ActionLog::TYPE_THEME_UPDATE_REFUSED)->count())->toBe(0);
+    });
+
+    it('never holds back plugin updates', function () {
+        Queue::fake();
+
+        $site = nightlySite([
+            'wp_plugin_updates' => true,
+            'companion_snapshot' => pluginSnapshot([
+                ['slug' => 'example-child/example-child.php', 'name' => 'Example Child Plugin', 'version' => '1.0', 'new_version' => '2.0', 'update_available' => true],
+            ]),
+        ]);
+
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+
+        Queue::assertPushed(RunPluginUpdate::class);
+        expect(PluginUpdateJob::query()->where('site_id', $site->id)->sole()->status)->toBe(PluginUpdateJob::STATUS_PENDING);
     });
 });

@@ -4,11 +4,15 @@ namespace App\Console\Commands;
 
 use App\Jobs\RunPluginUpdate;
 use App\Jobs\RunThemeUpdate;
+use App\Models\ActionLog;
 use App\Models\PluginUpdateFailureStreak;
 use App\Models\PluginUpdateIgnore;
 use App\Models\PluginUpdateJob;
 use App\Models\Site;
+use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
 use App\Services\Security\PluginVulnerabilityMatcher;
+use App\Services\Updates\ThemeIdentityGuard;
 use App\Support\UpgraderOutput;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -65,7 +69,7 @@ class RunNightlyPluginUpdates extends Command
         UpgraderOutput::REASON_NOT_OFFERED,
     ];
 
-    public function handle(PluginVulnerabilityMatcher $vulnMatcher): int
+    public function handle(PluginVulnerabilityMatcher $vulnMatcher, ThemeIdentityGuard $themeGuard): int
     {
         $isDryRun = (bool) $this->option('dry-run');
         $siteFilter = $this->option('site');
@@ -167,6 +171,7 @@ class RunNightlyPluginUpdates extends Command
                     'is_vulnerable' => false,
                     'patched_in' => null,
                     'pause_bypass' => null,
+                    'snapshot_item' => $entry,
                 ];
             }
         }
@@ -184,7 +189,13 @@ class RunNightlyPluginUpdates extends Command
         // Drop tuples that already have a live PluginUpdateJob for this kind/slug.
         $tuples = $this->filterAlreadyLive($tuples);
 
-        if ($tuples === []) {
+        // Hold back theme updates that would put a different theme in place
+        // of the installed one (a custom theme sharing its folder name with
+        // an unrelated wordpress.org theme). Checked last, so ignored and
+        // already-queued themes cost no directory lookup.
+        [$tuples, $refused] = $this->splitIdentityMismatches($tuples, $themeGuard);
+
+        if ($tuples === [] && $refused === []) {
             $this->info('All candidates filtered out (ignored or already live). Nothing to queue.');
             if (! $isDryRun) {
                 $this->stampEligibleSites($siteFilter);
@@ -223,6 +234,25 @@ class RunNightlyPluginUpdates extends Command
                 count(array_filter($retried, fn ($t) => $t['pause_bypass'] === self::BYPASS_NEW_VERSION)),
                 count(array_filter($retried, fn ($t) => $t['pause_bypass'] === self::BYPASS_SECURITY_FIX)),
             ));
+        }
+
+        if ($refused !== []) {
+            $this->warn(sprintf(
+                'Holding back %d theme update%s: the installed theme does not look like the theme on offer.',
+                count($refused),
+                count($refused) === 1 ? '' : 's',
+            ));
+            foreach ($refused as $t) {
+                $this->line(sprintf(
+                    '  HOLD %s [%s] %s (%s → %s): %s',
+                    str_pad((string) $t['site']->domain, 36),
+                    $t['kind'],
+                    $t['slug'],
+                    $t['before_version'] ?: '?',
+                    $t['target_version'] ?: '?',
+                    $t['refusal'],
+                ));
+            }
         }
 
         if ($isDryRun) {
@@ -267,6 +297,10 @@ class RunNightlyPluginUpdates extends Command
                 'reason' => $t['pause_bypass'],
                 'batch_id' => $batchId,
             ]);
+        }
+
+        foreach ($refused as $t) {
+            $this->recordIdentityRefusal($t, $batchId);
         }
 
         foreach ($tuples as $t) {
@@ -325,14 +359,165 @@ class RunNightlyPluginUpdates extends Command
         $this->stampEligibleSites($siteFilter);
 
         $this->info(sprintf(
-            'Done. batch_id=%s accepted=%d failed=%d sites_touched=%d',
+            'Done. batch_id=%s accepted=%d failed=%d sites_touched=%d held_back=%d',
             $batchId,
             $accepted,
             $failed,
             $sitesTouched,
+            count($refused),
         ));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Split theme tuples whose installed theme doesn't look like the theme
+     * on offer (see ThemeIdentityGuard) off the queue. Plugin tuples pass
+     * through: the snapshot carries nothing comparable for plugins, and
+     * wordpress.org plugin names carry taglines and edition names ("Lite"),
+     * so comparing them would hold back legitimate updates.
+     *
+     * A failed lookup never stops the night: the tuple is queued as before.
+     *
+     * @param  list<array<string, mixed>>  $tuples
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>} [to queue, held back with 'refusal']
+     */
+    private function splitIdentityMismatches(array $tuples, ThemeIdentityGuard $guard): array
+    {
+        $queue = [];
+        $refused = [];
+
+        foreach ($tuples as $t) {
+            if ($t['kind'] !== PluginUpdateJob::KIND_THEME) {
+                $queue[] = $t;
+
+                continue;
+            }
+
+            try {
+                $reason = $guard->mismatchReason((array) ($t['snapshot_item'] ?? ['slug' => $t['slug']]));
+            } catch (\Throwable $e) {
+                Log::warning('plugin_update.theme_identity_check_failed', [
+                    'site_id' => $t['site']->id,
+                    'slug' => $t['slug'],
+                    'error' => $e->getMessage(),
+                ]);
+                $reason = null;
+            }
+
+            if ($reason === null) {
+                $queue[] = $t;
+            } else {
+                $t['refusal'] = $reason;
+                $refused[] = $t;
+            }
+        }
+
+        return [$queue, $refused];
+    }
+
+    /**
+     * Record a held-back theme update once, where ops will see it:
+     *   - a skipped plugin_update_jobs row in tonight's batch (reason_code
+     *     identity_mismatch), so the nightly summary email lists it;
+     *   - an ignore (source identity_mismatch, not shown in wp-admin), so
+     *     the slug stays out of later nights and of the Updates page's bulk
+     *     actions until an operator lifts it;
+     *   - a local-only action log and one chat message.
+     * Nothing here touches failure streaks or auto-pauses: no update ran.
+     *
+     * @param  array<string, mixed>  $t
+     */
+    private function recordIdentityRefusal(array $t, string $batchId): void
+    {
+        /** @var Site $site */
+        $site = $t['site'];
+        $reason = (string) $t['refusal'];
+        $name = (string) ($t['name'] ?: $t['slug']);
+
+        try {
+            DB::transaction(function () use ($t, $site, $reason, $batchId) {
+                PluginUpdateJob::create([
+                    'site_id' => $site->id,
+                    'target_kind' => $t['kind'],
+                    'target_slug' => $t['slug'],
+                    'target_name' => $t['name'],
+                    'status' => PluginUpdateJob::STATUS_SKIPPED,
+                    'before_version' => $t['before_version'],
+                    'target_version' => $t['target_version'],
+                    'error' => $reason,
+                    'reason_code' => ThemeIdentityGuard::REASON_CODE,
+                    'requested_by_user_id' => null,
+                    'batch_id' => $batchId,
+                    'queued_at' => Carbon::now(),
+                    'completed_at' => Carbon::now(),
+                ]);
+
+                PluginUpdateIgnore::updateOrCreate(
+                    ['site_id' => $site->id, 'target_kind' => $t['kind'], 'target_slug' => $t['slug']],
+                    [
+                        'source' => PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH,
+                        'failure_count' => null,
+                        'last_error' => $reason,
+                        'client_visible' => false,
+                        'note' => mb_strimwidth('Held by the nightly loop: '.$reason, 0, 255, '…'),
+                        'ignored_at' => Carbon::now(),
+                        'ignored_by_user_id' => null,
+                    ],
+                );
+            });
+        } catch (\Throwable $e) {
+            Log::error('plugin_update.theme_identity_record_failed', [
+                'site_id' => $site->id,
+                'slug' => $t['slug'],
+                'batch_id' => $batchId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        app(ActionLogger::class)->record(
+            actionType: ActionLog::TYPE_THEME_UPDATE_REFUSED,
+            summary: sprintf('Theme update held back: %s %s → %s does not look like the installed theme', $name, $t['before_version'] ?: '?', $t['target_version'] ?: '?'),
+            site: $site,
+            target: $t['slug'],
+            details: [
+                'slug' => $t['slug'],
+                'name' => $t['name'],
+                'from_version' => $t['before_version'],
+                'to_version' => $t['target_version'],
+                'reason_code' => ThemeIdentityGuard::REASON_CODE,
+                'reason' => $reason,
+                'batch_id' => $batchId,
+            ],
+            ok: true,
+            actor: 'auto',
+        );
+
+        // Same gate as the other nightly alerts: inactive sites stay quiet.
+        if ($site->is_inactive) {
+            return;
+        }
+
+        try {
+            $title = sprintf(':no_entry: Held back a theme update on %s: %s', $site->domain, $name);
+            app(ChatNotifier::class)->send($title, [[
+                'fallback' => $title,
+                'color' => '#f59e0b',
+                'title' => $title,
+                'text' => $reason.' Automatic updates for this theme are now held on this site. If the theme really is the one on offer, unignore it on the site\'s Updates tab and update it by hand.',
+                'fields' => [
+                    ['title' => 'Site', 'value' => $site->domain, 'short' => true],
+                    ['title' => 'Offered', 'value' => sprintf('%s → %s', $t['before_version'] ?: '?', $t['target_version'] ?: '?'), 'short' => true],
+                ],
+            ]]);
+        } catch (\Throwable $e) {
+            Log::warning('chat_notifier.theme_update_held_back_failed', [
+                'site_id' => $site->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

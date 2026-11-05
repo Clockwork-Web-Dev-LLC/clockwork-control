@@ -79,9 +79,12 @@ class BackfillCompanionActionLog extends Command
                     ->update(['companion_pushed_at' => null]);
             }
 
+            // Local-only rows (observed or refused updates) never go to the
+            // client's mirror; ActionLogger doesn't push them either.
             $rows = ActionLog::query()
                 ->where('site_id', $site->id)
                 ->whereNull('companion_pushed_at')
+                ->whereNotIn('action_type', ActionLog::LOCAL_ONLY_TYPES)
                 ->orderBy('ran_at')
                 ->limit($limit)
                 ->get();

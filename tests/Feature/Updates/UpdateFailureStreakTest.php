@@ -807,6 +807,35 @@ describe('Update failure streaks and auto-ignore', function () {
         expect($payload['items'])->toBeEmpty();
     });
 
+    it('does not convert a theme held as a different theme into a client-visible auto-ignore', function () {
+        $site = makeExampleSite();
+
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_THEME,
+            'target_slug' => 'held-theme',
+            'source' => PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH,
+            'client_visible' => false,
+            'note' => 'Held by the nightly loop',
+        ]);
+
+        $job = fakeNightlyJob($site, 'held-theme', [
+            'target_kind' => PluginUpdateJob::KIND_THEME,
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => 'Theme update failed.',
+        ]);
+
+        $recorder = app(UpdateFailureStreakRecorder::class);
+        for ($i = 1; $i <= 5; $i++) {
+            $recorder->record($job, ['ok' => false, 'error' => 'Theme update failed.', 'slug' => 'held-theme']);
+        }
+
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'held-theme')->sole();
+        expect($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH)
+            ->and($ignore->client_visible)->toBeFalse()
+            ->and($recorder->buildExceptionsPayload($site)['items'])->toBeEmpty();
+    });
+
     it('stores the reason code and a redacted last_error on the streak and the auto-ignore', function () {
         $site = makeExampleSite();
 

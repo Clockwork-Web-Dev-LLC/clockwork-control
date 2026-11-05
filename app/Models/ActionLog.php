@@ -45,6 +45,24 @@ class ActionLog extends Model
 
     public const TYPE_TRANSLATIONS_UPDATE = 'translations_update';
 
+    /**
+     * The nightly loop held back a theme update because the installed
+     * theme doesn't look like the theme on offer (ThemeIdentityGuard).
+     */
+    public const TYPE_THEME_UPDATE_REFUSED = 'theme_update_refused';
+
+    /**
+     * A version change between two Companion snapshots that Control did not
+     * make (WordPress auto-updates, another updater, someone in wp-admin).
+     * Written by ObservedUpdateRecorder; details are {slug, name,
+     * from_version, to_version, observed_at, previous_snapshot_at}.
+     */
+    public const TYPE_PLUGIN_UPDATE_OBSERVED = 'plugin_update_observed';
+
+    public const TYPE_THEME_UPDATE_OBSERVED = 'theme_update_observed';
+
+    public const TYPE_CORE_UPDATE_OBSERVED = 'core_update_observed';
+
     public const TYPE_SSO_LOGIN = 'sso_login';
 
     public const TYPE_COMPANION_INSTALL = 'companion_install';
@@ -156,6 +174,31 @@ class ActionLog extends Model
         self::TYPE_THEME_UPDATE,
         self::TYPE_CORE_UPDATE,
         self::TYPE_TRANSLATIONS_UPDATE,
+    ];
+
+    /**
+     * Updates seen in the snapshots but made by something other than
+     * Control. Informational only, and deliberately not in UPDATE_TYPES:
+     * that list means "updates Control ran".
+     *
+     * @var array<int, string>
+     */
+    public const OBSERVED_UPDATE_TYPES = [
+        self::TYPE_PLUGIN_UPDATE_OBSERVED,
+        self::TYPE_THEME_UPDATE_OBSERVED,
+        self::TYPE_CORE_UPDATE_OBSERVED,
+    ];
+
+    /**
+     * Rows kept in Control only: ActionLogger and the backfill command never
+     * mirror them to the client's wp-admin activity log, which lists what
+     * Control did on the site.
+     *
+     * @var array<int, string>
+     */
+    public const LOCAL_ONLY_TYPES = [
+        ...self::OBSERVED_UPDATE_TYPES,
+        self::TYPE_THEME_UPDATE_REFUSED,
     ];
 
     protected $fillable = [

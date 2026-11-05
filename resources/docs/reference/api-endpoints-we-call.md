@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-11-03
+updated: 2026-11-05
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -159,6 +159,10 @@ Full details on the `architecture/companion-plugin` page. Control only mints res
 ## WordPress.org Plugin Information — `https://api.wordpress.org/plugins/info/1.2/`
 
 `app/Services/Security/PluginDirectoryClient.php` · No auth, keyless. `GET ?action=plugin_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+plugin-directory-check)`. 100ms delay between requests. Queries unique plugin slugs across the fleet to detect closed/abandoned zombieware plugins (`plugin_directory_statuses`). Tolerates partial failures; non-closed/not_found responses for premium plugins never alert. Weekly on Mondays at 03:30 UTC (`clockwork:refresh-closed-plugins`).
+
+## WordPress.org Theme Information — `https://api.wordpress.org/themes/info/1.2/`
+
+`app/Services/Updates/ThemeIdentityGuard.php` · No auth, keyless. `GET ?action=theme_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+theme-identity-check)`, 8s timeout, retried twice on connection errors and 5xx. Called by the nightly update loop (`clockwork:run-nightly-plugin-updates`) once per theme folder that has an update pending, to check the installed theme is the directory theme on offer (see Features → Updates, *Theme slug collisions*). An error body (`{"error": "Theme not found"}`, usually HTTP 404) means the folder isn't listed; a failed lookup falls back to the snapshot checks and never stops the night.
 
 ## CISA Known Exploited Vulnerabilities (KEV) — `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`
 

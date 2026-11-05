@@ -374,9 +374,10 @@ class UpdateFailureStreakRecorder
             ->where('target_slug', $job->target_slug)
             ->first();
 
-        // Operator already paused this slug by hand — do not rewrite it as
-        // auto_failure or push it into wp-admin.
-        if ($existingIgnore && $existingIgnore->isManual()) {
+        // Operator already paused this slug by hand (or the nightly loop held
+        // it as a different theme) — do not rewrite it as auto_failure or
+        // push it into wp-admin.
+        if ($existingIgnore && ! $existingIgnore->isAutoFailure()) {
             return;
         }
 

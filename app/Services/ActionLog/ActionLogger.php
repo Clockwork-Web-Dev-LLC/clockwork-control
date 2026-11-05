@@ -96,8 +96,13 @@ class ActionLogger
         // warning in pushToCompanion). Either way we don't break the action.
         //
         // Server-only actions (no site) don't push — the Companion mirror is a
-        // per-site client-facing log, not a fleet log.
-        if ($site !== null && $site->companion_installed && ! empty($site->companion_secret)) {
+        // per-site client-facing log, not a fleet log. Neither do local-only
+        // types (updates Control merely observed, refused updates): the
+        // mirror lists what Control did on the site.
+        if (
+            $site !== null && $site->companion_installed && ! empty($site->companion_secret)
+            && ! in_array($actionType, ActionLog::LOCAL_ONLY_TYPES, true)
+        ) {
             $this->pushToCompanion($site, $row, $actionType, $target, $summary, $details, $ok, $error, $elapsedMs, $actor, $ranAt);
         }
 

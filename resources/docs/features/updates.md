@@ -2,10 +2,10 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-11-03
+updated: 2026-11-05
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
-tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
+tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Services/Updates/ThemeIdentityGuard.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
 ---
 
 Fleet-wide page for plugin / theme / WP core / translation updates. Replaces the per-site click-through workflow with a single grouped-by-name view modeled after ManageWP Orion. Lives at **`/updates`** (top-nav between Issues and Security).
@@ -92,6 +92,7 @@ Bill.com sync drives `care_plan_enabled` automatically based on invoice line ite
 
 - **Manual ignore**: Triggered by an operator clicking *Ignore* on `/updates`. Sets `source = manual` and `client_visible = false`. It is kept private to Control by default (an agency decision like "hold off updating WooCommerce this week" is internal).
 - **Auto-ignore**: Triggered automatically when a plugin or theme repeatedly fails nightly automated updates and crosses the streak threshold. Sets `source = auto_failure` and `client_visible = true`.
+- **Held as a different theme**: Written by the nightly loop when the installed theme doesn't look like the theme on offer (see *Theme slug collisions* below). Sets `source = identity_mismatch` and `client_visible = false`, and holds like a manual ignore (shown as one on the site's Updates tab, with the reason underneath).
 
 ### Auto-ignore after repeated nightly failures
 
@@ -177,6 +178,15 @@ Plugins-only, opt-in per site, runs every night between 02:00 and 06:00 ET. The 
 2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher` on the plugin's directory, the part of the snapshot's `dir/file.php` slug before the slash) are sorted first so security patches land before cosmetic updates.
 3. `clockwork:nightly-update-summary` (06:15 ET) reads every job whose `batch_id` starts with `nightly-` since the last summary run and emails the operator a success/failure breakdown. No jobs → no email.
 4. If any job ends in `failed` and its `batch_id` is a nightly batch, `AbstractRunUpdate` fires a Mattermost `pluginUpdateFailed()` ping immediately — manual bulk failures stay quiet since the operator is watching the page.
+
+### Theme slug collisions
+
+WordPress asks wordpress.org about every installed theme by folder name. A custom theme whose folder shares its name with an unrelated directory theme is offered that theme's releases as updates, and applying one replaces the custom theme wholesale — the custom code is gone and the site can fatal-error. Before queueing a theme, the nightly loop asks `App\Services\Updates\ThemeIdentityGuard`:
+
+1. If wordpress.org lists a theme for that folder (`api.wordpress.org/themes/info/1.2/`, one request per folder per run), the installed theme's name must match the listed name (case, punctuation, HTML entities and a trailing "Theme" ignored). A different name means a different theme.
+2. If the folder isn't listed (a premium theme's own updater makes the offer) or the directory can't be reached, a child theme is refused: a snapshot `template`/`parent` field naming another theme, or — since today's snapshots carry no such field — the word "child" in the theme's name. Anything else is queued as before.
+
+A held-back theme is recorded once: a `skipped` `plugin_update_jobs` row with `reason_code = identity_mismatch` in that night's batch (so the 06:15 summary email lists it with the reason), an ignore with `source = identity_mismatch` (so later nights and the Updates page's bulk actions leave it alone), a local-only `theme_update_refused` action log, and one chat message. It never counts toward a failure streak or an auto-pause. If the theme really is the one on offer, unignore it on the site's Updates tab and update it by hand; the nightly loop holds it again the next time an update is offered. Plugins are not checked: the snapshot has nothing comparable for them, and wordpress.org plugin names carry taglines and edition names, so a name comparison would hold back legitimate updates. Manual updates from `/updates` are not checked either, but they skip any ignored theme.
 
 ### Opt-in toggle
 
