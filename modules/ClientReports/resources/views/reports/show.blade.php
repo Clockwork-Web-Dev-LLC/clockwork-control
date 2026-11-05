@@ -36,6 +36,16 @@
     $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
     $hiddenNotes = $isOperatorPreview ? \Modules\ClientReports\Support\ReportSections::hiddenNotes($data) : [];
     $showUptime = $sections['uptime'];
+    // The email's figure and colour: green only for a month that really was
+    // (99.9%+), amber from 99%, red below.
+    $uptimePct = $uptime['uptime_percentage'] ?? null;
+    $uptimeLabel = $uptimePct === null ? '—' : rtrim(rtrim(number_format((float) $uptimePct, 2), '0'), '.').'%';
+    $uptimeTone = match (\Modules\ClientReports\Support\ReportPhrases::uptimeTone($uptimePct)) {
+        'good' => ['text' => 'text-emerald-600', 'badge' => 'text-emerald-700 bg-emerald-50'],
+        'warn' => ['text' => 'text-amber-600', 'badge' => 'text-amber-700 bg-amber-50'],
+        'bad' => ['text' => 'text-red-600', 'badge' => 'text-red-700 bg-red-50'],
+        default => ['text' => 'text-slate-400', 'badge' => 'text-slate-600 bg-slate-100'],
+    };
     // A site enrolled part-way through the month: say when monitoring began.
     $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
     $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
@@ -183,7 +193,7 @@
                 @endif
                 @if ($showUptime)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-emerald-600">{{ $uptime['uptime_percentage'] ?? 100 }}%</div>
+                        <div class="text-2xl font-black {{ $uptimeTone['text'] }}">{{ $uptimeLabel }}</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
                     </div>
                 @endif
@@ -243,11 +253,9 @@
                             </tbody>
                         </table>
                     </div>
-                @elseif (\Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates))
-                    {{-- Same rule as the email: never "up to date" while updates wait or weren't checked. --}}
-                    <div class="text-xs text-slate-500 italic py-2">No updates were applied this period.</div>
                 @else
-                    <div class="text-xs text-slate-500 italic py-2">All software components were up-to-date throughout this period.</div>
+                    {{-- The email's sentence: never "up to date" while updates wait or weren't checked. --}}
+                    <div class="text-xs text-slate-500 italic py-2">{{ \Modules\ClientReports\Support\ReportPhrases::noUpdatesLine($updates) }}</div>
                 @endif
             </div>
         @endif
@@ -259,8 +267,8 @@
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-heart-pulse text-emerald-600"></i> Uptime & Availability
                     </h2>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                        {{ $uptime['uptime_percentage'] ?? 100 }}% Available
+                    <span class="text-xs font-semibold {{ $uptimeTone['badge'] }} px-2.5 py-1 rounded-full">
+                        {{ $uptimeLabel }} Available
                     </span>
                 </div>
                 <p class="text-xs text-slate-500">
@@ -313,14 +321,15 @@
                     $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
                     $vulnPluginNames = \Modules\ClientReports\Support\ReportPhrases::vulnerablePlugins($security);
                     $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
-                    [$malwareLabel, $malwareClass] = match ($security['malware_status'] ?? null) {
-                        'clean' => ['No malware found', 'text-emerald-600'],
-                        'warning', 'issues_found' => ['Issues flagged', 'text-amber-600'],
-                        // A clean result from a scan that didn't cover the whole site.
-                        'incomplete' => ['Partial scan', 'text-slate-500'],
-                        null => ['Not checked this period', 'text-slate-400'],
-                        default => [ucfirst((string) $security['malware_status']), 'text-amber-600'],
+                    // The email's label: "Reviewed — no threat found" once a person has
+                    // checked review-tier findings, "Partial scan" for a scan cut short.
+                    [$malwareLabel, $malwareTone] = \Modules\ClientReports\Support\ReportPhrases::malwareLabel($security);
+                    $malwareClass = match ($malwareTone) {
+                        'good' => 'text-emerald-600',
+                        'muted' => 'text-slate-500',
+                        default => 'text-amber-600',
                     };
+                    $blockedNote = \Modules\ClientReports\Support\ReportPhrases::blockedVisitorsNote($security);
                     $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
                 @endphp
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -352,13 +361,13 @@
                     @endif
                     @if (($security['blocked_threats_count'] ?? null) !== null)
                         <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                            <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                            <div class="text-sm font-bold text-slate-900 mt-1">{{ $security['blocked_threats_count'] }} IP bans</div>
+                            <div class="text-xs font-medium text-slate-500">Malicious Visitors Blocked</div>
+                            <div class="text-sm font-bold text-slate-900 mt-1">{{ number_format((int) $security['blocked_threats_count']) }}</div>
                         </div>
                     @elseif ($isOperatorPreview)
                         <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
-                            <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                            <div class="text-sm font-bold text-slate-400 mt-1">{{ (int) ($security['unbanned_lockouts'] ?? 0) > 0 ? 'Not measured ('.(int) $security['unbanned_lockouts'].' lockouts this period never became a ban)' : 'Not measured (no blocker reports to Control for this site this period)' }} — hidden from the client</div>
+                            <div class="text-xs font-medium text-slate-500">Malicious Visitors Blocked</div>
+                            <div class="text-sm font-bold text-slate-400 mt-1">{{ $blockedNote ?? 'Malicious visitors blocked hidden from the client: no blocker reports to Control for this site this period.' }}</div>
                         </div>
                     @endif
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
@@ -417,9 +426,9 @@
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($backups['recent'] as $day)
                                 <tr>
-                                    <td class="px-3 py-1.5 font-mono text-slate-700">{{ $day['date'] }}</td>
-                                    <td class="px-3 py-1.5 text-slate-500">{{ implode(' + ', $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
-                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ $day['bytes'] !== null ? number_format($day['bytes'] / 1024 ** 2, 1).' MB' : '—' }}</td>
+                                    <td class="px-3 py-1.5 text-slate-700 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}</td>
+                                    <td class="px-3 py-1.5 text-slate-500">{{ \Modules\ClientReports\Support\ReportPhrases::backupKinds((array) ($day['kinds'] ?? [])) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ ($day['bytes'] ?? null) !== null ? \Modules\ClientReports\Support\ReportPhrases::bytes((int) $day['bytes']) : '—' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -488,7 +497,9 @@
                 @if ($isOperatorPreview && isset($traffic['days_covered']))
                     <p class="no-print text-xs text-slate-500">Recorded on {{ (int) $traffic['days_covered'] }} of {{ (int) ($traffic['period_days'] ?? 0) }} days, from {{ ($traffic['source'] ?? null) === 'pressable' ? "Pressable's traffic feed" : "the server's access logs" }}.</p>
                 @endif
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                {{-- Like the email: no "Data transferred" when the host reported no byte counts. --}}
+                @php($bandwidthLabel = \Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb'] ?? null))
+                <div class="grid grid-cols-1 {{ $bandwidthLabel !== null ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }} gap-4 text-center">
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_visits'] ?? 0) }}</div>
                         <div class="text-[11px] text-slate-500">Total Visits</div>
@@ -497,10 +508,12 @@
                         <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_requests'] ?? 0) }}</div>
                         <div class="text-[11px] text-slate-500">Total Requests</div>
                     </div>
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">{{ ($traffic['bandwidth_mb'] ?? 0) > 0 ? number_format($traffic['bandwidth_mb'], 1).' MB' : 'Not measured' }}</div>
-                        <div class="text-[11px] text-slate-500">Bandwidth Served</div>
-                    </div>
+                    @if ($bandwidthLabel !== null)
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-sm font-bold text-slate-900">{{ $bandwidthLabel }}</div>
+                            <div class="text-[11px] text-slate-500">Data Transferred</div>
+                        </div>
+                    @endif
                 </div>
             </div>
         @elseif (isset($hiddenNotes['traffic']))

@@ -152,7 +152,7 @@ describe('generate + show', function () {
             ->assertSee('Traffic Analytics')
             ->assertSee(number_format(41 * $days))
             ->assertSee(number_format(1003 * $days))
-            ->assertSee('10.0 MB')
+            ->assertSee('10 MB') // ReportPhrases::bandwidth(), as in the email
             ->assertSee("Recorded on {$days} of {$days} days", false);
     });
 

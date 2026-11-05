@@ -989,7 +989,9 @@ describe('threats blocked', function () {
             ->and($report['html'])->not->toContain('Threats blocked')->not->toContain('Malicious visitors blocked')
             ->not->toContain('block attackers')
             ->and($report['text'])->not->toContain('Malicious visitors blocked')
-            ->and($report['preview'])->toContain('Not measured (no blocker reports to Control for this site this period)');
+            // The operator preview gives the shared reason the count is hidden.
+            ->and(ReportPhrases::blockedVisitorsNote($report['data']['security']))->not->toBeNull()
+            ->and($report['preview'])->toContain(e(ReportPhrases::blockedVisitorsNote($report['data']['security'])));
     });
 
     it('shows a real 0, blocked at the server, when the server has a jail and its lockouts were pulled', function () {
@@ -1019,7 +1021,8 @@ describe('threats blocked', function () {
         expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'unbanned_lockouts' => 2])
             ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('block malicious visitors')
             ->and($report['text'])->not->toContain('Malicious visitors blocked')
-            ->and($report['preview'])->toContain('Not measured (2 lockouts this period never became a ban)')
+            ->and($report['preview'])->toContain('2 lockouts this period never became a ban')
+            ->and($report['preview'])->toContain(e(ReportPhrases::blockedVisitorsNote($report['data']['security'])))
             ->and(implode(' ', $report['reasons']))->not->toContain('never became a ban');
     })->with([ReviewQueueEntry::STATUS_PENDING, ReviewQueueEntry::STATUS_QUEUED_FOR_BAN, ReviewQueueEntry::STATUS_FAILED]);
 
@@ -2094,9 +2097,9 @@ describe('updates and site facts', function () {
             ->and($w['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date')
             ->and($w['text'])->toContain('No updates were applied this month.')
             ->and($c['html'])->toContain('Everything was up to date at the end of the month.');
-        // The preview (what prints as the PDF) follows the same rule.
-        expect($wPreview)->toContain('No updates were applied this period.')->not->toContain('up-to-date throughout')
-            ->and($cPreview)->toContain('up-to-date throughout this period');
+        // The preview (what prints as the PDF) says the same sentences.
+        expect($wPreview)->toContain('No updates were applied this month.')->not->toContain('Everything was up to date')
+            ->and($cPreview)->toContain('Everything was up to date at the end of the month.');
     });
 
     it('does not say "already up to date" while a theme or WordPress update is waiting', function () {
