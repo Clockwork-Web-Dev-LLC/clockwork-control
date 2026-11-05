@@ -82,13 +82,13 @@
         null => ['Not checked this month', $muted],
         default => [ucfirst((string) $security['blacklist_status']), $warn],
     };
-    [$malwareLabel, $malwareColor] = match ($security['malware_status'] ?? null) {
-        'clean' => ['No malware found', $good],
-        'warning', 'issues_found' => ['Issues flagged', $warn],
-        // A clean result from a scan that didn't cover the whole site.
-        'incomplete' => ['Partial scan', $muted],
-        null => ['Not checked this month', $muted],
-        default => [ucfirst((string) $security['malware_status']), $warn],
+    // Shared with the text part: "Reviewed — no threat found" once a person
+    // has checked review-tier findings, "Partial scan" for a scan cut short.
+    [$malwareLabel, $malwareTone] = \Modules\ClientReports\Support\ReportPhrases::malwareLabel($security);
+    $malwareColor = match ($malwareTone) {
+        'good' => $good,
+        'muted' => $muted,
+        default => $warn,
     };
     // The Companion snapshot date: when we looked, often just after the period.
     $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);

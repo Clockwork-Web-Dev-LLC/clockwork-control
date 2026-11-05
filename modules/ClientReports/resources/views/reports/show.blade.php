@@ -115,6 +115,16 @@
                     <li>{{ $reason }}</li>
                 @endforeach
             </ul>
+            {{-- Review-tier malware findings a person has checked: clears that reason and the client's "Issues flagged". Never sends. --}}
+            @if ($report->status === \Modules\ClientReports\Models\ClientReport::STATUS_GENERATED && empty($report->sent_to) && \Modules\ClientReports\Services\ReportReviewFlags::canMarkMalwareReviewed($data))
+                <form method="POST" action="{{ route('client-reports.malware-reviewed', $report) }}" class="mt-3 flex flex-wrap items-center gap-2">
+                    @csrf
+                    <input type="text" name="note" required maxlength="500" placeholder="What you checked in the flagged files (operator only)" class="flex-1 min-w-[14rem] px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-xs text-slate-800">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center gap-2" title="Clears the malware reason; the client reads &quot;Reviewed — no threat found&quot;. Nothing is sent.">
+                        <i class="fa-solid fa-check"></i> Mark findings reviewed
+                    </button>
+                </form>
+            @endif
             <div class="mt-2 text-xs text-amber-800">
                 @if ($report->canRecompile())
                     Fix or confirm these, then press <strong>Recompile</strong> to refresh this report from current data (it never sends), or send it from the history table.

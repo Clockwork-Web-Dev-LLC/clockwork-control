@@ -59,7 +59,7 @@ Security scans run: {!! number_format((int) ($security['total_scans'] ?? 0)) !!}
 Spam & malware blocklists: {!! match ($security['blacklist_status']) { 'clean' => 'Not listed', 'issues_found', 'warning' => 'Listed — under review', null => 'Not checked this month', default => ucfirst((string) $security['blacklist_status']) } !!}
 @endif
 @if (array_key_exists('malware_status', $security))
-Malware scan: {!! match ($security['malware_status']) { 'clean' => 'No malware found', 'warning', 'issues_found' => 'Issues flagged', 'incomplete' => 'Partial scan', null => 'Not checked this month', default => ucfirst((string) $security['malware_status']) } !!}
+Malware scan: {!! \Modules\ClientReports\Support\ReportPhrases::malwareLabel($security)[0] !!}
 @endif
 @if ((bool) ($data['site']['is_wordpress'] ?? true) && (bool) ($security['checksum_supported'] ?? true))
 WordPress core files: {!! match ($security['checksum_status'] ?? null) { 'clean' => 'Verified clean', 'issues_found', 'warning' => 'Unexpected changes found', null => 'Not checked this month', default => ucfirst((string) $security['checksum_status']) } !!}

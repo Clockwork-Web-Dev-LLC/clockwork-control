@@ -389,3 +389,45 @@ describe('nothing applied while updates were waiting', function () {
             ->and(ReportReviewFlags::reasons(['updates' => ['total' => 0, 'pending_plugins' => ['Example Forms']]]))->toBe([]);
     });
 });
+
+describe('malware findings marked reviewed', function () {
+    function reviewedSecurity(array $overrides = [], array $mark = []): array
+    {
+        return array_replace([
+            'malware_status' => 'warning', 'malware_scan_id' => 41, 'malware_finding_kinds' => ['php_in_uploads' => 2, 'wp_config_recently_modified' => 1],
+            'malware_reviewed' => array_replace(['scan_id' => 41, 'finding_kinds' => ['wp_config_recently_modified' => 1, 'php_in_uploads' => 2],
+                'reviewed_by' => 'Example Operator', 'reviewed_at' => '2026-11-03T10:00:00+00:00', 'note' => 'Checked'], $mark),
+        ], $overrides);
+    }
+
+    it('reads the mark only for the same scan and the same findings, in any order', function () {
+        expect(ReportReviewFlags::malwareReviewed(reviewedSecurity()))->toBeTrue()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(mark: ['scan_id' => 40])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(mark: ['finding_kinds' => ['php_in_uploads' => 2]])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(['malware_finding_kinds' => ['php_in_uploads' => 3, 'wp_config_recently_modified' => 1]])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(['malware_reviewed' => null])))->toBeFalse();
+    });
+
+    it('never applies to suspected malware, even with a matching mark', function () {
+        $kinds = ['php_in_uploads' => 1, 'eval_base64' => 1];
+        $security = reviewedSecurity(['malware_status' => 'issues_found', 'malware_finding_kinds' => $kinds], ['finding_kinds' => $kinds]);
+
+        expect(ReportReviewFlags::malwareReviewed($security))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(['malware_status' => 'warning'] + $security))->toBeFalse()
+            ->and(ReportReviewFlags::canMarkMalwareReviewed(['security' => $security]))->toBeFalse()
+            ->and(ReportReviewFlags::reasons(['security' => $security]))->toBe(['The malware scan found suspected malware: php_in_uploads ×1, eval_base64 ×1 (scan #41).']);
+    });
+
+    it('drops the malware reason once reviewed, keeping the others', function () {
+        $data = ['security' => reviewedSecurity(['malware_reviewed' => null]), 'backups' => ['status' => 'stale']];
+        $data['meta']['review_reasons'] = ['First report.', ...ReportReviewFlags::reasons($data)];
+
+        $marked = ReportReviewFlags::withMalwareReviewed($data, ['reviewed_by' => 'Example Operator', 'note' => 'Checked']);
+
+        expect(ReportReviewFlags::canMarkMalwareReviewed($data))->toBeTrue()
+            ->and($data['meta']['review_reasons'])->toHaveCount(3)
+            ->and($marked['meta']['review_reasons'])->toBe(['First report.', 'Backups stopped before the last 10 days of the month.'])
+            ->and($marked['security']['malware_reviewed'])->toMatchArray(['scan_id' => 41, 'reviewed_by' => 'Example Operator'])
+            ->and(ReportReviewFlags::canMarkMalwareReviewed($marked))->toBeFalse();
+    });
+});

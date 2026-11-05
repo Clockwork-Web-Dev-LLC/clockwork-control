@@ -7,6 +7,7 @@ use DateTimeZone;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ReportReviewFlags;
 use Throwable;
 
 /**
@@ -417,6 +418,30 @@ final class ReportPhrases
         return $vulns.' found'
             .($plugins > 0 ? ' in '.$plugins.' '.Str::plural('plugin', $plugins) : '')
             .($inactive > 0 ? ' ('.$inactive.' in inactive plugins)' : '');
+    }
+
+    /**
+     * The client's malware-scan line and its tone ('good', 'warn' or
+     * 'muted'), shared by both email parts. Review-tier findings a person
+     * has checked (ReportReviewFlags::malwareReviewed) read "Reviewed — no
+     * threat found" instead of "Issues flagged"; suspected malware never does.
+     *
+     * @param  array<string, mixed>  $security  sections_data['security']
+     * @return array{0: string, 1: string}
+     */
+    public static function malwareLabel(array $security): array
+    {
+        $status = $security['malware_status'] ?? null;
+
+        return match (true) {
+            $status === 'clean' => ['No malware found', 'good'],
+            $status === 'warning' && ReportReviewFlags::malwareReviewed($security) => ['Reviewed — no threat found', 'good'],
+            in_array($status, ['warning', 'issues_found'], true) => ['Issues flagged', 'warn'],
+            // A clean result from a scan that didn't cover the whole site.
+            $status === ClientReportCompiler::MALWARE_INCOMPLETE => ['Partial scan', 'muted'],
+            $status === null => ['Not checked this month', 'muted'],
+            default => [ucfirst((string) $status), 'warn'],
+        };
     }
 
     /**

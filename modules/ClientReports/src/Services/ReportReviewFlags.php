@@ -3,6 +3,8 @@
 namespace Modules\ClientReports\Services;
 
 use App\Models\SiteBackup;
+use App\Models\SiteSecurityScan;
+use App\Services\Security\CompanionMalwareScanner;
 use Illuminate\Support\Carbon;
 use Modules\ClientReports\Support\ReportPhrases;
 
@@ -331,9 +333,112 @@ class ReportReviewFlags
     }
 
     /**
+     * Whether finding kinds (kind => count) are all review-tier: ones the
+     * scanner grades as "warning" (PHP in uploads, a recently changed
+     * wp-config, the dead /e modifier), never a malware signature. The
+     * scanner's own grading decides, so the two can't disagree.
+     */
+    public static function reviewTierKinds(mixed $kinds): bool
+    {
+        if (! is_array($kinds) || $kinds === []) {
+            return false;
+        }
+
+        $findings = array_map(fn ($kind) => ['kind' => (string) $kind], array_keys($kinds));
+
+        return CompanionMalwareScanner::statusForFindings($findings) === SiteSecurityScan::STATUS_WARNING;
+    }
+
+    /**
+     * Whether a person has reviewed the malware findings the report shows:
+     * the latest scan is a "warning" with review-tier findings only, and
+     * security.malware_reviewed was recorded for that same scan and the
+     * same findings. A newer scan, or different findings, needs a new look.
+     *
+     * @param  array<string, mixed>  $security  sections_data['security']
+     */
+    public static function malwareReviewed(array $security): bool
+    {
+        $mark = $security['malware_reviewed'] ?? null;
+        $kinds = $security['malware_finding_kinds'] ?? null;
+
+        return is_array($mark)
+            && ($security['malware_status'] ?? null) === SiteSecurityScan::STATUS_WARNING
+            && isset($security['malware_scan_id'], $mark['scan_id'])
+            && (int) $mark['scan_id'] === (int) $security['malware_scan_id']
+            && self::reviewTierKinds($kinds)
+            && self::sameKinds($mark['finding_kinds'] ?? null, $kinds);
+    }
+
+    /**
+     * Whether a report's malware findings can be marked reviewed: the latest
+     * scan is a "warning" with review-tier findings only (never suspected
+     * malware), not already marked.
+     *
+     * @param  array<string, mixed>  $data  a report's sections_data
+     */
+    public static function canMarkMalwareReviewed(array $data): bool
+    {
+        $security = (array) ($data['security'] ?? []);
+
+        return ($security['malware_status'] ?? null) === SiteSecurityScan::STATUS_WARNING
+            && isset($security['malware_scan_id'])
+            && self::reviewTierKinds($security['malware_finding_kinds'] ?? null)
+            && ! self::malwareReviewed($security);
+    }
+
+    /**
+     * The report's sections_data with its malware findings marked reviewed
+     * ($mark: reviewed_by, reviewed_by_id, reviewed_at, note), tied to the
+     * scan and findings it shows, and the review reasons that clears taken
+     * out of meta.review_reasons; the others (and the first-report reason)
+     * stay.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $mark
+     * @return array<string, mixed>
+     */
+    public static function withMalwareReviewed(array $data, array $mark): array
+    {
+        $before = self::reasons($data);
+        $data['security']['malware_reviewed'] = [
+            'scan_id' => (int) $data['security']['malware_scan_id'],
+            'finding_kinds' => (array) $data['security']['malware_finding_kinds'],
+            ...$mark,
+        ];
+        $cleared = array_diff($before, self::reasons($data));
+
+        // A reason stored under older wording still names the findings to review.
+        $data['meta']['review_reasons'] = array_values(array_filter(
+            (array) ($data['meta']['review_reasons'] ?? []),
+            fn ($reason) => ! in_array($reason, $cleared, true) && ! str_starts_with((string) $reason, 'The malware scan flagged files to review'),
+        ));
+
+        return $data;
+    }
+
+    /** Whether two kind => count lists are the same, in any order. */
+    private static function sameKinds(mixed $a, mixed $b): bool
+    {
+        if (! is_array($a) || ! is_array($b)) {
+            return false;
+        }
+
+        $normalize = function (array $kinds): array {
+            $kinds = array_map('intval', $kinds);
+            ksort($kinds);
+
+            return $kinds;
+        };
+
+        return $normalize($a) === $normalize($b);
+    }
+
+    /**
      * The latest scan's verdict, with its finding kinds and scan id so the
      * reviewer knows what to open, and any malware an earlier scan in the
-     * period found that the latest one no longer does.
+     * period found that the latest one no longer does. Review-tier findings
+     * a person has marked reviewed (malwareReviewed) no longer hold it.
      *
      * @param  array<string, mixed>  $security
      * @return list<string>
@@ -346,7 +451,9 @@ class ReportReviewFlags
         $kinds = self::findingKinds($security['malware_finding_kinds'] ?? null);
         $stoppedEarly = ! empty($security['malware_scan_aborted']) ? ' The scan also stopped before it finished.' : '';
 
-        if ($status === 'warning' && $kinds !== '') {
+        if ($status === 'warning' && self::malwareReviewed($security)) {
+            // A person checked these findings: nothing more to hold for.
+        } elseif ($status === 'warning' && $kinds !== '') {
             $reasons[] = "The malware scan flagged files to review: {$kinds}{$scan}.{$stoppedEarly}";
         } elseif ($status === 'issues_found' && $kinds !== '') {
             $reasons[] = "The malware scan found suspected malware: {$kinds}{$scan}.{$stoppedEarly}";
