@@ -176,6 +176,7 @@ describe('generate + show', function () {
 
 describe('email version', function () {
     it('shows the email exactly as the client gets it, with who it goes to and why it was held', function () {
+        $this->mockIssueCounterZero(); // the email version renders inside the app layout
         $user = User::factory()->create();
         $site = Site::factory()->create(['domain' => 'email-version.test']);
         $data = app(ClientReportCompiler::class)->compile($site, now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth());
@@ -200,6 +201,7 @@ describe('email version', function () {
     });
 
     it('shows the From line the client will see: the sending address under the report brand name', function () {
+        $this->mockIssueCounterZero();
         config(['mail.from.address' => 'reports@example.com', 'mail.from.name' => 'Internal Control App']);
         app(CompanionBrandingManager::class)->saveReportsBranding(['company_name' => 'Example Agency']);
         $user = User::factory()->create();
@@ -218,6 +220,7 @@ describe('email version', function () {
     });
 
     it('shows the plain-text part too, and says so when everyone already has the report', function () {
+        $this->mockIssueCounterZero();
         $user = User::factory()->create();
         $site = Site::factory()->create(['domain' => 'text-part.test']);
         $report = ClientReport::create([

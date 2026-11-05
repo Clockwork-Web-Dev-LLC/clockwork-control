@@ -56,36 +56,27 @@
     $accentColor = !empty($branding['accent_color']) ? $branding['accent_color'] : '#7EFF83';
 @endphp
 
+@if ($isOperatorPreview && isset($nav))
+    @include('client-reports::reports._operator-toolbar', ['report' => $report, 'nav' => $nav])
+@endif
+
 <div class="max-w-4xl mx-auto">
-    {{-- Floating Action Bar for Print / Share --}}
-    <div class="no-print flex items-center justify-between mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div class="flex items-center gap-3">
-            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                Executive Maintenance Report
-            </span>
-            <span class="text-xs text-slate-500">Period: {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}</span>
+    @unless ($isOperatorPreview && isset($nav))
+        {{-- Floating Action Bar for Print / Share --}}
+        <div class="no-print flex items-center justify-between flex-wrap gap-3 mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                    Executive Maintenance Report
+                </span>
+                <span class="text-xs text-slate-500">Period: {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-print"></i> Print / Download PDF
+                </button>
+            </div>
         </div>
-        <div class="flex items-center gap-2">
-            @if ($isOperatorPreview)
-                <a href="{{ route('client-reports.email', $report) }}" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="The email exactly as the client gets it">
-                    <i class="fa-solid fa-envelope"></i> Email version
-                </a>
-                {{-- Unsent scheduled reports only: refresh from current data. Never sends. --}}
-                @if ($report->canRecompile())
-                    <form method="POST" action="{{ route('client-reports.recompile', $report) }}"
-                          onsubmit="return confirm('Recompile this report for {{ $report->period_start->format('M j') }} – {{ $report->period_end->format('M j, Y') }} from current data? This copy is replaced. Nothing is sent.');">
-                        @csrf
-                        <button type="submit" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="Compile this period again from current data. Nothing is sent.">
-                            <i class="fa-solid fa-rotate"></i> Recompile
-                        </button>
-                    </form>
-                @endif
-            @endif
-            <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-print"></i> Print / Download PDF
-            </button>
-        </div>
-    </div>
+    @endunless
 
     @if ($isOperatorPreview && (session('status') || session('status_error')))
         <div class="no-print mb-6 rounded-xl p-4 text-sm border {{ session('status_error') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-900' }}">
@@ -107,22 +98,8 @@
         <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
             A newer report for this schedule and period replaced this one. It can't be sent.
         </div>
-    @elseif ($isOperatorPreview && ! empty($data['meta']['review_reasons']) && $report->status !== 'sent')
-        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
-            <div class="font-semibold mb-1"><i class="fa-solid fa-hand"></i> {{ $report->schedule?->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_AUTO ? 'Held for review instead of being emailed automatically' : 'Check these before sending' }}</div>
-            <ul class="list-disc ml-5 space-y-0.5">
-                @foreach ($data['meta']['review_reasons'] as $reason)
-                    <li>{{ $reason }}</li>
-                @endforeach
-            </ul>
-            <div class="mt-2 text-xs text-amber-800">
-                @if ($report->canRecompile())
-                    Fix or confirm these, then press <strong>Recompile</strong> to refresh this report from current data (it never sends), or send it from the history table.
-                @else
-                    Fix or confirm these, then send it from the history table (or generate a fresh one).
-                @endif
-            </div>
-        </div>
+    @elseif ($isOperatorPreview && \Modules\ClientReports\Support\ReportState::reasons($report) !== [])
+        @include('client-reports::reports._review-panel', ['report' => $report, 'reasons' => \Modules\ClientReports\Support\ReportState::reasons($report)])
     @endif
 
     {{-- Report Document Container --}}

@@ -30,7 +30,7 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-function listReport(string $domain, string $month, array $attributes = [], array $meta = [], ?Client $client = null, bool $scheduled = true): ClientReport
+function listReport(string $domain, string $month, array $attributes = [], array $meta = [], ?Client $client = null, bool $scheduled = true, bool $compiled = false): ClientReport
 {
     $site = Site::where('domain', $domain)->first()
         ?? Site::factory()->create(['domain' => $domain, 'care_plan_enabled' => true, 'client_id' => $client?->id]);
@@ -41,6 +41,9 @@ function listReport(string $domain, string $month, array $attributes = [], array
         ]))
         : null;
     $start = Carbon::parse($month.'-01');
+    // The preview page needs a whole compiled report; the lists only read meta.
+    $data = $compiled ? app(ClientReportCompiler::class)->compile($site, $start, $start->copy()->endOfMonth()) : [];
+    $data['meta'] = array_merge($data['meta'] ?? [], ['schema_version' => ClientReportCompiler::SCHEMA_VERSION], $meta);
 
     return ClientReport::create(array_merge([
         'site_id' => $site->id,
@@ -48,7 +51,7 @@ function listReport(string $domain, string $month, array $attributes = [], array
         'title' => "Report {$domain} {$month}",
         'period_start' => $start,
         'period_end' => $start->copy()->endOfMonth(),
-        'sections_data' => ['meta' => array_merge(['schema_version' => ClientReportCompiler::SCHEMA_VERSION], $meta)],
+        'sections_data' => $data,
         'client_email' => "owner@{$domain}",
         'status' => ClientReport::STATUS_GENERATED,
     ], $attributes));
@@ -274,4 +277,88 @@ it('builds the same filters back from the query string', function () {
 
     $junk = ReportListFilters::fromRequest(request()->duplicate(['period' => '2026-13', 'status' => 'bogus', 'category' => 'bogus', 'client' => 'x', 'from' => 'client']), '2026-09');
     expect($junk->toQuery())->toBe(['period' => '2026-09']);
+
+    $arrays = ReportListFilters::fromRequest(request()->duplicate(['period' => ['x'], 'q' => ['y'], 'status' => ['z']]), '2026-09');
+    expect($arrays->toQuery())->toBe(['period' => '2026-09']);
+});
+
+describe('operator preview and email version', function () {
+    it('steps through the filtered list it was opened from, and goes back to it with the filters kept', function () {
+        $a = listReport('a.example.com', '2026-10', meta: ['review_reasons' => ['No backups were found this month.']], compiled: true);
+        listReport('b.example.com', '2026-10', compiled: true); // ready: not in the needs-review list
+        $c = listReport('c.example.com', '2026-10', meta: ['review_reasons' => ['The malware scan flagged something (scan #3).']], compiled: true);
+        $context = ['period' => '2026-10', 'status' => 'needs_review'];
+
+        $this->actingAs($this->user);
+        $this->get(route('client-reports.show', [$a, ...$context]))
+            ->assertOk()
+            ->assertSee('id="operator-toolbar"', false)
+            ->assertSee('1 of 2')
+            ->assertSee(e(route('client-reports.show', [$c, ...$context])), false)
+            ->assertSee(e(route('client-reports.reports', $context)), false)
+            ->assertSee(e(route('client-reports.email', [$a, ...$context])), false)
+            ->assertSee('previous / next');
+
+        $this->get(route('client-reports.show', [$c, ...$context]))
+            ->assertSee('2 of 2')
+            ->assertSee(e(route('client-reports.show', [$a, ...$context])), false);
+
+        // The same stepping on the email version.
+        $this->get(route('client-reports.email', [$a, ...$context]))
+            ->assertOk()
+            ->assertSee(e(route('client-reports.email', [$c, ...$context])), false)
+            ->assertSee(e(route('client-reports.reports', $context)), false)
+            ->assertSee('action="'.route('client-reports.send-test', $a).'"', false)
+            ->assertSee('Plain-text version');
+    });
+
+    it('returns to the page of the list the report is on', function () {
+        foreach (range(1, ReportBrowser::PER_PAGE + 1) as $i) {
+            $last = listReport(sprintf('site%02d.example.com', $i), '2026-10', compiled: true);
+        }
+
+        $this->actingAs($this->user)->get(route('client-reports.show', [$last, 'period' => '2026-10']))
+            ->assertSee(e(route('client-reports.reports', ['period' => '2026-10', 'page' => 2])), false);
+    });
+
+    it('goes back to the client page when opened from it', function () {
+        $client = Client::create(['name' => 'Back Example', 'email' => 'back@example.com']);
+        $report = listReport('back.example.com', '2026-10', client: $client, compiled: true);
+
+        $this->actingAs($this->user)
+            ->get(route('client-reports.show', [$report, 'period' => 'all', 'client' => (string) $client->id, 'from' => 'client']))
+            ->assertSee('Back to client')
+            ->assertSee('href="'.route('client-reports.clients.show', $client->id).'"', false);
+    });
+
+    it('groups the hold reasons by category with a link to the site tab, and disables Send with the reason when it can\'t be sent', function () {
+        $held = listReport('held.example.com', '2026-10', meta: ['review_reasons' => [
+            ScheduledReportRunner::FIRST_REPORT_REASON, 'The malware scan flagged something (scan #3).', 'No backups were found this month.',
+        ]], compiled: true);
+        $outdated = listReport('stale.example.com', '2026-10', meta: ['schema_version' => 1], compiled: true);
+
+        $this->actingAs($this->user);
+        $this->get(route('client-reports.show', $held))
+            ->assertSee('Malware &amp; core files', false)
+            ->assertSee(route('sites.show', ['site' => $held->site, 'tab' => 'security']), false)
+            ->assertSee(route('client-reports.schedules.edit', $held->schedule), false)
+            ->assertSee('action="'.route('client-reports.send', $held).'"', false)
+            ->assertSee('once it has been sent, the schedule emails its clean reports automatically');
+
+        $this->get(route('client-reports.show', $outdated))
+            ->assertSee('Send unavailable: Compiled before the latest report fixes')
+            ->assertDontSee('action="'.route('client-reports.send', $outdated).'"', false);
+    });
+
+    it('never shows the toolbar or its actions on the public page', function () {
+        $report = listReport('public.example.com', '2026-10', meta: ['review_reasons' => ['No backups were found this month.']], compiled: true);
+        auth()->logout();
+
+        $this->get(route('client-reports.public', $report->public_token))
+            ->assertOk()
+            ->assertDontSee('operator-toolbar')
+            ->assertDontSee('Back to list')
+            ->assertDontSee('/send-test', false)
+            ->assertDontSee('No backups were found this month.');
+    });
 });
