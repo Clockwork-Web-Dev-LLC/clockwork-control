@@ -258,6 +258,60 @@ final class ReportPhrases
             : 'No updates were applied this month.';
     }
 
+    /** At or above this availability the figure reads as good. */
+    public const UPTIME_GOOD = 99.9;
+
+    /** At or above this (and below UPTIME_GOOD) it reads as a warning; below it, as bad. */
+    public const UPTIME_FAIR = 99.0;
+
+    /**
+     * 'good', 'warn' or 'bad' for an availability percentage, so a month
+     * at 97% isn't shown in the colour of a perfect one; null when there's
+     * no figure.
+     */
+    public static function uptimeTone(mixed $percentage): ?string
+    {
+        if (! is_numeric($percentage)) {
+            return null;
+        }
+
+        return match (true) {
+            (float) $percentage >= self::UPTIME_GOOD => 'good',
+            (float) $percentage >= self::UPTIME_FAIR => 'warn',
+            default => 'bad',
+        };
+    }
+
+    /**
+     * "40.7 GB", "512 MB": data transferred, from traffic.bandwidth_mb, or
+     * null when the host reported no byte counts.
+     */
+    public static function bandwidth(mixed $megabytes): ?string
+    {
+        $mb = is_numeric($megabytes) ? (float) $megabytes : 0.0;
+        if ($mb <= 0) {
+            return null;
+        }
+
+        return $mb >= 1024 ? number_format($mb / 1024, 1).' GB' : number_format($mb, 0).' MB';
+    }
+
+    /**
+     * "Files & database", "Database" or "Files": what a day's backups held,
+     * from one of backups.recent's kinds lists.
+     *
+     * @param  array<int, mixed>  $kinds
+     */
+    public static function backupKinds(array $kinds): string
+    {
+        return match (true) {
+            in_array(SiteBackup::KIND_FULL, $kinds, true),
+            in_array(SiteBackup::KIND_FILES, $kinds, true) && in_array(SiteBackup::KIND_DATABASE, $kinds, true) => 'Files & database',
+            in_array(SiteBackup::KIND_DATABASE, $kinds, true) => 'Database',
+            default => 'Files',
+        };
+    }
+
     /** "45 min", "6h 19m": a length of time the way the email's outage list shows it. */
     public static function duration(int $minutes): string
     {

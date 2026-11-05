@@ -242,6 +242,51 @@ it('prints the footer text in the plain-text part when one is set', function () 
     expect(view($content->text, $content->with)->render())->not->toContain("\n\n\nQuestions about anything");
 });
 
+it('colours uptime by its value, in the tile and the row', function (float $pct, string $label, string $color) {
+    $html = (new ClientReportMail(clientReportMailFixture(['uptime' => ['uptime_percentage' => $pct]])))->render();
+
+    // Tile, then the Availability row.
+    expect(substr_count($html, "color:{$color}; line-height:1.2; white-space:nowrap;\">{$label}</div>"))->toBe(1)
+        ->and($html)->toMatch('/Availability.*?font-weight:700; color:'.preg_quote($color, '/').';">'.preg_quote($label, '/').'</');
+})->with([
+    'good' => [100.0, '100%', '#047857'],
+    'just good' => [99.9, '99.9%', '#047857'],
+    'amber' => [99.83, '99.83%', '#b45309'],
+    'red' => [97.08, '97.08%', '#b91c1c'],
+]);
+
+it('gives the plain-text part the same traffic and backup details as the HTML', function () {
+    $mail = new ClientReportMail(clientReportMailFixture([
+        'meta' => ['schema_version' => 6],
+        'traffic' => ['status' => 'ok'],
+        'backups' => [
+            'status' => 'verified', 'verified' => true, 'source' => 'pressable', 'covers_period' => true, 'days_with_backups' => 30,
+            'recent' => [
+                ['date' => '2026-09-30', 'kinds' => ['db', 'fs'], 'bytes' => 3 * 1024 ** 3, 'manual' => false],
+                ['date' => '2026-09-29', 'kinds' => ['db'], 'bytes' => 60 * 1024 ** 2, 'manual' => false],
+                ['date' => '2026-09-28', 'kinds' => ['fs'], 'bytes' => null, 'manual' => true],
+            ],
+        ],
+    ]));
+    $content = $mail->content();
+    $text = view($content->text, $content->with)->render();
+    $html = $mail->render();
+
+    expect($html)->toContain('Data transferred')->toContain('40.7 GB')->toContain('Files &amp; database')->toContain('Database')
+        ->and($text)->toContain("Requests served: 1,429,336\nData transferred: 40.7 GB")
+        ->toContain('- Wed, Sep 30: Files & database, 3.0 GB')
+        ->toContain('- Tue, Sep 29: Database, 60 MB')
+        ->toContain('- Mon, Sep 28: Files (manual)');
+});
+
+it('leaves "Data transferred" out of both parts when the host reports no byte counts', function () {
+    $mail = new ClientReportMail(clientReportMailFixture(['traffic' => ['bandwidth_mb' => null]]));
+    $content = $mail->content();
+
+    expect($mail->render())->not->toContain('Data transferred')
+        ->and(view($content->text, $content->with)->render())->not->toContain('Data transferred');
+});
+
 it('cleans raw action-log summaries', function (string $summary, ?string $target, string $expected) {
     expect(ClientReportMail::cleanUpdateSummary($summary, $target))->toBe($expected);
 })->with([

@@ -87,7 +87,7 @@ Backed up on {!! (int) $data['backups']['days_with_backups'] !!} {!! \Illuminate
 Backed up{!! $backupDestination ? ' '.$backupDestination : '' !!}. Most recent:
 @endif
 @foreach ($data['backups']['recent'] as $day)
-- {!! \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') !!}{!! ! empty($day['manual']) ? ' (manual)' : '' !!}
+- {!! \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') !!}: {!! \Modules\ClientReports\Support\ReportPhrases::backupKinds((array) ($day['kinds'] ?? [])) !!}{!! ! empty($day['manual']) ? ' (manual)' : '' !!}{!! isset($day['bytes']) ? ', '.\Modules\ClientReports\Support\ReportPhrases::bytes((int) $day['bytes']) : '' !!}
 @endforeach
 @else
 Your site's files and database were backed up to independent off-site storage this month.{!! ! empty($data['backups']['last_backup_at']) ? ' Most recent backup: '.\Illuminate\Support\Carbon::parse($data['backups']['last_backup_at'])->format('M j, Y').'.' : '' !!}
@@ -107,6 +107,9 @@ SPEED & PERFORMANCE (Google Lighthouse, out of 100)
 TRAFFIC
 Visits: {!! number_format((int) ($traffic['total_visits'] ?? 0)) !!}
 Requests served: {!! number_format((int) ($traffic['total_requests'] ?? 0)) !!}
+@if (\Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb'] ?? null) !== null)
+Data transferred: {!! \Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb']) !!}
+@endif
 @endif
 @if ($sections['forms'])
 

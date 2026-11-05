@@ -13,6 +13,7 @@
     $soft = '#f8fafc';
     $good = '#047857';
     $warn = '#b45309';
+    $bad = '#b91c1c';
 
     $meta = $data['meta'] ?? [];
     $updates = $data['updates'] ?? [];
@@ -45,6 +46,13 @@
     $updateCount = count($updateRows);
     $uptimePct = $uptime['uptime_percentage'] ?? null;
     $uptimeLabel = $uptimePct === null ? '—' : rtrim(rtrim(number_format((float) $uptimePct, 2), '0'), '.').'%';
+    // Green only for a month that really was (99.9%+), amber from 99%, red below.
+    $uptimeColor = match (\Modules\ClientReports\Support\ReportPhrases::uptimeTone($uptimePct)) {
+        'good' => $good,
+        'warn' => $warn,
+        'bad' => $bad,
+        default => $muted,
+    };
     $downtime = (int) ($uptime['downtime_minutes'] ?? 0);
     $downtimeLabel = $downtime >= 60 ? floor($downtime / 60).'h '.($downtime % 60).'m' : $downtime.' min';
     $isWordPress = (bool) ($data['site']['is_wordpress'] ?? true);
@@ -86,22 +94,16 @@
     $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
     $showBackups = $sections['backups'];
     $backupDestination = \Modules\ClientReports\Support\ReportPhrases::backupDestination($backups);
-    $backupKindLabel = fn (array $kinds) => match (true) {
-        in_array('full', $kinds, true), in_array('fs', $kinds, true) && in_array('db', $kinds, true) => 'Files & database',
-        in_array('db', $kinds, true) => 'Database',
-        default => 'Files',
-    };
     // A site enrolled part-way through the month: say when monitoring began.
     $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
     $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
     $outageWhen = fn (array $o) => \Modules\ClientReports\Support\ReportPhrases::outageStart($o).(! empty($o['ongoing']) ? ' (still down at period end)' : '');
     $outageLength = fn (int $m) => $m < 1 ? '<1 min' : ($m >= 60 ? floor($m / 60).'h '.($m % 60).'m' : $m.' min');
-    $formatBytes = fn (int $b) => $b >= 1024 ** 3 ? number_format($b / 1024 ** 3, 1).' GB' : ($b >= 1024 ** 2 ? number_format($b / 1024 ** 2, 0).' MB' : number_format(max(1, $b / 1024), 0).' KB');
 
-    $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : '#b91c1c');
-    $bandwidth = (float) ($traffic['bandwidth_mb'] ?? 0);
-    $showBandwidth = $bandwidth > 0;
-    $bandwidthLabel = $bandwidth >= 1024 ? number_format($bandwidth / 1024, 1).' GB' : number_format($bandwidth, 0).' MB';
+    $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : $bad);
+    // Shared with the text part, so both say the same.
+    $bandwidthLabel = \Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb'] ?? null);
+    $showBandwidth = $bandwidthLabel !== null;
 
     // Tiles sit four across even on a phone, so long numbers are abbreviated there
     // (the section below still shows the exact figure).
@@ -109,7 +111,7 @@
         : ($n >= 10000 ? rtrim(rtrim(number_format($n / 1000, 1), '0'), '.').'K' : number_format($n));
     $tiles = [];
     if ($sections['updates']) $tiles[] = [$updateCount, 'Updates applied', $ink];
-    if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $good];
+    if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $uptimeColor];
     if ($sections['security']) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
     if ($showTraffic) $tiles[] = [$compact((int) ($traffic['total_visits'] ?? 0)), 'Visits', $ink];
     elseif ($sections['security'] && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
@@ -215,7 +217,7 @@
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Uptime &amp; availability</div>
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We check your site around the clock and are alerted the moment it stops responding.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability @if ($monitoredSince)<span style="font-size:11px; color:#94a3b8;">(monitoring began {{ $monitoredSince }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $good }};">{{ $uptimeLabel }}</td></tr>
+                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability @if ($monitoredSince)<span style="font-size:11px; color:#94a3b8;">(monitoring began {{ $monitoredSince }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $uptimeColor }};">{{ $uptimeLabel }}</td></tr>
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Outages</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ (int) ($uptime['outages_count'] ?? 0) }}</td></tr>
                 <tr><td style="padding:8px 0; color:#334155;">Total downtime</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $downtimeLabel }}</td></tr>
             </table>
@@ -349,8 +351,8 @@
                     @foreach ($backups['recent'] as $day)
                         <tr>
                             <td style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $ink }}; white-space:nowrap;">{{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}</td>
-                            <td style="padding:7px 8px; border-bottom:1px solid {{ $line }}; color:#334155;">{{ $backupKindLabel($day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
-                            <td align="right" style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $muted }}; white-space:nowrap;">{{ $day['bytes'] !== null ? $formatBytes((int) $day['bytes']) : '—' }}</td>
+                            <td style="padding:7px 8px; border-bottom:1px solid {{ $line }}; color:#334155;">{{ \Modules\ClientReports\Support\ReportPhrases::backupKinds((array) $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                            <td align="right" style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $muted }}; white-space:nowrap;">{{ $day['bytes'] !== null ? \Modules\ClientReports\Support\ReportPhrases::bytes((int) $day['bytes']) : '—' }}</td>
                         </tr>
                     @endforeach
                 </table>
