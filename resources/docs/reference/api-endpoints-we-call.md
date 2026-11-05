@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-11-03
+updated: 2026-11-05
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -154,11 +154,15 @@ Full details on the `architecture/companion-plugin` page. Control only mints res
 
 ## wpvulnerability.net — `https://www.wpvulnerability.net/plugin/{slug}`
 
-`app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both.
+`app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both. Each advisory's `operator` block becomes the stored range: `lt`/`lte` set the upper bound, `gt`/`gte` the lower bound (the operator decides the side, whichever slot it arrives in), and `eq` an exact release (`from_version = to_version`, both inclusive). `patched_in` is only set for an `lt` bound on a fixed advisory.
 
 ## WordPress.org Plugin Information — `https://api.wordpress.org/plugins/info/1.2/`
 
 `app/Services/Security/PluginDirectoryClient.php` · No auth, keyless. `GET ?action=plugin_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+plugin-directory-check)`. 100ms delay between requests. Queries unique plugin slugs across the fleet to detect closed/abandoned zombieware plugins (`plugin_directory_statuses`). Tolerates partial failures; non-closed/not_found responses for premium plugins never alert. Weekly on Mondays at 03:30 UTC (`clockwork:refresh-closed-plugins`).
+
+## WordPress.org Theme Information — `https://api.wordpress.org/themes/info/1.2/`
+
+`app/Services/Updates/ThemeIdentityGuard.php` · No auth, keyless. `GET ?action=theme_information&request[slug]={slug}` with `User-Agent: Clockwork-Monitoring/1.0 (+theme-identity-check)`, 8s timeout, retried twice on connection errors and 5xx. Called by the nightly update loop (`clockwork:run-nightly-plugin-updates`) once per theme folder that has an update pending, to check the installed theme is the directory theme on offer (see Features → Updates, *Theme slug collisions*). An error body (`{"error": "Theme not found"}`, usually HTTP 404) means the folder isn't listed; a failed lookup falls back to the snapshot checks and never stops the night.
 
 ## CISA Known Exploited Vulnerabilities (KEV) — `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`
 

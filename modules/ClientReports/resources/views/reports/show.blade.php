@@ -99,7 +99,7 @@
             A newer report for this schedule and period replaced this one. It can't be sent.
         </div>
     @elseif ($isOperatorPreview && \Modules\ClientReports\Support\ReportState::reasons($report) !== [])
-        @include('client-reports::reports._review-panel', ['report' => $report, 'reasons' => \Modules\ClientReports\Support\ReportState::reasons($report)])
+        @include('client-reports::reports._review-panel', ['report' => $report, 'reasons' => \Modules\ClientReports\Support\ReportState::reasons($report), 'data' => $data])
     @endif
 
     {{-- Report Document Container --}}

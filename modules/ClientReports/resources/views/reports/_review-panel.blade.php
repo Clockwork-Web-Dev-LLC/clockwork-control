@@ -4,6 +4,10 @@
     $categoryClass = \Modules\ClientReports\Support\ReviewReasonCategories::class;
     $groups = $categoryClass::group($reasons);
     $tabLabels = ['security' => 'Security tab', 'updates' => 'Updates tab', 'traffic' => 'Traffic tab', 'forms' => 'Forms tab', 'overview' => 'site overview'];
+    // Review-tier malware findings a person can mark checked (held, unsent reports only).
+    $canMarkReviewed = $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_GENERATED
+        && empty($report->sent_to)
+        && \Modules\ClientReports\Services\ReportReviewFlags::canMarkMalwareReviewed($data ?? (array) $report->sections_data);
 @endphp
 <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
     <div class="font-semibold mb-2"><i class="fa-solid fa-hand"></i> {{ $report->schedule?->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_AUTO ? 'Held for review instead of being emailed automatically' : 'Check these before sending' }}</div>
@@ -24,9 +28,16 @@
                         <li>{{ $reason }}</li>
                     @endforeach
                 </ul>
+                @if ($category === $categoryClass::MALWARE && $canMarkReviewed)
+                    @include('client-reports::reports._malware-reviewed-form', ['report' => $report])
+                    @php($canMarkReviewed = false)
+                @endif
             </div>
         @endforeach
     </div>
+    @if ($canMarkReviewed)
+        @include('client-reports::reports._malware-reviewed-form', ['report' => $report])
+    @endif
     <div class="mt-3 text-xs text-amber-800">
         @if ($report->canRecompile())
             Fix or confirm these, then press <strong>Recompile</strong> to refresh this report from current data (it never sends), or <strong>Send</strong> it as it is.

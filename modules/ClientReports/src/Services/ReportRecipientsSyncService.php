@@ -58,10 +58,13 @@ class ReportRecipientsSyncService
             $fallbackRecipients = $this->sanitizeEmails([$site->client_email]);
         }
 
+        // No schedule means no report goes out, whatever the care plan says,
+        // so WordPress must not show reports as active. The client's
+        // addresses are still offered as the recipients to start from.
         return [
             'report_recipients' => $fallbackRecipients,
             'report_frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
-            'report_enabled' => (bool) $site->isCarePlanActive(),
+            'report_enabled' => false,
             'report_last_sent_at' => null,
             'report_recipients_updated_at' => now()->toIso8601String(),
         ];
@@ -232,12 +235,22 @@ class ReportRecipientsSyncService
         }
 
         // Case 2: WordPress has never been initialized with recipients yet,
-        // and Control has a schedule (or client recipients on an active care plan).
+        // and Control has a schedule (or client recipients to offer, pushed
+        // as not active, since without a schedule nothing sends).
         if ($updatedAtRaw === null && $wpRecipients === []) {
             $resolved = $this->resolvePayloadForSite($site, $schedule);
             if ($schedule !== null || ! empty($resolved['report_recipients'])) {
                 $this->pushToSite($site, $schedule);
             }
+
+            return;
+        }
+
+        // Case 3: WordPress shows reports as active, set by Control (an
+        // earlier push that took a care plan for a schedule), but Control
+        // has no schedule, so nothing sends: tell WordPress so.
+        if ($schedule === null && ($cn['report_enabled'] ?? false) === true) {
+            $this->pushToSite($site);
         }
     }
 

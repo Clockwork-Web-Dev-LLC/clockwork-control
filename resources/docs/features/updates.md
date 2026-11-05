@@ -2,10 +2,10 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-11-03
+updated: 2026-11-05
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
-tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
+tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Services/Updates/ThemeIdentityGuard.php, app/Services/Updates/ObservedUpdateRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
 ---
 
 Fleet-wide page for plugin / theme / WP core / translation updates. Replaces the per-site click-through workflow with a single grouped-by-name view modeled after ManageWP Orion. Lives at **`/updates`** (top-nav between Issues and Security).
@@ -92,6 +92,7 @@ Bill.com sync drives `care_plan_enabled` automatically based on invoice line ite
 
 - **Manual ignore**: Triggered by an operator clicking *Ignore* on `/updates`. Sets `source = manual` and `client_visible = false`. It is kept private to Control by default (an agency decision like "hold off updating WooCommerce this week" is internal).
 - **Auto-ignore**: Triggered automatically when a plugin or theme repeatedly fails nightly automated updates and crosses the streak threshold. Sets `source = auto_failure` and `client_visible = true`.
+- **Held as a different theme**: Written by the nightly loop when the installed theme doesn't look like the theme on offer (see *Theme slug collisions* below). Sets `source = identity_mismatch` and `client_visible = false`, and holds like a manual ignore (shown as one on the site's Updates tab, with the reason underneath).
 
 ### Auto-ignore after repeated nightly failures
 
@@ -163,6 +164,14 @@ stdout_logfile=/var/log/clockwork/plugin-updates.log
 
 Every completed update writes to `action_logs` with `action_type='plugin_update'` (or `theme_update` / `core_update` / `translations_update`). The `ActionLogger` mirrors to the per-site Companion endpoint, so the client's wp-admin "Activity" page shows what we've done.
 
+### Updates made outside Control
+
+WordPress's own auto-updates, another management tool or someone in wp-admin can update a plugin before Control does. Those updates leave no job, so `App\Services\Updates\ObservedUpdateRecorder` finds them in the snapshots instead: whenever a new Companion snapshot replaces the previous one (the `Site` model's `updated` hook, so every place that writes a snapshot is covered), each installed plugin, theme or WordPress core version that went **up** gets one `action_logs` row — `plugin_update_observed`, `theme_update_observed` or `core_update_observed`, `actor = observed`, `ran_at` = the new snapshot's time, details `{slug, name, from_version, to_version, observed_at, previous_snapshot_at}` (core uses the slug `wordpress`). The update happened somewhere between `previous_snapshot_at` and `observed_at`.
+
+A change is not logged when Control made it — a `plugin_update_jobs` row for the same site and slug (any core job for core) created in the last 48 hours, or since the previous snapshot if that is older, that completed, is still live, or ended on exactly the new version — nor for downgrades (rollbacks, restores), items added or removed, or a change already logged with the same new version (a snapshot that flips back and forth logs once).
+
+These rows are informational. They are in `ActionLog::OBSERVED_UPDATE_TYPES`, not `UPDATE_TYPES` (which means "updates Control ran"), and in `ActionLog::LOCAL_ONLY_TYPES`, so neither `ActionLogger` nor `clockwork:backfill-companion-action-log` mirrors them to the client's wp-admin. They never touch update jobs, failure streaks, auto-pauses or chat alerts.
+
 The `plugin_update_jobs` table is the **live** progress substrate — once a batch finishes, those rows are useful for "what just ran" forensics for a few days, then can be safely archived. Action logs are the immutable record.
 
 **"History"** in the page header (top-right, next to Care-plan auto-updates) links into `MaintenanceHistoryController` (`/maintenance-history`, pre-filtered to `action_type=_updates` — a synthetic filter value that expands to `plugin_update`/`theme_update`/`core_update`/`translations_update` together) — the full cross-site `action_logs` log, filterable by site/type/care-plan/outcome/actor, month-scoped with a pill-bar month picker. Originally built as a billing-reconciliation view ("what to bill, what's covered" — hence the covered/billable stats strip), it reads the exact same table this page's audit trail writes to, so it doubles as the fleet-wide update history without any separate data path. Each site's Overview tab also links here directly (`?site_id={id}`) from its Recent Activity card, which is itself capped at 25 rows — useful when you need the full, unpaginated per-site history rather than just the last couple dozen actions.
@@ -177,6 +186,15 @@ Plugins-only, opt-in per site, runs every night between 02:00 and 06:00 ET. The 
 2. Vulnerable plugins (matched by `PluginVulnerabilityMatcher` on the plugin's directory, the part of the snapshot's `dir/file.php` slug before the slash) are sorted first so security patches land before cosmetic updates.
 3. `clockwork:nightly-update-summary` (06:15 ET) reads every job whose `batch_id` starts with `nightly-` since the last summary run and emails the operator a success/failure breakdown. No jobs → no email.
 4. If any job ends in `failed` and its `batch_id` is a nightly batch, `AbstractRunUpdate` fires a Mattermost `pluginUpdateFailed()` ping immediately — manual bulk failures stay quiet since the operator is watching the page.
+
+### Theme slug collisions
+
+WordPress asks wordpress.org about every installed theme by folder name. A custom theme whose folder shares its name with an unrelated directory theme is offered that theme's releases as updates, and applying one replaces the custom theme wholesale — the custom code is gone and the site can fatal-error. Before queueing a theme, the nightly loop asks `App\Services\Updates\ThemeIdentityGuard`:
+
+1. If wordpress.org lists a theme for that folder (`api.wordpress.org/themes/info/1.2/`, one request per folder per run), the installed theme's name must match the listed name (case, punctuation, HTML entities and a trailing "Theme" ignored). A different name means a different theme.
+2. If the folder isn't listed (a premium theme's own updater makes the offer) or the directory can't be reached, a child theme is refused: a snapshot `template`/`parent` field naming another theme, or — since today's snapshots carry no such field — the word "child" in the theme's name. Anything else is queued as before.
+
+A held-back theme is recorded once: a `skipped` `plugin_update_jobs` row with `reason_code = identity_mismatch` in that night's batch (so the 06:15 summary email lists it with the reason), an ignore with `source = identity_mismatch` (so later nights and the Updates page's bulk actions leave it alone), a local-only `theme_update_refused` action log, and one chat message. It never counts toward a failure streak or an auto-pause. If the theme really is the one on offer, unignore it on the site's Updates tab and update it by hand; the nightly loop holds it again the next time an update is offered. Plugins are not checked: the snapshot has nothing comparable for them, and wordpress.org plugin names carry taglines and edition names, so a name comparison would hold back legitimate updates. Manual updates from `/updates` are not checked either, but they skip any ignored theme.
 
 ### Opt-in toggle
 

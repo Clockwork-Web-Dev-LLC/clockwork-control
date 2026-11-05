@@ -7,6 +7,7 @@ use DateTimeZone;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ReportReviewFlags;
 use Throwable;
 
 /**
@@ -23,6 +24,58 @@ final class ReportPhrases
         SiteBackup::SOURCE_SPINUPWP_SPACES => 'by SpinupWP to DigitalOcean Spaces',
         SiteBackup::SOURCE_S3_ARCHIVE => 'to independent off-site storage (Amazon S3)',
     ];
+
+    /**
+     * Words that make a contact's stored name an organisation's rather than
+     * a person's ("St James Church", "Example Design Group"), lower case.
+     */
+    private const ORGANISATION_WORDS = [
+        'academy', 'agency', 'and', 'association', 'bank', 'board', 'cafe', 'capital', 'center', 'centre',
+        'church', 'cid', 'clinic', 'club', 'co', 'coalition', 'college', 'committee', 'company', 'consulting',
+        'corp', 'corporation', 'council', 'department', 'dept', 'design', 'designs', 'enterprises', 'firm',
+        'for', 'foundation', 'fund', 'gallery', 'global', 'group', 'health', 'holdings', 'hospital', 'hotel',
+        'inc', 'industries', 'info', 'inn', 'institute', 'interiors', 'international', 'law', 'library', 'llc',
+        'llp', 'ltd', 'marketing', 'media', 'ministries', 'ministry', 'museum', 'national', 'network', 'of',
+        'office', 'partners', 'pllc', 'program', 'programme', 'project', 'properties', 'realty', 'resort',
+        'restaurant', 'sales', 'salon', 'school', 'services', 'shop', 'society', 'solutions', 'spa', 'store',
+        'studio', 'studios', 'support', 'team', 'the', 'trust', 'university', 'web', 'website',
+    ];
+
+    /**
+     * The first name to greet a contact by ("Jane" for "Jane Example"), or
+     * null when the stored name isn't plainly one person's: an organisation
+     * ("Example Institute", an acronym, a name with an organisation word or
+     * more than three words), an initial ("J. Example"), a name with a note
+     * in brackets or with digits or symbols ("Jane (Example Co)"), or one
+     * not written as a name (all lower case, or run together with capitals
+     * inside, "ExampleSupply"). Null greets "Hi there,", which is never
+     * wrong; a guessed name can be.
+     */
+    public static function firstName(?string $name): ?string
+    {
+        $name = trim(preg_replace('/\s+/u', ' ', (string) $name) ?? '');
+        if ($name === '' || preg_match('/[()\[\]{}\/\\\\&@,+#:;!?"_\d]/u', $name)) {
+            return null;
+        }
+
+        $words = explode(' ', $name);
+        if (count($words) > 3) {
+            return null;
+        }
+
+        foreach ($words as $word) {
+            if (in_array(mb_strtolower(rtrim($word, '.')), self::ORGANISATION_WORDS, true)
+                || (mb_strlen($word) > 1 && preg_match('/^\p{Lu}+$/u', $word))) {
+                return null;
+            }
+        }
+
+        $first = $words[0];
+
+        return mb_strlen($first) >= 2 && preg_match("/^\p{Lu}\p{Ll}*(?:['’\-]\p{Lu}?\p{Ll}+)*$/u", $first)
+            ? $first
+            : null;
+    }
 
     /**
      * The timezone times in a report are shown in (clockwork.reports.timezone).
@@ -150,15 +203,19 @@ final class ReportPhrases
             return null;
         }
 
+        // A care plan switched on mid-month: the site may have been watched
+        // before, but it wasn't being looked after.
+        $subject = ($data['meta']['coverage_source'] ?? null) === 'care_plan' ? 'Your care plan' : 'Monitoring';
+
         if (self::beganAfterPeriod($data['meta']['coverage_start'], $data)) {
-            return "Monitoring began {$began}, after the end of this report's period.";
+            return "{$subject} began {$began}, after the end of this report's period.";
         }
 
         $periodEnd = $data['meta']['period_end'] ?? null;
 
         return is_string($periodEnd) && $periodEnd !== ''
-            ? "Monitoring began {$began}, so this report covers {$began} – ".Carbon::parse($periodEnd)->format('M j').'.'
-            : "Monitoring began {$began}.";
+            ? "{$subject} began {$began}, so this report covers {$began} – ".Carbon::parse($periodEnd)->format('M j').'.'
+            : "{$subject} began {$began}.";
     }
 
     /**
@@ -183,6 +240,83 @@ final class ReportPhrases
         }
 
         return 'Down '.$at->setTimezone(self::timezone())->format('M j, g:i A T');
+    }
+
+    /**
+     * What the updates section says when no update is listed. Only what's
+     * known: nothing was waiting at the end of the month (the snapshot said
+     * so), never that no updates were needed all month, since something
+     * other than Control can apply one. When something was waiting, or we
+     * can't tell (including reports compiled before waiting updates were
+     * recorded), just that none were applied.
+     *
+     * @param  array<string, mixed>  $updates  sections_data['updates']
+     */
+    public static function noUpdatesLine(array $updates): string
+    {
+        return array_key_exists('pending_plugins', $updates) && ! ClientReportCompiler::updatesWereWaiting($updates)
+            ? 'Everything was up to date at the end of the month.'
+            : 'No updates were applied this month.';
+    }
+
+    /** At or above this availability the figure reads as good. */
+    public const UPTIME_GOOD = 99.9;
+
+    /** At or above this (and below UPTIME_GOOD) it reads as a warning; below it, as bad. */
+    public const UPTIME_FAIR = 99.0;
+
+    /**
+     * 'good', 'warn' or 'bad' for an availability percentage, so a month
+     * at 97% isn't shown in the colour of a perfect one; null when there's
+     * no figure.
+     */
+    public static function uptimeTone(mixed $percentage): ?string
+    {
+        if (! is_numeric($percentage)) {
+            return null;
+        }
+
+        return match (true) {
+            (float) $percentage >= self::UPTIME_GOOD => 'good',
+            (float) $percentage >= self::UPTIME_FAIR => 'warn',
+            default => 'bad',
+        };
+    }
+
+    /**
+     * "40.7 GB", "512 MB": data transferred, from traffic.bandwidth_mb, or
+     * null when the host reported no byte counts.
+     */
+    public static function bandwidth(mixed $megabytes): ?string
+    {
+        $mb = is_numeric($megabytes) ? (float) $megabytes : 0.0;
+        if ($mb <= 0) {
+            return null;
+        }
+
+        return $mb >= 1024 ? number_format($mb / 1024, 1).' GB' : number_format($mb, 0).' MB';
+    }
+
+    /**
+     * "Files & database", "Database" or "Files": what a day's backups held,
+     * from one of backups.recent's kinds lists.
+     *
+     * @param  array<int, mixed>  $kinds
+     */
+    public static function backupKinds(array $kinds): string
+    {
+        return match (true) {
+            in_array(SiteBackup::KIND_FULL, $kinds, true),
+            in_array(SiteBackup::KIND_FILES, $kinds, true) && in_array(SiteBackup::KIND_DATABASE, $kinds, true) => 'Files & database',
+            in_array(SiteBackup::KIND_DATABASE, $kinds, true) => 'Database',
+            default => 'Files',
+        };
+    }
+
+    /** "45 min", "6h 19m": a length of time the way the email's outage list shows it. */
+    public static function duration(int $minutes): string
+    {
+        return $minutes >= 60 ? intdiv($minutes, 60).'h '.($minutes % 60).'m' : max(0, $minutes).' min';
     }
 
     /**
@@ -250,7 +384,10 @@ final class ReportPhrases
     {
         $share = $traffic['top_ip_share'] ?? null;
         if (($traffic['source'] ?? null) === 'nginx' && is_numeric($share) && (float) $share > ClientReportCompiler::TRAFFIC_TOP_IP_SHARE_MAX) {
-            return (int) round((float) $share * 100).'% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors';
+            // Older reports didn't keep how many IPs the share is from.
+            $ips = (int) ($traffic['top_ip_count'] ?? 2) === 1 ? 'one IP address' : 'two IP addresses';
+
+            return (int) round((float) $share * 100)."% of requests came from {$ips}, which looks like a proxy or gateway in front of the site rather than visitors";
         }
 
         return number_format((int) ($traffic['total_visits'] ?? 0)).' visits for '.number_format((int) ($traffic['total_requests'] ?? 0))
@@ -281,6 +418,57 @@ final class ReportPhrases
         return $vulns.' found'
             .($plugins > 0 ? ' in '.$plugins.' '.Str::plural('plugin', $plugins) : '')
             .($inactive > 0 ? ' ('.$inactive.' in inactive plugins)' : '');
+    }
+
+    /**
+     * The client's malware-scan line and its tone ('good', 'warn' or
+     * 'muted'), shared by both email parts. Review-tier findings a person
+     * has checked (ReportReviewFlags::malwareReviewed) read "Reviewed — no
+     * threat found" instead of "Issues flagged"; suspected malware never does.
+     *
+     * @param  array<string, mixed>  $security  sections_data['security']
+     * @return array{0: string, 1: string}
+     */
+    public static function malwareLabel(array $security): array
+    {
+        $status = $security['malware_status'] ?? null;
+
+        return match (true) {
+            $status === 'clean' => ['No malware found', 'good'],
+            $status === 'warning' && ReportReviewFlags::malwareReviewed($security) => ['Reviewed — no threat found', 'good'],
+            in_array($status, ['warning', 'issues_found'], true) => ['Issues flagged', 'warn'],
+            // A clean result from a scan that didn't cover the whole site.
+            $status === ClientReportCompiler::MALWARE_INCOMPLETE => ['Partial scan', 'muted'],
+            $status === null => ['Not checked this month', 'muted'],
+            default => [ucfirst((string) $status), 'warn'],
+        };
+    }
+
+    /**
+     * Why the "Malicious visitors blocked" count is hidden, as a note for
+     * the operator, or null when it's shown (or the report predates the
+     * reason being kept and has no unbanned lockouts to explain it).
+     *
+     * @param  array<string, mixed>  $security  sections_data['security']
+     */
+    public static function blockedVisitorsNote(array $security): ?string
+    {
+        if (($security['blocked_threats_count'] ?? null) !== null) {
+            return null;
+        }
+
+        $lockouts = (int) ($security['unbanned_lockouts'] ?? 0);
+        $reason = match ($security['blocks_unmeasured'] ?? ($lockouts > 0 ? 'unbanned_lockouts' : null)) {
+            'unbanned_lockouts' => $lockouts.' '.Str::plural('lockout', $lockouts).' this period never became a ban, so a count would leave those visitors out',
+            'ingestion_stopped' => 'no lockout from any site has reached Control since '
+                .(self::date($security['lockouts_last_ingested_at'] ?? null) ?? 'well before the period end')
+                .', so a count would cover only part of the period',
+            'no_lockout_feed' => "nothing shows this site's lockouts reached Control all period (no blocker reporting to Control now, "
+                ."no provisioned fail2ban jail, or the server's lockouts weren't pulled at the end of the period)",
+            default => null,
+        };
+
+        return $reason !== null ? 'Malicious visitors blocked hidden from the client: '.$reason.'.' : null;
     }
 
     /**

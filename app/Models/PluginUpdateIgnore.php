@@ -24,6 +24,14 @@ class PluginUpdateIgnore extends Model
 
     public const SOURCE_AUTO_FAILURE = 'auto_failure';
 
+    /**
+     * Held by the nightly loop because the installed theme doesn't look like
+     * the theme on offer (a custom theme sharing its folder name with an
+     * unrelated wordpress.org theme). Holds like a manual ignore: only an
+     * operator lifts it. Never shown in wp-admin (client_visible=false).
+     */
+    public const SOURCE_IDENTITY_MISMATCH = 'identity_mismatch';
+
     protected static function booted(): void
     {
         static::creating(function ($ignore) {

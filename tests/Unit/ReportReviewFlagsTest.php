@@ -1,6 +1,7 @@
 <?php
 
 use Modules\ClientReports\Services\ReportReviewFlags;
+use Modules\ClientReports\Support\ReportPhrases;
 
 it('flags what a person should see before the client does', function () {
     expect(ReportReviewFlags::reasons([
@@ -81,6 +82,20 @@ it('says the monitor was blocked, not that the site was down, when only a 429 is
     expect($reasons)->toHaveCount(1)
         ->and($reasons[0])->toStartWith('The uptime monitor was blocked (HTTP 429) from Oct 30, ')
         ->toEndWith('; the site was not necessarily down.');
+});
+
+it('holds completed outages of an hour or more, read from the outages list on reports compiled before long_outages', function () {
+    $long = ['started_at' => '2026-10-01T06:10:00+00:00', 'minutes' => 381, 'started_before_period' => false, 'ongoing' => false];
+    $carried = ['started_at' => '2026-10-01T04:00:00+00:00', 'minutes' => 60, 'started_before_period' => true, 'ongoing' => false];
+    $short = ['started_at' => '2026-10-09T10:00:00+00:00', 'minutes' => 59, 'started_before_period' => false, 'ongoing' => false];
+
+    // The time is shown in the report timezone, which needs the app config; the wording doesn't.
+    $when = fn (array $o) => preg_replace('/^Down /', '', ReportPhrases::outageStart($o));
+    $expected = 'The site was down for an hour or more: '.$when($carried).' for 1h 0m; '.$when($long).' for 6h 21m. Add context for the client before this goes out.';
+
+    expect(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short, $long, $carried]]]))->toBe([$expected])
+        ->and(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short], 'long_outages' => [$carried, $long]]]))->toBe([$expected])
+        ->and(ReportReviewFlags::reasons(['uptime' => ['outages' => [$long], 'long_outages' => []]]))->toBe([]);
 });
 
 it('still says the site was down when a real outage is open at the end of the month', function () {
@@ -200,6 +215,23 @@ describe('vulnerable plugins joined to waiting updates by slug', function () {
         ]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in 1.2; auto-paused on 2026-10-30 after 9 failed attempts); Example Gallery 3.0 (no fixed version yet; paused by hand since 2026-09-01: Licence expired).']);
     });
 
+    it('reads a fix only known as "after" a closed bound, and holds only an update past it', function () {
+        $item = fn (string $offered) => vulnerableItem(['fixed_in' => null, 'fixed_after' => '5.2.4', 'update_offered' => $offered]);
+
+        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('5.2.5')]]]))
+            ->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 5.2.5 (fixed in the next version after 5.2.4)."])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('5.2.4')]]]))->toBe([])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [
+                vulnerableItem(['fixed_in' => null, 'fixed_after' => '5.2.4', 'paused' => ['source' => 'manual', 'since' => null, 'failure_count' => null, 'note' => null]]),
+            ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in the next version after 5.2.4; paused by hand).']);
+    });
+
+    it('says an update held back as a different package is held back, not paused by hand', function () {
+        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [
+            vulnerableItem(['paused' => ['source' => 'identity_mismatch', 'since' => '2026-10-01', 'failure_count' => null, 'note' => 'Different package']]),
+        ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in 1.2; update held back since 2026-10-01: the offered package appears to be a different theme).']);
+    });
+
     it('uses the version the plugin recorded as offered when there is no list of waiting updates', function () {
         expect(ReportReviewFlags::reasons([
             'security' => ['vulnerable_plugin_items' => [vulnerableItem(['update_offered' => '1.2'])]],
@@ -216,6 +248,17 @@ describe('backups', function () {
             ->toBe(['Database backups are 9 KB but the database is 3.0 GB, so they look empty or broken and the Backups section was left out.'])
             ->and(ReportReviewFlags::reasons(['backups' => ['status' => 'suspect']]))
             ->toBe(['Database backups are far smaller than the database, so they look empty or broken and the Backups section was left out.']);
+    });
+
+    it('counts only the days backups were expected, from when the site\'s coverage began', function () {
+        $relay = ['status' => 'verified', 'verified' => true, 'source' => 's3_archive', 'covers_period' => false, 'daily' => true,
+            'days_with_backups' => 1, 'period_days' => 31, 'expected_days' => 4, 'archives_began' => '2026-10-31', 'expected_from' => '2026-10-28'];
+        $daily = ['status' => 'verified', 'verified' => true, 'covers_period' => true, 'daily' => true, 'days_with_backups' => 5, 'period_days' => 31, 'expected_days' => 12];
+
+        expect(ReportReviewFlags::reasons(['backups' => $relay]))
+            ->toBe(['Off-site backups began on Oct 31, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 1 of 4 days).'])
+            ->and(ReportReviewFlags::reasons(['backups' => $daily]))->toBe(['Backed up on only 5 of 12 days this month.'])
+            ->and(ReportReviewFlags::reasons(['backups' => ['days_with_backups' => 10] + $daily]))->toBe([]);
     });
 
     it('holds a daily source that backed up on far fewer days than the period had', function () {
@@ -282,6 +325,10 @@ describe('traffic', function () {
             ['status' => 'suspect', 'source' => 'nginx', 'days_covered' => 12, 'period_days' => 31, 'top_ip_share' => 0.998, 'total_visits' => 40, 'total_requests' => 1500000],
             '100% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors; also, traffic was recorded on only 12 of 31 days, so the Traffic section was left out.',
         ],
+        'a proxy seen as one address' => [
+            ['status' => 'suspect', 'source' => 'nginx', 'days_covered' => 31, 'period_days' => 31, 'top_ip_share' => 1.0, 'top_ip_count' => 1, 'total_visits' => 31, 'total_requests' => 90000],
+            '100% of requests came from one IP address, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.',
+        ],
         'visits that cannot be real' => [
             ['status' => 'suspect', 'source' => 'pressable', 'days_covered' => 31, 'period_days' => 31, 'top_ip_share' => 0.95, 'total_visits' => 33, 'total_requests' => 410000],
             "33 visits for 410,000 requests doesn't look like real visitors, so the Traffic section was left out.",
@@ -346,5 +393,47 @@ describe('nothing applied while updates were waiting', function () {
             ->and(ReportReviewFlags::reasons($updates(['pending_plugins' => null, 'pending_themes' => null, 'pending_core' => null])))->toBe([])
             ->and(implode(' ', ReportReviewFlags::reasons($updates(['pending_plugins' => null, 'snapshot_stale' => true]))))->not->toContain($reason)
             ->and(ReportReviewFlags::reasons(['updates' => ['total' => 0, 'pending_plugins' => ['Example Forms']]]))->toBe([]);
+    });
+});
+
+describe('malware findings marked reviewed', function () {
+    function reviewedSecurity(array $overrides = [], array $mark = []): array
+    {
+        return array_replace([
+            'malware_status' => 'warning', 'malware_scan_id' => 41, 'malware_finding_kinds' => ['php_in_uploads' => 2, 'wp_config_recently_modified' => 1],
+            'malware_reviewed' => array_replace(['scan_id' => 41, 'finding_kinds' => ['wp_config_recently_modified' => 1, 'php_in_uploads' => 2],
+                'reviewed_by' => 'Example Operator', 'reviewed_at' => '2026-11-03T10:00:00+00:00', 'note' => 'Checked'], $mark),
+        ], $overrides);
+    }
+
+    it('reads the mark only for the same scan and the same findings, in any order', function () {
+        expect(ReportReviewFlags::malwareReviewed(reviewedSecurity()))->toBeTrue()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(mark: ['scan_id' => 40])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(mark: ['finding_kinds' => ['php_in_uploads' => 2]])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(['malware_finding_kinds' => ['php_in_uploads' => 3, 'wp_config_recently_modified' => 1]])))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(reviewedSecurity(['malware_reviewed' => null])))->toBeFalse();
+    });
+
+    it('never applies to suspected malware, even with a matching mark', function () {
+        $kinds = ['php_in_uploads' => 1, 'eval_base64' => 1];
+        $security = reviewedSecurity(['malware_status' => 'issues_found', 'malware_finding_kinds' => $kinds], ['finding_kinds' => $kinds]);
+
+        expect(ReportReviewFlags::malwareReviewed($security))->toBeFalse()
+            ->and(ReportReviewFlags::malwareReviewed(['malware_status' => 'warning'] + $security))->toBeFalse()
+            ->and(ReportReviewFlags::canMarkMalwareReviewed(['security' => $security]))->toBeFalse()
+            ->and(ReportReviewFlags::reasons(['security' => $security]))->toBe(['The malware scan found suspected malware: php_in_uploads ×1, eval_base64 ×1 (scan #41).']);
+    });
+
+    it('drops the malware reason once reviewed, keeping the others', function () {
+        $data = ['security' => reviewedSecurity(['malware_reviewed' => null]), 'backups' => ['status' => 'stale']];
+        $data['meta']['review_reasons'] = ['First report.', ...ReportReviewFlags::reasons($data)];
+
+        $marked = ReportReviewFlags::withMalwareReviewed($data, ['reviewed_by' => 'Example Operator', 'note' => 'Checked']);
+
+        expect(ReportReviewFlags::canMarkMalwareReviewed($data))->toBeTrue()
+            ->and($data['meta']['review_reasons'])->toHaveCount(3)
+            ->and($marked['meta']['review_reasons'])->toBe(['First report.', 'Backups stopped before the last 10 days of the month.'])
+            ->and($marked['security']['malware_reviewed'])->toMatchArray(['scan_id' => 41, 'reviewed_by' => 'Example Operator'])
+            ->and(ReportReviewFlags::canMarkMalwareReviewed($marked))->toBeFalse();
     });
 });

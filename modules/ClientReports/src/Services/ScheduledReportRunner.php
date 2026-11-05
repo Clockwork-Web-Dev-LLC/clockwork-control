@@ -170,13 +170,48 @@ class ScheduledReportRunner
      */
     protected function compileFresh(ClientReportSchedule $schedule, Carbon $start, Carbon $end, array $recipients, ?string $customNotes = null): ClientReport
     {
-        $this->samePeriod($schedule, $start, $end)
+        $earlier = $this->samePeriod($schedule, $start, $end)
             ->where('status', ClientReport::STATUS_GENERATED)
             ->get()
-            ->filter(fn (ClientReport $r) => empty($r->sent_to))
-            ->each(fn (ClientReport $r) => $r->update(['status' => ClientReport::STATUS_SUPERSEDED]));
+            ->filter(fn (ClientReport $r) => empty($r->sent_to));
 
-        return $this->compile($schedule, $start, $end, $recipients, $customNotes);
+        // A person's review of the malware findings, from the newest copy
+        // that has one: it still holds if the new copy shows the same scan
+        // and findings.
+        $malwareReview = $earlier->sortByDesc('id')
+            ->map(fn (ClientReport $r) => $r->sections_data['security']['malware_reviewed'] ?? null)
+            ->first(fn ($mark) => is_array($mark));
+
+        $earlier->each(fn (ClientReport $r) => $r->update(['status' => ClientReport::STATUS_SUPERSEDED]));
+
+        $report = $this->compile($schedule, $start, $end, $recipients, $customNotes);
+
+        if (is_array($malwareReview)) {
+            $this->reapplyMalwareReview($report, $malwareReview);
+        }
+
+        return $report;
+    }
+
+    /**
+     * Carry an operator's "findings reviewed" mark onto a freshly compiled
+     * copy when it shows the same scan with the same findings
+     * (ReportReviewFlags::malwareReviewed). A newer scan or different
+     * findings need a person to look again, so the mark is dropped.
+     *
+     * @param  array<string, mixed>  $mark  an earlier copy's security.malware_reviewed
+     */
+    protected function reapplyMalwareReview(ClientReport $report, array $mark): void
+    {
+        $data = is_array($report->sections_data) ? $report->sections_data : [];
+        if (! isset($data['security'])) {
+            return;
+        }
+
+        $data['security']['malware_reviewed'] = $mark;
+        if (ReportReviewFlags::malwareReviewed((array) $data['security'])) {
+            $report->update(['sections_data' => $data]);
+        }
     }
 
     /**

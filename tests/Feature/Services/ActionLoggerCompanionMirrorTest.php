@@ -39,3 +39,25 @@ it('redacts secrets in the summary, details and error it mirrors to Companion', 
         && $request['details']['attempt'] === 2
         && $request['target'] === 'example-pro/example-pro.php');
 });
+
+it('keeps local-only rows (observed or held-back updates) out of the Companion mirror', function (string $type) {
+    $site = Site::factory()->create([
+        'domain' => 'local-only.example.com',
+        'companion_installed' => true,
+        'companion_secret' => 'test-secret-'.uniqid(),
+    ]);
+    Http::fake();
+
+    $row = app(ActionLogger::class)->record(
+        actionType: $type,
+        summary: 'Example row',
+        site: $site,
+        target: 'example-plugin/example-plugin.php',
+        actor: 'auto',
+    );
+
+    Http::assertNothingSent();
+    expect($row)->not->toBeNull()
+        ->and($row->companion_pushed_at)->toBeNull()
+        ->and(ActionLog::query()->where('action_type', $type)->count())->toBe(1);
+})->with(ActionLog::LOCAL_ONLY_TYPES);

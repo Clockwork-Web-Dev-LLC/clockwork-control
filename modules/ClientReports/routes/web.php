@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\ClientReports\Http\Controllers\ClientReportsController;
 use Modules\ClientReports\Http\Controllers\ClientsOverviewController;
+use Modules\ClientReports\Http\Controllers\ReportReviewController;
 use Modules\ClientReports\Http\Controllers\SchedulesController;
 use Modules\ClientReports\Http\Controllers\TemplatesController;
 
@@ -49,4 +50,6 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/client-reports/{report}/send-test', [ClientReportsController::class, 'sendTest'])->whereNumber('report')->name('client-reports.send-test');
     // Refreshes an unsent scheduled report from current data. Never sends.
     Route::post('/client-reports/{report}/recompile', [ClientReportsController::class, 'recompile'])->whereNumber('report')->name('client-reports.recompile');
+    // Records that a held report's review-tier malware findings were checked. Never sends.
+    Route::post('/client-reports/{report}/malware-reviewed', [ReportReviewController::class, 'markMalwareReviewed'])->whereNumber('report')->name('client-reports.malware-reviewed');
 });
