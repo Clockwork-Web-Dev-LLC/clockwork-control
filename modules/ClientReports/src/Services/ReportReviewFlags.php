@@ -117,6 +117,14 @@ class ReportReviewFlags
             $reasons[] = $noUpdatesReason;
         }
 
+        // An update that ran and was then undone (the site is back on the
+        // older version) isn't listed; a person should know why, and whether
+        // the client saw anything of it.
+        $notKeptReason = self::notKeptReason((array) ($data['updates'] ?? []));
+        if ($notKeptReason !== null) {
+            $reasons[] = $notKeptReason;
+        }
+
         $stillDown = false;
         foreach ((array) ($data['uptime']['outages'] ?? []) as $outage) {
             if (! empty($outage['ongoing'])) {
@@ -221,6 +229,37 @@ class ReportReviewFlags
 
         return 'No updates were applied this month although updates were waiting'.$list
             .', so the client would read "No updates were applied this month". Check why they are failing or paused.';
+    }
+
+    /**
+     * The updates left out of the list because they were undone after they
+     * ran (updates.not_kept), or null when there were none.
+     *
+     * @param  array<string, mixed>  $updates
+     */
+    private static function notKeptReason(array $updates): ?string
+    {
+        $items = [];
+        foreach ((array) ($updates['not_kept'] ?? []) as $item) {
+            if (! is_array($item) || trim((string) ($item['label'] ?? '')) === '') {
+                continue;
+            }
+
+            $when = array_filter([
+                is_string($item['date'] ?? null) && $item['date'] !== '' ? Carbon::parse($item['date'])->format('M j') : null,
+                trim((string) ($item['installed_version'] ?? '')) !== '' ? 'the site is on '.trim((string) $item['installed_version']).' now' : null,
+            ]);
+            $items[] = trim((string) $item['label']).($when !== [] ? ' ('.implode('; ', $when).')' : '');
+        }
+
+        if ($items === []) {
+            return null;
+        }
+
+        return (count($items) === 1
+            ? 'An update was undone after it ran, so it is left out of the updates list: '
+            : 'Updates were undone after they ran, so they are left out of the updates list: ')
+            .implode('; ', $items).'. Add context for the client if they noticed.';
     }
 
     /**

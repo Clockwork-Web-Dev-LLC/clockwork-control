@@ -35,7 +35,7 @@ UPDATES APPLIED ({!! count($updateRows) !!})
 @forelse ($updateRows as $row)
 - [{!! $row['type'] !!}] {!! $row['label'] !!}{!! $row['date'] ? ' ('.\Illuminate\Support\Carbon::parse($row['date'])->format('M j').')' : '' !!}
 @empty
-{!! \Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates) ? 'No updates were applied this month.' : 'Everything was already up to date this month.' !!}
+{!! \Modules\ClientReports\Support\ReportPhrases::noUpdatesLine($updates) !!}
 @endforelse
 @endif
 @if ($sections['uptime'])

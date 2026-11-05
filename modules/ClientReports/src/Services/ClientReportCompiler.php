@@ -23,7 +23,9 @@ use App\Services\Security\CompanionMalwareScanner;
 use App\Services\Security\PluginVulnerabilityMatcher;
 use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Support\ReportPhrases;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
@@ -92,6 +94,35 @@ class ClientReportCompiler
     /** A Companion snapshot older than this before the period end can't say what was waiting then. */
     public const SNAPSHOT_MAX_AGE_HOURS = 48;
 
+    /**
+     * The agency's own connector plugins, by directory. Updating them is
+     * our tooling, not the client's software, so they're never listed or
+     * counted as the client's updates.
+     */
+    public const AGENCY_PLUGIN_DIRS = ['clockwork-companion', 'clockwork-renegade'];
+
+    /**
+     * Version changes something other than Control made (WordPress's own
+     * auto-updates, the host, someone in wp-admin), recorded when Control
+     * sees them between snapshots, and the update kind each one is listed
+     * as. Their details: slug, name, from_version, to_version, observed_at.
+     */
+    public const OBSERVED_UPDATE_TYPES = [
+        'plugin_update_observed' => ActionLog::TYPE_PLUGIN_UPDATE,
+        'theme_update_observed' => ActionLog::TYPE_THEME_UPDATE,
+        'core_update_observed' => ActionLog::TYPE_CORE_UPDATE,
+    ];
+
+    /**
+     * Logged after an update to say it was undone or stopped: the nightly
+     * run pausing the plugin or theme, or a backup restored over the site.
+     */
+    protected const UNDO_LOG_TYPES = [
+        ActionLog::TYPE_PLUGIN_UPDATE_AUTO_IGNORED,
+        ActionLog::TYPE_THEME_UPDATE_AUTO_IGNORED,
+        ActionLog::TYPE_BACKUP_RESTORE_APPLIED,
+    ];
+
     protected ?bool $vulnerabilityFeedFresh = null;
 
     public function __construct(
@@ -116,10 +147,11 @@ class ClientReportCompiler
         $end = $periodEnd->copy()->endOfDay();
 
         // The same calendar days in the report timezone, as UTC instants. The
-        // uptime section and the coverage dates show times and dates in that
-        // zone, so they're measured over it: an outage at 01:00 UTC on the 1st
-        // reads "Sep 30, 9:00 PM EDT" and belongs to the month before. The
-        // other sections list whole days (UTC, as their sources record them).
+        // uptime and updates sections and the coverage dates show times and
+        // dates in that zone, so they're measured over it: an outage at 01:00
+        // UTC on the 1st reads "Sep 30, 9:00 PM EDT" and belongs to the month
+        // before, and so does an update run then. The other sections list
+        // whole days (UTC, as their sources record them).
         $zone = ReportPhrases::timezone();
         $localStart = Carbon::parse($periodStart->toDateString(), $zone)->startOfDay()->utc();
         $localEnd = Carbon::parse($periodEnd->toDateString(), $zone)->endOfDay()->utc();
@@ -167,7 +199,7 @@ class ClientReportCompiler
         ];
 
         if ($shouldInclude('updates')) {
-            $data['updates'] = $this->compileUpdates($site, $start, $end);
+            $data['updates'] = $this->compileUpdates($site, $localStart, $localEnd);
         }
         if ($shouldInclude('uptime')) {
             $data['uptime'] = $this->compileUptime($site, $localStart, $localEnd, $uptimeFrom);
@@ -272,40 +304,65 @@ class ClientReportCompiler
         ];
     }
 
+    /**
+     * The updates applied in the period: Control's own update runs, and
+     * version changes something else made that Control saw between
+     * snapshots (OBSERVED_UPDATE_TYPES), each listed once. $start and $end
+     * bound the period's days in the report timezone, and each update is
+     * dated by its day there, so an update run at 9:30 PM on the 28th
+     * (01:30 UTC on the 29th) reads "Oct 28", as an outage then would.
+     *
+     * Left out: runs that changed nothing, the agency's own connector
+     * plugins (AGENCY_PLUGIN_DIRS), and updates that were undone after they
+     * ran (see undoneUpdates()), which are kept apart as not_kept for the
+     * review flags.
+     */
     protected function compileUpdates(Site $site, Carbon $start, Carbon $end): array
     {
+        $zone = ReportPhrases::timezone();
         $logs = ActionLog::query()
             ->where('site_id', $site->id)
             ->whereIn('action_type', ActionLog::UPDATE_TYPES)
             ->where('ok', true)
             ->whereBetween('ran_at', [$start, $end])
             ->orderByDesc('ran_at')
+            ->orderByDesc('id')
             ->get()
-            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary));
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary) || self::isAgencyPluginUpdate($log))
+            ->values();
 
-        $pluginUpdates = [];
-        $themeUpdates = [];
-        $coreUpdates = [];
-        $translationUpdates = [];
+        $undone = $this->undoneUpdates($site, $logs);
+        $logs = $logs->reject(fn (ActionLog $log) => isset($undone[$log->id]))->values();
 
-        foreach ($logs as $log) {
-            $item = [
+        $items = $logs->map(fn (ActionLog $log) => [
+            'type' => $log->action_type,
+            'at' => $log->ran_at,
+            'item' => [
                 'target' => $log->target,
                 'summary' => $log->summary,
-                'date' => $log->ran_at?->toDateString(),
-            ];
+                'date' => $log->ran_at?->copy()->setTimezone($zone)->toDateString(),
+                'observed' => false,
+            ],
+        ])->all();
 
-            match ($log->action_type) {
-                ActionLog::TYPE_PLUGIN_UPDATE => $pluginUpdates[] = $item,
-                ActionLog::TYPE_THEME_UPDATE => $themeUpdates[] = $item,
-                ActionLog::TYPE_CORE_UPDATE => $coreUpdates[] = $item,
-                ActionLog::TYPE_TRANSLATIONS_UPDATE => $translationUpdates[] = $item,
-                default => null,
-            };
+        foreach ($this->observedUpdates($site, $start, $end) as $observed) {
+            $items[] = $observed;
         }
 
+        // Newest first, as the rows were read.
+        usort($items, fn (array $a, array $b) => ($b['at']?->getTimestamp() ?? 0) <=> ($a['at']?->getTimestamp() ?? 0));
+
+        $byType = fn (string $type) => array_values(array_map(
+            fn (array $i) => $i['item'],
+            array_filter($items, fn (array $i) => $i['type'] === $type),
+        ));
+        $pluginUpdates = $byType(ActionLog::TYPE_PLUGIN_UPDATE);
+        $themeUpdates = $byType(ActionLog::TYPE_THEME_UPDATE);
+        $coreUpdates = $byType(ActionLog::TYPE_CORE_UPDATE);
+        $translationUpdates = $byType(ActionLog::TYPE_TRANSLATIONS_UPDATE);
+
         return [
-            'total' => $logs->count(),
+            'total' => count($items),
             'plugins_count' => count($pluginUpdates),
             'themes_count' => count($themeUpdates),
             'core_count' => count($coreUpdates),
@@ -315,11 +372,236 @@ class ClientReportCompiler
                 'themes' => $themeUpdates,
                 'core' => $coreUpdates,
             ],
+            // Internal: updates that ran in the period but were undone after
+            // (the site is on an older version now, and the update was paused
+            // or a backup restored), so they aren't listed. For the review flags.
+            'not_kept' => array_values($undone),
             // What was still waiting at the end of the period, so the email
-            // never says "already up to date" while something was. null means
+            // never says "up to date" while something was. null means
             // unknown (no snapshot, or one too old to say). See updatesWereWaiting().
             ...$this->pendingUpdates($site, $end),
         ];
+    }
+
+    /** Whether an update log is for one of the agency's own connector plugins. */
+    protected static function isAgencyPluginUpdate(ActionLog $log): bool
+    {
+        $type = self::OBSERVED_UPDATE_TYPES[$log->action_type] ?? $log->action_type;
+        if ($type !== ActionLog::TYPE_PLUGIN_UPDATE) {
+            return false;
+        }
+
+        $details = is_array($log->details) ? $log->details : [];
+
+        return self::isAgencyPlugin((string) ($details['slug'] ?? $log->target ?? ''));
+    }
+
+    /** Whether a plugin slug ("clockwork-companion/clockwork-companion.php") is one of the agency's own. */
+    public static function isAgencyPlugin(string $slug): bool
+    {
+        return in_array(strtolower(explode('/', trim($slug), 2)[0]), self::AGENCY_PLUGIN_DIRS, true);
+    }
+
+    /**
+     * Version changes something other than Control made, seen in the period,
+     * as update items. Each is dated by when it was seen (observed_at, else
+     * when it was logged) in the report timezone. One that Control's own
+     * update run made (the same plugin, theme or core going to the same
+     * version) is already listed, so it's left out; so are the agency's own
+     * plugins and changes that ended on the version they started from.
+     *
+     * @return list<array{type: string, at: Carbon, item: array{target: ?string, summary: string, date: string, observed: bool}}>
+     */
+    protected function observedUpdates(Site $site, Carbon $start, Carbon $end): array
+    {
+        $zone = ReportPhrases::timezone();
+        $rows = $this->observedUpdateRows($site, $start)
+            ->filter(fn (array $row) => $row['at']->betweenIncluded($start, $end))
+            ->reject(fn (array $row) => $row['to'] === '' || $row['to'] === $row['from'])
+            ->values();
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        // Control's own runs to the same version, a little either side of
+        // the period: a snapshot can see a change a day after Control made it.
+        $applied = [];
+        ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', [ActionLog::TYPE_PLUGIN_UPDATE, ActionLog::TYPE_THEME_UPDATE, ActionLog::TYPE_CORE_UPDATE])
+            ->where('ok', true)
+            ->whereBetween('ran_at', [$start->copy()->subDays(31), $end->copy()->addDays(31)])
+            ->get(['action_type', 'target', 'summary', 'details'])
+            ->each(function (ActionLog $log) use (&$applied) {
+                $details = is_array($log->details) ? $log->details : [];
+                $to = trim((string) ($details['after_version'] ?? ''));
+                if ($to === '' && preg_match('/→\s*(\S+)\s*(?:\[|$)/u', (string) $log->summary, $m)) {
+                    $to = $m[1];
+                }
+                $applied[self::updateKey($log->action_type, (string) ($details['slug'] ?? $log->target ?? ''), $to)] = true;
+            });
+
+        $prefixes = [
+            ActionLog::TYPE_PLUGIN_UPDATE => 'Plugin updated: ',
+            ActionLog::TYPE_THEME_UPDATE => 'Theme updated: ',
+            ActionLog::TYPE_CORE_UPDATE => 'WordPress core updated: ',
+        ];
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (isset($applied[self::updateKey($row['type'], $row['slug'], $row['to'])])) {
+                continue;
+            }
+
+            $name = $row['type'] === ActionLog::TYPE_CORE_UPDATE ? '' : $row['name'];
+            $versions = ($row['from'] !== '' ? $row['from'].' → ' : '→ ').$row['to'];
+            $items[] = [
+                'type' => $row['type'],
+                'at' => $row['at'],
+                'item' => [
+                    'target' => $row['slug'] !== '' ? $row['slug'] : null,
+                    'summary' => $prefixes[$row['type']].trim($name.' '.$versions),
+                    'date' => $row['at']->copy()->setTimezone($zone)->toDateString(),
+                    'observed' => true,
+                ],
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * The site's observed version changes from $since on, read into one
+     * shape, without the agency's own plugins.
+     *
+     * @return Collection<int, array{type: string, slug: string, name: string, from: string, to: string, at: Carbon}>
+     */
+    protected function observedUpdateRows(Site $site, Carbon $since): Collection
+    {
+        return ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', array_keys(self::OBSERVED_UPDATE_TYPES))
+            ->where('ok', true)
+            // observed_at can come before the row was written, never after.
+            ->where('ran_at', '>=', $since)
+            ->get()
+            ->reject(fn (ActionLog $log) => self::isAgencyPluginUpdate($log))
+            ->map(function (ActionLog $log) {
+                $details = is_array($log->details) ? $log->details : [];
+                $slug = trim((string) ($details['slug'] ?? $log->target ?? ''));
+
+                try {
+                    $at = is_string($details['observed_at'] ?? null) && trim($details['observed_at']) !== ''
+                        ? Carbon::parse($details['observed_at'])
+                        : $log->ran_at;
+                } catch (Throwable) {
+                    $at = $log->ran_at;
+                }
+
+                return [
+                    'type' => self::OBSERVED_UPDATE_TYPES[$log->action_type],
+                    'slug' => $slug,
+                    'name' => trim((string) ($details['name'] ?? '')) ?: ($slug !== '' ? Str::headline(explode('/', $slug, 2)[0]) : 'WordPress'),
+                    'from' => trim((string) ($details['from_version'] ?? '')),
+                    'to' => trim((string) ($details['to_version'] ?? '')),
+                    'at' => $at?->copy()->utc(),
+                ];
+            })
+            ->filter(fn (array $row) => $row['at'] !== null)
+            ->values();
+    }
+
+    /** "plugin_update|example-forms|2.1": an update by kind, plugin or theme directory and the version it reached. */
+    protected static function updateKey(string $type, string $slug, string $version): string
+    {
+        $dir = $type === ActionLog::TYPE_CORE_UPDATE ? '' : strtolower(explode('/', trim($slug), 2)[0]);
+
+        return $type.'|'.$dir.'|'.trim($version);
+    }
+
+    /**
+     * Plugin and theme updates that ran but didn't stick: the site's
+     * snapshot, taken after the update, shows a lower version than the
+     * update reached, and since the update the plugin or theme was paused
+     * (an update ignore, or the nightly run's auto-pause) or a backup was
+     * restored over the site. A lower version alone isn't enough (the
+     * snapshot may list the plugin under another slug, or a person may have
+     * rolled it back for a reason the client was told about), so without
+     * one of those the update is still listed.
+     *
+     * @param  Collection<int, ActionLog>  $logs
+     * @return array<int, array{type: string, label: string, date: ?string, installed_version: string}> keyed by log id
+     */
+    protected function undoneUpdates(Site $site, Collection $logs): array
+    {
+        $snapshotAt = $site->companion_snapshot_at;
+        $snapshot = (array) $site->companion_snapshot;
+        if ($snapshotAt === null || $snapshot === []) {
+            return [];
+        }
+
+        $installed = [];
+        foreach (['plugin' => $snapshot['plugins']['plugins'] ?? null, 'theme' => $snapshot['themes']['items'] ?? null] as $kind => $entries) {
+            foreach ((array) $entries as $entry) {
+                $slug = is_array($entry) ? trim((string) ($entry['slug'] ?? '')) : '';
+                $version = is_array($entry) ? trim((string) ($entry['version'] ?? '')) : '';
+                if ($slug !== '' && $version !== '') {
+                    $installed[$kind][$slug] = $version;
+                    $installed[$kind][strtolower(explode('/', $slug, 2)[0])] ??= $version;
+                }
+            }
+        }
+
+        $candidates = [];
+        foreach ($logs as $log) {
+            $kind = match ($log->action_type) {
+                ActionLog::TYPE_PLUGIN_UPDATE => 'plugin',
+                ActionLog::TYPE_THEME_UPDATE => 'theme',
+                default => null,
+            };
+            $details = is_array($log->details) ? $log->details : [];
+            $slug = trim((string) ($details['slug'] ?? $log->target ?? ''));
+            $after = trim((string) ($details['after_version'] ?? ''));
+            $now = $kind !== null ? ($installed[$kind][$slug] ?? $installed[$kind][strtolower(explode('/', $slug, 2)[0])] ?? null) : null;
+
+            if ($now !== null && $after !== '' && $log->ran_at !== null && $snapshotAt->greaterThan($log->ran_at)
+                && version_compare($now, $after, '<')) {
+                $candidates[$log->id] = [$log, $kind, $slug, $now];
+            }
+        }
+        if ($candidates === []) {
+            return [];
+        }
+
+        $earliest = collect($candidates)->min(fn (array $c) => $c[0]->ran_at);
+        $pauses = PluginUpdateIgnore::query()
+            ->where('site_id', $site->id)
+            ->whereIn('target_slug', array_unique(array_column($candidates, 2)))
+            ->get(['target_kind', 'target_slug', 'ignored_at']);
+        $undoLogs = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->whereIn('action_type', self::UNDO_LOG_TYPES)
+            ->where('ran_at', '>=', $earliest)
+            ->get(['action_type', 'target', 'ran_at']);
+
+        $undone = [];
+        foreach ($candidates as $id => [$log, $kind, $slug, $now]) {
+            $paused = $pauses->contains(fn (PluginUpdateIgnore $p) => $p->target_kind === $kind && $p->target_slug === $slug
+                && $p->ignored_at !== null && $p->ignored_at->greaterThanOrEqualTo($log->ran_at));
+            $rolledBack = $undoLogs->contains(fn (ActionLog $u) => $u->ran_at !== null && $u->ran_at->greaterThanOrEqualTo($log->ran_at)
+                && ($u->action_type === ActionLog::TYPE_BACKUP_RESTORE_APPLIED || $u->target === $slug));
+
+            if ($paused || $rolledBack) {
+                $undone[$id] = [
+                    'type' => $kind,
+                    'label' => ClientReportMail::cleanUpdateSummary((string) $log->summary, $slug),
+                    'date' => $log->ran_at->copy()->setTimezone(ReportPhrases::timezone())->toDateString(),
+                    'installed_version' => $now,
+                ];
+            }
+        }
+
+        return $undone;
     }
 
     /**
@@ -335,6 +617,8 @@ class ClientReportCompiler
      *
      * pending_plugin_items is the same list with each plugin's file slug and
      * the version offered, for the review flags to join on (names repeat).
+     * The agency's own connector plugins are left out, as they are from the
+     * updates list.
      *
      * @return array{pending_plugins: ?list<string>, pending_plugin_items: ?list<array{slug: string, name: string, new_version: ?string}>, pending_themes: ?list<string>, pending_core: ?bool, updated_since_period: int, snapshot_at: ?string, snapshot_stale: bool}
      */
@@ -357,16 +641,24 @@ class ClientReportCompiler
         };
         $name = fn (array $i) => (string) ($i['name'] ?? $i['slug'] ?? '');
         $plugins = $snapshot['plugins']['plugins'] ?? null;
+        if (is_array($plugins)) {
+            $plugins = array_values(array_filter($plugins, fn ($p) => ! (is_array($p) && self::isAgencyPlugin((string) ($p['slug'] ?? '')))));
+        }
         $core = $snapshot['wp_core'] ?? null;
 
+        // Updates applied after the period (by Control, or seen changing
+        // since) were waiting at its end.
         $updatedSince = ActionLog::query()
             ->where('site_id', $site->id)
             ->whereIn('action_type', [ActionLog::TYPE_PLUGIN_UPDATE, ActionLog::TYPE_THEME_UPDATE, ActionLog::TYPE_CORE_UPDATE])
             ->where('ok', true)
             ->where('ran_at', '>', $end)
-            ->get(['summary'])
-            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary))
-            ->count();
+            ->get(['action_type', 'target', 'summary', 'details'])
+            ->reject(fn (ActionLog $log) => self::isNoOpUpdate((string) $log->summary) || self::isAgencyPluginUpdate($log))
+            ->count()
+            + $this->observedUpdateRows($site, $end)
+                ->filter(fn (array $row) => $row['at']->greaterThan($end) && $row['to'] !== '' && $row['to'] !== $row['from'])
+                ->count();
 
         return [
             'pending_plugins' => $stale ? null : $waiting($plugins, $name),

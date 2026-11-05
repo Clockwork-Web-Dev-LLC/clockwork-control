@@ -204,11 +204,7 @@
                     @endforeach
                 </table>
             @else
-                @if (\Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates))
-                    <p style="margin:0; font-size:14px; color:#334155;">No updates were applied this month.</p>
-                @else
-                    <p style="margin:0; font-size:14px; color:#334155;">Everything was already up to date this month — no updates were needed.</p>
-                @endif
+                <p style="margin:0; font-size:14px; color:#334155;">{{ \Modules\ClientReports\Support\ReportPhrases::noUpdatesLine($updates) }}</p>
             @endif
         </td></tr>
     @endif

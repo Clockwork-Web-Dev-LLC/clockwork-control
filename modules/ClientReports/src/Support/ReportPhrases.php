@@ -238,6 +238,23 @@ final class ReportPhrases
     }
 
     /**
+     * What the updates section says when no update is listed. Only what's
+     * known: nothing was waiting at the end of the month (the snapshot said
+     * so), never that no updates were needed all month, since something
+     * other than Control can apply one. When something was waiting, or we
+     * can't tell (including reports compiled before waiting updates were
+     * recorded), just that none were applied.
+     *
+     * @param  array<string, mixed>  $updates  sections_data['updates']
+     */
+    public static function noUpdatesLine(array $updates): string
+    {
+        return array_key_exists('pending_plugins', $updates) && ! ClientReportCompiler::updatesWereWaiting($updates)
+            ? 'Everything was up to date at the end of the month.'
+            : 'No updates were applied this month.';
+    }
+
+    /**
      * The end of "Your site was backed up …" as a whole phrase, preposition
      * included ("by your host, Pressable"), or null when the source is unknown.
      *
