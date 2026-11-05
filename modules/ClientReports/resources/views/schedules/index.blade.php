@@ -44,9 +44,11 @@
                 <button type="submit" class="cr-btn cr-btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i>Create all {{ $missingSites->count() }}</button>
             </form>
         </div>
+        <div x-data="{ all: false }">
         <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
             @foreach ($missingSites as $missing)
-                <li class="rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] p-3 flex items-center justify-between gap-3">
+                <li class="rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] p-3 flex items-center justify-between gap-3"
+                    @if ($loop->index >= 9) x-show="all" x-cloak @endif>
                     <div class="min-w-0">
                         <a href="{{ route('sites.show', $missing['site']) }}" class="font-mono text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] break-all">{{ $missing['site']->domain }}</a>
                         <div class="text-[11px] text-[var(--color-ink-muted)] truncate">
@@ -63,6 +65,13 @@
                 </li>
             @endforeach
         </ul>
+        @if ($missingSites->count() > 9)
+            <button type="button" class="cr-btn mt-3" @click="all = ! all">
+                <i class="fa-solid" :class="all ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                <span x-text="all ? 'Show fewer' : 'Show all {{ $missingSites->count() }}'">Show all {{ $missingSites->count() }}</span>
+            </button>
+        @endif
+        </div>
     </div>
 @endif
 
