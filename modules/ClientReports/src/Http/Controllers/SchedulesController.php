@@ -47,8 +47,8 @@ class SchedulesController extends Controller
         ];
         $counts = array_map(fn (callable $match) => $all->filter($match)->count(), $matches);
 
-        $show = array_key_exists((string) $request->query('show'), self::FILTERS) ? (string) $request->query('show') : 'all';
-        $q = trim(mb_substr((string) $request->query('q', ''), 0, 100));
+        $show = is_string($request->query('show')) && array_key_exists($request->query('show'), self::FILTERS) ? $request->query('show') : 'all';
+        $q = is_string($request->query('q')) ? trim(mb_substr($request->query('q'), 0, 100)) : '';
         $needle = Str::lower($q);
         $schedules = $all->filter($matches[$show])
             ->filter(fn (ClientReportSchedule $s) => $needle === '' || Str::contains(Str::lower(implode(' ', [

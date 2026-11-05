@@ -165,7 +165,7 @@ class ClientDirectory
     public static function filtersFrom(array $input): array
     {
         return array_filter([
-            'q' => trim(mb_substr((string) ($input['q'] ?? ''), 0, 100)),
+            'q' => is_string($input['q'] ?? null) ? trim(mb_substr($input['q'], 0, 100)) : null,
             'care' => in_array($input['care'] ?? null, ['yes', 'no'], true) ? $input['care'] : null,
             'waiting' => ! empty($input['waiting']) ? '1' : null,
             'missing' => ! empty($input['missing']) ? '1' : null,

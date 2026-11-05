@@ -32,29 +32,37 @@ final class ReportListFilters
 
     public static function fromRequest(Request $request, ?string $defaultPeriod = null): self
     {
-        $period = (string) $request->query('period', '');
+        $period = self::text($request, 'period');
         $period = $period === self::ALL || preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $period) === 1
             ? $period
             : $defaultPeriod;
 
-        $status = (string) $request->query('status', '');
+        $status = self::text($request, 'status');
         $status = $status === self::WAITING || ReportState::isKnown($status) ? $status : null;
 
-        $category = (string) $request->query('category', '');
+        $category = self::text($request, 'category');
         $category = ReviewReasonCategories::isKnown($category) ? $category : null;
 
-        $client = (string) $request->query('client', '');
+        $client = self::text($request, 'client');
         $client = $client === self::UNASSIGNED || ctype_digit($client) ? $client : null;
 
         return new self(
             period: $period,
             status: $status,
             category: $category,
-            q: trim(mb_substr((string) $request->query('q', ''), 0, 100)),
+            q: trim(mb_substr(self::text($request, 'q'), 0, 100)),
             showSuperseded: $request->boolean('superseded'),
             client: $client,
-            from: $client !== null && $request->query('from') === 'client' ? 'client' : null,
+            from: $client !== null && self::text($request, 'from') === 'client' ? 'client' : null,
         );
+    }
+
+    /** A filter from the query string or form; anything that isn't a plain string counts as unset. */
+    private static function text(Request $request, string $key): string
+    {
+        $value = $request->input($key);
+
+        return is_string($value) ? $value : '';
     }
 
     /**

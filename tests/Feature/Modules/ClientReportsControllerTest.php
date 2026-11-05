@@ -387,7 +387,9 @@ describe('send', function () {
         $this->actingAs(User::factory()->create())
             ->get(route('client-reports.reports'))
             ->assertOk()
-            ->assertSee('Outdated: recompile')
+            ->assertSee('Outdated')
+            ->assertSee('Compiled before the latest report fixes')
+            ->assertDontSee('action="'.route('client-reports.send', $report).'"', false)
             ->assertDontSee('Email report to outdated@client.test?');
 
         $site = Site::factory()->create();
