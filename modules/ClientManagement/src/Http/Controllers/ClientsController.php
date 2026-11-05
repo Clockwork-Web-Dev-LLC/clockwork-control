@@ -44,6 +44,7 @@ class ClientsController extends Controller
         $totalClients = Client::count();
         $assignedSitesCount = Site::whereNotNull('client_id')->count();
         $totalReportsCount = ClientReport::whereNotNull('client_id')->count();
+        $allReportsCount = ClientReport::count();
 
         return view('client-management::clients.index', compact(
             'clients',
@@ -51,7 +52,8 @@ class ClientsController extends Controller
             'q',
             'totalClients',
             'assignedSitesCount',
-            'totalReportsCount'
+            'totalReportsCount',
+            'allReportsCount'
         ));
     }
 

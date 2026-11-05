@@ -33,7 +33,17 @@ class CompanionTarballBuilder
             return $this->acquireFromDistUrl($distUrl);
         }
 
-        return $this->acquireFromLocalPath((string) config('clockwork.companion.local_path'));
+        $localPath = (string) config('clockwork.companion.local_path');
+        if ($localPath !== '' && is_dir($localPath)) {
+            return $this->acquireFromLocalPath($localPath);
+        }
+
+        $releaseZipUrl = trim((string) config('clockwork.companion.release_zip_url'));
+        if ($releaseZipUrl !== '') {
+            return $this->acquireFromReleaseZipUrl($releaseZipUrl);
+        }
+
+        return $this->acquireFromLocalPath($localPath);
     }
 
     /**
@@ -217,6 +227,11 @@ class CompanionTarballBuilder
     {
         $localPath = $localPath ?: (string) config('clockwork.companion.local_path');
         if ($localPath === '' || ! is_dir($localPath)) {
+            $releaseUrl = trim((string) config('clockwork.companion.release_zip_url'));
+            if ($releaseUrl !== '') {
+                return $this->fetchReleaseZipBytes($releaseUrl, 'Companion');
+            }
+
             throw new RuntimeException("Local plugin source not found at {$localPath}. Set CLOCKWORK_COMPANION_LOCAL_PATH.");
         }
 
@@ -278,6 +293,11 @@ class CompanionTarballBuilder
     {
         $localPath = $localPath ?: (string) config('clockwork.renegade.local_path');
         if ($localPath === '' || ! is_dir($localPath)) {
+            $releaseUrl = trim((string) config('clockwork.renegade.release_zip_url'));
+            if ($releaseUrl !== '') {
+                return $this->fetchReleaseZipBytes($releaseUrl, 'Renegade');
+            }
+
             throw new RuntimeException("Local Renegade plugin source not found at {$localPath}. Set CLOCKWORK_RENEGADE_LOCAL_PATH.");
         }
 
@@ -353,5 +373,63 @@ class CompanionTarballBuilder
         }
 
         return $bytes;
+    }
+
+    /**
+     * Fetch a published WordPress plugin .zip package from GitHub Releases when
+     * no local source repository checkout exists on disk (e.g. self-hosted
+     * Clockwork Control instances).
+     */
+    private function fetchReleaseZipBytes(string $url, string $label): string
+    {
+        $response = Http::timeout(60)->get($url);
+        if ($response->failed()) {
+            throw new RuntimeException("{$label} release zip fetch failed: HTTP {$response->status()} from {$url}");
+        }
+
+        $bytes = $response->body();
+        if (! str_starts_with($bytes, "PK\x03\x04")) {
+            throw new RuntimeException("{$label} release zip from {$url} is not a valid ZIP archive.");
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * Acquire the canonical Companion tarball by downloading the latest
+     * GitHub Release .zip, extracting its `clockwork-companion/` folder to a
+     * temporary directory, and building the tarball from it.
+     */
+    private function acquireFromReleaseZipUrl(string $url): string
+    {
+        $zipBytes = $this->fetchReleaseZipBytes($url, 'Companion');
+        $tmpZip = sys_get_temp_dir().'/clockwork-companion-release-'.Str::random(8).'.zip';
+        $extractDir = sys_get_temp_dir().'/clockwork-companion-extract-'.Str::random(8);
+
+        if (file_put_contents($tmpZip, $zipBytes) === false) {
+            throw new RuntimeException("Could not write temporary release zip to {$tmpZip}.");
+        }
+
+        $zip = new \ZipArchive;
+        if ($zip->open($tmpZip) !== true) {
+            @unlink($tmpZip);
+            throw new RuntimeException("Could not open Companion release zip at {$tmpZip}.");
+        }
+
+        try {
+            if (! mkdir($extractDir, 0755, true) || ! $zip->extractTo($extractDir)) {
+                throw new RuntimeException("Could not extract Companion release zip to {$extractDir}.");
+            }
+            $zip->close();
+
+            $sourceRoot = is_dir($extractDir.'/clockwork-companion')
+                ? $extractDir.'/clockwork-companion'
+                : $extractDir;
+
+            return base64_encode($this->buildLocalTarballBytes($sourceRoot));
+        } finally {
+            @unlink($tmpZip);
+            $this->rmTree($extractDir);
+        }
     }
 }

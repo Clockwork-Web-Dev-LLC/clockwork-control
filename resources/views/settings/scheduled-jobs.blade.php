@@ -3,11 +3,11 @@
 @section('title', 'Scheduled Jobs · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Scheduled Jobs"
         subtitle="Every entry in the live cron schedule, its last outcome, and a Run now button — so a silently failing job never goes unnoticed again.">
     </x-page-header>
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

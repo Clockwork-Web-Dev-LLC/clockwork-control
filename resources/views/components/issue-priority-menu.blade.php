@@ -6,7 +6,7 @@
      @click.outside="activePriorityMenu === '{{ $category }}' ? activePriorityMenu = null : null">
     <button type="button"
             @click="activePriorityMenu = (activePriorityMenu === '{{ $category }}' ? null : '{{ $category }}')"
-            class="px-2 py-0.5 rounded text-[11px] font-medium border flex items-center gap-1 transition-all cursor-pointer select-none"
+            class="min-w-[7.5rem] justify-between whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-medium border flex items-center gap-1 transition-all cursor-pointer select-none"
             :class="{
                 'bg-red-500/10 text-[var(--color-status-red)] border-red-500/20 hover:bg-red-500/20': isCategoryEmergency('{{ $category }}'),
                 'bg-amber-500/10 text-[var(--color-status-yellow)] border-amber-500/20 hover:bg-amber-500/20': isCategoryPressing('{{ $category }}'),

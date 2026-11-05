@@ -48,7 +48,7 @@ html {
     --color-ink: #222222;
     --color-ink-strong: #18181b;
     --color-ink-muted: #45515e;
-    --color-ink-soft: #8e8e93;
+    --color-ink-soft: #6e6e73; /* 5.1:1 on white (WCAG AA) */
     --color-ink-helper: #5f5f5f;
 
     /* Surfaces */
@@ -100,7 +100,7 @@ html {
     --color-ink: #222222;
     --color-ink-strong: #18181b;
     --color-ink-muted: #45515e;
-    --color-ink-soft: #8e8e93;
+    --color-ink-soft: #6e6e73; /* 5.1:1 on white (WCAG AA) */
     --color-ink-helper: #5f5f5f;
 
     --color-status-green: #16a34a;
@@ -143,7 +143,7 @@ html {
     --color-ink: #e6e8eb;
     --color-ink-strong: #f8fafc;
     --color-ink-muted: #94a3b8;
-    --color-ink-soft: #64748b;
+    --color-ink-soft: #8391a7; /* 5.3:1 on surface (WCAG AA) */
     --color-ink-helper: #94a3b8;
 
     --color-primary-50: rgba(59, 130, 246, 0.12);
@@ -342,6 +342,8 @@ body {
     font-size: 0.75rem;
     font-weight: 600;
     line-height: 1.25;
+    /* Pills are labels: never wrap onto a second line (that turned them into circles). */
+    white-space: nowrap;
 }
 
 .status-pill .status-dot {
@@ -943,13 +945,111 @@ body.cw-mobile-nav-open {
     font-weight: 600;
 }
 
-/* Wide tables (Issues, Monitoring, Capacity) stay reachable on a phone. */
+/* Drawer toggle + drawer: shown whenever the layout's persistent nav is off screen.
+   Modern shows studio tabs from md; Command Center shows the sidebar rail from lg, so
+   between 768px and 1023px Command Center needs the drawer too. */
+@media (min-width: 768px) {
+    [data-layout-style="modern"] .cw-nav-drawer-only {
+        display: none !important;
+    }
+}
+@media (min-width: 1024px) {
+    .cw-nav-drawer-only {
+        display: none !important;
+    }
+}
+
+/* Hide scrollbar chrome on horizontally scrolling strips (tab bars, chip rows). */
+.scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
+/* Underlined tab bars. Tabs use -mb-px to sit on the border, which overflows the strip by
+   1px vertically; with overflow-x:auto that turned into a tiny vertical scroll widget.
+   Clip vertically and hide the horizontal scrollbar chrome. */
+@layer components {
+    /* In the components layer so utilities like `hidden lg:flex` still win. */
+    .cw-tab-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        border-bottom: 1px solid var(--color-border-light);
+    }
+    .cw-tab-bar::-webkit-scrollbar {
+        display: none;
+    }
+    .cw-tab-bar > * {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Table scrollers
+   Every `.overflow-x-auto` that holds a table is the table's one and only
+   horizontal scroller. resources/js/table-scroll.js toggles
+   .is-scroll-start / .is-scroll-end so the clipped edge fades out as a hint
+   that there is more to the side.
+   --------------------------------------------------------------------------- */
+.overflow-x-auto:has(> table),
+.cw-table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+.cw-table-scroll.is-overflowing:not(.is-scroll-start):not(.is-scroll-end) {
+    mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+.cw-table-scroll.is-overflowing.is-scroll-start:not(.is-scroll-end) {
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+.cw-table-scroll.is-overflowing.is-scroll-end:not(.is-scroll-start) {
+    mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
+}
+/* With a sticky action column the fade would hide the buttons, so keep only the left fade. */
+.cw-table-scroll.cw-sticky-actions.is-overflowing:not(.is-scroll-start) {
+    mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
+}
+.cw-table-scroll.cw-sticky-actions.is-overflowing.is-scroll-start {
+    mask-image: none;
+}
+
+/* Opt-in: keep the last (actions) column pinned to the right edge of the scroller. */
+.cw-sticky-actions table tr > :last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: var(--color-surface);
+}
+.cw-sticky-actions table thead tr > :last-child {
+    background: var(--color-surface-alt);
+}
+.cw-sticky-actions.is-overflowing:not(.is-scroll-end) table tr > :last-child {
+    box-shadow: -10px 0 12px -10px rgba(0, 0, 0, 0.35);
+}
+
+/* Fallback for tables with no wrapper of their own: on phones, let the table scroll itself
+   rather than the page. Tables already inside a scroller are left alone (a second scroller
+   inside the first is what made Issues/Monitoring hard to swipe). */
 @media (max-width: 767px) {
-    main table {
+    main table:not(.overflow-x-auto table):not(.cw-table-scroll table):not(.cw-stack-table) {
         display: block;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
+}
+
+/* Single-line status pills / badges inside dense rows. */
+.cw-nowrap {
+    white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -977,6 +1077,13 @@ body.cw-mobile-nav-open {
 }
 [data-layout-style="command-center"] .cw-toolbar-inner {
     max-width: 100% !important;
+}
+
+/* Light mode: the rail was white on a white page with a near-invisible border, so its
+   edge disappeared and the nav read as flush against the screen. Give it a frame. */
+:root:not([data-theme="dark"]):not([data-theme="midnight"]):not([data-theme="high-contrast"]) .cw-sidebar-rail {
+    background-color: #fafbfc;
+    border-right-color: var(--color-border);
 }
 
 .cw-toolbar-inner {
@@ -1345,6 +1452,18 @@ body.cw-mobile-nav-open {
 
 [data-layout-style="command-center"] .cw-kpi-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* Phones: the Servers KPI grid is 2×2, so tighten the cards to keep the server list
+   within about one screen of the top. */
+@container (max-width: 32rem) {
+    .cw-kpi-grid .cw-kpi-card {
+        padding: 0.875rem 1rem;
+    }
+    .cw-kpi-grid .cw-kpi-card .text-3xl {
+        font-size: 1.5rem;
+        line-height: 2rem;
+    }
 }
 
 .cw-server-card {

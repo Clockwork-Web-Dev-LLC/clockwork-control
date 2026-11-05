@@ -128,15 +128,17 @@
             {{-- SSH/jail badges link to the Settings tab where they're actionable. --}}
             <a href="{{ route('servers.show', ['server' => $server, 'tab' => 'settings']) }}"
                title="SSH: {{ $server->last_ssh_ok_at ? 'verified ' . $server->last_ssh_ok_at->diffForHumans() : 'never tested' }}"
-               class="inline-flex items-center justify-center w-6 h-6"
+               class="inline-flex items-center gap-1 h-6 text-[11px] font-semibold"
+               aria-label="SSH: {{ $server->last_ssh_ok_at ? 'verified' : 'never tested' }}"
                style="color: {{ $server->last_ssh_ok_at ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
-                <i class="fa-solid fa-key text-sm"></i>
+                <i class="fa-solid fa-key text-xs"></i><span>SSH</span>
             </a>
             <a href="{{ route('servers.show', ['server' => $server, 'tab' => 'settings']) }}"
                title="Jail: {{ $server->clockwork_jail_provisioned_at ? 'provisioned ' . $server->clockwork_jail_provisioned_at->diffForHumans() : 'not provisioned' }}"
-               class="inline-flex items-center justify-center w-6 h-6"
+               class="inline-flex items-center gap-1 h-6 text-[11px] font-semibold"
+               aria-label="Jail: {{ $server->clockwork_jail_provisioned_at ? 'provisioned' : 'not provisioned' }}"
                style="color: {{ $server->clockwork_jail_provisioned_at ? 'var(--color-status-green)' : 'var(--color-ink-soft)' }}">
-                <i class="fa-solid fa-shield-halved text-sm"></i>
+                <i class="fa-solid fa-shield-halved text-xs"></i><span>Jail</span>
             </a>
             {{-- Patch / reboot indicators — link to Updates tab so the user can act. --}}
             @unless ($server->is_ignored)
@@ -178,8 +180,9 @@
                  daily, just triggered now. Takes 10–30 seconds. Hidden entirely
                  for servers with no owning panel (added manually, or a cloud-VPS
                  provider with no panel of its own) — there's nothing to refresh. --}}
+            <div class="flex items-center gap-2 flex-wrap sm:justify-end empty:hidden">
             @if ($refreshPanel === 'spinupwp')
-                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}" class="mt-2">
+                <form method="POST" action="{{ route('servers.refreshFromSpinupWp') }}">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from SpinupWP API. Reflects new servers and site moves immediately."
@@ -188,7 +191,7 @@
                     </button>
                 </form>
             @elseif ($refreshPanel === 'gridpane')
-                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}" class="mt-2">
+                <form method="POST" action="{{ route('servers.refreshFromGridPane') }}">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from GridPane API. Reflects new servers and site moves immediately."
@@ -197,7 +200,7 @@
                     </button>
                 </form>
             @elseif ($refreshPanel === 'turnkeywp')
-                <form method="POST" action="{{ route('servers.refreshFromTurnkeyWp') }}" class="mt-2">
+                <form method="POST" action="{{ route('servers.refreshFromTurnkeyWp') }}">
                     @csrf
                     <button type="submit" class="btn-pill-nav text-xs"
                             title="Re-pull servers + sites from TurnkeyWP API. Reflects new servers and site moves immediately."
@@ -210,12 +213,13 @@
             @if ($moduleState->isEnabled('ai-remedy'))
                 <button type="button"
                         @click="$dispatch('open-ai-remedy', { serverId: {{ $server->id }}, serverName: '{{ addslashes($server->name) }}', reason: 'Manual server health audit' })"
-                        class="btn-pill-nav text-xs mt-2 text-[var(--color-brand)] border-[var(--color-brand)]/30 hover:bg-[var(--color-brand)]/10 font-semibold cursor-pointer"
+                        class="btn-pill-nav text-xs text-[var(--color-brand)] border-[var(--color-brand)]/30 hover:bg-[var(--color-brand)]/10 font-semibold cursor-pointer"
                         title="Run an AI-powered diagnostic and fix performance issues with AiRemedy">
                     <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
                     <span>Diagnose with AiRemedy</span>
                 </button>
             @endif
+            </div>
         </div>
     </div>
 

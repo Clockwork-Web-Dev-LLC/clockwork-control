@@ -5,8 +5,8 @@
     ];
 @endphp
 
-<div class="border-b border-[var(--color-border-light)] mb-6 -mx-1">
-    <nav class="flex items-center gap-1 px-1" role="tablist">
+<div class="mb-6">
+    <nav class="cw-tab-bar" role="tablist">
         @foreach ($tabs as $key => $meta)
             @php $active = request()->routeIs($meta['route']); @endphp
             <a href="{{ route($meta['route']) }}"

@@ -102,7 +102,7 @@
         </form>
 
         @if ($bannedIps->isNotEmpty())
-            <div class="mt-5 border-t border-[var(--color-border-light)] -mx-5 -mb-5">
+            <div class="mt-5 border-t border-[var(--color-border-light)] -mx-5 -mb-5 overflow-x-auto cw-sticky-actions">
                 <table class="w-full text-sm">
                     <thead class="text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
@@ -139,13 +139,14 @@
                                         <span class="text-[var(--color-ink-muted)]">{{ $ban->source }}</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] truncate max-w-md" title="{{ $ban->reason }}">
-                                    {{ $ban->reason }}
+                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]" title="{{ $ban->reason }}">
+                                    {{-- max-width on a <td> is ignored by auto table layout; cap the inner box instead. --}}
+                                    <div class="truncate max-w-[16rem] xl:max-w-[22rem]">{{ $ban->reason }}</div>
                                 </td>
-                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] font-data">
+                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] font-data whitespace-nowrap">
                                     {{ $ban->banned_at?->diffForHumans() }}
                                 </td>
-                                <td class="px-5 py-2 text-xs font-data">
+                                <td class="px-5 py-2 text-xs font-data whitespace-nowrap">
                                     @if ($ban->expires_at)
                                         <span class="text-[var(--color-status-yellow)]" title="{{ $ban->expires_at }}">
                                             in {{ $ban->expires_at->diffForHumans(null, true) }}
@@ -154,7 +155,7 @@
                                         <span class="text-[var(--color-ink-soft)]">Permanent</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-right">
+                                <td class="px-5 py-2 text-right whitespace-nowrap">
                                     <div class="inline-flex items-center gap-2 justify-end">
                                         @if (($exploitShieldActive ?? false) && ($exploitShieldGloballyEnabled ?? false))
                                             <button type="button"

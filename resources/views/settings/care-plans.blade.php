@@ -3,8 +3,6 @@
 @section('title', 'Care Plans Policy · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Care Plans Policy"
         subtitle="Configure whether your agency tracks care plan enrollments individually or treats all managed sites as covered for routine maintenance and automated scans.">
         <x-slot:actions>
@@ -14,6 +12,8 @@
             </a>
         </x-slot:actions>
     </x-page-header>
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

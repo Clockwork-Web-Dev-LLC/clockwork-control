@@ -158,7 +158,7 @@ function aiRemedyIndex(pageIds) {
         <div class="card p-4 flex flex-col justify-between">
             <span class="text-xs uppercase font-bold tracking-wider text-[var(--color-ink-muted)]">Total AI Cost</span>
             <div class="flex items-baseline justify-between mt-2">
-                <span class="text-2xl font-bold font-data text-[var(--color-ink-strong)]">${{ number_format($stats['total_cost'], 4) }}</span>
+                <span class="text-2xl font-bold font-data text-[var(--color-ink-strong)]" title="${{ number_format($stats['total_cost'], 4) }}">${{ number_format($stats['total_cost'], 2) }}</span>
                 <i class="fa-solid fa-receipt text-amber-500 opacity-60 text-lg"></i>
             </div>
         </div>
@@ -291,8 +291,8 @@ function aiRemedyIndex(pageIds) {
 
         <div class="card overflow-hidden">
             {{-- Desktop Table View: Large screens and up (lg:block) --}}
-            <div class="hidden lg:block overflow-x-auto">
-                <table class="w-full text-left text-xs min-w-[920px]">
+            <div class="hidden lg:block overflow-x-auto cw-sticky-actions">
+                <table class="w-full text-left text-xs min-w-[880px]">
                     <thead class="bg-[var(--color-surface-alt)] border-b border-[var(--color-border-light)] text-[var(--color-ink-muted)] uppercase font-semibold">
                         <tr>
                             @if($canManageRuns)
@@ -302,7 +302,7 @@ function aiRemedyIndex(pageIds) {
                             @endif
                             <th class="py-3 px-4 whitespace-nowrap">Time & Mode</th>
                             <th class="py-3 px-4 whitespace-nowrap">Target Server / Site</th>
-                            <th class="py-3 px-4 min-w-[200px]">Root Cause & Diagnosis</th>
+                            <th class="py-3 px-4 min-w-[180px]">Root Cause & Diagnosis</th>
                             <th class="py-3 px-4 whitespace-nowrap">Safety Tier</th>
                             <th class="py-3 px-4 whitespace-nowrap">Status</th>
                             <th class="py-3 px-4 text-right whitespace-nowrap">Cost</th>
@@ -336,15 +336,15 @@ function aiRemedyIndex(pageIds) {
                                     @if($run->server)
                                         <a href="{{ route('servers.show', $run->server) }}" class="text-[var(--color-brand)] hover:underline flex items-center gap-1.5">
                                             <i class="fa-solid fa-server text-[10px]"></i>
-                                            <span>{{ $run->server->name }}</span>
+                                            <span class="max-w-[11rem] truncate">{{ $run->server->name }}</span>
                                         </a>
-                                        <div class="text-[11px] font-data text-[var(--color-ink-soft)]">
+                                        <div class="text-[11px] font-data text-[var(--color-ink-soft)] max-w-[12rem] truncate" title="{{ $run->server->hostname }}">
                                             {{ $run->server->hostname }}
                                         </div>
                                     @elseif($run->site)
                                         <div class="text-[var(--color-ink-strong)] font-semibold flex items-center gap-1.5">
                                             <i class="fa-solid fa-globe text-[10px]"></i>
-                                            <span>{{ $run->site->domain }}</span>
+                                            <span class="max-w-[11rem] truncate" title="{{ $run->site->domain }}">{{ $run->site->domain }}</span>
                                         </div>
                                     @else
                                         <span class="text-[var(--color-ink-soft)]">—</span>
@@ -352,10 +352,10 @@ function aiRemedyIndex(pageIds) {
                                 </td>
 
                                 <td class="py-3.5 px-4">
-                                    <div class="font-semibold text-[var(--color-ink-strong)] truncate max-w-xs xl:max-w-sm" title="{{ $run->root_cause }}">
+                                    <div class="font-semibold text-[var(--color-ink-strong)] truncate max-w-[14rem] xl:max-w-[18rem]" title="{{ $run->root_cause }}">
                                         {{ $run->root_cause ?: 'Analysis completed' }}
                                     </div>
-                                    <div class="text-[11px] text-[var(--color-ink-muted)] line-clamp-1 mt-0.5 max-w-xs xl:max-w-sm" title="{{ $run->diagnosis_summary }}">
+                                    <div class="text-[11px] text-[var(--color-ink-muted)] line-clamp-1 mt-0.5 max-w-[14rem] xl:max-w-[18rem]" title="{{ $run->diagnosis_summary }}">
                                         {{ $run->diagnosis_summary }}
                                     </div>
                                 </td>
@@ -372,8 +372,8 @@ function aiRemedyIndex(pageIds) {
                                     </span>
                                 </td>
 
-                                <td class="py-3.5 px-4 text-right font-data font-semibold text-[var(--color-ink-strong)] whitespace-nowrap">
-                                    ${{ number_format((float)$run->total_cost_usd, 4) }}
+                                <td class="py-3.5 px-4 text-right font-data font-semibold text-[var(--color-ink-strong)] whitespace-nowrap" title="${{ number_format((float) $run->total_cost_usd, 4) }}">
+                                    {{ (float) $run->total_cost_usd > 0 && (float) $run->total_cost_usd < 0.01 ? '<$0.01' : '$'.number_format((float) $run->total_cost_usd, 2) }}
                                 </td>
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
@@ -411,8 +411,8 @@ function aiRemedyIndex(pageIds) {
                                 </span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="font-data text-xs font-semibold text-[var(--color-ink-strong)]">
-                                    ${{ number_format((float)$run->total_cost_usd, 4) }}
+                                <span class="font-data text-xs font-semibold text-[var(--color-ink-strong)]" title="${{ number_format((float) $run->total_cost_usd, 4) }}">
+                                    {{ (float) $run->total_cost_usd > 0 && (float) $run->total_cost_usd < 0.01 ? '<$0.01' : '$'.number_format((float) $run->total_cost_usd, 2) }}
                                 </span>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full font-data text-[10px] font-semibold border whitespace-nowrap {{ $run->statusBadgeClass() }}">
                                     {{ $run->statusLabel() }}

@@ -95,20 +95,20 @@
         <form method="POST" action="{{ route('operations.server-updates.queueBulk') }}" id="updates-bulk-form">
             @csrf
             <div class="card overflow-hidden">
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto cw-sticky-actions">
                     <table class="w-full text-sm min-w-[720px]" x-data="sortableTable({ defaultKey: 'updates', defaultDir: 'desc' })">
                     <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                         <tr>
-                            <th class="px-5 py-2 w-10">
+                            <th class="pl-5 pr-2 py-2 w-10">
                                 <input type="checkbox" id="select-all" class="rounded">
                             </th>
-                            <x-sort-th key="name" class="px-5 py-2">Server</x-sort-th>
-                            <x-sort-th key="status" class="px-5 py-2">State</x-sort-th>
-                            <x-sort-th key="updates" class="px-5 py-2 text-right">Packages</x-sort-th>
-                            <x-sort-th key="security" class="px-5 py-2 text-right">Security</x-sort-th>
-                            <x-sort-th key="reboot" class="px-5 py-2">Reboot</x-sort-th>
-                            <x-sort-th key="polled" class="px-5 py-2">Polled</x-sort-th>
-                            <th class="px-5 py-2 text-right">Action</th>
+                            <x-sort-th key="name" class="px-3 py-2">Server</x-sort-th>
+                            <x-sort-th key="status" class="px-3 py-2">State</x-sort-th>
+                            <x-sort-th key="updates" class="px-3 py-2 text-right">Packages</x-sort-th>
+                            <x-sort-th key="security" class="px-3 py-2 text-right">Security</x-sort-th>
+                            <x-sort-th key="reboot" class="px-3 py-2">Reboot</x-sort-th>
+                            <x-sort-th key="polled" class="px-3 py-2">Polled</x-sort-th>
+                            <th class="pl-3 pr-5 py-2 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -170,7 +170,7 @@
                                 data-sort-security="{{ $securityUpdates }}"
                                 data-sort-reboot="{{ $rebootRequired ? 1 : 0 }}"
                                 data-sort-polled="{{ $polledTs }}">
-                                <td class="px-5 py-2">
+                                <td class="pl-5 pr-2 py-2">
                                     <input type="checkbox" name="server_ids[]" value="{{ $server->id }}"
                                            class="rounded server-row-checkbox"
                                            {{ $disableCheckbox ? 'disabled' : '' }}
@@ -178,7 +178,7 @@
                                            data-sec="{{ $securityUpdates }}"
                                            data-reboot="{{ $rebootRequired ? 1 : 0 }}">
                                 </td>
-                                <td class="px-5 py-2 font-data">
+                                <td class="px-3 py-2 font-data whitespace-nowrap">
                                     <a href="{{ route('servers.show', [$server, 'updates']) }}" class="text-[var(--color-primary-600)] hover:underline" title="{{ $server->name }}">{{ $server->display_name }}</a>
                                     @if ($missingSsh)
                                         <span class="ml-1 text-[10px] text-[var(--color-status-yellow)]" title="No SSH credentials — bulk queue will skip this row">
@@ -186,30 +186,30 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2">
+                                <td class="px-3 py-2 whitespace-nowrap">
                                     <span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $stateClass }}">{{ $stateLabel }}</span>
                                 </td>
-                                <td class="px-5 py-2 text-right font-data tabular-nums {{ $totalUpdates > 0 ? 'text-[var(--color-status-yellow)] font-medium' : 'text-[var(--color-ink-soft)]' }}">
+                                <td class="px-3 py-2 text-right font-data tabular-nums {{ $totalUpdates > 0 ? 'text-[var(--color-status-yellow)] font-medium' : 'text-[var(--color-ink-soft)]' }}">
                                     {{ number_format($totalUpdates) }}
                                 </td>
-                                <td class="px-5 py-2 text-right font-data tabular-nums {{ $securityUpdates > 0 ? 'text-[var(--color-status-red)] font-medium' : 'text-[var(--color-ink-soft)]' }}">
+                                <td class="px-3 py-2 text-right font-data tabular-nums {{ $securityUpdates > 0 ? 'text-[var(--color-status-red)] font-medium' : 'text-[var(--color-ink-soft)]' }}">
                                     {{ number_format($securityUpdates) }}
                                 </td>
-                                <td class="px-5 py-2">
+                                <td class="px-3 py-2 whitespace-nowrap">
                                     @if ($rebootRequired)
                                         <span class="text-[10px] text-[var(--color-status-yellow)]"><i class="fa-solid fa-power-off"></i> required</span>
                                     @else
                                         <span class="text-[10px] text-[var(--color-ink-soft)]">—</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">
+                                <td class="px-3 py-2 text-xs text-[var(--color-ink-muted)] whitespace-nowrap">
                                     @if ($snap)
-                                        <span title="{{ $snap->polled_at }}">{{ $snap->polled_at->diffForHumans() }}</span>
+                                        <span title="{{ $snap->polled_at }}">{{ $snap->polled_at->diffForHumans(['short' => true]) }}</span>
                                     @else
                                         <span class="text-[var(--color-ink-soft)]">never</span>
                                     @endif
                                 </td>
-                                <td class="px-5 py-2 text-right whitespace-nowrap">
+                                <td class="pl-3 pr-5 py-2 text-right whitespace-nowrap">
                                     @if ($jobActive)
                                         <span class="text-xs text-[var(--color-primary-700)]"><i class="fa-solid fa-spinner {{ $server->update_status === Server::UPDATE_STATUS_RUNNING ? 'fa-spin' : '' }}"></i> {{ $stateLabel }}</span>
                                     @else
@@ -239,8 +239,8 @@
 
             {{-- Sticky bulk-action toolbar. --}}
             <div class="sticky bottom-0 z-40 mt-4 -mx-4 px-4 pb-4 pt-2 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent">
-                <div class="card p-4 flex items-end gap-3 flex-wrap shadow-lg ring-1 ring-[var(--color-border)]">
-                    <div class="flex gap-2 text-xs">
+                <div class="card px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg ring-1 ring-[var(--color-border)]">
+                    <div class="flex gap-2 text-xs flex-wrap">
                         <button type="button" id="select-with-updates" class="btn-pill-nav">
                             <i class="fa-solid fa-check-double"></i> Select all with packages
                         </button>
@@ -249,24 +249,20 @@
                         </button>
                         <button type="button" id="select-clear" class="btn-pill-nav">Clear</button>
                     </div>
-                    <div class="ml-auto flex items-end gap-3 flex-wrap">
+                    <div class="ml-auto flex items-center gap-3 flex-wrap">
                         <input type="hidden" name="reboot_immediate" value="1">
-                        <div>
-                            <label for="bulk-reboot-at" class="block text-xs uppercase tracking-wide text-[var(--color-ink-soft)] mb-1">
-                                Reboot at <span class="normal-case text-[var(--color-ink-muted)]">(optional, server-local; blank = immediate)</span>
-                            </label>
+                        <label for="bulk-reboot-at" class="flex items-center gap-2 text-xs text-[var(--color-ink-muted)]"
+                               title="Optional, server-local time. Leave blank to install and reboot immediately after the upgrade completes.">
+                            <span class="whitespace-nowrap">Reboot at</span>
                             <input type="time" id="bulk-reboot-at" name="reboot_at"
-                                   class="font-data border border-[var(--color-border)] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
-                            <div class="text-[10px] text-[var(--color-ink-soft)] mt-1">Leave blank to install & reboot immediately after upgrade completes.</div>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <button type="submit" id="bulk-queue-btn" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled
-                                    onclick="confirmBulkSubmit(event);">
-                                <i class="fa-solid fa-bolt"></i>
-                                <span id="bulk-btn-label">Install updates & reboot immediately</span> (<span data-bulk-count>0</span>)
-                            </button>
-                            <span class="text-[10px] text-[var(--color-ink-soft)]">Drains via <code class="font-data">clockwork:process-server-updates</code> (every minute, one server per tick)</span>
-                        </div>
+                                   class="font-data border border-[var(--color-border)] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-200)] focus:border-[var(--color-primary-500)]">
+                        </label>
+                        <button type="submit" id="bulk-queue-btn" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled
+                                onclick="confirmBulkSubmit(event);"
+                                title="Drains via clockwork:process-server-updates (every minute, one server per tick)">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span id="bulk-btn-label">Install updates & reboot immediately</span> (<span data-bulk-count>0</span>)
+                        </button>
                     </div>
                 </div>
             </div>

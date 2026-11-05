@@ -20,6 +20,7 @@ class BlacklistCheckerTest extends TestCase
             webRiskApiKey: '',
             gsbApiKey: '',
             urlhausAuthKey: '',
+            dnsResolver: fn (string $host) => $host,
         );
 
         $result = $checker->check($site);
@@ -41,6 +42,7 @@ class BlacklistCheckerTest extends TestCase
             webRiskApiKey: 'test-web-risk-key',
             gsbApiKey: '',
             urlhausAuthKey: '',
+            dnsResolver: fn (string $host) => $host,
         );
 
         $result = $checker->check($site);
@@ -73,6 +75,7 @@ class BlacklistCheckerTest extends TestCase
             webRiskApiKey: 'test-web-risk-key',
             gsbApiKey: '',
             urlhausAuthKey: '',
+            dnsResolver: fn (string $host) => $host,
         );
 
         $result = $checker->check($site);
@@ -102,6 +105,7 @@ class BlacklistCheckerTest extends TestCase
             webRiskApiKey: '',
             gsbApiKey: 'test-gsb-key',
             urlhausAuthKey: '',
+            dnsResolver: fn (string $host) => $host,
         );
 
         $result = $checker->check($site);
@@ -150,6 +154,7 @@ class BlacklistCheckerTest extends TestCase
             webRiskApiKey: '   ',
             gsbApiKey: 'gsb-key',
             urlhausAuthKey: '',
+            dnsResolver: fn (string $host) => $host,
         );
 
         $checker->check($site);

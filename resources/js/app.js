@@ -25,6 +25,7 @@ import { initConfirmModalSystem } from './confirm-modal.js';
 import { initFontScaleSystem } from './font-scale.js';
 import { initLayoutStyleSystem } from './layout-style.js';
 import { appChrome } from './system/app-chrome.js';
+import { initTableScrollHints } from './table-scroll.js';
 import { initThemeSystem } from './theme.js';
 import { initTooltipSystem } from './tooltip.js';
 
@@ -57,6 +58,7 @@ initFontScaleSystem(Alpine);
 initLayoutStyleSystem(Alpine);
 initTooltipSystem();
 initConfirmModalSystem(Alpine);
+initTableScrollHints();
 
 // Start Alpine
 Alpine.start();

@@ -116,9 +116,9 @@
                     $statusNextDir = ($sort === 'status' && $dir === 'asc') ? 'desc' : 'asc';
                 @endphp
                 {{-- List Header / Column Sorting --}}
-                <div class="relative grid grid-cols-1 lg:grid-cols-2 bg-[var(--color-surface-alt)]/70 border-b border-[var(--color-border-light)] text-xs font-mono font-semibold uppercase tracking-wider text-[var(--color-ink-muted)] select-none">
+                <div class="relative grid grid-cols-1 2xl:grid-cols-2 bg-[var(--color-surface-alt)]/70 border-b border-[var(--color-border-light)] text-xs font-mono font-semibold uppercase tracking-wider text-[var(--color-ink-muted)] select-none">
                     {{-- Vertical divider line between columns in header on wide screens --}}
-                    <div class="hidden lg:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none"></div>
+                    <div class="hidden 2xl:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none"></div>
 
                     {{-- Left Column Header --}}
                     <div class="px-3.5 sm:px-5 py-2.5 flex items-center gap-2.5 sm:gap-3">
@@ -162,8 +162,8 @@
                         </div>
                     </div>
 
-                    {{-- Right Column Header (Visible on lg: screens and up) --}}
-                    <div class="hidden lg:flex px-3.5 sm:px-5 py-2.5 items-center gap-2.5 sm:gap-3">
+                    {{-- Right Column Header (two-column mode, 2xl and up) --}}
+                    <div class="hidden 2xl:flex px-3.5 sm:px-5 py-2.5 items-center gap-2.5 sm:gap-3">
                         <span class="w-5 sm:w-6 shrink-0 text-center" title="Site Type">
                             <i class="fa-solid fa-globe text-[11px] text-[var(--color-ink-soft)]"></i>
                         </span>
@@ -205,10 +205,10 @@
                     </div>
                 </div>
 
-                {{-- List Container with Central Vertical Divider on lg: --}}
+                {{-- List Container with Central Vertical Divider in two-column mode --}}
                 <div class="relative">
-                    <div class="hidden lg:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none z-10"></div>
-                    <ul class="grid grid-cols-1 lg:grid-cols-2" id="sites-list">
+                    <div class="hidden 2xl:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--color-border-light)] pointer-events-none z-10"></div>
+                    <ul class="grid grid-cols-1 2xl:block 2xl:columns-2 2xl:gap-0" id="sites-list">
                         @foreach ($sites as $site)
                             @php
                                 $sslState = $site->sslState();
@@ -227,7 +227,7 @@
                                     default => ['class' => 'status-unknown', 'icon' => 'fa-circle-question', 'tooltip' => 'Uptime Unknown'],
                                 };
                             @endphp
-                            <li class="site-row relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors border-b border-[var(--color-border-light)]"
+                            <li class="site-row break-inside-avoid relative px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3 hover:bg-[var(--color-surface-alt)] transition-colors border-b border-[var(--color-border-light)]"
                                 data-search="{{ strtolower($site->domain . ' ' . implode(' ', $site->aliasDomains()) . ' ' . ($site->server->display_name ?? $site->server->name ?? '')) }}">
                                 <a href="{{ route('sites.show', $site) }}" class="absolute inset-0 z-0" aria-label="Open {{ $site->domain }}"></a>
 
@@ -238,7 +238,7 @@
                                 @endif
 
                                 <div class="min-w-0 flex-1 relative z-10 pointer-events-none">
-                                    <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug">
+                                    <div class="font-medium text-[var(--color-ink-strong)] truncate text-sm sm:text-base leading-snug" title="{{ $site->domain }}">
                                         {{ $site->domain }}
                                     </div>
                                     <div class="text-[11px] text-[var(--color-ink-muted)] truncate flex items-center gap-1.5 mt-0.5">
@@ -256,11 +256,11 @@
                                 </div>
 
                                 <div class="flex items-center gap-1.5 sm:gap-2 relative z-10 shrink-0">
-                                    <span class="status-pill {{ $uptimeMeta['class'] }} cursor-default" data-tooltip="{{ $uptimeMeta['tooltip'] }}">
+                                    <span class="status-pill {{ $uptimeMeta['class'] }} cursor-default" role="img" aria-label="{{ $uptimeMeta['tooltip'] }}" data-tooltip="{{ $uptimeMeta['tooltip'] }}">
                                         <i class="fa-solid {{ $uptimeMeta['icon'] }}"></i>
                                     </span>
 
-                                    <span class="status-pill {{ $sslMeta['class'] }} cursor-default" data-tooltip="{{ $sslMeta['tooltip'] }}">
+                                    <span class="status-pill {{ $sslMeta['class'] }} cursor-default" role="img" aria-label="{{ $sslMeta['tooltip'] }}" data-tooltip="{{ $sslMeta['tooltip'] }}">
                                         <i class="fa-solid {{ $sslMeta['icon'] }}"></i>
                                     </span>
 
@@ -271,13 +271,13 @@
                                                 ? ($site->isRenegade() ? 'Renegade Plugin Unreachable' : 'Companion Plugin Unreachable')
                                                 : ($site->isRenegade() ? 'Renegade Plugin Active' : 'Companion Plugin Active');
                                         @endphp
-                                        <span class="status-pill {{ $companionClass }} cursor-default" data-tooltip="{{ $companionTooltip }}">
+                                        <span class="status-pill {{ $companionClass }} cursor-default" role="img" aria-label="{{ $companionTooltip }}" data-tooltip="{{ $companionTooltip }}">
                                             <i class="fa-solid fa-plug"></i>
                                         </span>
                                     @endif
 
                                     @if (\App\Models\Site::areCarePlansEnabled() && $site->care_plan_enabled)
-                                        <span class="status-pill status-green cursor-default" data-tooltip="Care Plan Active">
+                                        <span class="status-pill status-green cursor-default" role="img" aria-label="Care Plan Active" data-tooltip="Care Plan Active">
                                             <i class="fa-solid fa-shield-heart"></i>
                                         </span>
                                     @endif

@@ -4,8 +4,6 @@
 
 @section('content')
 <div x-data="settingsHubManager()">
-    @include('settings._tabs')
-
     <x-page-header title="Settings & Operations"
         subtitle="Manage fleet configuration, API integrations, operational tools, and system administration.">
         <x-slot:actions>
@@ -24,6 +22,8 @@
             </div>
         </x-slot:actions>
     </x-page-header>
+
+    @include('settings._tabs')
 
     {{-- Reorder helper and controls bar --}}
     <div class="flex items-center justify-between flex-wrap gap-2 mb-4 px-1 text-xs text-[var(--color-ink-muted)]">
@@ -51,7 +51,8 @@
         </div>
     </div>
 
-    <div id="settings-cards-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {{-- Two masonry columns (CSS columns) so a short card is not stretched to match a tall neighbour. --}}
+    <div id="settings-cards-grid" class="lg:columns-2 gap-6 [&>*]:mb-6 [&>*]:break-inside-avoid">
 
         {{-- 1. Agency Branding --}}
         <div class="card p-5 flex flex-col justify-between transition-all duration-200"
@@ -599,12 +600,12 @@
                     @endif
 
                     <a href="{{ route('settings.weird-stats.index') }}"
-                       x-show="matches('weird stats fleet analytics records anomalies numbers')"
+                       x-show="matches('fleet stats weird stats fleet analytics records anomalies numbers')"
                        class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
                         <div class="flex items-start gap-3 min-w-0">
                             <i class="fa-solid fa-chart-pie text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
                             <div class="min-w-0">
-                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Weird Stats</div>
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Fleet Stats</div>
                                 <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Fleet anomalies, distribution metrics, oldest plugins, and platform records</div>
                             </div>
                         </div>
