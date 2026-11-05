@@ -7,32 +7,83 @@ use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
+use Modules\ClientReports\Services\ReportBrowser;
 use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\ClientReports\Services\ScheduledReportRunner;
 use Throwable;
 
 class SchedulesController extends Controller
 {
-    public function index(): View
+    /** Schedule list filters: who won't get a report, and why. */
+    public const FILTERS = [
+        'all' => 'All',
+        'wont_send' => 'Won\'t send: no care plan',
+        'no_recipients' => 'No recipients',
+        'disabled' => 'Disabled',
+        'draft' => 'Drafts for review',
+    ];
+
+    public function index(Request $request, ReportBrowser $browser): View
     {
-        $schedules = ClientReportSchedule::query()
-            ->with(['site', 'template'])
+        // A schedule outlives its site's archiving; those sites are left out.
+        $all = ClientReportSchedule::query()
+            ->with(['site.client:id,name,company_name', 'template'])
             ->get()
-            ->sortBy(fn ($s) => $s->site->domain);
+            ->filter(fn (ClientReportSchedule $s) => $s->site !== null)
+            ->sortBy(fn (ClientReportSchedule $s) => Str::lower($s->site->domain))
+            ->values();
 
-        $scheduledSiteIds = $schedules->pluck('site_id')->all();
+        $matches = [
+            'all' => fn (ClientReportSchedule $s) => true,
+            'wont_send' => fn (ClientReportSchedule $s) => ! ScheduledReportRunner::siteIsEligible($s->site),
+            'no_recipients' => fn (ClientReportSchedule $s) => array_filter((array) $s->recipients) === [],
+            'disabled' => fn (ClientReportSchedule $s) => ! $s->is_enabled,
+            'draft' => fn (ClientReportSchedule $s) => $s->delivery_mode === ClientReportSchedule::MODE_DRAFT,
+        ];
+        $counts = array_map(fn (callable $match) => $all->filter($match)->count(), $matches);
 
-        $unscheduledSites = Site::query()
+        $show = array_key_exists((string) $request->query('show'), self::FILTERS) ? (string) $request->query('show') : 'all';
+        $q = trim(mb_substr((string) $request->query('q', ''), 0, 100));
+        $needle = Str::lower($q);
+        $schedules = $all->filter($matches[$show])
+            ->filter(fn (ClientReportSchedule $s) => $needle === '' || Str::contains(Str::lower(implode(' ', [
+                $s->site->domain, $s->site->client?->name, $s->site->client?->company_name, ...array_filter((array) $s->recipients),
+            ])), $needle))
+            ->values();
+
+        // Each schedule's latest report (newest period, newest copy), so its
+        // state shows next to it.
+        $latestReports = $browser->get($browser->query()
+            ->whereIn('schedule_id', $all->pluck('id'))
+            ->where('status', '!=', ClientReport::STATUS_SUPERSEDED))
+            ->sortByDesc(fn (ClientReport $r) => $r->period_start->format('Y-m-d').'-'.str_pad((string) $r->id, 12, '0', STR_PAD_LEFT))
+            ->unique('schedule_id')
+            ->keyBy('schedule_id');
+
+        // Care-plan sites that get no report at all: the coverage gap.
+        $sync = app(ReportRecipientsSyncService::class);
+        $missingSites = Site::query()
             ->where('is_inactive', false)
-            ->whereNotIn('id', $scheduledSiteIds)
-            ->orderByDesc('care_plan_enabled')
+            ->carePlanEligible()
+            ->whereNotIn('id', ClientReportSchedule::query()->select('site_id'))
+            ->with('client')
             ->orderBy('domain')
-            ->get(['id', 'domain', 'care_plan_enabled']);
+            ->get()
+            ->map(fn (Site $site) => ['site' => $site, 'recipients' => $sync->resolvePayloadForSite($site)['report_recipients']]);
 
-        return view('client-reports::schedules.index', compact('schedules', 'unscheduledSites'));
+        return view('client-reports::schedules.index', [
+            'schedules' => $schedules,
+            'counts' => $counts,
+            'show' => $show,
+            'q' => $q,
+            'latestReports' => $latestReports,
+            'missingSites' => $missingSites,
+        ]);
     }
 
     public function create(Request $request): View|RedirectResponse
@@ -203,7 +254,7 @@ class SchedulesController extends Controller
             ->with('status', "Reporting schedule for {$domain} deleted.");
     }
 
-    public function toggle(ClientReportSchedule $schedule): RedirectResponse
+    public function toggle(Request $request, ClientReportSchedule $schedule): RedirectResponse
     {
         $schedule->update([
             'is_enabled' => ! $schedule->is_enabled,
@@ -215,8 +266,90 @@ class SchedulesController extends Controller
 
         $state = $schedule->is_enabled ? 'enabled' : 'paused';
 
-        return redirect()->route('client-reports.schedules.index')
-            ->with('status', "Schedule for {$schedule->site->domain} has been {$state}.");
+        // The client page toggles in place and stays where it was.
+        $redirect = $request->input('return') === 'back'
+            ? back()
+            : redirect()->route('client-reports.schedules.index');
+
+        return $redirect->with('status', "Schedule for {$schedule->site->domain} has been {$state}.");
+    }
+
+    /**
+     * One-click schedule for a care-plan site that has none: the default
+     * template, monthly, sent to the client's contacts (the same fallback
+     * WordPress is shown) or, with no contacts on file, as drafts for
+     * review. Its first report always waits for someone to send it.
+     */
+    public function quickStore(Site $site): RedirectResponse
+    {
+        if ($site->is_inactive) {
+            return back()->with('status_error', "{$site->domain} is inactive, so it gets no reports.");
+        }
+
+        if (! ScheduledReportRunner::siteIsEligible($site)) {
+            return back()->with('status_error', "{$site->domain} has no care plan. Client reports are only sent for care-plan sites.");
+        }
+
+        if (ClientReportSchedule::query()->where('site_id', $site->id)->exists()) {
+            return back()->with('status', "{$site->domain} already has a report schedule.");
+        }
+
+        $schedule = $this->createDefaultSchedule($site);
+        $recipients = (array) $schedule->recipients;
+
+        $message = $schedule->delivery_mode === ClientReportSchedule::MODE_AUTO
+            ? "Created a monthly report schedule for {$site->domain}, to ".implode(', ', $recipients).'. Its first report ('.$schedule->next_run_at->format('M j').') waits for you to check and send it.'
+            : "Created a monthly report schedule for {$site->domain} as drafts for review: the client has no contacts on file. Add recipients to send it.";
+
+        return back()->with('status', $message);
+    }
+
+    /**
+     * The same one-click schedule for every active care-plan site that has
+     * none. Nothing is sent: each schedule's first report waits for review.
+     */
+    public function quickStoreAll(): RedirectResponse
+    {
+        $sites = Site::query()
+            ->where('is_inactive', false)
+            ->carePlanEligible()
+            ->whereNotIn('id', ClientReportSchedule::query()->select('site_id'))
+            ->orderBy('domain')
+            ->get();
+
+        if ($sites->isEmpty()) {
+            return back()->with('status', 'Every care-plan site already has a report schedule.');
+        }
+
+        $drafts = $sites->map(fn (Site $site) => $this->createDefaultSchedule($site))
+            ->filter(fn (ClientReportSchedule $s) => $s->delivery_mode === ClientReportSchedule::MODE_DRAFT)
+            ->count();
+
+        return back()->with('status', "Created {$sites->count()} monthly report schedule(s)"
+            .($drafts > 0 ? ", {$drafts} of them as drafts for review because the client has no contacts on file" : '')
+            .'. Each first report waits for you to check and send it. Nothing was sent.');
+    }
+
+    /** Default template, monthly, client contacts (auto) or none (drafts). */
+    protected function createDefaultSchedule(Site $site): ClientReportSchedule
+    {
+        $sync = app(ReportRecipientsSyncService::class);
+        $recipients = $sync->resolvePayloadForSite($site)['report_recipients'];
+        $template = ClientReportTemplate::query()->orderByDesc('is_default')->orderBy('name')->first();
+
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id,
+            'template_id' => $template?->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => $recipients !== [] ? ClientReportSchedule::MODE_AUTO : ClientReportSchedule::MODE_DRAFT,
+            'recipients' => $recipients,
+            'is_enabled' => true,
+            'next_run_at' => (new ClientReportSchedule(['frequency' => ClientReportSchedule::FREQUENCY_MONTHLY]))->computeNextRun(),
+        ]);
+
+        $sync->pushToSite($site, $schedule);
+
+        return $schedule;
     }
 
     public function sendNow(ClientReportSchedule $schedule, ScheduledReportRunner $runner): RedirectResponse

@@ -3,216 +3,216 @@
 @section('title', 'Scheduled Reports · Clockwork')
 
 @section('content')
-<div class="mb-6 flex items-center justify-between flex-wrap gap-4">
-    <div>
-        <h1 class="display-heading text-3xl text-[var(--color-ink-strong)] flex items-center gap-2">
-            <i class="fa-solid fa-file-lines text-[var(--color-brand)]"></i>
-            Client Reports
-        </h1>
-        <p class="text-xs text-[var(--color-ink-soft)] mt-1">
-            Automated, executive-ready white-labeled maintenance and performance reports for your agency clients.
-        </p>
-    </div>
-    <div class="flex items-center gap-2">
-        <a href="{{ route('client-reports.schedules.create') }}" class="btn-pill-primary text-xs">
-            <i class="fa-solid fa-plus mr-1"></i> New Schedule
+<x-page-header title="Client Reports"
+    subtitle="Who gets a monthly report, where it goes, and which care-plan sites still have none.">
+    <x-slot:actions>
+        <a href="{{ route('client-reports.schedules.create') }}" class="btn-primary text-xs py-2 px-4">
+            <i class="fa-solid fa-plus text-[11px]"></i> New schedule
         </a>
-    </div>
-</div>
+    </x-slot:actions>
+</x-page-header>
 
 @include('client-reports::_nav')
+@include('client-reports::partials.flash')
 
-@if (session('status'))
-    <div class="card p-4 mb-6 status-green text-xs flex items-center gap-2">
-        <i class="fa-solid fa-circle-check"></i>
-        <span>{{ session('status') }}</span>
-    </div>
-@endif
+@php
+    $stateClass = \Modules\ClientReports\Support\ReportState::class;
+    $runnerClass = \Modules\ClientReports\Services\ScheduledReportRunner::class;
+    $modeDraft = \Modules\ClientReports\Models\ClientReportSchedule::MODE_DRAFT;
+    $filterLabels = \Modules\ClientReports\Http\Controllers\SchedulesController::FILTERS;
+@endphp
 
-@if (session('status_error'))
-    <div class="card p-4 mb-6 status-red text-xs flex items-center gap-2">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <span>{{ session('status_error') }}</span>
-    </div>
-@endif
-
-<div class="space-y-6">
-    {{-- Active Schedules Table --}}
-    <div class="card p-5">
-        <div class="flex items-center justify-between mb-4">
+{{-- The coverage gap: care-plan sites that get no report at all. --}}
+@if ($missingSites->isNotEmpty())
+    <div class="card p-5 mb-6 card-status-red">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
             <div>
                 <h2 class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-clock text-[var(--color-ink-soft)]"></i>
-                    Automated Reporting Schedules
+                    <i class="fa-solid fa-triangle-exclamation text-[var(--color-status-red)]"></i>
+                    Care-plan sites without a report schedule ({{ $missingSites->count() }})
                 </h2>
-                <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">
-                    Cron automated dispatches aggregating monthly and weekly site maintenance telemetry.
+                <p class="text-xs text-[var(--color-ink-muted)] mt-0.5 max-w-2xl">
+                    These sites are on a care plan but get no monthly report. "Create schedule" sets one up with the default template, monthly,
+                    to the client's contacts (or as drafts for review when there are none). Nothing is sent: each first report waits for you to check and send it.
                 </p>
             </div>
-            <span class="text-xs text-[var(--color-ink-muted)]">{{ $schedules->count() }} schedule(s) configured</span>
+            <form method="POST" action="{{ route('client-reports.schedules.quick-all') }}"
+                  data-confirm="Create a monthly report schedule for all {{ $missingSites->count() }} sites?"
+                  data-confirm-details="Each gets the default template, monthly, sent to the client's contacts (drafts for review where there are none). Nothing is sent now: every first report waits for review."
+                  data-confirm-btn="Create {{ $missingSites->count() }} schedules" data-confirm-variant="primary">
+                @csrf
+                <button type="submit" class="cr-btn cr-btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i>Create all {{ $missingSites->count() }}</button>
+            </form>
         </div>
+        <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            @foreach ($missingSites as $missing)
+                <li class="rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)] p-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <a href="{{ route('sites.show', $missing['site']) }}" class="font-mono text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] break-all">{{ $missing['site']->domain }}</a>
+                        <div class="text-[11px] text-[var(--color-ink-muted)] truncate">
+                            @if ($missing['site']->client)
+                                <a href="{{ route('client-reports.clients.show', $missing['site']->client_id) }}" class="hover:underline">{{ $missing['site']->client->company_name ?: $missing['site']->client->name }}</a> ·
+                            @endif
+                            {{ $missing['recipients'] !== [] ? 'to '.implode(', ', $missing['recipients']) : 'no contacts: drafts for review' }}
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ route('client-reports.schedules.quick', $missing['site']) }}" class="shrink-0">
+                        @csrf
+                        <button type="submit" class="cr-btn"><i class="fa-solid fa-plus"></i>Create schedule</button>
+                    </form>
+                </li>
+            @endforeach
+        </ul>
+    </div>
+@endif
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">
-                    <tr>
-                        <th class="px-4 py-3">Site</th>
-                        <th class="px-4 py-3">Template</th>
-                        <th class="px-4 py-3">Frequency</th>
-                        <th class="px-4 py-3">Delivery Mode</th>
-                        <th class="px-4 py-3">Recipients</th>
-                        <th class="px-4 py-3">Next Dispatch</th>
-                        <th class="px-4 py-3">State</th>
-                        <th class="px-4 py-3 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-[var(--color-border-light)]">
-                    @forelse ($schedules as $s)
-                        <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors {{ ! $s->is_enabled ? 'opacity-60' : '' }}">
-                            <td class="px-4 py-3 font-medium text-[var(--color-ink-strong)]">
-                                <a href="{{ route('sites.show', $s->site) }}" class="font-mono text-sm hover:text-[var(--color-brand)] transition-colors">
-                                    {{ $s->site->domain }}
-                                </a>
-                                @if ($s->site->care_plan_enabled)
-                                    <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
-                                        Care Plan
-                                    </span>
-                                @elseif (! \Modules\ClientReports\Services\ScheduledReportRunner::siteIsEligible($s->site))
-                                    <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800" title="Reports are only sent for care-plan sites. Each month without a care plan is skipped; reports resume the month after it's turned back on.">
-                                        No care plan — won't send
-                                    </span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 text-[var(--color-ink-soft)] whitespace-nowrap">
-                                @if ($s->template)
-                                    <span class="inline-flex items-center gap-1 font-medium text-[var(--color-ink-strong)]">
-                                        <i class="fa-solid fa-layer-group text-[10px] text-[var(--color-brand)]"></i>
-                                        <span>{{ $s->template->name }}</span>
-                                    </span>
-                                    <div class="text-[10px] text-[var(--color-ink-muted)]">
-                                        {{ count((array) $s->template->sections) }} sections
-                                    </div>
-                                @else
-                                    <span class="text-[var(--color-ink-muted)] italic">Default (All Sections)</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <span class="capitalize font-medium text-[var(--color-ink-strong)]">{{ $s->frequency }}</span>
-                            </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                @if ($s->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_DRAFT)
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
-                                        <i class="fa-solid fa-file-pen text-[9px]"></i> Draft Review
-                                    </span>
-                                @else
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
-                                        <i class="fa-solid fa-paper-plane text-[9px]"></i> Auto-Send
-                                    </span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 text-[var(--color-ink-soft)]">
-                                @php $recips = (array) $s->recipients; @endphp
-                                @if (!empty($recips))
-                                    <div class="truncate max-w-xs font-mono text-[11px]" title="{{ implode(', ', $recips) }}">
-                                        {{ implode(', ', $recips) }}
-                                    </div>
-                                @else
-                                    <span class="text-[var(--color-ink-muted)] italic">None</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 text-[var(--color-ink-soft)] whitespace-nowrap">
-                                @if ($s->next_run_at)
-                                    <div class="font-medium text-[var(--color-ink-strong)]">{{ $s->next_run_at->format('M j, Y') }}</div>
-                                    <div class="text-[10px] text-[var(--color-ink-muted)]">{{ $s->next_run_at->diffForHumans() }}</div>
-                                @else
-                                    <span class="text-[var(--color-ink-muted)]">—</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <form method="POST" action="{{ route('client-reports.schedules.toggle', $s) }}" class="inline">
-                                    @csrf
-                                    @method('PATCH')
-                                    <button type="submit" class="cursor-pointer">
-                                        @if ($s->is_enabled)
-                                            <span class="status-pill status-green text-xs hover:opacity-80">
-                                                <span class="status-dot"></span> Active
-                                            </span>
-                                        @else
-                                            <span class="status-pill status-red text-xs hover:opacity-80">
-                                                <span class="status-dot"></span> Paused
-                                            </span>
-                                        @endif
-                                    </button>
-                                </form>
-                            </td>
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <div class="flex items-center justify-end gap-1.5">
-                                    {{-- Run Now Action --}}
-                                    <form method="POST" action="{{ route('client-reports.schedules.send-now', $s) }}" class="inline" onsubmit="return confirm('Run schedule for {{ addslashes($s->site->domain) }} now?');">
-                                        @csrf
-                                        <button type="submit" class="btn-pill-nav text-xs py-1 px-2.5 text-indigo-600 hover:bg-indigo-50" title="Trigger Run Now">
-                                            <i class="fa-solid fa-play mr-1 text-[10px]"></i> Run
-                                        </button>
-                                    </form>
-
-                                    <a href="{{ route('client-reports.schedules.edit', $s) }}" class="btn-pill-nav text-xs py-1 px-2" title="Edit Schedule">
-                                        <i class="fa-solid fa-pen-to-square"></i>
-                                    </a>
-
-                                    <form method="POST" action="{{ route('client-reports.schedules.destroy', $s) }}" class="inline" onsubmit="return confirm('Delete schedule for {{ addslashes($s->site->domain) }}?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn-pill-nav text-xs py-1 px-2 text-rose-600 hover:bg-rose-50" title="Delete Schedule">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="8" class="text-center py-10 text-[var(--color-ink-muted)]">
-                                <i class="fa-solid fa-clock text-3xl mb-2 block opacity-30"></i>
-                                No automated schedules created yet. Configure your first client site below!
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+<div class="card overflow-hidden">
+    <div class="p-4 sm:p-5 border-b border-[var(--color-border-light)] space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="font-display font-semibold text-base text-[var(--color-ink-strong)] flex items-center gap-2">
+                <i class="fa-solid fa-clock text-[var(--color-ink-soft)]"></i>
+                Report schedules
+            </h2>
+            <form method="GET" action="{{ route('client-reports.schedules.index') }}" class="flex items-center gap-2">
+                <input type="hidden" name="show" value="{{ $show }}">
+                <div class="relative">
+                    <label for="cr-schedule-q" class="sr-only">Search</label>
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--color-ink-soft)]"></i>
+                    <input id="cr-schedule-q" type="search" name="q" value="{{ $q }}" placeholder="Site, client or recipient…" class="cr-input pl-7 w-56">
+                </div>
+                <button type="submit" class="cr-btn cr-btn-primary">Search</button>
+            </form>
+        </div>
+        <div class="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter schedules">
+            @foreach ($filterLabels as $key => $label)
+                <a href="{{ route('client-reports.schedules.index', array_filter(['show' => $key === 'all' ? null : $key, 'q' => $q])) }}"
+                   class="btn-pill-nav text-xs py-1 px-3 {{ $show === $key ? 'is-active' : '' }}" @if ($show === $key) aria-current="true" @endif>
+                    {{ $label }} <span class="opacity-70">{{ $counts[$key] }}</span>
+                </a>
+            @endforeach
         </div>
     </div>
 
-    {{-- Unscheduled Care Plan Sites --}}
-    @if ($unscheduledSites->isNotEmpty())
-        <div class="card p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-2">
-                    <i class="fa-solid fa-shield-cat text-emerald-600"></i>
-                    Unscheduled Managed Sites ({{ $unscheduledSites->count() }})
-                </h3>
-                <span class="text-xs text-[var(--color-ink-muted)]">Sites ready for automated reporting</span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
-                @foreach ($unscheduledSites as $us)
-                    <div class="p-3 rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-alt)]/40 flex items-center justify-between gap-2">
-                        <div class="min-w-0">
-                            <div class="font-mono text-xs font-semibold text-[var(--color-ink-strong)] truncate">
-                                {{ $us->domain }}
+    <div class="overflow-x-auto cw-sticky-actions">
+        <table class="w-full text-xs text-left">
+            <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">
+                <tr>
+                    <th class="px-4 py-3">Site</th>
+                    <th class="px-4 py-3">Delivery</th>
+                    <th class="px-4 py-3">Recipients</th>
+                    <th class="px-4 py-3">Next run</th>
+                    <th class="px-4 py-3">Latest report</th>
+                    <th class="px-4 py-3">State</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--color-border-light)]">
+                @forelse ($schedules as $s)
+                    @php
+                        $recips = array_values(array_filter((array) $s->recipients));
+                        $eligible = $runnerClass::siteIsEligible($s->site);
+                        $latest = $latestReports->get($s->id);
+                    @endphp
+                    <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors {{ ! $s->is_enabled ? 'opacity-70' : '' }}">
+                        <td class="px-4 py-3 align-top">
+                            <a href="{{ route('sites.show', $s->site) }}" class="font-mono text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] break-all">{{ $s->site->domain }}</a>
+                            <div class="mt-1 flex flex-wrap gap-1 items-center">
+                                @if (! $eligible)
+                                    <span class="cr-pill status-unknown" title="Reports are only sent for care-plan sites. Each month without one is skipped; reports resume the month after it's turned back on.">
+                                        <i class="fa-solid fa-ban"></i>No care plan — won't send
+                                    </span>
+                                @elseif (\App\Models\Site::areCarePlansEnabled())
+                                    <span class="cr-pill status-green"><i class="fa-solid fa-shield-heart"></i>Care plan</span>
+                                @endif
+                                @if ($s->site->client)
+                                    <a href="{{ route('client-reports.clients.show', $s->site->client_id) }}" class="text-[11px] text-[var(--color-ink-muted)] hover:underline">{{ $s->site->client->company_name ?: $s->site->client->name }}</a>
+                                @endif
                             </div>
-                            @if ($us->care_plan_enabled)
-                                <span class="text-[10px] text-emerald-700 font-medium">Care Plan Active</span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap align-top">
+                            @if ($s->delivery_mode === $modeDraft)
+                                <span class="cr-pill status-yellow"><i class="fa-solid fa-file-pen"></i>Drafts for review</span>
                             @else
-                                <span class="text-[10px] text-[var(--color-ink-muted)]">Standard Monitored</span>
+                                <span class="cr-pill status-green"><i class="fa-solid fa-paper-plane"></i>Auto-Send</span>
                             @endif
-                        </div>
-                        <a href="{{ route('client-reports.schedules.create', ['site_id' => $us->id]) }}"
-                           class="btn-pill-nav text-xs py-1 px-2 whitespace-nowrap shrink-0 hover:border-[var(--color-brand)]">
-                            <i class="fa-solid fa-plus text-[10px] mr-1 text-[var(--color-brand)]"></i> Schedule
-                        </a>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    @endif
+                            <div class="text-[10px] text-[var(--color-ink-muted)] mt-1">
+                                {{ ucfirst($s->frequency) }} · {{ $s->template?->name ?? 'Default (all sections)' }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-[var(--color-ink-soft)] align-top">
+                            @if ($recips !== [])
+                                <div class="max-w-[16rem] break-all text-[11px]">{{ implode(', ', $recips) }}</div>
+                            @else
+                                <span class="cr-pill status-yellow"><i class="fa-solid fa-at"></i>No recipients</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap align-top">
+                            @if ($s->next_run_at)
+                                <div class="font-medium text-[var(--color-ink-strong)]">{{ $s->next_run_at->format('M j, Y') }}</div>
+                                <div class="text-[10px] text-[var(--color-ink-muted)]">{{ $s->last_sent_at ? 'Last sent '.$s->last_sent_at->format('M j') : 'Never sent yet' }}</div>
+                            @else
+                                <span class="text-[var(--color-ink-muted)]">—</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 align-top">
+                            @if ($latest)
+                                @php($latestState = $stateClass::of($latest))
+                                <a href="{{ route('client-reports.show', $latest) }}" class="block hover:opacity-80">
+                                    <div class="text-[11px] font-semibold text-[var(--color-ink-strong)] mb-0.5">{{ $latest->period_start->format('M Y') }}</div>
+                                    @include('client-reports::partials.state-pill', ['state' => $latestState])
+                                </a>
+                            @else
+                                <span class="text-[var(--color-ink-muted)]">None yet</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap align-top">
+                            <form method="POST" action="{{ route('client-reports.schedules.toggle', $s) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="cursor-pointer" title="{{ $s->is_enabled ? 'Pause this schedule' : 'Resume this schedule' }}">
+                                    @if ($s->is_enabled)
+                                        <span class="status-pill status-green text-xs hover:opacity-80"><span class="status-dot"></span> Active</span>
+                                    @else
+                                        <span class="status-pill status-red text-xs hover:opacity-80"><span class="status-dot"></span> Paused</span>
+                                    @endif
+                                </button>
+                            </form>
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap align-top">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <form method="POST" action="{{ route('client-reports.schedules.send-now', $s) }}" class="inline"
+                                      data-confirm="Run the schedule for {{ $s->site->domain }} now?"
+                                      data-confirm-details="{{ $s->delivery_mode === $modeDraft ? 'It compiles last month\'s report as a draft for review. Nothing is sent.' : ($s->last_sent_at === null ? 'It compiles last month\'s report. As this schedule\'s first report it is held for review, not sent.' : 'It compiles last month\'s report and, if nothing needs review, emails it to '.(implode(', ', $recips) ?: 'its recipients').' straight away.') }}"
+                                      data-confirm-btn="Run now" data-confirm-variant="warning">
+                                    @csrf
+                                    <button type="submit" class="cr-btn" title="Compile last month's report now">
+                                        <i class="fa-solid fa-play"></i>Run
+                                    </button>
+                                </form>
+                                <a href="{{ route('client-reports.schedules.edit', $s) }}" class="cr-btn" title="Edit schedule">
+                                    <i class="fa-solid fa-pen-to-square"></i>Edit
+                                </a>
+                                <form method="POST" action="{{ route('client-reports.schedules.destroy', $s) }}" class="inline"
+                                      data-confirm="Delete the report schedule for {{ $s->site->domain }}?" data-confirm-details="Its past reports are kept. No more reports are compiled for this site." data-confirm-variant="danger">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="cr-btn text-[var(--color-status-red)]" title="Delete schedule" aria-label="Delete schedule">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" class="text-center py-10 text-[var(--color-ink-muted)]">
+                            <i class="fa-solid fa-clock text-3xl mb-2 block opacity-30"></i>
+                            {{ $show === 'all' && $q === '' ? 'No report schedules yet.' : 'No schedules match.' }}
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 </div>
 @endsection

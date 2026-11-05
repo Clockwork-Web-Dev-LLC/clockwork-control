@@ -42,6 +42,7 @@ it('requires authentication for the operator routes', function () {
     ]);
 
     $this->get(route('client-reports.index'))->assertRedirect(route('login'));
+    $this->get(route('client-reports.reports'))->assertRedirect(route('login'));
     $this->get(route('client-reports.show', $report))->assertRedirect(route('login'));
     $this->post(route('client-reports.generate'))->assertRedirect(route('login'));
     $this->post(route('client-reports.send', $report))->assertRedirect(route('login'));
@@ -61,7 +62,7 @@ describe('index', function () {
             'status' => 'generated',
         ]);
 
-        $response = $this->actingAs(User::factory()->create())->get(route('client-reports.index'));
+        $response = $this->actingAs(User::factory()->create())->get(route('client-reports.reports'));
 
         $response->assertOk()->assertSee('Existing Report');
     });
@@ -384,7 +385,7 @@ describe('send', function () {
         $report = sendableReport('outdated@client.test', ['sections_data' => ['meta' => ['schema_version' => 3]]]);
 
         $this->actingAs(User::factory()->create())
-            ->get(route('client-reports.index'))
+            ->get(route('client-reports.reports'))
             ->assertOk()
             ->assertSee('Outdated: recompile')
             ->assertDontSee('Email report to outdated@client.test?');
@@ -409,7 +410,7 @@ describe('send', function () {
         sendableReport('saved@client.test');
 
         $this->actingAs(User::factory()->create())
-            ->get(route('client-reports.index'))
+            ->get(route('client-reports.reports'))
             ->assertOk()
             ->assertSee('Send this report to which email address(es)?')
             ->assertSee('Email report to saved@client.test?');
@@ -574,7 +575,7 @@ describe('recompile', function () {
         $sent = heldOctoberReport(recompileSchedule(recompileSite()), ['status' => ClientReport::STATUS_SENT, 'sent_to' => ['client@example.com']]);
         $manual = heldOctoberReport(recompileSchedule(recompileSite()), ['schedule_id' => null]);
 
-        $index = $this->actingAs($user)->get(route('client-reports.index'))->assertOk()->getContent();
+        $index = $this->actingAs($user)->get(route('client-reports.reports'))->assertOk()->getContent();
         expect($index)->toContain('action="'.route('client-reports.recompile', $held).'"')
             ->not->toContain('action="'.route('client-reports.recompile', $sent).'"')
             ->not->toContain('action="'.route('client-reports.recompile', $manual).'"');

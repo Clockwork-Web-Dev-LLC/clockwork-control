@@ -86,7 +86,7 @@ describe('Schedules UI & CRUD', function () {
             ->assertSee('boss@scheduled.test')
             ->assertSee('Auto-Send')
             ->assertSee('unscheduled.test')
-            ->assertSee('Unscheduled Managed Sites');
+            ->assertSee('Care-plan sites without a report schedule');
     });
 
     it('renders the create schedule form with available sites and templates', function () {
