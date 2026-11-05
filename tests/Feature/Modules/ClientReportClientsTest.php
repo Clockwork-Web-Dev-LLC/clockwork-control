@@ -234,6 +234,18 @@ describe('client reports page', function () {
     });
 });
 
+it('links the site dashboard to the site\'s client reports', function () {
+    $client = Client::create(['name' => 'Header Example', 'email' => 'header@example.com']);
+    $site = clientsSite($client, 'header.example.com');
+    $loose = clientsSite(null, 'loose-header.example.com');
+
+    $this->actingAs($this->user);
+    $this->get(route('sites.show', $site))->assertOk()
+        ->assertSee(route('client-reports.clients.show', $client->id).'#site-'.$site->id, false);
+    $this->get(route('sites.show', $loose))->assertOk()
+        ->assertSee(route('client-reports.clients.show', 'unassigned').'#site-'.$loose->id, false);
+});
+
 describe('ClientDirectory', function () {
     it('lists the last six report periods ending with last month', function () {
         $months = app(ClientDirectory::class)->months();
