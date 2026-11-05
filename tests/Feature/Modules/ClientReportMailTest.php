@@ -194,7 +194,7 @@ describe('the greeting', function () {
         'an acronym' => 'EXCO',
         'an initial' => 'J. Example',
         'a note in brackets' => 'Jane (Example Strategy)',
-        'a company spelled out' => 'Example Girl Interior Design',
+        'a company spelled out' => 'Example Interior Design Studio',
     ]);
 });
 

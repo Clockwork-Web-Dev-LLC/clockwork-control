@@ -85,13 +85,13 @@ it('says the monitor was blocked, not that the site was down, when only a 429 is
 });
 
 it('holds completed outages of an hour or more, read from the outages list on reports compiled before long_outages', function () {
-    $long = ['started_at' => '2026-10-01T06:25:09+00:00', 'minutes' => 379, 'started_before_period' => false, 'ongoing' => false];
+    $long = ['started_at' => '2026-10-01T06:10:00+00:00', 'minutes' => 381, 'started_before_period' => false, 'ongoing' => false];
     $carried = ['started_at' => '2026-10-01T04:00:00+00:00', 'minutes' => 60, 'started_before_period' => true, 'ongoing' => false];
     $short = ['started_at' => '2026-10-09T10:00:00+00:00', 'minutes' => 59, 'started_before_period' => false, 'ongoing' => false];
 
     // The time is shown in the report timezone, which needs the app config; the wording doesn't.
     $when = fn (array $o) => preg_replace('/^Down /', '', ReportPhrases::outageStart($o));
-    $expected = 'The site was down for an hour or more: '.$when($carried).' for 1h 0m; '.$when($long).' for 6h 19m. Add context for the client before this goes out.';
+    $expected = 'The site was down for an hour or more: '.$when($carried).' for 1h 0m; '.$when($long).' for 6h 21m. Add context for the client before this goes out.';
 
     expect(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short, $long, $carried]]]))->toBe([$expected])
         ->and(ReportReviewFlags::reasons(['uptime' => ['outages' => [$short], 'long_outages' => [$carried, $long]]]))->toBe([$expected])
@@ -216,14 +216,14 @@ describe('vulnerable plugins joined to waiting updates by slug', function () {
     });
 
     it('reads a fix only known as "after" a closed bound, and holds only an update past it', function () {
-        $item = fn (string $offered) => vulnerableItem(['fixed_in' => null, 'fixed_after' => '2.0.6', 'update_offered' => $offered]);
+        $item = fn (string $offered) => vulnerableItem(['fixed_in' => null, 'fixed_after' => '5.2.4', 'update_offered' => $offered]);
 
-        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('2.0.7')]]]))
-            ->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 2.0.7 (fixed in the next version after 2.0.6)."])
-            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('2.0.6')]]]))->toBe([])
+        expect(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('5.2.5')]]]))
+            ->toBe(["A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0 → 5.2.5 (fixed in the next version after 5.2.4)."])
+            ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [$item('5.2.4')]]]))->toBe([])
             ->and(ReportReviewFlags::reasons(['security' => ['vulnerable_plugin_items' => [
-                vulnerableItem(['fixed_in' => null, 'fixed_after' => '2.0.6', 'paused' => ['source' => 'manual', 'since' => null, 'failure_count' => null, 'note' => null]]),
-            ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in the next version after 2.0.6; paused by hand).']);
+                vulnerableItem(['fixed_in' => null, 'fixed_after' => '5.2.4', 'paused' => ['source' => 'manual', 'since' => null, 'failure_count' => null, 'note' => null]]),
+            ]]]))->toBe(['Updates are paused for a plugin with a known vulnerability: Example Forms 1.0 (fixed in the next version after 5.2.4; paused by hand).']);
     });
 
     it('says an update held back as a different package is held back, not paused by hand', function () {

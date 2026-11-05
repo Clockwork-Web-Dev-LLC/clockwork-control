@@ -222,17 +222,17 @@ describe('known plugin vulnerabilities (#8)', function () {
     });
 
     it('reads an advisory with no patched version but a closed upper bound as fixed in the next version after it', function () {
-        // Affects up to and including 2.0.6, no patched version named: 2.0.7 on is clear.
-        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.6', 'to_inclusive' => true, 'patched_in' => null]);
-        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '2.0.0', 'to_inclusive' => false, 'patched_in' => '2.0.1']);
+        // Affects up to and including 5.2.4, no patched version named: 5.2.5 on is clear.
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '5.2.4', 'to_inclusive' => true, 'patched_in' => null]);
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '4.5.0', 'to_inclusive' => false, 'patched_in' => '4.5.1']);
         // An advisory for exactly one version (stored from = to): any later release fixes it.
-        PluginVulnerability::factory()->create(['slug' => 'example-seo-pro', 'from_version' => '3.0.123', 'to_version' => '3.0.123', 'to_inclusive' => true, 'patched_in' => null]);
+        PluginVulnerability::factory()->create(['slug' => 'example-seo-pro', 'from_version' => '4.1.7', 'to_version' => '4.1.7', 'to_inclusive' => true, 'patched_in' => null]);
         // Affects versions below 3.0 (exclusive), no patched version named: 3.0 fixes it.
         PluginVulnerability::factory()->create(['slug' => 'example-tabs', 'to_version' => '3.0', 'to_inclusive' => false, 'patched_in' => null]);
         $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
-            ['slug' => 'example-widgets/example-widgets.php', 'name' => 'Example Widgets', 'version' => '1.5.0', 'active' => true, 'update_available' => true, 'new_version' => '1.5.141'],
+            ['slug' => 'example-widgets/example-widgets.php', 'name' => 'Example Widgets', 'version' => '4.1.0', 'active' => true, 'update_available' => true, 'new_version' => '4.9.30'],
             ['slug' => 'example-tabs/example-tabs.php', 'name' => 'Example Tabs', 'version' => '2.2', 'active' => true, 'update_available' => true, 'new_version' => '3.0'],
-            ['slug' => 'example-seo-pro/example-seo-pro.php', 'name' => 'Example SEO Pro', 'version' => '3.0.123', 'active' => true, 'update_available' => true, 'new_version' => '3.0.124'],
+            ['slug' => 'example-seo-pro/example-seo-pro.php', 'name' => 'Example SEO Pro', 'version' => '4.1.7', 'active' => true, 'update_available' => true, 'new_version' => '4.1.8'],
         ]]]]);
         PluginUpdateIgnore::factory()->create([
             'site_id' => $site->id, 'target_slug' => 'example-widgets/example-widgets.php', 'source' => PluginUpdateIgnore::SOURCE_MANUAL,
@@ -242,11 +242,11 @@ describe('known plugin vulnerabilities (#8)', function () {
         $report = compileSeptember($site);
         $items = collect($report['data']['security']['vulnerable_plugin_items'])->keyBy('slug');
 
-        expect($items['example-widgets/example-widgets.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '2.0.6'])
+        expect($items['example-widgets/example-widgets.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '5.2.4'])
             ->and($items['example-tabs/example-tabs.php'])->toMatchArray(['fixed_in' => '3.0', 'fixed_after' => null])
-            ->and($items['example-seo-pro/example-seo-pro.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '3.0.123'])
-            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Widgets 1.5.0 (fixed in the next version after 2.0.6; paused by hand since 2026-09-02: Licence lapsed; 1.5.141 is waiting).')
-            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0); Example SEO Pro 3.0.123 → 3.0.124 (fixed in the next version after 3.0.123).")
+            ->and($items['example-seo-pro/example-seo-pro.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '4.1.7'])
+            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Widgets 4.1.0 (fixed in the next version after 5.2.4; paused by hand since 2026-09-02: Licence lapsed; 4.9.30 is waiting).')
+            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0); Example SEO Pro 4.1.7 → 4.1.8 (fixed in the next version after 4.1.7).")
             ->and(implode(' ', $report['reasons']))->not->toContain('no fixed version yet');
     });
 
@@ -1073,7 +1073,7 @@ describe('threats blocked', function () {
         // Unbanned days later: a real ban that expired.
         $ban('2026-09-12 12:00', ['unbanned_at' => Carbon::parse('2026-09-15 12:00'), 'decided_by' => 'retention']);
         // A rule that misfired, reversed minutes later.
-        $ban('2026-09-18 19:59', ['source' => BlockedIp::SOURCE_EXPLOIT_SHIELD, 'decided_by' => 'false_positive_ua_rule', 'unbanned_at' => Carbon::parse('2026-09-18 20:08')]);
+        $ban('2026-09-18 14:10', ['source' => BlockedIp::SOURCE_EXPLOIT_SHIELD, 'decided_by' => 'false_positive_ua_rule', 'unbanned_at' => Carbon::parse('2026-09-18 14:18')]);
         // Lifted by hand within the hour.
         $ban('2026-09-20 10:00', ['decided_by' => 'manual', 'unbanned_at' => Carbon::parse('2026-09-20 10:40')]);
 
@@ -1088,13 +1088,13 @@ describe('threats blocked', function () {
         $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
         $site = accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]);
         BlockedIp::factory()->create(['site_id' => $site->id, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-03 08:00')]);
-        BlockedIp::factory()->create(['site_id' => null, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-12 06:52')]);
+        BlockedIp::factory()->create(['site_id' => null, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-12 09:15')]);
         // A manual ban later on doesn't show lockouts were still arriving.
         BlockedIp::factory()->create(['site_id' => $site->id, 'source' => BlockedIp::SOURCE_MANUAL, 'banned_at' => Carbon::parse('2026-09-25 10:00')]);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_unmeasured' => 'ingestion_stopped', 'lockouts_last_ingested_at' => '2026-09-12T06:52:00+00:00'])
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_unmeasured' => 'ingestion_stopped', 'lockouts_last_ingested_at' => '2026-09-12T09:15:00+00:00'])
             ->and($report['text'])->not->toContain('Malicious visitors blocked')
             ->and($report['html'])->not->toContain('block attackers')
             ->and(ReportPhrases::blockedVisitorsNote($report['data']['security']))->toContain('since Sep 12, 2026');
@@ -1413,9 +1413,9 @@ describe('uptime', function () {
 
     it('holds a report with a completed outage of an hour or more, even one past the listed five, so a person adds context', function () {
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        // 6h 19m from 2:25 AM EDT on Sep 1.
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 06:25:09', status: 500);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 12:44:28', status: 200);
+        // 6h 21m from 2:10 AM EDT on Sep 1.
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 06:10:00', status: 500);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 12:31:00', status: 200);
         // Five short ones later in the month push it off the client's list.
         foreach ([10, 12, 14, 16, 18] as $day) {
             uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, "2026-09-{$day} 10:00:00", status: 503);
@@ -1429,9 +1429,9 @@ describe('uptime', function () {
 
         expect($report['data']['uptime']['outages'])->toHaveCount(5)
             ->and($report['data']['uptime']['long_outages'])->toBe([
-                ['started_at' => '2026-09-01T06:25:09+00:00', 'minutes' => 379, 'started_before_period' => false, 'ongoing' => false],
+                ['started_at' => '2026-09-01T06:10:00+00:00', 'minutes' => 381, 'started_before_period' => false, 'ongoing' => false],
             ])
-            ->and($report['reasons'])->toContain('The site was down for an hour or more: Sep 1, 2:25 AM EDT for 6h 19m. Add context for the client before this goes out.');
+            ->and($report['reasons'])->toContain('The site was down for an hour or more: Sep 1, 2:10 AM EDT for 6h 21m. Add context for the client before this goes out.');
     });
 
     it('does not add the long-outage reason for an outage still open at the end, which has its own', function () {
@@ -1927,13 +1927,13 @@ describe('partial-month coverage', function () {
 
     it('treats a care plan switched on mid-month as the start of what the report covers', function () {
         $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
-        carePlanToggle($site, '2026-08-03 23:42', ['now' => false, 'override' => true, 'previous' => true], 'off');
-        carePlanToggle($site, '2026-09-26 17:59', ['now' => true, 'override' => true, 'previous' => false]);
+        carePlanToggle($site, '2026-08-03 21:05', ['now' => false, 'override' => true, 'previous' => true], 'off');
+        carePlanToggle($site, '2026-09-26 16:20', ['now' => true, 'override' => true, 'previous' => false]);
 
         $report = compileSeptember($site);
         $note = 'Your care plan began Sep 26, so this report covers Sep 26 – Sep 30.';
 
-        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-26T17:59:00+00:00', 'coverage_source' => 'care_plan'])
+        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-26T16:20:00+00:00', 'coverage_source' => 'care_plan'])
             ->and($report['html'])->toContain($note)
             ->and($report['text'])->toContain($note)
             ->and($report['preview'])->toContain($note)
@@ -2198,8 +2198,8 @@ describe('updates and site facts', function () {
     it('leaves the agency\'s own connector plugins out of the client\'s updates and counts', function () {
         $site = accuracySite();
         foreach ([
-            ['clockwork-renegade/clockwork-renegade.php', 'Plugin updated: Clockwork Renegade 1.1.0 → 1.1.2'],
-            ['clockwork-companion/clockwork-companion.php', 'Plugin updated: Clockwork Companion 1.40.0 → 1.41.0'],
+            ['clockwork-renegade/clockwork-renegade.php', 'Plugin updated: Clockwork Renegade 1.0.4 → 1.0.5'],
+            ['clockwork-companion/clockwork-companion.php', 'Plugin updated: Clockwork Companion 1.38.0 → 1.39.0'],
             ['example-forms/example-forms.php', 'Plugin updated: Example Forms 2.0 → 2.1'],
         ] as $i => [$target, $summary]) {
             ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => $target,
@@ -2246,7 +2246,7 @@ describe('updates and site facts', function () {
             'details' => ['slug' => 'example-seo/example-seo.php', 'before_version' => '5.0', 'after_version' => '5.1']]);
         $observed('plugin_update_observed', 'example-seo/example-seo.php', 'Example SEO', '5.0', '5.1', '2026-09-16 07:00');
         // The agency's own plugin and a change seen before the period stay out.
-        $observed('plugin_update_observed', 'clockwork-companion/clockwork-companion.php', 'Clockwork Companion', '1.40.0', '1.41.0', '2026-09-17 07:00');
+        $observed('plugin_update_observed', 'clockwork-companion/clockwork-companion.php', 'Clockwork Companion', '1.38.0', '1.39.0', '2026-09-17 07:00');
         $observed('plugin_update_observed', 'example-old/example-old.php', 'Example Old', '1.0', '1.1', '2026-08-30 07:00');
 
         $report = compileSeptember($site);
@@ -2280,22 +2280,22 @@ describe('updates and site facts', function () {
         // directory theme of the same slug; it was restored and paused.
         $site = accuracySite(['companion_snapshot_at' => Carbon::parse('2026-10-01 06:00'), 'companion_snapshot' => [
             'plugins' => ['plugins' => []],
-            'themes' => ['items' => [['name' => 'Example Child Theme', 'slug' => 'example-child', 'version' => '1.0.1', 'update_available' => false]]],
+            'themes' => ['items' => [['name' => 'Example Child Theme', 'slug' => 'example-child', 'version' => '2.0.3', 'update_available' => false]]],
             'wp_core' => ['update_available' => false],
         ]]);
         ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_THEME_UPDATE, 'target' => 'example-child',
-            'summary' => 'Theme updated: Example Child Theme 1.0.1 → 1.2.8', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-01 10:06'), 'actor' => 'auto',
-            'details' => ['slug' => 'example-child', 'before_version' => '1.0.1', 'after_version' => '1.2.8']]);
+            'summary' => 'Theme updated: Example Child Theme 2.0.3 → 2.4.0', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-01 09:30'), 'actor' => 'auto',
+            'details' => ['slug' => 'example-child', 'before_version' => '2.0.3', 'after_version' => '2.4.0']]);
         PluginUpdateIgnore::create(['site_id' => $site->id, 'target_kind' => 'theme', 'target_slug' => 'example-child',
-            'source' => PluginUpdateIgnore::SOURCE_MANUAL, 'note' => 'Custom theme; never update.', 'ignored_at' => Carbon::parse('2026-09-01 16:42')]);
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL, 'note' => 'Custom theme; never update.', 'ignored_at' => Carbon::parse('2026-09-01 15:10')]);
 
         $report = compileSeptember($site);
 
         expect($report['data']['updates'])->toMatchArray(['total' => 0, 'themes_count' => 0])
-            ->and($report['data']['updates']['not_kept'])->toBe([['type' => 'theme', 'label' => 'Example Child Theme 1.0.1 → 1.2.8', 'date' => '2026-09-01', 'installed_version' => '1.0.1']])
-            ->and($report['html'])->not->toContain('1.2.8')
-            ->and($report['text'])->not->toContain('1.2.8')
-            ->and($report['reasons'])->toContain('An update was undone after it ran, so it is left out of the updates list: Example Child Theme 1.0.1 → 1.2.8 (Sep 1; the site is on 1.0.1 now). Add context for the client if they noticed.');
+            ->and($report['data']['updates']['not_kept'])->toBe([['type' => 'theme', 'label' => 'Example Child Theme 2.0.3 → 2.4.0', 'date' => '2026-09-01', 'installed_version' => '2.0.3']])
+            ->and($report['html'])->not->toContain('2.4.0')
+            ->and($report['text'])->not->toContain('2.4.0')
+            ->and($report['reasons'])->toContain('An update was undone after it ran, so it is left out of the updates list: Example Child Theme 2.0.3 → 2.4.0 (Sep 1; the site is on 2.0.3 now). Add context for the client if they noticed.');
     });
 
     it('keeps an update whose version is lower now when nothing says it was undone, or when the snapshot is older than the update', function () {

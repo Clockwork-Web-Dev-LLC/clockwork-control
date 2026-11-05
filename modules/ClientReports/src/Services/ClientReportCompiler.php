@@ -1272,8 +1272,8 @@ class ClientReportCompiler
      * version fixes them) or [null, fixed_after] (only versions after that
      * one do), or [null, null] when one has no fix. An advisory names its
      * patched version, or failing that its range does: "below 3.0" is fixed
-     * in 3.0, "up to and including 2.0.6" (or exactly 2.0.6) by whatever
-     * comes after 2.0.6.
+     * in 3.0, "up to and including 4.2.0" (or exactly 4.2.0) by whatever
+     * comes after 4.2.0.
      * One open-ended ("all versions") with no patched version has no fix yet.
      *
      * @param  list<PluginVulnerability>  $vulns

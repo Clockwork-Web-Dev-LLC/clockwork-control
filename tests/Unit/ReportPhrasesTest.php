@@ -30,7 +30,7 @@ describe('first name for the greeting', function () {
         'a title' => 'Dr. Jane Example',
         'a note in brackets' => 'Jane (Example Strategy)',
         'an ampersand' => 'Example & Sons',
-        'more than three words' => 'Example Girl Interior Shop',
+        'more than three words' => 'Jane Mary Ann Example',
         'run together' => 'ExampleSupply',
         'all lower case' => 'jane example',
         'an email address' => 'jane@example.com',
