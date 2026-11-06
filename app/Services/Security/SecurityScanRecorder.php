@@ -23,7 +23,8 @@ use Throwable;
  * Also the chokepoint for the clean → malware-hit alert: every scan type
  * that can set has_malware_hit (SiteCheck, Companion in-WP probe) flows
  * through record(), so the transition check lives here once rather than
- * being duplicated in each artisan command.
+ * being duplicated in each artisan command. The Companion probe's
+ * new-PHP-in-uploads notice lives here for the same reason.
  */
 class SecurityScanRecorder
 {
@@ -66,12 +67,18 @@ class SecurityScanRecorder
         // Captured before the new row exists so it's genuinely the PREVIOUS
         // scan of this type for this site — used below to alert only on the
         // clean → malware-hit transition, not on every re-scan of a site
-        // that's still infected.
-        $previouslyHadMalwareHit = (bool) SiteSecurityScan::query()
+        // that's still infected. Failed scans are skipped: they carry no
+        // verdict (has_malware_hit is always false on them), so counting one
+        // as "clean" would re-alert on the next hit after every transport
+        // outage.
+        $previous = SiteSecurityScan::query()
             ->where('site_id', $r->site->id)
             ->where('scan_type', $r->scanType)
+            ->where('status', '!=', SiteSecurityScan::STATUS_FAILED)
             ->orderByDesc('scanned_at')
-            ->value('has_malware_hit');
+            ->orderByDesc('id')
+            ->first();
+        $previouslyHadMalwareHit = (bool) $previous?->has_malware_hit;
 
         $row = SiteSecurityScan::create([
             'site_id' => $r->site->id,
@@ -97,6 +104,10 @@ class SecurityScanRecorder
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        if ($r->scanType === SiteSecurityScan::TYPE_COMPANION_MALWARE && ! $r->isFailed()) {
+            $this->notifyNewPhpInUploads($r, $previous, $row);
         }
 
         // Forward the operator-actionable subset of the full scan details
@@ -143,5 +154,71 @@ class SecurityScanRecorder
         );
 
         return $row;
+    }
+
+    /**
+     * php_in_uploads is a review-tier finding, so it never sets
+     * has_malware_hit and the clean → hit alert above never covers it. A
+     * PHP file newly dropped into uploads is still the most common sign of
+     * a compromise, so post a notice for each path the previous non-failed
+     * scan of this site did not report. Paths are compared normalized
+     * (CompanionMalwareScanner::normalizeFindingPath), so older rows that
+     * stored absolute paths don't make known files look new, and each file
+     * alerts once — on the scan where it first appears — while long-standing
+     * files stay quiet. With no earlier scan to compare against, every path
+     * counts as new: nobody has reviewed them yet.
+     */
+    private function notifyNewPhpInUploads(SecurityScanResult $r, ?SiteSecurityScan $previous, SiteSecurityScan $row): void
+    {
+        $normalize = CompanionMalwareScanner::findingPathNormalizer($r->site);
+
+        $current = $this->uploadsPhpPaths($r->details['findings'] ?? null, $normalize);
+        if ($current === []) {
+            return;
+        }
+
+        $before = $previous !== null
+            ? $this->uploadsPhpPaths($previous->details['findings'] ?? null, $normalize)
+            : [];
+
+        $new = array_values(array_diff($current, $before));
+        if ($new === []) {
+            return;
+        }
+
+        try {
+            $this->chat->phpInUploadsDetected($r->site, $row, $new);
+        } catch (Throwable $e) {
+            Log::warning('security_scan.php_in_uploads_alert_failed', [
+                'site_id' => $r->site->id,
+                'scan_id' => $row->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  \Closure(string): string  $normalize
+     * @return list<string> unique normalized php_in_uploads paths
+     */
+    private function uploadsPhpPaths(mixed $findings, \Closure $normalize): array
+    {
+        if (! is_array($findings)) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($findings as $f) {
+            if (! is_array($f) || ($f['kind'] ?? null) !== 'php_in_uploads') {
+                continue;
+            }
+            $path = is_string($f['path'] ?? null) ? $normalize($f['path']) : '';
+            if ($path !== '') {
+                $paths[$path] = true;
+            }
+        }
+
+        // strval: PHP turns numeric-string array keys into ints.
+        return array_map('strval', array_keys($paths));
     }
 }

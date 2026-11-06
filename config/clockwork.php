@@ -429,6 +429,12 @@ return [
         // this are usually pages Lighthouse can't measure stably anyway.
         'poll_interval_seconds' => (int) env('CLOCKWORK_GTMETRIX_POLL_INTERVAL', 5),
         'poll_max_attempts' => (int) env('CLOCKWORK_GTMETRIX_POLL_MAX_ATTEMPTS', 36),
+        // API credits the plan refills each day (at ~04:27 UTC; unused
+        // credits don't carry over). One test costs one credit. The nightly
+        // rotation's month-end catch-up never schedules more scans than this.
+        // The default is the smallest (Core) plan's 10, a deliberately
+        // conservative floor: set it to the account's plan.
+        'daily_credits' => (int) env('CLOCKWORK_GTMETRIX_DAILY_CREDITS', 10),
     ],
 
     'security_scans' => [
@@ -529,6 +535,13 @@ return [
     // and care plan badges/banners/cards are suppressed across the platform.
     'care_plans' => [
         'enabled' => (bool) env('CLOCKWORK_CARE_PLANS_ENABLED', true),
+    ],
+
+    // Client reports (modules/ClientReports). Times are stored in UTC, which
+    // reads as the wrong time of day to clients; the report emails show
+    // outage start times in this zone, with its abbreviation (e.g. "EDT").
+    'reports' => [
+        'timezone' => env('CLOCKWORK_REPORTS_TIMEZONE', 'America/New_York'),
     ],
 
     // Anonymous usage telemetry — enabled by default, easily disabled anytime.

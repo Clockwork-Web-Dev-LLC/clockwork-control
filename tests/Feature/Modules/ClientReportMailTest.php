@@ -3,9 +3,11 @@
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
+use Modules\ClientReports\Models\ClientReportSchedule;
 
 function clientReportMailFixture(array $overrides = []): ClientReport
 {
@@ -94,22 +96,106 @@ it('hides the contact-forms section when no form tests ran', function () {
         'meta' => ['schema_version' => 2],
         'forms' => ['total_synthetic_tests' => 4, 'live_tests' => 4, 'pass_rate' => 100],
     ])))->render();
-    expect($html)->toContain('Contact forms')->toContain('100% delivered');
+    expect($html)->toContain('Contact forms')->toContain('your site reported sending the notification email for')
+        ->toContain('100%</strong> of them.')->not->toContain('% delivered');
 });
 
 it('does not HTML-escape names and notes in the plain-text part', function () {
     $report = clientReportMailFixture(['meta' => ['custom_notes' => "We've fixed the <contact> form & cache."]]);
-    $report->site->forceFill(['client_id' => Client::create(['name' => "O'Brien & Sons", 'email' => 'office@obrien.test'])->id])->save();
+    $report->forceFill(['client_email' => 'darcy@obrien.test'])->save();
+    $report->site->forceFill(['client_id' => Client::create(['name' => "D'Arcy O'Brien", 'email' => 'darcy@obrien.test'])->id])->save();
     $mail = new ClientReportMail($report->fresh());
     $content = $mail->content();
 
     $text = view($content->text, $content->with)->render();
 
-    expect($text)->toContain("Hi O'Brien & Sons,")
+    expect($text)->toContain("Hi D'Arcy,")
         ->toContain("We've fixed the <contact> form & cache.")
         ->not->toContain('&amp;')->not->toContain('&#039;');
     // The HTML part still escapes them.
-    expect($mail->render())->toContain('O&#039;Brien &amp; Sons')->not->toContain('<contact>');
+    expect($mail->render())->toContain('Hi D&#039;Arcy,')->toContain('&lt;contact&gt; form &amp; cache')->not->toContain('<contact>');
+});
+
+describe('the greeting', function () {
+    /** @return array{html: string, text: string} */
+    function greetingParts(ClientReport $report): array
+    {
+        $mail = new ClientReportMail($report->fresh());
+        $content = $mail->content();
+
+        return ['html' => $mail->render(), 'text' => view($content->text, $content->with)->render()];
+    }
+
+    it('greets the one recipient by first name when they are the contact on file, in both parts', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'Jane@Example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi Jane,')->not->toContain('Hi Jane Example,')
+            ->and($parts['text'])->toContain('Hi Jane,');
+    });
+
+    it('greets a recipient by name when another client record holds their address', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'sam@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Alex Example', 'email' => 'alex@example.test'])->id])->save();
+        Client::create(['name' => 'Sam Sample', 'email' => 'sam@example.test']);
+
+        expect(greetingParts($report)['text'])->toContain('Hi Sam,')->not->toContain('Alex');
+    });
+
+    it('says "Hi there," when the one recipient is not a known contact, even though the site has one', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'someone-else@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Alex Example', 'email' => 'alex@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')->not->toContain('Alex')
+            ->and($parts['text'])->toContain('Hi there,')->not->toContain('Alex');
+    });
+
+    it('says "Hi there," to several recipients, even when the first is the contact on file', function () {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'jane@example.test, colleague@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')->not->toContain('Hi Jane')
+            ->and($parts['text'])->toContain('Hi there,');
+    });
+
+    it('falls back to the schedule recipients when the report has none stored', function () {
+        $report = clientReportMailFixture();
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $report->site_id, 'frequency' => 'monthly', 'delivery_mode' => 'auto',
+            'recipients' => ['jane@example.test', 'colleague@example.test'], 'is_enabled' => true,
+        ]);
+        $report->forceFill(['schedule_id' => $schedule->id, 'client_email' => null])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => 'Jane Example', 'email' => 'jane@example.test'])->id])->save();
+
+        expect(greetingParts($report)['text'])->toContain('Hi there,');
+    });
+
+    it('says "Hi there," when the contact\'s stored name is not plainly a person\'s', function (string $name) {
+        $report = clientReportMailFixture();
+        $report->forceFill(['client_email' => 'office@example.test'])->save();
+        $report->site->forceFill(['client_id' => Client::create(['name' => $name, 'email' => 'office@example.test'])->id])->save();
+
+        $parts = greetingParts($report);
+
+        expect($parts['html'])->toContain('Hi there,')
+            ->and($parts['text'])->toContain('Hi there,');
+    })->with([
+        'an organisation' => 'Example Institute',
+        'an acronym' => 'EXCO',
+        'an initial' => 'J. Example',
+        'a note in brackets' => 'Jane (Example Strategy)',
+        'a company spelled out' => 'Example Interior Design Studio',
+    ]);
 });
 
 it('has a client-friendly subject and replies go to support', function () {
@@ -119,11 +205,94 @@ it('has a client-friendly subject and replies go to support', function () {
     $mail->assertHasReplyTo('support@clockwork.test');
 });
 
+it('sends from the configured address under the report brand name, not MAIL_FROM_NAME', function () {
+    config(['mail.from.address' => 'reports@example.com', 'mail.from.name' => 'Internal Control App']);
+    $mail = new ClientReportMail(clientReportMailFixture(['branding' => ['company_name' => 'Example Agency']]));
+
+    $mail->assertFrom('reports@example.com', 'Example Agency');
+    expect($mail->envelope()->from?->name)->toBe('Example Agency');
+
+    // The header that actually goes out, through the array transport.
+    Mail::to('client@example.com')->send($mail);
+    $from = app('mail.manager')->mailer()->getSymfonyTransport()->messages()->last()->getOriginalMessage()->getFrom();
+
+    expect($from)->toHaveCount(1)
+        ->and($from[0]->getAddress())->toBe('reports@example.com')
+        ->and($from[0]->getName())->toBe('Example Agency');
+});
+
+it('leaves the global From in place when no sending address is configured', function () {
+    config(['mail.from.address' => null]);
+
+    expect((new ClientReportMail(clientReportMailFixture()))->envelope()->from)->toBeNull();
+});
+
+it('prints the footer text in the plain-text part when one is set', function () {
+    $mail = new ClientReportMail(clientReportMailFixture(['branding' => ['footer_text' => 'Example Agency, 1 Example Street']]));
+    $content = $mail->content();
+    $text = view($content->text, $content->with)->render();
+
+    expect($text)->toContain("Example Agency, 1 Example Street\n\nQuestions about anything in this report?")
+        ->and($mail->render())->toContain('Example Agency, 1 Example Street');
+
+    // No footer set: no stray blank block before the sign-off.
+    $plain = new ClientReportMail(clientReportMailFixture());
+    $content = $plain->content();
+
+    expect(view($content->text, $content->with)->render())->not->toContain("\n\n\nQuestions about anything");
+});
+
+it('colours uptime by its value, in the tile and the row', function (float $pct, string $label, string $color) {
+    $html = (new ClientReportMail(clientReportMailFixture(['uptime' => ['uptime_percentage' => $pct]])))->render();
+
+    // Tile, then the Availability row.
+    expect(substr_count($html, "color:{$color}; line-height:1.2; white-space:nowrap;\">{$label}</div>"))->toBe(1)
+        ->and($html)->toMatch('/Availability.*?font-weight:700; color:'.preg_quote($color, '/').';">'.preg_quote($label, '/').'</');
+})->with([
+    'good' => [100.0, '100%', '#047857'],
+    'just good' => [99.9, '99.9%', '#047857'],
+    'amber' => [99.83, '99.83%', '#b45309'],
+    'red' => [97.08, '97.08%', '#b91c1c'],
+]);
+
+it('gives the plain-text part the same traffic and backup details as the HTML', function () {
+    $mail = new ClientReportMail(clientReportMailFixture([
+        'meta' => ['schema_version' => 6],
+        'traffic' => ['status' => 'ok'],
+        'backups' => [
+            'status' => 'verified', 'verified' => true, 'source' => 'pressable', 'covers_period' => true, 'days_with_backups' => 30,
+            'recent' => [
+                ['date' => '2026-09-30', 'kinds' => ['db', 'fs'], 'bytes' => 3 * 1024 ** 3, 'manual' => false],
+                ['date' => '2026-09-29', 'kinds' => ['db'], 'bytes' => 60 * 1024 ** 2, 'manual' => false],
+                ['date' => '2026-09-28', 'kinds' => ['fs'], 'bytes' => null, 'manual' => true],
+            ],
+        ],
+    ]));
+    $content = $mail->content();
+    $text = view($content->text, $content->with)->render();
+    $html = $mail->render();
+
+    expect($html)->toContain('Data transferred')->toContain('40.7 GB')->toContain('Files &amp; database')->toContain('Database')
+        ->and($text)->toContain("Requests served: 1,429,336\nData transferred: 40.7 GB")
+        ->toContain('- Wed, Sep 30: Files & database, 3.0 GB')
+        ->toContain('- Tue, Sep 29: Database, 60 MB')
+        ->toContain('- Mon, Sep 28: Files (manual)');
+});
+
+it('leaves "Data transferred" out of both parts when the host reports no byte counts', function () {
+    $mail = new ClientReportMail(clientReportMailFixture(['traffic' => ['bandwidth_mb' => null]]));
+    $content = $mail->content();
+
+    expect($mail->render())->not->toContain('Data transferred')
+        ->and(view($content->text, $content->with)->render())->not->toContain('Data transferred');
+});
+
 it('cleans raw action-log summaries', function (string $summary, ?string $target, string $expected) {
     expect(ClientReportMail::cleanUpdateSummary($summary, $target))->toBe($expected);
 })->with([
     ['Plugin updated: Yoast SEO 26.1 → 26.2', null, 'Yoast SEO 26.1 → 26.2'],
     ['Theme updated: Astra 4.1 → 4.2 [1 repair: x]', null, 'Astra 4.1 → 4.2'],
+    ['Theme updated: Example &amp; Co 1.0 → 1.1', null, 'Example & Co 1.0 → 1.1'],
     ['', 'wp-mail-smtp/wp_mail_smtp.php', 'Wp Mail Smtp'],
     ['', null, 'Software update'],
 ]);

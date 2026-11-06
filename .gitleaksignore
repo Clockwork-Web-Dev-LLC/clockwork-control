@@ -61,3 +61,11 @@ tests/Feature/Installer/InstallerWizardTest.php:generic-api-key:73
 # private-key rule on the PEM markers alone, same false-positive shape as
 # ReencryptSecretsTest.php above.
 database/seeders/AnonymizedSnapshotSeeder.php:private-key:105
+
+# UpgraderOutputTest.php's FAKE_JWT constant is an invented, unsigned
+# JWT-shaped fixture (header {"typ":"JWT","alg":"HS256"}, payload
+# {"license":"fake"}, signature segment = base64url of "fakesignature").
+# It only exercises UpgraderOutput's redaction of JWT-in-path download URLs
+# and is never sent anywhere. Matched by gitleaks' default jwt rule on shape
+# alone. (Not quoted here, so this comment does not trip the same rule.)
+tests/Unit/Support/UpgraderOutputTest.php:jwt:20

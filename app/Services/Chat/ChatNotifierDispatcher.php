@@ -125,6 +125,15 @@ class ChatNotifierDispatcher implements ChatNotifier
         return $this->dispatch(fn (ChatNotifier $n) => $n->siteExitedMaintenance($site, $maintenanceSec));
     }
 
+    /**
+     * A blocked probe is a monitoring gap, not an outage, so it is routed like
+     * the other routine per-site notices and stays quiet for inactive sites.
+     */
+    public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool
+    {
+        return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->uptimeProbeBlocked($site, $blockedSec, $statusCode, $retryAfter));
+    }
+
     public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
     {
         return $this->dispatchForSite($site, fn (ChatNotifier $n) => $n->pluginUpdateFailed($site, $job));
@@ -171,6 +180,14 @@ class ChatNotifierDispatcher implements ChatNotifier
     public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool
     {
         return $this->dispatch(fn (ChatNotifier $n) => $n->malwareFindingDetected($site, $scan));
+    }
+
+    // Same reasoning as malwareFindingDetected: a PHP file newly dropped into
+    // uploads is a possible compromise, not a maintenance nag, so it is not
+    // gated on is_inactive either.
+    public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool
+    {
+        return $this->dispatch(fn (ChatNotifier $n) => $n->phpInUploadsDetected($site, $scan, $paths));
     }
 
     /**

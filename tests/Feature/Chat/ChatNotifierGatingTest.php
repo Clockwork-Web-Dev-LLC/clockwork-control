@@ -30,14 +30,15 @@ use Modules\AiRemedy\Models\AiRemedyRun;
 | an inactive site:
 |   sslStateChanged, contactFormTestFailed,
 |   contactFormTestRecovered, companionUnreachable, companionReachable,
-|   pluginUpdateFailed
+|   pluginUpdateFailed, uptimeProbeBlocked (a monitoring gap, not an outage)
 |
 | NEVER gated — routed straight through dispatch() even for an inactive
 | site, because the class's own comment block says these are active-incident
 | signals (a real compromise, a real outage, a real attacker at the
 | firewall) on infrastructure Clockwork still serves, not routine
 | maintenance nags like an upcoming SSL renewal:
-|   siteWentDown, siteWentUp, malwareFindingDetected, ipBlocked
+|   siteWentDown, siteWentUp, malwareFindingDetected, phpInUploadsDetected,
+|   ipBlocked
 |
 | Not site-scoped at all — no Site parameter, so is_inactive can't apply:
 |   send, backupRelayStale, backupRelayRecovered, serverUpdateFailed,
@@ -163,6 +164,13 @@ function fakeChatNotifier(bool $returns): ChatNotifier
             return $this->returns;
         }
 
+        public function uptimeProbeBlocked(Site $site, int $blockedSec, ?int $statusCode, ?string $retryAfter = null): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
         public function pluginUpdateFailed(Site $site, PluginUpdateJob $job): bool
         {
             $this->calls[] = __FUNCTION__;
@@ -178,6 +186,13 @@ function fakeChatNotifier(bool $returns): ChatNotifier
         }
 
         public function malwareFindingDetected(Site $site, SiteSecurityScan $scan): bool
+        {
+            $this->calls[] = __FUNCTION__;
+
+            return $this->returns;
+        }
+
+        public function phpInUploadsDetected(Site $site, SiteSecurityScan $scan, array $paths): bool
         {
             $this->calls[] = __FUNCTION__;
 
@@ -285,10 +300,11 @@ dataset('gatedMethods', [
         PluginUpdateJob::factory()->create(['site_id' => $s->id]),
         5
     )],
+    'uptimeProbeBlocked' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->uptimeProbeBlocked($s, 6 * 3600, 429, '120')],
 ]);
 
 /**
- * The four dispatch()-routed "active incident" methods that must NEVER be
+ * The dispatch()-routed "active incident" methods that must NEVER be
  * gated on is_inactive, each as a closure invoking it with plausible args.
  */
 dataset('neverGatedMethods', [
@@ -297,6 +313,15 @@ dataset('neverGatedMethods', [
     'malwareFindingDetected' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->malwareFindingDetected(
         $s,
         SiteSecurityScan::factory()->malwareFound()->create(['site_id' => $s->id])
+    )],
+    'phpInUploadsDetected' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->phpInUploadsDetected(
+        $s,
+        SiteSecurityScan::factory()->create([
+            'site_id' => $s->id,
+            'scan_type' => SiteSecurityScan::TYPE_COMPANION_MALWARE,
+            'status' => SiteSecurityScan::STATUS_WARNING,
+        ]),
+        ['wp-content/uploads/2026/01/new.php']
     )],
     'ipBlocked' => [fn (ChatNotifierDispatcher $d, Site $s) => $d->ipBlocked(BlockedIp::factory()->create())],
 ]);

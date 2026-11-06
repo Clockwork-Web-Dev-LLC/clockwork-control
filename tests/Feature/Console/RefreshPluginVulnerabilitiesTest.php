@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\PluginVulnerability;
 use App\Models\Site;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -181,6 +182,51 @@ describe('clockwork:refresh-plugin-vulnerabilities — real sync against a faked
             ->assertFailed();
 
         expect(DB::table('plugin_vulnerabilities')->pluck('wordfence_id')->all())->toBe(['cf7-vuln']);
+    });
+
+    it('stores each feed operator as the right range, and an exact-version advisory as that version only', function () {
+        Site::factory()->create([
+            'companion_snapshot' => ['plugins' => ['plugins' => [['slug' => 'example-seo/example-seo.php']]]],
+        ]);
+
+        $op = fn (?string $min, ?string $minOp, ?string $max, ?string $maxOp, string $unfixed = '0') => [
+            'min_version' => $min, 'min_operator' => $minOp, 'max_version' => $max, 'max_operator' => $maxOp, 'unfixed' => $unfixed,
+        ];
+
+        Http::fake([
+            'wpvulnerability.net/plugin/example-seo*' => Http::response(pluginVulnResponse([
+                pluginVulnEntry(['uuid' => 'exact', 'name' => 'Example SEO [example-seo] == 3.0.123', 'operator' => $op(null, null, '3.0.123', 'eq')]),
+                pluginVulnEntry(['uuid' => 'exact-in-min', 'operator' => $op('2.5.0', 'eq', null, null)]),
+                pluginVulnEntry(['uuid' => 'below', 'operator' => $op(null, null, '3.0.97', 'lt')]),
+                pluginVulnEntry(['uuid' => 'up-to', 'operator' => $op(null, null, '2.0.6', 'lte', '1')]),
+                pluginVulnEntry(['uuid' => 'window', 'operator' => $op('1.0.0', 'gte', '1.4.0', 'lt')]),
+                pluginVulnEntry(['uuid' => 'after', 'operator' => $op('4.0.0', 'gt', null, null, '1')]),
+                pluginVulnEntry(['uuid' => 'numeric', 'operator' => ['max_version' => 2, 'max_operator' => 'lt', 'unfixed' => 0]]),
+            ])),
+        ]);
+
+        $this->artisan('clockwork:refresh-plugin-vulnerabilities')->assertSuccessful();
+
+        $rows = DB::table('plugin_vulnerabilities')->get()->keyBy('wordfence_id');
+        $range = fn (string $id) => [
+            $rows[$id]->from_version, (bool) $rows[$id]->from_inclusive,
+            $rows[$id]->to_version, (bool) $rows[$id]->to_inclusive,
+            $rows[$id]->patched_in,
+        ];
+
+        expect($range('exact'))->toBe(['3.0.123', true, '3.0.123', true, null])
+            ->and($range('exact-in-min'))->toBe(['2.5.0', true, '2.5.0', true, null])
+            ->and($range('below'))->toBe([null, true, '3.0.97', false, '3.0.97'])
+            ->and($range('up-to'))->toBe([null, true, '2.0.6', true, null])
+            ->and($range('window'))->toBe(['1.0.0', true, '1.4.0', false, '1.4.0'])
+            ->and($range('after'))->toBe(['4.0.0', false, null, true, null])
+            ->and($range('numeric'))->toBe([null, true, '2', false, '2']);
+
+        // The matcher sees the exact advisory only on that exact release.
+        $exact = PluginVulnerability::query()->where('wordfence_id', 'exact')->sole();
+        expect($exact->rangeIncludes('3.0.121'))->toBeFalse()
+            ->and($exact->rangeIncludes('3.0.123'))->toBeTrue()
+            ->and($exact->rangeIncludes('3.0.124'))->toBeFalse();
     });
 
     it('de-duplicates unique plugin slugs across multiple sites into a single fetch each', function () {

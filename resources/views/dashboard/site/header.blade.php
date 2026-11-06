@@ -98,6 +98,12 @@
                 </span>
             @endif
         @endif
+        {{-- Client Reports module: this site's schedule and report history. --}}
+        @if (\Illuminate\Support\Facades\Route::has('client-reports.clients.show'))
+            <a href="{{ route('client-reports.clients.show', $site->client_id ?? 'unassigned') }}#site-{{ $site->id }}" class="btn-pill-nav text-xs" title="This site's report schedule and past client reports">
+                <i class="fa-solid fa-file-lines"></i> Client reports
+            </a>
+        @endif
 
         @if ($ssoCapable && count($ssoAdmins) > 0)
             <form method="POST" action="{{ route('sites.companion.sso', $site) }}" target="_blank" class="inline">

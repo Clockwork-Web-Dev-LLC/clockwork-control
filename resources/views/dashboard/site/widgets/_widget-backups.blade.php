@@ -10,6 +10,12 @@
     $hasRelayOrPressable = $isPressable || $relayEnabled || $lastArchived !== null;
     $spacesEligible = $isSpinupWp && $spacesConfigured;
     $showSnapshots = $hasRelayOrPressable || $spacesEligible || $isCustom;
+    $relayLastError = $site->backup_relay_last_error ?? null;
+    $relayFailingSince = $site->backup_relay_failing_since ?? null;
+    $relayLastAttemptAt = $site->backup_relay_last_attempt_at ?? null;
+    $relayBlockedReason = ($isCustom && ! $relayEnabled && class_exists(\Modules\BackupRelay\Services\CompanionBackupRelayAdapter::class))
+        ? \Modules\BackupRelay\Services\CompanionBackupRelayAdapter::enableBlockedReason($site)
+        : null;
 @endphp
 
 <div class="card p-5 flex flex-col justify-between h-full"
@@ -28,6 +34,10 @@
          frequency: @js($relayFrequency),
          lastAt: @js($lastArchived?->toIso8601String()),
          nextAt: @js($nextScheduled?->toIso8601String()),
+         lastError: @js($relayLastError),
+         failingSince: @js($relayFailingSince?->toIso8601String()),
+         lastAttemptAt: @js($relayLastAttemptAt?->toIso8601String()),
+         blockedReason: @js($relayBlockedReason),
          saving: false,
          runningNow: false,
          runMessage: null,
@@ -223,6 +233,11 @@
                  if (json.schedule.frequency) this.frequency = json.schedule.frequency;
                  this.lastAt = json.schedule.last_archived_at || this.lastAt;
                  this.nextAt = json.schedule.next_scheduled_at || this.nextAt;
+                 if ('last_error' in json.schedule) {
+                     this.lastError = json.schedule.last_error;
+                     this.failingSince = json.schedule.failing_since;
+                     this.lastAttemptAt = json.schedule.last_attempt_at;
+                 }
              }
          },
          fetchHistory() {
@@ -262,6 +277,10 @@
                  const data = await res.json();
                  if (data.ok) {
                      this.nextAt = data.next_scheduled_at;
+                 } else {
+                     // Refused (e.g. the plugin lacks backup-create): show the server's state.
+                     if ('enabled' in data) this.enabled = !!data.enabled;
+                     this.runMessage = data.message || 'Could not save the backup schedule.';
                  }
              } catch (e) { /* keep previous UI */ }
              finally { this.saving = false; }
@@ -271,6 +290,7 @@
              this.runningNow = true;
              this.runMessage = null;
              const started = this.lastAt;
+             const startedAttempt = this.lastAttemptAt;
              try {
                  const res = await fetch('{{ route('sites.backup-relay.run-now', $site) }}', {
                      method: 'POST',
@@ -290,6 +310,11 @@
                      await this.fetchHistory().catch(() => {});
                      if (this.lastAt && this.lastAt !== started) {
                          this.runMessage = 'Backup completed.';
+                         this.runningNow = false;
+                         return;
+                     }
+                     if (this.lastError && this.lastAttemptAt && this.lastAttemptAt !== startedAttempt) {
+                         this.runMessage = 'Backup failed: ' + this.lastError;
                          this.runningNow = false;
                          return;
                      }
@@ -315,9 +340,9 @@
                 Backups
             </h3>
             @if ($isCustom)
-                <span class="status-pill text-[10px]" :class="enabled ? 'status-green' : 'status-unknown'">
+                <span class="status-pill text-[10px]" :class="enabled ? (lastError ? 'status-red' : 'status-green') : 'status-unknown'">
                     <span class="status-dot"></span>
-                    <span x-text="enabled ? 'Protected' : 'Disabled'">{{ $relayEnabled ? 'Protected' : 'Disabled' }}</span>
+                    <span x-text="enabled ? (lastError ? 'Failing' : 'Protected') : 'Disabled'">{{ $relayEnabled ? ($relayLastError ? 'Failing' : 'Protected') : 'Disabled' }}</span>
                 </span>
             @elseif ($hasRelayOrPressable)
                 <span class="status-pill status-green text-[10px]">
@@ -355,9 +380,10 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-sm text-[var(--color-ink-strong)] flex items-center gap-1.5">
-                            <i class="fa-solid fa-circle-check text-emerald-600 text-xs" x-show="enabled && lastAt"></i>
-                            <span x-text="enabled ? (lastAt ? 'Backups are successful' : 'Glacier relay active') : 'Backups disabled'">
-                                {{ $relayEnabled && $lastArchived ? 'Backups are successful' : ($relayEnabled ? 'Glacier relay active' : 'Backups disabled') }}
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-xs" x-show="enabled && lastAt && !lastError"></i>
+                            <i class="fa-solid fa-triangle-exclamation text-rose-600 text-xs" x-show="enabled && lastError" x-cloak></i>
+                            <span x-text="enabled ? (lastError ? 'Last backup attempt failed' : (lastAt ? 'Backups are successful' : 'Glacier relay active')) : 'Backups disabled'">
+                                {{ $relayEnabled && $relayLastError ? 'Last backup attempt failed' : ($relayEnabled && $lastArchived ? 'Backups are successful' : ($relayEnabled ? 'Glacier relay active' : 'Backups disabled')) }}
                             </span>
                         </div>
                         <div class="text-xs text-[var(--color-ink-muted)] mt-1">
@@ -376,6 +402,22 @@
                     </div>
                 </div>
 
+                {{-- Last failed attempt (cleared by the next successful archive) --}}
+                <div class="mt-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-[11px] text-rose-700 dark:text-rose-300"
+                     x-show="enabled && lastError"
+                     @unless ($relayEnabled && $relayLastError) x-cloak @endunless>
+                    <div class="font-semibold flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span x-text="failingSince ? 'Failing since ' + formatStamp(failingSince) : 'Last backup attempt failed'">
+                            {{ $relayFailingSince ? 'Failing since '.$relayFailingSince->format('Y-m-d, H:i') : 'Last backup attempt failed' }}
+                        </span>
+                    </div>
+                    <p class="mt-1 font-mono break-words" x-text="lastError">{{ $relayLastError }}</p>
+                    <p class="mt-1 text-[10px] opacity-80" x-show="lastAttemptAt" x-text="'Last attempt: ' + formatStamp(lastAttemptAt)">
+                        {{ $relayLastAttemptAt ? 'Last attempt: '.$relayLastAttemptAt->format('Y-m-d, H:i') : '' }}
+                    </p>
+                </div>
+
                 {{-- Configuration / Cadence metadata box --}}
                 <div class="mt-3.5 p-2.5 rounded-lg bg-[var(--color-surface-alt)]/60 text-xs space-y-2 border border-[var(--color-border-light)]/40">
                     <div class="flex items-center justify-between text-[11px]">
@@ -392,7 +434,8 @@
                                     :aria-checked="enabled ? 'true' : 'false'"
                                     aria-label="Toggle Glacier backups for {{ $site->domain }}"
                                     @click="enabled = !enabled; saveSchedule()"
-                                    :disabled="saving"
+                                    :disabled="saving || (!enabled && blockedReason)"
+                                    :title="!enabled && blockedReason ? blockedReason : null"
                                     class="cw-switch"
                                     :class="{ 'cw-switch--on': enabled, 'cw-switch--busy': saving }">
                                 <span class="cw-switch__knob"></span>
@@ -404,6 +447,7 @@
                             </span>
                         </div>
                     </div>
+                    <p class="text-[11px] text-amber-700 dark:text-amber-400" x-show="!enabled && blockedReason" @unless ($relayBlockedReason) x-cloak @endunless x-text="blockedReason">{{ $relayBlockedReason }}</p>
                     <div class="flex items-center justify-between text-[11px]">
                         <span class="text-[var(--color-ink-muted)]">Cadence:</span>
                         <select x-model="frequency"

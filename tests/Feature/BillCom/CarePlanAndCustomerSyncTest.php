@@ -242,3 +242,197 @@ describe('CarePlanSyncService::sync()', function () {
             ->and($stats['sites_skipped_due_to_override'])->toBe(0);
     });
 });
+
+/**
+ * One invoice with one line item — enough for the domain-matching cases below.
+ */
+function billComSingleLineInvoice(string $customerId, string $description, string $itemId = 'item-1', string $invoiceNumber = 'INV-9001'): array
+{
+    return [
+        'customerId' => $customerId,
+        'invoiceNumber' => $invoiceNumber,
+        'invoiceDate' => '2026-08-01',
+        'invoiceLineItems' => [
+            ['itemId' => $itemId, 'description' => $description],
+        ],
+    ];
+}
+
+describe('CustomerSyncService::sync() domain normalization', function () {
+    it('links a site stored as www.example.com from a line that writes it with a scheme and www.', function () {
+        $site = Site::factory()->create(['domain' => 'www.example.com', 'bill_com_customer_id' => null]);
+
+        $client = billComClientMock(
+            customers: [['id' => '0cuWWW1', 'name' => 'Example Client', 'archived' => false]],
+            invoices: [billComSingleLineInvoice('0cuWWW1', 'http://www.example.com - WordPress Care Plan')],
+        );
+
+        $stats = (new CustomerSyncService($client))->sync(windowDays: 365);
+
+        $site->refresh();
+        expect($site->bill_com_customer_id)->toBe('0cuWWW1')
+            ->and($site->bill_com_linked_via_invoice)->toBe('INV-9001')
+            ->and($stats['sites_linked'])->toBe(1)
+            ->and($stats['unmatched_domains'])->toBe([])
+            ->and($stats['domain_collisions'])->toBe([]);
+    });
+
+    it('links a site stored as www.example.org from a line that names the bare domain', function () {
+        $site = Site::factory()->create(['domain' => 'www.example.org', 'bill_com_customer_id' => null]);
+
+        $client = billComClientMock(
+            customers: [['id' => '0cuWWW2', 'name' => 'Example Org', 'archived' => false]],
+            invoices: [billComSingleLineInvoice('0cuWWW2', 'Website hosting for example.org')],
+        );
+
+        $stats = (new CustomerSyncService($client))->sync(windowDays: 365);
+
+        expect($site->refresh()->bill_com_customer_id)->toBe('0cuWWW2')
+            ->and($stats['sites_linked'])->toBe(1)
+            ->and($stats['unmatched_domains'])->toBe([]);
+    });
+
+    it('links a site on a TLD outside the static allow-list because a non-archived site uses that TLD', function () {
+        $site = Site::factory()->create(['domain' => 'example.tv', 'bill_com_customer_id' => null]);
+
+        $client = billComClientMock(
+            customers: [['id' => '0cuTV1', 'name' => 'Example TV', 'archived' => false]],
+            invoices: [billComSingleLineInvoice('0cuTV1', 'Website hosting for example.tv')],
+        );
+
+        $stats = (new CustomerSyncService($client))->sync(windowDays: 365);
+
+        expect($site->refresh()->bill_com_customer_id)->toBe('0cuTV1')
+            ->and($stats['sites_linked'])->toBe(1);
+    });
+
+    it('lists a domain only an archived site has under archived_site_domains, not unmatched, and never links it', function () {
+        $archived = Site::factory()->archived()->create(['domain' => 'www.example.net', 'bill_com_customer_id' => null]);
+
+        $client = billComClientMock(
+            customers: [['id' => '0cuARCH1', 'name' => 'Former Client', 'archived' => false]],
+            invoices: [billComSingleLineInvoice('0cuARCH1', 'Hosting for example.net and missing-example.com')],
+        );
+
+        $stats = (new CustomerSyncService($client))->sync(windowDays: 365);
+
+        $archived = Site::withoutGlobalScope('notArchived')->find($archived->id);
+        expect($archived->bill_com_customer_id)->toBeNull()
+            ->and($stats['archived_site_domains'])->toBe(['example.net' => 1])
+            ->and($stats['unmatched_domains'])->toBe(['missing-example.com' => 1])
+            ->and($stats['sites_linked'])->toBe(0);
+    });
+
+    it('prefers the exact domain when two active sites normalize to the same key, and counts the collision', function () {
+        $apex = Site::factory()->create(['domain' => 'example.com', 'bill_com_customer_id' => null]);
+        $www = Site::factory()->create(['domain' => 'www.example.com', 'bill_com_customer_id' => null]);
+
+        $client = billComClientMock(
+            customers: [['id' => '0cuDUP1', 'name' => 'Duplicate Client', 'archived' => false]],
+            invoices: [billComSingleLineInvoice('0cuDUP1', 'Website hosting for example.com')],
+        );
+
+        $stats = (new CustomerSyncService($client))->sync(windowDays: 365);
+
+        expect($apex->refresh()->bill_com_customer_id)->toBe('0cuDUP1')
+            ->and($www->refresh()->bill_com_customer_id)->toBeNull()
+            ->and($stats['sites_linked'])->toBe(1)
+            ->and($stats['domain_collisions'])->toBe(['example.com' => 2]);
+    });
+});
+
+describe('CarePlanSyncService::sync() domain normalization', function () {
+    it('flips care_plan_enabled on for a site stored as www.example.com when the care-plan line writes it with a scheme and www.', function () {
+        $customer = BillComCustomer::create(['id' => '0cuCPWWW1', 'name' => 'Example Client', 'archived' => false]);
+        $site = Site::factory()->create([
+            'domain' => 'www.example.com',
+            'bill_com_customer_id' => $customer->id,
+            'care_plan_enabled' => false,
+            'care_plan_override' => null,
+        ]);
+
+        $client = billComClientMock(
+            items: [['id' => 'item-care-1', 'name' => 'WordPress Care Plan']],
+            invoices: [billComSingleLineInvoice($customer->id, 'http://www.example.com - WordPress Care Plan', 'item-care-1')],
+        );
+
+        $stats = (new CarePlanSyncService($client))->sync(windowDays: 60, itemRegex: '/care plan/i');
+
+        expect($site->refresh()->care_plan_enabled)->toBeTrue()
+            ->and($stats['sites_set_true'])->toBe(1)
+            ->and($stats['active_care_plan_domains'])->toBe(1)
+            ->and($stats['unmatched_care_plan_domains'])->toBe([])
+            ->and($stats['domain_collisions'])->toBe([]);
+    });
+
+    it('flips care_plan_enabled on for a .law site, a TLD only recognised because a non-archived site uses it', function () {
+        $customer = BillComCustomer::create(['id' => '0cuCPLAW1', 'name' => 'Example Law', 'archived' => false]);
+        $site = Site::factory()->create([
+            'domain' => 'example.law',
+            'bill_com_customer_id' => $customer->id,
+            'care_plan_enabled' => false,
+            'care_plan_override' => null,
+        ]);
+
+        $client = billComClientMock(
+            items: [['id' => 'item-care-1', 'name' => 'Care Plan - Monthly']],
+            invoices: [billComSingleLineInvoice($customer->id, 'Care plan services for example.law', 'item-care-1')],
+        );
+
+        $stats = (new CarePlanSyncService($client))->sync(windowDays: 60, itemRegex: '/care plan/i');
+
+        expect($site->refresh()->care_plan_enabled)->toBeTrue()
+            ->and($stats['care_plan_lineitems_without_domain'])->toBe(0)
+            ->and($stats['unmatched_care_plan_domains'])->toBe([]);
+    });
+
+    it('lists a care-plan domain only an archived site has under archived_care_plan_domains, keeping truly unknown ones unmatched', function () {
+        $customer = BillComCustomer::create(['id' => '0cuCPARCH1', 'name' => 'Former Client', 'archived' => false]);
+        Site::factory()->archived()->create([
+            'domain' => 'example.net',
+            'bill_com_customer_id' => $customer->id,
+            'care_plan_enabled' => false,
+            'care_plan_override' => null,
+        ]);
+
+        $client = billComClientMock(
+            items: [['id' => 'item-care-1', 'name' => 'Care Plan - Monthly']],
+            invoices: [billComSingleLineInvoice($customer->id, 'Care plan for www.example.net and missing-example.org', 'item-care-1')],
+        );
+
+        $stats = (new CarePlanSyncService($client))->sync(windowDays: 60, itemRegex: '/care plan/i');
+
+        expect($stats['archived_care_plan_domains'])->toBe(['example.net' => 1])
+            ->and($stats['unmatched_care_plan_domains'])->toBe(['missing-example.org' => 1])
+            ->and($stats['sites_set_true'])->toBe(0);
+    });
+
+    it('flags only the exact-match site when two active sites normalize to the same domain, and counts the collision', function () {
+        $customer = BillComCustomer::create(['id' => '0cuCPDUP1', 'name' => 'Duplicate Client', 'archived' => false]);
+        $apex = Site::factory()->create([
+            'domain' => 'example.org',
+            'bill_com_customer_id' => $customer->id,
+            'care_plan_enabled' => false,
+            'care_plan_override' => null,
+        ]);
+        $www = Site::factory()->create([
+            'domain' => 'www.example.org',
+            'bill_com_customer_id' => $customer->id,
+            'care_plan_enabled' => false,
+            'care_plan_override' => null,
+        ]);
+
+        $client = billComClientMock(
+            items: [['id' => 'item-care-1', 'name' => 'Care Plan - Monthly']],
+            invoices: [billComSingleLineInvoice($customer->id, 'Care plan for example.org', 'item-care-1')],
+        );
+
+        $stats = (new CarePlanSyncService($client))->sync(windowDays: 60, itemRegex: '/care plan/i');
+
+        expect($apex->refresh()->care_plan_enabled)->toBeTrue()
+            ->and($www->refresh()->care_plan_enabled)->toBeFalse()
+            ->and($stats['sites_set_true'])->toBe(1)
+            ->and($stats['domain_collisions'])->toBe(['example.org' => 2])
+            ->and($stats['unmatched_care_plan_domains'])->toBe([]);
+    });
+});

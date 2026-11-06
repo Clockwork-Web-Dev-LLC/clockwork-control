@@ -1067,6 +1067,7 @@
                                         <input type="url" name="support_url" x-model="reportsSupportUrl"
                                             class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
                                             :placeholder="supportUrl || companyUrl || 'https://youragency.com'">
+                                        <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Leave empty to use the Companion Support Portal URL, then your Agency Website (now: <span x-text="supportUrl || companyUrl || 'none'"></span>). Must be a public http(s) address clients can reach, not localhost or a private address.</p>
                                     </div>
                                 </div>
                             </div>

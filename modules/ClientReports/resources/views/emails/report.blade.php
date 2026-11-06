@@ -13,6 +13,7 @@
     $soft = '#f8fafc';
     $good = '#047857';
     $warn = '#b45309';
+    $bad = '#b91c1c';
 
     $meta = $data['meta'] ?? [];
     $updates = $data['updates'] ?? [];
@@ -32,22 +33,32 @@
     $period = $report->period_start->format('F Y');
     $range = $report->period_start->format('M j').' – '.$report->period_end->format('M j, Y');
 
-    $showUptime = isset($data['uptime']) && ($uptime['monitored'] ?? true);
-    // Reports compiled before schema 2 counted form passes wrongly (always 0%), so their forms data isn't shown.
-    $isCurrentSchema = (int) ($meta['schema_version'] ?? 1) >= 2;
+    // Which sections the client sees: one rule for this, the text part and the preview.
+    $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
+    $showUptime = $sections['uptime'];
     $liveTests = (int) ($forms['live_tests'] ?? 0);
     $labTests = (int) ($forms['lab_tests'] ?? 0);
-    $showForms = $isCurrentSchema && isset($data['forms']) && ($liveTests > 0 || $labTests > 0);
-    $showPerf = isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop']));
-    $showTraffic = isset($data['traffic']) && ! empty($traffic['has_traffic']);
-    $showWork = isset($data['work_log']) && ! empty($workLog['entries']);
+    $showForms = $sections['forms'];
+    $showPerf = $sections['performance'];
+    $showTraffic = $sections['traffic'];
+    $showWork = $sections['work_log'];
 
     $updateCount = count($updateRows);
     $uptimePct = $uptime['uptime_percentage'] ?? null;
     $uptimeLabel = $uptimePct === null ? '—' : rtrim(rtrim(number_format((float) $uptimePct, 2), '0'), '.').'%';
+    // Green only for a month that really was (99.9%+), amber from 99%, red below.
+    $uptimeColor = match (\Modules\ClientReports\Support\ReportPhrases::uptimeTone($uptimePct)) {
+        'good' => $good,
+        'warn' => $warn,
+        'bad' => $bad,
+        default => $muted,
+    };
     $downtime = (int) ($uptime['downtime_minutes'] ?? 0);
     $downtimeLabel = $downtime >= 60 ? floor($downtime / 60).'h '.($downtime % 60).'m' : $downtime.' min';
     $isWordPress = (bool) ($data['site']['is_wordpress'] ?? true);
+    // No transport can run the core-file check on some hosts, so "Not checked"
+    // would be true every month: the row is left out. Older reports had the row.
+    $showChecksum = $isWordPress && (bool) ($security['checksum_supported'] ?? true);
     $checksum = $security['checksum_status'] ?? null;
     [$checksumLabel, $checksumColor] = match ($checksum) {
         'clean' => ['Verified clean', $good],
@@ -56,15 +67,13 @@
         default => [ucfirst((string) $checksum), $warn],
     };
     // Older reports never actually checked vulnerabilities, so a missing flag means "not checked".
-    $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
-    $inactiveVulns = (int) ($security['inactive_plugin_vulnerabilities'] ?? 0);
-    $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
-    $vulnPlugins = count($security['vulnerable_plugins'] ?? []);
-    [$vulnLabel, $vulnColor] = match (true) {
-        ! $vulnsChecked => ['Not checked', $muted],
-        $vulns === 0 => ['None found', $good],
-        default => [$vulns.' found'.($vulnPlugins > 0 ? ' in '.$vulnPlugins.' '.\Illuminate\Support\Str::plural('plugin', $vulnPlugins) : '').($inactiveVulns > 0 ? ' ('.$inactiveVulns.' in inactive plugins)' : ''), $warn],
+    $vulnLabel = \Modules\ClientReports\Support\ReportPhrases::vulnerabilities($security);
+    $vulnColor = match (true) {
+        ! ($security['vulnerabilities_checked'] ?? false) => $muted,
+        (int) ($security['active_vulnerabilities'] ?? 0) === 0 => $good,
+        default => $warn,
     };
+    $vulnPluginNames = \Modules\ClientReports\Support\ReportPhrases::vulnerablePlugins($security);
     $showMalware = array_key_exists('malware_status', $security);
     $showBlacklist = array_key_exists('blacklist_status', $security);
     [$blacklistLabel, $blacklistColor] = match ($security['blacklist_status'] ?? null) {
@@ -73,40 +82,39 @@
         null => ['Not checked this month', $muted],
         default => [ucfirst((string) $security['blacklist_status']), $warn],
     };
-    [$malwareLabel, $malwareColor] = match ($security['malware_status'] ?? null) {
-        'clean' => ['No malware found', $good],
-        'warning', 'issues_found' => ['Issues flagged', $warn],
-        null => ['Not checked this month', $muted],
-        default => [ucfirst((string) $security['malware_status']), $warn],
+    // Shared with the text part: "Reviewed — no threat found" once a person
+    // has checked review-tier findings, "Partial scan" for a scan cut short.
+    [$malwareLabel, $malwareTone] = \Modules\ClientReports\Support\ReportPhrases::malwareLabel($security);
+    $malwareColor = match ($malwareTone) {
+        'good' => $good,
+        'muted' => $muted,
+        default => $warn,
     };
-    $vulnsAsOf = ! empty($security['vulnerabilities_as_of'])
-        ? \Illuminate\Support\Carbon::parse($security['vulnerabilities_as_of'])->format('M j')
-        : null;
-    $showBackups = isset($data['backups']) && ! empty($backups['verified']);
-    $backupKindLabel = fn (array $kinds) => match (true) {
-        in_array('full', $kinds, true), in_array('fs', $kinds, true) && in_array('db', $kinds, true) => 'Files & database',
-        in_array('db', $kinds, true) => 'Database',
-        default => 'Files',
-    };
-    $outageWhen = fn (array $o) => (! empty($o['started_before_period']) ? 'Down since before ' : 'Down ').\Illuminate\Support\Carbon::parse($o['started_at'])->format('M j, g:i A').' UTC'.(! empty($o['ongoing']) ? ' (still down at period end)' : '');
+    // The Companion snapshot date: when we looked, often just after the period.
+    $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
+    $showBackups = $sections['backups'];
+    $backupDestination = \Modules\ClientReports\Support\ReportPhrases::backupDestination($backups);
+    // A site enrolled part-way through the month: say when monitoring began.
+    $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
+    $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
+    $outageWhen = fn (array $o) => \Modules\ClientReports\Support\ReportPhrases::outageStart($o).(! empty($o['ongoing']) ? ' (still down at period end)' : '');
     $outageLength = fn (int $m) => $m < 1 ? '<1 min' : ($m >= 60 ? floor($m / 60).'h '.($m % 60).'m' : $m.' min');
-    $formatBytes = fn (int $b) => $b >= 1024 ** 3 ? number_format($b / 1024 ** 3, 1).' GB' : ($b >= 1024 ** 2 ? number_format($b / 1024 ** 2, 0).' MB' : number_format(max(1, $b / 1024), 0).' KB');
 
-    $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : '#b91c1c');
-    $bandwidth = (float) ($traffic['bandwidth_mb'] ?? 0);
-    $showBandwidth = $bandwidth > 0;
-    $bandwidthLabel = $bandwidth >= 1024 ? number_format($bandwidth / 1024, 1).' GB' : number_format($bandwidth, 0).' MB';
+    $scoreColor = fn ($s) => $s >= 90 ? $good : ($s >= 50 ? $warn : $bad);
+    // Shared with the text part, so both say the same.
+    $bandwidthLabel = \Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb'] ?? null);
+    $showBandwidth = $bandwidthLabel !== null;
 
     // Tiles sit four across even on a phone, so long numbers are abbreviated there
     // (the section below still shows the exact figure).
     $compact = fn ($n) => $n >= 1000000 ? rtrim(rtrim(number_format($n / 1000000, 1), '0'), '.').'M'
         : ($n >= 10000 ? rtrim(rtrim(number_format($n / 1000, 1), '0'), '.').'K' : number_format($n));
     $tiles = [];
-    if (isset($data['updates'])) $tiles[] = [$updateCount, 'Updates applied', $ink];
-    if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $good];
-    if (isset($data['security'])) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
+    if ($sections['updates']) $tiles[] = [$updateCount, 'Updates applied', $ink];
+    if ($showUptime) $tiles[] = [$uptimeLabel, 'Uptime', $uptimeColor];
+    if ($sections['security']) $tiles[] = [$compact((int) ($security['total_scans'] ?? 0)), 'Security scans', $ink];
     if ($showTraffic) $tiles[] = [$compact((int) ($traffic['total_visits'] ?? 0)), 'Visits', $ink];
-    elseif (isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
+    elseif ($sections['security'] && ($security['blocked_threats_count'] ?? null) !== null) $tiles[] = [$compact((int) $security['blocked_threats_count']), 'Threats blocked', $ink];
     $tiles = array_slice($tiles, 0, 4);
 @endphp
 <!DOCTYPE html>
@@ -145,8 +153,11 @@
 
     {{-- Intro --}}
     <tr><td style="padding:28px 32px 8px 32px; font-size:15px; line-height:1.6; color:#334155;">
-        <p style="margin:0 0 12px 0;">Hi{{ $contactName ? ' '.$contactName : '' }},</p>
+        <p style="margin:0 0 12px 0;">Hi {{ $greetingName ?: 'there' }},</p>
         <p style="margin:0;">Here's your website care summary for <strong class="cw-nolink" style="color:{{ $ink }}; text-decoration:none;">{!! $plainDomain !!}</strong> for {{ $period }} — what we updated, how the site performed, and how we kept it secure.</p>
+        @if ($coverageNote)
+            <p style="margin:12px 0 0 0;">{{ $coverageNote }}</p>
+        @endif
     </td></tr>
 
     @if (! empty($meta['custom_notes']))
@@ -179,7 +190,7 @@
     @endif
 
     {{-- Updates --}}
-    @if (isset($data['updates']))
+    @if ($sections['updates'])
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Updates applied</div>
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">Keeping WordPress, themes and plugins current closes known security holes and keeps everything compatible.</p>
@@ -195,11 +206,7 @@
                     @endforeach
                 </table>
             @else
-                @if (\Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates))
-                    <p style="margin:0; font-size:14px; color:#334155;">No updates were applied this month.</p>
-                @else
-                    <p style="margin:0; font-size:14px; color:#334155;">Everything was already up to date this month — no updates were needed.</p>
-                @endif
+                <p style="margin:0; font-size:14px; color:#334155;">{{ \Modules\ClientReports\Support\ReportPhrases::noUpdatesLine($updates) }}</p>
             @endif
         </td></tr>
     @endif
@@ -210,7 +217,7 @@
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Uptime &amp; availability</div>
             <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">We check your site around the clock and are alerted the moment it stops responding.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
-                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $good }};">{{ $uptimeLabel }}</td></tr>
+                <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Availability @if ($monitoredSince)<span style="font-size:11px; color:#94a3b8;">(monitoring began {{ $monitoredSince }})</span>@endif</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $uptimeColor }};">{{ $uptimeLabel }}</td></tr>
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Outages</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ (int) ($uptime['outages_count'] ?? 0) }}</td></tr>
                 <tr><td style="padding:8px 0; color:#334155;">Total downtime</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ $downtimeLabel }}</td></tr>
             </table>
@@ -231,12 +238,20 @@
     @endif
 
     {{-- Security --}}
-    @if (isset($data['security']))
+    @if ($sections['security'])
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Security</div>
-            {{-- Only claim blocking where something on the site reports its blocks to us. --}}
-            @php $showBlocked = ($security['blocked_threats_count'] ?? null) !== null; @endphp
-            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">{{ $showBlocked ? 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.' : 'We scan for malware and tampered files and watch for known plugin vulnerabilities.' }}</p>
+            {{-- Only claim blocking where we know the site's lockouts reach us, and
+                 "at the server" only where a fail2ban jail bans there. --}}
+            @php
+                $showBlocked = ($security['blocked_threats_count'] ?? null) !== null;
+                $securityIntro = match (true) {
+                    $showBlocked && (bool) ($security['blocks_at_server'] ?? true) => 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block attackers at the server.',
+                    $showBlocked => 'We scan for malware and tampered files, watch for known plugin vulnerabilities, and block malicious visitors.',
+                    default => 'We scan for malware and tampered files and watch for known plugin vulnerabilities.',
+                };
+            @endphp
+            <p style="margin:10px 0 12px 0; font-size:13px; line-height:1.6; color:{{ $muted }};">{{ $securityIntro }}</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;">
                 <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Security scans run</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $ink }};">{{ number_format((int) ($security['total_scans'] ?? 0)) }}</td></tr>
                 @if ($showBlacklist)
@@ -245,10 +260,14 @@
                 @if ($showMalware)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">Malware scan</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $malwareColor }};">{{ $malwareLabel }}</td></tr>
                 @endif
-                @if ($isWordPress)
+                @if ($showChecksum)
                     <tr><td style="padding:8px 0; border-bottom:1px solid {{ $line }}; color:#334155;">WordPress core files</td><td align="right" style="padding:8px 0; border-bottom:1px solid {{ $line }}; font-weight:700; color:{{ $checksumColor }};">{{ $checksumLabel }}</td></tr>
                 @endif
-                <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsAsOf)<span style="font-size:11px; color:#94a3b8;">(as of {{ $vulnsAsOf }})</span>@endif</td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
+                <tr><td style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} color:#334155;">Known plugin vulnerabilities @if ($vulnsCheckedOn)<span style="font-size:11px; color:#94a3b8;">(checked {{ $vulnsCheckedOn }})</span>@endif
+                    @if ($vulnPluginNames !== [])
+                        <div style="font-size:12px; color:{{ $muted }}; margin-top:2px; line-height:1.45;">{{ \Illuminate\Support\Str::plural('Plugin', count($vulnPluginNames)) }} affected: {{ implode(', ', $vulnPluginNames) }}</div>
+                    @endif
+                </td><td align="right" style="padding:8px 0; {{ $showBlocked ? 'border-bottom:1px solid '.$line.';' : '' }} font-weight:700; color:{{ $vulnColor }};">{{ $vulnLabel }}</td></tr>
                 @if ($showBlocked)
                     <tr><td style="padding:8px 0; color:#334155;">Malicious visitors blocked</td><td align="right" style="padding:8px 0; font-weight:700; color:{{ $ink }};">{{ number_format((int) $security['blocked_threats_count']) }}</td></tr>
                 @endif
@@ -304,10 +323,10 @@
         <tr><td style="padding:28px 32px 0 32px;">
             <div style="font-size:17px; font-weight:800; color:{{ $ink }}; border-bottom:2px solid {{ $primary }}; padding-bottom:8px;">Contact forms</div>
             @if ($liveTests > 0)
-                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms to confirm messages reach you — <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}% delivered</strong>.</p>
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms — your site reported sending the notification email for <strong style="color:{{ ($forms['pass_rate'] ?? 0) >= 100 ? $good : $warn }};">{{ $forms['pass_rate'] ?? 0 }}%</strong> of them. <span style="color:{{ $muted }};">We don't check the inbox, so this doesn't confirm the emails arrived.</span></p>
             @endif
             @if ($labTests > 0)
-                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span style="color:{{ $muted }};">These checks confirm the form works without sending an email, so they don't test delivery.</span></p>
+                <p style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:#334155;">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span style="color:{{ $muted }};">These checks confirm the form works without sending an email, so they don't test the email.</span></p>
             @endif
         </td></tr>
     @endif
@@ -323,17 +342,17 @@
                 @php $backupDays = (int) ($backups['days_with_backups'] ?? 0); @endphp
                 <p style="margin:10px 0 12px 0; font-size:14px; line-height:1.6; color:#334155;">
                     @if ($backups['covers_period'] ?? true)
-                        Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                        Your site was backed up on <strong>{{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }}</strong> this month{{ $backupDestination ? ' '.$backupDestination : '' }}, so it can be restored if anything goes wrong.
                     @else
-                        Your site is backed up{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}, so it can be restored if anything goes wrong.
+                        Your site is backed up{{ $backupDestination ? ' '.$backupDestination : '' }}, so it can be restored if anything goes wrong.
                     @endif
                 </p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
                     @foreach ($backups['recent'] as $day)
                         <tr>
                             <td style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $ink }}; white-space:nowrap;">{{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}</td>
-                            <td style="padding:7px 8px; border-bottom:1px solid {{ $line }}; color:#334155;">{{ $backupKindLabel($day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
-                            <td align="right" style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $muted }}; white-space:nowrap;">{{ $day['bytes'] !== null ? $formatBytes((int) $day['bytes']) : '—' }}</td>
+                            <td style="padding:7px 8px; border-bottom:1px solid {{ $line }}; color:#334155;">{{ \Modules\ClientReports\Support\ReportPhrases::backupKinds((array) $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                            <td align="right" style="padding:7px 0; border-bottom:1px solid {{ $line }}; color:{{ $muted }}; white-space:nowrap;">{{ $day['bytes'] !== null ? \Modules\ClientReports\Support\ReportPhrases::bytes((int) $day['bytes']) : '—' }}</td>
                         </tr>
                     @endforeach
                 </table>

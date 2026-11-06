@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Modules\ClientReports\Services\ClientReportCompiler;
 
 /**
  * @property int $id
@@ -102,6 +103,33 @@ class ClientReport extends Model
         }
 
         return array_values(array_diff($this->recipients(), $this->sent_to ?? []));
+    }
+
+    /**
+     * Whether this report was compiled before the report rules it would be
+     * read under now (meta.schema_version below the compiler's). Its stored
+     * figures were worked out the old way, so it mustn't reach anyone who
+     * hasn't already got it: recompile it (or generate a new one) first.
+     */
+    public function isStale(): bool
+    {
+        $data = is_array($this->sections_data) ? $this->sections_data : [];
+
+        return (int) ($data['meta']['schema_version'] ?? 0) < ClientReportCompiler::SCHEMA_VERSION;
+    }
+
+    /**
+     * Whether the Recompile action may refresh this report from current
+     * data: only a scheduled report that hasn't reached anyone (still
+     * generated, nobody in sent_to). A sent or partly sent report is a
+     * record of what the client got, a superseded one has a newer copy, and
+     * a hand-generated one has no schedule to recompile it from.
+     */
+    public function canRecompile(): bool
+    {
+        return $this->schedule_id !== null
+            && $this->status === self::STATUS_GENERATED
+            && empty($this->sent_to);
     }
 
     protected static function booted(): void

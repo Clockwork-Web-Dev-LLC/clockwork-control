@@ -41,42 +41,42 @@ class ClientReportTemplate extends Model
     public const SECTIONS = [
         'updates' => [
             'label' => 'Updates & Upgrades',
-            'description' => 'Plugins, themes, core updates and translation upgrades applied.',
+            'description' => 'Plugin, theme and WordPress core updates applied during the period, and any still waiting at its end.',
             'icon' => 'fa-circle-arrow-up',
         ],
         'uptime' => [
             'label' => 'Uptime & Availability',
-            'description' => 'Availability percentage, outage counts, and total downtime.',
+            'description' => 'Uptime percentage, outage count, total downtime and the most recent outages, for sites the uptime monitor checks.',
             'icon' => 'fa-heart-pulse',
         ],
         'security' => [
             'label' => 'Security & Firewall',
-            'description' => 'Checksum malware scans, file integrity, and blocked malicious requests.',
+            'description' => 'Latest malware scan, WordPress core file check, blocklist check and known plugin vulnerabilities, plus attackers blocked when the site reports its blocks.',
             'icon' => 'fa-shield-halved',
         ],
         'performance' => [
             'label' => 'Performance Benchmarks',
-            'description' => 'PageSpeed scores, time to first byte (TTFB), and page load speed.',
+            'description' => 'Latest mobile and desktop performance score and page load time (LCP) from tests run during the period.',
             'icon' => 'fa-gauge-high',
         ],
         'forms' => [
             'label' => 'Contact Form Testing',
-            'description' => 'Automated synthetic form submission success and deliverability rates.',
+            'description' => 'Automated test submissions and whether each form accepted them. Scheduled tests suppress the email, so delivery is only reported for live tests.',
             'icon' => 'fa-envelope-circle-check',
         ],
         'traffic' => [
             'label' => 'Traffic Analytics',
-            'description' => 'Monthly unique visits, top referrers, and page view statistics.',
+            'description' => 'Visits, page and file requests served, and data transferred (when the host reports it).',
             'icon' => 'fa-chart-line',
         ],
         'backups' => [
             'label' => 'Backups & Snapshots',
-            'description' => 'Completed backup runs, cloud storage locations, and restore readiness.',
+            'description' => 'Backups recorded from the site\'s own backup source: where they are stored and the last 10 days of the period.',
             'icon' => 'fa-box-archive',
         ],
         'work_log' => [
             'label' => 'Work log',
-            'description' => 'Manual hours logged by the team during the report period.',
+            'description' => 'Hours logged in the site\'s work log during the period; left out when there are none.',
             'icon' => 'fa-clock',
         ],
     ];

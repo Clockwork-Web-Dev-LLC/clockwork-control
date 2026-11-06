@@ -22,6 +22,53 @@ use Throwable;
  */
 class CompanionBackupRelayAdapter implements BackupRelayAdapter, DirectS3BackupRelayAdapter
 {
+    /** Plugin capability that exposes POST /backup/create (the direct-to-S3 dump). */
+    public const CAPABILITY_BACKUP_CREATE = 'backup-create';
+
+    /**
+     * @param  array<int, string>|null  $capabilities  as reported by the plugin's /health
+     */
+    public static function supportsBackupCreate(?array $capabilities): bool
+    {
+        return in_array(self::CAPABILITY_BACKUP_CREATE, $capabilities ?? [], true);
+    }
+
+    /**
+     * Operator-facing reason a site's plugin cannot take a direct backup.
+     */
+    public static function missingBackupCreateMessage(Site $site): string
+    {
+        $plugin = $site->isRenegade() ? 'Renegade' : 'Companion';
+        $version = trim((string) $site->companion_version);
+        $label = $version !== '' ? "{$plugin} {$version}" : $plugin;
+
+        return $site->isRenegade()
+            ? "{$label} lacks the backup-create capability; update Renegade."
+            : "{$label} lacks the backup-create capability; update Companion or switch to Renegade.";
+    }
+
+    /**
+     * Why backup relay must not be turned on for this site, or null when it
+     * can be. Only sites this adapter archives (the plugin uploads straight to
+     * S3) need backup-create; host-streamed providers are never blocked here.
+     */
+    public static function enableBlockedReason(Site $site): ?string
+    {
+        try {
+            $adapter = $site->host()->backupRelayAdapter();
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! $adapter instanceof self) {
+            return null;
+        }
+
+        return self::supportsBackupCreate($site->companion_capabilities)
+            ? null
+            : self::missingBackupCreateMessage($site);
+    }
+
     public function latestBackupRef(Site $site): ?BackupRef
     {
         if (! $site->companion_installed || ! $site->companion_secret) {
@@ -47,6 +94,13 @@ class CompanionBackupRelayAdapter implements BackupRelayAdapter, DirectS3BackupR
      */
     public function uploadDirectToS3(Site $site, string $destinationKey, array $presigned): array
     {
+        // Fail loudly rather than skip: relay is on, so a backup was promised,
+        // and the run must report this site as failed with a fix the operator
+        // can act on (an older plugin has no /backup/create endpoint).
+        if (! self::supportsBackupCreate($site->companion_capabilities)) {
+            throw new RuntimeException("BackupRelay: {$site->domain}: ".self::missingBackupCreateMessage($site));
+        }
+
         $client = new ClockworkCompanionClient($site, timeout: 300);
 
         try {

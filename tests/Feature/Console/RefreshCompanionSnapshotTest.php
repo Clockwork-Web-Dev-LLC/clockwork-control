@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Models\ActionLog;
 use App\Models\Server;
 use App\Models\Site;
 use Illuminate\Support\Facades\Http;
@@ -97,6 +98,37 @@ describe('clockwork:refresh-companion-snapshot — happy path', function () {
 
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/plugins'));
         Http::assertSent(fn ($request) => str_contains($request->url(), '/snapshot'));
+    });
+
+    it('logs a plugin version that changed outside Control since the previous snapshot, without mirroring it to the site', function () {
+        $site = csSnapshotSite([
+            'companion_capabilities' => ['snapshot', 'action-log'],
+            'companion_snapshot' => ['plugins' => ['plugins' => [
+                ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '2.9.0'],
+            ]]],
+            'companion_snapshot_at' => now()->subDay(),
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/snapshot*" => Http::response(
+                ['plugins' => ['plugins' => [
+                    ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '2.9.1'],
+                ]]],
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        $this->artisan('clockwork:refresh-companion-snapshot')->assertSuccessful();
+
+        $row = ActionLog::query()->where('site_id', $site->id)->where('action_type', ActionLog::TYPE_PLUGIN_UPDATE_OBSERVED)->sole();
+        expect($row->details)->toMatchArray([
+            'slug' => 'example-forms/example-forms.php',
+            'name' => 'Example Forms',
+            'from_version' => '2.9.0',
+            'to_version' => '2.9.1',
+        ]);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'action-log'));
     });
 });
 

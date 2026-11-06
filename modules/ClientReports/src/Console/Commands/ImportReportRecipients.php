@@ -22,7 +22,8 @@ class ImportReportRecipients extends Command
         {--site-column= : Explicit header name of the column containing site domains}
         {--apply : Write the changes. Without it the command only shows what it would do}
         {--replace : Replace a schedule\'s existing recipients instead of adding to them}
-        {--no-push : Don\'t push the updated recipients to the sites\' WordPress plugin}';
+        {--no-push : Don\'t push the updated recipients to the sites\' WordPress plugin}
+        {--include-no-care-plan : Create enabled schedules for sites without an active care plan too (by default they\'re created disabled)}';
 
     protected $description = 'Import client report recipients from a CSV (site domain + email columns). Dry run unless --apply.';
 
@@ -34,6 +35,7 @@ class ImportReportRecipients extends Command
         $path = (string) $this->argument('path');
         $apply = (bool) $this->option('apply');
         $replace = (bool) $this->option('replace');
+        $includeNoCarePlan = (bool) $this->option('include-no-care-plan');
 
         if (! is_file($path) || ! is_readable($path)) {
             $this->error("Can't read {$path}.");
@@ -131,7 +133,7 @@ class ImportReportRecipients extends Command
         $schedules = ClientReportSchedule::query()->get()->keyBy('site_id');
         $defaultTemplate = ClientReportTemplate::query()->orderByDesc('is_default')->orderBy('name')->first();
 
-        $stats = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'no_site' => 0, 'no_emails' => 0];
+        $stats = ['created' => 0, 'created_disabled' => 0, 'updated' => 0, 'unchanged' => 0, 'no_site' => 0, 'no_emails' => 0];
         $tableRows = [];
         /** @var list<array{0: Site, 1: ClientReportSchedule}> $toPush */
         $toPush = [];
@@ -159,8 +161,19 @@ class ImportReportRecipients extends Command
             $schedule = $schedules->get($site->id);
 
             if ($schedule === null) {
+                // A CSV row is no proof the client pays for reports, so a site
+                // without a care plan gets its schedule switched off until
+                // someone turns it on, unless asked otherwise.
+                $enabled = $site->isCarePlanActive() || $includeNoCarePlan;
                 $stats['created']++;
-                $tableRows[] = [$domain, 'Create schedule'.$carePlanNote, implode(', ', $emails)];
+                if (! $enabled) {
+                    $stats['created_disabled']++;
+                }
+                $tableRows[] = [
+                    $domain,
+                    'Create schedule'.($enabled ? $carePlanNote : ' (no care plan: created disabled)'),
+                    implode(', ', $emails),
+                ];
 
                 if ($apply) {
                     $schedule = ClientReportSchedule::create([
@@ -169,7 +182,7 @@ class ImportReportRecipients extends Command
                         'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
                         'delivery_mode' => ClientReportSchedule::MODE_AUTO,
                         'recipients' => $emails,
-                        'is_enabled' => true,
+                        'is_enabled' => $enabled,
                         'next_run_at' => (new ClientReportSchedule(['frequency' => ClientReportSchedule::FREQUENCY_MONTHLY]))->computeNextRun(),
                     ]);
                     $toPush[] = [$site, $schedule];
@@ -203,9 +216,10 @@ class ImportReportRecipients extends Command
 
         $this->table(['Site', 'Action', 'Recipients'], $tableRows);
         $this->line(sprintf(
-            '%s: %d created, %d updated, %d unchanged, %d not found in Control, %d without a valid email%s.',
+            '%s: %d created%s, %d updated, %d unchanged, %d not found in Control, %d without a valid email%s.',
             $apply ? 'Done' : 'Dry run',
             $stats['created'],
+            $stats['created_disabled'] > 0 ? " ({$stats['created_disabled']} disabled: no care plan)" : '',
             $stats['updated'],
             $stats['unchanged'],
             $stats['no_site'],

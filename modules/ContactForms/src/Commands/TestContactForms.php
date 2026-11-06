@@ -106,14 +106,23 @@ class TestContactForms extends Command
 
     /**
      * "Is this row due?" — never-tested rows always qualify; otherwise the
-     * row must be older than its frequency window.
+     * row must be older than its frequency window, less a grace margin.
+     *
+     * The scheduled run starts at a fixed time each day, but last_test_at
+     * is stamped when each test finishes — a few minutes later, and at a
+     * slightly different minute every day. A strict 24h / 7d cutoff skips
+     * a row whenever today's run reaches this filter earlier in the day
+     * than the previous test finished, so daily rows ran roughly every
+     * other day and weekly rows every eighth day. The margins absorb that
+     * drift while still keeping a row from running twice in one window:
+     * daily is due after 20 hours, weekly after 7 days minus 4 hours.
      *
      * @param  Builder<ContactFormTest>  $q
      */
     private function applyDueFilter($q): void
     {
-        $dailyCutoff = now()->subDay();
-        $weeklyCutoff = now()->subDays(7);
+        $dailyCutoff = now()->subHours(20);
+        $weeklyCutoff = now()->subDays(7)->addHours(4);
 
         $q->where(function ($q) use ($dailyCutoff, $weeklyCutoff) {
             $q->whereNull('last_test_at')

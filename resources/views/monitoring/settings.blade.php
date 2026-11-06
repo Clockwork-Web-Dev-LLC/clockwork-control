@@ -67,6 +67,26 @@
             </p>
         </div>
 
+        {{-- Probe-blocked notice --}}
+        <div class="mb-6">
+            <label for="probe_blocked_alert_hours" class="block text-sm font-medium text-[var(--color-ink-strong)] mb-2">Notify when a site blocks the probe for</label>
+            <div class="flex items-center gap-2">
+                <input type="number" id="probe_blocked_alert_hours" name="probe_blocked_alert_hours" min="1" max="168" step="1"
+                       value="{{ old('probe_blocked_alert_hours', $probeBlockedAlertHours ?? 6) }}"
+                       class="w-24 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-data text-[var(--color-ink-strong)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-600)]">
+                <span class="text-sm text-[var(--color-ink-muted)]">hours</span>
+            </div>
+            @error('probe_blocked_alert_hours')
+                <p class="text-xs text-[var(--color-status-red)] mt-2">{{ $message }}</p>
+            @enderror
+            <p class="text-xs text-[var(--color-ink-muted)] mt-2">
+                A site that answers the probe with HTTP 429 (Too Many Requests) is rate-limiting the monitor, not down.
+                It shows as "blocked", never counts as downtime, and never fires a down alert. If it keeps blocking
+                for this many hours in a row, one chat notice is sent so someone can allowlist the monitor or check
+                whether real visitors are being throttled too. Default: 6.
+            </p>
+        </div>
+
         {{-- Domain ignore list --}}
         <div class="mb-6">
             <label for="ignored_domains" class="block text-sm font-medium text-[var(--color-ink-strong)] mb-2">Ignored domains</label>

@@ -142,6 +142,40 @@ class SshClient
     }
 
     /**
+     * Like exec(), but a command that runs out of time throws
+     * SshCommandTimedOut instead of returning the output so far as if it had
+     * finished, and a command phpseclib couldn't run at all throws too. For
+     * callers that read "no output" as "nothing found".
+     *
+     * @throws SshCommandTimedOut
+     * @throws RuntimeException
+     */
+    public function execChecked(Server $server, string $command, ?int $timeoutSeconds = null): string
+    {
+        $ssh = $this->connect($server);
+
+        if ($timeoutSeconds !== null && $timeoutSeconds > 0) {
+            $ssh->setTimeout($timeoutSeconds);
+        }
+
+        try {
+            $output = $ssh->exec($command);
+            $timedOut = $ssh->isTimeout();
+        } finally {
+            $ssh->disconnect();
+        }
+
+        if ($timedOut) {
+            throw new SshCommandTimedOut('SSH command timed out after '.($timeoutSeconds ?? 'the default').'s.');
+        }
+        if (! is_string($output)) {
+            throw new RuntimeException('SSH command could not be run.');
+        }
+
+        return $output;
+    }
+
+    /**
      * Lightweight connection test. Returns the username the server reports back
      * along with which auth method actually succeeded.
      *

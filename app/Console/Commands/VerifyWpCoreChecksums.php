@@ -8,13 +8,16 @@ use App\Services\Security\WpCoreChecksumVerifier;
 use App\Support\Settings;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Server-side counterpart to clockwork:scan-sitecheck — runs `wp core
  * verify-checksums` against every WordPress site, capturing any modified,
  * missing, or unexpectedly-present core files. Transport is per-site: SSH
  * for SpinupWP, Pressable's async command API for Pressable — see
- * WpCoreChecksumVerifier for the branch.
+ * WpCoreChecksumVerifier for the branch. Sites with no transport at all
+ * (WpCoreChecksumVerifier::hasTransport) are skipped and counted, not
+ * recorded as failures.
  *
  * Catches the case Sucuri can't see by design: PHP shells and base64
  * backdoors that aren't rendered into the public HTML. Anything dropped
@@ -35,6 +38,24 @@ class VerifyWpCoreChecksums extends Command
             $this->warn('No sites match.');
 
             return self::SUCCESS;
+        }
+
+        // A site with no way to run wp-cli (a standalone site on a host we
+        // have no shell access to) can never be checked. Recording a failed
+        // row for it every night only turned the job red and buried real
+        // failures, so it's skipped and counted instead.
+        [$sites, $noTransport] = $sites->partition(fn (Site $site) => $verifier->hasTransport($site));
+        $skipped = $noTransport->count();
+        if ($skipped > 0) {
+            Log::info('verify-wp-core-checksums: skipped sites with no checksum transport', [
+                'count' => $skipped,
+                'site_ids' => $noTransport->pluck('id')->values()->all(),
+            ]);
+            if ($this->option('site') || $this->getOutput()->isVerbose()) {
+                foreach ($noTransport as $site) {
+                    $this->line("  - {$site->domain}: skipped, no SSH, Pressable or host command runner to run wp-cli");
+                }
+            }
         }
 
         $clean = 0;
@@ -75,7 +96,7 @@ class VerifyWpCoreChecksums extends Command
 
         $bar->finish();
         $this->line('');
-        $this->info("Done. clean={$clean}, issues={$issues}, failed={$failed}");
+        $this->info("Done. clean={$clean}, issues={$issues}, failed={$failed}, skipped={$skipped}");
 
         $settings->put('security_scans.checksums_last_run_at', now()->toIso8601String());
 

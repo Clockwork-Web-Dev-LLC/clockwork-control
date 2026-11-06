@@ -2,6 +2,7 @@
     $isUp = $site->uptime_state === 'up';
     $isDown = $site->uptime_state === 'down';
     $isMaintenance = $site->uptime_state === 'maintenance';
+    $isProbeBlocked = $site->uptime_state === 'probe_blocked';
     $latestDown = $isDown ? $site->latestDownEvent() : null;
     $isNotOurFault = $isDown && ($site->uptime_sla_exempt || (bool) $latestDown?->is_sla_exempt);
     $exemptionReason = $site->uptime_exemption_reason ?: $latestDown?->exemption_reason;
@@ -34,6 +35,10 @@
                 <span class="status-pill status-yellow text-[10px]">
                     <span class="status-dot"></span> Maintenance
                 </span>
+            @elseif ($isProbeBlocked)
+                <span class="status-pill status-yellow text-[10px]" title="The site answers the uptime probe with HTTP 429 (rate-limited). Not counted as downtime.">
+                    <span class="status-dot"></span> Probe blocked
+                </span>
             @else
                 <span class="status-pill status-green text-[10px]">
                     <span class="status-dot"></span> {{ $authProtected ? 'Up (Auth)' : 'Operational' }}
@@ -47,7 +52,7 @@
                 <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                     <path class="text-[var(--color-surface-alt)]" stroke-width="3.5" stroke="currentColor" fill="none"
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                    <path class="{{ ! $monitoringEnabled ? 'text-gray-300' : ($isNotOurFault ? 'text-amber-500' : ($isDown ? 'text-rose-500' : ($isMaintenance ? 'text-amber-500' : 'text-emerald-500'))) }} transition-all duration-700 ease-out"
+                    <path class="{{ ! $monitoringEnabled ? 'text-gray-300' : ($isNotOurFault ? 'text-amber-500' : ($isDown ? 'text-rose-500' : ($isMaintenance || $isProbeBlocked ? 'text-amber-500' : 'text-emerald-500'))) }} transition-all duration-700 ease-out"
                           stroke-dasharray="{{ $monitoringEnabled ? ($pct . ', 100') : '0, 100' }}"
                           stroke-width="3.5"
                           stroke-linecap="round"
@@ -64,6 +69,8 @@
                         <span class="font-bold text-[11px] text-rose-600">DOWN</span>
                     @elseif ($isMaintenance)
                         <i class="fa-solid fa-wrench text-[13px] text-amber-600"></i>
+                    @elseif ($isProbeBlocked)
+                        <span class="font-bold text-[9px] text-amber-600">429</span>
                     @else
                         <span class="font-bold text-[11px] text-emerald-600">UP</span>
                     @endif
@@ -87,6 +94,8 @@
                         @if ($site->uptime_last_status_code) (HTTP {{ $site->uptime_last_status_code }}) @endif
                     @elseif ($isMaintenance && $site->uptime_maintenance_since)
                         In maintenance for {{ $site->uptime_maintenance_since->diffForHumans(['parts' => 2, 'short' => true]) }}
+                    @elseif ($isProbeBlocked)
+                        Probe rate-limited (HTTP 429){{ $site->uptime_probe_blocked_since ? ' since ' . $site->uptime_probe_blocked_since->diffForHumans(['parts' => 2, 'short' => true]) : '' }} · not counted as downtime
                     @elseif ($site->uptime_last_up_at)
                         Up for {{ $site->uptime_last_up_at->diffForHumans(['parts' => 2, 'short' => true]) }}
                     @else
@@ -110,6 +119,8 @@
                                     <span class="text-emerald-600 font-bold">↑ Up</span>
                                 @elseif ($event->event_type === 'maintenance')
                                     <span class="text-amber-600 font-bold">🔧 Maint</span>
+                                @elseif ($event->event_type === 'probe_blocked')
+                                    <span class="text-amber-600 font-bold">⊘ Blocked</span>
                                 @elseif ($event->is_sla_exempt)
                                     <span class="text-amber-600 dark:text-amber-400 font-bold">↓ Down (Excused)</span>
                                 @else

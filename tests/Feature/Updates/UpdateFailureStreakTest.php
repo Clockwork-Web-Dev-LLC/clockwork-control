@@ -11,10 +11,12 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
 use App\Services\Updates\UpdateFailureStreakRecorder;
 use App\Support\IssueCounter;
 use App\Support\Settings;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -47,6 +49,43 @@ function fakeNightlyJob(Site $site, string $slug = 'stubborn-plugin', array $ove
         'target_version' => '1.1.0',
         'status' => PluginUpdateJob::STATUS_PENDING,
     ], $overrides));
+}
+
+/*
+| Upgrader output as Companion returns it for a failed upgrade it still
+| reports as ok=true (before == after, below the target). The licence key
+| is invented; hosts are reserved example domains.
+*/
+const STREAK_FAKE_LICENSE = 'FAKE-LICENSE-5555-4444-3333';
+
+/**
+ * @param  list<string>  $messages
+ * @return array<string, mixed>
+ */
+function stalledWithUpgraderError(array $messages): array
+{
+    return [
+        'ok' => true,
+        'upgrade_completed' => true,
+        'before_version' => '1.0.0',
+        'after_version' => '1.0.0',
+        'was_active' => true,
+        'reactivated' => true,
+        'messages' => $messages,
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function copyFailedMessages(string $slug): array
+{
+    return [
+        'Downloading update from https://downloads.example.org/packages/'.$slug.'.1.1.0.zip?license='.STREAK_FAKE_LICENSE.'&#8230;',
+        'Unpacking the update&#8230;',
+        "Could not copy file. {$slug}/includes/class-main.php",
+        'Error: Could not copy file.',
+    ];
 }
 
 describe('Update failure streaks and auto-ignore', function () {
@@ -153,7 +192,7 @@ describe('Update failure streaks and auto-ignore', function () {
             ],
         ]);
 
-        PluginUpdateIgnore::create([
+        $ignore = PluginUpdateIgnore::create([
             'site_id' => $site->id,
             'target_kind' => PluginUpdateJob::KIND_PLUGIN,
             'target_slug' => 'stubborn-plugin',
@@ -163,10 +202,190 @@ describe('Update failure streaks and auto-ignore', function () {
             'note' => 'Auto-ignored',
         ]);
 
+        // The snapshot still offers the version that kept failing.
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_from_version' => '1.0.0',
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
         $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
 
         Queue::assertNothingPushed();
         expect(PluginUpdateJob::where('site_id', $site->id)->where('target_slug', 'stubborn-plugin')->count())->toBe(0);
+    });
+
+    it('lifts the auto-pause, clears the streak and re-pushes exceptions when an update reaches its target version', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        // A second paused plugin on the same site stays in the pushed list.
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'other-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        $streak = PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions*" => Http::response(['ok' => true], 200),
+        ]);
+
+        // A nightly retry of a newer release that went through.
+        $job = fakeNightlyJob($site, 'stubborn-plugin', [
+            'target_version' => '1.2.0',
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => '1.2.0',
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, [
+            'ok' => true,
+            'slug' => 'stubborn-plugin',
+            'before_version' => '1.0.0',
+            'after_version' => '1.2.0',
+        ]);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'other-plugin')->exists())->toBeTrue();
+
+        $streak->refresh();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->toBeNull()
+            ->and($streak->ignore_id)->toBeNull();
+
+        Http::assertSent(function ($request) use ($site) {
+            return strtok($request->url(), '?') === "https://{$site->domain}/wp-json/clockwork/v1/update-exceptions"
+                && collect($request['items'] ?? [])->pluck('slug')->all() === ['other-plugin'];
+        });
+    });
+
+    it('lifts the auto-pause when a nightly retry of a new release succeeds through the update job', function () {
+        $site = makeExampleSite();
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response([
+                'ok' => true,
+                'slug' => 'stubborn-plugin',
+                'before_version' => '1.0.0',
+                'after_version' => '1.2.0',
+                'was_active' => true,
+                'reactivated' => true,
+                'elapsed_ms' => 400,
+            ], 200),
+        ]);
+
+        $job = fakeNightlyJob($site, 'stubborn-plugin', ['target_version' => '1.2.0']);
+        (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+        expect($job->refresh()->status)->toBe(PluginUpdateJob::STATUS_COMPLETE)
+            ->and(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeFalse();
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->where('target_slug', 'stubborn-plugin')->first();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->toBeNull();
+    });
+
+    it('keeps the auto-pause when a completed job cannot show it reached the target version', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 5,
+            'client_visible' => true,
+        ]);
+        $streak = PluginUpdateFailureStreak::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'stubborn-plugin',
+            'consecutive_failures' => 5,
+            'last_target_version' => '1.1.0',
+            'ignored_at' => now(),
+            'ignore_id' => $ignore->id,
+        ]);
+
+        Http::fake();
+
+        $job = fakeNightlyJob($site, 'stubborn-plugin', [
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => null,
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, ['ok' => true, 'slug' => 'stubborn-plugin']);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeTrue();
+        $streak->refresh();
+        expect($streak->consecutive_failures)->toBe(0)
+            ->and($streak->ignored_at)->not->toBeNull()
+            ->and($streak->ignore_id)->toBe($ignore->id);
+        Http::assertNothingSent();
+    });
+
+    it('never lifts a manual ignore after a successful update', function () {
+        $site = makeExampleSite(['companion_installed' => true]);
+
+        $ignore = PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_PLUGIN,
+            'target_slug' => 'held-plugin',
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'client_visible' => false,
+            'note' => 'Hold this one',
+        ]);
+
+        Http::fake();
+
+        $job = fakeNightlyJob($site, 'held-plugin', [
+            'requested_by_user_id' => User::factory()->create()->id,
+            'batch_id' => (string) Str::uuid(),
+            'status' => PluginUpdateJob::STATUS_COMPLETE,
+            'after_version' => '1.1.0',
+        ]);
+        app(UpdateFailureStreakRecorder::class)->record($job, ['ok' => true, 'slug' => 'held-plugin', 'after_version' => '1.1.0']);
+
+        expect(PluginUpdateIgnore::whereKey($ignore->id)->exists())->toBeTrue();
+        Http::assertNothingSent();
     });
 
     it('resets streak to 0 on any successful update after prior failures', function () {
@@ -588,6 +807,64 @@ describe('Update failure streaks and auto-ignore', function () {
         expect($payload['items'])->toBeEmpty();
     });
 
+    it('does not convert a theme held as a different theme into a client-visible auto-ignore', function () {
+        $site = makeExampleSite();
+
+        PluginUpdateIgnore::create([
+            'site_id' => $site->id,
+            'target_kind' => PluginUpdateJob::KIND_THEME,
+            'target_slug' => 'held-theme',
+            'source' => PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH,
+            'client_visible' => false,
+            'note' => 'Held by the nightly loop',
+        ]);
+
+        $job = fakeNightlyJob($site, 'held-theme', [
+            'target_kind' => PluginUpdateJob::KIND_THEME,
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => 'Theme update failed.',
+        ]);
+
+        $recorder = app(UpdateFailureStreakRecorder::class);
+        for ($i = 1; $i <= 5; $i++) {
+            $recorder->record($job, ['ok' => false, 'error' => 'Theme update failed.', 'slug' => 'held-theme']);
+        }
+
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'held-theme')->sole();
+        expect($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_IDENTITY_MISMATCH)
+            ->and($ignore->client_visible)->toBeFalse()
+            ->and($recorder->buildExceptionsPayload($site)['items'])->toBeEmpty();
+    });
+
+    it('stores the reason code and a redacted last_error on the streak and the auto-ignore', function () {
+        $site = makeExampleSite();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response(stalledWithUpgraderError([
+                'Downloading update from https://vendor.example.net/download?license_key='.STREAK_FAKE_LICENSE.'&#8230;',
+                'Download failed. Unauthorized',
+                'Error: Download failed.',
+            ]), 200),
+        ]);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $job = fakeNightlyJob($site, 'licensed-plugin');
+            (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+        }
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->where('target_slug', 'licensed-plugin')->first();
+        expect($streak->reason_code)->toBe('download_unauthorized')
+            ->and($streak->last_error)->toStartWith('Download failed. Unauthorized — Error: Download failed.')
+            ->and($streak->last_error)->not->toContain(STREAK_FAKE_LICENSE);
+
+        // A licence problem is specific to the plugin: per-plugin pause as before.
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'licensed-plugin')->first();
+        expect($ignore)->not->toBeNull()
+            ->and($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_AUTO_FAILURE)
+            ->and($ignore->last_error)->not->toContain(STREAK_FAKE_LICENSE)
+            ->and($site->refresh()->auto_updates_paused)->toBeFalse();
+    });
+
     it('pushes an updated exceptions list when an auto-ignore is converted to a manual ignore', function () {
         $site = makeExampleSite(['companion_installed' => true]);
         $user = User::factory()->create();
@@ -622,5 +899,278 @@ describe('Update failure streaks and auto-ignore', function () {
                 && isset($request['items'])
                 && count($request['items']) === 0;
         });
+    });
+});
+
+describe('File-permission failures pause the site, not each plugin', function () {
+    it('pauses the whole site once, with one action log and one ops alert, instead of auto-ignoring each plugin', function () {
+        $site = makeExampleSite();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => fn (Request $request) => Http::response(
+                stalledWithUpgraderError(copyFailedMessages((string) $request['slug'])),
+                200,
+            ),
+        ]);
+
+        $this->mock(ChatNotifier::class, function ($mock) use ($site) {
+            $mock->shouldReceive('pluginUpdateFailed')->andReturn(true);
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->never();
+            $mock->shouldReceive('send')
+                ->once()
+                ->withArgs(fn (string $text, array $attachments) => str_contains($text, $site->domain)
+                    && str_contains($text, 'filesystem not writable')
+                    && ! str_contains((string) json_encode($attachments), STREAK_FAKE_LICENSE))
+                ->andReturn(true);
+        });
+
+        // Two plugins on the same site fail the same way every night; both
+        // cross the threshold on night 5.
+        for ($night = 1; $night <= 5; $night++) {
+            foreach (['alpha-plugin', 'beta-plugin'] as $slug) {
+                $job = fakeNightlyJob($site, $slug);
+                (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+            }
+        }
+
+        $site->refresh();
+        expect($site->auto_updates_paused)->toBeTrue()
+            ->and($site->auto_updates_paused_reason)->toStartWith('Filesystem not writable');
+
+        // No per-plugin pauses, so nothing client-visible either.
+        expect(PluginUpdateIgnore::where('site_id', $site->id)->count())->toBe(0)
+            ->and(ActionLog::where('site_id', $site->id)->where('action_type', ActionLog::TYPE_PLUGIN_UPDATE_AUTO_IGNORED)->count())->toBe(0);
+
+        foreach (['alpha-plugin', 'beta-plugin'] as $slug) {
+            $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->where('target_slug', $slug)->first();
+            expect($streak->consecutive_failures)->toBe(5)
+                ->and($streak->reason_code)->toBe('fs_permission')
+                ->and($streak->ignored_at)->toBeNull()
+                ->and($streak->last_error)->toContain("Could not copy file. {$slug}/includes/class-main.php")
+                ->and($streak->last_error)->not->toContain(STREAK_FAKE_LICENSE);
+        }
+
+        $pauseLogs = ActionLog::where('site_id', $site->id)->where('action_type', ActionLog::TYPE_AUTO_UPDATES_TOGGLED)->get();
+        expect($pauseLogs)->toHaveCount(1)
+            ->and($pauseLogs[0]->actor)->toBe('auto')
+            ->and($pauseLogs[0]->target)->toBe('paused')
+            ->and($pauseLogs[0]->details['reason_code'])->toBe('fs_permission')
+            ->and($pauseLogs[0]->details['now'])->toBeTrue()
+            ->and((string) json_encode($pauseLogs[0]->details))->not->toContain(STREAK_FAKE_LICENSE);
+
+        // A paused site drops out of the nightly loop's candidate query.
+        Queue::fake();
+        $site->forceFill([
+            'companion_installed' => true,
+            'companion_snapshot' => [
+                'plugins' => ['plugins' => [
+                    ['slug' => 'alpha-plugin', 'name' => 'Alpha', 'version' => '1.0.0', 'new_version' => '1.1.0', 'update_available' => true],
+                ]],
+                'themes' => ['items' => []],
+            ],
+        ])->save();
+        $this->artisan('clockwork:run-nightly-plugin-updates')->assertSuccessful();
+        Queue::assertNothingPushed();
+    });
+
+    it('keeps the per-plugin auto-ignore when another update on the site succeeded during the streak', function () {
+        $site = makeExampleSite();
+
+        Http::fake([
+            "https://{$site->domain}/wp-json/clockwork/v1/plugins/update*" => Http::response(
+                stalledWithUpgraderError(copyFailedMessages('alpha-plugin')),
+                200,
+            ),
+        ]);
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateFailed')->andReturn(true);
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        for ($night = 1; $night <= 5; $night++) {
+            $job = fakeNightlyJob($site, 'alpha-plugin');
+            (new RunPluginUpdate($job->id))->handle(app(ActionLogger::class));
+
+            if ($night === 1) {
+                // Another plugin on the same site updated fine: the site's
+                // files are writable, only this plugin's are not.
+                PluginUpdateJob::factory()->for($site)->complete()->create([
+                    'batch_id' => 'nightly-'.now()->format('Y-m-d'),
+                    'target_slug' => 'healthy-plugin',
+                    'before_version' => '2.0.0',
+                    'after_version' => '2.1.0',
+                    'target_version' => '2.1.0',
+                ]);
+            }
+        }
+
+        expect($site->refresh()->auto_updates_paused)->toBeFalse();
+
+        $ignore = PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'alpha-plugin')->first();
+        expect($ignore)->not->toBeNull()
+            ->and($ignore->source)->toBe(PluginUpdateIgnore::SOURCE_AUTO_FAILURE);
+    });
+
+    it('leaves a site that is already paused alone: same reason, no log, no alert, no per-plugin ignore', function () {
+        $site = makeExampleSite([
+            'auto_updates_paused' => true,
+            'auto_updates_paused_reason' => 'Paused by an operator during a redesign',
+        ]);
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('send')->never();
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->never();
+        });
+
+        $error = 'Could not copy file. alpha-plugin/includes/class-main.php — Error: Could not copy file.';
+        $job = fakeNightlyJob($site, 'alpha-plugin', [
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => $error,
+            'reason_code' => 'fs_permission',
+        ]);
+
+        $recorder = app(UpdateFailureStreakRecorder::class);
+        for ($i = 1; $i <= 5; $i++) {
+            $recorder->record($job, ['ok' => true, 'error' => $error, 'reason_code' => 'fs_permission']);
+        }
+
+        $site->refresh();
+        expect($site->auto_updates_paused)->toBeTrue()
+            ->and($site->auto_updates_paused_reason)->toBe('Paused by an operator during a redesign')
+            ->and(ActionLog::where('site_id', $site->id)->where('action_type', ActionLog::TYPE_AUTO_UPDATES_TOGGLED)->count())->toBe(0)
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->count())->toBe(0);
+    });
+
+    /** One counted (or, with $result null, uncounted transport) nightly failure, each its own job. */
+    function recordNightlyFailure(Site $site, string $slug, ?string $reasonCode, ?array $result = []): PluginUpdateJob
+    {
+        $error = $reasonCode === 'fs_permission'
+            ? "Could not copy file. {$slug}/includes/class-main.php — Error: Could not copy file."
+            : 'The update is not offered to this site.';
+        $job = fakeNightlyJob($site, $slug, ['status' => PluginUpdateJob::STATUS_FAILED, 'error' => $error, 'reason_code' => $reasonCode]);
+        app(UpdateFailureStreakRecorder::class)->record($job, $result === null ? null : ['ok' => false, 'error' => $error, 'reason_code' => $reasonCode]);
+
+        return $job;
+    }
+
+    it('does not pause the site on the first file-permission failure of a plugin already paused for another reason', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        for ($i = 1; $i <= 5; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'not_offered');
+        }
+        // A retry of a new release, weeks later, fails once in its own folder.
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->sole();
+        expect($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and($streak->consecutive_failures)->toBe(6)
+            ->and($streak->consecutive_fs_failures)->toBe(1)
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->value('source'))->toBe(PluginUpdateIgnore::SOURCE_AUTO_FAILURE);
+    });
+
+    it('auto-ignores the plugin, not the site, when only the last of the failures was a file-permission one', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        for ($i = 1; $i <= 4; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'download_unauthorized');
+        }
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+
+        expect($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'alpha-plugin')->exists())->toBeTrue();
+    });
+
+    it('sees a success on the site inside the run even when an uncounted failure came between', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->never();
+        });
+
+        $first = recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        // Another plugin on the site updated fine: its files are writable.
+        PluginUpdateJob::factory()->for($site)->complete()->create([
+            'batch_id' => 'nightly-'.now()->format('Y-m-d'),
+            'target_slug' => 'healthy-plugin',
+            'before_version' => '2.0.0',
+            'after_version' => '2.1.0',
+            'target_version' => '2.1.0',
+        ]);
+        // A transport failure: never counted, and must not move the run's start.
+        recordNightlyFailure($site, 'alpha-plugin', null, result: null);
+        for ($i = 1; $i <= 4; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        }
+
+        $streak = PluginUpdateFailureStreak::where('site_id', $site->id)->sole();
+        expect($streak->consecutive_fs_failures)->toBe(5)
+            ->and($streak->fs_streak_started_job_id)->toBe($first->id)
+            ->and($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and(PluginUpdateIgnore::where('site_id', $site->id)->where('target_slug', 'alpha-plugin')->exists())->toBeTrue();
+    });
+
+    it('counts only the file-permission run in the site pause reason', function () {
+        $site = makeExampleSite();
+        $this->mock(ChatNotifier::class, function ($mock) {
+            // Five failures in all come first: the plugin is paused on its own.
+            $mock->shouldReceive('pluginUpdateAutoIgnored')->once()->andReturn(true);
+            $mock->shouldReceive('send')->once()->andReturn(true);
+        });
+
+        recordNightlyFailure($site, 'alpha-plugin', 'not_offered');
+        for ($i = 1; $i <= 5; $i++) {
+            recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        }
+
+        expect(PluginUpdateFailureStreak::where('site_id', $site->id)->value('consecutive_failures'))->toBe(6)
+            ->and($site->refresh()->auto_updates_paused)->toBeTrue()
+            ->and($site->auto_updates_paused_reason)->toContain('5 nightly updates in a row failed with a file-permission error');
+    });
+
+    it('clears the file-permission run when the plugin updates', function () {
+        $site = makeExampleSite();
+        recordNightlyFailure($site, 'alpha-plugin', 'fs_permission');
+        $ok = fakeNightlyJob($site, 'alpha-plugin', ['status' => PluginUpdateJob::STATUS_COMPLETE, 'after_version' => '1.1.0']);
+        app(UpdateFailureStreakRecorder::class)->record($ok, ['ok' => true]);
+
+        expect(PluginUpdateFailureStreak::where('site_id', $site->id)->sole())
+            ->consecutive_failures->toBe(0)
+            ->consecutive_fs_failures->toBe(0)
+            ->fs_streak_started_job_id->toBeNull();
+    });
+
+    it('honors the auto-pause kill switch for the site-level pause too', function () {
+        $site = makeExampleSite();
+        app(Settings::class)->put('updates.auto_ignore_enabled', false);
+
+        $this->mock(ChatNotifier::class, function ($mock) {
+            $mock->shouldReceive('send')->never();
+        });
+
+        $error = 'Could not create directory. /var/www/html/wp-content/upgrade/alpha-plugin_1.1.0-AbC12d — Error: Could not create directory.';
+        $job = fakeNightlyJob($site, 'alpha-plugin', [
+            'status' => PluginUpdateJob::STATUS_FAILED,
+            'error' => $error,
+            'reason_code' => 'fs_permission',
+        ]);
+
+        $recorder = app(UpdateFailureStreakRecorder::class);
+        for ($i = 1; $i <= 6; $i++) {
+            $recorder->record($job, ['ok' => true, 'error' => $error, 'reason_code' => 'fs_permission']);
+        }
+
+        expect($site->refresh()->auto_updates_paused)->toBeFalse()
+            ->and(PluginUpdateFailureStreak::where('site_id', $site->id)->value('consecutive_failures'))->toBe(6);
     });
 });

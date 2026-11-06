@@ -2,7 +2,7 @@
 title: Uptime monitoring
 section: Features
 order: 30
-updated: 2026-10-02
+updated: 2026-11-03
 author: Aaron Reimann
 tags: [monitoring, uptime, alerts, hosting, pressable, slack, twilio, subscribers]
 tracks: [app/Services/Uptime/**, app/Support/Monitoring/**, app/Http/Controllers/MonitoringController.php, app/Http/Controllers/SitesController.php, app/Console/Commands/CheckSiteUptime.php, app/Services/Twilio/OnCallResolver.php, app/Mail/SiteDownClientMail.php, app/Mail/SiteUpClientMail.php]
@@ -26,14 +26,14 @@ Monitoring queries use `Site::hostMonitored()` across the fleet, ensuring both s
 A site is **up** if it responds with HTTP 2xx or 3xx within 10 seconds — or if it returns 401/403 indicating it's alive but auth-protected (see below). Anything else is **down**:
 
 - HTTP 5xx
-- HTTP 4xx other than 401 (with `WWW-Authenticate`) and 403
+- HTTP 4xx other than 401 (with `WWW-Authenticate`), 403, and 429 (see the rate-limit carve-out below)
 - Connection refused, DNS failure, TLS handshake failure
 - Request timeout
 - HTTP 200/3xx whose body is a white screen (under 50 visible characters after tag-stripping) or contains WordPress/PHP fatal signatures (`There has been a critical error`, `Fatal error`, etc.). Optional per-site `uptime_require_keyword` on the site Settings tab also fails a 200 that does not contain that string. Sites that are *legitimately* near-empty on a logged-out GET (parked static HTML, a JS-rendered SPA shell, a gated/private homepage) can skip only the length check via `uptime_skip_body_check` on the same Settings tab — signatures and the required keyword still apply. The probe does not issue a second HTTP request — it inspects the body already fetched.
 
 A site has to fail **two probes in a row** (about 10 minutes at the default cadence) before it transitions to `down` and fires the Mattermost alert. Recovery is instant — the moment the next probe succeeds, we transition back to `up` and fire the recovery alert.
 
-The 2-failure threshold is the de-jitter logic. A single bad probe (CF blip, momentary network flicker, a brief WAF rate-limit) won't fire an alert.
+The 2-failure threshold is the de-jitter logic. A single bad probe (CF blip, momentary network flicker) won't fire an alert.
 
 ## Outage fault attribution & SLA exemption ("Not Our Fault" / Client DNS)
 
@@ -66,6 +66,19 @@ Sites behind `.htaccess` basic auth, IP allowlists, staging gates, or a WAF chal
 The per-site Overview status pill shows **"Up · auth required"** with a lock icon when the latest state was auth-protected.
 
 If you want to exempt our probe from a CF WAF rule, the User-Agent is `Clockwork-Uptime/1.0` plus `(+CLOCKWORK_OPERATOR_CONTACT_EMAIL)` if that's set (see `reference/env-vars`) — `UptimeProber::userAgent()` builds it dynamically as of the modularization roadmap's Phase 8, replacing what used to be a hardcoded email address. Whitelist whatever your instance's actual User-Agent string is in the WAF and the probe will receive a 200 instead.
+
+## The 429 rate-limit carve-out ("probe blocked")
+
+Some hosts and security plugins rate-limit or challenge automated clients and answer the probe with **HTTP 429 Too Many Requests** while real visitors load the site fine. Counting that as down turned a host's anti-bot rule into a multi-day "outage" in uptime numbers and client reports, so a 429 is now its own result:
+
+- `UptimeProber` returns `UptimeProbeResult::blocked()` (`isProbeBlocked = true`, `succeeded = false`, `Retry-After` kept when sent).
+- `UptimeStateUpdater` moves an `up` (or `unknown`) site to the **`probe_blocked`** state once it has answered 429 as many times **in a row** as it takes failures to go down (`monitoring.uptime_failure_threshold`, default 2; counted in `sites.uptime_consecutive_blocked`). Any other answer resets the run, so a single rate-limit blip leaves no event, no action log (nothing reaches the client's wp-admin activity log) and no month-end report hold. Entering the state records a `probe_blocked` row in `site_uptime_events` dated at the run's **first** 429. A 429 does **not** add to `uptime_consecutive_failures`, does **not** set `uptime_last_up_at`, and never transitions the site to `down`. Blocked time never counts as downtime.
+- A site that is `down` (or in `maintenance`) and answers 429 **stays** `down` (or in maintenance): a 429 during a real outage is often the overloaded origin's rate limiter. A failure after it belongs to the same outage (no new down event, alert, SMS or diagnosis), and a success is the outage's normal recovery, with the usual "back up" chat, SMS and client messages. Only when the site has answered nothing but 429 for the probe-blocked notice hours (below, default 6) does it move to `probe_blocked`: the outage is closed at the first 429 (and the failure streak reset), so a site that only rate-limits the probe after an outage doesn't show days of downtime, but recovery is not confirmed, so no "back up" alert goes out.
+- `sites.uptime_probe_blocked_since` marks the start of the run of 429s, and of the blocked stretch. A single failed probe while blocked does not end it; a success, maintenance, or a real down transition does. A real outage while blocked still goes `down` after the usual failure threshold.
+- If a site keeps blocking for **6 hours** (Monitoring → Settings, "Notify when a site blocks the probe for"), one `uptime_probe_blocked` chat notice goes to the ops channels (Mattermost / Slack, toggleable per channel like every other event). It respects the per-site rules: ignored sites stay silent and inactive sites are skipped. One notice per blocked stretch (`sites.uptime_probe_blocked_alerted_at`); it never pages on-call SMS or client contacts.
+- On `/monitoring` the site shows a yellow **BLOCKED** pill and a "probe blocked" filter; the per-site widget shows **Probe blocked**.
+
+The fix is usually on the host: allowlist the `Clockwork-Uptime/1.0` User-Agent (and the Control server's IP) in the host's rate limiter or the security plugin's anti-bot settings. If real visitors are throttled too, treat it as an outage.
 
 ## The 503 maintenance mode carve-out
 
@@ -111,11 +124,12 @@ How: per-site **Settings** tab → "Ignore uptime alerts" section. There's a rea
 
 ## Tuning the global settings
 
-`/monitoring/settings` exposes three knobs. Change them carefully — they affect every site.
+`/monitoring/settings` exposes four knobs. Change them carefully — they affect every site.
 
 - **Probe interval** — how often we hit each site. Default 5 minutes. The minimum is 1 minute (gives ManageWP-tier sensitivity), max is 15 minutes (gentlest, lowest log noise). Changes only apply on the next `schedule:work` restart.
 - **Failure threshold** — how many failures in a row trigger the down transition. Default 2. Lower values = more sensitive (1 = alert on first miss, you'll get noise). Higher values = fewer alerts (6 = ~30 minutes at default cadence before you hear about it). Threshold changes apply on the next probe — no restart needed.
 - **Ignored domains** — wildcard patterns that remove matching sites from uptime monitoring entirely (see the section above). Applies on the next probe — no restart needed.
+- **Probe-blocked notice** — hours a site may keep answering HTTP 429 before the one-off ops chat notice (1–168, default 6), and before a `down` or `maintenance` site that answers only 429 moves to `probe_blocked`. Applies on the next probe.
 
 ## Alert channels & dispatch
 

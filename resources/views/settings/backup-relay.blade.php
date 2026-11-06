@@ -1007,7 +1007,16 @@ function backupRelaySettings() {
             .then(data => {
                 if (data.success) {
                     this.showToast(data.message);
+                    return;
                 }
+                // Refused (e.g. the site's plugin cannot take direct backups): undo.
+                if (willEnable) {
+                    const i = this.enabledSites.indexOf(id);
+                    if (i > -1) this.enabledSites.splice(i, 1);
+                } else if (!this.enabledSites.includes(id)) {
+                    this.enabledSites.push(id);
+                }
+                this.showToast(data.message || 'Could not update backup relay for this site.', 'error');
             })
             .catch(() => {
                 // Revert on network failure
