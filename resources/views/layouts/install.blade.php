@@ -11,6 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Installation Wizard') · Clockwork Control</title>
+    @include('partials.favicon')
     <script>
         (function () {
             try {
