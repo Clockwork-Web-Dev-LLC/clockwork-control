@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-11-06
+
 ### Added
 - **Client Reports — Clients tab**: `/client-reports` opens on every client grouped by care plan ("Care plan clients — reported monthly" first, "No care plan" collapsed), with each site's care-plan badge, schedule, recipients and a six-month report history whose cells open that month's report. Care plan / No care plan / All, Needs attention / A–Z order, search and filters; a page per client with its full report history, previous/next client and a client switcher. A "Client reports" link sits in each site's dashboard header.
 - **Client Reports — Send test to me**: emails a report's exact client email only to the signed-in operator, marked `[TEST]`, without changing the report or its schedule. Send now spells out who receives the report and that a schedule's first send switches it to sending clean reports automatically.
