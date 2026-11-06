@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Site;
+use App\Models\SiteSecurityScan;
 use App\Support\IssueCounter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -50,4 +52,22 @@ function mockIssueCounterZero(): void
     test()->partialMock(IssueCounter::class, function ($mock) {
         $mock->shouldReceive('total')->andReturn(0);
     });
+}
+
+/**
+ * A clean Sucuri SiteCheck and blocklist check on the 10th of each month
+ * from three months back to next month, so a report compiled for any of
+ * those months has its malware and blocklist rows filled and isn't held
+ * for "No malware scan finished this month". SiteCheck only stands in for
+ * the malware row when no Companion scan ran, so a test's own Companion
+ * scan still decides it.
+ */
+function cleanSecurityScans(Site $site): void
+{
+    foreach (range(-3, 1) as $offset) {
+        $day = now()->startOfMonth()->addMonthsNoOverflow($offset)->addDays(9)->setTime(2, 0);
+        foreach ([SiteSecurityScan::TYPE_SITECHECK, SiteSecurityScan::TYPE_BLACKLIST] as $type) {
+            SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => $type, 'scanned_at' => $day]);
+        }
+    }
 }

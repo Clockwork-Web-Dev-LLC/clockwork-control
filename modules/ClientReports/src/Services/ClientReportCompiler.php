@@ -21,6 +21,8 @@ use App\Services\Backups\SiteBackupRecorder;
 use App\Services\Companion\CompanionBrandingManager;
 use App\Services\Security\CompanionMalwareScanner;
 use App\Services\Security\PluginVulnerabilityMatcher;
+use App\Services\Security\WpVulnerabilityClient;
+use App\Support\Settings;
 use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -32,7 +34,7 @@ use Throwable;
 
 class ClientReportCompiler
 {
-    public const SCHEMA_VERSION = 7;
+    public const SCHEMA_VERSION = 8;
 
     /**
      * security.malware_status for a clean scan that didn't cover the whole
@@ -202,6 +204,10 @@ class ClientReportCompiler
                 // views say so and the report is held for review.
                 'coverage_start' => $joinedAt?->toIso8601String(),
                 'coverage_source' => $coverageSource,
+                // When the care plan was switched off after the period ended
+                // (Bill.com's sync on the 1st, say), for a site that's off now:
+                // the period was covered, but a person confirms it still goes.
+                'care_plan_ended_at' => self::carePlanSwitchedOffAfter($site, $periodEnd->copy()->endOfDay())?->toIso8601String(),
                 // Bumped when a section's meaning changes, so the views can
                 // tell reports compiled under the old (overstating) rules apart.
                 'schema_version' => self::SCHEMA_VERSION,
@@ -253,10 +259,45 @@ class ClientReportCompiler
      * reads. Being added on the first day counts as the whole period, as it
      * does for backups (covers_period).
      */
+    /**
+     * When a site that is off a care plan now was switched off, if that was
+     * after $end and it was on until then (the first toggle after $end turned
+     * it off), else null. With care plans off fleet-wide every site counts.
+     */
+    public static function carePlanSwitchedOffAfter(Site $site, Carbon $end): ?Carbon
+    {
+        if (! Site::areCarePlansEnabled() || $site->care_plan_enabled) {
+            return null;
+        }
+
+        $first = ActionLog::query()
+            ->where('site_id', $site->id)
+            ->where('action_type', ActionLog::TYPE_CARE_PLAN_TOGGLED)
+            ->where('ran_at', '>', $end)
+            ->orderBy('ran_at')
+            ->orderBy('id')
+            ->first(['ran_at', 'details']);
+        $details = is_array($first?->details) ? $first->details : [];
+
+        return ($details['previous'] ?? null) === true && ($details['now'] ?? $details['enabled'] ?? null) === false
+            ? $first->ran_at
+            : null;
+    }
+
+    /**
+     * The end of the period's first day in the report timezone, as UTC. Not
+     * $start + 24 hours: the day the clocks go back (Nov 1, 2026 in New
+     * York) has 25.
+     */
+    protected static function afterFirstDay(Carbon $start): Carbon
+    {
+        return $start->copy()->setTimezone(ReportPhrases::timezone())->addDay()->startOfDay()->utc();
+    }
+
     protected function joinedAt(Site $site, Carbon $start, Carbon $end): ?Carbon
     {
         $created = $site->created_at;
-        if ($created === null || ! $created->betweenIncluded($start, $end) || $created->lessThan($start->copy()->addDay())) {
+        if ($created === null || ! $created->betweenIncluded($start, $end) || $created->lessThan(self::afterFirstDay($start))) {
             return null;
         }
 
@@ -314,7 +355,7 @@ class ClientReportCompiler
             });
 
         $at = $switchedOn?->ran_at;
-        if ($at === null || $at->lessThan($start->copy()->addDay())) {
+        if ($at === null || $at->lessThan(self::afterFirstDay($start))) {
             return null;
         }
 
@@ -349,7 +390,7 @@ class ClientReportCompiler
             default => null,
         };
 
-        if ($began === null || $began->lessThan($start->copy()->addDay())) {
+        if ($began === null || $began->lessThan(self::afterFirstDay($start))) {
             return null;
         }
 
@@ -416,7 +457,7 @@ class ClientReportCompiler
             'at' => $log->ran_at,
             'item' => [
                 'target' => $log->target,
-                'summary' => $log->summary,
+                'summary' => self::updatesTabSummary($site, $log) ?? $log->summary,
                 'date' => $log->ran_at?->copy()->setTimezone($zone)->toDateString(),
                 'observed' => false,
             ],
@@ -781,6 +822,30 @@ class ClientReportCompiler
      * the version it started from ("1.5.3 → 1.5.3"), a plugin that was already
      * current, or a translations run with no packages.
      */
+    /**
+     * An update run from the site's Updates tab was logged as "Updated
+     * {file slug} {from} → {to} on {domain}." (SitesController::updatePlugin
+     * before it used the jobs' wording). Reworded as the jobs word it, with
+     * the plugin's name from the snapshot, or null for any other summary.
+     */
+    public static function updatesTabSummary(Site $site, ActionLog $log): ?string
+    {
+        if ($log->action_type !== ActionLog::TYPE_PLUGIN_UPDATE
+            || preg_match('/^\s*Updated\s+(\S+)\s+(\S+\s*→\s*\S+)\s+on\s+\S+?\.?\s*$/u', (string) $log->summary, $m) !== 1) {
+            return null;
+        }
+
+        $name = null;
+        foreach ((array) ($site->companion_snapshot['plugins']['plugins'] ?? []) as $plugin) {
+            if (is_array($plugin) && ($plugin['slug'] ?? null) === $m[1] && trim((string) ($plugin['name'] ?? '')) !== '') {
+                $name = html_entity_decode(trim((string) $plugin['name']), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                break;
+            }
+        }
+
+        return 'Plugin updated: '.($name ?? Str::headline(Str::before($m[1], '/'))).' '.$m[2];
+    }
+
     public static function isNoOpUpdate(string $summary): bool
     {
         return (bool) preg_match('/(?<![\w.\-])(\d[\w.\-]*)\s*→\s*\1(?![\w.\-])/u', $summary)
@@ -896,12 +961,32 @@ class ClientReportCompiler
         ];
         $blockedSeconds = array_sum(array_map($seconds, array_filter($intervals, fn (array $i) => $i['blocked'])));
 
+        // Maintenance windows count as up. A long one (a maintenance page
+        // left on for days) would read as a perfect month, so it is measured
+        // for the review flags: from each maintenance event to the next event.
+        $maintenanceSeconds = 0;
+        $maintenanceFrom = $priorEvent?->event_type === SiteUptimeEvent::TYPE_MAINTENANCE ? $from->copy() : null;
+        foreach ($events as $event) {
+            if ($maintenanceFrom !== null) {
+                $maintenanceSeconds += max(0, (int) $maintenanceFrom->diffInSeconds($event->event_at));
+                $maintenanceFrom = null;
+            }
+            if ($event->event_type === SiteUptimeEvent::TYPE_MAINTENANCE) {
+                $maintenanceFrom = $event->event_at->copy();
+            }
+        }
+        if ($maintenanceFrom !== null && $periodEnd->greaterThan($maintenanceFrom)) {
+            $maintenanceSeconds += (int) $maintenanceFrom->diffInSeconds($periodEnd);
+        }
+
         $outages = count($outageIntervals)
             + ($open !== null && ! $open['blocked'] && ! $periodEnd->greaterThan($open['from']) ? 1 : 0);
         $downtimeSeconds = array_sum(array_map($seconds, $outageIntervals));
 
         $downtimeMinutes = min($totalMinutes, (int) round($downtimeSeconds / 60));
-        $uptimePercentage = max(0.0, min(100.0, round(100 - (($downtimeMinutes / $totalMinutes) * 100), 2)));
+        // Rounded down, so a minute or two of downtime reads 99.99%, not a
+        // "100%" beside a listed outage.
+        $uptimePercentage = max(0.0, min(100.0, floor((100 - (($downtimeMinutes / $totalMinutes) * 100)) * 100) / 100));
 
         // No events reads as 100%, so the flag alone isn't enough: the probe
         // skips ignored and staging servers and ignore-listed domains (the
@@ -928,6 +1013,8 @@ class ClientReportCompiler
             // downtime. probe_blocked_since is when a block still in place at
             // the period end began, so the report is held for a person to check.
             'probe_blocked_minutes' => (int) round($blockedSeconds / 60),
+            // Internal: time in maintenance mode, which counts as up.
+            'maintenance_minutes' => (int) round($maintenanceSeconds / 60),
             'probe_blocked_since' => $open !== null && $open['blocked'] ? $open['began']->toIso8601String() : null,
             // Newest first, capped: the email lists the most recent outages. An
             // outage carried in from before the period starts at the period
@@ -982,6 +1069,22 @@ class ClientReportCompiler
         $issueScans = $companionScans->filter(fn (SiteSecurityScan $scan) => $effectiveStatus($scan) === SiteSecurityScan::STATUS_ISSUES_FOUND);
         $blacklistScan = $scans->firstWhere('scan_type', SiteSecurityScan::TYPE_BLACKLIST);
 
+        // Scans the email's rows don't show but a person should: SiteCheck
+        // runs daily beside Companion but only stands in for it, so its hits
+        // (malware served to visitors, a blocklisting) would otherwise never
+        // be read; and a core-file or blocklist problem earlier in the month
+        // is hidden by a later clean result.
+        $badStatuses = [SiteSecurityScan::STATUS_WARNING, SiteSecurityScan::STATUS_ISSUES_FOUND];
+        $sitecheckHits = $scans
+            ->where('scan_type', SiteSecurityScan::TYPE_SITECHECK)
+            ->where('status', SiteSecurityScan::STATUS_ISSUES_FOUND)
+            ->reject(fn (SiteSecurityScan $scan) => $malwareScan !== null && $scan->is($malwareScan))
+            ->values();
+        $checksumIssue = $isWordPress
+            ? $scans->first(fn (SiteSecurityScan $scan) => $scan->scan_type === SiteSecurityScan::TYPE_CORE_CHECKSUMS && in_array($scan->status, $badStatuses, true))
+            : null;
+        $blacklistIssue = $scans->first(fn (SiteSecurityScan $scan) => $scan->scan_type === SiteSecurityScan::TYPE_BLACKLIST && in_array($scan->status, $badStatuses, true));
+
         // The plugin list is the site's current Companion snapshot, so this is
         // the state on the snapshot date, not a history over the period.
         // An empty or stale vulnerability feed matches nothing, which would
@@ -1026,9 +1129,15 @@ class ClientReportCompiler
             'clean_scans' => $scans->where('status', SiteSecurityScan::STATUS_CLEAN)->count(),
             'warn_scans' => $scans->whereIn('status', [SiteSecurityScan::STATUS_WARNING, SiteSecurityScan::STATUS_ISSUES_FOUND])->count(),
             'vulnerabilities_checked' => $vulnerabilitiesChecked,
+            // Internal: the site has a plugin list but the feed is too old to
+            // check it against, so the client would read "Not checked".
+            'vulnerability_feed_stale' => is_array($snapshotPlugins) && ! $this->vulnerabilityFeedIsFresh(),
             'vulnerabilities_as_of' => $vulnerabilitiesChecked ? $site->companion_snapshot_at?->toDateString() : null,
             'active_vulnerabilities' => count($vulnerabilities),
             'vulnerable_plugins' => array_values(array_unique(array_column($vulnerabilities, 'plugin_name'))),
+            // Internal: installed plugins whose vulnerability lookup has never
+            // succeeded, so "None found" doesn't cover them.
+            'vulnerabilities_unchecked_plugins' => $vulnerabilitiesChecked ? self::neverLookedUp((array) $snapshotPlugins) : [],
             // Internal: each vulnerable plugin by its file slug, so the review
             // flags can tell whether a waiting update fixes it or its updates
             // are paused. Names aren't unique enough to join on.
@@ -1089,6 +1198,21 @@ class ClientReportCompiler
             'malware_issue_days' => $issueScans->map(fn (SiteSecurityScan $s) => $s->scanned_at->toDateString())->unique()->count(),
             'blacklist_status' => $blacklistScan?->status,
             'blacklist_checked_at' => $blacklistScan?->scanned_at?->toDateString(),
+            // Internal: whether the daily scans that fill the malware and
+            // blocklist rows were switched on, so a month in which every one
+            // failed is held rather than sent as "Not checked this month".
+            'malware_expected' => $this->settingOn('security_scans.companion_malware_enabled')
+                || $this->settingOn('security_scans.sitecheck_enabled'),
+            'blacklist_expected' => $this->settingOn('security_scans.blacklist_enabled'),
+            // Internal, for the review flags: the latest in-period day each
+            // of these found a problem, or null.
+            'checksum_last_issue_at' => $checksumIssue?->scanned_at?->toDateString(),
+            'blacklist_last_issue_at' => $blacklistIssue?->scanned_at?->toDateString(),
+            'sitecheck_last_issue_at' => $sitecheckHits->first()?->scanned_at?->toDateString(),
+            'sitecheck_issues' => array_values(array_filter([
+                $sitecheckHits->contains(fn (SiteSecurityScan $scan) => (bool) $scan->has_malware_hit) ? 'malware' : null,
+                $sitecheckHits->contains(fn (SiteSecurityScan $scan) => (bool) $scan->blacklist_hit) ? 'blocklist' : null,
+            ])),
         ];
     }
 
@@ -1412,6 +1536,36 @@ class ClientReportCompiler
         return false;
     }
 
+    /**
+     * The names of the snapshot's plugins that no vulnerability lookup has
+     * succeeded for yet; empty before the refresh began keeping lookups.
+     *
+     * @param  array<int, mixed>  $plugins
+     * @return list<string>
+     */
+    protected static function neverLookedUp(array $plugins): array
+    {
+        $lookups = WpVulnerabilityClient::lastLookups();
+        if ($lookups === null) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($plugins as $plugin) {
+            $slug = is_array($plugin) ? (string) strtok((string) ($plugin['slug'] ?? ''), '/') : '';
+            if ($slug !== '' && ! isset($lookups[$slug])) {
+                $names[] = html_entity_decode(trim((string) ($plugin['name'] ?? '')) ?: $slug, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    protected function settingOn(string $key): bool
+    {
+        return (bool) app(Settings::class)->get($key, true);
+    }
+
     protected function vulnerabilityFeedIsFresh(): bool
     {
         if ($this->vulnerabilityFeedFresh === null) {
@@ -1435,6 +1589,9 @@ class ClientReportCompiler
         $inPeriod = fn () => SitePerformanceScan::query()
             ->where('site_id', $site->id)
             ->where('status', SitePerformanceScan::STATUS_OK)
+            // A "completed" test can come back without a score; shown, it
+            // would read as a red 0/100.
+            ->whereNotNull('performance_score')
             ->whereRaw('COALESCE(source_generated_at, scanned_at) BETWEEN ? AND ?', [$start, $end])
             ->orderByRaw('COALESCE(source_generated_at, scanned_at) DESC');
 
@@ -1545,7 +1702,10 @@ class ClientReportCompiler
         $source = $site->isPressable() ? 'pressable' : 'nginx';
         [$topIpShare, $topIpCount] = self::topIps($measured);
         $suspect = ($source === 'nginx' && $topIpShare !== null && $topIpShare > self::TRAFFIC_TOP_IP_SHARE_MAX)
-            || ($requests > self::TRAFFIC_BUSY_REQUESTS && $visits < $requests * self::TRAFFIC_MIN_VISITS_PER_REQUEST);
+            || ($requests > self::TRAFFIC_BUSY_REQUESTS && $visits < $requests * self::TRAFFIC_MIN_VISITS_PER_REQUEST)
+            // Requests with no visits at all: the visitor count never arrived
+            // (a feed can return one family of metrics without the other).
+            || ($requests > 0 && $visits === 0);
 
         $status = match (true) {
             // supportsTrafficReport() is the host's state now, so it only
@@ -1713,7 +1873,14 @@ class ClientReportCompiler
         $dbSize = is_numeric($dbSize) && (int) $dbSize > 0 ? (int) $dbSize : null;
         $dbBackup = $inPeriod->first(fn (SiteBackup $b) => $b->bytes !== null
             && in_array($b->kind, [SiteBackup::KIND_DATABASE, SiteBackup::KIND_FULL], true));
-        $dbBackupTooSmall = $dbSize !== null && $dbBackup !== null && self::backupTooSmall((int) $dbBackup->bytes, $dbSize);
+        // A full backup's own database half when the source reports it
+        // (SpinupWP): its combined size would hide an empty dump.
+        $dbBackupBytes = $dbBackup === null ? null : (int) ($dbBackup->kind === SiteBackup::KIND_FULL ? ($dbBackup->database_bytes ?? $dbBackup->bytes) : $dbBackup->bytes);
+        $dbBackupTooSmall = $dbSize !== null && $dbBackupBytes !== null && self::backupTooSmall($dbBackupBytes, $dbSize);
+        // Every backup listed is files only: the database isn't being backed
+        // up (SpinupWP drops a run's empty dump, leaving its files).
+        $noDatabaseBackup = $recent->isNotEmpty()
+            && $recent->every(fn (array $d) => array_diff($d['kinds'], [SiteBackup::KIND_FILES]) === []);
 
         // Our own relay keeps its failure streak on the site row: when it was
         // already failing by the end of the period, that's why there's
@@ -1769,8 +1936,13 @@ class ClientReportCompiler
             'check_error' => $check !== null && ! $check->ok ? $check->error : null,
             'checked_at' => $check?->checked_at->toIso8601String(),
             // Internal: the newest database backup's size against the database's.
-            'db_backup_bytes' => $dbBackup?->bytes,
+            'db_backup_bytes' => $dbBackupBytes,
             'db_size_bytes' => $dbSize,
+            // Internal: no database backup among the days listed.
+            'no_database_backup' => $noDatabaseBackup,
+            // Internal: the latest read of the source finished before the
+            // period ended (the last day's backups may be missing).
+            'read_before_period_end' => $check !== null && $check->ok && $end->lessThan(now()) && $check->checked_at->lessThan($end),
             // Internal: when our relay's current failure streak began, if that
             // was by the end of the period, and its last error (trimmed, URLs
             // without query strings). For the review flags and the preview.

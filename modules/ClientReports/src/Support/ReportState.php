@@ -117,6 +117,9 @@ final class ReportState
         $lines = [$to === []
             ? 'Email this report? You will be asked for the address to send it to.'
             : 'Email report to '.implode(', ', $to).'?'];
+        if ($report->status === ClientReport::STATUS_SENT) {
+            array_unshift($lines, 'This report was already sent'.($report->sent_at ? ' on '.$report->sent_at->format('M j, Y') : '').'. Sending it again emails everyone on it a second copy.');
+        }
         $lines[] = 'They get it straight away and the report is marked as sent.';
 
         $schedule = $report->schedule;

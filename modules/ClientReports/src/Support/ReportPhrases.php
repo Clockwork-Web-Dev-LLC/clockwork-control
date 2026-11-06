@@ -483,7 +483,9 @@ final class ReportPhrases
             return [];
         }
 
-        $names = array_map(fn ($name) => trim((string) $name), (array) ($security['vulnerable_plugins'] ?? []));
+        // Names come from WordPress with HTML entities ("Example &amp; Co");
+        // the views escape what they print.
+        $names = array_map(fn ($name) => trim(html_entity_decode((string) $name, ENT_QUOTES | ENT_HTML5, 'UTF-8')), (array) ($security['vulnerable_plugins'] ?? []));
 
         return array_values(array_unique(array_filter($names, fn (string $name) => $name !== '')));
     }

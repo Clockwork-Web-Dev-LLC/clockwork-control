@@ -232,6 +232,18 @@ class SchedulesController extends Controller
 
         $schedule->update($updates);
 
+        // A held report keeps the recipients it was compiled with, and Send
+        // emails those: bring this schedule's unsent copies in line, so the
+        // fix the operator just made is the list that gets the report.
+        // Partly sent ones too; who already has it stays in sent_to.
+        if ($recipients !== []) {
+            ClientReport::query()
+                ->where('schedule_id', $schedule->id)
+                ->where('status', ClientReport::STATUS_GENERATED)
+                ->get()
+                ->each(fn (ClientReport $report) => $report->update(['client_email' => implode(', ', $recipients)]));
+        }
+
         if ($schedule->site) {
             app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
         }
@@ -411,6 +423,6 @@ class SchedulesController extends Controller
     {
         $raw = preg_split('/[\r\n,]+/', $input);
 
-        return array_values(array_unique(array_filter(array_map('trim', (array) $raw))));
+        return ClientReport::uniqueAddresses(array_filter(array_map('trim', (array) $raw)));
     }
 }

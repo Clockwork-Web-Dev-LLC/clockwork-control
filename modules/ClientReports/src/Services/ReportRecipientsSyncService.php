@@ -91,8 +91,12 @@ class ReportRecipientsSyncService
             $client = new ClockworkCompanionClient($site);
             $response = $client->pushClientNotifications($payload);
 
-            if (is_array($site->companion_snapshot)) {
-                $snapshot = $site->companion_snapshot;
+            // Merged into the snapshot as it is now, not as this Site was
+            // loaded: a nightly refresh that landed since (the report run can
+            // overlap it) mustn't be overwritten with an older one.
+            $current = Site::query()->whereKey($site->id)->first(['id', 'companion_snapshot'])?->companion_snapshot;
+            if (is_array($current)) {
+                $snapshot = $current;
                 $snapshot['client_notifications'] = array_merge(
                     is_array($snapshot['client_notifications'] ?? null) ? $snapshot['client_notifications'] : [],
                     is_array($response['client_notifications'] ?? null) ? $response['client_notifications'] : $payload,

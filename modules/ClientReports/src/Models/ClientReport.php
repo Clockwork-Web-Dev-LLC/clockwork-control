@@ -81,7 +81,38 @@ class ClientReport extends Model
     {
         $parts = preg_split('/[\s,;]+/', (string) $input) ?: [];
 
-        return array_values(array_unique(array_filter($parts, fn (string $part) => $part !== '')));
+        return self::uniqueAddresses(array_filter($parts, fn (string $part) => $part !== ''));
+    }
+
+    /**
+     * Addresses with duplicates removed ignoring case ("Jane@x.com" and
+     * "jane@x.com" are one inbox), keeping the first spelling.
+     *
+     * @param  iterable<string>  $addresses
+     * @return list<string>
+     */
+    public static function uniqueAddresses(iterable $addresses): array
+    {
+        $unique = [];
+        foreach ($addresses as $address) {
+            $unique[strtolower($address)] ??= $address;
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * $addresses without those in $without, ignoring case.
+     *
+     * @param  list<string>  $addresses
+     * @param  list<string>  $without
+     * @return list<string>
+     */
+    public static function addressesWithout(array $addresses, array $without): array
+    {
+        $skip = array_map('strtolower', $without);
+
+        return array_values(array_filter($addresses, fn (string $address) => ! in_array(strtolower($address), $skip, true)));
     }
 
     /** @return list<string> */
@@ -102,7 +133,7 @@ class ClientReport extends Model
             return $this->recipients();
         }
 
-        return array_values(array_diff($this->recipients(), $this->sent_to ?? []));
+        return self::addressesWithout($this->recipients(), $this->sent_to ?? []);
     }
 
     /**

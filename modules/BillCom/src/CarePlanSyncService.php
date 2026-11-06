@@ -2,6 +2,7 @@
 
 namespace Modules\BillCom;
 
+use App\Models\ActionLog;
 use App\Models\Site;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -212,7 +213,24 @@ class CarePlanSyncService
                     'reason' => $domainHit ? 'domain_match' : 'customer_match',
                 ]);
             } else {
+                $previous = (bool) $site->care_plan_enabled;
                 $site->forceFill(['care_plan_enabled' => $shouldBeOnPlan])->save();
+                // Logged like the site page's toggle, so client reports can
+                // tell when coverage began or ended. Written directly rather
+                // than through ActionLogger, which would mirror a billing
+                // change into the client's own wp-admin activity log.
+                ActionLog::query()->create([
+                    'site_id' => $site->id,
+                    'action_type' => ActionLog::TYPE_CARE_PLAN_TOGGLED,
+                    'target' => $shouldBeOnPlan ? 'on' : 'off',
+                    'summary' => $shouldBeOnPlan
+                        ? "Marked {$site->domain} as on a care plan (Bill.com sync)."
+                        : "Marked {$site->domain} as NOT on a care plan (Bill.com sync).",
+                    'details' => ['previous' => $previous, 'now' => $shouldBeOnPlan, 'source' => 'bill_com', 'reason' => $domainHit ? 'domain_match' : 'customer_match'],
+                    'ok' => true,
+                    'actor' => 'scheduled',
+                    'ran_at' => now(),
+                ]);
             }
 
             $shouldBeOnPlan ? $stats['sites_set_true']++ : $stats['sites_set_false']++;

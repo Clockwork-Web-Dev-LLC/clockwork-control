@@ -4,6 +4,7 @@ namespace Modules\ClientReports\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Site;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Mailables\Address;
@@ -260,7 +261,11 @@ class ClientReportsController extends Controller
             $report->update(['client_email' => implode(', ', $recipients)]);
         }
 
-        $failed = $sender->send($report, $recipients);
+        try {
+            $failed = $sender->send($report, $recipients);
+        } catch (LockTimeoutException) {
+            return back()->with('status_error', 'This report is already being sent. Reload the page in a minute to see who has it.');
+        }
         $delivered = array_values(array_diff($recipients, $failed));
 
         // A held or draft report sent by hand counts as the schedule's send,

@@ -2,7 +2,7 @@
 title: Updates
 section: Features
 order: 35
-updated: 2026-11-05
+updated: 2026-11-06
 author: Aaron Reimann
 tags: [updates, plugins, themes, wp-core, translations, care-plan, pressable]
 tracks: [app/Services/Updates/UpdateGrouping.php, app/Services/Updates/UpdateFailureStreakRecorder.php, app/Services/Updates/ThemeIdentityGuard.php, app/Services/Updates/ObservedUpdateRecorder.php, app/Http/Controllers/UpdatesController.php, app/Http/Controllers/MaintenanceHistoryController.php, app/Http/Controllers/SitesController.php, app/Jobs/**, app/Models/PluginUpdateJob.php, app/Models/PluginUpdateIgnore.php, app/Models/PluginUpdateFailureStreak.php, app/Console/Commands/RunNightlyPluginUpdates.php, app/Console/Commands/PushUpdateExceptions.php, app/Console/Commands/NightlyUpdateSummary.php, app/Console/Commands/RefreshCompanionSnapshot.php, app/Console/Commands/DetectStuckCompanionState.php, app/Console/Commands/ReapStaleUpdateJobs.php, app/Services/Companion/ClockworkCompanionClient.php, app/Services/Companion/CompanionInstaller.php, modules/Pressable/src/PressableCompanionInstaller.php, database/migrations/**add_state_to_plugin_update_jobs*, database/migrations/**plugin_update_failure_streaks*, database/migrations/**add_failure_tracking_to_plugin_update_ignores_table*]
@@ -131,6 +131,7 @@ Sites that advertise the `update-exceptions` capability (Companion / Renegade bu
   - *Empty state*: "Automatic plugin and theme updates are on for this site when a care plan is active. Nothing is currently paused."
   - *Populated state*: Displays a clear table of paused plugins, version stopped on, date paused, and public explanation.
 - **Plugins / themes notice**: A dismissible warning notice on `plugins.php` and `themes.php` alerts administrators when paused items exist (plugins and/or themes) and links to Update coverage.
+- **Updates from a site's Updates tab** are logged like the update jobs' ("Plugin updated: Name 1.0 → 1.1"), so client reports list them by name.
 - **Manual updates remain unlocked**: WordPress's native "Update now" links and controls are never disabled. Clients or other vendors can still apply updates manually by hand.
 
 #### Client email drafts (Phase 3)

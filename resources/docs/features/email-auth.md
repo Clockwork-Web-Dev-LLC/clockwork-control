@@ -2,7 +2,7 @@
 title: Email Authentication (SPF, DMARC, DKIM)
 section: Features
 order: 42
-updated: 2026-10-04
+updated: 2026-11-06
 author: Aaron Reimann
 tags: [email-auth, security, spf, dmarc, dkim, dns, doh]
 tracks: [modules/EmailAuth/**]
@@ -72,7 +72,7 @@ Open a domain's drawer on `/email-auth` and click **Compose email** (or go to `/
 - **Your note** comes first in the email (default: *"We've noticed some issues with your domain's email settings (DNS)… Would you like us to fix this for you?"*), then **What we found** — each selected finding in plain English (`Modules\EmailAuth\Support\FindingExplainer`), then a **reply** call-to-action, then **Technical details** for whoever manages DNS: the scanner message + code for each finding and the current SPF / DMARC / DKIM / MX state.
 - **Findings**: `fail` and `warn` are pre-ticked, `info` is offered unticked, `pass` is never offered. Unknown codes posted to the form are dropped.
 - **Live preview** renders the exact email beside the form.
-- **Branding** = White Labeling → Client Reports (header colour, accent, logo, company name, support email) — same template family as the monthly client report. The logo is embedded inline (`App\Support\Mail\BrandLogo`). Reply-To is the support email; the only link in the email is the support `mailto:` (Control isn't publicly reachable).
+- **Branding** = White Labeling → Client Reports (header colour, accent, logo, company name, support email) — same template family as the monthly client report. The logo is embedded inline (`App\Support\Mail\BrandLogo`); a logo uploaded in Settings is read from Control's disk, and a relative or Control-host logo URL is never linked. Reply-To is the support email; the only link in the email is the support `mailto:` (Control isn't publicly reachable).
 - **Send me a copy** BCCs the operator. Each send writes an `email_auth_client_notice_sent` action-log row (recipients, subject, finding codes, mailer).
 - If `MAIL_MAILER=log`, the composer shows a warning and the send is written to the log instead of delivered.
 

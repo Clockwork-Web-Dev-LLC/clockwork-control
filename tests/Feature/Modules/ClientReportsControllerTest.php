@@ -430,10 +430,13 @@ describe('recompile', function () {
      */
     function recompileSite(): Site
     {
-        return Site::factory()->carePlan()->create([
+        $site = Site::factory()->carePlan()->create([
             'domain' => 'site-'.Str::lower(Str::random(6)).'.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
             'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear(),
         ]);
+        cleanSecurityScans($site);
+
+        return $site;
     }
 
     function recompileSchedule(Site $site, array $attributes = []): ClientReportSchedule

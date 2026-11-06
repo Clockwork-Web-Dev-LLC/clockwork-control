@@ -2,6 +2,8 @@
 
 use App\Models\PluginVulnerability;
 use App\Models\Site;
+use App\Services\Security\WpVulnerabilityClient;
+use App\Support\Settings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -164,6 +166,28 @@ describe('clockwork:refresh-plugin-vulnerabilities — real sync against a faked
         // Fetched slugs are replaced, the failed one is kept, plugins no longer installed go.
         expect(DB::table('plugin_vulnerabilities')->orderBy('wordfence_id')->pluck('wordfence_id')->all())
             ->toBe(['cf7-vuln', 'flaky-vuln']);
+    });
+
+    it('records when each plugin was last looked up, keeping the earlier time of one that failed this run', function () {
+        Site::factory()->create([
+            'companion_snapshot' => ['plugins' => ['plugins' => [
+                ['slug' => 'contact-form-7/wp-contact-form-7.php'],
+                ['slug' => 'flaky-plugin/flaky.php'],
+                ['slug' => 'never-plugin/never.php'],
+            ]]],
+        ]);
+        app(Settings::class)->put(WpVulnerabilityClient::LOOKUPS_SETTING, ['flaky-plugin' => '2026-11-20T03:15:00+00:00']);
+        Http::fake([
+            'wpvulnerability.net/plugin/contact-form-7*' => Http::response(pluginVulnResponse()),
+            'wpvulnerability.net/plugin/flaky-plugin*' => Http::response('', 500),
+            'wpvulnerability.net/plugin/never-plugin*' => Http::response('', 500),
+        ]);
+
+        $this->artisan('clockwork:refresh-plugin-vulnerabilities')->assertSuccessful();
+
+        $lookups = WpVulnerabilityClient::lastLookups();
+        expect(array_keys($lookups))->toBe(['contact-form-7', 'flaky-plugin'])
+            ->and($lookups['flaky-plugin'])->toBe('2026-11-20T03:15:00+00:00');
     });
 
     it('changes nothing and fails when every lookup fails', function () {

@@ -34,6 +34,18 @@ class ScheduledReportRunner
         return $site !== null && (! Site::areCarePlansEnabled() || $site->care_plan_enabled);
     }
 
+    /**
+     * Whether a site gets the report for a period ending $periodEnd: on a
+     * care plan now, or on one until after the period ended (switched off on
+     * the 1st by the Bill.com sync, say), in which case it is held for a
+     * person to confirm (meta.care_plan_ended_at).
+     */
+    public static function siteIsEligibleFor(?Site $site, Carbon $periodEnd): bool
+    {
+        return self::siteIsEligible($site)
+            || ($site !== null && ClientReportCompiler::carePlanSwitchedOffAfter($site, $periodEnd) !== null);
+    }
+
     public function run(ClientReportSchedule $schedule): ScheduledReportRun
     {
         // NoOverflow: on the 29th-31st a plain subMonth() rolls into the
@@ -44,6 +56,20 @@ class ScheduledReportRunner
         $recipients = array_values(array_filter((array) $schedule->recipients));
 
         if ($schedule->delivery_mode === ClientReportSchedule::MODE_DRAFT) {
+            // A copy for this period that already reached someone is the
+            // period's report: a second live copy beside it would show as
+            // ready to send and email the client again.
+            $delivered = $this->samePeriod($schedule, $start, $end)
+                ->whereIn('status', [ClientReport::STATUS_GENERATED, ClientReport::STATUS_SENT])
+                ->latest('id')
+                ->get()
+                ->first(fn (ClientReport $r) => ! empty($r->sent_to));
+            if ($delivered !== null) {
+                $schedule->advanceNextRun();
+
+                return new ScheduledReportRun($delivered, isDraft: true, resumed: true);
+            }
+
             $report = $this->compileFresh($schedule, $start, $end, $recipients);
             $reasons = $this->flagForReview($report);
             $schedule->advanceNextRun();
@@ -76,7 +102,7 @@ class ScheduledReportRunner
             }
         }
 
-        $pending = array_values(array_diff($recipients, $report->sent_to ?? []));
+        $pending = ClientReport::addressesWithout(ClientReport::uniqueAddresses($recipients), $report->sent_to ?? []);
         $alreadySent = $pending === [] && $report->status === ClientReport::STATUS_SENT;
         $failed = $alreadySent ? [] : $this->sender->send($report, $pending);
 

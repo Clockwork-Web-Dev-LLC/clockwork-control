@@ -71,7 +71,7 @@ class SendScheduledClientReports extends Command
             // Reports are for care-plan customers. A due schedule still moves on
             // to next month, so turning the care plan back on later doesn't send
             // a report for a month the site had none.
-            if (! ScheduledReportRunner::siteIsEligible($site)) {
+            if (! ScheduledReportRunner::siteIsEligibleFor($site, now()->subMonthNoOverflow()->endOfMonth())) {
                 $schedule->advanceNextRun();
                 $noCarePlan[] = (string) $site->domain;
                 $this->line("  - {$site->domain}: skipped this month (care plan is off; reports are for care-plan sites)");
