@@ -464,6 +464,9 @@ describe('recompile', function () {
     }
 
     beforeEach(function () {
+        // A schedule that has never sent holds its first report only when
+        // clean reports send themselves (approval off).
+        clientReportsSendThemselves();
         // A month later than the reports: "last month" is November, not October.
         $this->travelTo(Carbon::parse('2026-12-10 09:00:00'));
     });

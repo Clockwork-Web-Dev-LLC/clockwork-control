@@ -23,6 +23,8 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/client-reports/reports', [ClientReportsController::class, 'index'])->name('client-reports.reports');
     // Recompiles a batch of unsent scheduled reports. Never sends.
     Route::post('/client-reports/reports/recompile', [ClientReportsController::class, 'recompileMany'])->name('client-reports.recompile-many');
+    // Sends a batch: every Ready to send report of a period, or the ticked ones.
+    Route::post('/client-reports/reports/send', [ClientReportsController::class, 'sendMany'])->name('client-reports.send-many');
     Route::post('/client-reports/generate', [ClientReportsController::class, 'generate'])->name('client-reports.generate');
     // Templates CRUD
     Route::resource('/client-reports/templates', TemplatesController::class)
@@ -35,6 +37,9 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
         ->name('client-reports.schedules.quick');
     Route::post('/client-reports/schedules/quick-all', [SchedulesController::class, 'quickStoreAll'])
         ->name('client-reports.schedules.quick-all');
+    // Whether every report waits for a person to send it (on by default).
+    Route::post('/client-reports/schedules/approval', [SchedulesController::class, 'setApproval'])
+        ->name('client-reports.schedules.approval');
     Route::resource('/client-reports/schedules', SchedulesController::class)
         ->except(['show'])
         ->names('client-reports.schedules');

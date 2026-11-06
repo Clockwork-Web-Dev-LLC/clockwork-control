@@ -12,6 +12,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Modules\ClientReports\Mail\ClientReportMail;
@@ -30,6 +31,9 @@ class ClientReportsController extends Controller
 {
     /** Most reports one "Recompile" press works through, so the request finishes. */
     public const RECOMPILE_BATCH = 100;
+
+    /** Reports one press of a bulk send emails, so the request finishes well inside the web server's timeout. */
+    public const SEND_BATCH = 25;
 
     /**
      * The reports list: one period at a time (the latest by default),
@@ -74,6 +78,8 @@ class ClientReportsController extends Controller
             'periods' => $periods,
             'summary' => $browser->summarize($periodReports),
             'outdatedCount' => $outdatedCount,
+            'readyCount' => $periodReports->filter(fn (ClientReport $r) => ReportState::of($r) === ReportState::READY)->count(),
+            'approvalRequired' => ScheduledReportRunner::approvalRequired(),
             'sites' => $sites,
             'templates' => $templates,
         ]);
@@ -372,6 +378,99 @@ class ClientReportsController extends Controller
         return $failed === []
             ? $back->with('status', $message)
             : $back->with('status_error', $message.' Failed: '.implode(', ', $failed).' (see the log).');
+    }
+
+    /**
+     * Approve and send a batch: every Ready to send report of the period
+     * (nothing to fix), or the ones ticked on the list. A ticked report that
+     * is held for review is sent too: ticking it is the approval. Each goes
+     * through the same ClientReportSender as the Send button (one send per
+     * report at a time, every delivery recorded as it happens), so a press
+     * cut off part-way loses nothing and pressing again only emails who is
+     * still owed it. Outdated, replaced and already-sent reports are skipped.
+     */
+    public function sendMany(Request $request, ReportBrowser $browser, ClientReportSender $sender): RedirectResponse
+    {
+        $filters = ReportListFilters::fromRequest($request, ReportListFilters::ALL);
+        $back = redirect()->route('client-reports.reports', $filters->toQuery());
+        $readyOnly = $request->input('scope') !== 'selected';
+
+        if ($readyOnly) {
+            $ids = $browser->list(new ReportListFilters(period: $filters->period, status: ReportState::READY))
+                ->filter(fn (ClientReport $r) => ReportState::of($r) === ReportState::READY)
+                ->pluck('id')
+                ->values();
+            if ($ids->isEmpty()) {
+                return $back->with('status', 'No reports are ready to send in this period.');
+            }
+        } else {
+            $ids = collect((array) $request->input('ids', []))
+                ->filter(fn ($id) => is_scalar($id) && ctype_digit((string) $id))
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+            if ($ids->isEmpty()) {
+                return $back->with('status_error', 'Tick the reports to send first.');
+            }
+        }
+
+        @set_time_limit(600);
+        $remaining = max(0, $ids->count() - self::SEND_BATCH);
+        $sent = 0;
+        $skipped = [];
+        $failed = [];
+
+        foreach ($ids->take(self::SEND_BATCH) as $id) {
+            $report = ClientReport::query()->with(['site', 'schedule'])->find($id);
+            $label = $report?->site->domain ?? "#{$id}";
+            if ($report === null || self::bulkSendBlocked($report, $readyOnly)) {
+                $skipped[] = $label;
+
+                continue;
+            }
+
+            try {
+                $failedTo = $sender->send($report, $report->recipientsToSend());
+            } catch (LockTimeoutException) {
+                $skipped[] = $label;
+
+                continue;
+            } catch (Throwable $e) {
+                $failed[] = $label;
+                Log::error("Bulk send of client report #{$report->id} failed: {$e->getMessage()}", ['exception' => $e]);
+
+                continue;
+            }
+
+            if ($failedTo !== []) {
+                $failed[] = $label.' ('.implode(', ', $failedTo).')';
+
+                continue;
+            }
+            $sent++;
+            $report->schedule?->update(['last_sent_at' => now()]);
+        }
+
+        $message = "Sent {$sent} ".Str::plural('report', $sent).'.';
+        if ($skipped !== []) {
+            $message .= ' Skipped '.count($skipped).' that can\'t be sent as they are (outdated, replaced, already sent, no recipient, or no longer ready): '.implode(', ', array_slice($skipped, 0, 10)).(count($skipped) > 10 ? ' …' : '').'.';
+        }
+        if ($remaining > 0) {
+            $message .= " {$remaining} more are left: press the button again to send them.";
+        }
+
+        return $failed === []
+            ? $back->with('status', $message)
+            : $back->with('status_error', $message.' Failed: '.implode('; ', $failed).'. Sending again only retries who is still owed it (see the log).');
+    }
+
+    /** Why a bulk send leaves this report alone: true when it can't or shouldn't go. */
+    protected static function bulkSendBlocked(ClientReport $report, bool $readyOnly): bool
+    {
+        return $report->status !== ClientReport::STATUS_GENERATED
+            || ReportState::sendBlockedReason($report) !== null
+            || $report->recipientsToSend() === []
+            || ($readyOnly && ReportState::of($report) !== ReportState::READY);
     }
 
     /**

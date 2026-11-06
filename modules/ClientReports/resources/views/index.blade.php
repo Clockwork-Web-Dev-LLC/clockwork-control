@@ -103,7 +103,7 @@
         </div>
     </form>
 
-    {{-- Bulk actions for the period. Never send. --}}
+    {{-- Bulk actions for the period: recompile (never sends), or approve and send. --}}
     <form id="cr-bulk" method="POST" action="{{ route('client-reports.recompile-many') }}"
           class="px-4 sm:px-5 py-3 border-b border-[var(--color-border-light)] flex flex-wrap items-center justify-between gap-3 bg-[var(--color-surface-alt)]/40">
         @csrf
@@ -129,6 +129,17 @@
                     <i class="fa-solid fa-rotate"></i>Recompile all outdated ({{ $outdatedCount }})
                 </button>
             @endif
+            <span class="hidden sm:inline-block w-px h-5 bg-[var(--color-border-light)] mx-1" aria-hidden="true"></span>
+            <button type="submit" name="scope" value="selected" formaction="{{ route('client-reports.send-many') }}" class="cr-btn"
+                    data-confirm="Send the ticked reports to their clients now?" data-confirm-details="Each goes to everyone on it who doesn't have it yet. A ticked report that is held for review is sent too, so check those first. Outdated, replaced and already-sent reports are skipped. Up to {{ \Modules\ClientReports\Http\Controllers\ClientReportsController::SEND_BATCH }} per press." data-confirm-btn="Send" data-confirm-variant="warning">
+                <i class="fa-solid fa-paper-plane"></i>Send selected
+            </button>
+            @if ($readyCount > 0)
+                <button type="submit" name="scope" value="ready" formaction="{{ route('client-reports.send-many') }}" class="cr-btn cr-btn-primary"
+                        data-confirm="Approve and send all {{ $readyCount }} ready {{ \Illuminate\Support\Str::plural('report', $readyCount) }} for {{ $periodLabel }}?" data-confirm-details="These have nothing to fix. Each one is emailed to its recipients now. Reports that need review, are outdated or are already sent are left alone. Up to {{ \Modules\ClientReports\Http\Controllers\ClientReportsController::SEND_BATCH }} per press." data-confirm-btn="Send {{ $readyCount }}" data-confirm-variant="warning">
+                    <i class="fa-solid fa-circle-check"></i>Approve &amp; send all ready ({{ $readyCount }})
+                </button>
+            @endif
         </div>
     </form>
 
@@ -147,7 +158,7 @@
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] uppercase tracking-wider text-[10px]">
                     <tr>
                         <th class="pl-4 pr-1 py-3 w-6">
-                            <input type="checkbox" aria-label="Select every report on this page that can be recompiled"
+                            <input type="checkbox" aria-label="Select every unsent report on this page"
                                    onclick="document.querySelectorAll('input[form=cr-bulk][name=&quot;ids[]&quot;]').forEach(c => { if (! c.disabled) c.checked = this.checked; })">
                         </th>
                         <th class="px-3 py-3">Site &amp; client</th>
@@ -159,12 +170,17 @@
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border-light)]">
                     @foreach ($reports as $r)
-                        @php($state = $stateClass::of($r))
+                        @php
+                            $state = $stateClass::of($r);
+                        @endphp
                         <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors {{ $state === $stateClass::SUPERSEDED ? 'opacity-60' : '' }}">
                             <td class="pl-4 pr-1 py-3 align-top">
-                                <input type="checkbox" form="cr-bulk" name="ids[]" value="{{ $r->id }}" @disabled(! $r->canRecompile())
+                                @php
+                                    $selectable = $r->canRecompile() || in_array($state, [$stateClass::READY, $stateClass::NEEDS_REVIEW, $stateClass::PARTLY_SENT], true);
+                                @endphp
+                                <input type="checkbox" form="cr-bulk" name="ids[]" value="{{ $r->id }}" @disabled(! $selectable)
                                        aria-label="Select {{ $r->site?->domain }} {{ $r->period_start->format('M Y') }}"
-                                       title="{{ $r->canRecompile() ? 'Select to recompile' : 'Only unsent scheduled reports can be recompiled' }}">
+                                       title="{{ $selectable ? 'Select to recompile or send' : 'Already sent or replaced' }}">
                             </td>
                             <td class="px-3 py-3 align-top min-w-[12rem]">
                                 <a href="{{ route('client-reports.show', [$r, ...$context]) }}" class="font-mono text-xs font-semibold text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] break-all">{{ $r->site?->domain ?? $r->client_name ?? $r->title }}</a>

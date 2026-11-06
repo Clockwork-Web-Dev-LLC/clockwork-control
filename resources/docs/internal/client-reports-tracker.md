@@ -13,7 +13,7 @@ The running to-do list for the Client Reports module. For how the feature works,
 
 - **Goal:** recreate the ManageWP client report in Control, then retire ManageWP.
 - **Shipped:** PR #50 (the Nov 1 work) and PR #63 (Clients tab, report verification fixes, schema 7) are merged into `main` as **v1.12.1**. The Nov 1 run held every report as a first report, as planned.
-- **Dec 1 is the first unattended run.** Reports sent by hand in November stamped their schedule's `last_sent_at`, so on Dec 1 **clean reports email the client with nobody looking**. Only flagged ones are held.
+- **Every report now waits for approval (2026-11-06).** The Dec 1 run compiles and checks every report and **emails nothing**. Send them from the Reports tab: **Approve & send all ready** for the clean ones, then look at the held ones and send them one by one or ticked. The switch is on the Scheduling tab; turning it off would let Automatic schedules email clean reports by themselves again.
 - **2026-11-06 audit for Dec 1** (5 reviewers over the run path, every section, the emails and the operator screens; each finding checked against the code before fixing). The fixes are on `feature/client-reports`, **not merged or deployed yet**; see Done and the checklist below. What wasn't fixed is listed under Open issues (#23 on).
 - The original plan, `plans/client-reports-templates-scheduling.md`, is fully shipped; this page is the source of truth.
 - **Decisions (2026-10-15):** reports are for **care-plan customers only**; after the first send, clean reports send themselves and flagged ones are held (**review only the exceptions**); unchecked sections are hidden from the client and flagged in the preview.
@@ -26,7 +26,8 @@ The running to-do list for the Client Reports module. For how the feature works,
   - `php artisan clockwork:refresh-plugin-vulnerabilities` once, to start the per-plugin lookup record (#22).
   - Report schema is now **8**: any unsent report is outdated. `php artisan clockwork:recompile-held-client-reports --outdated --dry-run`, then without `--dry-run` (never sends).
   - `npm run build`, clear the view cache, `php artisan queue:restart`.
-- [ ] **Expect more holds on Dec 1 than "first report" only.** New holds: SiteCheck hits, earlier core-file/blocklist problems, no malware or blocklist scan all month, stale vulnerability list, never-looked-up plugins, files-only backups, a failed or early backup read, 429 blocks or maintenance of hours, a care plan switched off on Dec 1. Each one is a client email that would have been wrong or unexplained.
+- [ ] **On Dec 1:** open Client Reports → Reports (November). Press **Approve & send all ready** (25 per press; press again until none are left), then work through **Needs review**: fix, Recompile or send. Nothing reaches a client until you do.
+- [ ] **Expect more held reports than before.** New holds: SiteCheck hits, earlier core-file/blocklist problems, no malware or blocklist scan all month, stale vulnerability list, never-looked-up plugins, files-only backups, a failed or early backup read, 429 blocks or maintenance of hours, a care plan switched off on Dec 1. Each one is a client email that would have been wrong or unexplained.
 - [ ] **Off-site backups (#11):** put a valid AWS key in production `.env`. Until then every relay site is held.
 - [ ] **Check the 04:45 and 05:30 UTC jobs finish before 06:00** (#34): Scheduled Jobs → `pressable-traffic-report` and `record-site-backups` end times in November.
 - [ ] **Logo:** if the report logo was uploaded in Settings, check the Email version shows it. It's now embedded from disk; before, an uploaded logo's `/storage/…` link was broken in every inbox.
@@ -79,6 +80,7 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | Date | What | Ref |
 |---|---|---|
+| 2026-11-06 | **Every report waits for approval** (on by default; switch on the Scheduling tab), with **Approve & send all ready** and **Send selected** on the Reports list. The confirm dialog now submits through the clicked button, so a button's `formaction` and value survive it. | `feature/client-reports` |
 | 2026-11-06 | **Audit for the first unattended run (Dec 1)**, 5 reviewers, every finding checked against the code. Below, from "Schedule form" to "Report schema 8". | `feature/client-reports` |
 | 2026-11-06 | **Schedule form:** unchecking **Enable** did nothing, and saving a paused schedule switched it back on (an unchecked box sends nothing; the controller read that as on). | `feature/client-reports` |
 | 2026-11-06 | **Security holds:** a Sucuri SiteCheck hit is held even when the malware row comes from a clean Companion scan; a core-file or blocklist problem earlier in the month is held when a later clean check hides it; a month in which no malware scan or blocklist check finished is held (when those scans are on). | `feature/client-reports` |

@@ -343,6 +343,15 @@ export function initConfirmModalSystem(Alpine) {
                         matchInput.value = requireMatch;
                     }
                 }
+                if (submitter && typeof form.requestSubmit === 'function') {
+                    // Submit through the button that was clicked, so its
+                    // name/value and any formaction/formmethod still apply
+                    // (the second submit event passes the bypass above). On
+                    // the next tick: a submit requested while the first
+                    // submit event is still being dispatched is ignored.
+                    setTimeout(() => form.requestSubmit(submitter), 0);
+                    return;
+                }
                 if (submitter?.name) {
                     // Include submitter name/value if present
                     const hidden = document.createElement('input');
@@ -350,6 +359,9 @@ export function initConfirmModalSystem(Alpine) {
                     hidden.name = submitter.name;
                     hidden.value = submitter.value;
                     form.appendChild(hidden);
+                }
+                if (submitter?.hasAttribute('formaction')) {
+                    form.action = submitter.formAction;
                 }
                 form.submit();
             }

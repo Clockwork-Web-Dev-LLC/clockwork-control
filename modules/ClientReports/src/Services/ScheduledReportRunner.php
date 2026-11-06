@@ -3,6 +3,7 @@
 namespace Modules\ClientReports\Services;
 
 use App\Models\Site;
+use App\Support\Settings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,27 @@ use Modules\ClientReports\Models\ClientReportSchedule;
 class ScheduledReportRunner
 {
     public const FIRST_REPORT_REASON = 'This is the first report from this schedule. Once it has been sent, clean reports send themselves.';
+
+    /** Settings key: whether every report waits for a person to send it. On unless switched off. */
+    public const APPROVAL_SETTING = 'client_reports.require_approval';
+
+    /**
+     * Whether every report waits for a person to approve (send) it, whatever
+     * its schedule's delivery mode. On by default: a scheduled run compiles
+     * and checks the report, then leaves it Ready to send or Needs review,
+     * and nothing reaches a client until someone sends it (one by one, or
+     * with Approve & send all ready on the Reports list).
+     */
+    public static function approvalRequired(): bool
+    {
+        return (bool) app(Settings::class)->get(self::APPROVAL_SETTING, true);
+    }
+
+    /** Whether this schedule's run emails a clean report by itself. */
+    public static function sendsByItself(ClientReportSchedule $schedule): bool
+    {
+        return $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT && ! self::approvalRequired();
+    }
 
     public function __construct(
         protected ClientReportCompiler $compiler,
@@ -55,7 +77,8 @@ class ScheduledReportRunner
         $end = $month->copy()->endOfMonth();
         $recipients = array_values(array_filter((array) $schedule->recipients));
 
-        if ($schedule->delivery_mode === ClientReportSchedule::MODE_DRAFT) {
+        // Waiting for approval: compiled and checked like a draft, never sent.
+        if (! self::sendsByItself($schedule)) {
             // A copy for this period that already reached someone is the
             // period's report: a second live copy beside it would show as
             // ready to send and email the client again.
@@ -164,7 +187,7 @@ class ScheduledReportRunner
             $fresh = $this->compileFresh($schedule, $start, $end, $recipients, is_string($notes) ? $notes : null);
             $reasons = $this->flagForReview(
                 $fresh,
-                firstReport: $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT && $schedule->last_sent_at === null,
+                firstReport: self::sendsByItself($schedule) && $schedule->last_sent_at === null,
             );
 
             return new ScheduledReportRun($fresh, isDraft: true, resumed: false, heldReasons: $reasons);

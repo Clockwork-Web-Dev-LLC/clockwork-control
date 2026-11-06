@@ -3,7 +3,9 @@
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Support\IssueCounter;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 use Tests\TestCase;
 
 /*
@@ -70,4 +72,13 @@ function cleanSecurityScans(Site $site): void
             SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => $type, 'scanned_at' => $day]);
         }
     }
+}
+
+/**
+ * Switch off "every report waits for approval" (on by default), for tests
+ * of the mode where Automatic schedules email clean reports by themselves.
+ */
+function clientReportsSendThemselves(): void
+{
+    app(Settings::class)->put(ScheduledReportRunner::APPROVAL_SETTING, false);
 }

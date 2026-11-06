@@ -152,6 +152,12 @@
                         </div>
                     </label>
                 </div>
+                @if (\Modules\ClientReports\Services\ScheduledReportRunner::approvalRequired())
+                    <p class="text-xs text-[var(--color-ink-muted)] mt-2">
+                        <i class="fa-solid fa-user-check mr-1"></i>Approval is on for every schedule, so Automatic reports also wait for you to send them.
+                        Change it on the <a href="{{ route('client-reports.schedules.index') }}" class="underline">Scheduling</a> tab.
+                    </p>
+                @endif
             </div>
 
             {{-- Recipient Emails --}}

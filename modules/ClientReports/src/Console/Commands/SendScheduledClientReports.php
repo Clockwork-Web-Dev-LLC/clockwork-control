@@ -16,7 +16,7 @@ class SendScheduledClientReports extends Command
         {--site= : Limit run to a specific site id or domain}
         {--force : Force generation even if not yet due}';
 
-    protected $description = 'Generate and email scheduled client reports for care plan websites.';
+    protected $description = 'Compile scheduled client reports for care plan websites; email the clean ones only when reports don\'t need approval.';
 
     /** The action log entry listing the schedules a run skipped. */
     public const ACTION_SKIPPED = 'client_report_skipped';
@@ -80,7 +80,7 @@ class SendScheduledClientReports extends Command
             }
 
             $recipients = array_values(array_filter((array) $schedule->recipients));
-            $isAuto = $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT;
+            $isAuto = ScheduledReportRunner::sendsByItself($schedule);
 
             if ($isAuto && empty($recipients)) {
                 $this->line("  - {$site->domain}: skipped (auto delivery mode requires at least one recipient)");
@@ -94,7 +94,7 @@ class SendScheduledClientReports extends Command
                 if ($run->held()) {
                     $this->warn("  ! {$site->domain}: held as a draft for review: ".implode(' ', $run->heldReasons));
                 } elseif ($run->isDraft) {
-                    $this->line("  ✓ {$site->domain}: generated draft report (awaiting operator review)");
+                    $this->line("  ✓ {$site->domain}: compiled, waiting for approval (nothing sent)");
                 } elseif ($run->complete() && $run->sentTo === []) {
                     $this->line("  ✓ {$site->domain}: every recipient already had this report; nothing sent");
                 } elseif ($run->complete()) {

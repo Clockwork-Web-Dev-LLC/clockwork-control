@@ -287,6 +287,7 @@ describe('client reports page', function () {
     });
 
     it('explains the consequences before a real send: who gets it and that the schedule then sends by itself', function () {
+        clientReportsSendThemselves();
         $client = Client::create(['name' => 'Confirm Example', 'email' => 'confirm@example.com']);
         $site = clientsSite($client, 'confirm.example.com');
         $schedule = clientsSchedule($site, ['recipients' => ['confirm@example.com']]);

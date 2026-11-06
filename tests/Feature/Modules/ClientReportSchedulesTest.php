@@ -24,6 +24,11 @@ use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
 
+// Most of these tests cover Automatic schedules emailing clean reports by
+// themselves, which needs approval switched off; the approval-on run has
+// its own describe block below.
+beforeEach(fn () => clientReportsSendThemselves());
+
 /**
  * A care-plan site whose compiled report has nothing to hold for review (no
  * backup source to check, uptime probe running, and enrolled long before any
@@ -452,7 +457,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
         ]);
 
         $this->artisan('clockwork:send-client-reports')
-            ->expectsOutputToContain('generated draft report (awaiting operator review)')
+            ->expectsOutputToContain('compiled, waiting for approval (nothing sent)')
             ->assertExitCode(0);
 
         Mail::assertNothingSent();
