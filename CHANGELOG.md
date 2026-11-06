@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Client Reports — Every report waits for approval** (on by default): the monthly run compiles and checks every report but emails nothing; operators send them from the Reports list. Switch it on or off on the Scheduling tab (`client_reports.require_approval`, logged as `client_report_approval_changed`).
+- **Client Reports — Approve & send all ready / Send selected** on the Reports list: send every Ready to send report of the period, or the ticked ones (held ones included), up to 25 per press, skipping outdated, replaced and already-sent reports.
+
+### Changed
+- **Client Reports — Report schema 8**: unsent reports compiled before the checks below are outdated and must be recompiled before they can be sent.
+- **Client Reports — More reports held for review before the first unattended run (Dec 1)**, each one a client email that would otherwise have been wrong or unexplained:
+  - a Sucuri SiteCheck hit (malware or a blocklisting) on a site whose malware row comes from a clean Companion scan;
+  - a core-file or blocklist problem earlier in the month that a later clean check hides;
+  - no malware scan or blocklist check finished all month while those scans are switched on;
+  - a vulnerability list older than 48 hours, or an installed plugin whose vulnerability lookup has never succeeded (the refresh now records each plugin's last successful lookup);
+  - the uptime monitor blocked (HTTP 429) for an hour or more, or maintenance mode for 2 hours or more, in total (both count as up);
+  - every listed backup files only, or the latest backup read failed or finished before the month ended;
+  - a care plan switched off after the month ended (the month is now compiled for it, not skipped).
+- **Bill.com care-plan sync** logs each care-plan flip as a local `care_plan_toggled` entry (not mirrored to wp-admin).
+- **Client Reports — Schedule form** no longer offers "Weekly" for new schedules (every run reports on the previous calendar month).
+
+### Fixed
+- **Confirm dialogs** submit through the button that was clicked, so its `formaction` and value survive the dialog (a button's value was re-added as a hidden field, which stayed behind when the page came back from the browser's back button).
+- **Client Reports — Schedule form**: unchecking **Enable** had no effect, and saving a paused schedule switched it back on.
+- **Client Reports — Recipients**: editing a schedule's recipients now updates its unsent reports (Send used the list the report was compiled with); addresses are de-duplicated ignoring case; sends to one report are locked, so a double click or a hand send during the scheduled run can't email anyone twice; Send on an already-sent report says so first; a draft-mode Run no longer compiles a second live report beside a sent one; `client_reports.client_email` holds long recipient lists.
+- **Client Reports — Email content**: updates run from a site's Updates tab show the plugin's name instead of the raw log line; vulnerable plugin names no longer show HTML entities; a speed test with no score is skipped instead of showing a red 0/100; requests with no visits count as suspect traffic; uptime is rounded down, so a short outage never reads 100%; the inbox preview text follows the template's sections; a site added late on Nov 1 (a 25-hour day in New York) is no longer held as a partial month.
+- **Client Reports — Backups**: a SpinupWP run's database half is stored on its own (`site_backups.database_bytes`), so a broken dump can't hide behind the files.
+- **Client emails — Logo**: a logo uploaded in Settings is embedded from Control's disk; a relative or Control-host logo URL is never linked (it showed as a broken image).
+- **Client Reports — Recipient push** no longer writes an older Companion snapshot back over a newer one.
+- **Plugin updates from a site's Updates tab** are logged in the update jobs' wording ("Plugin updated: Name 1.0 → 1.1").
+
+### Upgrade notes
+- Run `php artisan migrate` (`site_backups.database_bytes`; `client_reports.client_email` becomes text), then `php artisan clockwork:record-site-backups` and `php artisan clockwork:refresh-plugin-vulnerabilities` once.
+- Report schema 8 marks every unsent report outdated: run `php artisan clockwork:recompile-held-client-reports --outdated` (never sends).
+- Approval is on by default after deploy: from the next run nothing is emailed until someone sends it. Run `npm run build` (confirm dialog change).
+
 ## [1.12.2] - 2026-11-06
 
 ### Added

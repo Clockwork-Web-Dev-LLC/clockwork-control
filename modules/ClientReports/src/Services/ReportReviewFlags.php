@@ -2,10 +2,12 @@
 
 namespace Modules\ClientReports\Services;
 
+use App\Models\Site;
 use App\Models\SiteBackup;
 use App\Models\SiteSecurityScan;
 use App\Services\Security\CompanionMalwareScanner;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Modules\ClientReports\Support\ReportPhrases;
 
 /**
@@ -49,6 +51,12 @@ class ReportReviewFlags
                 ? "{$began}, after the end of this report's period, so it covers none of it."
                 : "{$began}, so this report covers only part of the month.";
         }
+        $carePlanEnded = $data['meta']['care_plan_ended_at'] ?? null;
+        if (is_string($carePlanEnded) && $carePlanEnded !== '') {
+            $reasons[] = 'The care plan was switched off '.ReportPhrases::time($carePlanEnded)
+                .', when this period had ended. The period was covered, but confirm the client should still get this report.';
+        }
+
         // Uptime monitoring switched on later than that (or for a site added
         // long before): only the uptime figures are partial.
         $uptimeSince = $data['uptime']['monitored_since'] ?? null;
@@ -70,6 +78,28 @@ class ReportReviewFlags
         }
         if (in_array($security['blacklist_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
             $reasons[] = 'The site is on a spam or malware blocklist.';
+        }
+        array_push($reasons, ...self::earlierScanReasons($security));
+
+        // Daily scans that were switched on but never finished a run this
+        // month: the client would read "Not checked this month" beside an
+        // intro saying we scan for malware. Reports compiled before these
+        // keys were kept say nothing.
+        if (($security['malware_expected'] ?? false) === true && array_key_exists('malware_status', $security) && $security['malware_status'] === null) {
+            $reasons[] = 'No malware scan finished this month, so the client would read "Not checked this month".';
+        }
+        if (($security['blacklist_expected'] ?? false) === true && array_key_exists('blacklist_status', $security) && $security['blacklist_status'] === null) {
+            $reasons[] = 'No blocklist check finished this month, so the client would read "Not checked this month".';
+        }
+        $unchecked = array_values(array_filter((array) ($security['vulnerabilities_unchecked_plugins'] ?? []), fn ($n) => is_string($n) && $n !== ''));
+        if ($unchecked !== []) {
+            $reasons[] = 'No vulnerability lookup has succeeded yet for '.implode(', ', array_slice($unchecked, 0, 5))
+                .(count($unchecked) > 5 ? ' and '.(count($unchecked) - 5).' more' : '')
+                .', so "Known plugin vulnerabilities" doesn\'t cover '.(count($unchecked) === 1 ? 'it' : 'them').'.';
+        }
+        if (($security['vulnerability_feed_stale'] ?? false) === true) {
+            $reasons[] = 'The plugin vulnerability list has not refreshed in over '.ClientReportCompiler::VULNERABILITY_FEED_MAX_AGE_HOURS
+                .' hours (clockwork:refresh-plugin-vulnerabilities), so the client would read "Known plugin vulnerabilities: Not checked".';
         }
 
         // Lockouts that never became a ban (security.unbanned_lockouts) hide
@@ -154,8 +184,19 @@ class ReportReviewFlags
         // A host rate-limiting the monitor (HTTP 429) isn't an outage, but
         // nobody could see the site, so a person should check before it goes out.
         $blockedSince = $data['uptime']['probe_blocked_since'] ?? null;
+        $blockedMinutes = (int) ($data['uptime']['probe_blocked_minutes'] ?? 0);
         if (! $stillDown && is_string($blockedSince) && $blockedSince !== '') {
             $reasons[] = 'The uptime monitor was blocked (HTTP 429) from '.ReportPhrases::time($blockedSince).'; the site was not necessarily down.';
+        } elseif ($blockedMinutes >= self::LONG_OUTAGE_MINUTES) {
+            // Blocked time counts as up, so a long block reads as "100%".
+            $reasons[] = 'The uptime monitor was blocked (HTTP 429) for '.ReportPhrases::duration($blockedMinutes)
+                .' this month. That time counts as up in the uptime figure, but nobody could see the site.';
+        }
+
+        $maintenanceMinutes = (int) ($data['uptime']['maintenance_minutes'] ?? 0);
+        if ($maintenanceMinutes >= Site::UPTIME_STUCK_MAINTENANCE_HOURS * 60) {
+            $reasons[] = 'The site was in maintenance mode for '.ReportPhrases::duration($maintenanceMinutes)
+                .' this month. That time counts as up in the uptime figure: check it was planned before the client reads it.';
         }
 
         return $reasons;
@@ -191,6 +232,20 @@ class ReportReviewFlags
             return [$reason];
         }
 
+        // The list looks fine, but something says it is incomplete.
+        $listReasons = [];
+        if (in_array($status, ['verified', 'suspect'], true)) {
+            if (($backups['no_database_backup'] ?? false) === true) {
+                $listReasons[] = 'Every backup in the last 10 days is files only: the database is not being backed up.';
+            }
+            $error = is_string($backups['check_error'] ?? null) && trim($backups['check_error']) !== '' ? trim($backups['check_error']) : null;
+            if ($error !== null) {
+                $listReasons[] = 'The latest read of the backups failed ('.Str::limit($error, 160).'), so the newest backups may be missing from the list.';
+            } elseif (($backups['read_before_period_end'] ?? false) === true) {
+                $listReasons[] = 'Backups were last read before the end of the month, so the last day may be missing from the list. Run clockwork:record-site-backups, then Recompile.';
+            }
+        }
+
         $days = (int) ($backups['days_with_backups'] ?? 0);
         // The days backups were expected (from when the site's coverage
         // began); reports compiled before that was kept use the period's.
@@ -202,15 +257,15 @@ class ReportReviewFlags
         if ($status === 'verified' && ($backups['source'] ?? null) === SiteBackup::SOURCE_S3_ARCHIVE && $began !== null) {
             $beganOn = Carbon::parse($began)->format('M j, Y');
 
-            return ["Off-site backups began on {$beganOn}; none were made before that this month, although the site was enrolled earlier (backed up on {$days} of {$periodDays} days)."];
+            return [...$listReasons, "Off-site backups began on {$beganOn}; none were made before that this month, although the site was enrolled earlier (backed up on {$days} of {$periodDays} days)."];
         }
 
         if ($status === 'verified' && ($backups['covers_period'] ?? false) === true && ($backups['daily'] ?? false) === true
             && $periodDays > 0 && $days < $periodDays - 3) {
-            return ["Backed up on only {$days} of {$periodDays} days this month."];
+            return [...$listReasons, "Backed up on only {$days} of {$periodDays} days this month."];
         }
 
-        return [];
+        return $listReasons;
     }
 
     /**
@@ -472,6 +527,44 @@ class ReportReviewFlags
             ]);
             $reasons[] = 'An earlier malware scan this month flagged malware'.($when !== [] ? ' ('.implode(', ', $when).')' : '')
                 .', but the latest scan did not: check it was cleaned up.';
+        }
+
+        return $reasons;
+    }
+
+    /**
+     * Problems found in the period that the email's rows don't show: a core
+     * file or blocklist check that failed before a later clean one, and a
+     * Sucuri SiteCheck hit on a site whose malware row comes from Companion.
+     *
+     * @param  array<string, mixed>  $security
+     * @return list<string>
+     */
+    private static function earlierScanReasons(array $security): array
+    {
+        $reasons = [];
+        $day = fn (mixed $date): ?string => is_string($date) && $date !== '' ? Carbon::parse($date)->format('M j') : null;
+
+        $checksumOn = $day($security['checksum_last_issue_at'] ?? null);
+        if ($checksumOn !== null && ! in_array($security['checksum_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
+            $reasons[] = "A core-file check on {$checksumOn} found WordPress files that differ from the official release, but the latest check did not: check it was cleaned up.";
+        }
+
+        $blacklistOn = $day($security['blacklist_last_issue_at'] ?? null);
+        if ($blacklistOn !== null && ! in_array($security['blacklist_status'] ?? null, self::BAD_SCAN_STATUSES, true)) {
+            $reasons[] = "The site was on a spam or malware blocklist on {$blacklistOn}, but the latest check found it clean: confirm it was delisted.";
+        }
+
+        $sitecheckOn = $day($security['sitecheck_last_issue_at'] ?? null);
+        if ($sitecheckOn !== null) {
+            $what = array_values(array_intersect(['malware', 'blocklist'], (array) ($security['sitecheck_issues'] ?? [])));
+            $found = match ($what) {
+                ['malware', 'blocklist'] => 'malware and a blocklisting',
+                ['malware'] => 'malware',
+                ['blocklist'] => 'a blocklisting',
+                default => 'a problem',
+            };
+            $reasons[] = "Sucuri SiteCheck reported {$found} (last on {$sitecheckOn}). The email's malware and blocklist rows come from other scans, so check the site before sending.";
         }
 
         return $reasons;

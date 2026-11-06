@@ -72,7 +72,7 @@
                             <div class="flex items-center justify-end gap-1.5">
                                 <form method="POST" action="{{ route('client-reports.schedules.send-now', $s) }}" class="inline"
                                       data-confirm="Run the schedule for {{ $s->site->domain }} now?"
-                                      data-confirm-details="{{ $s->delivery_mode === $modeDraft ? 'It compiles last month\'s report as a draft for review. Nothing is sent.' : ($s->last_sent_at === null ? 'It compiles last month\'s report. As this schedule\'s first report it is held for review, not sent.' : 'It compiles last month\'s report and, if nothing needs review, emails it to '.(implode(', ', $recips) ?: 'its recipients').' straight away.') }}"
+                                      data-confirm-details="{{ ! \Modules\ClientReports\Services\ScheduledReportRunner::sendsByItself($s) ? 'It compiles last month\'s report and leaves it waiting for approval. Nothing is sent.' : ($s->last_sent_at === null ? 'It compiles last month\'s report. As this schedule\'s first report it is held for review, not sent.' : 'It compiles last month\'s report and, if nothing needs review, emails it to '.(implode(', ', $recips) ?: 'its recipients').' straight away.') }}"
                                       data-confirm-btn="Run now" data-confirm-variant="warning">
                                     @csrf
                                     <button type="submit" class="cr-btn" title="Compile last month's report now">

@@ -131,7 +131,7 @@
 </head>
 <body style="margin:0; padding:0; background:#f1f5f9; font-family:{{ $font }}; color:{{ $ink }};">
 <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
-    {{ $period }} for {!! $plainDomain !!}: {{ $updateCount }} {{ \Illuminate\Support\Str::plural('update', $updateCount) }}{{ $showUptime ? ', '.$uptimeLabel.' uptime' : '' }} — full details inside.
+    {{ $period }} for {!! $plainDomain !!}: {{ implode(', ', array_filter([$sections['updates'] ? $updateCount.' '.\Illuminate\Support\Str::plural('update', $updateCount) : null, $showUptime ? $uptimeLabel.' uptime' : null])) ?: 'your website report' }} — full details inside.
 </div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;">
 <tr><td align="center" style="padding:24px 12px;">
@@ -140,8 +140,8 @@
     {{-- Header: brand purple so the white logo is visible --}}
     <tr><td style="background:{{ $primary }}; padding:28px 32px 24px 32px;" bgcolor="{{ $primary }}">
         @if ($logoBytes)
-            <img src="{{ $message->embedData($logoBytes, 'logo.png', 'image/png') }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
-        @elseif ($branding['logo_url'] !== '')
+            <img src="{{ $message->embedData($logoBytes, 'logo', \App\Support\Mail\BrandLogo::mimeType($logoBytes)) }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
+        @elseif (\App\Support\Mail\BrandLogo::linkable($branding['logo_url']))
             <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
         @else
             <div style="color:#ffffff; font-size:20px; font-weight:800;">{{ $branding['company_name'] }}</div>

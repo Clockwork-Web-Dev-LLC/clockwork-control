@@ -3,6 +3,7 @@
 namespace Modules\ClientReports\Services;
 
 use App\Models\Site;
+use App\Support\Settings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,27 @@ class ScheduledReportRunner
 {
     public const FIRST_REPORT_REASON = 'This is the first report from this schedule. Once it has been sent, clean reports send themselves.';
 
+    /** Settings key: whether every report waits for a person to send it. On unless switched off. */
+    public const APPROVAL_SETTING = 'client_reports.require_approval';
+
+    /**
+     * Whether every report waits for a person to approve (send) it, whatever
+     * its schedule's delivery mode. On by default: a scheduled run compiles
+     * and checks the report, then leaves it Ready to send or Needs review,
+     * and nothing reaches a client until someone sends it (one by one, or
+     * with Approve & send all ready on the Reports list).
+     */
+    public static function approvalRequired(): bool
+    {
+        return (bool) app(Settings::class)->get(self::APPROVAL_SETTING, true);
+    }
+
+    /** Whether this schedule's run emails a clean report by itself. */
+    public static function sendsByItself(ClientReportSchedule $schedule): bool
+    {
+        return $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT && ! self::approvalRequired();
+    }
+
     public function __construct(
         protected ClientReportCompiler $compiler,
         protected ClientReportSender $sender,
@@ -34,6 +56,18 @@ class ScheduledReportRunner
         return $site !== null && (! Site::areCarePlansEnabled() || $site->care_plan_enabled);
     }
 
+    /**
+     * Whether a site gets the report for a period ending $periodEnd: on a
+     * care plan now, or on one until after the period ended (switched off on
+     * the 1st by the Bill.com sync, say), in which case it is held for a
+     * person to confirm (meta.care_plan_ended_at).
+     */
+    public static function siteIsEligibleFor(?Site $site, Carbon $periodEnd): bool
+    {
+        return self::siteIsEligible($site)
+            || ($site !== null && ClientReportCompiler::carePlanSwitchedOffAfter($site, $periodEnd) !== null);
+    }
+
     public function run(ClientReportSchedule $schedule): ScheduledReportRun
     {
         // NoOverflow: on the 29th-31st a plain subMonth() rolls into the
@@ -43,7 +77,22 @@ class ScheduledReportRunner
         $end = $month->copy()->endOfMonth();
         $recipients = array_values(array_filter((array) $schedule->recipients));
 
-        if ($schedule->delivery_mode === ClientReportSchedule::MODE_DRAFT) {
+        // Waiting for approval: compiled and checked like a draft, never sent.
+        if (! self::sendsByItself($schedule)) {
+            // A copy for this period that already reached someone is the
+            // period's report: a second live copy beside it would show as
+            // ready to send and email the client again.
+            $delivered = $this->samePeriod($schedule, $start, $end)
+                ->whereIn('status', [ClientReport::STATUS_GENERATED, ClientReport::STATUS_SENT])
+                ->latest('id')
+                ->get()
+                ->first(fn (ClientReport $r) => ! empty($r->sent_to));
+            if ($delivered !== null) {
+                $schedule->advanceNextRun();
+
+                return new ScheduledReportRun($delivered, isDraft: true, resumed: true);
+            }
+
             $report = $this->compileFresh($schedule, $start, $end, $recipients);
             $reasons = $this->flagForReview($report);
             $schedule->advanceNextRun();
@@ -76,7 +125,7 @@ class ScheduledReportRunner
             }
         }
 
-        $pending = array_values(array_diff($recipients, $report->sent_to ?? []));
+        $pending = ClientReport::addressesWithout(ClientReport::uniqueAddresses($recipients), $report->sent_to ?? []);
         $alreadySent = $pending === [] && $report->status === ClientReport::STATUS_SENT;
         $failed = $alreadySent ? [] : $this->sender->send($report, $pending);
 
@@ -138,7 +187,7 @@ class ScheduledReportRunner
             $fresh = $this->compileFresh($schedule, $start, $end, $recipients, is_string($notes) ? $notes : null);
             $reasons = $this->flagForReview(
                 $fresh,
-                firstReport: $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT && $schedule->last_sent_at === null,
+                firstReport: self::sendsByItself($schedule) && $schedule->last_sent_at === null,
             );
 
             return new ScheduledReportRun($fresh, isDraft: true, resumed: false, heldReasons: $reasons);

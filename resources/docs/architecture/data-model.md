@@ -2,7 +2,7 @@
 title: Data model
 section: Architecture
 order: 20
-updated: 2026-10-15
+updated: 2026-11-06
 author: Aaron Reimann
 tags: [architecture, database, schema, pressable, modules]
 tracks: [database/migrations/**, app/Models/**]
@@ -142,7 +142,7 @@ One row per site × form factor (`phone`/`desktop`) × scope (`origin`/`url`) ×
 
 Backup evidence for client reports, written daily (05:30) by `clockwork:record-site-backups` (`App\Services\Backups\SiteBackupRecorder`) from each site's real backup source, never from a setting that says backups should be happening.
 
-`site_backups` has one row per backup the source reported. Columns: `source` (`pressable` = Pressable's backup API, `spinupwp_spaces` = the DigitalOcean Spaces bucket SpinupWP writes to, `s3_archive` = our own S3 archives for unhosted relay sites), `kind` (`fs` / `db` / `full`), `external_ref` (the source's own id), `backup_at`, `bytes` (nullable), `is_manual`, `first_seen_at`, `last_seen_at`. It's unique on `(site_id, source, kind, external_ref)` and indexed on `(site_id, backup_at)`. Rows are kept after the source prunes them, so a report for an older period can still be rebuilt.
+`site_backups` has one row per backup the source reported. Columns: `source` (`pressable` = Pressable's backup API, `spinupwp_spaces` = the DigitalOcean Spaces bucket SpinupWP writes to, `s3_archive` = our own S3 archives for unhosted relay sites), `kind` (`fs` / `db` / `full`), `external_ref` (the source's own id), `backup_at`, `bytes` (nullable), `database_bytes` (the database half of a SpinupWP `full` run, so client reports can compare it with the database's size; null elsewhere), `is_manual`, `first_seen_at`, `last_seen_at`. It's unique on `(site_id, source, kind, external_ref)` and indexed on `(site_id, backup_at)`. Rows are kept after the source prunes them, so a report for an older period can still be rebuilt.
 
 `site_backup_checks` holds the latest read attempt per `(site_id, source)`: `checked_at`, `ok`, `backups_seen`, `error`. It lets "checked, found none" be told apart from "couldn't check". Both tables cascade on site delete. See [Features → Client reports](/docs/features/client-reports).
 

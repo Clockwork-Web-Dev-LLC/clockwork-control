@@ -22,6 +22,31 @@
     $filterLabels = \Modules\ClientReports\Http\Controllers\SchedulesController::FILTERS;
 @endphp
 
+{{-- Whether reports wait for a person, for every schedule. --}}
+@php
+    $approval = $runnerClass::approvalRequired();
+@endphp
+<div class="card p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="text-sm">
+        @if ($approval)
+            <span class="status-pill cr-pill-blue text-xs mr-1.5"><i class="fa-solid fa-user-check"></i> Approval on</span>
+            Every report waits for your approval. The monthly run compiles and checks them, then sends <strong>nothing</strong>: send them from the
+            <a href="{{ route('client-reports.reports') }}" class="underline">Reports</a> tab, one by one or with <strong>Approve &amp; send all ready</strong>.
+        @else
+            <span class="status-pill status-orange text-xs mr-1.5"><i class="fa-solid fa-paper-plane"></i> Approval off</span>
+            Schedules set to Automatic email their clean reports by themselves; only flagged ones (and a schedule's first report) wait for you.
+        @endif
+    </div>
+    <form method="POST" action="{{ route('client-reports.schedules.approval') }}"
+          data-confirm="{{ $approval ? 'Let clean reports send themselves?' : 'Make every report wait for approval?' }}"
+          data-confirm-details="{{ $approval ? 'From the next run, schedules set to Automatic email clean reports to clients with nobody checking them first. Flagged reports are still held.' : 'From the next run, nothing is emailed until someone sends it from the Reports tab.' }}"
+          data-confirm-btn="{{ $approval ? 'Turn approval off' : 'Turn approval on' }}" data-confirm-variant="{{ $approval ? 'warning' : 'primary' }}">
+        @csrf
+        <input type="hidden" name="require_approval" value="{{ $approval ? '0' : '1' }}">
+        <button type="submit" class="cr-btn">{{ $approval ? 'Let clean reports send themselves' : 'Require approval' }}</button>
+    </form>
+</div>
+
 {{-- The coverage gap: care-plan sites that get no report at all. --}}
 @if ($missingSites->isNotEmpty())
     <div class="card p-5 mb-6 card-status-red">

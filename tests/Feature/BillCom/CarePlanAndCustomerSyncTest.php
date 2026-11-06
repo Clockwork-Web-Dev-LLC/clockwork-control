@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\BillCom;
 
+use App\Models\ActionLog;
 use App\Models\Site;
 use Mockery;
 use Modules\BillCom\BillComClient;
@@ -240,6 +241,12 @@ describe('CarePlanSyncService::sync()', function () {
             ->and($stats['sites_set_false'])->toBe(1)
             ->and($stats['sites_set_true'])->toBe(0)
             ->and($stats['sites_skipped_due_to_override'])->toBe(0);
+
+        // Logged like the site page's toggle, so client reports know when
+        // coverage ended, but never mirrored to the client's wp-admin.
+        $log = ActionLog::query()->where('site_id', $site->id)->where('action_type', ActionLog::TYPE_CARE_PLAN_TOGGLED)->sole();
+        expect($log->details)->toMatchArray(['previous' => true, 'now' => false, 'source' => 'bill_com'])
+            ->and($log->companion_pushed_at)->toBeNull();
     });
 });
 

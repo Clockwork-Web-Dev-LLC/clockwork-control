@@ -4,6 +4,8 @@ namespace Modules\ClientReports\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Site;
+use App\Services\ActionLog\ActionLogger;
+use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +21,9 @@ use Throwable;
 
 class SchedulesController extends Controller
 {
+    /** The action log entry for turning "every report waits for approval" on or off. */
+    public const ACTION_APPROVAL_CHANGED = 'client_report_approval_changed';
+
     /** Schedule list filters: who won't get a report, and why. */
     public const FILTERS = [
         'all' => 'All',
@@ -232,6 +237,18 @@ class SchedulesController extends Controller
 
         $schedule->update($updates);
 
+        // A held report keeps the recipients it was compiled with, and Send
+        // emails those: bring this schedule's unsent copies in line, so the
+        // fix the operator just made is the list that gets the report.
+        // Partly sent ones too; who already has it stays in sent_to.
+        if ($recipients !== []) {
+            ClientReport::query()
+                ->where('schedule_id', $schedule->id)
+                ->where('status', ClientReport::STATUS_GENERATED)
+                ->get()
+                ->each(fn (ClientReport $report) => $report->update(['client_email' => implode(', ', $recipients)]));
+        }
+
         if ($schedule->site) {
             app(ReportRecipientsSyncService::class)->pushToSite($schedule->site, $schedule);
         }
@@ -352,6 +369,29 @@ class SchedulesController extends Controller
         return $schedule;
     }
 
+    /**
+     * Turn "every report waits for approval" on or off for all schedules.
+     * Logged, since turning it off lets clean reports reach clients with
+     * nobody checking them first.
+     */
+    public function setApproval(Request $request, ActionLogger $actions): RedirectResponse
+    {
+        $required = $request->boolean('require_approval');
+        app(Settings::class)->put(ScheduledReportRunner::APPROVAL_SETTING, $required);
+
+        $actions->record(
+            actionType: self::ACTION_APPROVAL_CHANGED,
+            summary: $required
+                ? 'Client reports: every report now waits for approval before it is sent.'
+                : 'Client reports: clean reports from Automatic schedules now send themselves.',
+            details: ['require_approval' => $required, 'by' => $request->user()?->email],
+        );
+
+        return back()->with('status', $required
+            ? 'Approval is on: every report waits for you to send it.'
+            : 'Approval is off: Automatic schedules now email their clean reports by themselves.');
+    }
+
     public function sendNow(ClientReportSchedule $schedule, ScheduledReportRunner $runner): RedirectResponse
     {
         $site = $schedule->site;
@@ -364,7 +404,7 @@ class SchedulesController extends Controller
         }
 
         $recipients = array_values(array_filter((array) $schedule->recipients));
-        $isAuto = $schedule->delivery_mode !== ClientReportSchedule::MODE_DRAFT;
+        $isAuto = ScheduledReportRunner::sendsByItself($schedule);
 
         if ($isAuto && empty($recipients)) {
             return back()->with('status_error', 'Cannot run auto delivery: no recipient email addresses configured.');
@@ -380,7 +420,7 @@ class SchedulesController extends Controller
 
             if ($run->isDraft) {
                 return redirect()->route('client-reports.show', $run->report)
-                    ->with('status', 'Draft report compiled successfully. Preview and review below before sending.');
+                    ->with('status', 'Report compiled and waiting for approval: check it below, then send it. Nothing was sent.');
             }
 
             if (! $run->complete()) {
@@ -411,6 +451,6 @@ class SchedulesController extends Controller
     {
         $raw = preg_split('/[\r\n,]+/', $input);
 
-        return array_values(array_unique(array_filter(array_map('trim', (array) $raw))));
+        return ClientReport::uniqueAddresses(array_filter(array_map('trim', (array) $raw)));
     }
 }

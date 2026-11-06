@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-11-05
+updated: 2026-11-06
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -154,7 +154,7 @@ Full details on the `architecture/companion-plugin` page. Control only mints res
 
 ## wpvulnerability.net — `https://www.wpvulnerability.net/plugin/{slug}`
 
-`app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both. Each advisory's `operator` block becomes the stored range: `lt`/`lte` set the upper bound, `gt`/`gte` the lower bound (the operator decides the side, whichever slot it arrives in), and `eq` an exact release (`from_version = to_version`, both inclusive). `patched_in` is only set for an `lt` bound on a fixed advisory.
+`app/Services/Security/WpVulnerabilityClient.php` · No auth, keyless. `GET` per unique plugin slug installed anywhere in the fleet (~150-250 slugs), 100ms between requests, replaces the local `plugin_vulnerabilities` mirror in one transaction. Per-slug failures are recorded but don't abort the run, and a failed slug keeps its earlier entries. Each slug's last successful lookup is kept in the `plugin_vulnerabilities.last_lookups` setting, so client reports can tell a plugin that was never looked up from one with nothing found. Replaced Wordfence's free Threat Intelligence v2 feed after it moved to authenticated v3 — wpvulnerability.net aggregates CVE/Patchstack/WPScan/Wordfence into one free feed. Feeds the Issues page's vulnerable-plugin flags. Daily at 03:15 (`clockwork:refresh-plugin-vulnerabilities`). Separate from Pressable's own CVE feed (`security-alerts/plugins`/`themes` on `PressableClient`) — Pressable-hosted sites get both. Each advisory's `operator` block becomes the stored range: `lt`/`lte` set the upper bound, `gt`/`gte` the lower bound (the operator decides the side, whichever slot it arrives in), and `eq` an exact release (`from_version = to_version`, both inclusive). `patched_in` is only set for an `lt` bound on a fixed advisory.
 
 ## WordPress.org Plugin Information — `https://api.wordpress.org/plugins/info/1.2/`
 

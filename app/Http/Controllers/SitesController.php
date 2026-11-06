@@ -1592,7 +1592,8 @@ class SitesController extends Controller
         $summary = $result['ok']
             ? ($result['before_version'] === $result['after_version']
                 ? "Plugin already up to date: {$slug} ({$result['before_version']}) on {$site->domain}."
-                : "Updated {$slug} {$result['before_version']} → {$result['after_version']} on {$site->domain}.")
+                // Worded as the update jobs word it: client reports list this.
+                : sprintf('Plugin updated: %s %s → %s', $this->snapshotPluginName($site, $slug), $result['before_version'], $result['after_version']))
             : "Plugin update failed: {$slug} on {$site->domain}.";
 
         $logger->record(
@@ -1607,6 +1608,18 @@ class SitesController extends Controller
         );
 
         return response()->json($result);
+    }
+
+    /** The plugin's name from the site's Companion snapshot, or its slug. */
+    private function snapshotPluginName(Site $site, string $slug): string
+    {
+        foreach ((array) ($site->companion_snapshot['plugins']['plugins'] ?? []) as $plugin) {
+            if (is_array($plugin) && ($plugin['slug'] ?? null) === $slug && trim((string) ($plugin['name'] ?? '')) !== '') {
+                return html_entity_decode(trim((string) $plugin['name']), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+        }
+
+        return $slug;
     }
 
     /**
