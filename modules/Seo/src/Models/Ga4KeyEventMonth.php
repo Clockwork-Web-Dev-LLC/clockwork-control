@@ -4,6 +4,7 @@ namespace Modules\Seo\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * Key events by event name across all channels, per month.
@@ -26,6 +27,6 @@ class Ga4KeyEventMonth extends Model
 
     protected function casts(): array
     {
-        return ['month' => 'date', 'key_events' => 'float', 'event_count' => 'integer', 'is_final' => 'boolean', 'subject_to_thresholding' => 'boolean', 'fetched_at' => 'datetime'];
+        return ['month' => DateOnly::class, 'key_events' => 'float', 'event_count' => 'integer', 'is_final' => 'boolean', 'subject_to_thresholding' => 'boolean', 'fetched_at' => 'datetime'];
     }
 }

@@ -4,6 +4,7 @@ namespace Modules\Seo\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * One page, query or page×query row for a calendar month.
@@ -30,6 +31,6 @@ class GscMonthRow extends Model
 
     protected function casts(): array
     {
-        return ['month' => 'date', 'is_branded' => 'boolean', 'clicks' => 'integer', 'impressions' => 'integer', 'ctr' => 'float', 'position' => 'float', 'fetched_at' => 'datetime'];
+        return ['month' => DateOnly::class, 'is_branded' => 'boolean', 'clicks' => 'integer', 'impressions' => 'integer', 'ctr' => 'float', 'position' => 'float', 'fetched_at' => 'datetime'];
     }
 }

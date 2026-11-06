@@ -4,6 +4,7 @@ namespace Modules\Seo\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * The month's GSC Generative AI impressions, typed in or recorded by Claude,
@@ -32,7 +33,7 @@ class AiImpressionEntry extends Model
     protected function casts(): array
     {
         return [
-            'month' => 'date',
+            'month' => DateOnly::class,
             'ai_impressions' => 'integer',
             'top_pages' => 'array',
         ];

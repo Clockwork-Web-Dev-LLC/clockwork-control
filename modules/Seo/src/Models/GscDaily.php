@@ -4,6 +4,7 @@ namespace Modules\Seo\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * Daily GSC site totals, segment 'all' or 'nonbranded'.
@@ -26,6 +27,6 @@ class GscDaily extends Model
 
     protected function casts(): array
     {
-        return ['date' => 'date', 'clicks' => 'integer', 'impressions' => 'integer', 'ctr' => 'float', 'position' => 'float', 'fetched_at' => 'datetime'];
+        return ['date' => DateOnly::class, 'clicks' => 'integer', 'impressions' => 'integer', 'ctr' => 'float', 'position' => 'float', 'fetched_at' => 'datetime'];
     }
 }

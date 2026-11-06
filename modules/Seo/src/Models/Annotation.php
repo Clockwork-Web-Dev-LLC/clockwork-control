@@ -5,6 +5,7 @@ namespace Modules\Seo\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * A dated event that makes some comparisons misleading: a Google change
@@ -37,8 +38,8 @@ class Annotation extends Model
     protected function casts(): array
     {
         return [
-            'starts_on' => 'date',
-            'ends_on' => 'date',
+            'starts_on' => DateOnly::class,
+            'ends_on' => DateOnly::class,
             'suppresses' => 'array',
         ];
     }

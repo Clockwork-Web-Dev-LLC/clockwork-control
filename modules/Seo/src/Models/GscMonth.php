@@ -4,6 +4,7 @@ namespace Modules\Seo\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * Finality and truncation per site per month of GSC month rows.
@@ -27,6 +28,6 @@ class GscMonth extends Model
 
     protected function casts(): array
     {
-        return ['month' => 'date', 'is_final' => 'boolean', 'possibly_truncated' => 'boolean', 'rows_page' => 'integer', 'rows_query' => 'integer', 'rows_page_query' => 'integer', 'synced_at' => 'datetime'];
+        return ['month' => DateOnly::class, 'is_final' => 'boolean', 'possibly_truncated' => 'boolean', 'rows_page' => 'integer', 'rows_query' => 'integer', 'rows_page_query' => 'integer', 'synced_at' => 'datetime'];
     }
 }

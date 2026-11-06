@@ -6,6 +6,7 @@ use App\Models\Site;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Modules\Seo\Casts\DateOnly;
 
 /**
  * Per-site SEO settings: which GSC and GA4 properties to sync, brand terms,
@@ -68,7 +69,7 @@ class SiteProfile extends Model
             'key_events' => 'array',
             'compare_yoy' => 'boolean',
             'is_enabled' => 'boolean',
-            'history_starts_on' => 'date',
+            'history_starts_on' => DateOnly::class,
             'last_gsc_synced_at' => 'datetime',
             'last_ga4_synced_at' => 'datetime',
         ];
