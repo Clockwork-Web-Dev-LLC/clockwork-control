@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-11-06
+
+### Added
+- **Favicon**: browser tabs, bookmarks and iOS home-screen shortcuts show the Clockwork clock mark (`favicon.svg`, a multi-size `favicon.ico` replacing the empty placeholder, and `apple-touch-icon.png`), linked from the app, install, sign-in and client report pages.
+
+### Upgrade notes
+- No migrations. After updating, hard-refresh the browser (browsers cache favicons aggressively).
+
 ## [1.12.1] - 2026-11-06
 
 ### Added
