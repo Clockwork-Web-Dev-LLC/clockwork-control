@@ -76,7 +76,7 @@ describe('clockwork:check-site-uptime', function () {
         app(Settings::class)->put(DomainIgnoreList::SETTING_KEY, ['*.mystagingwebsite.com']);
 
         $staging = Site::factory()->create([
-            'domain' => 'michelli.mystagingwebsite.com',
+            'domain' => 'staging-demo.mystagingwebsite.com',
             'uptime_monitoring_enabled' => true,
             'uptime_state' => 'unknown',
         ]);
@@ -88,7 +88,7 @@ describe('clockwork:check-site-uptime', function () {
 
         $this->artisan('clockwork:check-site-uptime')->assertSuccessful();
 
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'michelli.mystagingwebsite.com'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'staging-demo.mystagingwebsite.com'));
         Http::assertSent(fn ($request) => str_contains($request->url(), 'prod.example.test'));
         expect($staging->refresh()->uptime_last_checked_at)->toBeNull()
             ->and($prod->refresh()->uptime_last_checked_at)->not->toBeNull();

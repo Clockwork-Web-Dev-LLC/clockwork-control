@@ -66,7 +66,7 @@ Most of the source plan's Workstream 1A is **already done and committed**:
   stored hash is `sites.backup_relay_last_sha256` (latest archive only, written by
   `ArchiveSiteBackupJob::markArchived()`).
 - **No extraction code exists in Companion** (`extractTo` has zero hits). The live proof host
-  (desatechpr.com, site 315, PHP 8.1) has **no php-zip**, so extraction MUST work via PclZip.
+  (example-custom.com, site 315, PHP 8.1) has **no php-zip**, so extraction MUST work via PclZip.
 - **Companion `composer.json` requires `php >= 8.2`** while 1.36.0 explicitly fixed an 8.1 fatal and
   the source is 8.1-clean. The plugin header has no `Requires PHP:` line at all.
 - `HmacVerifier` burns each POST signature into a replay-guard transient — **an identical signed POST

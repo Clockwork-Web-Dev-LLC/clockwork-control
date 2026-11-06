@@ -2,7 +2,7 @@
 
 ## The incident
 
-phii.org (Pressable, id 269, pressable_site_id 1282022) fataled on every
+example-health.org (Pressable, id 269, pressable_site_id 1282022) fataled on every
 wp-admin page footer:
 
 ```
@@ -13,7 +13,7 @@ Argument #1 ($footerText) must be of type string, null given
 ```
 
 Root cause: WordPress filter callbacks receive whatever the PREVIOUS
-callback in the chain returned. Some other plugin on phii.org returns
+callback in the chain returned. Some other plugin on example-health.org returns
 `null` from `admin_footer_text`; Companion's strictly-typed `string`
 parameter turned that into a fatal. This is a latent bug on every site —
 it only fires when a null-returning filter neighbor is present.
@@ -35,7 +35,7 @@ it only fires when a null-returning filter neighbor is present.
   `testFilterCallbacksTolerateNullFromEarlierCallbacks` regression test.
 - Test suite green: `vendor/bin/phpunit` → 123 tests, 522 assertions.
 
-Deployed live to **phii.org only** (health ok, v1.37.2, nullable signature
+Deployed live to **example-health.org only** (health ok, v1.37.2, nullable signature
 confirmed in the remote file). Rest of fleet still on 1.36.0 (~158 sites)
 / 1.37.1 (~20 sites) / older.
 
@@ -81,9 +81,9 @@ edits). Keep commits separated by concern.
   rotated — that is exactly what the salvageJsonBody fix addresses. With
   the control-repo fix in place this self-heals; without it you get a
   secret desync (recovery recipe in the memory file above).
-- amymartinauctioneer.com has multiple object-cache pools: CLI
+- example-auction.com has multiple object-cache pools: CLI
   `wp cache flush` does NOT clear what web containers read — use
   `PressableClient::flushObjectCache()` (DELETE /sites/{id}/object-cache).
-- Unrelated open finding: phii.org's Companion malware scans have reported
+- Unrelated open finding: example-health.org's Companion malware scans have reported
   `php_in_uploads=5` for 3+ nights running — same pattern as previous real
   compromises. Not investigated yet; flagged to Aaron.

@@ -848,7 +848,7 @@ class ClockworkCompanionClient
         // before REST JSON (the timezone-redirect case), a raw parse fails,
         // the rotation is reported as failed — but the plugin HAS already
         // swapped to the new secret, which is then lost. That desync silenced
-        // amymartinauctioneer for 3 days (2026-09-11 → 09-15) and needs a
+        // an affected site for 3 days (2026-09-11 → 09-15) and needs a
         // cache-flush + DB realign to recover from. Never discard a rotate
         // response without trying to salvage the secret out of it.
         $body = $this->salvageJsonBody($response) ?? [];
