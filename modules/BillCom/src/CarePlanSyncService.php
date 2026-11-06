@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\Log;
  *      - Otherwise → set care_plan_enabled = false.
  *   4. Sites with care_plan_override IS NOT NULL are skipped.
  *
+ * Domains are compared normalized (SiteDomainIndex / DomainNormalizer), so a
+ * site stored as "www.example.com" is hit by a line naming "example.com",
+ * and the extractor recognises every TLD a non-archived site uses.
+ *
  * Why line-item-level not customer-level: a single customer can have multiple
  * sites, where some are care-plan'd and some aren't. One real customer, for
  * example, hosts client-l.example AND client-m.example — only the latter
@@ -52,11 +56,19 @@ class CarePlanSyncService
      *     active_care_plan_domains: int,
      *     active_care_plan_customers: int,
      *     unmatched_care_plan_domains: array<string, int>,
+     *     archived_care_plan_domains: array<string, int>,
+     *     domain_collisions: array<string, int>,
      *     care_plan_lineitems_without_domain: int,
      *     sites_set_true: int,
      *     sites_set_false: int,
      *     sites_skipped_due_to_override: int,
      * }
+     *
+     * archived_care_plan_domains: active care-plan domains that only an
+     *   archived Site has — kept out of unmatched_care_plan_domains so they
+     *   don't read as "not in Clockwork yet".
+     * domain_collisions: normalized domain => number of non-archived sites
+     *   sharing it, where the sync had to pick one (exact match wins).
      */
     public function sync(int $windowDays, string $itemRegex, bool $dryRun = false): array
     {
@@ -67,11 +79,16 @@ class CarePlanSyncService
             'active_care_plan_domains' => 0,
             'active_care_plan_customers' => 0,
             'unmatched_care_plan_domains' => [],
+            'archived_care_plan_domains' => [],
+            'domain_collisions' => [],
             'care_plan_lineitems_without_domain' => 0,
             'sites_set_true' => 0,
             'sites_set_false' => 0,
             'sites_skipped_due_to_override' => 0,
         ];
+
+        $siteIndex = SiteDomainIndex::build();
+        $extraTlds = $siteIndex->tlds();
 
         // 1. Sync + classify Items.
         $carePlanItemIds = [];
@@ -139,7 +156,7 @@ class CarePlanSyncService
                 }
 
                 $desc = (string) ($li['description'] ?? '');
-                $domains = InvoiceDomainExtractor::extractAll($desc);
+                $domains = InvoiceDomainExtractor::extractAll($desc, $extraTlds);
                 if ($domains === []) {
                     $stats['care_plan_lineitems_without_domain']++;
                     if ($customerId !== '') {
@@ -156,6 +173,17 @@ class CarePlanSyncService
         $stats['active_care_plan_domains'] = count($activeDomains);
         $stats['active_care_plan_customers'] = count($activeCustomers);
 
+        // Resolve each active (normalized) domain to the one non-archived
+        // site it names. When two sites normalize to the same domain, the
+        // index picks the exact match and records the collision.
+        $activeDomainBySiteId = []; // site id => active domain
+        foreach ($activeDomains as $domain => $_) {
+            $site = $siteIndex->find($domain);
+            if ($site !== null) {
+                $activeDomainBySiteId[$site->id] = $domain;
+            }
+        }
+
         // 3. Apply to sites — only those without a manual override.
         $matchedDomains = [];
         foreach (Site::query()->whereNotNull('bill_com_customer_id')->get() as $site) {
@@ -165,11 +193,11 @@ class CarePlanSyncService
                 continue;
             }
 
-            $domainHit = isset($activeDomains[$site->domain]);
+            $domainHit = isset($activeDomainBySiteId[$site->id]);
             $customerHit = isset($activeCustomers[$site->bill_com_customer_id]);
             $shouldBeOnPlan = $domainHit || $customerHit;
             if ($domainHit) {
-                $matchedDomains[$site->domain] = true;
+                $matchedDomains[$activeDomainBySiteId[$site->id]] = true;
             }
 
             if ($site->care_plan_enabled === $shouldBeOnPlan) {
@@ -192,12 +220,17 @@ class CarePlanSyncService
 
         // Active care-plan domains that didn't match any Site row — surface
         // these so the operator can see "Bill.com says X is on a care plan but X
-        // isn't in Clockwork yet."
+        // isn't in Clockwork yet." A domain only an archived site has is listed
+        // separately: it IS in Clockwork, just archived.
         foreach ($activeDomains as $domain => $_) {
-            if (! isset($matchedDomains[$domain])) {
-                $stats['unmatched_care_plan_domains'][$domain] = 1;
+            if (isset($matchedDomains[$domain])) {
+                continue;
             }
+            $bucket = $siteIndex->belongsToArchivedSite($domain) ? 'archived_care_plan_domains' : 'unmatched_care_plan_domains';
+            $stats[$bucket][$domain] = 1;
         }
+
+        $stats['domain_collisions'] = $siteIndex->collisions();
 
         return $stats;
     }

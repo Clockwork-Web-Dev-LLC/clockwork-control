@@ -10,7 +10,10 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
+use Modules\ClientManagement\Models\Client;
 use Modules\ClientReports\Models\ClientReport;
+use Modules\ClientReports\Support\ReportPhrases;
+use Throwable;
 
 /**
  * The monthly client report, delivered as a complete self-contained email.
@@ -36,9 +39,25 @@ class ClientReportMail extends Mailable
             : [];
 
         return new Envelope(
+            from: $this->fromAddress(),
             subject: sprintf('Your %s website report — %s', $this->report->period_start->format('F Y'), $this->domain()),
             replyTo: $replyTo,
         );
+    }
+
+    /**
+     * The configured sending address under the report brand's company name,
+     * so the inbox shows the agency rather than whatever MAIL_FROM_NAME says
+     * (by default the internal product name). Null leaves Laravel's global
+     * From in place when no sending address is configured.
+     */
+    public function fromAddress(): ?Address
+    {
+        $address = (string) config('mail.from.address');
+
+        return filter_var($address, FILTER_VALIDATE_EMAIL)
+            ? new Address($address, $this->branding()['company_name'])
+            : null;
     }
 
     public function content(): Content
@@ -51,11 +70,51 @@ class ClientReportMail extends Mailable
                 'data' => $this->report->sections_data ?? [],
                 'branding' => $this->branding(),
                 'logoBytes' => $this->logoBytes(),
-                'contactName' => $this->report->site?->client?->name,
+                // "Hi Jane," or, when we can't be sure who reads it, "Hi there,".
+                'greetingName' => $this->greetingName(),
                 'domain' => $this->domain(),
                 'updateRows' => $this->updateRows(),
             ],
         );
+    }
+
+    /**
+     * The first name to greet the reader by, or null for "Hi there,". Only
+     * when the report goes to one address, and that address is a known
+     * client contact whose stored name is plainly a person's
+     * (ReportPhrases::firstName): the site's client's name is often an
+     * organisation, and a report sent to several people, or to someone
+     * other than the site's contact, would greet the wrong person.
+     */
+    public function greetingName(): ?string
+    {
+        $recipients = $this->report->recipients();
+        if ($recipients === []) {
+            $recipients = array_values(array_filter(array_map(
+                fn ($r) => trim((string) $r),
+                (array) ($this->report->schedule->recipients ?? []),
+            )));
+        }
+        if (count($recipients) !== 1) {
+            return null;
+        }
+
+        $address = mb_strtolower(trim($recipients[0]));
+
+        try {
+            $own = $this->report->site?->client;
+            $contacts = $own instanceof Client && mb_strtolower(trim((string) $own->email)) === $address
+                ? collect([$own])
+                : Client::query()->whereRaw('LOWER(TRIM(email)) = ?', [$address])->get();
+        } catch (Throwable) {
+            // No client records to read (the module's table isn't there).
+            return null;
+        }
+
+        // Two contacts sharing the address under different names: don't guess.
+        $names = $contacts->map(fn (Client $c) => ReportPhrases::firstName($c->name))->unique()->values();
+
+        return $names->count() === 1 ? $names->first() : null;
     }
 
     /**
@@ -104,6 +163,9 @@ class ClientReportMail extends Mailable
 
     public static function cleanUpdateSummary(string $summary, ?string $target = null): string
     {
+        // Names come from WordPress with HTML entities ("Example &amp; Co");
+        // the views escape what they print, so decode them here.
+        $summary = html_entity_decode($summary, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $clean = preg_replace('/^\s*(plugin|theme|core|wordpress(?: core)?)\s+updated\s*:\s*/i', '', $summary) ?? $summary;
         $clean = trim(preg_replace('/\s*\[[^\]]*\]\s*$/', '', $clean) ?? $clean);
 

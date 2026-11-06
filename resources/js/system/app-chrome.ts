@@ -50,16 +50,23 @@ export function appChrome(): Record<string, any> {
             });
 
             if (typeof window.matchMedia === 'function') {
-                const desktop = window.matchMedia('(min-width: 768px)');
-                const dismiss = (event: MediaQueryListEvent | MediaQueryList) => {
-                    if (event.matches) {
+                // The drawer is only reachable while no persistent nav is on screen: the studio
+                // tabs return at md (modern layout), the sidebar rail at lg (command-center).
+                // Close it once the persistent nav for the current layout is back.
+                const md = window.matchMedia('(min-width: 768px)');
+                const lg = window.matchMedia('(min-width: 1024px)');
+                const dismiss = () => {
+                    const persistentNav = (this as any).style === 'command-center' ? lg.matches : md.matches;
+                    if (persistentNav) {
                         this.mobileNavOpen = false;
                     }
                 };
-                if (typeof desktop.addEventListener === 'function') {
-                    desktop.addEventListener('change', dismiss);
-                } else if (typeof (desktop as any).addListener === 'function') {
-                    (desktop as any).addListener(dismiss);
+                for (const query of [md, lg]) {
+                    if (typeof query.addEventListener === 'function') {
+                        query.addEventListener('change', dismiss);
+                    } else if (typeof (query as any).addListener === 'function') {
+                        (query as any).addListener(dismiss);
+                    }
                 }
             }
         },

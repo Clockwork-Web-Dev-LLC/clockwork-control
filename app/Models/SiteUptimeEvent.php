@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One row per uptime state transition (up→down or down→up). NOT one per probe.
+ * One row per uptime state transition (up→down, down→up, into maintenance,
+ * into probe_blocked). NOT one per probe.
  *
  * @property int $id
  * @property int $site_id
- * @property string $event_type 'down' or 'up'
+ * @property string $event_type 'down', 'up', 'maintenance' or 'probe_blocked'
  * @property ?int $status_code
  * @property ?string $error
  * @property ?int $response_time_ms
@@ -35,6 +36,12 @@ class SiteUptimeEvent extends Model
     public const TYPE_UP = 'up';
 
     public const TYPE_MAINTENANCE = 'maintenance';
+
+    /**
+     * The site started rate-limiting the probe (HTTP 429). Opens a stretch of
+     * "can't tell" — never downtime. Closed by the next up/down/maintenance.
+     */
+    public const TYPE_PROBE_BLOCKED = 'probe_blocked';
 
     public const REASON_CLIENT_DNS = 'client_dns';
 

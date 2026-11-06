@@ -620,8 +620,8 @@
         {{-- SCHEDULER HEARTBEAT — if this is stale, every other monitor is lying --}}
     @if ($schedulerHeartbeat->isStale())
         <section id="section-scheduler_stale" x-show="isCategoryVisible('scheduler_stale') && matchesTier('critical')" class="card mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div @click="toggleSection('scheduler_stale')" class="px-5 py-4 flex items-start justify-between gap-4 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('scheduler_stale') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('scheduler_stale')" class="px-5 py-4 flex items-start justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('scheduler_stale') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-clock text-[var(--color-status-red)] mr-2"></i>
                         Scheduler has not ticked in {{ $schedulerHeartbeat->ageLabel() }}
@@ -637,12 +637,13 @@
                         <a href="{{ route('monitoring.settings') }}" class="text-[var(--color-primary-600)] hover:underline">Monitoring settings</a>
                     </p>
                 </div>
-                <span class="status-pill status-red">1</span>
-                <x-issue-priority-menu :category="'scheduler_stale'"/>
-            
-                    <button type="button" @click.stop="toggleSection('scheduler_stale')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('scheduler_stale') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">1</span>
+                    <x-issue-priority-menu :category="'scheduler_stale'"/>
+                    <button type="button" @click.stop="toggleSection('scheduler_stale')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('scheduler_stale') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('scheduler_stale') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('scheduler_stale')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
         </div>
@@ -652,20 +653,21 @@
         {{-- MALWARE / BLACKLIST (Sucuri SiteCheck) --}}
     @if ($malwareHits->isNotEmpty())
         <section id="section-malware" x-show="isCategoryVisible('malware') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-bug text-[var(--color-status-red)] mr-2"></i>
                         Malware or blacklist hit
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest Sucuri SiteCheck flagged the site as compromised or on a public blacklist.</p>
                 </div>
-                <span class="status-pill status-red">{{ $malwareHits->count() }}</span>
-                <x-issue-priority-menu :category="'malware'"/>
-            
-                    <button type="button" @click.stop="toggleSection('malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('malware') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $malwareHits->count() }}</span>
+                    <x-issue-priority-menu :category="'malware'"/>
+                    <button type="button" @click.stop="toggleSection('malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('malware') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('malware') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('malware')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]">
@@ -706,20 +708,21 @@
         {{-- COMPANION MALWARE FINDINGS (PHP-in-uploads + obfuscation signatures, scanned on-site) --}}
     @if ($companionMalwareFindings->isNotEmpty())
         <section id="section-companion_malware" x-show="isCategoryVisible('companion_malware') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('companion_malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('companion_malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('companion_malware')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('companion_malware') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-file-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
                         Companion malware findings
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest Companion file scan flagged PHP in uploads or obfuscation/webshell signatures. Clients see the same result on their wp-admin Security page — get there first.</p>
                 </div>
-                <span class="status-pill status-red">{{ $companionMalwareFindings->count() }}</span>
-                <x-issue-priority-menu :category="'companion_malware'"/>
-            
-                    <button type="button" @click.stop="toggleSection('companion_malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('companion_malware') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $companionMalwareFindings->count() }}</span>
+                    <x-issue-priority-menu :category="'companion_malware'"/>
+                    <button type="button" @click.stop="toggleSection('companion_malware')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('companion_malware') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('companion_malware') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('companion_malware')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]">
@@ -757,20 +760,21 @@
         {{-- CORE FILE TAMPERING (wp core verify-checksums) --}}
     @if ($checksumTampering->isNotEmpty())
         <section id="section-tampering" x-show="isCategoryVisible('tampering') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('tampering')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('tampering') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('tampering')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('tampering') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-status-red)] mr-2"></i>
                         Core file tampering
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Latest <code class="font-data">wp core verify-checksums</code> flagged modified, missing, or unexpected core files.</p>
                 </div>
-                <span class="status-pill status-red">{{ $checksumTampering->count() }}</span>
-                <x-issue-priority-menu :category="'tampering'"/>
-            
-                    <button type="button" @click.stop="toggleSection('tampering')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('tampering') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $checksumTampering->count() }}</span>
+                    <x-issue-priority-menu :category="'tampering'"/>
+                    <button type="button" @click.stop="toggleSection('tampering')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('tampering') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('tampering') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('tampering')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]">
@@ -808,20 +812,21 @@
         {{-- SITES CURRENTLY DOWN — real outages outrank everything below --}}
     @if ($downSites->isNotEmpty())
         <section id="section-down-sites" x-show="isCategoryVisible('down_sites') && matchesTier('critical')" class="card mb-6 ring-1 ring-[var(--color-status-red)]/30">
-            <div @click="toggleSection('down_sites')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('down_sites') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('down_sites')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('down_sites') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-circle-exclamation text-[var(--color-status-red)] mr-2"></i>
                         Sites currently down
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">HTTP probe failed 2+ times in a row. Mattermost was alerted at the transition.</p>
                 </div>
-                <span class="status-pill status-red">{{ $downSites->count() }}</span>
-                <x-issue-priority-menu :category="'down_sites'"/>
-            
-                    <button type="button" @click.stop="toggleSection('down_sites')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('down_sites') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $downSites->count() }}</span>
+                    <x-issue-priority-menu :category="'down_sites'"/>
+                    <button type="button" @click.stop="toggleSection('down_sites')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('down_sites') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('down_sites') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('down_sites')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]">
@@ -869,20 +874,21 @@
         {{-- STUCK MAINTENANCE — forgotten windows, not outages --}}
     @if ($stuckMaintenanceSites->isNotEmpty())
         <section id="section-stuck_maintenance" x-show="isCategoryVisible('stuck_maintenance') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('stuck_maintenance')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('stuck_maintenance') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('stuck_maintenance')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('stuck_maintenance') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-wrench text-[var(--color-status-yellow)] mr-2"></i>
                         Maintenance running longer than {{ \App\Models\Site::UPTIME_STUCK_MAINTENANCE_HOURS }} hours
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Likely a forgotten maintenance plugin or an update that never finished. Outage alerts stay suppressed until the site comes back up.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $stuckMaintenanceSites->count() }}</span>
-                <x-issue-priority-menu :category="'stuck_maintenance'"/>
-            
-                    <button type="button" @click.stop="toggleSection('stuck_maintenance')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('stuck_maintenance') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $stuckMaintenanceSites->count() }}</span>
+                    <x-issue-priority-menu :category="'stuck_maintenance'"/>
+                    <button type="button" @click.stop="toggleSection('stuck_maintenance')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('stuck_maintenance') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('stuck_maintenance') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('stuck_maintenance')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]">
@@ -918,20 +924,21 @@
         {{-- HEALTH --}}
     @if ($unhealthyServers->isNotEmpty())
         <section id="section-health" x-show="isCategoryVisible('health') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('health')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('health') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('health')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('health') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-heart-pulse text-[var(--color-status-red)] mr-2"></i>
                         Server health
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Servers reporting status=red from the DigitalOcean poller.</p>
                 </div>
-                <span class="status-pill status-red">{{ $unhealthyServers->count() }}</span>
-                <x-issue-priority-menu :category="'health'"/>
-            
-                    <button type="button" @click.stop="toggleSection('health')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('health') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $unhealthyServers->count() }}</span>
+                    <x-issue-priority-menu :category="'health'"/>
+                    <button type="button" @click.stop="toggleSection('health')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('health') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('health') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('health')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
@@ -974,20 +981,21 @@
         {{-- FORM TESTING FAILING --}}
     @if ($failedFormTests->isNotEmpty())
         <section id="section-forms_failing" x-show="isCategoryVisible('forms_failing') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('forms_failing')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('forms_failing') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('forms_failing')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('forms_failing') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-envelope-circle-check text-[var(--color-status-red)] mr-2"></i>
                         Contact form failing
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Care-plan sites with contact-form testing on whose daily test has failed two or more runs in a row. Mattermost was pinged on the second failure.</p>
                 </div>
-                <span class="status-pill status-red">{{ $failedFormTests->count() }}</span>
-                <x-issue-priority-menu :category="'forms_failing'"/>
-            
-                    <button type="button" @click.stop="toggleSection('forms_failing')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('forms_failing') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-red">{{ $failedFormTests->count() }}</span>
+                    <x-issue-priority-menu :category="'forms_failing'"/>
+                    <button type="button" @click.stop="toggleSection('forms_failing')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('forms_failing') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('forms_failing') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('forms_failing')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'streak', defaultDir: 'desc' })">
@@ -1047,20 +1055,21 @@
             };
         @endphp
         <section id="section-ssl" x-show="isCategoryVisible('ssl') && matchesTier('critical')" class="card mb-6">
-            <div @click="toggleSection('ssl')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('ssl') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('ssl')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('ssl') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-lock-open text-[var(--color-ink-muted)] mr-2"></i>
                         SSL certificates
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Yellow = renewal window passed without rollover · Red = already expired. <i class="fa-solid fa-cloud" style="color: #F38020"></i> = on Cloudflare with proxy active · <i class="fa-solid fa-cloud text-[var(--color-ink-soft)]"></i> = on Cloudflare DNS only.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $sslIssues->count() }}</span>
-                <x-issue-priority-menu :category="'ssl'"/>
-            
-                    <button type="button" @click.stop="toggleSection('ssl')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('ssl') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $sslIssues->count() }}</span>
+                    <x-issue-priority-menu :category="'ssl'"/>
+                    <button type="button" @click.stop="toggleSection('ssl')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('ssl') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('ssl') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('ssl')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
@@ -1102,7 +1111,7 @@
                             <td class="px-5 py-2 cell-state">
                                 <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
                             </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-expires">
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] whitespace-nowrap cell-expires">
                                 {{ $s->cert_expires_at?->format('M j, Y') }}
                                 <span class="text-[var(--color-ink-soft)]">({{ $s->cert_expires_at?->diffForHumans() }})</span>
                             </td>
@@ -1137,8 +1146,8 @@
                 this.ignoreModalOpen = true;
             }
         }">
-            <div @click="toggleSection('seo-indexability')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('seo-indexability') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('seo-indexability')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap flex-wrap gap-3 cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('seo-indexability') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-magnifying-glass text-[var(--color-status-red)] mr-2"></i>
                         SEO indexability
@@ -1171,11 +1180,12 @@
                         </button>
                     </div>
                 </div>
-                <x-issue-priority-menu :category="'seo-indexability'"/>
-            
-                    <button type="button" @click.stop="toggleSection('seo-indexability')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('seo-indexability') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <x-issue-priority-menu :category="'seo-indexability'"/>
+                    <button type="button" @click.stop="toggleSection('seo-indexability')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('seo-indexability') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('seo-indexability') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('seo-indexability')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
 
@@ -1451,12 +1461,13 @@
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">24-hour average exceeds CPU/memory/disk yellow thresholds (sustained, not spikes).</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $hotServers->count() }}</span>
-                <x-issue-priority-menu :category="'hot'"/>
-            
-                    <button type="button" @click.stop="toggleSection('hot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('hot') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $hotServers->count() }}</span>
+                    <x-issue-priority-menu :category="'hot'"/>
+                    <button type="button" @click.stop="toggleSection('hot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('hot') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('hot') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('hot')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'cpu', defaultDir: 'desc' })">
@@ -1502,8 +1513,8 @@
         {{-- DOMAIN EXPIRATION --}}
     @if ($domainExpirationIssues->isNotEmpty())
         <section id="section-domain-expiration" x-show="isCategoryVisible('domain-expiration') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('domain-expiration')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('domain-expiration') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('domain-expiration')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('domain-expiration') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-globe text-[var(--color-ink-muted)] mr-2"></i>
                         Domain expiration
@@ -1512,12 +1523,13 @@
                         Yellow = renewal window (≤30 days) · Red = expiring soon (≤7 days) or redemption/pending delete.
                     </p>
                 </div>
-                <span class="status-pill status-yellow">{{ $domainExpirationIssues->count() }}</span>
-                <x-issue-priority-menu :category="'domain-expiration'"/>
-            
-                    <button type="button" @click.stop="toggleSection('domain-expiration')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('domain-expiration') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $domainExpirationIssues->count() }}</span>
+                    <x-issue-priority-menu :category="'domain-expiration'"/>
+                    <button type="button" @click.stop="toggleSection('domain-expiration')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('domain-expiration') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('domain-expiration') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('domain-expiration')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'expires', defaultDir: 'asc' })">
@@ -1555,11 +1567,11 @@
                             <td class="px-5 py-2 cell-state">
                                 <span class="status-pill {{ $stateClass }} text-[10px]">{{ $stateLabel }}</span>
                             </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] cell-expires">
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)] whitespace-nowrap cell-expires">
                                 {{ $s->domain_expires_at?->format('M j, Y') }}
                                 <span class="text-[var(--color-ink-soft)]">({{ $s->domain_expires_at?->diffForHumans() }})</span>
                             </td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data cell-registrar">
+                            <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)] font-data whitespace-nowrap cell-registrar">
                                 {{ $s->domain_registrar ?? 'Unknown' }}
                             </td>
                             <td class="px-5 py-2 text-right">
@@ -1580,8 +1592,8 @@
         {{-- CLOUDFLARE MISCONFIG --}}
     @if ($cfMisconfigured->isNotEmpty())
         <section id="section-cf" x-show="isCategoryVisible('cf') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('cf')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('cf') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('cf')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('cf') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cloud text-yellow-500 mr-2"></i>
                         Cloudflare misconfigured
@@ -1590,12 +1602,13 @@
                         These domains use Cloudflare DNS but the proxy (orange cloud) is off — traffic is hitting the origin directly. Toggle the proxy on in Cloudflare → DNS to fix.
                     </p>
                 </div>
-                <span class="status-pill status-yellow">{{ $cfMisconfigured->count() }}</span>
-                <x-issue-priority-menu :category="'cf'"/>
-            
-                    <button type="button" @click.stop="toggleSection('cf')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('cf') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $cfMisconfigured->count() }}</span>
+                    <x-issue-priority-menu :category="'cf'"/>
+                    <button type="button" @click.stop="toggleSection('cf')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('cf') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('cf') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('cf')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
@@ -1642,20 +1655,21 @@
     {{-- PATCHES (Server.upgrade_required — set by SpinupWP import or the daily SSH poll) --}}
     @if ($patchesAvailable->isNotEmpty())
         <section id="section-patches" x-show="isCategoryVisible('patches') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('patches')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('patches') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('patches')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('patches') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-cube text-[var(--color-ink-muted)] mr-2"></i>
                         Patches available
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Non-security apt updates are pending. Security updates auto-install via unattended-upgrades.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $patchesAvailable->count() }}</span>
-                <x-issue-priority-menu :category="'patches'"/>
-            
-                    <button type="button" @click.stop="toggleSection('patches')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('patches') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $patchesAvailable->count() }}</span>
+                    <x-issue-priority-menu :category="'patches'"/>
+                    <button type="button" @click.stop="toggleSection('patches')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('patches') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('patches') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('patches')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @php
@@ -1749,20 +1763,21 @@
         {{-- REBOOT (Server.reboot_required — typically a kernel patch was applied via unattended-upgrades) --}}
     @if ($rebootRequired->isNotEmpty())
         <section id="section-reboot" x-show="isCategoryVisible('reboot') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('reboot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('reboot') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('reboot')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('reboot') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-power-off text-[var(--color-ink-muted)] mr-2"></i>
                         Reboot required
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">A kernel or system update has been applied; the server is running an old image until rebooted.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $rebootRequired->count() }}</span>
-                <x-issue-priority-menu :category="'reboot'"/>
-            
-                    <button type="button" @click.stop="toggleSection('reboot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('reboot') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $rebootRequired->count() }}</span>
+                    <x-issue-priority-menu :category="'reboot'"/>
+                    <button type="button" @click.stop="toggleSection('reboot')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('reboot') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('reboot') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('reboot')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })" id="reboot-list">
@@ -1811,20 +1826,21 @@
     {{-- SSH --}}
     @if ($missingSsh->isNotEmpty())
         <section id="section-no_ssh" x-show="isCategoryVisible('no_ssh') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('no_ssh')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_ssh') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('no_ssh')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_ssh') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-key text-[var(--color-ink-muted)] mr-2"></i>
                         SSH not verified
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Until SSH is verified, the server can't pull logs or ban IPs.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $missingSsh->count() }}</span>
-                <x-issue-priority-menu :category="'no_ssh'"/>
-            
-                    <button type="button" @click.stop="toggleSection('no_ssh')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_ssh') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $missingSsh->count() }}</span>
+                    <x-issue-priority-menu :category="'no_ssh'"/>
+                    <button type="button" @click.stop="toggleSection('no_ssh')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('no_ssh') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_ssh') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('no_ssh')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
@@ -1887,20 +1903,21 @@
         {{-- JAIL --}}
     @if ($missingJail->isNotEmpty())
         <section id="section-no_jail" x-show="isCategoryVisible('no_jail') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('no_jail')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_jail') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('no_jail')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_jail') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-shield-halved text-[var(--color-ink-muted)] mr-2"></i>
                         Fail2ban not provisioned
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">SSH works but the clockwork jail isn't installed yet — banning IPs won't work on these.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $missingJail->count() }}</span>
-                <x-issue-priority-menu :category="'no_jail'"/>
-            
-                    <button type="button" @click.stop="toggleSection('no_jail')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_jail') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $missingJail->count() }}</span>
+                    <x-issue-priority-menu :category="'no_jail'"/>
+                    <button type="button" @click.stop="toggleSection('no_jail')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('no_jail') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_jail') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('no_jail')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'server', defaultDir: 'asc' })">
@@ -1926,20 +1943,21 @@
         {{-- COMPANION MISSING / STALE --}}
     @if ($companionMissing->isNotEmpty())
         <section id="section-no_companion" x-show="isCategoryVisible('no_companion') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('no_companion')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_companion') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('no_companion')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_companion') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-plug-circle-xmark text-[var(--color-ink-muted)] mr-2"></i>
                         Companion plugin not reachable
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Form testing is enabled for these sites but the Companion mu-plugin hasn't checked in within 48h (or was never installed). Click into each site and hit <strong>Install Companion</strong> on the Settings tab.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $companionMissing->count() }}</span>
-                <x-issue-priority-menu :category="'no_companion'"/>
-            
-                    <button type="button" @click.stop="toggleSection('no_companion')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_companion') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $companionMissing->count() }}</span>
+                    <x-issue-priority-menu :category="'no_companion'"/>
+                    <button type="button" @click.stop="toggleSection('no_companion')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('no_companion') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_companion') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('no_companion')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
@@ -1982,20 +2000,21 @@
         {{-- ORPHAN SITES --}}
     @if ($orphanSites->isNotEmpty())
         <section id="section-orphans" x-show="isCategoryVisible('orphans') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('orphans')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('orphans') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('orphans')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('orphans') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-link-slash text-[var(--color-ink-muted)] mr-2"></i>
                         Orphaned sites
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Local Site rows whose SpinupWP linkage is gone. Either consolidated under another site (safe to archive) or unknown (needs review). Refresh with <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">php artisan clockwork:find-orphan-sites --archive-consolidated</code>.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $orphanSites->count() }}</span>
-                <x-issue-priority-menu :category="'orphans'"/>
-            
-                    <button type="button" @click.stop="toggleSection('orphans')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('orphans') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $orphanSites->count() }}</span>
+                    <x-issue-priority-menu :category="'orphans'"/>
+                    <button type="button" @click.stop="toggleSection('orphans')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('orphans') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('orphans') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('orphans')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <table class="w-full text-sm min-w-[560px]" x-data="sortableTable({ defaultKey: 'site', defaultDir: 'asc' })">
@@ -2067,8 +2086,8 @@
         {{-- DB CREDS --}}
     @if ($missingDbCreds->isNotEmpty())
         <section id="section-no_db" x-show="isCategoryVisible('no_db') && matchesTier('infrastructure')" class="card mb-6">
-            <div @click="toggleSection('no_db')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_db') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
-                <div>
+            <div @click="toggleSection('no_db')" class="px-5 py-4 border-b border-[var(--color-border-light)] flex items-center justify-between gap-x-3 gap-y-2 flex-wrap sm:flex-nowrap cursor-pointer select-none hover:bg-[var(--color-surface-alt)]/50 transition-colors" :class="isSectionCollapsed('no_db') ? 'rounded-[var(--radius-card)] border-b-0' : 'rounded-t-[var(--radius-card)]'">
+                <div class="min-w-0 flex-1">
                     <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)]">
                         <i class="fa-solid fa-database text-[var(--color-ink-muted)] mr-2"></i>
                         WordPress DB credentials missing
@@ -2084,11 +2103,12 @@
                         </button>
                     </form>
                 </div>
-                <x-issue-priority-menu :category="'no_db'"/>
-            
-                    <button type="button" @click.stop="toggleSection('no_db')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('no_db') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <x-issue-priority-menu :category="'no_db'"/>
+                    <button type="button" @click.stop="toggleSection('no_db')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('no_db') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('no_db') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('no_db')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <div class="max-h-96 overflow-y-auto">
@@ -2156,12 +2176,13 @@
                     </h2>
                     <p class="text-xs text-[var(--color-ink-soft)] mt-0.5">Pulled from each site's Companion snapshot (refreshed nightly at 03:00). Counts reflect the cached <code class="bg-[var(--color-surface-alt)] px-1.5 py-0.5 rounded">update_plugins</code> transient on the site.</p>
                 </div>
-                <span class="status-pill status-yellow">{{ $pluginsOutdated->count() }}</span>
-                <x-issue-priority-menu :category="'plugins_outdated'"/>
-            
-                    <button type="button" @click.stop="toggleSection('plugins_outdated')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('plugins_outdated') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <span class="status-pill cw-nowrap justify-center min-w-[2.25rem] status-yellow">{{ $pluginsOutdated->count() }}</span>
+                    <x-issue-priority-menu :category="'plugins_outdated'"/>
+                    <button type="button" @click.stop="toggleSection('plugins_outdated')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('plugins_outdated') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_outdated') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('plugins_outdated')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             <div class="max-h-[32rem] overflow-y-auto">
@@ -2565,11 +2586,12 @@
                         Active plugins removed or closed in the official WordPress plugin directory. Closed plugins receive no updates or security patches.
                     </p>
                 </div>
-                <x-issue-priority-menu :category="'plugins_closed'"/>
-            
-                    <button type="button" @click.stop="toggleSection('plugins_closed')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('plugins_closed') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <x-issue-priority-menu :category="'plugins_closed'"/>
+                    <button type="button" @click.stop="toggleSection('plugins_closed')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('plugins_closed') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('plugins_closed') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('plugins_closed')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @if ($closedPluginSites->isNotEmpty())
@@ -2673,11 +2695,12 @@
                         <a href="{{ route('security.admins') }}" class="text-[var(--color-primary-600)] hover:underline">Open fleet directory</a>
                     </p>
                 </div>
-                <x-issue-priority-menu :category="'wp_admins'"/>
-            
-                    <button type="button" @click.stop="toggleSection('wp_admins')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors ml-1.5 cursor-pointer" :title="isSectionCollapsed('wp_admins') ? 'Expand section' : 'Collapse section'">
+                <div class="ml-auto flex items-center justify-end gap-2 shrink-0">
+                    <x-issue-priority-menu :category="'wp_admins'"/>
+                    <button type="button" @click.stop="toggleSection('wp_admins')" class="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)] transition-colors cursor-pointer" :title="isSectionCollapsed('wp_admins') ? 'Expand section' : 'Collapse section'">
                         <i class="fa-solid fa-chevron-up text-xs transition-transform duration-200" :class="isSectionCollapsed('wp_admins') ? 'rotate-180' : ''"></i>
                     </button>
+                </div>
             </div>
             <div x-show="!isSectionCollapsed('wp_admins')" class="rounded-b-[var(--radius-card)] overflow-x-auto">
             @if ($flaggedAdminSites->isNotEmpty())

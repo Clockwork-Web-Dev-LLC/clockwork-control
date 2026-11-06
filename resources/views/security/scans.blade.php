@@ -5,10 +5,7 @@
 @section('content')
     @php $activeTab = 'scans'; @endphp
 
-    <x-page-header title="Security"
-        subtitle="Fleet-wide malware + integrity scans, plus the firewall (bans queue, active bans, audit history)." />
-
-    @include('security._tabs')
+    @include('security._tabs', ['intro' => 'Fleet-wide malware and core-file integrity scans.'])
 
     <div x-data="{ showInfo: false }" class="mb-5">
         <div class="flex items-center justify-between gap-3">
@@ -123,19 +120,19 @@
             };
         @endphp
         <div class="card overflow-hidden">
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto cw-sticky-actions">
                 <table class="w-full text-sm min-w-[640px]" x-data="sortableTable({ defaultKey: 'sitecheck', defaultDir: 'asc' })">
                 <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                     <tr>
-                        <x-sort-th key="site" class="px-5 py-2">Site</x-sort-th>
-                        <x-sort-th key="server" class="px-5 py-2">Server</x-sort-th>
+                        <x-sort-th key="site" class="pl-5 pr-3 py-2">Site</x-sort-th>
+                        <x-sort-th key="server" class="px-3 py-2">Server</x-sort-th>
                         @if ($carePlansEnabled)
-                            <x-sort-th key="careplan" class="px-5 py-2" title="Sort desc to surface care plan sites first">Care plan</x-sort-th>
+                            <x-sort-th key="careplan" class="px-3 py-2" title="Sort desc to surface care plan sites first">Care plan</x-sort-th>
                         @endif
-                        <x-sort-th key="sitecheck" class="px-5 py-2" title="Sort asc to surface failures + issues">SiteCheck</x-sort-th>
-                        <x-sort-th key="checksums" class="px-5 py-2" title="Sort asc to surface failures + issues">Checksums</x-sort-th>
-                        <x-sort-th key="last" class="px-5 py-2">Last scanned</x-sort-th>
-                        <th class="px-5 py-2"></th>
+                        <x-sort-th key="sitecheck" class="px-3 py-2" title="Sort asc to surface failures + issues">SiteCheck</x-sort-th>
+                        <x-sort-th key="checksums" class="px-3 py-2" title="Sort asc to surface failures + issues">Checksums</x-sort-th>
+                        <x-sort-th key="last" class="px-3 py-2">Last scanned</x-sort-th>
+                        <th class="pl-3 pr-5 py-2"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -156,10 +153,10 @@
                             data-sort-sitecheck="{{ $scPill['rank'] }}"
                             data-sort-checksums="{{ $ccPill['rank'] }}"
                             data-sort-last="{{ $lastScannedAt?->getTimestamp() ?? '' }}">
-                            <td class="px-5 py-2 font-data">
-                                <a href="{{ route('sites.show', [$site, 'security']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $site->domain }}</a>
+                            <td class="pl-5 pr-3 py-2 font-data">
+                                <a href="{{ route('sites.show', [$site, 'security']) }}" class="block max-w-[15rem] xl:max-w-[18rem] truncate text-[var(--color-primary-600)] hover:underline" title="{{ $site->domain }}">{{ $site->domain }}</a>
                             </td>
-                            <td class="px-5 py-2 text-xs">
+                            <td class="px-3 py-2 text-xs whitespace-nowrap">
                                 @if ($site->server)
                                     <a href="{{ route('servers.show', $site->server) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]" title="{{ $site->server->name }}">{{ $site->server->display_name }}</a>
                                 @elseif ($site->hosting_provider)
@@ -171,7 +168,7 @@
                                 @endif
                             </td>
                             @if ($carePlansEnabled)
-                                <td class="px-5 py-2">
+                                <td class="px-3 py-2 whitespace-nowrap">
                                     {{-- Inline toggle — clicking flips care_plan_enabled in place via
                                          fetch (no page reload, so the row doesn't reorder). The handler
                                          at the bottom of the page intercepts via the data-care-plan-toggle
@@ -191,10 +188,10 @@
                                     </button>
                                 </td>
                             @endif
-                            <td class="px-5 py-2"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $scPill['class'] }}">{{ $scPill['label'] }}</span></td>
-                            <td class="px-5 py-2"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $ccPill['class'] }}">{{ $ccPill['label'] }}</span></td>
-                            <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]" title="{{ $lastScannedAt }}">{{ $lastScannedAt?->diffForHumans() ?? '—' }}</td>
-                            <td class="px-5 py-2 text-right">
+                            <td class="px-3 py-2 whitespace-nowrap"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $scPill['class'] }}">{{ $scPill['label'] }}</span></td>
+                            <td class="px-3 py-2 whitespace-nowrap"><span class="text-[10px] px-2 py-0.5 rounded-full font-medium {{ $ccPill['class'] }}">{{ $ccPill['label'] }}</span></td>
+                            <td class="px-3 py-2 text-xs text-[var(--color-ink-muted)] whitespace-nowrap" title="{{ $lastScannedAt }}">{{ $lastScannedAt?->diffForHumans(['short' => true]) ?? '—' }}</td>
+                            <td class="pl-3 pr-5 py-2 text-right whitespace-nowrap">
                                 <form method="POST" action="{{ route('security.scans.run', $site) }}" class="inline">
                                     @csrf
                                     <button type="submit" class="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink-strong)]">

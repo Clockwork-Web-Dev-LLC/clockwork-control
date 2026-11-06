@@ -47,6 +47,7 @@ class CheckSiteUptime extends Command
 
         $up = 0;
         $down = 0;
+        $blocked = 0;
         $seoFailures = 0;
         $seoLastError = null;
         $start = microtime(true);
@@ -66,7 +67,13 @@ class CheckSiteUptime extends Command
                     $seoFailures++;
                     $seoLastError = $seoError->getMessage();
                 }
-                $probe->succeeded ? $up++ : $down++;
+                if ($probe->isProbeBlocked) {
+                    $blocked++;
+                } elseif ($probe->succeeded) {
+                    $up++;
+                } else {
+                    $down++;
+                }
             } catch (Throwable $e) {
                 // Synthesize a transport-failed probe and run it through the
                 // state machine so consecutive_failures still ticks up — a
@@ -88,7 +95,7 @@ class CheckSiteUptime extends Command
         }
 
         $elapsed = (int) round(microtime(true) - $start);
-        $this->info("Done. up={$up} down={$down} elapsed={$elapsed}s");
+        $this->info("Done. up={$up} down={$down} blocked={$blocked} elapsed={$elapsed}s");
 
         if ($seoFailures > 0) {
             $this->warn("SEO indexability piggyback failed on {$seoFailures} of {$sites->count()} sites. Last error: {$seoLastError}");

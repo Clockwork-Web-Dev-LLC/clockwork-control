@@ -102,3 +102,45 @@ OK: secret upserted', 0));
     expect($result['exit'])->toBe(0)
         ->and($result['output'])->toContain('OK: secret upserted');
 });
+
+it('extracts Companion into wp-content/plugins/clockwork-companion, cleans up legacy mu-plugins, and activates the plugin', function () {
+    $ssh = Mockery::mock(SshClient::class);
+    $server = Server::factory()->create(['ssh_password' => 'sudo-pw']);
+    $site = Site::factory()->for($server, 'server')->create([
+        'site_user' => 'siteuser',
+        'table_prefix' => 'wp_',
+    ]);
+
+    // 1) Base64 chunk upload to /tmp
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(fn (Server $s, string $cmd) => str_starts_with($cmd, 'printf %s '))
+        ->andReturn('');
+
+    // 2) Extract script into wp-content/plugins + legacy mu-plugins cleanup + wp plugin activate
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(function (Server $s, string $cmd): bool {
+            return str_contains($cmd, 'PLUGINS="/sites/example.com/files/wp-content/plugins"')
+                && str_contains($cmd, 'MU="/sites/example.com/files/wp-content/mu-plugins"')
+                && str_contains($cmd, 'mv .clockwork-stage/clockwork-companion.php .clockwork-stage/clockwork-companion/clockwork-companion.php')
+                && str_contains($cmd, 'rm -f "$MU/clockwork-companion.php"')
+                && str_contains($cmd, 'plugin activate clockwork-companion');
+        })
+        ->andReturn(sentinelOutput('OK: companion staged at /sites/example.com/files/wp-content/plugins/clockwork-companion', 0));
+
+    // 3) Cleanup of /tmp staging file
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(fn (Server $s, string $cmd) => str_starts_with($cmd, 'rm -f '))
+        ->andReturn('');
+
+    $installer = new CompanionInstaller($ssh, Mockery::mock(CompanionTarballBuilder::class));
+    $method = new ReflectionMethod(CompanionInstaller::class, 'extractOnRemote');
+    $method->setAccessible(true);
+
+    $result = $method->invoke($installer, $site, '/sites/example.com/files', base64_encode('fake-tarball'));
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])->toContain('wp-content/plugins/clockwork-companion');
+});

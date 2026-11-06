@@ -37,7 +37,7 @@
 @endphp
 
 <div class="mb-6">
-    <div class="flex items-center gap-1 border-b border-[var(--color-border-light)] overflow-x-auto">
+    <div class="cw-tab-bar">
         @foreach ($tools as $tool)
             <a href="{{ route($tool['route']) }}"
                class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap

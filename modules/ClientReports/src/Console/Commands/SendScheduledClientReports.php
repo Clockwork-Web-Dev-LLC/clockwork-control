@@ -2,8 +2,10 @@
 
 namespace Modules\ClientReports\Console\Commands;
 
+use App\Services\ActionLog\ActionLogger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Services\ScheduledReportRunner;
 use Throwable;
@@ -16,7 +18,12 @@ class SendScheduledClientReports extends Command
 
     protected $description = 'Generate and email scheduled client reports for care plan websites.';
 
-    public function handle(ScheduledReportRunner $runner): int
+    /** The action log entry listing the schedules a run skipped. */
+    public const ACTION_SKIPPED = 'client_report_skipped';
+
+    public const SKIPPED_NO_CARE_PLAN = 'no_care_plan';
+
+    public function handle(ScheduledReportRunner $runner, ActionLogger $actions): int
     {
         $isForce = (bool) $this->option('force');
 
@@ -44,6 +51,8 @@ class SendScheduledClientReports extends Command
         $processed = 0;
         $crashed = 0;
         $undelivered = 0;
+        /** @var list<string> $noCarePlan */
+        $noCarePlan = [];
 
         foreach ($schedules as $schedule) {
             $site = $schedule->site;
@@ -64,6 +73,7 @@ class SendScheduledClientReports extends Command
             // a report for a month the site had none.
             if (! ScheduledReportRunner::siteIsEligible($site)) {
                 $schedule->advanceNextRun();
+                $noCarePlan[] = (string) $site->domain;
                 $this->line("  - {$site->domain}: skipped this month (care plan is off; reports are for care-plan sites)");
 
                 continue;
@@ -109,6 +119,23 @@ class SendScheduledClientReports extends Command
         }
 
         $this->info("Scheduled client reports dispatch completed ({$processed} processed).");
+
+        // A scheduled run's output isn't kept, and the skipped month is gone
+        // once the schedule moves on, so say which sites missed it where an
+        // operator will see it.
+        if ($noCarePlan !== []) {
+            $actions->record(
+                actionType: self::ACTION_SKIPPED,
+                summary: Str::limit(sprintf(
+                    'Skipped %d scheduled client %s (no care plan): %s',
+                    count($noCarePlan),
+                    Str::plural('report', count($noCarePlan)),
+                    implode(', ', $noCarePlan),
+                ), 500),
+                details: ['domains' => $noCarePlan, 'reason' => self::SKIPPED_NO_CARE_PLAN],
+                actor: 'scheduled',
+            );
+        }
 
         // A site whose report crashed, or whose email didn't reach everyone
         // (a mail outage is the likely one), stays due and is retried

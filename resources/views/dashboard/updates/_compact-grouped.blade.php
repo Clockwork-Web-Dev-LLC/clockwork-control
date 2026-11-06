@@ -22,18 +22,20 @@
             <span class="w-4 flex-shrink-0"></span>
             <span class="w-9 flex-shrink-0 inline-flex items-center justify-center">
                 <button type="button" data-sort-by="count"
-                        class="hover:text-[var(--color-ink-strong)]"
+                        class="inline-flex items-center gap-1 font-semibold uppercase tracking-wide hover:text-[var(--color-ink-strong)]"
                         title="Sort by number of sites">
-                    <i class="fa-solid fa-sort" data-sort-icon="count"></i>
+                    Sites <i class="fa-solid fa-sort" data-sort-icon="count"></i>
                 </button>
             </span>
-            <span class="flex-1">
+            <span class="flex-1 min-w-0">
                 <button type="button" data-sort-by="name"
-                        class="hover:text-[var(--color-ink-strong)]"
+                        class="inline-flex items-center gap-1 font-semibold uppercase tracking-wide hover:text-[var(--color-ink-strong)]"
                         title="Sort alphabetically by {{ $kind }} name">
-                    <i class="fa-solid fa-sort" data-sort-icon="name"></i>
+                    {{ $kind === 'theme' ? 'Theme' : 'Plugin' }} <i class="fa-solid fa-sort" data-sort-icon="name"></i>
                 </button>
             </span>
+            <span class="hidden sm:block w-44 text-right font-semibold uppercase tracking-wide">Installed &rarr; Available</span>
+            <span class="hidden sm:block w-[13.5rem] flex-shrink-0"></span>
         </div>
 
         <div class="divide-y divide-[var(--color-border-light)]" id="sort-list">
@@ -50,7 +52,7 @@
                 <details class="group" data-group="{{ $group['slug'] }}"
                          data-sort-name="{{ strtolower($group['name']) }}"
                          data-sort-count="{{ $group['count'] }}">
-                    <summary class="list-none cursor-pointer px-5 py-3 flex items-center gap-3 hover:bg-[var(--color-surface-alt)] {{ $allIgnored ? 'opacity-60' : '' }}">
+                    <summary class="list-none cursor-pointer px-4 sm:px-5 py-3 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 hover:bg-[var(--color-surface-alt)] {{ $allIgnored ? 'opacity-60' : '' }}">
                         {{-- Slot 1: parent group checkbox (toggles all children) --}}
                         <label class="cursor-pointer w-4 flex-shrink-0 inline-flex items-center justify-center" onclick="event.stopPropagation()">
                             <input type="checkbox" class="rounded" data-group-toggle="{{ $group['slug'] }}"
@@ -60,18 +62,22 @@
                         {{-- Slot 2: count badge --}}
                         <span class="w-9 flex-shrink-0 inline-flex items-center justify-center h-6 px-1.5 rounded-full bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs font-data tabular-nums">{{ $group['count'] }}</span>
 
-                        {{-- Slot 3: plugin/theme name (flex-1, takes the rest) --}}
-                        <span class="font-display font-medium text-[var(--color-ink-strong)] flex-1 min-w-0 truncate" title="{{ $group['name'] }}">{{ $group['name'] }}</span>
+                        {{-- Slot 3: plugin/theme name + before → after. On phones the versions sit
+                             under the name so neither is squeezed; from sm they are a fixed-width,
+                             right-aligned column so versions line up row to row. --}}
+                        <span class="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                            <span class="font-display font-medium text-[var(--color-ink-strong)] min-w-0 truncate sm:flex-1" title="{{ $group['name'] }}">{{ $group['name'] }}</span>
+                            @if ($first)
+                                <span class="inline-flex items-center sm:justify-end sm:w-44 sm:shrink-0 text-xs sm:text-sm font-data tabular-nums whitespace-nowrap text-[var(--color-ink-strong)] {{ $versionsHomogeneous ? '' : 'opacity-50' }}"
+                                      title="{{ $versionsHomogeneous ? '' : 'Sites have mixed before-versions; expand to see per-site' }}">
+                                    <span class="text-[var(--color-ink-soft)] truncate">{{ $first['before_version'] }}</span>
+                                    <i class="fa-solid fa-arrow-right text-[var(--color-ink-soft)] mx-1.5 text-xs"></i>
+                                    <span class="text-[var(--color-primary-600)] truncate">{{ $first['target_version'] }}</span>
+                                </span>
+                            @endif
+                        </span>
 
-                        {{-- Before → After (representative; opacity drops when sites diverge) --}}
-                        @if ($first)
-                            <span class="hidden sm:inline-flex items-center text-sm font-data tabular-nums text-[var(--color-ink-strong)] {{ $versionsHomogeneous ? '' : 'opacity-50' }}"
-                                  title="{{ $versionsHomogeneous ? '' : 'Sites have mixed before-versions; expand to see per-site' }}">
-                                <span class="text-[var(--color-ink-soft)]">{{ $first['before_version'] }}</span>
-                                <i class="fa-solid fa-arrow-right text-[var(--color-ink-soft)] mx-1.5 text-xs"></i>
-                                <span class="text-[var(--color-primary-600)]">{{ $first['target_version'] }}</span>
-                            </span>
-                        @endif
+                        <span class="w-full sm:w-[13.5rem] flex items-center justify-end gap-2 flex-shrink-0">
 
                         @if ($hasRunning)
                             <i class="fa-solid fa-spinner fa-spin text-[var(--color-status-amber,#d97706)] text-sm flex-shrink-0" title="Update in progress"></i>
@@ -82,21 +88,22 @@
                         @unless ($hasLive)
                             <button type="button" data-update-group="{{ $group['slug'] }}"
                                     onclick="event.stopPropagation(); event.preventDefault();"
-                                    class="text-xs font-medium px-2.5 py-1 rounded-md bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)] flex-shrink-0"
+                                    class="text-xs font-medium px-2.5 py-1 rounded-md bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)] flex-shrink-0 whitespace-nowrap min-w-[6.5rem] text-center"
                                     title="Update this {{ $kind }} on all {{ $group['count'] }} listed site{{ $group['count'] === 1 ? '' : 's' }}">
                                 <i class="fa-solid fa-arrow-up-from-bracket text-[10px]"></i>
-                                <span class="hidden sm:inline">Update </span>{{ $group['count'] === 1 ? '1' : 'all ' . $group['count'] }}
+                                Update {{ $group['count'] === 1 ? '1' : 'all ' . $group['count'] }}
                             </button>
                         @endunless
 
                         <button type="button" data-ignore-group="{{ $group['slug'] }}"
                                 onclick="event.stopPropagation(); event.preventDefault();"
-                                class="text-[10px] text-[var(--color-ink-soft)] hover:text-[var(--color-status-red)] px-1.5 py-0.5 rounded hover:bg-[var(--color-surface-alt)] flex-shrink-0"
+                                class="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-status-red)] px-1.5 py-0.5 rounded hover:bg-[var(--color-surface-alt)] flex-shrink-0 whitespace-nowrap"
                                 title="Ignore this {{ $kind }} on all {{ $group['count'] }} listed site{{ $group['count'] === 1 ? '' : 's' }}">
-                            <i class="fa-solid fa-eye-slash"></i> <span class="hidden md:inline">Ignore everywhere</span>
+                            <i class="fa-solid fa-eye-slash"></i> <span class="hidden md:inline">Ignore all</span>
                         </button>
 
                         <i class="fa-solid fa-chevron-down text-xs text-[var(--color-ink-soft)] transition-transform group-open:rotate-180 flex-shrink-0"></i>
+                        </span>
                     </summary>
 
                     {{-- Per-site rows. Same px-5 / gap-3 / slot widths as the

@@ -13,6 +13,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Modules\BackupRelay\Services\GlacierUploader;
+use Modules\BackupRelay\Services\RelayAttemptRecorder;
 use Modules\Core\Contracts\BackupRef;
 use Modules\Core\Contracts\BackupRelayAdapter;
 use Modules\Core\Contracts\DirectS3BackupRelayAdapter;
@@ -42,6 +43,22 @@ class ArchiveSiteBackupJob implements ShouldQueue
     {
         $site = $this->site instanceof Site ? $this->site : Site::query()->findOrFail($this->site);
 
+        try {
+            return $this->archive($site, $uploader);
+        } catch (Throwable $e) {
+            // Keep the failure on the site row so it is visible without log
+            // access. Queued runs never reach RunBackupRelayNow's own catch.
+            RelayAttemptRecorder::recordFailure($site, $e->getMessage());
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @return string 'archived' | 'skipped'
+     */
+    private function archive(Site $site, GlacierUploader $uploader): string
+    {
         $host = $site->host();
         if (! $host->supports(HostingProvider::CAP_BACKUP_RELAY)) {
             Log::info("BackupRelay: Provider {$host->id()} does not support CAP_BACKUP_RELAY for {$site->domain}.");
@@ -216,16 +233,18 @@ class ArchiveSiteBackupJob implements ShouldQueue
     {
         $updates = [
             'backup_relay_last_archived_at' => now(),
+            ...RelayAttemptRecorder::successAttributes(),
         ];
 
         if (array_key_exists('size_bytes', $meta) && $meta['size_bytes'] !== null) {
             $updates['backup_relay_last_size_bytes'] = (int) $meta['size_bytes'];
         }
 
+        // The stored hash describes the newest archive only. When this archive
+        // came without one, clear it: keeping the previous archive's hash would
+        // pair it with the new key, and restore would fail the checksum.
         $sha = isset($meta['sha256']) ? trim((string) $meta['sha256']) : '';
-        if ($sha !== '') {
-            $updates['backup_relay_last_sha256'] = $sha;
-        }
+        $updates['backup_relay_last_sha256'] = $sha !== '' ? $sha : null;
 
         $manifest = isset($meta['manifest']) && is_array($meta['manifest']) ? $meta['manifest'] : null;
         if ($manifest !== null) {

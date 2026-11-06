@@ -90,6 +90,7 @@ class CompanionInstaller implements CompanionInstallerContract
         // signs with $site->companion_secret, so it has to be set on the model
         // first.
         $previouslyInstalled = (bool) $site->companion_installed;
+        $site->companion_variant = 'companion';
         $site->companion_secret = $secret;
         $site->save();
 
@@ -189,29 +190,37 @@ class CompanionInstaller implements CompanionInstallerContract
 
         $escapedB64Path = escapeshellarg($remoteB64Path);
 
-        // Atomic swap pattern: stage in .clockwork-stage, swap loader + dir,
-        // remove stage. All as the site_user so file ownership is right by
-        // construction. The /tmp staging file is owned by clockwork-deploy (the SSH
-        // user), so cleanup happens OUTSIDE the sudo'd block — the site_user
-        // can't delete a file it doesn't own.
+        // Atomic swap pattern: stage in .clockwork-stage inside wp-content/plugins,
+        // move clockwork-companion.php into clockwork-companion/ so it runs as a
+        // standard WordPress plugin (eligible for GitHub Releases self-updates),
+        // swap into wp-content/plugins/clockwork-companion, remove any legacy
+        // mu-plugins copy, and activate via wp-cli. All as the site_user so file
+        // ownership is right by construction. The /tmp staging file is owned by
+        // clockwork-deploy (the SSH user), so cleanup happens OUTSIDE the sudo'd
+        // block — the site_user can't delete a file it doesn't own.
         $script = <<<BASH
 set -euo pipefail
+PLUGINS="{$wpPath}/wp-content/plugins"
 MU="{$wpPath}/wp-content/mu-plugins"
-mkdir -p "\$MU"
-cd "\$MU"
+mkdir -p "\$PLUGINS"
+cd "\$PLUGINS"
 rm -rf .clockwork-stage
 mkdir .clockwork-stage
 base64 -d < {$escapedB64Path} | tar -xzf - -C .clockwork-stage
-# Swap. We use 'rm -rf' on the stage dir at the end (not 'rmdir') because
-# even with COPYFILE_DISABLE on the tar side, a future tarball could carry
-# unexpected metadata files (._something, .DS_Store, pax_global_header) that
-# rmdir would reject. The two mv's already moved everything we care about.
-rm -f clockwork-companion.php
+if [ -f .clockwork-stage/clockwork-companion.php ] && [ -d .clockwork-stage/clockwork-companion ]; then
+    mv .clockwork-stage/clockwork-companion.php .clockwork-stage/clockwork-companion/clockwork-companion.php
+fi
 rm -rf clockwork-companion
-mv .clockwork-stage/clockwork-companion.php .
 mv .clockwork-stage/clockwork-companion .
 rm -rf .clockwork-stage
-echo "OK: companion staged at \$MU"
+rm -f "\$MU/clockwork-companion.php"
+rm -rf "\$MU/clockwork-companion"
+rm -f "\$MU/clockwork-renegade.php"
+rm -rf "\$MU/clockwork-renegade"
+rm -rf clockwork-renegade
+/usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true
+/usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
+echo "OK: companion staged at \$PLUGINS/clockwork-companion"
 BASH;
 
         $result = $this->runAsSiteUser($site, $script);

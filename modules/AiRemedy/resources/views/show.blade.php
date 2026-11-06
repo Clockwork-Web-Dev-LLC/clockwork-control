@@ -26,7 +26,7 @@
                 </span>
             </div>
             <p class="text-xs text-[var(--color-ink-muted)] mt-1">
-                Triggered {{ $run->started_at->format('M j, Y H:i:s') }} via {{ $run->actor }} · Model: {{ $run->model_used }} · Cost: ${{ number_format((float)$run->total_cost_usd, 4) }}
+                Triggered {{ $run->started_at->format('M j, Y H:i:s') }} via {{ $run->actor }} · Model: {{ $run->model_used }} · Cost: {{ (float) $run->total_cost_usd > 0 && (float) $run->total_cost_usd < 0.01 ? '<$0.01' : '$'.number_format((float) $run->total_cost_usd, 2) }}
             </p>
         </div>
 

@@ -3,8 +3,6 @@
 @section('title', 'Login Lockouts (Gatekeeper) · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Login Lockouts (Gatekeeper)"
         subtitle="Native login brute-force throttling and white-labeled lockout screens. Replaces Limit Login Attempts Reloaded (LLAR) with silent IP lockouts, zero client-facing attack counters, and full ingest visibility for Pressable and VPS sites.">
         <x-slot:actions>
@@ -17,6 +15,8 @@
             </form>
         </x-slot:actions>
     </x-page-header>
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">

@@ -116,6 +116,7 @@ class PressableCompanionInstaller implements CompanionInstallerContract
         // call ITSELF signs with $site->companion_secret.
         $previouslyInstalled = (bool) $site->companion_installed;
         $previousVersion = $site->companion_version;
+        $site->companion_variant = 'companion';
         $site->companion_secret = $bootstrapSecret;
         $site->save();
 
@@ -241,20 +242,30 @@ class PressableCompanionInstaller implements CompanionInstallerContract
 
     /**
      * Same atomic-swap pattern as the SSH installer: extract to a scratch
-     * dir inside the stage, swap loader + dir into mu-plugins/, remove the
-     * stage. A failure mid-extract leaves the previous version intact.
+     * dir inside the stage, assemble the standard plugin directory at
+     * wp-content/plugins/clockwork-companion/, remove any legacy mu-plugins/
+     * copy, activate via wp-cli, and remove the stage. A failure mid-extract
+     * leaves the previous version intact.
      */
     private function extract(string $psId, string $stage): void
     {
+        $plugins = self::DOCROOT.'/wp-content/plugins';
         $mu = self::DOCROOT.'/wp-content/mu-plugins';
         $s = escapeshellarg($stage);
+        $p = escapeshellarg($plugins);
         $m = escapeshellarg($mu);
 
-        $script = "mkdir {$s}/x"
+        $script = "mkdir -p {$p} && mkdir {$s}/x"
             ." && base64 -d < {$s}/plugin.b64 | tar -xzf - -C {$s}/x 2>/dev/null"
+            ." && if [ -f {$s}/x/clockwork-companion.php ] && [ -d {$s}/x/clockwork-companion ]; then mv {$s}/x/clockwork-companion.php {$s}/x/clockwork-companion/clockwork-companion.php; fi"
+            ." && rm -rf {$p}/clockwork-companion"
+            ." && mv {$s}/x/clockwork-companion {$p}/"
             ." && rm -f {$m}/clockwork-companion.php && rm -rf {$m}/clockwork-companion"
-            ." && mv {$s}/x/clockwork-companion.php {$m}/ && mv {$s}/x/clockwork-companion {$m}/"
-            ." && rm -rf {$s} && echo swapped";
+            ." && rm -f {$m}/clockwork-renegade.php && rm -rf {$m}/clockwork-renegade && rm -rf {$p}/clockwork-renegade"
+            ." && rm -rf {$s}"
+            .' && (cd '.self::DOCROOT.' && wp --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true)'
+            .' && (cd '.self::DOCROOT.' && wp --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true)'
+            .' && echo swapped';
 
         $output = $this->runner->runOrFail($psId, $script);
         if (! str_contains($output, 'swapped')) {

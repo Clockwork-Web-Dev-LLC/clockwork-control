@@ -67,6 +67,20 @@ class SyncBillCustomers extends Command
             }
         }
 
+        if (! empty($stats['archived_site_domains'])) {
+            $this->line('Domains that only belong to archived sites (not linked):');
+            foreach ($stats['archived_site_domains'] as $domain => $_) {
+                $this->line("  {$domain} (archived)");
+            }
+        }
+
+        if (! empty($stats['domain_collisions'])) {
+            $this->warn('Domains shared by more than one active site (linked the exact match):');
+            foreach ($stats['domain_collisions'] as $domain => $count) {
+                $this->line("  {$domain} ({$count} sites)");
+            }
+        }
+
         $logger->record(
             actionType: ActionLog::TYPE_BILL_COM_SYNC,
             summary: sprintf(

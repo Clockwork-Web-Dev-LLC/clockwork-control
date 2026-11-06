@@ -68,6 +68,36 @@ describe('MonitoringController', function () {
             ->assertViewHas('currentlyMaintenance', 1);
     });
 
+    it('renders a site that rate-limits the probe as blocked, not down, with its event in the feed', function () {
+        $server = Server::factory()->create();
+        $site = Site::factory()->spinupwp()->create([
+            'server_id' => $server->id,
+            'domain' => 'ratelimited.example.com',
+            'uptime_monitoring_enabled' => true,
+            'uptime_state' => Site::UPTIME_STATE_PROBE_BLOCKED,
+            'uptime_probe_blocked_since' => now()->subHours(3),
+        ]);
+        SiteUptimeEvent::create([
+            'site_id' => $site->id,
+            'event_type' => SiteUptimeEvent::TYPE_PROBE_BLOCKED,
+            'status_code' => 429,
+            'error' => 'HTTP 429 (rate-limited — probe blocked)',
+            'event_at' => now()->subHours(3),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.index'));
+
+        $response->assertOk()
+            ->assertSee('ratelimited.example.com')
+            ->assertSee('BLOCKED')
+            ->assertSee('Probe blocked (HTTP 429) for 3h')
+            ->assertSee('1 probe blocked')
+            ->assertSee('not counted as downtime')
+            ->assertViewHas('currentlyProbeBlocked', 1)
+            ->assertViewHas('currentlyDown', 0);
+    });
+
     it('renders separate 7d and 30d fleet uptime headline figures', function () {
         $server = Server::factory()->create();
         $site = Site::factory()->spinupwp()->create([
@@ -171,6 +201,50 @@ describe('MonitoringController', function () {
             ]);
 
         $response->assertSessionHasErrors('interval_minutes');
+    });
+
+    it('shows the probe-blocked notice hours on the settings page, defaulting to 6', function () {
+        $this->actingAs(User::factory()->create())
+            ->get(route('monitoring.settings'))
+            ->assertOk()
+            ->assertSee('Notify when a site blocks the probe for')
+            ->assertSee('name="probe_blocked_alert_hours"', false)
+            ->assertViewHas('probeBlockedAlertHours', 6);
+    });
+
+    it('saves the probe-blocked notice hours', function () {
+        $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+                'probe_blocked_alert_hours' => 12,
+            ])
+            ->assertRedirect(route('monitoring.settings'));
+
+        expect((int) app(Settings::class)->get('monitoring.uptime_probe_blocked_alert_hours'))->toBe(12);
+    });
+
+    it('keeps the stored probe-blocked hours when the field is not posted', function () {
+        app(Settings::class)->put('monitoring.uptime_probe_blocked_alert_hours', 9);
+
+        $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+            ])
+            ->assertRedirect(route('monitoring.settings'));
+
+        expect((int) app(Settings::class)->get('monitoring.uptime_probe_blocked_alert_hours'))->toBe(9);
+    });
+
+    it('rejects out-of-range probe-blocked hours', function () {
+        $this->actingAs(User::factory()->create())
+            ->patch(route('monitoring.settings.update'), [
+                'interval_minutes' => 5,
+                'failure_threshold' => 2,
+                'probe_blocked_alert_hours' => 0,
+            ])
+            ->assertSessionHasErrors('probe_blocked_alert_hours');
     });
 
     it('classifies active outage as Not Our Fault without setting standing site SLA policy', function () {
@@ -285,7 +359,7 @@ describe('MonitoringController', function () {
         $response->assertOk()
             ->assertSee('exempt-site.example.com')
             ->assertSee('NOT OUR FAULT')
-            ->assertSee('1 EXCUSED')
+            ->assertSee('EXCUSED')
             ->assertSee('1 not our fault')
             ->assertSee('classify-outage-modal')
             ->assertSee('monitoringOpenClassify')

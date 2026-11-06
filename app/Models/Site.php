@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Jobs\CaptureSiteScreenshotJob;
 use App\Services\HostingProvider\HostingProviderRegistry;
+use App\Services\Updates\ObservedUpdateRecorder;
 use App\Services\Uptime\UptimeStatsCalculator;
 use App\Support\Monitoring\DomainIgnoreList;
 use App\Support\Settings;
@@ -93,6 +94,9 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?int $backup_relay_last_size_bytes
  * @property ?string $backup_relay_last_sha256
  * @property ?array $backup_relay_last_manifest
+ * @property ?Carbon $backup_relay_last_attempt_at last archive attempt (success or failure)
+ * @property ?string $backup_relay_last_error last failed attempt's error; null once an archive succeeds
+ * @property ?Carbon $backup_relay_failing_since first failure in the current unbroken failure streak
  * @property ?string $bill_com_customer_id
  * @property ?string $bill_com_customer_name
  * @property ?string $bill_com_linked_via_invoice
@@ -102,13 +106,16 @@ use Modules\Core\Contracts\HostingProvider;
  * @property ?string $auto_updates_paused_reason short note shown as a tooltip in the fleet listing
  * @property ?Carbon $auto_updates_last_run_at last time the nightly loop touched this site
  * @property bool $uptime_monitoring_enabled
- * @property string $uptime_state up|down|maintenance|unknown
+ * @property string $uptime_state up|down|maintenance|probe_blocked|unknown
  * @property ?Carbon $uptime_last_checked_at
  * @property ?Carbon $uptime_last_up_at
  * @property ?int $uptime_last_status_code
  * @property int $uptime_consecutive_failures
  * @property ?Carbon $uptime_down_since
  * @property ?Carbon $uptime_maintenance_since
+ * @property ?Carbon $uptime_probe_blocked_since start of the current unbroken run of HTTP 429 probe answers
+ * @property int $uptime_consecutive_blocked HTTP 429 answers in a row (the run probe_blocked waits for)
+ * @property ?Carbon $uptime_probe_blocked_alerted_at when ops was told about that run (one notice per run)
  * @property ?Carbon $uptime_ignored_at
  * @property ?string $uptime_ignore_reason
  * @property bool $uptime_sla_exempt
@@ -255,6 +262,12 @@ class Site extends Model
 
     public const UPTIME_STATE_UNKNOWN = 'unknown';
 
+    /**
+     * The site rate-limits the probe (HTTP 429), so we can't tell whether it
+     * is up. Not an outage: it never counts as downtime.
+     */
+    public const UPTIME_STATE_PROBE_BLOCKED = 'probe_blocked';
+
     protected $fillable = [
         'spinupwp_id',
         'pressable_site_id',
@@ -328,6 +341,9 @@ class Site extends Model
         'backup_relay_last_size_bytes',
         'backup_relay_last_sha256',
         'backup_relay_last_manifest',
+        'backup_relay_last_attempt_at',
+        'backup_relay_last_error',
+        'backup_relay_failing_since',
         'bill_com_customer_id',
         'bill_com_customer_name',
         'bill_com_linked_via_invoice',
@@ -344,6 +360,9 @@ class Site extends Model
         'uptime_consecutive_failures',
         'uptime_down_since',
         'uptime_maintenance_since',
+        'uptime_probe_blocked_since',
+        'uptime_probe_blocked_alerted_at',
+        'uptime_consecutive_blocked',
         'uptime_ignored_at',
         'uptime_ignore_reason',
         'uptime_sla_exempt',
@@ -432,6 +451,8 @@ class Site extends Model
             'backup_relay_last_archived_at' => 'datetime',
             'backup_relay_last_size_bytes' => 'integer',
             'backup_relay_last_manifest' => 'array',
+            'backup_relay_last_attempt_at' => 'datetime',
+            'backup_relay_failing_since' => 'datetime',
             'bill_com_linked_at' => 'datetime',
             'care_plan_override' => 'boolean',
             'auto_updates_paused' => 'boolean',
@@ -443,6 +464,9 @@ class Site extends Model
             'uptime_consecutive_failures' => 'integer',
             'uptime_down_since' => 'datetime',
             'uptime_maintenance_since' => 'datetime',
+            'uptime_probe_blocked_since' => 'datetime',
+            'uptime_consecutive_blocked' => 'integer',
+            'uptime_probe_blocked_alerted_at' => 'datetime',
             'uptime_ignored_at' => 'datetime',
             'uptime_sla_exempt' => 'boolean',
             'uptime_skip_body_check' => 'boolean',
@@ -521,6 +545,28 @@ class Site extends Model
         static::created(function (Site $site) {
             if (! app()->runningUnitTests()) {
                 CaptureSiteScreenshotJob::dispatch($site->id);
+            }
+        });
+
+        // A Companion snapshot that reports a WordPress core proves the site
+        // runs WordPress. Heal is_wordpress here rather than in each place
+        // that writes a snapshot, so a site enrolled without the flag doesn't
+        // stay out of the WordPress-only jobs (core checksums, lockout and
+        // firewall pulls) forever. Never clears the flag.
+        static::saving(function (Site $site) {
+            if (! $site->is_wordpress && isset($site->companion_snapshot['wp_core'])) {
+                $site->is_wordpress = true;
+            }
+        });
+
+        // Updates applied by something other than Control (WordPress
+        // auto-updates, another updater, wp-admin) only show up as version
+        // changes between two snapshots. Compared here, where the previous
+        // snapshot is still the original, rather than in each place that
+        // writes one. Informational rows only; never throws.
+        static::updated(function (Site $site) {
+            if ($site->wasChanged('companion_snapshot')) {
+                app(ObservedUpdateRecorder::class)->recordSnapshotChange($site);
             }
         });
     }
@@ -1404,6 +1450,11 @@ class Site extends Model
         return $this->uptime_state === self::UPTIME_STATE_MAINTENANCE;
     }
 
+    public function isUptimeProbeBlocked(): bool
+    {
+        return $this->uptime_state === self::UPTIME_STATE_PROBE_BLOCKED;
+    }
+
     /**
      * Return a consolidated status color for visual cards ('green', 'yellow', 'red').
      */
@@ -1417,7 +1468,7 @@ class Site extends Model
             return 'red';
         }
 
-        if ($this->uptime_state === 'unknown' || $this->uptime_state === self::UPTIME_STATE_MAINTENANCE || $this->sslState() === self::SSL_STATE_YELLOW) {
+        if ($this->uptime_state === 'unknown' || $this->uptime_state === self::UPTIME_STATE_MAINTENANCE || $this->uptime_state === self::UPTIME_STATE_PROBE_BLOCKED || $this->sslState() === self::SSL_STATE_YELLOW) {
             return 'yellow';
         }
 

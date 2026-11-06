@@ -12,6 +12,11 @@ namespace App\Services\Uptime;
  * - succeeded=false → status_code is set if we got a response (4xx/5xx),
  *   or null if the request never completed (timeout / DNS / refused / TLS fail).
  *   In either failure case, `error` carries a short human description.
+ * - isProbeBlocked=true (always with succeeded=false) → the site answered
+ *   HTTP 429: a rate limiter or anti-bot challenge refused the probe. That
+ *   says nothing either way about whether real visitors can reach the site,
+ *   so UptimeStateUpdater neither counts it as a failure nor as proof of
+ *   life (see blocked()).
  */
 final class UptimeProbeResult
 {
@@ -24,6 +29,7 @@ final class UptimeProbeResult
         public readonly ?string $xRobotsTagHeader = null,
         public readonly bool $isMaintenance = false,
         public readonly ?string $retryAfter = null,
+        public readonly bool $isProbeBlocked = false,
     ) {}
 
     public static function success(int $statusCode, int $responseTimeMs, ?string $body = null, ?string $xRobotsTagHeader = null): self
@@ -59,6 +65,28 @@ final class UptimeProbeResult
     public static function authProtected(int $statusCode, int $responseTimeMs, string $error, ?string $body = null, ?string $xRobotsTagHeader = null): self
     {
         return new self(true, $statusCode, $responseTimeMs, $error, $body, $xRobotsTagHeader);
+    }
+
+    /**
+     * The site rate-limited the probe (HTTP 429). Deliberately NOT a success:
+     * a host can throttle real visitors too, so this must not set last-up or
+     * clear a failure streak. Deliberately NOT a plain failure either: a rate
+     * limiter or anti-bot challenge that singles out automated clients would
+     * otherwise read as a multi-day outage. The state updater treats it as
+     * "no signal" and tracks it separately.
+     */
+    public static function blocked(int $statusCode, int $responseTimeMs, string $reason, ?string $retryAfter = null, ?string $body = null, ?string $xRobotsTagHeader = null): self
+    {
+        return new self(
+            succeeded: false,
+            statusCode: $statusCode,
+            responseTimeMs: $responseTimeMs,
+            error: $reason,
+            body: $body,
+            xRobotsTagHeader: $xRobotsTagHeader,
+            retryAfter: $retryAfter,
+            isProbeBlocked: true,
+        );
     }
 
     public static function badStatus(int $statusCode, int $responseTimeMs, string $error, ?string $body = null, ?string $xRobotsTagHeader = null): self

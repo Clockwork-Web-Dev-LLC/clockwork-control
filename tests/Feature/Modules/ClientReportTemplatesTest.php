@@ -52,6 +52,25 @@ describe('Templates CRUD', function () {
             ->assertSee('Security &amp; Firewall', false);
     });
 
+    it('describes each section by what the report actually contains', function () {
+        $descriptions = collect(ClientReportTemplate::SECTIONS)->pluck('description')->implode(' ');
+
+        // Promises the compiler never delivers: no referrer, page-view, TTFB,
+        // translation or restore data is compiled, and scheduled form tests
+        // suppress the email, so they can't speak to delivery.
+        foreach (['referrer', 'page view', 'unique visits', 'TTFB', 'time to first byte', 'translation', 'deliverability', 'restore readiness'] as $promise) {
+            expect(stripos($descriptions, $promise))->toBeFalse("Section descriptions still promise \"{$promise}\".");
+        }
+
+        expect(ClientReportTemplate::SECTIONS['forms']['description'])->toContain('delivery is only reported for live tests');
+
+        $this->mockIssueCounterZero();
+        $this->actingAs(User::factory()->create())
+            ->get(route('client-reports.templates.create'))
+            ->assertOk()
+            ->assertSee(ClientReportTemplate::SECTIONS['forms']['description']);
+    });
+
     it('stores a new custom template with selected sections', function () {
         $user = User::factory()->create();
 

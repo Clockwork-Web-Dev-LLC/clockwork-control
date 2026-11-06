@@ -175,7 +175,7 @@ class SetupController extends Controller
                 'title' => 'Maintenance & QA',
                 'badge' => 'Care Plans',
                 'badge_color' => 'purple',
-                'description' => 'Automated synthetic testing and deliverability QA for client care plans. Probes and exercises live contact forms (Gravity Forms, WPForms, Contact Form 7, Fluent Forms) on your WordPress sites with end-to-end SMTP deliverability verification, streak tracking, and instant failure alerting.',
+                'description' => 'Automated synthetic testing for client care plans. Submits test entries to live contact forms (Gravity Forms, WPForms, Contact Form 7, Fluent Forms) on your WordPress sites to check they still accept messages, with streak tracking and instant failure alerting. Scheduled tests suppress the outgoing email, so they don\'t verify inbox delivery.',
                 'services' => [],
             ],
             'notifications' => [

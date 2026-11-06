@@ -3,10 +3,10 @@
 @section('title', 'Team · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Team"
         subtitle="Allowlist of operators authorized to access Clockwork. Teammates can log in with their local password, or via configured Single Sign-On providers (Google, GitHub, Microsoft)." />
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-6 status-green flex items-center gap-2">
@@ -29,7 +29,7 @@
     @endif
 
     {{-- Roll-up metric tiles --}}
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 max-w-5xl">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <div class="card px-4 py-3">
             <div class="text-[10px] uppercase tracking-wide text-[var(--color-ink-soft)]">Active Teammates</div>
             <div class="text-2xl font-display text-[var(--color-ink-strong)] font-data">{{ $users->whereNull('revoked_at')->count() }}</div>
@@ -60,7 +60,7 @@
     </div>
 
     {{-- Add teammate form --}}
-    <form method="POST" action="{{ route('settings.users.store') }}" class="card p-6 max-w-4xl mb-6">
+    <form method="POST" action="{{ route('settings.users.store') }}" class="card p-6 mb-6">
         @csrf
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] mb-1.5">Add a teammate</h2>
         <p class="text-sm text-[var(--color-ink-muted)] mb-4">
@@ -69,7 +69,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
             <div>
                 <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Email</label>
-                <input type="email" name="email" required placeholder="teammate@agency.com"
+                <input type="email" name="email" required autocomplete="off" placeholder="teammate@agency.com"
                        class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm font-data focus:outline-none focus:border-[var(--color-brand)]">
             </div>
             <div>
@@ -79,7 +79,7 @@
             </div>
             <div>
                 <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Password (optional, min 8)</label>
-                <input type="password" name="password" placeholder="••••••••••••"
+                <input type="password" name="password" autocomplete="new-password" placeholder="Leave blank to use SSO"
                        class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm font-mono focus:outline-none focus:border-[var(--color-brand)]">
             </div>
             <div>
@@ -100,7 +100,7 @@
     </form>
 
     {{-- Allowlist table with password reset modal --}}
-    <div class="card max-w-4xl overflow-hidden" x-data="{ passwordModalUser: null, passwordModalEmail: '' }">
+    <div class="card overflow-hidden" x-data="{ passwordModalUser: null, passwordModalEmail: '' }">
         <h2 class="font-display text-lg font-semibold text-[var(--color-ink-strong)] px-6 pt-6 pb-2">
             Allowlist
             <span class="text-xs text-[var(--color-ink-muted)] font-normal">·
@@ -253,12 +253,12 @@
                     @method('PATCH')
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">New Password (min 8)</label>
-                        <input type="password" name="password" required minlength="8" placeholder="••••••••••••"
+                        <input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"
                                class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm font-mono focus:outline-none focus:border-[var(--color-brand)]">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider mb-1">Confirm Password</label>
-                        <input type="password" name="password_confirmation" required minlength="8" placeholder="••••••••••••"
+                        <input type="password" name="password_confirmation" required minlength="8" autocomplete="new-password" placeholder="Repeat the password"
                                class="w-full px-3 py-2 rounded-md border border-[var(--color-border)] text-sm font-mono focus:outline-none focus:border-[var(--color-brand)]">
                     </div>
                     <div class="flex items-center justify-end gap-2.5 pt-2">

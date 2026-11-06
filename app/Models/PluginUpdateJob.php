@@ -65,6 +65,7 @@ class PluginUpdateJob extends Model
         'reactivated',
         'elapsed_ms',
         'error',
+        'reason_code',
         'messages',
         'state_before',
         'repairs',

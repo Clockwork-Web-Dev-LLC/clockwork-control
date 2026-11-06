@@ -111,10 +111,10 @@ class ContactFormsServiceProvider extends ModuleServiceProvider
         return new ModuleManifest(
             id: 'contact-forms',
             name: 'Contact Form Testing',
-            description: 'Automated synthetic end-to-end testing and delivery verification for WordPress contact forms via Clockwork Companion.',
+            description: 'Automated synthetic submissions that check WordPress contact forms still accept messages, via Clockwork Companion. Scheduled tests suppress the outgoing email, so they don\'t verify delivery.',
             credentialFields: [],
             status: ModuleManifest::STATUS_VERIFIED,
-            statusNote: 'Verified synthetic form testing and email round-trip delivery verification.',
+            statusNote: 'Verified synthetic form testing: checks that each form accepts a submission. Inbox delivery is not verified.',
         );
     }
 }

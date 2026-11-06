@@ -21,7 +21,7 @@
         <!-- ArchitectureTest's arch() checks reflect + parse the PHPDoc of every
              class under app/ and modules/ — the default 128M CLI memory_limit
              exhausts under that load. -->
-        <ini name="memory_limit" value="1G"/>
+        <ini name="memory_limit" value="2G"/>
         <env name="APP_KEY" value="base64:PpV0sYePBa5SQ0yDw4SESwHn7nFlNfq4gKXdFjj5CjE="/>
         <env name="APP_ENV" value="testing"/>
         <!-- cache + array store = per-process maintenance flag. The file driver

@@ -5,10 +5,7 @@
 @section('content')
     @php $activeTab = 'admins'; @endphp
 
-    <x-page-header title="Security"
-        subtitle="Every administrator-role WordPress user across Companion-installed sites. Flag default logins and, once you set an allowlist, unknown emails." />
-
-    @include('security._tabs')
+    @include('security._tabs', ['intro' => 'Every administrator-role WordPress user across Companion-installed sites. Flags default logins and, once you set an allowlist, unknown emails.'])
 
     @if (session('status'))
         <div class="mb-4 px-4 py-2 rounded-md bg-[var(--color-status-green)]/10 text-[var(--color-status-green)] text-sm">
@@ -53,7 +50,7 @@
     </div>
 
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto cw-sticky-actions">
             <table class="w-full text-sm min-w-[620px]" x-data="sortableTable()">
             <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                 <tr>
@@ -62,7 +59,7 @@
                     <x-sort-th key="email" class="px-4 py-2">Email</x-sort-th>
                     <x-sort-th key="last_seen" class="px-4 py-2">Last seen</x-sort-th>
                     <x-sort-th key="flags" class="px-4 py-2">Flags</x-sort-th>
-                    <th class="px-4 py-2"></th>
+                    <th class="px-4 py-2"><span class="sr-only">Actions</span></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -92,12 +89,12 @@
                         data-sort-last_seen="{{ $lastSeenTs }}"
                         data-sort-flags="{{ $flagSort }}">
                         <td class="px-4 py-2">
-                            <a href="{{ route('sites.show', $row['site_id']) }}" class="text-[var(--color-primary-600)] hover:underline">{{ $row['domain'] }}</a>
+                            <a href="{{ route('sites.show', $row['site_id']) }}" class="block max-w-[14rem] xl:max-w-[18rem] truncate text-[var(--color-primary-600)] hover:underline" title="{{ $row['domain'] }}">{{ $row['domain'] }}</a>
                         </td>
-                        <td class="px-4 py-2 font-data text-xs">{{ $row['login'] ?: '—' }}</td>
-                        <td class="px-4 py-2 text-xs">{{ $row['email'] ?: '—' }}</td>
-                        <td class="px-4 py-2 text-xs text-[var(--color-ink-muted)]">{{ $row['last_seen_at'] ? \Illuminate\Support\Carbon::parse($row['last_seen_at'])->diffForHumans() : '—' }}</td>
-                        <td class="px-4 py-2 text-xs">
+                        <td class="px-4 py-2 font-data text-xs"><div class="max-w-[10rem] truncate" title="{{ $row['login'] }}">{{ $row['login'] ?: '—' }}</div></td>
+                        <td class="px-4 py-2 text-xs"><div class="max-w-[14rem] xl:max-w-[16rem] truncate" title="{{ $row['email'] }}">{{ $row['email'] ?: '—' }}</div></td>
+                        <td class="px-4 py-2 text-xs text-[var(--color-ink-muted)] whitespace-nowrap">{{ $row['last_seen_at'] ? \Illuminate\Support\Carbon::parse($row['last_seen_at'])->diffForHumans(['short' => true]) : '—' }}</td>
+                        <td class="px-4 py-2 text-xs whitespace-nowrap">
                             @if ($row['ignored'])
                                 <span class="status-pill status-unknown">Acknowledged</span>
                             @elseif ($row['flagged'])
@@ -108,7 +105,7 @@
                                 <span class="text-[var(--color-ink-muted)]">—</span>
                             @endif
                         </td>
-                        <td class="px-4 py-2 text-right">
+                        <td class="px-4 py-2 text-right whitespace-nowrap">
                             @if ($row['ignored'])
                                 <form method="POST" action="{{ route('security.admins.unignore', [$row['site_id'], $row['ignored_id']]) }}">
                                     @csrf

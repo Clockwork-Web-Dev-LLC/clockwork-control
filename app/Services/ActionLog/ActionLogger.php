@@ -7,6 +7,7 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Services\Companion\ClockworkCompanionClient;
 use App\Services\Companion\CompanionInstaller;
+use App\Support\UpgraderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -95,8 +96,13 @@ class ActionLogger
         // warning in pushToCompanion). Either way we don't break the action.
         //
         // Server-only actions (no site) don't push — the Companion mirror is a
-        // per-site client-facing log, not a fleet log.
-        if ($site !== null && $site->companion_installed && ! empty($site->companion_secret)) {
+        // per-site client-facing log, not a fleet log. Neither do local-only
+        // types (updates Control merely observed, refused updates): the
+        // mirror lists what Control did on the site.
+        if (
+            $site !== null && $site->companion_installed && ! empty($site->companion_secret)
+            && ! in_array($actionType, ActionLog::LOCAL_ONLY_TYPES, true)
+        ) {
             $this->pushToCompanion($site, $row, $actionType, $target, $summary, $details, $ok, $error, $elapsedMs, $actor, $ranAt);
         }
 
@@ -161,6 +167,26 @@ class ActionLogger
     /**
      * @param  array<string, mixed>|null  $details
      */
+    /**
+     * An action-log row as it may be shown in the client's wp-admin. The
+     * mirror is the client's own site, so licence keys, tokens and signed
+     * download URLs in the summary, details or error are redacted on the
+     * way out, whatever wrote the row (rows from before upgrader output was
+     * redacted at write time still hold them). redact() keeps the shape of
+     * details: only string values change.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public static function forCompanionMirror(array $payload): array
+    {
+        $payload['summary'] = UpgraderOutput::redactText((string) ($payload['summary'] ?? ''));
+        $payload['details'] = UpgraderOutput::redact($payload['details'] ?? null);
+        $payload['error'] = isset($payload['error']) ? UpgraderOutput::redactText((string) $payload['error']) : null;
+
+        return $payload;
+    }
+
     private function pushToCompanion(
         Site $site,
         ActionLog $row,
@@ -175,7 +201,7 @@ class ActionLogger
         Carbon $ranAt,
     ): void {
         try {
-            (new ClockworkCompanionClient($site))->appendActionLog([
+            (new ClockworkCompanionClient($site))->appendActionLog(self::forCompanionMirror([
                 'action_type' => $actionType,
                 'target' => $target,
                 'summary' => $summary,
@@ -186,7 +212,7 @@ class ActionLogger
                 'actor' => $actor,
                 'care_plan_enabled' => (bool) $site->care_plan_enabled,
                 'ran_at' => $ranAt->toIso8601String(),
-            ]);
+            ]));
             // Mark the row pushed so the backfill command knows to skip it
             // on future re-syncs. forceFill avoids re-triggering observers.
             $row->forceFill(['companion_pushed_at' => now()])->save();

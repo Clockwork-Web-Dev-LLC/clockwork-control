@@ -45,7 +45,7 @@
         }
     }"
     @scroll.window="showFloating = (window.pageYOffset > 350)"
-    class="relative">
+    class="relative pb-20">
 
     <x-page-header title="Capacity"
         subtitle="Fleet capacity, resource pressure, headroom, and visit-threshold overages across SpinupWP shared servers, Pressable cloud, and standalone sites.">
@@ -106,7 +106,7 @@
         </div>
 
         {{-- Jump Shortcuts when in All Fleets mode --}}
-        <div x-show="filter === 'all'" class="flex items-center gap-2 text-xs text-[var(--color-ink-soft)] ml-auto">
+        <div x-show="filter === 'all'" class="flex items-center flex-wrap gap-x-2 gap-y-1 min-w-0 max-w-full text-xs text-[var(--color-ink-soft)] sm:ml-auto [&>button]:whitespace-nowrap">
             <span class="text-[11px] uppercase tracking-wider font-semibold opacity-70">Jump to:</span>
             <button type="button" @click="scrollTo('over-quota')" class="hover:text-[var(--color-ink-strong)] hover:underline cursor-pointer">
                 Shared Overages
@@ -209,9 +209,9 @@
                                     data-sort-mtd="{{ $row['month_visits'] }}"
                                     data-sort-last7="{{ $row['last_7d_visits'] }}">
                                     <td class="px-5 py-3">
-                                        <a href="{{ route('sites.show', $row['site']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">
+                                        <a href="{{ route('sites.show', $row['site']) }}" class="inline-flex items-center gap-1 whitespace-nowrap font-data text-[var(--color-ink-strong)] hover:underline">
                                             @if ($row['site']->is_wordpress)
-                                                <i class="fa-brands fa-wordpress text-[var(--color-brand)] mr-1"></i>
+                                                <i class="fa-brands fa-wordpress text-[var(--color-brand)]"></i>
                                             @endif
                                             {{ $row['site']->domain }}
                                             @if ($row['site']->cloudflare_state === 'proxied')
@@ -278,9 +278,9 @@
                                     data-sort-projected="{{ $row['projected_30d'] }}"
                                     data-sort-projectedover="{{ $row['projected_over_by'] }}">
                                     <td class="px-5 py-3">
-                                        <a href="{{ route('sites.show', $row['site']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">
+                                        <a href="{{ route('sites.show', $row['site']) }}" class="inline-flex items-center gap-1 whitespace-nowrap font-data text-[var(--color-ink-strong)] hover:underline">
                                             @if ($row['site']->is_wordpress)
-                                                <i class="fa-brands fa-wordpress text-[var(--color-brand)] mr-1"></i>
+                                                <i class="fa-brands fa-wordpress text-[var(--color-brand)]"></i>
                                             @endif
                                             {{ $row['site']->domain }}
                                             @if ($row['site']->cloudflare_state === 'proxied')
@@ -361,19 +361,19 @@
                         };
                     @endphp
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm min-w-[800px]" x-data="sortableTable({ defaultKey: 'cpu7avg', defaultDir: 'desc' })">
+                        <table class="w-full text-sm min-w-[760px]" x-data="sortableTable({ defaultKey: 'cpu7avg', defaultDir: 'desc' })">
                         <thead class="bg-[var(--color-surface-alt)] text-[var(--color-ink-muted)] text-xs uppercase tracking-wide">
                             <tr>
-                                <x-sort-th key="server" class="px-5 py-3">Server</x-sort-th>
-                                <th class="px-5 py-3 text-left" title="CPU over last 7 days, ~6h buckets">7d trend</th>
-                                <x-sort-th key="cpu7avg"  align="right" class="px-5 py-3" title="Average CPU over last 7 days">CPU avg 7d</x-sort-th>
-                                <x-sort-th key="cpu7peak" align="right" class="px-5 py-3" title="Peak CPU sample over last 7 days">CPU peak 7d</x-sort-th>
-                                <x-sort-th key="cpu30avg" align="right" class="px-5 py-3" title="Average CPU over last 30 days">CPU avg 30d</x-sort-th>
-                                <x-sort-th key="cpu30peak" align="right" class="px-5 py-3" title="Peak CPU sample over last 30 days">CPU peak 30d</x-sort-th>
-                                <x-sort-th key="mem7avg"  align="right" class="px-5 py-3 border-l border-[var(--color-border-light)]" title="Average memory over last 7 days">MEM avg 7d</x-sort-th>
-                                <x-sort-th key="mem7peak" align="right" class="px-5 py-3" title="Peak memory sample over last 7 days">MEM peak 7d</x-sort-th>
-                                <x-sort-th key="mem30avg" align="right" class="px-5 py-3" title="Average memory over last 30 days">MEM avg 30d</x-sort-th>
-                                <x-sort-th key="mem30peak" align="right" class="px-5 py-3" title="Peak memory sample over last 30 days">MEM peak 30d</x-sort-th>
+                                <x-sort-th key="server" class="pl-5 pr-3 py-3">Server</x-sort-th>
+                                <th class="px-3 py-3 text-left" title="CPU over last 7 days, ~6h buckets">7d trend</th>
+                                <x-sort-th key="cpu7avg"  align="right" class="px-3 py-3" title="Average CPU over last 7 days">CPU avg 7d</x-sort-th>
+                                <x-sort-th key="cpu7peak" align="right" class="px-3 py-3" title="Peak CPU sample over last 7 days">CPU peak 7d</x-sort-th>
+                                <x-sort-th key="cpu30avg" align="right" class="px-3 py-3" title="Average CPU over last 30 days">CPU avg 30d</x-sort-th>
+                                <x-sort-th key="cpu30peak" align="right" class="px-3 py-3" title="Peak CPU sample over last 30 days">CPU peak 30d</x-sort-th>
+                                <x-sort-th key="mem7avg"  align="right" class="px-3 py-3 border-l border-[var(--color-border-light)]" title="Average memory over last 7 days">MEM avg 7d</x-sort-th>
+                                <x-sort-th key="mem7peak" align="right" class="px-3 py-3" title="Peak memory sample over last 7 days">MEM peak 7d</x-sort-th>
+                                <x-sort-th key="mem30avg" align="right" class="px-3 py-3" title="Average memory over last 30 days">MEM avg 30d</x-sort-th>
+                                <x-sort-th key="mem30peak" align="right" class="px-3 py-3" title="Peak memory sample over last 30 days">MEM peak 30d</x-sort-th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -388,23 +388,23 @@
                                     data-sort-mem7peak="{{ $row['peak_mem_7d'] ?? -1 }}"
                                     data-sort-mem30avg="{{ $row['avg_mem_30d']  ?? -1 }}"
                                     data-sort-mem30peak="{{ $row['peak_mem_30d'] ?? -1 }}">
-                                    <td class="px-5 py-3">
+                                    <td class="pl-5 pr-3 py-3 whitespace-nowrap">
                                         <a href="{{ route('servers.show', $row['server']) }}" class="font-data text-[var(--color-ink-strong)] hover:underline">{{ $row['server']->name }}</a>
                                         @if ($row['samples_7d'] === 0)
                                             <span class="text-[10px] text-[var(--color-ink-soft)] ml-1" title="No metrics in last 7 days">no data</span>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-3" title="Last 7d CPU, ~6h buckets · ends in current state color (green &lt;70%, yellow 70-90%, red ≥90%)">
+                                    <td class="px-3 py-3" title="Last 7d CPU, ~6h buckets · ends in current state color (green &lt;70%, yellow 70-90%, red ≥90%)">
                                         {!! $renderSpark($row['cpu_spark_7d']) !!}
                                     </td>
-                                    <td class="px-5 py-3 text-right font-display {{ $cpuClass($row['avg_cpu_7d']) }}">{{ $fmt($row['avg_cpu_7d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $cpuClass($row['peak_cpu_7d']) }}">{{ $fmt($row['peak_cpu_7d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $cpuClass($row['avg_cpu_30d']) }}">{{ $fmt($row['avg_cpu_30d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $cpuClass($row['peak_cpu_30d']) }}">{{ $fmt($row['peak_cpu_30d']) }}</td>
-                                    <td class="px-5 py-3 text-right font-display border-l border-[var(--color-border-light)] {{ $memClass($row['avg_mem_7d']) }}">{{ $fmt($row['avg_mem_7d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $memClass($row['peak_mem_7d']) }}">{{ $fmt($row['peak_mem_7d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $memClass($row['avg_mem_30d']) }}">{{ $fmt($row['avg_mem_30d']) }}</td>
-                                    <td class="px-5 py-3 text-right {{ $memClass($row['peak_mem_30d']) }}">{{ $fmt($row['peak_mem_30d']) }}</td>
+                                    <td class="px-3 py-3 text-right font-display {{ $cpuClass($row['avg_cpu_7d']) }}">{{ $fmt($row['avg_cpu_7d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $cpuClass($row['peak_cpu_7d']) }}">{{ $fmt($row['peak_cpu_7d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $cpuClass($row['avg_cpu_30d']) }}">{{ $fmt($row['avg_cpu_30d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $cpuClass($row['peak_cpu_30d']) }}">{{ $fmt($row['peak_cpu_30d']) }}</td>
+                                    <td class="px-3 py-3 text-right font-display border-l border-[var(--color-border-light)] {{ $memClass($row['avg_mem_7d']) }}">{{ $fmt($row['avg_mem_7d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $memClass($row['peak_mem_7d']) }}">{{ $fmt($row['peak_mem_7d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $memClass($row['avg_mem_30d']) }}">{{ $fmt($row['avg_mem_30d']) }}</td>
+                                    <td class="px-3 py-3 text-right {{ $memClass($row['peak_mem_30d']) }}">{{ $fmt($row['peak_mem_30d']) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

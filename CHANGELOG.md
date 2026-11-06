@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-11-06
+
+### Added
+- **Favicon**: browser tabs, bookmarks and iOS home-screen shortcuts show the Clockwork clock mark (`favicon.svg`, a multi-size `favicon.ico` replacing the empty placeholder, and `apple-touch-icon.png`), linked from the app, install, sign-in and client report pages.
+
+### Upgrade notes
+- No migrations. After updating, hard-refresh the browser (browsers cache favicons aggressively).
+
+## [1.12.1] - 2026-11-06
+
+### Added
+- **Client Reports — Clients tab**: `/client-reports` opens on every client grouped by care plan ("Care plan clients — reported monthly" first, "No care plan" collapsed), with each site's care-plan badge, schedule, recipients and a six-month report history whose cells open that month's report. Care plan / No care plan / All, Needs attention / A–Z order, search and filters; a page per client with its full report history, previous/next client and a client switcher. A "Client reports" link sits in each site's dashboard header.
+- **Client Reports — Send test to me**: emails a report's exact client email only to the signed-in operator, marked `[TEST]`, without changing the report or its schedule. Send now spells out who receives the report and that a schedule's first send switches it to sending clean reports automatically.
+- **Client Reports — Schedules for care-plan sites that have none**: one-click (and "Create all") schedules from the Clients and Scheduling tabs; Scheduling lists care-plan schedules first and folds away the ones that won't send.
+- **Client Reports — Reports list** (now `/client-reports/reports`): one period at a time with replaced copies hidden, filters for status, hold-reason category and search, summary counts that act as filters, reason chips, labelled actions, and "Recompile all outdated / selected" (never sends).
+- **Client Reports — Report preview toolbar**: operator-only previous/next through the filtered list, Email version, Recompile, Print, Test to me and Send (disabled with the reason), keyboard shortcuts, and review reasons grouped by category with links to the site's dashboard tab. The email version page uses the app layout with HTML and plain-text tabs.
+- **Client Reports — Mark findings reviewed**: an operator can mark a held report's review-tier malware findings (never `issues_found`) as reviewed with a note; both emails then read "Reviewed — no threat found", and the mark survives Recompile while the scan is unchanged.
+- **Updates made outside Control are recorded**: snapshot changes write informational `plugin_update_observed` / `theme_update_observed` / `core_update_observed` activity (local only, never mirrored to the client's wp-admin, no effect on streaks or pauses).
+- **Client Reports — Recompile held drafts without sending**: a **Recompile** action (reports list and operator preview) and `clockwork:recompile-held-client-reports` (`--outdated`, `--site`, `--dry-run`) rebuild an unsent scheduled report for its own period from current data, supersede the old copy and re-check it for review. Neither ever sends email. Unsent reports compiled under older rules (schema < 6) can't be sent until recompiled; the history shows **Outdated: recompile**.
+- **Uptime — Probe-blocked state**: a site that answers the monitor with HTTP 429 (rate limiting) as many times in a row as the failure threshold moves to `probe_blocked` instead of down. No downtime, down alert or client email; one ops chat notice after a configurable number of hours (default 6, Monitoring → Settings), new `uptimeProbeBlocked` chat event.
+- **Malware scans — New PHP file in uploads notice**: a chat notice (`phpInUploadsDetected`) fires once for each PHP file that newly appears under `wp-content/uploads`, diffed against the previous scan, so a dropped file is noticed without re-alerting on long-standing ones. Companion scans now set `has_malware_hit`, so the malware alert fires for them too.
+- **Backup relay — Per-site failure state**: each site keeps its last relay attempt, last error and failing-since time (shown on the site's Backups card).
+
+### Changed
+- **Pressable traffic** is recorded at 04:45 UTC, before the 06:00 client-report run, for every Pressable site (with or without Companion), so a reported month's last day is complete.
+- **Performance scans**: the weekly rotation gives each site a fixed weekday from its domain (enrolments no longer reshuffle everyone), adds a month-end catch-up for care-plan sites with no scan that month within the daily GTmetrix budget (`CLOCKWORK_GTMETRIX_DAILY_CREDITS`), and starts a baseline scan on enrolment or when a care plan is switched on.
+- **Nightly plugin updates** run at most once per local (America/New_York) date, so the DST fall-back night no longer queues a second batch; `--force` overrides.
+- **Client Reports — Email**: sent From the configured address under the report brand's company name; outage and coverage dates use `CLOCKWORK_REPORTS_TIMEZONE` (default America/New_York); one show/hide rule now drives the HTML email, the plain-text part and the preview/PDF.
+- **Client Reports — Recipient import** creates schedules for sites without a care plan disabled unless `--include-no-care-plan` is passed, and each scheduled run logs (`client_report_skipped`) the schedules it skipped for having no care plan.
+
+### Fixed
+- **Client Reports — Report content verified against real data**: the greeting uses the recipient's first name only when there's one recipient who is a known contact, otherwise "Hi there,"; update dates use the report timezone; updates applied outside Control are listed and "no updates were needed" is never claimed; the agency's own Companion/Renegade plugins and updates that didn't stick are left out; "Malicious visitors blocked" excludes false-positive bans and shows only when lockouts reached Control all month; a care plan switched on mid-month starts the coverage period; outages of an hour or more hold the report; uptime is coloured by value; the plain-text email matches the HTML (data transferred, backup kinds); review reasons give exact figures. The preview, printout and public page use the same wording as the email. Report schema is now 7.
+- **Client Reports — wp-admin** no longer shows reports as active for a site without a Control schedule.
+- **Vulnerabilities — Exact-version advisories** (`== X`) no longer match every older release; a migration repairs existing rows.
+- **Updates — Theme identity guard**: the nightly updater holds back a theme update that would install a different wordpress.org theme sharing the folder name (e.g. over a custom child theme), lists it in the nightly summary and announces it once; it doesn't count as a failure.
+- **Client Reports — Accuracy fixes from an audit of a month of held drafts**:
+  - The support URL never falls back to Control's own (private) URL; the settings form rejects localhost/private URLs. Period lengths are whole days.
+  - Sites enrolled mid-month are measured from when they were added (uptime from when monitoring began), say so, and are held as partial-month reports.
+  - Rate-limited monitor checks (HTTP 429) aren't downtime; an open block at month end holds as "monitor was blocked", not "still down".
+  - A malware scan that stopped early shows "Partial scan", never "No malware found"; an earlier in-period hit, the finding kinds and scan id are given to the reviewer; matches on the scanner's own signature file are ignored.
+  - The WordPress core-files row is left out on hosts with no way to run the check; "Threats blocked" appears only when measured, and "at the server" only where a fail2ban jail exists.
+  - Vulnerable-plugin holds match plugins by slug and fire when a waiting update would fix the plugin or its updates are paused; a month where updates were waiting but none applied is held.
+  - Backups: database dumps far smaller than the database are held as suspect; a relay that has been failing, began mid-month, or missed many days is held with the reason.
+  - Traffic gets a status (ok / partial / suspect / no data / unsupported) and is shown only when complete and believable (e.g. not when every request comes from a load balancer's IP).
+  - Failed contact-form checks hold the report; live tests say the site "reported sending" the email rather than "delivered", and template, module and docs wording no longer promise inbox delivery checks.
+  - The preview lists core, theme and plugin updates, has a Contact forms section, and keeps staff names and operator notes off the printout and public page. Report schema is now 6.
+- **Uptime**: HTTP 429 answers no longer mark a site down; during a real outage they don't close and reopen it (which re-sent down alerts and client emails every cycle).
+- **Plugin updates**: vulnerable plugins are queued first (advisories now match on the plugin directory); auto-paused plugins are retried once per new release or security fix (7-day back-off, not for licence/offer failures), and a successful update lifts the pause and clears the wp-admin notice. Real upgrader errors (not writable, unauthorized download, bad/missing package) are recorded with a `reason_code` instead of "no longer offered", and repeated file-permission failures pause the site once with one alert instead of pausing every plugin.
+- **Backup relay**: can't be enabled for a site whose Companion lacks `backup-create`, and such sites fail with an actionable message; a stale archive hash is no longer paired with a newer archive.
+- **Malware scans**: finding paths are normalized to the WordPress root, so suppressions and the own-scanner exclusion work on every host layout (`clockwork:suppress-malware-path --kind`); SSH scans prove each check finished, so timeouts, cut-off output or a missing docroot no longer read as clean.
+- **Contact form tests** no longer skip days: daily/weekly due checks use a grace window instead of a strict 24h/7d cutoff.
+- **Pressable traffic** no longer overwrites earlier history with zeros for days the API returned no data.
+- **Bill.com syncs** match invoice domains after normalization (including a leading `www.`) and recognise every TLD the fleet uses; archived-site domains and collisions are reported separately.
+- **Scan coverage**: standalone (custom-host) sites are marked as WordPress (with a backfill migration and a snapshot self-heal), and the nightly core-checksum run skips sites with no shell transport instead of failing every night.
+
+### Security
+- **Upgrader output redaction**: licence keys, tokens and signed download URLs in WordPress upgrader output are redacted before update results are stored, logged, sent to chat or mirrored to Companion (including `clockwork:backfill-companion-action-log --reset-since` re-pushes of older rows).
+
+### Upgrade notes
+- Run `php artisan migrate` (new columns on `sites`, `plugin_update_jobs` and `plugin_update_failure_streaks`, and a backfill of `sites.is_wordpress` for standalone Companion sites).
+- Run `php artisan clockwork:sync-bill-customers --dry-run` and `clockwork:sync-bill-care-plans --dry-run` and review the output before the next real sync: normalized matching can link `www.` sites and change care-plan flags.
+- Refresh held client-report drafts with `php artisan clockwork:recompile-held-client-reports --outdated --dry-run`, then without `--dry-run`. It never sends.
+- Set `CLOCKWORK_GTMETRIX_DAILY_CREDITS` to the GTmetrix plan's daily credits (default 10). Optionally set `CLOCKWORK_REPORTS_TIMEZONE`.
+- Stored `plugin_update_jobs.messages` and `action_logs.details` rows written before this release still contain unredacted upgrader output; scrub them separately.
+- After deploy: `npm run build` (new Tailwind classes in the Client Reports views) and clear the view cache. Report schema 7 marks every unsent report outdated: run `php artisan clockwork:recompile-held-client-reports` (never sends). `/client-reports` now opens the Clients tab; the reports list moved to `/client-reports/reports`. Run `php artisan queue:restart` so workers load the observed-update hook. The app host needs HTTPS access to `api.wordpress.org` for the theme identity check.
+
+## [1.12.0] - 2026-11-04
+
 ### Added
 - **SEO module (`modules/Seo`)**: new home for SEO tooling. Its first page, `/seo` (gear menu → SEO), lists every monitored site's search engine indexability, with blocking production sites first and counts of each state. It reads the existing indexability watchdog's data, so it makes no new requests to client sites. See [Features → SEO module](resources/docs/features/seo.md).
 - **Client Reports — Import report recipients (`clockwork:import-report-recipients`)**: loads per-site report recipients from a CSV (site domain + email columns, e.g. the ManageWP export) into report schedules; dry run unless `--apply`.
@@ -81,6 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Client Reports — The plain-text email no longer HTML-escapes** client names, notes and plugin names ("O&#039;Brien &amp; Sons"). The Email version page now shows the plain-text part too.
 - **Client Reports — Sending a partly sent report by hand** only emails the recipients who don't have it yet, instead of everyone again. A held or draft report sent by hand now stamps its schedule's `last_sent_at`.
 - **Security — A partial vulnerability-feed refresh no longer drops matches**: `clockwork:refresh-plugin-vulnerabilities` keeps the existing entries of any plugin whose lookup failed (and lists them), instead of deleting the whole table and re-inserting only what it fetched. A run where every lookup fails changes nothing and exits as failed.
+
+- **Companion & Renegade Downloads — GitHub Releases Fallback (`/renegade/download` & `/companion/download`)**: Self-hosted Clockwork Control instances without local `~/Projects/clockwork-renegade` or `~/Projects/clockwork-companion` source checkouts now automatically stream the latest official `.zip` release package from GitHub Releases (`clockwork.renegade.release_zip_url` / `clockwork.companion.release_zip_url`) instead of returning HTTP 500.
+- **Companion Installers — Automatic Renegade Cleanup on Migration**: `PressableCompanionInstaller` and `CompanionInstaller` now reset `companion_variant = 'companion'` and deactivate/remove any legacy `clockwork-renegade` files when a site is migrated from external hosting to Pressable or SpinupWP.
+- **Bundled Plugin Versions**: Bumped default Clockwork Companion version to `1.43.1` and Clockwork Renegade version to `1.1.3` (preserving active plugins in-place during upgrades and fixing WPForms contact form health checks).
 
 ## [1.11.0] - 2026-10-14
 

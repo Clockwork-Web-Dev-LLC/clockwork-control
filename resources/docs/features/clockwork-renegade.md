@@ -103,7 +103,7 @@ When an operator enrolls a new site under **Sites → + Add Site** (`SitesContro
    - If Classic Companion returns 200 OK, `companion_variant = 'companion'`.
    - If neither endpoint responds, the operator receives an informative HTTP 404 message indicating neither variant was found.
 
-Enrollment matches SpinupWP/Pressable imports for nightly plugin updates (`auto_updates_paused = false`) and kicks a one-shot Sucuri SiteCheck + Companion malware scan in the background so the Security tab is not empty until the next 02:00 UTC cron. WP core checksums stay SSH/Pressable-only.
+Enrollment matches SpinupWP/Pressable imports for nightly plugin updates (`auto_updates_paused = false`) and kicks a one-shot Sucuri SiteCheck + Companion malware scan in the background so the Security tab is not empty until the next 02:00 UTC cron. It also starts one performance scan in the background (see [Performance scans](/docs/features/performance-scans)). WP core checksums stay SSH/Pressable-only; the nightly checksum run skips standalone sites rather than recording a failure for them. Enrolment sets `is_wordpress`, so the site joins the WordPress-only jobs (lockout and firewall pulls, plugin detection).
 
 ### Download Hub
 

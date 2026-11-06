@@ -19,6 +19,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Clockwork Control')</title>
+    @include('partials.favicon')
     <script>
         (function () {
             try {
@@ -97,6 +98,27 @@
         </div>
     </div>
 
+    @php
+        // Module nav items (sidebar + drawer). A module item is "active" for its whole route
+        // family (client-reports.index -> client-reports.*). When one is active, the broader
+        // parent item (Settings, Security) is not highlighted too: only the most specific match.
+        $navModuleItems = array_values(array_filter(
+            app(\Modules\Core\ModuleRegistry::class)->navItems(),
+            fn ($item) => $item->isVisible(),
+        ));
+        $navModuleActiveRoute = null;
+        foreach ($navModuleItems as $navModuleItem) {
+            $navModuleFamily = preg_replace('/\.index$/', '', $navModuleItem->route).'.*';
+            if (request()->routeIs($navModuleItem->route, $navModuleFamily)) {
+                $navModuleActiveRoute = $navModuleItem->route;
+                break;
+            }
+        }
+        $navModuleIsActive = fn ($item) => $navModuleActiveRoute === $item->route;
+        // Sidebar/drawer list the module items separately, so the parent defers to them there.
+        $navRailSecurityActive = request()->routeIs('security.*', 'bans.*', 'email-auth.*') && $navModuleActiveRoute === null;
+        $navRailSettingsActive = request()->routeIs('settings.*') && $navModuleActiveRoute === null;
+    @endphp
     <div class="flex min-h-screen">
         <!-- ================================================================= -->
         <!-- COMMAND RAIL (Left Sidebar - Command Center Layout Only)          -->
@@ -157,7 +179,7 @@
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Issues</span>
                         @isset($issueCount)
                             @if ($issueCount > 0)
-                                <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
+                                <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white" title="{{ $issueCount }} urgent (emergency + pressing) issues. The Issues page also lists lower-priority items.">{{ $issueCount }}</span>
                             @endif
                         @endisset
                     </a>
@@ -182,7 +204,7 @@
                     </a>
 
                     <a href="{{ route('security.scans') }}"
-                       class="cmd-nav-item {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}"
+                       class="cmd-nav-item {{ $navRailSecurityActive ? 'is-active' : '' }}"
                        :title="!sidebarOpen ? 'Security' : ''">
                         <i class="fa-solid fa-shield-halved w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Security</span>
@@ -191,7 +213,7 @@
 
                 <!-- Operations Navigation — collapsible, closed by default (see railGroup) -->
                 @php
-                    $railOpsActive = request()->routeIs('capacity.*', 'operations.server-updates.*', 'maintenance-history.*', 'ai-remedy.*');
+                    $railOpsActive = request()->routeIs('capacity.*', 'operations.server-updates.*', 'maintenance-history.*', 'servers.credentials.*', 'ai-remedy.*');
                 @endphp
                 <div class="space-y-1" x-data="railGroup('operations', @js($railOpsActive))">
                     <button type="button"
@@ -228,7 +250,14 @@
                        class="cmd-nav-item {{ request()->routeIs('maintenance-history.*') ? 'is-active' : '' }}"
                        :title="!sidebarOpen ? 'Maintenance History' : ''">
                         <i class="fa-solid fa-clock-rotate-left w-4 text-center shrink-0"></i>
-                        <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Maintenance</span>
+                        <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Maintenance History</span>
+                    </a>
+
+                    <a href="{{ route('servers.credentials.bulk') }}"
+                       class="cmd-nav-item {{ request()->routeIs('servers.credentials.*') ? 'is-active' : '' }}"
+                       :title="!sidebarOpen ? 'SSH Credentials' : ''">
+                        <i class="fa-solid fa-key w-4 text-center shrink-0"></i>
+                        <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">SSH Credentials</span>
                     </a>
 
                     @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
@@ -264,7 +293,7 @@
                     <div class="space-y-1" x-show="!sidebarOpen || open" @unless ($railConfigActive) style="display: none" @endunless>
 
                     <a href="{{ route('settings.index') }}"
-                       class="cmd-nav-item {{ request()->routeIs('settings.*') ? 'is-active' : '' }}"
+                       class="cmd-nav-item {{ $navRailSettingsActive ? 'is-active' : '' }}"
                        :title="!sidebarOpen ? 'Settings Hub' : ''">
                         <i class="fa-solid fa-sliders w-4 text-center shrink-0"></i>
                         <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">Settings</span>
@@ -283,10 +312,10 @@
                      is skipped because it already lives under Operations. -->
                 @php
                     $railModuleNavItems = array_filter(
-                        app(\Modules\Core\ModuleRegistry::class)->navItems(),
-                        fn ($item) => $item->isVisible() && $item->route !== 'ai-remedy.index',
+                        $navModuleItems,
+                        fn ($item) => $item->route !== 'ai-remedy.index',
                     );
-                    $railModulesActive = collect($railModuleNavItems)->contains(fn ($item) => request()->routeIs($item->route));
+                    $railModulesActive = collect($railModuleNavItems)->contains(fn ($item) => $navModuleIsActive($item));
                 @endphp
                 @if (! empty($railModuleNavItems))
                     <div class="space-y-1" x-data="railGroup('modules', @js($railModulesActive))">
@@ -303,7 +332,7 @@
 
                         @foreach ($railModuleNavItems as $moduleNavItem)
                             <a href="{{ route($moduleNavItem->route) }}"
-                               class="cmd-nav-item {{ request()->routeIs($moduleNavItem->route) ? 'is-active' : '' }}"
+                               class="cmd-nav-item {{ $navModuleIsActive($moduleNavItem) ? 'is-active' : '' }}"
                                :title="!sidebarOpen ? @js($moduleNavItem->label) : ''">
                                 <i class="{{ $moduleNavItem->icon }} w-4 text-center shrink-0"></i>
                                 <span x-show="sidebarOpen" x-transition.opacity class="truncate flex-1">{{ $moduleNavItem->label }}</span>
@@ -439,6 +468,15 @@
 
                     <!-- Right Controls: ⌘K Palette, Layout Switcher, Font Stepper, Theme, Profile -->
                     <div class="flex items-center gap-2 sm:gap-3">
+                        <!-- Phone: search icon opens the same palette (the Jump button is md+) -->
+                        <button type="button"
+                                @click="paletteOpen = true"
+                                class="md:hidden p-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] transition-colors text-xs cursor-pointer"
+                                title="Search"
+                                aria-label="Search servers, sites and commands">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
+
                         <!-- Quick Jump / Command Palette Button (Modern Studio) -->
                         <button type="button"
                                 @click="paletteOpen = true"
@@ -553,7 +591,7 @@
                         <!-- Mobile Menu Button -->
                         <button type="button"
                                 @click="mobileNavOpen = !mobileNavOpen"
-                                class="md:hidden relative p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
+                                class="cw-nav-drawer-only relative p-2 rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-alt)] cursor-pointer"
                                 :aria-expanded="mobileNavOpen.toString()"
                                 aria-controls="cw-mobile-drawer"
                                 aria-label="Toggle navigation drawer">
@@ -582,7 +620,7 @@
                                 <i class="fa-solid fa-triangle-exclamation"></i> Issues
                                 @isset($issueCount)
                                     @if ($issueCount > 0)
-                                        <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
+                                        <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white" title="{{ $issueCount }} urgent (emergency + pressing) issues. The Issues page also lists lower-priority items.">{{ $issueCount }}</span>
                                     @endif
                                 @endisset
                             </a>
@@ -635,7 +673,7 @@
                                         :aria-expanded="open.toString()"
                                         aria-haspopup="menu"
                                         aria-controls="cw-ops-menu"
-                                        class="studio-nav-tab cursor-pointer {{ (request()->routeIs('operations.*') || request()->routeIs('capacity.*') || request()->routeIs('maintenance-history.*') || request()->routeIs('ai-remedy.*')) ? 'is-active' : '' }}">
+                                        class="studio-nav-tab cursor-pointer {{ request()->routeIs('operations.*', 'capacity.*', 'maintenance-history.*', 'servers.credentials.*', 'ai-remedy.*') ? 'is-active' : '' }}">
                                     <i class="fa-solid fa-cube"></i> Operations
                                     @isset($aiRemedyReviewCount)
                                     @if ($aiRemedyReviewCount > 0)
@@ -663,7 +701,11 @@
                                         </a>
                                         <a href="{{ route('maintenance-history.index') }}" role="menuitem"
                                            class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('maintenance-history.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
-                                            <i class="fa-solid fa-clock-rotate-left w-4 text-center text-[var(--color-brand)]"></i> Maintenance
+                                            <i class="fa-solid fa-clock-rotate-left w-4 text-center text-[var(--color-brand)]"></i> Maintenance History
+                                        </a>
+                                        <a href="{{ route('servers.credentials.bulk') }}" role="menuitem"
+                                           class="flex items-center gap-2 px-3 py-2 text-[var(--color-ink-strong)] hover:bg-[var(--color-surface-alt)] {{ request()->routeIs('servers.credentials.*') ? 'font-semibold bg-[var(--color-surface-alt)]' : '' }}">
+                                            <i class="fa-solid fa-key w-4 text-center text-[var(--color-brand)]"></i> SSH Credentials
                                         </a>
                                         @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
                                             <a href="{{ route('ai-remedy.index') }}" role="menuitem"
@@ -694,10 +736,11 @@
 
             </header>
 
-            <!-- Mobile navigation sheet — the only primary nav below md. -->
+            <!-- Navigation drawer: the primary nav whenever neither the studio tabs (modern, md+)
+                 nor the sidebar rail (command-center, lg+) is on screen. See .cw-nav-drawer-only. -->
             <div x-show="mobileNavOpen"
                  x-cloak
-                 class="md:hidden">
+                 class="cw-nav-drawer-only">
                 <div class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs"
                      @click="closeMobileNav()"
                      x-transition:enter="ease-out duration-200"
@@ -745,7 +788,7 @@
                                 <span><i class="fa-solid fa-triangle-exclamation mr-2 text-[var(--color-brand)]"></i> Issues</span>
                                 @isset($issueCount)
                                     @if ($issueCount > 0)
-                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white">{{ $issueCount }}</span>
+                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold bg-[var(--color-status-red)] text-white" title="{{ $issueCount }} urgent (emergency + pressing) issues. The Issues page also lists lower-priority items.">{{ $issueCount }}</span>
                                     @endif
                                 @endisset
                             </a>
@@ -768,7 +811,7 @@
                                 @endisset
                             </a>
                             <a href="{{ route('security.scans') }}"
-                               class="cw-mobile-nav-link {{ (request()->routeIs('security.*') || request()->routeIs('bans.*') || request()->routeIs('email-auth.*')) ? 'is-active' : '' }}">
+                               class="cw-mobile-nav-link {{ $navRailSecurityActive ? 'is-active' : '' }}">
                                 <span><i class="fa-solid fa-shield-halved mr-2 text-[var(--color-brand)]"></i> Security</span>
                             </a>
                         </div>
@@ -788,7 +831,11 @@
                             </a>
                             <a href="{{ route('maintenance-history.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('maintenance-history.*') ? 'is-active' : '' }}">
-                                <span><i class="fa-solid fa-clock-rotate-left mr-2 text-[var(--color-brand)]"></i> Maintenance</span>
+                                <span><i class="fa-solid fa-clock-rotate-left mr-2 text-[var(--color-brand)]"></i> Maintenance History</span>
+                            </a>
+                            <a href="{{ route('servers.credentials.bulk') }}"
+                               class="cw-mobile-nav-link {{ request()->routeIs('servers.credentials.*') ? 'is-active' : '' }}">
+                                <span><i class="fa-solid fa-key mr-2 text-[var(--color-brand)]"></i> SSH Credentials</span>
                             </a>
                             @if (app(\Modules\Core\ModuleStateResolver::class)->isEnabled('ai-remedy'))
                                 <a href="{{ route('ai-remedy.index') }}"
@@ -809,17 +856,17 @@
                                 Configuration
                             </div>
                             <a href="{{ route('settings.index') }}"
-                               class="cw-mobile-nav-link {{ request()->routeIs('settings.*') ? 'is-active' : '' }}">
+                               class="cw-mobile-nav-link {{ $navRailSettingsActive ? 'is-active' : '' }}">
                                 <span><i class="fa-solid fa-sliders mr-2 text-[var(--color-brand)]"></i> Settings</span>
                             </a>
                             <a href="{{ route('docs.index') }}"
                                class="cw-mobile-nav-link {{ request()->routeIs('docs.*') ? 'is-active' : '' }}">
-                                <span><i class="fa-solid fa-book-bookmark mr-2 text-[var(--color-brand)]"></i> Docs</span>
+                                <span><i class="fa-solid fa-book-bookmark mr-2 text-[var(--color-brand)]"></i> Docs &amp; Runbooks</span>
                             </a>
                         </div>
 
                         @php
-                            $mobileModuleNavItems = app(\Modules\Core\ModuleRegistry::class)->navItems();
+                            $mobileModuleNavItems = $navModuleItems;
                         @endphp
                         @if (! empty($mobileModuleNavItems))
                             <div class="space-y-1">
@@ -827,9 +874,9 @@
                                     Modules
                                 </div>
                                 @foreach ($mobileModuleNavItems as $moduleNavItem)
-                                    @if ($moduleNavItem->isVisible() && $moduleNavItem->route !== 'ai-remedy.index')
+                                    @if ($moduleNavItem->route !== 'ai-remedy.index')
                                         <a href="{{ route($moduleNavItem->route) }}"
-                                           class="cw-mobile-nav-link {{ request()->routeIs($moduleNavItem->route) ? 'is-active' : '' }}">
+                                           class="cw-mobile-nav-link {{ $navModuleIsActive($moduleNavItem) ? 'is-active' : '' }}">
                                             <span><i class="{{ $moduleNavItem->icon }} mr-2 text-[var(--color-brand)]"></i> {{ $moduleNavItem->label }}</span>
                                         </a>
                                     @endif

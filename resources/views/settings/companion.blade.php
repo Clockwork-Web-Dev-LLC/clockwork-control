@@ -146,8 +146,6 @@
             }
         }
     }">
-        @include('settings._tabs')
-
         <x-page-header title="White Label & Styling Hub"
             subtitle="Centralize all client-facing agency branding, WordPress Companion mu-plugin styling, automated Client Reports, and vulnerability notification emails in one place.">
             <x-slot:actions>
@@ -164,6 +162,8 @@
                 </form>
             </x-slot:actions>
         </x-page-header>
+
+        @include('settings._tabs')
 
         @if (session('status'))
             <div class="card p-4 mb-6 status-green flex items-center gap-2">
@@ -1067,6 +1067,7 @@
                                         <input type="url" name="support_url" x-model="reportsSupportUrl"
                                             class="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-md focus:outline-none focus:border-[var(--color-brand)] font-data"
                                             :placeholder="supportUrl || companyUrl || 'https://youragency.com'">
+                                        <p class="text-[11px] text-[var(--color-ink-soft)] mt-1">Leave empty to use the Companion Support Portal URL, then your Agency Website (now: <span x-text="supportUrl || companyUrl || 'none'"></span>). Must be a public http(s) address clients can reach, not localhost or a private address.</p>
                                     </div>
                                 </div>
                             </div>

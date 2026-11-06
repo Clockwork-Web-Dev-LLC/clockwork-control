@@ -59,7 +59,9 @@ We never write to Bill.com.
 ## Files
 
 - `app/Services/BillCom/BillComClient.php` — HMAC + session client; generators for `customers()`, `items()`, `invoicesSince()` so callers don't materialise the full result set.
-- `app/Services/BillCom/InvoiceDomainExtractor.php` — pure-function regex extractor. Recognises a fixed TLD list (com / org / net / io / co / us / gov / edu).
+- `app/Services/BillCom/InvoiceDomainExtractor.php` — pure-function regex extractor. Recognises a fixed TLD list (com / org / net / io / co / us / gov / edu) plus every TLD a non-archived site uses (passed in per sync).
+- `SiteDomainIndex` — normalized lookup of sites by domain, built once per sync (see "Domain matching" below).
+- `app/Support/DomainNormalizer.php` — shared domain normalizer (lowercase; strips scheme, path, query, port, trailing dot and a leading `www.`).
 - `app/Services/BillCom/CustomerSyncService.php` — pulls customers + invoices, links sites by domain.
 - `app/Services/BillCom/CarePlanSyncService.php` — classifies items via regex, walks invoices, sets `care_plan_enabled`.
 - `app/Console/Commands/{BillComTest,SyncBillCustomers,SyncBillCarePlans}.php`
@@ -85,6 +87,16 @@ What works is two specific operator-side conventions:
 2. **The care-plan offering uses a consistent Item name** — default regex `/care plan/i`. Override via `CLOCKWORK_BILL_COM_CARE_PLAN_ITEM_REGEX`.
 
 If either convention breaks (the operator stops including domains, or starts using inconsistent Item names), the relevant half silently degrades. The `bill_com_linked_via_invoice` audit column shows which invoice proved each link.
+
+### Domain matching
+
+Both syncs build a `SiteDomainIndex` once per run and compare domains normalized on both sides, so a site stored as `www.example.com` matches a line that says `example.com` or `http://www.example.com/`, and the other way round. The extractor also accepts every TLD a non-archived site uses, so a fleet domain on `.tv`, `.law` or similar is recognised without opening the pattern to every dotted word.
+
+What the run report (console output and the `bill_com_sync` action-log details) separates out:
+
+- `unmatched_domains` / `unmatched_care_plan_domains` — named in invoices, no matching site (care-plan sync: no linked, non-overridden site hit).
+- `archived_site_domains` / `archived_care_plan_domains` — named in invoices, but only an archived site has that domain. Never linked or flagged; listed apart so they don't read as missing from Clockwork.
+- `domain_collisions` — normalized domain → number of non-archived sites sharing it (e.g. an apex site and its `www.` twin both live). The sync uses the site whose stored domain matches exactly (falling back to the lowest id) and reports the key so the duplicate can be archived or consolidated.
 
 ## `/settings/bill-com` — control panel (`BillComSettingsController`)
 

@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\ActionLog;
+use App\Models\BlockedIp;
 use App\Models\ContactFormTestRun;
+use App\Models\PluginUpdateIgnore;
 use App\Models\PluginVulnerability;
+use App\Models\ReviewQueueEntry;
 use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteBackup;
@@ -10,6 +13,14 @@ use App\Models\SiteBackupCheck;
 use App\Models\SitePerformanceScan;
 use App\Models\SiteSecurityScan;
 use App\Models\SiteUptimeEvent;
+use App\Services\ActionLog\ActionLogger;
+use App\Services\Chat\ChatNotifier;
+use App\Services\Security\CompanionMalwareScanner;
+use App\Services\Security\SecurityScanRecorder;
+use App\Services\Ssh\SshClient;
+use App\Services\Ssh\SshCommandTimedOut;
+use App\Services\Uptime\UptimeProbeResult;
+use App\Services\Uptime\UptimeStateUpdater;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -17,6 +28,8 @@ use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Services\ClientReportCompiler;
 use Modules\ClientReports\Services\ReportReviewFlags;
+use Modules\ClientReports\Support\ReportPhrases;
+use Modules\Core\Contracts\SmsNotifier;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,7 +59,7 @@ function accuracySite(array $attributes = []): Site
     ], $attributes));
 }
 
-/** @return array{data: array<string, mixed>, html: string, text: string} */
+/** @return array{data: array<string, mixed>, html: string, text: string, preview: string, public: string, reasons: list<string>} */
 function compileSeptember(Site $site): array
 {
     $start = Carbon::parse('2026-09-01');
@@ -69,7 +82,38 @@ function compileSeptember(Site $site): array
         'data' => $data,
         'html' => $mail->render(),
         'text' => view($content->text, $content->with)->render(),
+        'preview' => view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => true])->render(),
+        'public' => view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false])->render(),
+        'reasons' => ReportReviewFlags::reasons($data),
     ];
+}
+
+/**
+ * A Companion malware scan with the details the scanner records.
+ *
+ * @param  list<array{kind: string, path: string, evidence: string}>  $findings
+ * @param  array<string, mixed>  $details
+ */
+function companionMalwareScan(Site $site, string $at, string $status, array $findings = [], array $details = []): SiteSecurityScan
+{
+    return SiteSecurityScan::factory()->create([
+        'site_id' => $site->id,
+        'scan_type' => SiteSecurityScan::TYPE_COMPANION_MALWARE,
+        'scanned_at' => Carbon::parse($at),
+        'status' => $status,
+        'details' => array_replace([
+            'transport' => 'companion', 'findings' => $findings, 'scanned_files_count' => 12000,
+            'scan_aborted' => false, 'abort_reason' => null,
+        ], $details),
+    ]);
+}
+
+/** A snapshot with Limit Login Attempts Reloaded active. */
+function llarSnapshot(): array
+{
+    return ['plugins' => ['plugins' => [
+        ['slug' => 'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php', 'active' => true],
+    ]]];
 }
 
 describe('known plugin vulnerabilities (#8)', function () {
@@ -89,8 +133,11 @@ describe('known plugin vulnerabilities (#8)', function () {
                 'vulnerable_plugins' => ['Leaky Forms'],
                 'vulnerabilities_as_of' => '2026-10-01',
             ]);
-        expect($report['html'])->toContain('1 found in 1 plugin')->toContain('(as of Oct 1)')->not->toContain('None found');
-        expect($report['text'])->toContain('Known plugin vulnerabilities (as of Oct 1): 1 found in 1 plugin');
+        // The date is when the plugin list was checked (the snapshot date), so
+        // it says "checked", and the client is told which plugin it is.
+        expect($report['html'])->toContain('1 found in 1 plugin')->toContain('(checked Oct 1)')->not->toContain('as of')
+            ->toContain('Plugin affected: Leaky Forms')->not->toContain('None found');
+        expect($report['text'])->toContain("Known plugin vulnerabilities (checked Oct 1): 1 found in 1 plugin\nPlugin affected: Leaky Forms\n");
     });
 
     it('says "None found" only when the plugins were actually checked', function () {
@@ -121,6 +168,86 @@ describe('known plugin vulnerabilities (#8)', function () {
 
         expect($report['data']['security']['vulnerabilities_checked'])->toBeFalse()
             ->and($report['html'])->not->toContain('None found');
+    });
+
+    it('records each vulnerable plugin by its file slug, with the version that fixes it, the update offered and any pause', function () {
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '2.0.9', 'patched_in' => '2.1.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '1.9.0', 'patched_in' => '1.9.1']);
+        PluginVulnerability::factory()->create(['slug' => 'example-gallery', 'to_version' => '*', 'patched_in' => '2.0.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-gallery', 'to_version' => '*', 'patched_in' => null]);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'active' => true, 'update_available' => false],
+            // A backup copy with the same name and an update waiting: not the vulnerable plugin.
+            ['slug' => 'example-forms-old/example-forms.php', 'name' => 'Example Forms', 'version' => '1.0.0', 'active' => false, 'update_available' => true, 'new_version' => '2.1.0'],
+            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'active' => true, 'update_available' => true, 'new_version' => '3.1'],
+        ]]]]);
+        PluginUpdateIgnore::factory()->create([
+            'site_id' => $site->id,
+            'target_slug' => 'example-gallery/example-gallery.php',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE,
+            'failure_count' => 3,
+            'ignored_at' => Carbon::parse('2026-09-25 04:00'),
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security']['vulnerable_plugin_items'])->toBe([
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.5.0', 'fixed_in' => '2.1.0', 'fixed_after' => null, 'update_offered' => null, 'paused' => null],
+            ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '3.0', 'fixed_in' => null, 'fixed_after' => null, 'update_offered' => '3.1', 'paused' => [
+                'source' => 'auto_failure', 'since' => '2026-09-25', 'failure_count' => 3, 'note' => null,
+            ]],
+        ])
+            ->and($report['data']['updates']['pending_plugin_items'])->toBe([
+                ['slug' => 'example-forms-old/example-forms.php', 'name' => 'Example Forms', 'new_version' => '2.1.0'],
+                ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'new_version' => '3.1'],
+            ])
+            // Matching by name would have said the vulnerable Example Forms had an update waiting.
+            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Gallery 3.0 (no fixed version yet; auto-paused on 2026-09-25 after 3 failed attempts; 3.1 is waiting).')
+            // (The plugins still waiting are named once, in the "no updates applied" reason.)
+            ->and(implode(' ', array_filter($report['reasons'], fn ($r) => ! str_starts_with($r, 'No updates were applied'))))->not->toContain('Example Forms');
+    });
+
+    it('holds the report when a waiting update reaches the fixed version, but not when it falls short', function () {
+        PluginVulnerability::factory()->create(['slug' => 'example-forms', 'to_version' => '1.1.9', 'patched_in' => '1.2.0']);
+        PluginVulnerability::factory()->create(['slug' => 'example-slider', 'to_version' => '2.0.0', 'to_inclusive' => false, 'patched_in' => '2.0.1']);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '1.0.0', 'active' => true, 'update_available' => true, 'new_version' => '1.2.0'],
+            ['slug' => 'example-slider/example-slider.php', 'name' => 'Example Slider', 'version' => '1.4.0', 'active' => true, 'update_available' => true, 'new_version' => '1.5.0'],
+        ]]]]);
+
+        $reasons = compileSeptember($site)['reasons'];
+
+        expect($reasons)->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Forms 1.0.0 → 1.2.0 (fixed in 1.2.0).")
+            ->and(implode(' ', array_filter($reasons, fn ($r) => ! str_starts_with($r, 'No updates were applied'))))->not->toContain('Example Slider');
+    });
+
+    it('reads an advisory with no patched version but a closed upper bound as fixed in the next version after it', function () {
+        // Affects up to and including 5.2.4, no patched version named: 5.2.5 on is clear.
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '5.2.4', 'to_inclusive' => true, 'patched_in' => null]);
+        PluginVulnerability::factory()->create(['slug' => 'example-widgets', 'to_version' => '4.5.0', 'to_inclusive' => false, 'patched_in' => '4.5.1']);
+        // An advisory for exactly one version (stored from = to): any later release fixes it.
+        PluginVulnerability::factory()->create(['slug' => 'example-seo-pro', 'from_version' => '4.1.7', 'to_version' => '4.1.7', 'to_inclusive' => true, 'patched_in' => null]);
+        // Affects versions below 3.0 (exclusive), no patched version named: 3.0 fixes it.
+        PluginVulnerability::factory()->create(['slug' => 'example-tabs', 'to_version' => '3.0', 'to_inclusive' => false, 'patched_in' => null]);
+        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
+            ['slug' => 'example-widgets/example-widgets.php', 'name' => 'Example Widgets', 'version' => '4.1.0', 'active' => true, 'update_available' => true, 'new_version' => '4.9.30'],
+            ['slug' => 'example-tabs/example-tabs.php', 'name' => 'Example Tabs', 'version' => '2.2', 'active' => true, 'update_available' => true, 'new_version' => '3.0'],
+            ['slug' => 'example-seo-pro/example-seo-pro.php', 'name' => 'Example SEO Pro', 'version' => '4.1.7', 'active' => true, 'update_available' => true, 'new_version' => '4.1.8'],
+        ]]]]);
+        PluginUpdateIgnore::factory()->create([
+            'site_id' => $site->id, 'target_slug' => 'example-widgets/example-widgets.php', 'source' => PluginUpdateIgnore::SOURCE_MANUAL,
+            'note' => 'Licence lapsed', 'ignored_at' => Carbon::parse('2026-09-02 04:00'),
+        ]);
+
+        $report = compileSeptember($site);
+        $items = collect($report['data']['security']['vulnerable_plugin_items'])->keyBy('slug');
+
+        expect($items['example-widgets/example-widgets.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '5.2.4'])
+            ->and($items['example-tabs/example-tabs.php'])->toMatchArray(['fixed_in' => '3.0', 'fixed_after' => null])
+            ->and($items['example-seo-pro/example-seo-pro.php'])->toMatchArray(['fixed_in' => null, 'fixed_after' => '4.1.7'])
+            ->and($report['reasons'])->toContain('Updates are paused for a plugin with a known vulnerability: Example Widgets 4.1.0 (fixed in the next version after 5.2.4; paused by hand since 2026-09-02: Licence lapsed; 4.9.30 is waiting).')
+            ->toContain("A plugin with a known vulnerability has an update waiting that fixes it, but it wasn't applied: Example Tabs 2.2 → 3.0 (fixed in 3.0); Example SEO Pro 4.1.7 → 4.1.8 (fixed in the next version after 4.1.7).")
+            ->and(implode(' ', $report['reasons']))->not->toContain('no fixed version yet');
     });
 
     it('notes how many matches are in inactive plugins', function () {
@@ -223,7 +350,8 @@ describe('backups (#6)', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['backups']['recent'][0])->toMatchArray(['kinds' => ['db', 'full'], 'bytes' => 500 * 1024 ** 2])
-            ->and($report['html'])->toContain('by SpinupWP, stored in DigitalOcean Spaces')->toContain('Files &amp; database')->toContain('500 MB');
+            ->and($report['data']['backups']['destination'])->toBe('by SpinupWP to DigitalOcean Spaces')
+            ->and($report['html'])->toContain('by SpinupWP to DigitalOcean Spaces')->toContain('Files &amp; database')->toContain('500 MB');
     });
 
     it('flags backups that stopped before the last 10 days instead of showing them to the client', function () {
@@ -256,6 +384,97 @@ describe('backups (#6)', function () {
             ->not->toContain('Backed up on');
     });
 
+    it('holds database backups far smaller than the database instead of showing them to the client', function () {
+        $site = accuracySite([
+            'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
+            'companion_snapshot' => ['plugins' => ['plugins' => []], 'environment' => ['db_size_bytes' => 3 * 1024 ** 3]],
+        ]);
+        foreach (range(1, 30) as $day) {
+            SiteBackup::create([
+                'site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'kind' => SiteBackup::KIND_DATABASE,
+                'external_ref' => "db-{$day}", 'backup_at' => Carbon::parse(sprintf('2026-09-%02d 07:00', $day)), 'bytes' => 9200,
+                'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+            ]);
+        }
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray([
+            'status' => 'suspect', 'verified' => false, 'days_with_backups' => 30, 'db_backup_bytes' => 9200, 'db_size_bytes' => 3 * 1024 ** 3,
+        ])
+            ->and($report['html'])->not->toContain('backed up')
+            ->and($report['text'])->not->toContain('BACKUPS')
+            ->and($report['preview'])->toContain('Backups hidden from the client: the newest database backup is far smaller than the database (9 KB for 3.0 GB).')
+            ->and($report['reasons'])->toContain('Database backups are 9 KB but the database is 3.0 GB, so they look empty or broken and the Backups section was left out.');
+    });
+
+    it('keeps database backups of a plausible size, and a small database\'s small backups', function (int $dbBytes, int $backupBytes) {
+        $site = accuracySite([
+            'hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => (string) random_int(1000, 999999),
+            'companion_snapshot' => ['plugins' => ['plugins' => []], 'environment' => ['db_size_bytes' => $dbBytes]],
+        ]);
+        foreach (range(1, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_DATABASE, sprintf('2026-09-%02d 23:00:00', $day), $backupBytes);
+        }
+        recordCheck($site, true);
+
+        expect(compileSeptember($site)['data']['backups']['status'])->toBe('verified');
+    })->with([
+        'compressed to a few percent' => [100 * 1024 ** 2, 3 * 1024 ** 2],
+        'a small database' => [5 * 1024 ** 2, 60 * 1024],
+    ]);
+
+    it('draws the line at about 1% of the database', function () {
+        expect(ClientReportCompiler::backupTooSmall(9 * 1024, 3 * 1024 ** 3))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(500 * 1024, 100 * 1024 ** 2))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(90 * 1024, 11 * 1024 ** 2))->toBeTrue()
+            ->and(ClientReportCompiler::backupTooSmall(2 * 1024 ** 2, 100 * 1024 ** 2))->toBeFalse()
+            // Under 100 KB is fine for a database that small.
+            ->and(ClientReportCompiler::backupTooSmall(90 * 1024, 8 * 1024 ** 2))->toBeFalse();
+    });
+
+    it('holds a month a daily source backed up on far fewer days than it had', function () {
+        $site = pressableBackupSite();
+        recordBackup($site, SiteBackup::KIND_FILES, '2026-08-20 00:00:00'); // records go back before the period
+        foreach (range(15, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+        }
+        recordCheck($site, true);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'covers_period' => true, 'daily' => true, 'days_with_backups' => 16, 'period_days' => 30])
+            ->and($report['reasons'])->toContain('Backed up on only 16 of 30 days this month.')
+            // The client still reads the plain count, never a promise of daily backups.
+            ->and($report['html'])->toContain('backed up on <strong>16 days</strong> this month')->not->toContain('daily');
+    });
+
+    it('does not hold a weekly SpinupWP schedule or a month missing only a few days', function () {
+        $weekly = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP]);
+        foreach (['2026-08-30', '2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27'] as $at) {
+            SiteBackup::create([
+                'site_id' => $weekly->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'kind' => SiteBackup::KIND_FULL,
+                'external_ref' => $at, 'backup_at' => Carbon::parse($at.' 08:00'), 'bytes' => 500 * 1024 ** 2,
+                'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+            ]);
+        }
+        SiteBackupCheck::create(['site_id' => $weekly->id, 'source' => SiteBackup::SOURCE_SPINUPWP_SPACES, 'checked_at' => now(), 'ok' => true]);
+
+        $nearlyEveryDay = pressableBackupSite();
+        foreach (range(1, 30) as $day) {
+            if (! in_array($day, [5, 12, 19], true)) {
+                recordBackup($nearlyEveryDay, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 00:00:00', $day));
+            }
+        }
+        recordCheck($nearlyEveryDay, true);
+
+        $weeklyReport = compileSeptember($weekly);
+        expect($weeklyReport['data']['backups'])->toMatchArray(['status' => 'verified', 'daily' => false, 'days_with_backups' => 4])
+            ->and(implode(' ', $weeklyReport['reasons']))->not->toContain('Backed up on only')
+            ->and(implode(' ', compileSeptember($nearlyEveryDay)['reasons']))->not->toContain('Backed up on only');
+    });
+
     it('treats a failed or stale check as "could not check", not as no backups', function () {
         $failing = pressableBackupSite();
         recordCheck($failing, false);
@@ -264,6 +483,170 @@ describe('backups (#6)', function () {
 
         expect(compileSeptember($failing)['data']['backups'])->toMatchArray(['status' => 'not_checked', 'check_error' => 'Pressable API returned 503'])
             ->and(compileSeptember($stale)['data']['backups']['status'])->toBe('not_checked');
+    });
+});
+
+describe('backups from our relay that keeps failing', function () {
+    /** A standalone site whose off-site backups come from our relay (S3 archives). */
+    function failingRelaySite(array $attributes = []): Site
+    {
+        return accuracySite(array_merge([
+            'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'backup_relay_enabled' => true,
+        ], $attributes));
+    }
+
+    function failingRelayArchive(Site $site, string $at): void
+    {
+        SiteBackup::create([
+            'site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'kind' => SiteBackup::KIND_FULL,
+            'external_ref' => 'archive-'.$at, 'backup_at' => Carbon::parse($at), 'bytes' => 80 * 1024 ** 2,
+            'is_manual' => false, 'first_seen_at' => now(), 'last_seen_at' => now(),
+        ]);
+    }
+
+    it('reports "failing" with the relay\'s error, hidden from the client and held for review', function () {
+        $site = failingRelaySite([
+            'backup_relay_failing_since' => Carbon::parse('2026-09-20 05:10:00'),
+            'backup_relay_last_attempt_at' => Carbon::parse('2026-10-02 05:10:00'),
+            'backup_relay_last_error' => "BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz?X-Amz-Signature=abc123&X-Amz-Credential=key failed\n with HTTP 403",
+        ]);
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+        $backups = $report['data']['backups'];
+
+        expect($backups)->toMatchArray([
+            'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'status' => 'failing', 'verified' => false, 'days_with_backups' => 0,
+            'relay_failing_since' => '2026-09-20T05:10:00+00:00',
+            'relay_error' => 'BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz failed with HTTP 403',
+        ])
+            ->and(json_encode($report['data']))->not->toContain('X-Amz')->not->toContain('abc123')
+            ->and($report['reasons'])->toContain('Off-site backups have been failing since Sep 20, 2026: BackupRelay: example.com: upload to https://storage.example.com/bucket/site.tar.gz failed with HTTP 403.')
+            ->and($report['html'])->not->toContain('backed up')->not->toContain('BackupRelay')
+            ->and($report['text'])->not->toContain('BACKUPS')->not->toContain('BackupRelay')
+            ->and($report['preview'])->toContain('Backups hidden from the client: no off-site archive this period; the backup relay has been failing since Sep 20, 2026.')
+            ->toContain('>Failing</span>')
+            ->toContain('Last relay error: BackupRelay: example.com')
+            ->and($report['public'])->not->toContain('Failing')->not->toContain('BackupRelay')->not->toContain('Backups');
+    });
+
+    it('keeps no more than about 200 characters of the error', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-01 05:00:00'), 'backup_relay_last_error' => str_repeat('Connection reset by peer. ', 40)]);
+
+        $error = compileSeptember($site)['data']['backups']['relay_error'];
+
+        expect(mb_strlen($error))->toBeLessThanOrEqual(ClientReportCompiler::RELAY_ERROR_MAX_LENGTH + 3)
+            ->and($error)->toStartWith('Connection reset by peer.')->toEndWith('...');
+    });
+
+    it('says nothing about a relay that only started failing after the period', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-10-02 05:00:00'), 'backup_relay_last_error' => 'Example timeout']);
+        SiteBackupCheck::create(['site_id' => $site->id, 'source' => SiteBackup::SOURCE_S3_ARCHIVE, 'checked_at' => now(), 'ok' => true]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'none_found', 'relay_failing_since' => null, 'relay_error' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('failing');
+    });
+
+    it('names the failure when relay archives stopped part-way through the period', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-12 05:00:00'), 'backup_relay_last_error' => 'Example lacks the backup-create capability.']);
+        foreach (range(1, 11) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups']['status'])->toBe('stale')
+            ->and($report['reasons'])->toContain('Backups stopped before the last 10 days of the month. Off-site backups have been failing since Sep 12, 2026: Example lacks the backup-create capability.');
+    });
+
+    it('still shows archives made in the last days of the period, even if the relay fails now', function () {
+        $site = failingRelaySite(['backup_relay_failing_since' => Carbon::parse('2026-09-30 05:00:00'), 'backup_relay_last_error' => 'Example timeout']);
+        foreach (range(1, 29) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+        failingRelayArchive($site, '2026-08-31 05:00:00');
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'verified' => true, 'days_with_backups' => 29])
+            ->and(implode(' ', $report['reasons']))->not->toContain('failing');
+    });
+
+    it('holds a report whose relay archives only began at the end of the month for a site enrolled before it', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        foreach ([28, 29, 30] as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray([
+            'status' => 'verified', 'covers_period' => false, 'days_with_backups' => 3,
+            'archives_began' => '2026-09-28', 'expected_from' => '2026-09-01',
+        ])
+            ->and($report['reasons'])->toContain('Off-site backups began on Sep 28, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 3 of 30 days).')
+            ->and($report['preview'])->toContain('Off-site backups began on 2026-09-28; none were made before that this period')
+            ->and($report['public'])->not->toContain('Off-site backups began');
+    });
+
+    it('counts the days a site joined part-way through the month was expected to have backups, not the whole month', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-09-27 12:00:00')]);
+        failingRelayArchive($site, '2026-09-30 05:00:00');
+
+        $report = compileSeptember($site);
+
+        // Sep 27 – Sep 30.
+        expect($report['data']['backups'])->toMatchArray(['archives_began' => '2026-09-30', 'expected_from' => '2026-09-27', 'expected_days' => 4, 'period_days' => 30])
+            ->and($report['reasons'])->toContain('Off-site backups began on Sep 30, 2026; none were made before that this month, although the site was enrolled earlier (backed up on 1 of 4 days).');
+    });
+
+    it('does not flag relay archives that began the day after a site joined part-way through the month', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-09-15 12:00:00')]);
+        foreach (range(16, 30) as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'archives_began' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('Off-site backups began')->not->toContain('Backed up on only');
+    });
+
+    it('keeps the plain low-count flag for relay archives that reach back before the period', function () {
+        $site = failingRelaySite(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        failingRelayArchive($site, '2026-08-20 05:00:00');
+        foreach ([28, 29, 30] as $day) {
+            failingRelayArchive($site, sprintf('2026-09-%02d 05:00:00', $day));
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['backups'])->toMatchArray(['covers_period' => true, 'archives_began' => null])
+            ->and($report['reasons'])->toContain('Backed up on only 3 of 30 days this month.');
+    });
+
+    it('still treats a host\'s records that start mid-month as where our records start', function () {
+        $site = pressableBackupSite();
+        $site->update(['created_at' => Carbon::parse('2026-08-15 12:00:00')]);
+        foreach (range(24, 30) as $day) {
+            recordBackup($site, SiteBackup::KIND_FILES, sprintf('2026-09-%02d 03:00:00', $day));
+        }
+        recordCheck($site, true);
+
+        $report = compileSeptember($site->fresh());
+
+        expect($report['data']['backups'])->toMatchArray(['status' => 'verified', 'covers_period' => false, 'archives_began' => null])
+            ->and(implode(' ', $report['reasons']))->not->toContain('Off-site backups began');
+    });
+
+    it('ignores relay state on a site whose backups come from its host', function () {
+        $site = pressableBackupSite();
+        $site->update(['backup_relay_failing_since' => Carbon::parse('2026-09-05'), 'backup_relay_last_error' => 'Example timeout']);
+        recordCheck($site, true);
+
+        expect(compileSeptember($site->fresh())['data']['backups'])->toMatchArray(['status' => 'none_found', 'relay_failing_since' => null]);
     });
 });
 
@@ -296,6 +679,39 @@ describe('WordPress core file check (#5)', function () {
         expect($report['data']['security'])->toMatchArray(['checksum_status' => 'clean', 'checksum_checked_at' => '2026-09-20'])
             ->and($report['html'])->toContain('Verified clean');
     });
+
+    it('leaves the row out of both emails on a host with no way to run the check, and says why only in the preview', function () {
+        // A custom host: no server SSH, no Pressable API, no command runner.
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'spinupwp_id' => null]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['checksum_supported' => false, 'checksum_status' => null])
+            ->and($report['html'])->not->toContain('WordPress core files')
+            ->and($report['text'])->not->toContain('WordPress core files')
+            ->and($report['preview'])->toContain('Not checked (no checksum path for this host) — hidden from the client')
+            ->and($report['public'])->not->toContain('WordPress Core Files')->not->toContain('no checksum path')
+            ->and(implode(' ', $report['reasons']))->not->toContain('core-file');
+    });
+
+    it('holds the report when the host can run the check but none ran this month', function () {
+        $report = compileSeptember(accuracySite());
+
+        expect($report['data']['security']['checksum_supported'])->toBeTrue()
+            ->and($report['html'])->toContain('WordPress core files')->toContain('Not checked this month')
+            ->and($report['reasons'])->toContain('No WordPress core-file check ran this month, although this host supports one, so the client would read "Not checked this month".');
+    });
+
+    it('knows which hosts can run the check', function (Closure $makeSite, bool $supported) {
+        expect(compileSeptember($makeSite())['data']['security']['checksum_supported'])->toBe($supported);
+    })->with([
+        'server with SSH' => [fn () => accuracySite(), true],
+        'Pressable' => [fn () => Site::factory()->pressable()->create(['is_wordpress' => true, 'uptime_last_checked_at' => now()]), true],
+        'SSH host with no server' => [fn () => accuracySite(['server_id' => null]), false],
+        'SSH host on an ignored server' => [fn () => accuracySite(['server_id' => Server::factory()->create(['is_ignored' => true])->id]), false],
+        'custom host' => [fn () => accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null]), false],
+        'not WordPress' => [fn () => accuracySite(['is_wordpress' => false, 'companion_snapshot' => null]), false],
+    ]);
 
     it('leaves the WordPress row out entirely for non-WordPress sites', function () {
         $report = compileSeptember(accuracySite(['is_wordpress' => false, 'companion_snapshot' => null]));
@@ -333,6 +749,224 @@ describe('malware scan', function () {
         expect($report['data']['security']['malware_status'])->toBeNull()
             ->and($report['text'])->toContain('Malware scan: Not checked this month');
     });
+
+    it('says "Partial scan", never "No malware found", when the latest clean scan stopped at its limit', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['scan_aborted' => true, 'abort_reason' => 'max_files_visited', 'scanned_files_count' => 75000]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_scan_id' => $scan->id, 'malware_scan_aborted' => true])
+            ->and($report['html'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['preview'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) stopped before it finished (limit: max_files_visited, 75,000 files checked), so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('counts a clean SSH scan whose every check finished as complete, although SSH never counts files', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], [
+            'transport' => 'ssh', 'scanned_files_count' => 0, 'truncated_checks' => [], 'incomplete_checks' => [], 'ssh_checks_verified' => true,
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'clean', 'malware_transport' => 'ssh', 'malware_truncated_checks' => [], 'malware_ssh_checks_verified' => true])
+            ->and($report['html'])->toContain('No malware found')
+            ->and($report['text'])->not->toContain('Partial scan')
+            ->and(implode(' ', $report['reasons']))->not->toContain('malware');
+    });
+
+    it('says "Partial scan" for a clean SSH scan that hit its result limit', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], [
+            'transport' => 'ssh', 'scanned_files_count' => 0, 'scan_aborted' => true, 'abort_reason' => 'ssh_result_limit', 'truncated_checks' => ['php_in_uploads'],
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_truncated_checks' => ['php_in_uploads']])
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH and hit its result limit (php_in_uploads); files past the limit were not checked, so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('keeps an SSH scan recorded before every check proved it finished as partial', function (array $details) {
+        // Those rows always said scan_aborted=false, with or without an
+        // (empty) truncated_checks: a check that timed out still looked clean.
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], ['transport' => 'ssh', 'scanned_files_count' => 0, ...$details]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_ssh_checks_verified' => null])
+            ->and($report['text'])->toContain('Malware scan: Partial scan')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH before scans recorded whether every check finished; it can't vouch for the whole site, so the client sees \"Partial scan\" instead of an all-clear.");
+    })->with([
+        'before cut-short scans were noticed' => [[]],
+        'with an empty truncation list but no completion marker' => [['truncated_checks' => []]],
+    ]);
+
+    it('says "Partial scan" and names the checks for a clean SSH scan whose checks didn\'t finish', function () {
+        $site = accuracySite();
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_CLEAN, [], [
+            'transport' => 'ssh', 'scanned_files_count' => 0, 'scan_aborted' => true, 'abort_reason' => 'ssh_check_incomplete',
+            'truncated_checks' => [], 'incomplete_checks' => ['php_in_uploads', 'shell_c99'], 'ssh_checks_verified' => false,
+        ]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_incomplete_checks' => ['php_in_uploads', 'shell_c99']])
+            ->and($report['html'])->toContain('Partial scan')->not->toContain('No malware found')
+            ->and($report['reasons'])->toContain("The latest malware scan (scan #{$scan->id}) ran over SSH and some checks didn't finish (php_in_uploads, shell_c99); they timed out or were cut off, so they can't vouch for the files they didn't list, so the client sees \"Partial scan\" instead of an all-clear.");
+    });
+
+    it('reads a real SSH scan of a SpinupWP-style server as complete in the next report', function () {
+        // End to end: the scanner's own SSH result, recorded, then compiled.
+        $server = Server::factory()->create(['ssh_password' => 'not-empty']);
+        $site = accuracySite(['server_id' => $server->id, 'companion_installed' => false, 'companion_secret' => null, 'wp_path' => '/sites/ssh.example.com/files']);
+        $this->mock(SshClient::class, fn ($mock) => $mock->shouldReceive('execChecked')->andReturnUsing(fn ($server, string $cmd) => str_starts_with($cmd, 'test -d ')
+            ? CompanionMalwareScanner::SSH_DOCROOT_OK
+            : CompanionMalwareScanner::SSH_DONE_SENTINEL));
+        $this->travelTo(Carbon::parse('2026-09-28 06:00:00'));
+        app(SecurityScanRecorder::class)->record(app(CompanionMalwareScanner::class)->scanSite($site));
+        $this->travelBack();
+
+        $scan = SiteSecurityScan::query()->where('site_id', $site->id)->where('scan_type', SiteSecurityScan::TYPE_COMPANION_MALWARE)->sole();
+        expect($scan->details)->toMatchArray(['transport' => 'ssh', 'scan_aborted' => false, 'truncated_checks' => [], 'ssh_checks_verified' => true]);
+
+        expect(compileSeptember($site)['data']['security']['malware_status'])->toBe('clean');
+    });
+
+    it('reads a real SSH scan whose grep timed out as partial in the next report', function () {
+        $server = Server::factory()->create(['ssh_password' => 'not-empty']);
+        $site = accuracySite(['server_id' => $server->id, 'companion_installed' => false, 'companion_secret' => null, 'wp_path' => '/sites/ssh.example.com/files']);
+        $this->mock(SshClient::class, fn ($mock) => $mock->shouldReceive('execChecked')->andReturnUsing(fn ($server, string $cmd) => match (true) {
+            str_starts_with($cmd, 'test -d ') => CompanionMalwareScanner::SSH_DOCROOT_OK,
+            str_contains($cmd, 'FilesMan') => throw new SshCommandTimedOut('SSH command timed out after 60s.'),
+            default => CompanionMalwareScanner::SSH_DONE_SENTINEL,
+        }));
+        $this->travelTo(Carbon::parse('2026-09-28 06:00:00'));
+        app(SecurityScanRecorder::class)->record(app(CompanionMalwareScanner::class)->scanSite($site));
+        $this->travelBack();
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['malware_status' => 'incomplete', 'malware_incomplete_checks' => ['shell_filesman']])
+            ->and($report['html'])->not->toContain('No malware found');
+    });
+
+    it('keeps a finished clean scan as "No malware found", and a partial scan that flagged files as flagged', function () {
+        $clean = accuracySite();
+        companionMalwareScan($clean, '2026-09-28', SiteSecurityScan::STATUS_CLEAN);
+        $flagged = accuracySite();
+        companionMalwareScan($flagged, '2026-09-28', SiteSecurityScan::STATUS_WARNING, [['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/example/a.php', 'evidence' => 'x']], ['scan_aborted' => true, 'abort_reason' => 'max_files_visited']);
+
+        $cleanReport = compileSeptember($clean);
+        $flaggedReport = compileSeptember($flagged);
+
+        expect($cleanReport['data']['security']['malware_status'])->toBe('clean')
+            ->and($cleanReport['html'])->toContain('No malware found')
+            ->and(implode(' ', $cleanReport['reasons']))->not->toContain('malware')
+            ->and($flaggedReport['data']['security']['malware_status'])->toBe('warning')
+            ->and($flaggedReport['html'])->toContain('Issues flagged');
+    });
+
+    it('keeps the stored status of a SiteCheck scan standing in for Companion', function () {
+        $site = accuracySite();
+        SiteSecurityScan::factory()->create(['site_id' => $site->id, 'scan_type' => SiteSecurityScan::TYPE_SITECHECK, 'scanned_at' => Carbon::parse('2026-09-18'), 'status' => SiteSecurityScan::STATUS_CLEAN, 'details' => ['scan' => [], 'site' => []]]);
+
+        $security = compileSeptember($site)['data']['security'];
+
+        expect($security)->toMatchArray(['malware_status' => 'clean', 'malware_finding_kinds' => null, 'malware_worst_in_period' => null]);
+    });
+
+    it('names the finding kinds and the scan for the reviewer, and never stores the paths', function () {
+        $site = accuracySite();
+        $findings = [
+            ...array_map(fn (int $n) => ['kind' => 'php_in_uploads', 'path' => "wp-content/uploads/example-cache/file-{$n}.php", 'evidence' => 'PHP file under uploads'], range(1, 4)),
+            ['kind' => 'wp_config_recently_modified', 'path' => 'wp-config.php', 'evidence' => 'mtime within 30 days'],
+        ];
+        $scan = companionMalwareScan($site, '2026-09-28', SiteSecurityScan::STATUS_WARNING, $findings);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'warning',
+            'malware_scan_id' => $scan->id,
+            'malware_finding_kinds' => ['php_in_uploads' => 4, 'wp_config_recently_modified' => 1],
+        ])
+            ->and(json_encode($report['data']))->not->toContain('example-cache')->not->toContain('wp-config.php')
+            ->and($report['reasons'])->toContain("The malware scan flagged files to review: php_in_uploads ×4, wp_config_recently_modified ×1 (scan #{$scan->id}).")
+            // The client wording is unchanged.
+            ->and($report['text'])->toContain('Malware scan: Issues flagged');
+    });
+
+    it('holds a report whose earlier scans found malware even though the latest one is clean', function () {
+        $site = accuracySite();
+        $signature = [['kind' => 'eval_base64', 'path' => 'wp-content/themes/example/x.php', 'evidence' => 'Substring match']];
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature);
+        companionMalwareScan($site, '2026-09-06 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature, ['scan_aborted' => true, 'abort_reason' => 'max_files_visited']);
+        companionMalwareScan($site, '2026-09-06 15:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $signature);
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'clean',
+            'malware_worst_in_period' => 'issues_found',
+            'malware_last_issue_at' => '2026-09-06',
+            'malware_issue_days' => 2,
+        ])
+            ->and($report['reasons'])->toContain('An earlier malware scan this month flagged malware (on 2 days, last on 2026-09-06), but the latest scan did not: check it was cleaned up.');
+    });
+
+    it('does not count earlier scans that only flagged the scanner\'s own signature list', function () {
+        // Stored before the scanner skipped its own source: every signature
+        // it looks for, found in its own MalwareScanner.php.
+        $site = accuracySite(['wp_path' => '/srv/htdocs']);
+        $own = fn (string $path) => array_map(fn (string $kind) => ['kind' => $kind, 'path' => $path, 'evidence' => 'Substring match'],
+            ['eval_base64', 'shell_c99', 'shell_wso', 'preg_replace_e_modifier']);
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $own('wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php'));
+        companionMalwareScan($site, '2026-09-06 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, $own('/srv/htdocs/wp-content/plugins/clockwork-companion/src\\SecurityScans\\MalwareScanner.php'));
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray([
+            'malware_status' => 'clean',
+            'malware_worst_in_period' => 'clean',
+            'malware_last_issue_at' => null,
+            'malware_issue_days' => 0,
+        ])
+            ->and(implode(' ', $report['reasons']))->not->toContain('earlier malware scan');
+    });
+
+    it('still counts a scan that flagged real malware beside the scanner\'s own source', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-05 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, [
+            ['kind' => 'eval_base64', 'path' => 'wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php', 'evidence' => 'Substring match'],
+            ['kind' => 'eval_base64', 'path' => 'wp-content/themes/example/x.php', 'evidence' => 'Substring match'],
+        ]);
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_CLEAN);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['malware_worst_in_period' => 'issues_found', 'malware_issue_days' => 1]);
+    });
+
+    it('reads a latest scan whose only signatures were the scanner\'s own as the review-only findings it also had', function () {
+        $site = accuracySite();
+        companionMalwareScan($site, '2026-09-20 03:00', SiteSecurityScan::STATUS_ISSUES_FOUND, [
+            ['kind' => 'shell_c99', 'path' => 'wp-content/plugins/clockwork-companion/src/SecurityScans/MalwareScanner.php', 'evidence' => 'c99shell'],
+            ['kind' => 'php_in_uploads', 'path' => 'wp-content/uploads/example/a.php', 'evidence' => 'PHP file under uploads'],
+        ]);
+
+        $security = compileSeptember($site)['data']['security'];
+
+        expect($security)->toMatchArray([
+            'malware_status' => 'warning',
+            'malware_worst_in_period' => 'warning',
+            'malware_finding_kinds' => ['php_in_uploads' => 1],
+        ]);
+    });
 });
 
 describe('threats blocked', function () {
@@ -345,28 +979,287 @@ describe('threats blocked', function () {
             ->and($report['text'])->not->toContain('Malicious visitors blocked');
     });
 
-    it('shows a real 0 when a blocker reports to Control', function () {
-        $site = accuracySite(['companion_snapshot' => ['plugins' => ['plugins' => [
-            ['slug' => 'limit-login-attempts-reloaded/limit-login-attempts-reloaded.php', 'active' => true],
-        ]]]]);
+    // Was "shows a real 0 when a blocker reports to Control": an active blocker
+    // alone isn't evidence that its lockouts reach us (it can be switched off,
+    // or the site left out of every pull), so it no longer yields a 0.
+    it('leaves the count out when a blocker is installed but nothing shows its lockouts reach Control', function () {
+        $report = compileSeptember(accuracySite(['companion_snapshot' => llarSnapshot()]));
+
+        expect($report['data']['security']['blocked_threats_count'])->toBeNull()
+            ->and($report['html'])->not->toContain('Threats blocked')->not->toContain('Malicious visitors blocked')
+            ->not->toContain('block attackers')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            // The operator preview gives the shared reason the count is hidden.
+            ->and(ReportPhrases::blockedVisitorsNote($report['data']['security']))->not->toBeNull()
+            ->and($report['preview'])->toContain(e(ReportPhrases::blockedVisitorsNote($report['data']['security'])));
+    });
+
+    it('shows a real 0, blocked at the server, when the server has a jail and its lockouts were pulled', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $report = compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]));
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => 0, 'blocks_at_server' => true])
+            ->and($report['html'])->toContain('block attackers at the server')
+            ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+    });
+
+    it('does not count a jail whose lockouts were last pulled before the period', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => Carbon::parse('2026-08-20')]);
+
+        expect(compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]))['data']['security']['blocked_threats_count'])->toBeNull();
+    });
+
+    // Was "shows a real 0 … when lockouts from a serverless site reached the
+    // review queue": those rows are the lockouts that never became a ban, so
+    // they prove the count left visitors out, not that 0 was measured.
+    it('hides the count, without holding the report, when lockouts in the period never became bans', function (string $status) {
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
+        ReviewQueueEntry::factory()->count(2)->create(['site_id' => $site->id, 'source' => ReviewQueueEntry::SOURCE_LLAR, 'status' => $status, 'created_at' => Carbon::parse('2026-09-14'), 'updated_at' => Carbon::parse('2026-09-14')]);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['security']['blocked_threats_count'])->toBe(0)
-            ->and($report['html'])->toContain('block attackers at the server')
-            ->and($report['text'])->toContain('Malicious visitors blocked: 0');
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'unbanned_lockouts' => 2])
+            ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('block malicious visitors')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            ->and($report['preview'])->toContain('2 lockouts this period never became a ban')
+            ->and($report['preview'])->toContain(e(ReportPhrases::blockedVisitorsNote($report['data']['security'])))
+            ->and(implode(' ', $report['reasons']))->not->toContain('never became a ban');
+    })->with([ReviewQueueEntry::STATUS_PENDING, ReviewQueueEntry::STATUS_QUEUED_FOR_BAN, ReviewQueueEntry::STATUS_FAILED]);
+
+    it('hides the count even beside real bans when some lockouts were never banned', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $site = accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]);
+        BlockedIp::factory()->count(3)->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-09-10')]);
+        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'status' => ReviewQueueEntry::STATUS_FAILED, 'created_at' => Carbon::parse('2026-09-20'), 'updated_at' => Carbon::parse('2026-09-20')]);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'unbanned_lockouts' => 1]);
+    });
+
+    it('does not read a review-queue row from before the period, merely updated in it, as a measured 0', function () {
+        $site = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null, 'companion_snapshot' => llarSnapshot()]);
+        ReviewQueueEntry::factory()->create(['site_id' => $site->id, 'status' => ReviewQueueEntry::STATUS_FAILED, 'created_at' => Carbon::parse('2026-08-20'), 'updated_at' => Carbon::parse('2026-09-02')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'unbanned_lockouts' => 0])
+            ->and($report['text'])->not->toContain('Malicious visitors blocked');
+    });
+
+    it('does not count a jail whose lockouts stopped being pulled part-way through the period', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => Carbon::parse('2026-09-15')]);
+
+        expect(compileSeptember(accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]))['data']['security']['blocked_threats_count'])->toBeNull();
+    });
+
+    // Was "counts real bans in the period whatever else is known": bans in
+    // the period prove some lockouts reached us, not that all of them did
+    // all month, so a site with no lockout feed doesn't get a total.
+    it('does not show bans as a monthly total when nothing shows the site\'s lockouts reached Control all period', function () {
+        $site = accuracySite();
+        BlockedIp::factory()->count(2)->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-09-10')]);
+        BlockedIp::factory()->create(['site_id' => $site->id, 'banned_at' => Carbon::parse('2026-08-10')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_at_server' => false, 'blocks_unmeasured' => 'no_lockout_feed'])
+            ->and($report['html'])->not->toContain('Malicious visitors blocked')->not->toContain('block malicious visitors')
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            ->and(ReportPhrases::blockedVisitorsNote($report['data']['security']))->toContain('hidden from the client');
+    });
+
+    it('counts real bans, leaving out those lifted as false positives', function () {
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $site = accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]);
+        $ban = fn (string $at, array $extra = []) => BlockedIp::factory()->create(['site_id' => $site->id, 'server_id' => $server->id, 'banned_at' => Carbon::parse($at), ...$extra]);
+        $ban('2026-09-10 12:00');
+        $ban('2026-09-29 12:00');
+        // Unbanned days later: a real ban that expired.
+        $ban('2026-09-12 12:00', ['unbanned_at' => Carbon::parse('2026-09-15 12:00'), 'decided_by' => 'retention']);
+        // A rule that misfired, reversed minutes later.
+        $ban('2026-09-18 14:10', ['source' => BlockedIp::SOURCE_EXPLOIT_SHIELD, 'decided_by' => 'false_positive_ua_rule', 'unbanned_at' => Carbon::parse('2026-09-18 14:18')]);
+        // Lifted by hand within the hour.
+        $ban('2026-09-20 10:00', ['decided_by' => 'manual', 'unbanned_at' => Carbon::parse('2026-09-20 10:40')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => 3, 'blocks_unmeasured' => null])
+            ->and($report['text'])->toContain('Malicious visitors blocked: 3');
+    });
+
+    it('hides the count when no lockout has reached Control from any site since well before the period end', function () {
+        // The pull keeps running (and stamping last_llar_pull_at), but nothing arrives after Sep 12.
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $site = accuracySite(['server_id' => $server->id, 'companion_snapshot' => llarSnapshot()]);
+        BlockedIp::factory()->create(['site_id' => $site->id, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-03 08:00')]);
+        BlockedIp::factory()->create(['site_id' => null, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-12 09:15')]);
+        // A manual ban later on doesn't show lockouts were still arriving.
+        BlockedIp::factory()->create(['site_id' => $site->id, 'source' => BlockedIp::SOURCE_MANUAL, 'banned_at' => Carbon::parse('2026-09-25 10:00')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_unmeasured' => 'ingestion_stopped', 'lockouts_last_ingested_at' => '2026-09-12T09:15:00+00:00'])
+            ->and($report['text'])->not->toContain('Malicious visitors blocked')
+            ->and($report['html'])->not->toContain('block attackers')
+            ->and(ReportPhrases::blockedVisitorsNote($report['data']['security']))->toContain('since Sep 12, 2026');
+    });
+
+    it('hides the count when the site no longer reports its lockouts, whatever it banned before', function () {
+        // Companion stopped advertising its blocker part-way through the month.
+        $server = Server::factory()->create(['clockwork_jail_provisioned_at' => Carbon::parse('2026-08-01'), 'last_llar_pull_at' => now()]);
+        $site = accuracySite(['server_id' => $server->id, 'companion_capabilities' => ['malware-scan'], 'companion_snapshot' => ['plugins' => ['plugins' => []]]]);
+        BlockedIp::factory()->create(['site_id' => $site->id, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-09 11:00')]);
+        BlockedIp::factory()->create(['site_id' => null, 'server_id' => $server->id, 'banned_at' => Carbon::parse('2026-09-30 11:00')]);
+
+        expect(compileSeptember($site)['data']['security'])->toMatchArray(['blocked_threats_count' => null, 'blocks_unmeasured' => 'no_lockout_feed']);
     });
 });
 
 describe('traffic', function () {
+    /**
+     * One row per day of September from $first to $last, each written early
+     * on the day after it (as the hourly rollup does).
+     *
+     * @param  array<string, mixed>  $row
+     */
+    function recordTraffic(Site $site, int $first = 1, int $last = 30, array $row = []): void
+    {
+        foreach (range($first, $last) as $day) {
+            $date = Carbon::parse(sprintf('2026-09-%02d', $day));
+            DB::table('site_traffic_daily')->insert(array_replace([
+                'site_id' => $site->id, 'date' => $date->toDateString(), 'requests' => 5000, 'visits' => 80, 'bytes_sent' => 0,
+                'top_ips' => null, 'created_at' => $date->copy()->addDay()->setTime(5, 0), 'updated_at' => $date->copy()->addDay()->setTime(5, 0),
+            ], $row));
+        }
+    }
+
+    /** A site whose server we can read access logs from. */
+    function trafficSite(): Site
+    {
+        return accuracySite(['server_id' => Server::factory()->create(['last_ssh_ok_at' => now()])->id]);
+    }
+
     it('leaves out data transferred when the host reports no byte counts', function () {
         $site = accuracySite();
-        DB::table('site_traffic_daily')->insert(['site_id' => $site->id, 'date' => '2026-09-10', 'requests' => 5000, 'visits' => 80, 'bytes_sent' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        recordTraffic($site);
 
         $report = compileSeptember($site);
 
-        expect($report['data']['traffic'])->toMatchArray(['has_traffic' => true, 'total_requests' => 5000, 'bandwidth_mb' => null])
-            ->and($report['html'])->toContain('Visits')->not->toContain('Data transferred');
+        expect($report['data']['traffic'])->toMatchArray([
+            'has_traffic' => true, 'total_requests' => 150000, 'bandwidth_mb' => null,
+            'status' => 'ok', 'source' => 'nginx', 'days_covered' => 30, 'period_days' => 30, 'last_day_complete' => true,
+        ])
+            ->and($report['html'])->toContain('Visits')->not->toContain('Data transferred')
+            ->and($report['preview'])->toContain('Recorded on 30 of 30 days, from the server&#039;s access logs.')
+            ->and($report['public'])->not->toContain('Recorded on 30 of 30 days')
+            ->and(implode(' ', $report['reasons']))->not->toContain('Traffic');
+    });
+
+    it('hides traffic recorded on only some days of the month, and holds the report', function () {
+        $site = accuracySite();
+        recordTraffic($site, 10, 10);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['has_traffic' => true, 'total_requests' => 5000, 'status' => 'partial', 'days_covered' => 1, 'period_days' => 30])
+            ->and($report['html'])->not->toContain('Visits')
+            ->and($report['text'])->not->toContain('TRAFFIC')
+            ->and($report['preview'])->not->toContain('Traffic Analytics')
+            ->toContain('Traffic hidden from the client: traffic was recorded on only 1 of 30 days.')
+            ->and($report['reasons'])->toContain('Traffic was recorded on only 1 of 30 days, so the Traffic section was left out.');
+    });
+
+    it('allows one missing day, but not a missing or unfinished last day', function () {
+        $missingMidMonth = accuracySite();
+        recordTraffic($missingMidMonth, 1, 14);
+        recordTraffic($missingMidMonth, 16, 30);
+
+        $missingLastDay = accuracySite();
+        recordTraffic($missingLastDay, 1, 29);
+
+        // The host's feed wrote the last day before it was over.
+        $unfinishedLastDay = accuracySite();
+        recordTraffic($unfinishedLastDay, 1, 29);
+        recordTraffic($unfinishedLastDay, 30, 30, ['updated_at' => Carbon::parse('2026-09-30 06:37')]);
+
+        expect(compileSeptember($missingMidMonth)['data']['traffic'])->toMatchArray(['status' => 'ok', 'days_covered' => 29]);
+
+        foreach ([$missingLastDay, $unfinishedLastDay] as $site) {
+            $report = compileSeptember($site);
+            expect($report['data']['traffic'])->toMatchArray(['status' => 'partial', 'last_day_complete' => false])
+                ->and($report['reasons'])->toContain("The period's last day of traffic wasn't complete when the report was compiled, so the Traffic section was left out.");
+        }
+    });
+
+    it('does not count days the feed had nothing for', function () {
+        $site = accuracySite();
+        recordTraffic($site, 1, 15);
+        recordTraffic($site, 16, 30, ['requests' => 0, 'visits' => 0]);
+
+        expect(compileSeptember($site)['data']['traffic'])->toMatchArray(['status' => 'partial', 'days_covered' => 15]);
+    });
+
+    it('treats access logs that see two IP addresses as a proxy, not visitors', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 1000, 'visits' => 2, 'top_ips' => json_encode([
+            ['ip' => '10.0.0.4', 'hits' => 480], ['ip' => '10.0.0.5', 'hits' => 470], ['ip' => '203.0.113.9', 'hits' => 50],
+        ])]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => 0.95])
+            ->and($report['html'])->not->toContain('Visits')
+            ->and($report['reasons'])->toContain('95% of requests came from two IP addresses, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.');
+    });
+
+    it('says "one IP address" when every listed request came from one', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 1000, 'visits' => 1, 'top_ips' => json_encode([['ip' => '10.0.0.4', 'hits' => 1000]])]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => 1.0, 'top_ip_count' => 1])
+            ->and($report['reasons'])->toContain('100% of requests came from one IP address, which looks like a proxy or gateway in front of the site rather than visitors, so the Traffic section was left out.');
+    });
+
+    it('does not judge a host feed by its IP list, and keeps real spread-out visitors', function () {
+        $ips = json_encode([['ip' => '198.51.100.1', 'hits' => 900], ['ip' => '198.51.100.2', 'hits' => 90]]);
+        $pressable = accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_PRESSABLE, 'pressable_site_id' => '4242', 'server_id' => null]);
+        recordTraffic($pressable, row: ['requests' => 1000, 'top_ips' => $ips]);
+        $spread = accuracySite();
+        recordTraffic($spread, row: ['requests' => 1000, 'top_ips' => json_encode([['ip' => '198.51.100.1', 'hits' => 300], ['ip' => '198.51.100.2', 'hits' => 200]])]);
+
+        expect(compileSeptember($pressable)['data']['traffic'])->toMatchArray(['status' => 'ok', 'source' => 'pressable', 'top_ip_share' => 0.99])
+            ->and(compileSeptember($spread)['data']['traffic'])->toMatchArray(['status' => 'ok', 'top_ip_share' => 0.5]);
+    });
+
+    it('treats a busy site with almost no visits as suspect', function () {
+        $site = accuracySite();
+        recordTraffic($site, row: ['requests' => 70000, 'visits' => 1]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['traffic'])->toMatchArray(['status' => 'suspect', 'top_ip_share' => null])
+            ->and($report['reasons'])->toContain("30 visits for 2,100,000 requests doesn't look like real visitors, so the Traffic section was left out.");
+    });
+
+    it('holds a report with no traffic from a host we collect it from, but not from one we don\'t', function () {
+        $collected = compileSeptember(trafficSite());
+        $notCollected = compileSeptember(accuracySite(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'server_id' => null]));
+
+        expect($collected['data']['traffic'])->toMatchArray(['has_traffic' => false, 'status' => 'no_data', 'days_covered' => 0])
+            ->and($collected['reasons'])->toContain("No traffic was recorded for this period, although this host's traffic is collected, so the Traffic section was left out.")
+            ->and($notCollected['data']['traffic'])->toMatchArray(['has_traffic' => false, 'status' => 'unsupported'])
+            ->and(implode(' ', $notCollected['reasons']))->not->toContain('Traffic')
+            ->and($notCollected['preview'])->toContain('Traffic hidden from the client: traffic isn&#039;t collected for this host.');
+    });
+
+    it('reports traffic that exists even when the host can no longer be read', function () {
+        // The factory server has no SSH credentials, so the host reads as unsupported now.
+        $site = accuracySite();
+        recordTraffic($site);
+
+        expect($site->supportsTrafficReport())->toBeFalse()
+            ->and(compileSeptember($site)['data']['traffic']['status'])->toBe('ok');
     });
 });
 
@@ -407,9 +1300,10 @@ describe('security scan counts', function () {
 });
 
 describe('contact form tests (#4)', function () {
-    it('counts runs recorded as "success" as delivered', function () {
+    it('counts runs recorded as "success" as reported sent', function () {
         // Regression: the compiler looked for status "ok", which is never
-        // written, so every tested site was told "0% delivered".
+        // written, so every tested site was told "0% delivered". Only the
+        // site's own "sent" is measured, so the wording claims no more.
         $site = accuracySite();
         ContactFormTestRun::factory()->count(3)->create(['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-05'), 'status' => ContactFormTestRun::STATUS_SUCCESS]);
         ContactFormTestRun::factory()->create(['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-06'), 'status' => ContactFormTestRun::STATUS_FAILED]);
@@ -417,8 +1311,9 @@ describe('contact form tests (#4)', function () {
         $report = compileSeptember($site);
 
         expect($report['data']['forms'])->toMatchArray(['total_synthetic_tests' => 4, 'successful_tests' => 3, 'pass_rate' => 75.0])
-            ->and($report['html'])->toContain('75% delivered')
-            ->and($report['text'])->toContain('4 test submissions, 75% delivered');
+            ->and($report['html'])->toContain('your site reported sending the notification email for')->toContain('75%</strong> of them.')
+            ->not->toContain('% delivered')
+            ->and($report['text'])->toContain('4 live test submissions, notification email reported sent for 75% (inbox delivery not checked)');
     });
 
     it('never claims delivery from lab runs, which suppress the email', function () {
@@ -436,6 +1331,20 @@ describe('contact form tests (#4)', function () {
         expect($report['data']['forms'])->toMatchArray(['live_tests' => 0, 'pass_rate' => null, 'lab_tests' => 5, 'lab_accepted' => 5])
             ->and($report['html'])->toContain('accepted <strong>5 of 5</strong>')->not->toContain('% delivered')
             ->and($report['text'])->not->toContain('% delivered');
+    });
+
+    it('counts a lab run as accepted only when the form took the submission, and holds the report when one did not', function () {
+        $site = accuracySite();
+        $lab = ['site_id' => $site->id, 'ran_at' => Carbon::parse('2026-09-07'), 'mode' => ContactFormTestRun::MODE_LAB, 'mail_outcome' => ContactFormTestRun::MAIL_SUPPRESSED];
+        ContactFormTestRun::factory()->count(2)->create($lab + ['accepted' => true, 'status' => ContactFormTestRun::STATUS_SUCCESS]);
+        // Companion answered, but the form refused the submission.
+        ContactFormTestRun::factory()->create($lab + ['accepted' => false, 'status' => ContactFormTestRun::STATUS_SUCCESS]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['forms'])->toMatchArray(['lab_tests' => 3, 'lab_accepted' => 2])
+            ->and($report['html'])->toContain('accepted <strong>2 of 3</strong>')
+            ->and($report['reasons'])->toContain('Contact-form checks failed: the forms accepted 2 of 3 automated check submissions this month.');
     });
 
     it('does not count a live run whose email failed as delivered', function () {
@@ -500,10 +1409,43 @@ describe('performance (#7)', function () {
 });
 
 describe('uptime', function () {
-    function uptimeEvent(Site $site, string $type, string $at, bool $exempt = false): void
+    function uptimeEvent(Site $site, string $type, string $at, bool $exempt = false, ?int $status = null): void
     {
-        SiteUptimeEvent::create(['site_id' => $site->id, 'event_type' => $type, 'event_at' => Carbon::parse($at), 'is_sla_exempt' => $exempt]);
+        SiteUptimeEvent::create(['site_id' => $site->id, 'event_type' => $type, 'event_at' => Carbon::parse($at), 'is_sla_exempt' => $exempt, 'status_code' => $status]);
     }
+
+    it('holds a report with a completed outage of an hour or more, even one past the listed five, so a person adds context', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        // 6h 21m from 2:10 AM EDT on Sep 1.
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 06:10:00', status: 500);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 12:31:00', status: 200);
+        // Five short ones later in the month push it off the client's list.
+        foreach ([10, 12, 14, 16, 18] as $day) {
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, "2026-09-{$day} 10:00:00", status: 503);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, "2026-09-{$day} 10:20:00", status: 200);
+        }
+        // 59 minutes: under the bar.
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 10:59:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime']['outages'])->toHaveCount(5)
+            ->and($report['data']['uptime']['long_outages'])->toBe([
+                ['started_at' => '2026-09-01T06:10:00+00:00', 'minutes' => 381, 'started_before_period' => false, 'ongoing' => false],
+            ])
+            ->and($report['reasons'])->toContain('The site was down for an hour or more: Sep 1, 2:10 AM EDT for 6h 21m. Add context for the client before this goes out.');
+    });
+
+    it('does not add the long-outage reason for an outage still open at the end, which has its own', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 20:00:00', status: 500);
+
+        $reasons = compileSeptember($site)['reasons'];
+
+        expect($reasons)->toContain('The site was still down at the end of the month.')
+            ->and(implode(' ', $reasons))->not->toContain('an hour or more');
+    });
 
     it('measures real outage length from down to up instead of 5 minutes per outage', function () {
         // Regression: the compiler read a non-existent duration_seconds column
@@ -517,30 +1459,243 @@ describe('uptime', function () {
         expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 240])
             ->and($uptime['outages'])->toHaveCount(1)
             ->and($uptime['outages'][0])->toBe(['started_at' => '2026-09-10T10:00:00+00:00', 'minutes' => 240, 'started_before_period' => false, 'ongoing' => false]);
-        expect(compileSeptember($site)['html'])->toContain('Down Sep 10, 10:00 AM UTC')->toContain('4h 0m');
+        // Shown in the report timezone (clockwork.reports.timezone), not UTC.
+        expect(compileSeptember($site)['html'])->toContain('Down Sep 10, 6:00 AM EDT')->toContain('4h 0m')->not->toContain('UTC');
     });
 
     it('counts an outage that started before the period from the start of the period', function () {
+        // The period is September's days in the report timezone (EDT): Sep 1
+        // begins at 04:00 UTC.
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-08-31 23:00:00');
-        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 01:30:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 03:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 05:30:00');
 
         $report = compileSeptember($site);
 
         expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 90])
             ->and($report['data']['uptime']['outages'][0]['started_before_period'])->toBeTrue()
-            ->and($report['html'])->toContain('Down since before Sep 1, 12:00 AM UTC');
+            // Its start is clamped to the period start, which isn't when it began, so no time is given.
+            ->and($report['html'])->toContain('Down since before Sep 1<')->not->toContain('12:00 AM')
+            ->and($report['text'])->toContain('- Down since before Sep 1 for 90 min');
     });
 
     it('runs an outage still open at the end of the period to the end', function () {
+        // Sep 30 ends at midnight EDT, 04:00 UTC on Oct 1.
         $site = accuracySite(['uptime_monitoring_enabled' => true]);
-        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 02:00:00');
 
         $report = compileSeptember($site);
 
         expect($report['data']['uptime']['downtime_minutes'])->toBe(120)
             ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeTrue()
-            ->and($report['text'])->toContain('(still down at period end)');
+            ->and($report['text'])->toContain('- Down Sep 30, 10:00 PM EDT for 120 min (still down at period end)');
+    });
+
+    it('holds the report when a real outage is still open at the end of the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 02:00:00', status: 503);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 120, 'probe_blocked_minutes' => 0, 'probe_blocked_since' => null])
+            ->and(ReportReviewFlags::reasons($report['data']))->toContain('The site was still down at the end of the month.')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('HTTP 429');
+    });
+
+    it('does not count time the monitor was rate-limited (HTTP 429) as downtime', function () {
+        // A host that rate-limits the monitor answers 429: the probe was
+        // blocked, which says nothing about whether visitors reached the site.
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-12 08:00:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-12 20:00:00', status: 200);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 10:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 10:30:00', status: 200);
+
+        $report = compileSeptember($site);
+        $uptime = $report['data']['uptime'];
+
+        expect($uptime)->toMatchArray([
+            'outages_count' => 1,
+            'downtime_minutes' => 30,
+            'uptime_percentage' => 99.93,
+            'probe_blocked_minutes' => 720,
+            'probe_blocked_since' => null,
+        ])
+            ->and($uptime['outages'])->toHaveCount(1)
+            ->and($uptime['outages'][0])->toMatchArray(['started_at' => '2026-09-20T10:00:00+00:00', 'minutes' => 30])
+            ->and($report['html'])->not->toContain('Down Sep 12')->not->toContain('12h 0m')
+            ->and($report['text'])->not->toContain('Sep 12')
+            ->and(ReportReviewFlags::reasons(['meta' => $report['data']['meta'], 'uptime' => $uptime]))->toBe([]);
+    });
+
+    it('says the monitor was blocked, not that the site was still down, when a 429 is open at the end of the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 23:40:00', status: 429);
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+        $public = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => false])->render();
+
+        expect($report['data']['uptime'])->toMatchArray([
+            'outages_count' => 0,
+            'downtime_minutes' => 0,
+            'uptime_percentage' => 100,
+            'outages' => [],
+            'probe_blocked_minutes' => 260,
+            'probe_blocked_since' => '2026-09-30T23:40:00+00:00',
+        ])
+            ->and($report['html'])->not->toContain('still down')
+            ->and($report['text'])->not->toContain('still down')
+            ->and(ReportReviewFlags::reasons(['meta' => $report['data']['meta'], 'uptime' => $report['data']['uptime']]))->toBe([
+                'The uptime monitor was blocked (HTTP 429) from Sep 30, 7:40 PM EDT; the site was not necessarily down.',
+            ])
+            // The blocked time is for the operator only.
+            ->and($preview)->toContain('The uptime monitor was blocked (HTTP 429) for 260 min this period.')
+            ->and($public)->not->toContain('HTTP 429');
+    });
+
+    it('treats a 429 block carried in from before the period as blocked, not down', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 02:00:00', status: 429);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 07:00:00', status: 200);
+
+        expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
+            'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
+        ]);
+    });
+
+    describe('the monitor\'s probe_blocked events', function () {
+        it('never counts a probe_blocked stretch as downtime', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-12 08:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-12 20:00:00', status: 200);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'uptime_percentage' => 100, 'outages' => [],
+                'probe_blocked_minutes' => 720, 'probe_blocked_since' => null,
+            ])
+                ->and($report['html'])->not->toContain('Down Sep 12')
+                ->and(implode(' ', $report['reasons']))->not->toContain('down')->not->toContain('HTTP 429');
+        });
+
+        it('ends an outage where the site starts answering 429, and counts the block apart (down → probe_blocked → up)', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-15 10:00:00', status: 502);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-15 10:40:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-15 14:40:00', status: 200);
+
+            $uptime = compileSeptember($site)['data']['uptime'];
+
+            expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 240, 'probe_blocked_since' => null])
+                ->and($uptime['outages'])->toBe([['started_at' => '2026-09-15T10:00:00+00:00', 'minutes' => 40, 'started_before_period' => false, 'ongoing' => false]]);
+        });
+
+        it('reads the same from events the real uptime state machine wrote', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'down', 'uptime_consecutive_failures' => 2, 'uptime_down_since' => Carbon::parse('2026-09-15 10:00:00')]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-15 10:00:00', status: 502);
+            $chat = $this->mock(ChatNotifier::class);
+            $chat->shouldNotReceive('siteWentUp');
+            $chat->shouldNotReceive('siteWentDown');
+            $chat->shouldReceive('uptimeProbeBlocked')->once()->andReturn(true);
+            $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+
+            // A down site that then answers only 429 for the configured six
+            // hours: the outage is closed at the first 429.
+            $blocked = UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)');
+            for ($at = Carbon::parse('2026-09-15 10:40:00'); $at->lessThanOrEqualTo(Carbon::parse('2026-09-15 16:40:00')); $at->addMinutes(30)) {
+                $this->travelTo($at);
+                app(UptimeStateUpdater::class)->update($site->fresh(), $blocked);
+            }
+            $this->travelTo(Carbon::parse('2026-09-15 17:40:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 120));
+            $this->travelBack();
+            $site = $site->fresh();
+            $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+            expect(SiteUptimeEvent::where('site_id', $site->id)->orderBy('event_at')->get()->map(fn ($e) => [$e->event_type, $e->event_at->format('H:i')])->all())
+                ->toBe([[SiteUptimeEvent::TYPE_DOWN, '10:00'], [SiteUptimeEvent::TYPE_PROBE_BLOCKED, '10:40'], [SiteUptimeEvent::TYPE_UP, '17:40']]);
+            expect(compileSeptember($site)['data']['uptime'])
+                ->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 40, 'probe_blocked_minutes' => 420, 'probe_blocked_since' => null]);
+        });
+
+        it('leaves a single 429 on the last probe of the month out of the report', function () {
+            // 03:55 UTC on Oct 1 is 11:55 PM EDT on Sep 30, the month's last probe.
+            $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'up']);
+            $chat = $this->mock(ChatNotifier::class);
+            $chat->shouldNotReceive('uptimeProbeBlocked');
+            $chat->shouldNotReceive('siteWentUp');
+
+            $this->travelTo(Carbon::parse('2026-10-01 03:55:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::blocked(429, 150, 'HTTP 429 (rate-limited — probe blocked)'));
+            $this->travelTo(Carbon::parse('2026-10-01 04:00:00'));
+            app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 120));
+            $this->travelBack();
+            $site = $site->fresh();
+            $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+            $report = compileSeptember($site);
+
+            expect(SiteUptimeEvent::where('site_id', $site->id)->count())->toBe(0)
+                ->and(ActionLog::where('site_id', $site->id)->where('action_type', ActionLog::TYPE_UPTIME_TRANSITION)->count())->toBe(0)
+                ->and($report['data']['uptime'])->toMatchArray(['probe_blocked_since' => null, 'probe_blocked_minutes' => 0])
+                ->and(implode(' ', $report['reasons']))->not->toContain('HTTP 429');
+        });
+
+        it('says the monitor was blocked, not that the site was down, when a probe_blocked stretch is open at the end of the month', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-30 22:00:00', status: 503);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 23:40:00', status: 429);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 1, 'downtime_minutes' => 100, 'probe_blocked_minutes' => 260, 'probe_blocked_since' => '2026-09-30T23:40:00+00:00',
+            ])
+                ->and($report['data']['uptime']['outages'][0]['ongoing'])->toBeFalse()
+                ->and($report['text'])->not->toContain('still down')
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 30, 7:40 PM EDT; the site was not necessarily down.')
+                ->not->toContain('The site was still down at the end of the month.');
+        });
+
+        it('starts a real outage when a blocked site goes down', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-10 08:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-10 09:00:00', status: 502);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-10 10:00:00', status: 200);
+
+            $uptime = compileSeptember($site)['data']['uptime'];
+
+            expect($uptime)->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 60, 'probe_blocked_minutes' => 60])
+                ->and($uptime['outages'][0])->toMatchArray(['started_at' => '2026-09-10T09:00:00+00:00', 'minutes' => 60]);
+        });
+
+        it('carries a probe_blocked stretch in from before the period as blocked', function () {
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-01 02:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 07:00:00', status: 200);
+
+            expect(compileSeptember($site)['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [], 'probe_blocked_minutes' => 180, 'probe_blocked_since' => null,
+            ]);
+        });
+
+        it('joins a 429 down recorded before the monitor had a blocked state to the probe_blocked event after it', function () {
+            // Deployed mid-block: the old row (down, 429) and the new one
+            // (probe_blocked) are one stretch, which began with the old row.
+            $site = accuracySite(['uptime_monitoring_enabled' => true]);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-29 10:00:00', status: 429);
+            uptimeEvent($site, SiteUptimeEvent::TYPE_PROBE_BLOCKED, '2026-09-30 10:00:00', status: 429);
+
+            $report = compileSeptember($site);
+
+            expect($report['data']['uptime'])->toMatchArray([
+                'outages_count' => 0, 'downtime_minutes' => 0, 'outages' => [],
+                'probe_blocked_minutes' => 42 * 60, 'probe_blocked_since' => '2026-09-29T10:00:00+00:00',
+            ])
+                ->and($report['reasons'])->toContain('The uptime monitor was blocked (HTTP 429) from Sep 29, 6:00 AM EDT; the site was not necessarily down.');
+        });
     });
 
     it('leaves uptime out for a site the probe skips, instead of claiming 100%', function () {
@@ -553,7 +1708,8 @@ describe('uptime', function () {
         expect($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false])
             ->and($report['html'])->not->toContain('around the clock')->not->toContain('Uptime')
             ->and($report['text'])->not->toContain('UPTIME')
-            ->and($preview)->not->toContain('Uptime &amp; Availability')
+            ->and($preview)->not->toContain('Uptime & Availability')
+            ->toContain('Uptime hidden from the client: the uptime probe doesn&#039;t check this site.')
             ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Uptime');
     });
 
@@ -576,6 +1732,288 @@ describe('uptime', function () {
         uptimeEvent($site, SiteUptimeEvent::TYPE_MAINTENANCE, '2026-09-06 10:30:00');
 
         expect(compileSeptember($site)['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 30]);
+    });
+});
+
+describe('the period in the report timezone', function () {
+    it('keeps an outage at 01:00 UTC on the 1st in the month before, where its local time falls', function () {
+        // 01:00 UTC on Sep 1 is Aug 31, 9:00 PM EDT; 01:00 UTC on Oct 1 is Sep 30.
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-01 01:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-01 01:30:00', status: 200);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-10-01 01:00:00', status: 502);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-10-01 01:30:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['uptime'])->toMatchArray(['outages_count' => 1, 'downtime_minutes' => 30, 'total_period_minutes' => 30 * 24 * 60])
+            ->and($report['data']['uptime']['outages'][0])->toMatchArray(['started_at' => '2026-10-01T01:00:00+00:00', 'started_before_period' => false])
+            ->and($report['text'])->toContain('- Down Sep 30, 9:00 PM EDT for 30 min')->not->toContain('Aug 31')
+            ->and($report['html'])->toContain('Down Sep 30, 9:00 PM EDT')->not->toContain('Aug 31');
+    });
+
+    it('counts uptime monitoring that began late on the first day, local time, as the whole month', function () {
+        // 01:30 UTC on Sep 2 is still Sep 1 in New York.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-09-02 01:00:00')]);
+        uptimeSeed($site, '2026-09-02 01:30:00');
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60])
+            ->and($report['text'])->not->toContain('onitoring began')
+            ->and(implode(' ', $report['reasons']))->not->toContain('onitoring began');
+    });
+
+    it('reads a site added late on the last day, local time, as inside the period, not after it', function () {
+        // 02:00 UTC on Oct 1 is Sep 30, 10:00 PM EDT.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-10-01 02:00:00')]);
+        uptimeSeed($site, '2026-10-01 02:00:00');
+
+        $report = compileSeptember($site);
+        $note = 'Monitoring began Sep 30, so this report covers Sep 30 – Sep 30.';
+
+        expect($report['data']['meta']['coverage_start'])->toBe('2026-10-01T02:00:00+00:00')
+            ->and($report['data']['uptime'])->toMatchArray(['monitored' => true, 'monitored_since' => '2026-10-01T02:00:00+00:00', 'total_period_minutes' => 120])
+            ->and($report['text'])->toContain($note)->not->toContain('after the end')
+            ->and($report['reasons'])->toContain('Monitoring began Sep 30, so this report covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('after the end')->not->toContain('Uptime monitoring began');
+    });
+
+    it('shows an outage carried in from before the period as since before the local first day', function () {
+        expect(ReportPhrases::outageStart(['started_at' => '2026-09-01T04:00:00+00:00', 'started_before_period' => true]))
+            ->toBe('Down since before Sep 1')
+            // Reports compiled before the period was measured locally clamped to midnight UTC.
+            ->and(ReportPhrases::outageStart(['started_at' => '2026-09-01T00:00:00+00:00', 'started_before_period' => true]))
+            ->toBe('Down since before Sep 1');
+    });
+});
+
+describe('partial-month coverage', function () {
+    /** The seed transition the uptime probe (or the one-off backfill) writes. */
+    function uptimeSeed(Site $site, string $at, bool $backfilled = false): void
+    {
+        app(ActionLogger::class)->record(
+            actionType: ActionLog::TYPE_UPTIME_TRANSITION,
+            summary: "{$site->domain} monitoring started — confirmed up",
+            site: $site,
+            target: 'up',
+            details: ['status_code' => 200, 'seed' => true] + ($backfilled ? ['backfilled' => true] : []),
+            ok: true,
+            actor: $backfilled ? 'backfill' : 'scheduled',
+            ranAt: Carbon::parse($at),
+        );
+    }
+
+    it('measures uptime from when monitoring began for a site enrolled part-way through the month', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'uptime_state' => 'unknown', 'created_at' => Carbon::parse('2026-09-26 18:10:00')]);
+
+        // The first successful probe seeds the start of monitoring, exactly as the probe does.
+        $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->travelTo(Carbon::parse('2026-09-26 18:20:00'));
+        app(UptimeStateUpdater::class)->update($site, UptimeProbeResult::success(200, 150));
+        $this->travelBack();
+        $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-27 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-27 11:42:00', status: 200);
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+        $note = 'Monitoring began Sep 26, so this report covers Sep 26 – Sep 30.';
+
+        // 102 minutes down out of the 6,340 it was watched (to midnight EDT
+        // on Sep 30), not out of the whole month's 43,200.
+        expect($report['data']['meta']['coverage_start'])->toBe('2026-09-26T18:10:00+00:00')
+            ->and($report['data']['uptime'])->toMatchArray([
+                'monitored' => true,
+                'monitored_since' => '2026-09-26T18:20:00+00:00',
+                'total_period_minutes' => 6340,
+                'downtime_minutes' => 102,
+                'uptime_percentage' => 98.39,
+                'outages_count' => 1,
+            ])
+            ->and($report['html'])->toContain($note)->toContain('(monitoring began Sep 26)')->toContain('98.39%')
+            ->and($report['text'])->toContain($note)->toContain('Availability: 98.39% (monitoring began Sep 26)')
+            ->and($preview)->toContain($note)->toContain('Monitoring began')->not->toContain('24 / 7 / 365')
+            ->and(ReportReviewFlags::reasons($report['data']))->toContain('Monitoring began Sep 26, so this report covers only part of the month.')
+            // Uptime began the same day the site was added: one reason, not two.
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Uptime monitoring began');
+    });
+
+    it('falls back to when the site was added when its monitoring has no seed', function () {
+        // A site whose first probes failed goes straight to down and never gets a seed.
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-09-20 15:00:00')]);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-20 15:10:00', status: 500);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-20 16:10:00', status: 200);
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBe('2026-09-20T15:00:00+00:00')
+            ->and($data['uptime'])->toMatchArray([
+                'monitored_since' => '2026-09-20T15:00:00+00:00',
+                'total_period_minutes' => 15180,
+                'downtime_minutes' => 60,
+                'uptime_percentage' => 99.6,
+            ])
+            ->and(ReportReviewFlags::reasons($data))->toContain('Monitoring began Sep 20, so this report covers only part of the month.');
+    });
+
+    it('leaves a site watched for the whole month unchanged', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-06-01 09:00:00');
+        uptimeEvent($site, SiteUptimeEvent::TYPE_DOWN, '2026-09-10 10:00:00', status: 503);
+        uptimeEvent($site, SiteUptimeEvent::TYPE_UP, '2026-09-10 14:00:00', status: 200);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray([
+                'monitored' => true,
+                'monitored_since' => null,
+                'total_period_minutes' => 30 * 24 * 60,
+                'downtime_minutes' => 240,
+                'uptime_percentage' => 99.44,
+            ])
+            ->and($report['html'])->not->toContain('Monitoring began')->not->toContain('monitoring began')
+            ->and($report['text'])->not->toContain('onitoring began')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('Monitoring began');
+    });
+
+    it('counts monitoring that began on the first day as the whole month', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true]);
+        uptimeSeed($site, '2026-09-01 14:00:00');
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBeNull()
+            ->and($data['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60])
+            ->and(ReportReviewFlags::reasons(['meta' => $data['meta'], 'uptime' => $data['uptime']]))->toBe([]);
+    });
+
+    it('ignores a backfilled seed, which is dated when the backfill ran rather than when monitoring began', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-09-15 12:00:00', backfilled: true);
+
+        $data = compileSeptember($site)['data'];
+
+        expect($data['meta']['coverage_start'])->toBeNull()
+            ->and($data['uptime'])->toMatchArray(['monitored_since' => null, 'total_period_minutes' => 30 * 24 * 60]);
+    });
+
+    it('leaves uptime out and says so when monitoring began only after the period', function () {
+        $site = accuracySite(['uptime_monitoring_enabled' => true, 'created_at' => Carbon::parse('2026-05-01 12:00:00')]);
+        uptimeSeed($site, '2026-10-05 16:00:00');
+
+        $report = compileSeptember($site);
+        $preview = view('client-reports::reports.show', ['report' => ClientReport::latest('id')->first(), 'isOperatorPreview' => true])->render();
+
+        // The site was there all month, so only the uptime section is left
+        // out; nothing says the report covers none of the month.
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime'])->toMatchArray(['monitored' => false, 'probe_stopped' => false, 'monitored_since' => '2026-10-05T16:00:00+00:00'])
+            ->and($report['html'])->not->toContain('Uptime &amp; availability')->not->toContain('Monitoring began')
+            ->and($report['text'])->not->toContain('UPTIME')->not->toContain('Monitoring began')
+            ->and($preview)->toContain('Uptime hidden from the client: uptime monitoring began Oct 5, after this period.')
+            ->and(ReportReviewFlags::reasons($report['data']))
+            ->toContain('Uptime monitoring began Oct 5, after this period, so the Uptime section was left out.')
+            ->and(implode(' ', ReportReviewFlags::reasons($report['data'])))->not->toContain('covers none of it');
+    });
+
+    /** A care-plan toggle row, as the site page's toggle (or a one-off CLI run) writes it. */
+    function carePlanToggle(Site $site, string $at, array $details, string $target = 'on'): void
+    {
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_CARE_PLAN_TOGGLED, 'target' => $target,
+            'summary' => "Care plan toggled on {$site->domain}", 'details' => $details, 'ok' => true, 'ran_at' => Carbon::parse($at), 'actor' => 'manual']);
+    }
+
+    it('treats a care plan switched on mid-month as the start of what the report covers', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-08-03 21:05', ['now' => false, 'override' => true, 'previous' => true], 'off');
+        carePlanToggle($site, '2026-09-26 16:20', ['now' => true, 'override' => true, 'previous' => false]);
+
+        $report = compileSeptember($site);
+        $note = 'Your care plan began Sep 26, so this report covers Sep 26 – Sep 30.';
+
+        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-26T16:20:00+00:00', 'coverage_source' => 'care_plan'])
+            ->and($report['html'])->toContain($note)
+            ->and($report['text'])->toContain($note)
+            ->and($report['preview'])->toContain($note)
+            ->and($report['reasons'])->toContain('The care plan was switched on Sep 26, so this report covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('Monitoring began');
+    });
+
+    it('reads a care plan switched on from the command line the same way', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-09-20 15:00', ['enabled' => true, 'override' => true, 'previous' => false], '');
+
+        expect(compileSeptember($site)['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-20T15:00:00+00:00', 'coverage_source' => 'care_plan']);
+    });
+
+    it('takes the later of the site being added and its care plan being switched on', function () {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-09-24 12:00:00')]);
+        carePlanToggle($site, '2026-09-10 12:00', ['now' => true, 'override' => true, 'previous' => false]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta'])->toMatchArray(['coverage_start' => '2026-09-24T12:00:00+00:00', 'coverage_source' => 'site_added'])
+            ->and($report['reasons'])->toContain('Monitoring began Sep 24, so this report covers only part of the month.');
+    });
+
+    it('does not read a care plan that was already on, re-synced, or switched on on the first day as a late start', function (array $details, string $at) {
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, $at, $details);
+
+        expect(compileSeptember($site)['data']['meta'])->toMatchArray(['coverage_start' => null, 'coverage_source' => null]);
+    })->with([
+        'already on' => [['now' => true, 'override' => true, 'previous' => true, 'already_enabled' => true], '2026-09-20 15:00'],
+        're-synced' => [['source' => 'manual-resync'], '2026-09-20 15:00'],
+        'override cleared' => [['override' => null], '2026-09-20 15:00'],
+        'the first day' => [['now' => true, 'override' => true, 'previous' => false], '2026-09-01 15:00'],
+        // 10 PM EDT on Aug 31.
+        'the evening before the period' => [['now' => true, 'override' => true, 'previous' => false], '2026-09-01 02:00'],
+        'before the period' => [['now' => true, 'override' => true, 'previous' => false], '2026-08-20 15:00'],
+    ]);
+
+    it('ignores care-plan toggles while care plans are switched off fleet-wide', function () {
+        config(['clockwork.care_plans.enabled' => false]);
+        $site = accuracySite(['created_at' => Carbon::parse('2026-04-10 12:00:00')]);
+        carePlanToggle($site, '2026-09-20 15:00', ['now' => true, 'override' => true, 'previous' => false]);
+
+        expect(compileSeptember($site)['data']['meta']['coverage_start'])->toBeNull();
+    });
+
+    it('says only the uptime is partial when monitoring is switched on mid-month for a site added long before', function () {
+        // Added months ago with uptime monitoring off; an update ran on the
+        // 5th, then monitoring was switched on and first probed on the 17th.
+        $site = accuracySite([
+            'created_at' => Carbon::parse('2026-04-10 12:00:00'),
+            'uptime_monitoring_enabled' => false,
+            'uptime_state' => 'unknown',
+        ]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-forms/example-forms.php',
+            'summary' => 'Plugin updated: Example Forms 1.0 → 1.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-05 14:00'), 'actor' => 'test']);
+
+        $site->forceFill(['uptime_monitoring_enabled' => true])->save();
+        $this->mock(ChatNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->mock(SmsNotifier::class)->shouldNotReceive('siteWentUp');
+        $this->travelTo(Carbon::parse('2026-09-17 14:00:00'));
+        app(UptimeStateUpdater::class)->update($site->fresh(), UptimeProbeResult::success(200, 150));
+        $this->travelBack();
+        $site = $site->fresh();
+        $site->forceFill(['uptime_last_checked_at' => now()])->save();
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['meta']['coverage_start'])->toBeNull()
+            ->and($report['data']['uptime']['monitored_since'])->toBe('2026-09-17T14:00:00+00:00')
+            ->and($report['data']['updates']['plugins_count'])->toBe(1)
+            ->and($report['html'])->not->toContain('so this report covers')->toContain('(monitoring began Sep 17)')->toContain('Example Forms')
+            ->and($report['text'])->not->toContain('so this report covers')->toContain('(monitoring began Sep 17)')
+            ->and($report['preview'])->not->toContain('so this report covers')
+            ->and($report['reasons'])->toContain('Uptime monitoring began Sep 17, so uptime covers only part of the month.')
+            ->and(implode(' ', $report['reasons']))->not->toContain('this report covers only part');
     });
 });
 
@@ -658,10 +2096,10 @@ describe('updates and site facts', function () {
         expect($w['data']['updates']['pending_plugins'])->toBe(['WP Rocket'])
             ->and($w['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date')
             ->and($w['text'])->toContain('No updates were applied this month.')
-            ->and($c['html'])->toContain('Everything was already up to date');
-        // The preview (what prints as the PDF) follows the same rule.
-        expect($wPreview)->toContain('No updates were applied this period.')->not->toContain('up-to-date throughout')
-            ->and($cPreview)->toContain('up-to-date throughout this period');
+            ->and($c['html'])->toContain('Everything was up to date at the end of the month.');
+        // The preview (what prints as the PDF) says the same sentences.
+        expect($wPreview)->toContain('No updates were applied this month.')->not->toContain('Everything was up to date')
+            ->and($cPreview)->toContain('Everything was up to date at the end of the month.');
     });
 
     it('does not say "already up to date" while a theme or WordPress update is waiting', function () {
@@ -695,19 +2133,208 @@ describe('updates and site facts', function () {
             ->toContain("Companion hasn't reported since 2026-08-20, so waiting updates and plugin vulnerabilities are out of date.");
     });
 
+    it('holds a report that applied nothing while updates were waiting, naming them', function () {
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [
+                ['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'active' => true, 'update_available' => true, 'new_version' => '2.0'],
+                ['slug' => 'example-seo/example-seo.php', 'name' => 'Example SEO', 'active' => true, 'update_available' => false],
+            ]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => true],
+        ]]);
+
+        $report = compileSeptember($site);
+
+        expect($report['html'])->toContain('No updates were applied this month.')
+            ->and($report['reasons'])->toContain('No updates were applied this month although updates were waiting: Example Forms, WordPress core, so the client would read "No updates were applied this month". Check why they are failing or paused.');
+    });
+
+    it('does not hold a report for waiting updates when one was applied, or when nothing is known to be waiting', function () {
+        $applied = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'active' => true, 'update_available' => true, 'new_version' => '2.0']]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $applied->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-seo/example-seo.php',
+            'summary' => 'Plugin updated: Example SEO 1.0 → 1.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-12 06:00'), 'actor' => 'test']);
+        // No snapshot at all: nothing is known either way.
+        $unknown = accuracySite(['companion_snapshot' => null, 'companion_snapshot_at' => null]);
+
+        expect(implode(' ', compileSeptember($applied)['reasons']))->not->toContain('No updates were applied')
+            ->and(implode(' ', compileSeptember($unknown)['reasons']))->not->toContain('No updates were applied');
+    });
+
     it('counts an update applied after the period as waiting at its end', function () {
         // A held report recompiled after the month, or a manual update applied on the 1st.
         $site = accuracySite(['companion_snapshot' => [
             'plugins' => ['plugins' => [['name' => 'WP Rocket', 'active' => true, 'update_available' => false]]],
             'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
         ]]);
+        // 06:40 UTC on Oct 1 is Oct 1 in the report timezone too.
         ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'wp-rocket/wp-rocket.php',
-            'summary' => 'Plugin updated: WP Rocket 3.1 → 3.2', 'ok' => true, 'ran_at' => Carbon::parse('2026-10-01 01:40'), 'actor' => 'test']);
+            'summary' => 'Plugin updated: WP Rocket 3.1 → 3.2', 'ok' => true, 'ran_at' => Carbon::parse('2026-10-01 06:40'), 'actor' => 'test']);
 
         $report = compileSeptember($site);
 
         expect($report['data']['updates'])->toMatchArray(['total' => 0, 'updated_since_period' => 1])
             ->and($report['html'])->toContain('No updates were applied this month.')->not->toContain('already up to date');
+    });
+
+    it('dates updates by the report timezone\'s calendar day, as the uptime section does', function () {
+        $site = accuracySite();
+        $update = fn (string $at, string $name) => ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE,
+            'target' => strtolower($name).'/x.php', 'summary' => "Plugin updated: {$name} 1.0 → 1.1", 'ok' => true, 'ran_at' => Carbon::parse($at), 'actor' => 'test']);
+        // 8:50 PM EDT on Sep 15.
+        $update('2026-09-16 00:50', 'Evening');
+        // 9:30 PM EDT on Aug 31: the month before.
+        $update('2026-09-01 01:30', 'August');
+        // 9:30 PM EDT on Sep 30: still September.
+        $update('2026-10-01 01:30', 'Lastday');
+
+        $report = compileSeptember($site);
+        $dates = array_column($report['data']['updates']['items']['plugins'], 'date', 'target');
+
+        expect($dates)->toBe(['lastday/x.php' => '2026-09-30', 'evening/x.php' => '2026-09-15'])
+            ->and($report['data']['updates']['total'])->toBe(2)
+            ->and($report['text'])->toContain('Evening 1.0 → 1.1 (Sep 15)')->toContain('Lastday 1.0 → 1.1 (Sep 30)')->not->toContain('August')
+            ->and($report['html'])->toContain('Sep 15')->not->toContain('Sep 16');
+    });
+
+    it('leaves the agency\'s own connector plugins out of the client\'s updates and counts', function () {
+        $site = accuracySite();
+        foreach ([
+            ['clockwork-renegade/clockwork-renegade.php', 'Plugin updated: Clockwork Renegade 1.0.4 → 1.0.5'],
+            ['clockwork-companion/clockwork-companion.php', 'Plugin updated: Clockwork Companion 1.38.0 → 1.39.0'],
+            ['example-forms/example-forms.php', 'Plugin updated: Example Forms 2.0 → 2.1'],
+        ] as $i => [$target, $summary]) {
+            ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => $target,
+                'summary' => $summary, 'details' => ['slug' => $target], 'ok' => true, 'ran_at' => Carbon::parse('2026-09-1'.$i.' 06:00'), 'actor' => 'auto']);
+        }
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['updates'])->toMatchArray(['total' => 1, 'plugins_count' => 1])
+            ->and($report['html'])->not->toContain('Clockwork Renegade')->not->toContain('Clockwork Companion')->toContain('Example Forms 2.0 → 2.1')
+            ->and($report['text'])->toContain('UPDATES APPLIED (1)')->not->toContain('Clockwork Renegade')->not->toContain('Clockwork Companion');
+    });
+
+    it('never says no updates were needed, only that nothing was waiting at the end of the month', function () {
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['name' => 'Akismet', 'active' => true, 'update_available' => false]]],
+            'themes' => ['items' => []], 'wp_core' => ['current_version' => '6.8.3', 'update_available' => false],
+        ]]);
+
+        $report = compileSeptember($site);
+
+        expect($report['html'])->toContain('Everything was up to date at the end of the month.')
+            ->not->toContain('no updates were needed')->not->toContain('already up to date')
+            ->and($report['text'])->toContain('Everything was up to date at the end of the month.')->not->toContain('already up to date');
+    });
+
+    it('lists version changes made outside Control, once each, labelled like any other update', function () {
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => [['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'version' => '2.1', 'active' => true, 'update_available' => false]]],
+            'themes' => ['items' => []], 'wp_core' => ['current_version' => '6.8.3', 'update_available' => false],
+        ]]);
+        $observed = fn (string $type, string $slug, string $name, string $from, string $to, string $at) => ActionLog::create([
+            'site_id' => $site->id, 'action_type' => $type, 'target' => $slug, 'summary' => "{$name} {$from} → {$to} (seen)", 'ok' => true,
+            'details' => ['slug' => $slug, 'name' => $name, 'from_version' => $from, 'to_version' => $to, 'observed_at' => Carbon::parse($at)->toIso8601String()],
+            'ran_at' => Carbon::parse($at), 'actor' => 'observed',
+        ]);
+        $observed('plugin_update_observed', 'example-gallery/example-gallery.php', 'Example Gallery', '2.0', '2.1', '2026-09-12 07:00');
+        // WordPress gives theme names HTML-encoded.
+        $observed('theme_update_observed', 'example-theme', 'Example Theme &amp; Blocks', '1.4', '1.5', '2026-09-14 07:00');
+        $observed('core_update_observed', 'wordpress', 'WordPress', '6.8.2', '6.8.3', '2026-09-20 07:00');
+        // Control applied this one itself and the snapshot saw the change too: listed once.
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-seo/example-seo.php',
+            'summary' => 'Plugin updated: Example SEO 5.0 → 5.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-15 06:00'), 'actor' => 'auto',
+            'details' => ['slug' => 'example-seo/example-seo.php', 'before_version' => '5.0', 'after_version' => '5.1']]);
+        $observed('plugin_update_observed', 'example-seo/example-seo.php', 'Example SEO', '5.0', '5.1', '2026-09-16 07:00');
+        // The agency's own plugin and a change seen before the period stay out.
+        $observed('plugin_update_observed', 'clockwork-companion/clockwork-companion.php', 'Clockwork Companion', '1.38.0', '1.39.0', '2026-09-17 07:00');
+        $observed('plugin_update_observed', 'example-old/example-old.php', 'Example Old', '1.0', '1.1', '2026-08-30 07:00');
+
+        $report = compileSeptember($site);
+        $updates = $report['data']['updates'];
+
+        expect($updates)->toMatchArray(['total' => 4, 'plugins_count' => 2, 'themes_count' => 1, 'core_count' => 1])
+            ->and(array_column($updates['items']['plugins'], 'observed', 'target'))->toBe(['example-seo/example-seo.php' => false, 'example-gallery/example-gallery.php' => true])
+            ->and($report['html'])->toContain('Example Gallery 2.0 → 2.1')->toContain('Example Theme &amp; Blocks 1.4 → 1.5')->not->toContain('&amp;amp;')->toContain('6.8.2 → 6.8.3')
+            ->not->toContain('(seen)')->not->toContain('Clockwork Companion')->not->toContain('Example Old')
+            ->and(substr_count($report['html'], 'Example SEO 5.0 → 5.1'))->toBe(1)
+            ->and($report['text'])->toContain('UPDATES APPLIED (4)')->toContain('- [Plugin] Example Gallery 2.0 → 2.1 (Sep 12)')
+            ->toContain('- [Theme] Example Theme & Blocks 1.4 → 1.5 (Sep 14)');
+    });
+
+    it('counts a version change seen after the period as waiting at its end', function () {
+        $site = accuracySite(['companion_snapshot' => [
+            'plugins' => ['plugins' => []], 'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => 'plugin_update_observed', 'target' => 'example-gallery/example-gallery.php',
+            'summary' => 'Example Gallery 2.0 → 2.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-10-02 07:00'), 'actor' => 'system',
+            'details' => ['slug' => 'example-gallery/example-gallery.php', 'name' => 'Example Gallery', 'from_version' => '2.0', 'to_version' => '2.1', 'observed_at' => '2026-10-02T07:00:00+00:00']]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['updates'])->toMatchArray(['total' => 0, 'updated_since_period' => 1])
+            ->and($report['html'])->toContain('No updates were applied this month.');
+    });
+
+    it('does not list an update that was undone, and holds the report to say so', function () {
+        // The nightly run replaced a custom child theme with an unrelated
+        // directory theme of the same slug; it was restored and paused.
+        $site = accuracySite(['companion_snapshot_at' => Carbon::parse('2026-10-01 06:00'), 'companion_snapshot' => [
+            'plugins' => ['plugins' => []],
+            'themes' => ['items' => [['name' => 'Example Child Theme', 'slug' => 'example-child', 'version' => '2.0.3', 'update_available' => false]]],
+            'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_THEME_UPDATE, 'target' => 'example-child',
+            'summary' => 'Theme updated: Example Child Theme 2.0.3 → 2.4.0', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-01 09:30'), 'actor' => 'auto',
+            'details' => ['slug' => 'example-child', 'before_version' => '2.0.3', 'after_version' => '2.4.0']]);
+        PluginUpdateIgnore::create(['site_id' => $site->id, 'target_kind' => 'theme', 'target_slug' => 'example-child',
+            'source' => PluginUpdateIgnore::SOURCE_MANUAL, 'note' => 'Custom theme; never update.', 'ignored_at' => Carbon::parse('2026-09-01 15:10')]);
+
+        $report = compileSeptember($site);
+
+        expect($report['data']['updates'])->toMatchArray(['total' => 0, 'themes_count' => 0])
+            ->and($report['data']['updates']['not_kept'])->toBe([['type' => 'theme', 'label' => 'Example Child Theme 2.0.3 → 2.4.0', 'date' => '2026-09-01', 'installed_version' => '2.0.3']])
+            ->and($report['html'])->not->toContain('2.4.0')
+            ->and($report['text'])->not->toContain('2.4.0')
+            ->and($report['reasons'])->toContain('An update was undone after it ran, so it is left out of the updates list: Example Child Theme 2.0.3 → 2.4.0 (Sep 1; the site is on 2.0.3 now). Add context for the client if they noticed.');
+    });
+
+    it('keeps an update whose version is lower now when nothing says it was undone, or when the snapshot is older than the update', function () {
+        $snapshot = fn (string $at) => ['companion_snapshot_at' => Carbon::parse($at), 'companion_snapshot' => [
+            'plugins' => ['plugins' => [['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '2.0', 'update_available' => false]]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]];
+        $updated = function (Site $site) {
+            ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-forms/example-forms.php',
+                'summary' => 'Plugin updated: Example Forms 2.0 → 2.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-20 06:00'), 'actor' => 'auto',
+                'details' => ['slug' => 'example-forms/example-forms.php', 'before_version' => '2.0', 'after_version' => '2.1']]);
+        };
+        $noEvidence = accuracySite($snapshot('2026-10-01 06:00'));
+        $updated($noEvidence);
+        // Paused afterwards, but the snapshot predates the update, so it can't say what's installed since.
+        $oldSnapshot = accuracySite($snapshot('2026-09-19 06:00'));
+        $updated($oldSnapshot);
+        PluginUpdateIgnore::create(['site_id' => $oldSnapshot->id, 'target_kind' => 'plugin', 'target_slug' => 'example-forms/example-forms.php',
+            'source' => PluginUpdateIgnore::SOURCE_AUTO_FAILURE, 'ignored_at' => Carbon::parse('2026-09-25 06:00')]);
+
+        expect(compileSeptember($noEvidence)['data']['updates']['plugins_count'])->toBe(1)
+            ->and(compileSeptember($oldSnapshot)['data']['updates']['plugins_count'])->toBe(1);
+    });
+
+    it('reads an auto-pause logged after the update as the update not sticking', function () {
+        $site = accuracySite(['companion_snapshot_at' => Carbon::parse('2026-10-01 06:00'), 'companion_snapshot' => [
+            'plugins' => ['plugins' => [['slug' => 'example-forms/example-forms.php', 'name' => 'Example Forms', 'version' => '2.0', 'update_available' => true, 'new_version' => '2.1']]],
+            'themes' => ['items' => []], 'wp_core' => ['update_available' => false],
+        ]]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE, 'target' => 'example-forms/example-forms.php',
+            'summary' => 'Plugin updated: Example Forms 2.0 → 2.1', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-20 06:00'), 'actor' => 'auto',
+            'details' => ['slug' => 'example-forms/example-forms.php', 'before_version' => '2.0', 'after_version' => '2.1']]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_PLUGIN_UPDATE_AUTO_IGNORED, 'target' => 'example-forms/example-forms.php',
+            'summary' => 'Paused updates for Example Forms', 'ok' => true, 'ran_at' => Carbon::parse('2026-09-25 06:00'), 'actor' => 'auto']);
+
+        expect(compileSeptember($site)['data']['updates'])->toMatchArray(['plugins_count' => 0, 'total' => 0]);
     });
 
     it('reads the WordPress version from the Companion snapshot', function () {

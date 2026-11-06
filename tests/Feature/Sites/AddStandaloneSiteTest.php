@@ -4,6 +4,8 @@ namespace Tests\Feature\Sites;
 
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Process\BackgroundArtisan;
+use App\Services\Process\BackgroundArtisanResult;
 use App\Support\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 
@@ -124,7 +126,7 @@ describe('Add Standalone Site', function () {
             'https://wpengine-client.com/wp-json/clockwork/v1/health*' => Http::response([
                 'ok' => true,
                 'version' => '1.35.0',
-                'capabilities' => ['snapshot', 'updates', 'malware-scan', 'admins', 'sso'],
+                'capabilities' => ['snapshot', 'updates', 'malware-scan', 'admins', 'sso', 'backup-create'],
                 'is_multisite' => false,
             ], 200),
             'https://wpengine-client.com/wp-json/clockwork/v1/snapshot*' => Http::response([
@@ -152,10 +154,46 @@ describe('Add Standalone Site', function () {
             ->and($site->backup_relay_enabled)->toBeTrue()
             ->and($site->backup_relay_frequency)->toBe('daily')
             ->and($site->cert_source)->toBe(Site::CERT_SOURCE_LIVE_PROBE)
-            ->and($site->auto_updates_paused)->toBeFalse();
+            ->and($site->auto_updates_paused)->toBeFalse()
+            // The handshake only answers from the WordPress plugin; without
+            // the flag the site sat out every WordPress-only job.
+            ->and($site->is_wordpress)->toBeTrue();
 
         $response->assertRedirect(route('sites.show', $site));
         $response->assertSessionHas('flash');
+    });
+
+    it('starts one background performance scan for the new site', function () {
+        SsrfGuard::fake(['enrolled.example.com' => ['93.184.216.34']]);
+        Http::fake([
+            'https://enrolled.example.com/wp-json/clockwork/v1/health*' => Http::response([
+                'ok' => true,
+                'version' => '1.35.0',
+                'capabilities' => ['updates'],
+                'is_multisite' => false,
+            ], 200),
+            'https://enrolled.example.com*' => Http::response('<html><head><title>Test</title></head><body><h1>Hello World</h1><p>This is a real site with plenty of content to pass body check.</p></body></html>', 200),
+        ]);
+
+        $launched = [];
+        $this->mock(BackgroundArtisan::class, function ($mock) use (&$launched) {
+            $mock->shouldReceive('start')->andReturnUsing(function (string $lockKey, array $commands) use (&$launched) {
+                $launched[] = [$lockKey, $commands];
+
+                return BackgroundArtisanResult::ok();
+            });
+        });
+
+        $this->post(route('sites.store'), [
+            'domain' => 'enrolled.example.com',
+            'companion_secret' => bin2hex(random_bytes(32)),
+        ])->assertRedirect();
+
+        $site = Site::where('domain', 'enrolled.example.com')->firstOrFail();
+        expect($launched)->toBe([[
+            'performance-baseline:'.$site->id,
+            ['clockwork:run-performance-scans --site='.$site->id.' --strategy=mobile'],
+        ]]);
     });
 
     it('successfully connects and enrolls a standalone site via ManageWP-style Connection Key', function () {
@@ -172,7 +210,7 @@ describe('Add Standalone Site', function () {
             'https://client-wpengine.com/wp-json/clockwork/v1/health*' => Http::response([
                 'ok' => true,
                 'version' => '1.35.0',
-                'capabilities' => ['snapshot', 'updates', 'malware-scan'],
+                'capabilities' => ['snapshot', 'updates', 'malware-scan', 'backup-create'],
                 'is_multisite' => false,
             ], 200),
             'https://client-wpengine.com/wp-json/clockwork/v1/snapshot*' => Http::response([
@@ -197,5 +235,39 @@ describe('Add Standalone Site', function () {
             ->and($site->companion_secret)->toBe($secret);
 
         $response->assertRedirect(route('sites.show', $site));
+    });
+
+    it('enrolls a site whose plugin lacks backup-create but leaves off-site backups off', function () {
+        $secret = bin2hex(random_bytes(32));
+
+        SsrfGuard::fake(['old-plugin.example.com' => ['93.184.216.34']]);
+        Http::fake([
+            'https://old-plugin.example.com/wp-json/clockwork/v1/health*' => Http::response([
+                'ok' => true,
+                'version' => '1.30.3',
+                'capabilities' => ['snapshot', 'updates', 'malware-scan'],
+                'is_multisite' => false,
+            ], 200),
+            'https://old-plugin.example.com/wp-json/clockwork/v1/snapshot*' => Http::response([
+                'ok' => true,
+                'plugins' => ['active' => []],
+            ], 200),
+            'https://old-plugin.example.com*' => Http::response('<html><body><h1>Hello World</h1><p>This is a real site with plenty of content to pass body check.</p></body></html>', 200),
+        ]);
+
+        $response = $this->post(route('sites.store'), [
+            'domain' => 'old-plugin.example.com',
+            'companion_secret' => $secret,
+        ]);
+
+        $site = Site::where('domain', 'old-plugin.example.com')->first();
+        expect($site)->not->toBeNull()
+            ->and($site->companion_installed)->toBeTrue()
+            ->and($site->backup_relay_enabled)->toBeFalse()
+            ->and($site->backup_relay_frequency)->toBe('daily');
+
+        $response->assertRedirect(route('sites.show', $site));
+        $response->assertSessionHas('flash', fn (string $flash) => str_contains($flash, 'successfully connected and enrolled')
+            && str_contains($flash, 'Off-site backups were not turned on: Companion 1.30.3 lacks the backup-create capability; update Companion or switch to Renegade.'));
     });
 });

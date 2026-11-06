@@ -3,10 +3,10 @@
 @section('title', 'Notification settings · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <x-page-header title="Alert notifications"
         subtitle="Site outage and recovery alerting via Twilio SMS and email. Team engineers receive operational alerts for care-plan sites; client subscribers receive plain-language notices for their specific domains." />
+
+    @include('settings._tabs')
 
     @if (session('status'))
         <div class="card p-4 mb-4 status-green flex items-center gap-2">

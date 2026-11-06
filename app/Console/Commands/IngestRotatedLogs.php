@@ -28,7 +28,9 @@ class IngestRotatedLogs extends Command
 
     public function handle(SshClient $ssh, NginxLogParser $parser): int
     {
-        ini_set('memory_limit', '1G');
+        if (! app()->runningUnitTests()) {
+            ini_set('memory_limit', '1G');
+        }
         $dates = $this->parseDates();
         if (empty($dates)) {
             $this->error('No valid dates. Use --dates=2026-07-17,2026-07-18,2026-07-19');

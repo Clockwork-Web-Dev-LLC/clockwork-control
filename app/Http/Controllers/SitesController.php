@@ -36,6 +36,7 @@ use App\Services\Uptime\UptimeProber;
 use App\Services\Uptime\UptimeStateUpdater;
 use App\Support\CompanionExclusion;
 use App\Support\FleetSelfIps;
+use App\Support\UpgraderOutput;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
+use Modules\BackupRelay\Services\CompanionBackupRelayAdapter;
 use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\Core\Contracts\HostingProvider;
 use Modules\Core\ModuleStateResolver;
@@ -111,7 +113,7 @@ class SitesController extends Controller
                 break;
 
             case 'status':
-                $statusOrder = "CASE sites.uptime_state WHEN 'down' THEN 1 WHEN 'maintenance' THEN 2 WHEN 'unknown' THEN 3 WHEN 'up' THEN 4 ELSE 5 END";
+                $statusOrder = "CASE sites.uptime_state WHEN 'down' THEN 1 WHEN 'maintenance' THEN 2 WHEN 'unknown' THEN 3 WHEN 'probe_blocked' THEN 3 WHEN 'up' THEN 4 ELSE 5 END";
                 $sitesQuery->select('sites.*')
                     ->orderByRaw("{$statusOrder} ".($dir === 'desc' ? 'DESC' : 'ASC'))
                     ->orderBy('sites.domain', 'asc');
@@ -677,9 +679,11 @@ class SitesController extends Controller
 
             return response()->json([
                 'ok' => true,
-                'message' => $probe->succeeded
-                    ? "Up (HTTP {$probe->statusCode})"
-                    : 'Down ('.($probe->statusCode ? "HTTP {$probe->statusCode}" : ($probe->error ?? 'no response')).')',
+                'message' => match (true) {
+                    $probe->isProbeBlocked => "Probe blocked (HTTP {$probe->statusCode}) — not counted as down",
+                    $probe->succeeded => "Up (HTTP {$probe->statusCode})",
+                    default => 'Down ('.($probe->statusCode ? "HTTP {$probe->statusCode}" : ($probe->error ?? 'no response')).')',
+                },
                 'state' => $site->uptime_state,
                 'status_code' => $probe->statusCode,
             ]);
@@ -1565,7 +1569,9 @@ class SitesController extends Controller
         }
 
         try {
-            $result = (new ClockworkCompanionClient($site))->updatePlugin($slug);
+            // Redacted before it is logged or returned: the upgrader's
+            // download lines carry licence keys and signed URLs.
+            $result = UpgraderOutput::redact((new ClockworkCompanionClient($site))->updatePlugin($slug));
         } catch (Throwable $e) {
             $logger->record(
                 actionType: ActionLog::TYPE_PLUGIN_UPDATE,
@@ -1634,6 +1640,10 @@ class SitesController extends Controller
             target: $enabled ? 'on' : 'off',
             details: ['previous' => $previous, 'now' => $enabled, 'override' => true],
         );
+
+        if ($enabled && ! $previous) {
+            $this->kickPerformanceBaseline($site);
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -2193,6 +2203,9 @@ class SitesController extends Controller
                 'last_archived_at' => $site->backup_relay_last_archived_at?->toIso8601String(),
                 'last_size_bytes' => $site->backup_relay_last_size_bytes,
                 'next_scheduled_at' => $site->backupRelayNextScheduledAt()?->toIso8601String(),
+                'last_attempt_at' => $site->backup_relay_last_attempt_at?->toIso8601String(),
+                'last_error' => $site->backup_relay_last_error,
+                'failing_since' => $site->backup_relay_failing_since?->toIso8601String(),
             ],
         ]);
     }
@@ -2341,10 +2354,17 @@ class SitesController extends Controller
             'companion_capabilities' => $caps,
             'companion_secret' => $secret,
             'companion_last_seen_at' => now(),
+            // The /health handshake above only answers from the Companion or
+            // Renegade WordPress plugin, so this is a WordPress site. Without
+            // the flag it sits out every WordPress-only job (core checksums,
+            // lockout and firewall pulls).
+            'is_wordpress' => true,
             'is_multisite' => $isMultisite,
             'uptime_monitoring_enabled' => true,
             'cert_source' => Site::CERT_SOURCE_LIVE_PROBE,
-            'backup_relay_enabled' => true,
+            // Off-site backups need the plugin's /backup/create. Turning
+            // relay on without it only produces a failed backup every day.
+            'backup_relay_enabled' => CompanionBackupRelayAdapter::supportsBackupCreate($caps),
             'backup_relay_frequency' => 'daily',
             // Schema default is paused (opt-in flip). SpinupWP/Pressable
             // imports unpause on create; standalone enroll must do the same
@@ -2407,8 +2427,38 @@ class SitesController extends Controller
         );
 
         $this->kickEnrollmentSecurityBaseline($site);
+        $this->kickPerformanceBaseline($site);
 
-        return redirect()->route('sites.show', $site)->with('flash', "Site {$site->domain} successfully connected and enrolled!");
+        $flash = "Site {$site->domain} successfully connected and enrolled!";
+        if (! $site->backup_relay_enabled) {
+            $flash .= ' Off-site backups were not turned on: '.CompanionBackupRelayAdapter::missingBackupCreateMessage($site);
+        }
+
+        return redirect()->route('sites.show', $site)->with('flash', $flash);
+    }
+
+    /**
+     * One performance scan for a site that just came under care (standalone
+     * enrolment, or its care plan switched on). The nightly rotation only
+     * reaches a site on its own weekday, so a site enrolled late in the
+     * month could otherwise have no speed test for that month's report.
+     * Its own lock so a failed security baseline can't stop it, and detached
+     * because a scan takes 15-60s or more. `--site=` bypasses the care-plan
+     * gate.
+     */
+    private function kickPerformanceBaseline(Site $site): void
+    {
+        try {
+            app(BackgroundArtisan::class)->start(
+                lockKey: 'performance-baseline:'.$site->id,
+                commands: ['clockwork:run-performance-scans --site='.$site->id.' --strategy=mobile'],
+                ttlSeconds: 600,
+                logBasename: 'performance-baseline',
+            );
+        } catch (Throwable) {
+            // Non-fatal: the nightly rotation and its month-end catch-up
+            // still reach the site.
+        }
     }
 
     /**
@@ -2470,6 +2520,25 @@ class SitesController extends Controller
 
         $previousEnabled = (bool) $site->backup_relay_enabled;
         $previousFrequency = $site->backup_relay_frequency;
+
+        // Refuse only the off -> on switch. A site that is already on keeps
+        // its cadence editable, and its failures stay visible.
+        if ((bool) $validated['enabled'] && ! $previousEnabled
+            && ($blocked = CompanionBackupRelayAdapter::enableBlockedReason($site)) !== null) {
+            $msg = "Glacier backups for {$site->domain} were not turned on: {$blocked}";
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $msg,
+                    'enabled' => false,
+                    'frequency' => $site->backupRelayFrequency(),
+                    'domain' => $site->domain,
+                ], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
 
         $site->forceFill([
             'backup_relay_enabled' => (bool) $validated['enabled'],

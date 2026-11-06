@@ -1,11 +1,16 @@
 <?php
 
+use App\Models\ActionLog;
 use App\Models\Site;
+use App\Models\SiteSecurityScan;
 use App\Models\User;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Modules\ClientManagement\Models\Client;
+use Modules\ClientReports\Console\Commands\SendScheduledClientReports;
 use Modules\ClientReports\Mail\ClientReportMail;
 use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
@@ -17,10 +22,26 @@ use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
 
-/** A care-plan site whose compiled report has nothing to hold for review (no backup source to check, uptime probe running). */
+/**
+ * A care-plan site whose compiled report has nothing to hold for review (no
+ * backup source to check, uptime probe running, and enrolled long before any
+ * period a test compiles, so no report covers only part of a month).
+ */
 function reportableSite(array $attributes = []): Site
 {
-    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now()], $attributes));
+    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear()], $attributes));
+}
+
+/**
+ * A clean core-file check last month, so a site whose host can run one isn't
+ * also held for "no check ran" when a test is about something else.
+ */
+function checkedCoreFiles(Site $site): void
+{
+    SiteSecurityScan::factory()->coreChecksums()->create([
+        'site_id' => $site->id,
+        'scanned_at' => now()->subMonthNoOverflow()->startOfMonth()->addDays(9),
+    ]);
 }
 
 it('requires authentication for schedule management routes', function () {
@@ -67,7 +88,7 @@ describe('Schedules UI & CRUD', function () {
             ->assertSee('boss@scheduled.test')
             ->assertSee('Auto-Send')
             ->assertSee('unscheduled.test')
-            ->assertSee('Unscheduled Managed Sites');
+            ->assertSee('Care-plan sites without a report schedule');
     });
 
     it('renders the create schedule form with available sites and templates', function () {
@@ -688,6 +709,32 @@ describe('care-plan customers only', function () {
             ->and($schedule->fresh()->next_run_at->isFuture())->toBeTrue();
     });
 
+    it('records the sites a run skipped for having no care plan, once per run', function () {
+        Mail::fake();
+        foreach (['first-no-plan.example.com', 'second-no-plan.example.com'] as $domain) {
+            $site = Site::factory()->create(['domain' => $domain, 'care_plan_enabled' => false, 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM]);
+            ClientReportSchedule::create([
+                'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+                'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@example.com'],
+                'is_enabled' => true, 'next_run_at' => now()->subHour(),
+            ]);
+        }
+
+        $this->artisan('clockwork:send-client-reports')
+            ->expectsOutputToContain('first-no-plan.example.com: skipped this month (care plan is off')
+            ->assertSuccessful();
+
+        $log = ActionLog::where('action_type', SendScheduledClientReports::ACTION_SKIPPED)->sole();
+        expect($log->site_id)->toBeNull()
+            ->and($log->details)->toBe(['domains' => ['first-no-plan.example.com', 'second-no-plan.example.com'], 'reason' => 'no_care_plan'])
+            ->and($log->summary)->toBe('Skipped 2 scheduled client reports (no care plan): first-no-plan.example.com, second-no-plan.example.com')
+            ->and($log->actor)->toBe('scheduled');
+
+        // Nothing due, nothing skipped: no entry.
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+        expect(ActionLog::where('action_type', SendScheduledClientReports::ACTION_SKIPPED)->count())->toBe(1);
+    });
+
     it('refuses Send now for a site with no care plan', function () {
         $user = User::factory()->create();
         $site = Site::factory()->create(['care_plan_enabled' => false]);
@@ -707,6 +754,7 @@ describe('hold for review', function () {
         Mail::fake();
         // A SpinupWP site whose backups were never checked: "Backups could not be checked."
         $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
+        checkedCoreFiles($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
@@ -735,6 +783,7 @@ describe('hold for review', function () {
     it('checks a draft-mode report too, and never emails it unchecked after switching to auto', function () {
         Mail::fake();
         $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
+        checkedCoreFiles($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@was-draft.test'],
@@ -791,6 +840,32 @@ describe('hold for review', function () {
 
         Mail::assertSent(ClientReportMail::class, 1);
         expect(ClientReport::sole()->status)->toBe('sent');
+    });
+
+    it('recompiles an unsent copy compiled under older report rules instead of emailing it as it is', function () {
+        Mail::fake();
+        $site = reportableSite(['domain' => 'outdated.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@outdated.test'],
+            'is_enabled' => true, 'next_run_at' => now()->subHour(), 'last_sent_at' => now()->subMonths(2),
+        ]);
+        // Last month's copy from before the latest rules: not held, nobody has it.
+        $data = app(ClientReportCompiler::class)->compile($site, now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth());
+        $data['meta']['schema_version'] = 3;
+        $old = ClientReport::create([
+            'site_id' => $site->id, 'schedule_id' => $schedule->id, 'title' => 'Old copy',
+            'period_start' => now()->subMonthNoOverflow()->startOfMonth(), 'period_end' => now()->subMonthNoOverflow()->endOfMonth(),
+            'sections_data' => $data, 'status' => ClientReport::STATUS_GENERATED,
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        $sent = ClientReport::query()->where('status', 'sent')->sole();
+        expect($old->fresh()->status)->toBe(ClientReport::STATUS_SUPERSEDED)
+            ->and($sent->id)->not->toBe($old->id)
+            ->and($sent->sections_data['meta']['schema_version'])->toBe(ClientReportCompiler::SCHEMA_VERSION);
+        Mail::assertSent(ClientReportMail::class, fn ($mail) => $mail->report->is($sent));
     });
 
     it('holds a schedule\'s first report, and sends the next clean one by itself once that was sent by hand', function () {
@@ -1062,6 +1137,67 @@ describe('bidirectional WordPress report recipient sync', function () {
         expect($schedule->recipients)->toHaveCount(ReportRecipientsSyncService::MAX_WP_RECIPIENTS)
             ->and($schedule->frequency)->toBe('weekly')
             ->and($schedule->next_run_at->lt(now()->addDays(8)))->toBeTrue();
+    });
+
+    it('does not tell WordPress reports are active for a site with no Control schedule', function () {
+        $client = Client::create(['name' => 'Jane Example', 'email' => 'jane@no-schedule.example.com']);
+        $site = reportableSite(['domain' => 'no-schedule.example.com', 'client_id' => $client->id]);
+
+        $payload = app(ReportRecipientsSyncService::class)->resolvePayloadForSite($site);
+
+        // The client's addresses are still offered, but nothing will send.
+        expect($payload)->toMatchArray(['report_enabled' => false, 'report_recipients' => ['jane@no-schedule.example.com']]);
+    });
+
+    it('reports active only while the site\'s schedule is enabled', function () {
+        $site = reportableSite(['domain' => 'scheduled.example.com']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['owner@scheduled.example.com'], 'is_enabled' => true,
+        ]);
+        $service = app(ReportRecipientsSyncService::class);
+
+        expect($service->resolvePayloadForSite($site)['report_enabled'])->toBeTrue();
+
+        $schedule->update(['is_enabled' => false]);
+
+        expect($service->resolvePayloadForSite($site->fresh())['report_enabled'])->toBeFalse();
+    });
+
+    it('seeds a WordPress that has never had recipients with "not active" when Control has no schedule', function () {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $client = Client::create(['name' => 'Jane Example', 'email' => 'jane@unseeded.example.com']);
+        $site = Site::factory()->carePlan()->withCompanionInstalled()->create([
+            'domain' => 'unseeded.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'client_id' => $client->id,
+        ]);
+
+        app(ReportRecipientsSyncService::class)->reconcileFromSnapshot($site, [
+            'client_notifications' => ['report_recipients' => [], 'report_frequency' => 'monthly', 'report_enabled' => false],
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === false);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === true);
+        expect(ClientReportSchedule::where('site_id', $site->id)->exists())->toBeFalse();
+    });
+
+    it('corrects a WordPress that an earlier push left showing reports as active with no Control schedule', function () {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $site = Site::factory()->carePlan()->withCompanionInstalled()->create([
+            'domain' => 'seeded-active.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
+        ]);
+        $service = app(ReportRecipientsSyncService::class);
+        $seeded = ['report_recipients' => ['owner@seeded-active.example.com'], 'report_frequency' => 'monthly',
+            'report_recipients_updated_at' => now()->subMonth()->toIso8601String(), 'report_recipients_updated_by' => 'control'];
+
+        $service->reconcileFromSnapshot($site, ['client_notifications' => $seeded + ['report_enabled' => true]]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/client-notifications') && $request['report_enabled'] === false);
+
+        // Once WordPress says "not active", nothing more is pushed.
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $service->reconcileFromSnapshot($site->fresh(), ['client_notifications' => $seeded + ['report_enabled' => false]]);
+
+        Http::assertNothingSent();
     });
 
     it('pushes a disabled payload when a schedule is removed', function () {

@@ -3,8 +3,6 @@
 @section('title', 'AiRemedy Settings · Clockwork')
 
 @section('content')
-    @include('settings._tabs')
-
     <div class="max-w-5xl mx-auto space-y-6" x-data="{
         apiKey: '',
         testing: false,
@@ -101,6 +99,8 @@
                 </a>
             </x-slot:actions>
         </x-page-header>
+
+        @include('settings._tabs')
 
         @if(session('status'))
             <div class="card p-3.5 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">

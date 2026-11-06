@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $report->title }} · {{ $report->site->domain }}</title>
+    @include('partials.favicon')
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -23,14 +24,36 @@
 </head>
 <body class="py-8 px-4 sm:px-6 lg:px-8">
 @php
-    $data = $report->sections_data;
+    $data = (array) ($report->sections_data ?? []);
     $meta = $data['meta'] ?? [];
     $branding = $data['branding'] ?? [];
     $site = $data['site'] ?? [];
     $updates = $data['updates'] ?? [];
     $uptime = $data['uptime'] ?? [];
-    // Same rule as the email: a site the uptime probe doesn't check has no uptime to show.
-    $showUptime = isset($data['uptime']) && ($uptime['monitored'] ?? true);
+    $isOperatorPreview = (bool) ($isOperatorPreview ?? false);
+    // Which sections the client sees: the same rule as both email parts. This
+    // page prints as the PDF and is also the public report view, so a hidden
+    // section only shows up here as a no-print note on the operator preview.
+    $sections = \Modules\ClientReports\Support\ReportSections::visibility($data);
+    $hiddenNotes = $isOperatorPreview ? \Modules\ClientReports\Support\ReportSections::hiddenNotes($data) : [];
+    $showUptime = $sections['uptime'];
+    // The email's figure and colour: green only for a month that really was
+    // (99.9%+), amber from 99%, red below.
+    $uptimePct = $uptime['uptime_percentage'] ?? null;
+    $uptimeLabel = $uptimePct === null ? '—' : rtrim(rtrim(number_format((float) $uptimePct, 2), '0'), '.').'%';
+    $uptimeTone = match (\Modules\ClientReports\Support\ReportPhrases::uptimeTone($uptimePct)) {
+        'good' => ['text' => 'text-emerald-600', 'badge' => 'text-emerald-700 bg-emerald-50'],
+        'warn' => ['text' => 'text-amber-600', 'badge' => 'text-amber-700 bg-amber-50'],
+        'bad' => ['text' => 'text-red-600', 'badge' => 'text-red-700 bg-red-50'],
+        default => ['text' => 'text-slate-400', 'badge' => 'text-slate-600 bg-slate-100'],
+    };
+    // A site enrolled part-way through the month: say when monitoring began.
+    $coverageNote = \Modules\ClientReports\Support\ReportPhrases::coverageNote($data);
+    $monitoredSince = \Modules\ClientReports\Support\ReportPhrases::monitoringBeganOn($uptime['monitored_since'] ?? null);
+    $probeBlockedMinutes = (int) ($uptime['probe_blocked_minutes'] ?? 0);
+    // Core, theme and plugin updates, cleaned up exactly as the email lists them.
+    $updateRows = (new \Modules\ClientReports\Mail\ClientReportMail($report))->updateRows();
+    $updateCount = count($updateRows);
     $security = $data['security'] ?? [];
     $perf = $data['performance'] ?? [];
     $forms = $data['forms'] ?? [];
@@ -44,41 +67,50 @@
     $accentColor = !empty($branding['accent_color']) ? $branding['accent_color'] : '#7EFF83';
 @endphp
 
-<div class="max-w-4xl mx-auto">
-    {{-- Floating Action Bar for Print / Share --}}
-    <div class="no-print flex items-center justify-between mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div class="flex items-center gap-3">
-            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                Executive Maintenance Report
-            </span>
-            <span class="text-xs text-slate-500">Period: {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}</span>
-        </div>
-        <div class="flex items-center gap-2">
-            @if ($isOperatorPreview ?? false)
-                <a href="{{ route('client-reports.email', $report) }}" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2" title="The email exactly as the client gets it">
-                    <i class="fa-solid fa-envelope"></i> Email version
-                </a>
-            @endif
-            <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-print"></i> Print / Download PDF
-            </button>
-        </div>
-    </div>
+@if ($isOperatorPreview && isset($nav))
+    @include('client-reports::reports._operator-toolbar', ['report' => $report, 'nav' => $nav])
+@endif
 
-    @if (($isOperatorPreview ?? false) && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
+<div class="max-w-4xl mx-auto">
+    @unless ($isOperatorPreview && isset($nav))
+        {{-- Floating Action Bar for Print / Share --}}
+        <div class="no-print flex items-center justify-between flex-wrap gap-3 mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                    Executive Maintenance Report
+                </span>
+                <span class="text-xs text-slate-500">Period: {{ $report->period_start->format('M j, Y') }} &ndash; {{ $report->period_end->format('M j, Y') }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="window.print()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-print"></i> Print / Download PDF
+                </button>
+            </div>
+        </div>
+    @endunless
+
+    @if ($isOperatorPreview && (session('status') || session('status_error')))
+        <div class="no-print mb-6 rounded-xl p-4 text-sm border {{ session('status_error') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-900' }}">
+            {{ session('status_error') ?: session('status') }}
+        </div>
+    @endif
+
+    @if ($isOperatorPreview && $report->status !== \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED && empty($report->sent_to) && $report->isStale())
+        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+            <div class="font-semibold"><i class="fa-solid fa-clock-rotate-left"></i> Outdated: compiled before the latest report fixes</div>
+            <div class="mt-1 text-xs text-amber-800">
+                Its figures were worked out under older rules, so it can't be sent as it is.
+                {{ $report->canRecompile() ? 'Press Recompile to refresh it from current data (it never sends), check the new copy, then send that one.' : 'Generate a new report for this period instead.' }}
+            </div>
+        </div>
+    @endif
+
+    @if ($isOperatorPreview && $report->status === \Modules\ClientReports\Models\ClientReport::STATUS_SUPERSEDED)
         <div class="no-print mb-6 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl p-4 text-sm">
             A newer report for this schedule and period replaced this one. It can't be sent.
         </div>
-    @elseif (($isOperatorPreview ?? false) && ! empty($data['meta']['review_reasons']) && $report->status !== 'sent')
-        <div class="no-print mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
-            <div class="font-semibold mb-1"><i class="fa-solid fa-hand"></i> {{ $report->schedule?->delivery_mode === \Modules\ClientReports\Models\ClientReportSchedule::MODE_AUTO ? 'Held for review instead of being emailed automatically' : 'Check these before sending' }}</div>
-            <ul class="list-disc ml-5 space-y-0.5">
-                @foreach ($data['meta']['review_reasons'] as $reason)
-                    <li>{{ $reason }}</li>
-                @endforeach
-            </ul>
-            <div class="mt-2 text-xs text-amber-800">Fix or confirm these, then send it from the history table (or generate a fresh one).</div>
-        </div>
+    @elseif ($isOperatorPreview && \Modules\ClientReports\Support\ReportState::reasons($report) !== [])
+        @include('client-reports::reports._review-panel', ['report' => $report, 'reasons' => \Modules\ClientReports\Support\ReportState::reasons($report), 'data' => $data])
     @endif
 
     {{-- Report Document Container --}}
@@ -116,6 +148,10 @@
 
         <div class="p-8 sm:p-12 space-y-10">
 
+        @if ($coverageNote)
+            <p class="text-sm text-slate-700 leading-relaxed">{{ $coverageNote }}</p>
+        @endif
+
         {{-- Custom Operator Notes if Provided --}}
         @if (!empty($meta['custom_notes']))
             <div class="bg-slate-50 border-l-4 border-slate-900 p-4 rounded-r-lg text-sm text-slate-700 leading-relaxed">
@@ -126,11 +162,13 @@
 
         {{-- Key Metric Highlights Grid --}}
         @php
-            // Pre-schema-2 reports counted form passes wrongly (always 0%); don't show them.
-            $showFormsTile = (int) ($data['meta']['schema_version'] ?? 1) >= 2 && (int) ($forms['live_tests'] ?? 0) > 0;
+            // Same rule as the email's forms section (which also hides pre-schema-2 numbers).
+            $liveTests = (int) ($forms['live_tests'] ?? 0);
+            $labTests = (int) ($forms['lab_tests'] ?? 0);
+            $showFormsTile = $sections['forms'];
             // Null means nothing on the site reports blocks, so there's no number to show.
-            $showBlockedTile = isset($data['security']) && ($security['blocked_threats_count'] ?? null) !== null;
-            $metricCount = (isset($data['updates']) ? 1 : 0)
+            $showBlockedTile = $sections['security'] && ($security['blocked_threats_count'] ?? null) !== null;
+            $metricCount = ($sections['updates'] ? 1 : 0)
                 + ($showUptime ? 1 : 0)
                 + ($showBlockedTile ? 1 : 0)
                 + ($showFormsTile ? 1 : 0);
@@ -148,15 +186,15 @@
         @endphp
         @if ($metricCount > 0)
             <div class="grid grid-cols-2 {{ $metricGridColsClass }} gap-4">
-                @if (isset($data['updates']))
+                @if ($sections['updates'])
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-slate-900">{{ $updates['total'] ?? 0 }}</div>
+                        <div class="text-2xl font-black text-slate-900">{{ $updateCount }}</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Updates Completed</div>
                     </div>
                 @endif
                 @if ($showUptime)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black text-emerald-600">{{ $uptime['uptime_percentage'] ?? 100 }}%</div>
+                        <div class="text-2xl font-black {{ $uptimeTone['text'] }}">{{ $uptimeLabel }}</div>
                         <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Uptime Rate</div>
                     </div>
                 @endif
@@ -168,52 +206,57 @@
                 @endif
                 @if ($showFormsTile)
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                        <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 0 }}%</div>
-                        <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Deliverability</div>
+                        @if ($liveTests > 0)
+                            {{-- Only live runs send an email, and all we learn is that the site
+                                 reported it sent: nothing watches the inbox, so no "deliverability". --}}
+                            <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ $forms['pass_rate'] ?? 0 }}%</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Emails Sent</div>
+                        @else
+                            <div class="text-2xl font-black" style="color: {{ $primaryColor }};">{{ (int) ($forms['lab_accepted'] ?? 0) }}/{{ $labTests }}</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase mt-1">Form Checks Passed</div>
+                        @endif
                     </div>
                 @endif
             </div>
         @endif
 
         {{-- Section: Updates Applied --}}
-        @if (isset($data['updates']))
+        @if ($sections['updates'])
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-circle-arrow-up text-sky-600"></i> Updates & Upgrades
                     </h2>
-                    <span class="text-xs font-semibold text-slate-500">{{ $updates['total'] ?? 0 }} updates performed</span>
+                    <span class="text-xs font-semibold text-slate-500">{{ $updateCount }} {{ \Illuminate\Support\Str::plural('update', $updateCount) }} performed</span>
                 </div>
                 <p class="text-xs text-slate-500">
                     Regular updates ensure your site remains secure against known vulnerabilities and compatible with current WordPress releases.
                 </p>
 
-                @if (!empty($updates['items']['plugins']))
+                @if ($updateCount > 0)
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">
                                 <tr>
                                     <th class="px-3 py-2">Component</th>
-                                    <th class="px-3 py-2">Details</th>
+                                    <th class="px-3 py-2">Update</th>
                                     <th class="px-3 py-2 text-right">Date Applied</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                @foreach ($updates['items']['plugins'] as $item)
+                                @foreach ($updateRows as $row)
                                     <tr>
-                                        <td class="px-3 py-2 font-medium text-slate-900">{{ $item['target'] ?: 'WordPress Plugin' }}</td>
-                                        <td class="px-3 py-2 text-slate-500">{{ $item['summary'] }}</td>
-                                        <td class="px-3 py-2 text-right text-slate-400 font-mono">{{ $item['date'] }}</td>
+                                        <td class="px-3 py-2 font-medium text-slate-900">{{ $row['type'] }}</td>
+                                        <td class="px-3 py-2 text-slate-700">{{ $row['label'] }}</td>
+                                        <td class="px-3 py-2 text-right text-slate-400 font-mono">{{ $row['date'] }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
                     </div>
-                @elseif (\Modules\ClientReports\Services\ClientReportCompiler::updatesWereWaiting($updates))
-                    {{-- Same rule as the email: never "up to date" while updates wait or weren't checked. --}}
-                    <div class="text-xs text-slate-500 italic py-2">No updates were applied this period.</div>
                 @else
-                    <div class="text-xs text-slate-500 italic py-2">All software components were up-to-date throughout this period.</div>
+                    {{-- The email's sentence: never "up to date" while updates wait or weren't checked. --}}
+                    <div class="text-xs text-slate-500 italic py-2">{{ \Modules\ClientReports\Support\ReportPhrases::noUpdatesLine($updates) }}</div>
                 @endif
             </div>
         @endif
@@ -225,12 +268,12 @@
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-heart-pulse text-emerald-600"></i> Uptime & Availability
                     </h2>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                        {{ $uptime['uptime_percentage'] ?? 100 }}% Available
+                    <span class="text-xs font-semibold {{ $uptimeTone['badge'] }} px-2.5 py-1 rounded-full">
+                        {{ $uptimeLabel }} Available
                     </span>
                 </div>
                 <p class="text-xs text-slate-500">
-                    Our global uptime monitors ping your website 24/7 at frequent intervals to verify round-the-clock availability.
+                    We check your site around the clock and are alerted the moment it stops responding.
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
@@ -242,15 +285,25 @@
                         <div class="text-[11px] text-slate-500">Total Downtime</div>
                     </div>
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
-                        <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
+                        @if ($monitoredSince)
+                            <div class="text-sm font-bold text-slate-900">{{ $monitoredSince }}</div>
+                            <div class="text-[11px] text-slate-500">Monitoring began</div>
+                        @else
+                            <div class="text-sm font-bold text-slate-900">24 / 7 / 365</div>
+                            <div class="text-[11px] text-slate-500">Proactive Monitoring</div>
+                        @endif
                     </div>
                 </div>
+                @if ($isOperatorPreview && $probeBlockedMinutes > 0)
+                    <p class="no-print text-xs text-slate-500">The uptime monitor was blocked (HTTP 429) for {{ $probeBlockedMinutes }} min this period. That time isn't counted as downtime, and the client doesn't see this note.</p>
+                @endif
             </div>
+        @elseif (isset($hiddenNotes['uptime']))
+            @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['uptime']])
         @endif
 
         {{-- Section: Security & Threat Prevention --}}
-        @if (isset($data['security']))
+        @if ($sections['security'])
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -267,12 +320,17 @@
                         default => [ucfirst((string) $checksum), 'text-amber-600'],
                     };
                     $vulnsChecked = (bool) ($security['vulnerabilities_checked'] ?? false);
-                    [$malwareLabel, $malwareClass] = match ($security['malware_status'] ?? null) {
-                        'clean' => ['No malware found', 'text-emerald-600'],
-                        'warning', 'issues_found' => ['Issues flagged', 'text-amber-600'],
-                        null => ['Not checked this period', 'text-slate-400'],
-                        default => [ucfirst((string) $security['malware_status']), 'text-amber-600'],
+                    $vulnPluginNames = \Modules\ClientReports\Support\ReportPhrases::vulnerablePlugins($security);
+                    $vulnsCheckedOn = \Modules\ClientReports\Support\ReportPhrases::vulnerabilitiesCheckedOn($security);
+                    // The email's label: "Reviewed — no threat found" once a person has
+                    // checked review-tier findings, "Partial scan" for a scan cut short.
+                    [$malwareLabel, $malwareTone] = \Modules\ClientReports\Support\ReportPhrases::malwareLabel($security);
+                    $malwareClass = match ($malwareTone) {
+                        'good' => 'text-emerald-600',
+                        'muted' => 'text-slate-500',
+                        default => 'text-amber-600',
                     };
+                    $blockedNote = \Modules\ClientReports\Support\ReportPhrases::blockedVisitorsNote($security);
                     $vulns = (int) ($security['active_vulnerabilities'] ?? 0);
                 @endphp
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -285,95 +343,118 @@
                             @endif
                         </div>
                     @endif
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
-                        @if ((bool) ($data['site']['is_wordpress'] ?? true))
+                    {{-- Like the email: no core-files row for a non-WordPress site or a host
+                         with no way to run the check, and no blocked count unless we know
+                         the site's lockouts reach us. --}}
+                    @if ((bool) ($data['site']['is_wordpress'] ?? true) && (bool) ($security['checksum_supported'] ?? true))
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
                             <div class="text-sm font-bold {{ $checksumClass }} mt-1">{{ $checksumLabel }}</div>
                             @if (! empty($security['checksum_checked_at']))
                                 <div class="text-[11px] text-slate-400">Checked {{ $security['checksum_checked_at'] }}</div>
                             @endif
-                        @else
-                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked (no WordPress detected)</div>
-                        @endif
-                    </div>
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-xs font-medium text-slate-500">Malicious Requests Deflected</div>
-                        <div class="text-sm font-bold text-slate-900 mt-1">
-                            {{ ($security['blocked_threats_count'] ?? null) !== null ? $security['blocked_threats_count'].' IP bans' : 'Not measured (no blocker reports to Control)' }}
                         </div>
-                    </div>
+                    @elseif ($isOperatorPreview)
+                        <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
+                            <div class="text-xs font-medium text-slate-500">WordPress Core Files</div>
+                            <div class="text-sm font-bold text-slate-400 mt-1">{{ (bool) ($data['site']['is_wordpress'] ?? true) ? 'Not checked (no checksum path for this host)' : 'Not checked (no WordPress detected)' }} — hidden from the client</div>
+                        </div>
+                    @endif
+                    @if (($security['blocked_threats_count'] ?? null) !== null)
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-xs font-medium text-slate-500">Malicious Visitors Blocked</div>
+                            <div class="text-sm font-bold text-slate-900 mt-1">{{ number_format((int) $security['blocked_threats_count']) }}</div>
+                        </div>
+                    @elseif ($isOperatorPreview)
+                        <div class="no-print border border-dashed border-slate-200 rounded-lg p-3">
+                            <div class="text-xs font-medium text-slate-500">Malicious Visitors Blocked</div>
+                            <div class="text-xs text-slate-500 mt-1">{{ $blockedNote ?? 'Malicious visitors blocked hidden from the client: no blocker reports to Control for this site this period.' }}</div>
+                        </div>
+                    @endif
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-xs font-medium text-slate-500">Known Plugin Vulnerabilities</div>
-                        @if (! $vulnsChecked)
-                            <div class="text-sm font-bold text-slate-400 mt-1">Not checked</div>
-                        @else
-                            <div class="text-sm font-bold {{ $vulns === 0 ? 'text-emerald-600' : 'text-amber-600' }} mt-1">
-                                {{ $vulns === 0 ? 'None found' : $vulns.' found' }}
-                            </div>
-                            @if (! empty($security['vulnerable_plugins']))
-                                <div class="text-[11px] text-slate-500">{{ implode(', ', $security['vulnerable_plugins']) }}</div>
-                            @endif
-                            @if (! empty($security['vulnerabilities_as_of']))
-                                <div class="text-[11px] text-slate-400">As of {{ $security['vulnerabilities_as_of'] }}</div>
-                            @endif
+                        <div class="text-sm font-bold {{ ! $vulnsChecked ? 'text-slate-400' : ($vulns === 0 ? 'text-emerald-600' : 'text-amber-600') }} mt-1">
+                            {{ \Modules\ClientReports\Support\ReportPhrases::vulnerabilities($security) }}
+                        </div>
+                        @if ($vulnPluginNames !== [])
+                            <div class="text-[11px] text-slate-500">{{ \Illuminate\Support\Str::plural('Plugin', count($vulnPluginNames)) }} affected: {{ implode(', ', $vulnPluginNames) }}</div>
+                        @endif
+                        @if ($vulnsCheckedOn)
+                            <div class="text-[11px] text-slate-400">Checked {{ $vulnsCheckedOn }}</div>
                         @endif
                     </div>
                 </div>
             </div>
         @endif
 
-        {{-- Section: Backups & Disaster Recovery --}}
-        @if (isset($data['backups']))
+        {{-- Section: Backups & Disaster Recovery. Only backups we actually saw
+             recently, like the email; anything else is an operator note. --}}
+        @if ($sections['backups'])
             @php
-                $backupStatus = $backups['status'] ?? (! empty($backups['verified']) ? 'verified' : 'not_checked');
-                [$backupBadge, $backupBadgeClass] = match ($backupStatus) {
-                    'verified' => ['Verified this period', 'text-emerald-700 bg-emerald-50'],
-                    'none_found' => ['No backups found this period — hidden from the client email', 'text-amber-700 bg-amber-50'],
-                    'stale' => ['No backups in the last 10 days of the period — hidden from the client email', 'text-amber-700 bg-amber-50'],
-                    'no_source' => ['No backup source for this host — hidden from the client email', 'text-slate-600 bg-slate-100'],
-                    default => ['Could not check backups — hidden from the client email', 'text-red-700 bg-red-50'],
-                };
+                $backupDays = (int) ($backups['days_with_backups'] ?? 0);
+                $backupDestination = \Modules\ClientReports\Support\ReportPhrases::backupDestination($backups);
             @endphp
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                         <i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> Backups & Recovery
                     </h2>
-                    <span class="{{ $backupStatus === 'verified' ? '' : 'no-print' }} text-xs font-semibold {{ $backupBadgeClass }} px-2.5 py-1 rounded-full">{{ $backupBadge }}</span>
+                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Verified this period</span>
                 </div>
-                @if (in_array($backupStatus, ['verified', 'stale'], true))
+                @if (isset($backups['status']))
                     <p class="text-xs text-slate-500">
                         @if ($backups['covers_period'] ?? true)
-                            Backed up on {{ (int) ($backups['days_with_backups'] ?? 0) }} day(s) this period{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                            Backed up on {{ $backupDays }} {{ \Illuminate\Support\Str::plural('day', $backupDays) }} this period{{ $backupDestination ? ' '.$backupDestination : '' }}.
                         @else
-                            Backed up{{ ! empty($backups['destination']) ? ' by '.$backups['destination'] : '' }}.{{ $backupStatus === 'stale' && ! empty($backups['last_backup_at']) ? ' Last backup: '.$backups['last_backup_at'].'.' : '' }}
+                            Backed up{{ $backupDestination ? ' '.$backupDestination : '' }}.
                         @endif
                     </p>
-                    @if (! ($backups['covers_period'] ?? true) && ($isOperatorPreview ?? false))
-                        <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>
+                    @if (! ($backups['covers_period'] ?? true) && $isOperatorPreview)
+                        @if (! empty($backups['archives_began']))
+                            <p class="no-print text-xs text-amber-700">Off-site backups began on {{ $backups['archives_began'] }}; none were made before that this period, although the site was enrolled by {{ $backups['expected_from'] ?? $backups['records_from'] }}. The email leaves out the day count.</p>
+                        @else
+                            <p class="no-print text-xs text-slate-500">Our records for this site start {{ $backups['records_from'] }}, so the email leaves out the day count.</p>
+                        @endif
                     @endif
+                @else
+                    {{-- Older reports, compiled before backups were recorded: the email's wording. --}}
+                    <p class="text-xs text-slate-500">
+                        Your site's files and database were backed up to independent off-site storage this period.{{ ! empty($backups['last_backup_at']) ? ' Most recent backup: '.$backups['last_backup_at'].'.' : '' }}
+                    </p>
                 @endif
                 @if (! empty($backups['recent']))
                     <table class="w-full text-xs text-left">
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($backups['recent'] as $day)
                                 <tr>
-                                    <td class="px-3 py-1.5 font-mono text-slate-700">{{ $day['date'] }}</td>
-                                    <td class="px-3 py-1.5 text-slate-500">{{ implode(' + ', $day['kinds']) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
-                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ $day['bytes'] !== null ? number_format($day['bytes'] / 1024 ** 2, 1).' MB' : '—' }}</td>
+                                    <td class="px-3 py-1.5 text-slate-700 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($day['date'])->format('D, M j') }}</td>
+                                    <td class="px-3 py-1.5 text-slate-500">{{ \Modules\ClientReports\Support\ReportPhrases::backupKinds((array) ($day['kinds'] ?? [])) }}{{ ! empty($day['manual']) ? ' (manual)' : '' }}</td>
+                                    <td class="px-3 py-1.5 text-right text-slate-400">{{ ($day['bytes'] ?? null) !== null ? \Modules\ClientReports\Support\ReportPhrases::bytes((int) $day['bytes']) : '—' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 @endif
-                @if (! empty($backups['check_error']))
+                @if (! empty($backups['check_error']) && $isOperatorPreview)
                     <div class="no-print text-xs text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">Last check failed: {{ $backups['check_error'] }}</div>
                 @endif
             </div>
+        @elseif (isset($hiddenNotes['backups']))
+            @php
+                // Our relay's own failure (internal: never on the public view).
+                $relayError = ! empty($backups['relay_failing_since']) && ! empty($backups['relay_error'])
+                    ? 'Last relay error: '.$backups['relay_error']
+                    : null;
+            @endphp
+            @include('client-reports::reports._hidden-note', [
+                'note' => $hiddenNotes['backups'],
+                'badge' => ($backups['status'] ?? null) === 'failing' ? 'Failing' : null,
+                'detail' => $relayError ?? (! empty($backups['check_error']) ? 'Last check failed: '.$backups['check_error'] : null),
+            ])
         @endif
 
         {{-- Section: Performance Benchmarks --}}
-        @if (isset($data['performance']) && ! empty($perf['has_performance']) && (! empty($perf['mobile']) || ! empty($perf['desktop'])))
+        @if ($sections['performance'])
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -398,10 +479,12 @@
                     @endif
                 </div>
             </div>
+        @elseif (isset($hiddenNotes['performance']))
+            @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['performance']])
         @endif
 
         {{-- Section: Traffic Analytics --}}
-        @if (isset($data['traffic']) && !empty($traffic['has_traffic']))
+        @if ($sections['traffic'])
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -410,9 +493,14 @@
                     <span class="text-xs font-semibold text-slate-500">{{ number_format($traffic['total_visits'] ?? 0) }} visits this period</span>
                 </div>
                 <p class="text-xs text-slate-500">
-                    Overall visitor traffic and bandwidth usage recorded by the fleet's edge/CDN layer during the reporting period.
+                    Visits, requests and data served for your site during the reporting period.
                 </p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                @if ($isOperatorPreview && isset($traffic['days_covered']))
+                    <p class="no-print text-xs text-slate-500">Recorded on {{ (int) $traffic['days_covered'] }} of {{ (int) ($traffic['period_days'] ?? 0) }} days, from {{ ($traffic['source'] ?? null) === 'pressable' ? "Pressable's traffic feed" : "the server's access logs" }}.</p>
+                @endif
+                {{-- Like the email: no "Data transferred" when the host reported no byte counts. --}}
+                @php($bandwidthLabel = \Modules\ClientReports\Support\ReportPhrases::bandwidth($traffic['bandwidth_mb'] ?? null))
+                <div class="grid grid-cols-1 {{ $bandwidthLabel !== null ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }} gap-4 text-center">
                     <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
                         <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_visits'] ?? 0) }}</div>
                         <div class="text-[11px] text-slate-500">Total Visits</div>
@@ -421,15 +509,39 @@
                         <div class="text-sm font-bold text-slate-900">{{ number_format($traffic['total_requests'] ?? 0) }}</div>
                         <div class="text-[11px] text-slate-500">Total Requests</div>
                     </div>
-                    <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-900">{{ ($traffic['bandwidth_mb'] ?? 0) > 0 ? number_format($traffic['bandwidth_mb'], 1).' MB' : 'Not measured' }}</div>
-                        <div class="text-[11px] text-slate-500">Bandwidth Served</div>
-                    </div>
+                    @if ($bandwidthLabel !== null)
+                        <div class="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                            <div class="text-sm font-bold text-slate-900">{{ $bandwidthLabel }}</div>
+                            <div class="text-[11px] text-slate-500">Data Transferred</div>
+                        </div>
+                    @endif
                 </div>
             </div>
+        @elseif (isset($hiddenNotes['traffic']))
+            @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['traffic']])
         @endif
 
-        @if (isset($data['work_log']))
+        {{-- Section: Contact forms. Same rule and wording as the email. --}}
+        @if ($sections['forms'])
+            <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-envelope-open-text text-sky-600"></i> Contact Forms
+                    </h2>
+                </div>
+                @if ($liveTests > 0)
+                    <p class="text-sm text-slate-700">We sent <strong>{{ $liveTests }}</strong> test {{ \Illuminate\Support\Str::plural('submission', $liveTests) }} through your forms — your site reported sending the notification email for <strong class="{{ ($forms['pass_rate'] ?? 0) >= 100 ? 'text-emerald-600' : 'text-amber-600' }}">{{ $forms['pass_rate'] ?? 0 }}%</strong> of them. <span class="text-slate-500">We don't check the inbox, so this doesn't confirm the emails arrived.</span></p>
+                @endif
+                @if ($labTests > 0)
+                    <p class="text-sm text-slate-700">Your forms accepted <strong>{{ (int) ($forms['lab_accepted'] ?? 0) }} of {{ $labTests }}</strong> automated check {{ \Illuminate\Support\Str::plural('submission', $labTests) }}. <span class="text-slate-500">These checks confirm the form works without sending an email, so they don't test the email.</span></p>
+                @endif
+            </div>
+        @elseif (isset($hiddenNotes['forms']))
+            @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['forms']])
+        @endif
+
+        {{-- Section: Work log. Hidden when no hours were logged, like the email. --}}
+        @if ($sections['work_log'])
             <div class="space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                     <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -437,34 +549,33 @@
                     </h2>
                     <span class="text-xs font-semibold text-slate-500">{{ number_format($workLog['total_hours'] ?? 0, 2) }} hours</span>
                 </div>
-                @if (empty($workLog['entries']))
-                    <p class="text-xs text-slate-500">No manual work was logged during this period.</p>
-                @else
-                    <table class="w-full text-sm">
-                        <thead class="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <table class="w-full text-sm">
+                    <thead class="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                        <tr>
+                            <th class="pb-2">Date</th>
+                            <th class="pb-2">Hours</th>
+                            <th class="pb-2">Work</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($workLog['entries'] as $entry)
                             <tr>
-                                <th class="pb-2">Date</th>
-                                <th class="pb-2">Hours</th>
-                                <th class="pb-2">Work</th>
+                                <td class="py-2 text-slate-600 whitespace-nowrap">{{ $entry['worked_on'] }}</td>
+                                <td class="py-2 text-slate-900 font-semibold">{{ number_format($entry['hours'], 2) }}</td>
+                                <td class="py-2 text-slate-700">
+                                    {{ $entry['description'] }}
+                                    {{-- Who logged it is for us: never printed or on the public view. --}}
+                                    @if ($isOperatorPreview && ! empty($entry['user']))
+                                        <span class="no-print block text-[11px] text-slate-400">{{ $entry['user'] }}</span>
+                                    @endif
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach ($workLog['entries'] as $entry)
-                                <tr>
-                                    <td class="py-2 text-slate-600 whitespace-nowrap">{{ $entry['worked_on'] }}</td>
-                                    <td class="py-2 text-slate-900 font-semibold">{{ number_format($entry['hours'], 2) }}</td>
-                                    <td class="py-2 text-slate-700">
-                                        {{ $entry['description'] }}
-                                        @if (!empty($entry['user']))
-                                            <span class="block text-[11px] text-slate-400">{{ $entry['user'] }}</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                @endif
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
+        @elseif (isset($hiddenNotes['work_log']))
+            @include('client-reports::reports._hidden-note', ['note' => $hiddenNotes['work_log']])
         @endif
 
         {{-- Custom Footer Note if present --}}

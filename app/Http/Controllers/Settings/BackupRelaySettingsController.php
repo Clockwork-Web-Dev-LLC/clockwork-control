@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Modules\BackupRelay\Services\BackupArchiveEnumerator;
+use Modules\BackupRelay\Services\CompanionBackupRelayAdapter;
 use Modules\Core\Contracts\HostingProvider;
 use Throwable;
 
@@ -126,6 +127,22 @@ class BackupRelaySettingsController extends Controller
             ]);
 
             $site = Site::query()->findOrFail($validated['site_id']);
+
+            if ((bool) $validated['enabled'] && ! $site->backup_relay_enabled
+                && ($blocked = CompanionBackupRelayAdapter::enableBlockedReason($site)) !== null) {
+                $msg = "Backup relay was not enabled for {$site->domain}: {$blocked}";
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $msg,
+                        'enabled' => false,
+                    ], 422);
+                }
+
+                return back()->with('warning', $msg);
+            }
+
             $site->update([
                 'backup_relay_enabled' => (bool) $validated['enabled'],
             ]);
@@ -158,10 +175,26 @@ class BackupRelaySettingsController extends Controller
             'sites.*' => 'integer|exists:sites,id',
         ]);
 
-        $enabledIds = $validated['sites'] ?? [];
+        $enabledIds = array_map('intval', $validated['sites'] ?? []);
+
+        // Only sites being switched on are checked. A site that is already on
+        // stays on, so its failing runs keep showing up instead of going quiet.
+        $blocked = Site::query()
+            ->whereIn('id', $enabledIds)
+            ->where('backup_relay_enabled', false)
+            ->get()
+            ->map(fn (Site $site) => [
+                'site_id' => $site->id,
+                'domain' => $site->domain,
+                'reason' => CompanionBackupRelayAdapter::enableBlockedReason($site),
+            ])
+            ->filter(fn (array $row) => $row['reason'] !== null)
+            ->values();
+
+        $toEnable = array_values(array_diff($enabledIds, $blocked->pluck('site_id')->all()));
 
         Site::query()
-            ->whereIn('id', $enabledIds)
+            ->whereIn('id', $toEnable)
             ->update(['backup_relay_enabled' => true]);
 
         Site::query()
@@ -177,17 +210,23 @@ class BackupRelaySettingsController extends Controller
             }
         }
 
-        $msg = 'Backup relay settings updated for '.count($enabledIds).' site(s).';
+        $msg = 'Backup relay settings updated for '.count($toEnable).' site(s).';
+        $blockedMsg = $blocked->isEmpty() ? null : 'Not enabled: '.$blocked
+            ->map(fn (array $row) => "{$row['domain']} ({$row['reason']})")
+            ->implode('; ');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => $msg,
-                'enabled_count' => count($enabledIds),
+                'message' => $blockedMsg === null ? $msg : "{$msg} {$blockedMsg}",
+                'enabled_count' => count($toEnable),
+                'blocked' => $blocked->all(),
             ]);
         }
 
-        return back()->with('status', $msg);
+        $redirect = back()->with('status', $msg);
+
+        return $blockedMsg === null ? $redirect : $redirect->with('warning', $blockedMsg);
     }
 
     public function runNow(Request $request, Settings $settings): RedirectResponse|JsonResponse

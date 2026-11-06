@@ -62,7 +62,7 @@ describe('WeirdStatsController', function () {
             ->get(route('settings.weird-stats.index'));
 
         $response->assertOk()
-            ->assertSee('Weird Stats')
+            ->assertSee('Fleet Stats')
             ->assertDontSee('Attack hour-of-day')
             ->assertDontSee('Most-attacked request paths');
     });

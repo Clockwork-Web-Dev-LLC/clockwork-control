@@ -325,6 +325,7 @@ class UpdatesController extends Controller
                     ->where('target_slug', $slug)
                     ->update([
                         'consecutive_failures' => 0,
+                        ...UpdateFailureStreakRecorder::FS_RUN_RESET,
                         'ignored_at' => null,
                         'ignore_id' => null,
                     ]);
