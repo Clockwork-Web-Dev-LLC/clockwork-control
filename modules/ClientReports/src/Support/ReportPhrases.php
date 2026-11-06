@@ -27,7 +27,7 @@ final class ReportPhrases
 
     /**
      * Words that make a contact's stored name an organisation's rather than
-     * a person's ("St James Church", "Example Design Group"), lower case.
+     * a person's ("First Community Church", "Example Design Group"), lower case.
      */
     private const ORGANISATION_WORDS = [
         'academy', 'agency', 'and', 'association', 'bank', 'board', 'cafe', 'capital', 'center', 'centre',

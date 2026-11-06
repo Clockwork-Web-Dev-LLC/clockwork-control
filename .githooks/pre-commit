@@ -34,8 +34,48 @@ if [ "$blocked" -eq 1 ]; then
     exit 1
 fi
 
-# Layer 2: Block client-identifying names in staged content.
+# Layer 2: Block client-identifying names/domains/emails in staged content.
 DENYLIST="${HOME}/.config/clockwork/client-denylist.txt"
+if command -v php >/dev/null 2>&1 && [ -f "artisan" ]; then
+    php -r '
+        $denylistPath = getenv("HOME") . "/.config/clockwork/client-denylist.txt";
+        @mkdir(dirname($denylistPath), 0700, true);
+        $existing = is_file($denylistPath)
+            ? array_map("trim", file($denylistPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+            : [];
+        try {
+            $pdo = new PDO("mysql:host=127.0.0.1;port=3306;dbname=clockwork", "root", "", [PDO::ATTR_TIMEOUT => 1]);
+            $safeDomains = ["example.com", "example.org", "example.net", "localhost", "clockworkwd.com", "clockworkwp.com", "turnkeywp.com", "pressable.com", "headlesstesting.mystagingwebsite.com"];
+            $domains = $pdo->query("SELECT domain FROM sites WHERE domain IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($domains as $d) {
+                $d = strtolower(trim((string) $d));
+                if ($d !== "" && !in_array($d, $safeDomains, true)) {
+                    $existing[] = preg_quote($d, "/");
+                }
+            }
+            $emails = $pdo->query("SELECT email FROM clients WHERE email IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($emails as $e) {
+                $e = strtolower(trim((string) $e));
+                if ($e !== "" && !str_ends_with($e, "@example.com") && !str_ends_with($e, "@clockworkwd.com") && !str_ends_with($e, "@clockworkwp.com") && $e !== "aaron.reimann@gmail.com") {
+                    $existing[] = preg_quote($e, "/");
+                }
+            }
+            $safeNames = ["clockwork", "example", "test client"];
+            $names = $pdo->query("SELECT name FROM clients WHERE name IS NOT NULL UNION SELECT company_name FROM clients WHERE company_name IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($names as $n) {
+                $n = trim((string) $n);
+                if (strlen($n) >= 6 && (str_contains($n, " ") || str_contains($n, ".") || strlen($n) >= 9) && !in_array(strtolower($n), $safeNames, true)) {
+                    $existing[] = preg_quote($n, "/");
+                }
+            }
+            $all = array_values(array_unique(array_filter($existing)));
+            sort($all);
+            file_put_contents($denylistPath, implode("\n", $all) . "\n");
+        } catch (Throwable $e) {
+            // DB offline or unreachable; fall back to existing file on disk.
+        }
+    ' 2>/dev/null || true
+fi
 if [ -f "$DENYLIST" ]; then
     matches="$(git diff --cached --no-color --unified=0 --diff-filter=ACM \
         | grep '^+' | grep -v '^+++' \
@@ -43,7 +83,7 @@ if [ -f "$DENYLIST" ]; then
     if [ -n "$matches" ]; then
         echo "BLOCKED: staged changes match the client-identifier denylist (~/.config/clockwork/client-denylist.txt):" >&2
         echo "$matches" | head -20 >&2
-        echo "  Anonymize the reference (e.g. 'a client site') before committing." >&2
+        echo "  Anonymize the reference (e.g. 'example.com' / 'Acme Corp') before committing." >&2
         exit 1
     fi
 fi
