@@ -2,9 +2,13 @@
 
 namespace Modules\Seo;
 
+use App\Services\Diagnostics\DiagnosticCheck;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Seo\Diagnostics\GoogleConnectionCheck;
+use Modules\Seo\Google\GoogleApi;
+use Modules\Seo\Google\GoogleTokenProvider;
 
 /**
  * The indexability watchdog itself stays in app/Services/Seo (core
@@ -14,8 +18,19 @@ use Modules\Core\NavItem;
  */
 class SeoServiceProvider extends ModuleServiceProvider
 {
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->bind(GoogleApi::class, fn ($app) => new GoogleApi(
+            $app->make(GoogleTokenProvider::class),
+            (int) config('clockwork.seo.google_timeout', 30),
+        ));
+    }
+
     public function boot(): void
     {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'seo');
 
         if ($this->enabled()) {
@@ -28,10 +43,19 @@ class SeoServiceProvider extends ModuleServiceProvider
         return new ModuleManifest(
             id: 'seo',
             name: 'SEO',
-            description: 'Fleet-wide SEO overview: search engine indexability for every monitored site.',
+            description: 'Fleet-wide SEO overview: search engine indexability for every monitored site, plus a nightly Search Console and GA4 sync for SEO clients.',
+            credentialFields: [
+                'google_client_id' => ['label' => 'Google OAuth client ID (Search Console + GA4)', 'secret' => false],
+                'google_client_secret' => ['label' => 'Google OAuth client secret', 'secret' => true],
+            ],
             status: ModuleManifest::STATUS_VERIFIED,
             statusNote: 'Reads the indexability watchdog that already runs with every uptime probe.',
         );
+    }
+
+    public function diagnosticCheck(): ?DiagnosticCheck
+    {
+        return $this->app->make(GoogleConnectionCheck::class);
     }
 
     public function navItems(): array

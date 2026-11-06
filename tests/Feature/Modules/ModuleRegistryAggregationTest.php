@@ -24,6 +24,7 @@ use Modules\Linode\LinodeCheck;
 use Modules\Linode\LinodeCloudProvider;
 use Modules\Mattermost\MattermostCheck;
 use Modules\Pressable\PressableCheck;
+use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Pressable\PressableHostingProvider;
 use Modules\Slack\SlackCheck;
 use Modules\SpinupWp\SpinupWpCheck;
@@ -140,7 +141,7 @@ describe('ModuleRegistry aggregation', function () {
         expect($names)->toEqualCanonicalizing(['Google', 'GitHub', 'Microsoft']);
     });
 
-    it('includes all 20 module-contributed diagnostic checks', function () {
+    it('includes all 22 module-contributed diagnostic checks', function () {
         $checks = $this->registry->diagnosticChecks();
 
         $classes = array_map(fn ($c) => get_class($c), $checks);
@@ -167,6 +168,7 @@ describe('ModuleRegistry aggregation', function () {
             GoogleOAuthCheck::class,
             GitHubOAuthCheck::class,
             MicrosoftOAuthCheck::class,
+            GoogleConnectionCheck::class,
         ]);
     });
 

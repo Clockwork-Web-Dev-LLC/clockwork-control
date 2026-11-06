@@ -526,6 +526,16 @@ return [
     'seo' => [
         'monitoring_enabled' => (bool) env('CLOCKWORK_SEO_MONITORING_ENABLED', true),
         'robots_txt_timeout' => (int) env('CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT', 10),
+
+        // modules/Seo's own Google connection (Search Console + GA4 data),
+        // separate from Google login. Normally set on Settings → Integrations
+        // (stored encrypted); these env values are the fallback. Left null,
+        // the module falls back to the Google login client
+        // (auth_google.* / services.google.*), which only works if that
+        // client also lists /seo/google/callback as a redirect URI.
+        'google_client_id' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_ID'),
+        'google_client_secret' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET'),
+        'google_timeout' => (int) env('CLOCKWORK_SEO_GOOGLE_TIMEOUT', 30),
     ],
 
     // Fleet-wide care plans policy.
