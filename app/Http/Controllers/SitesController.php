@@ -38,6 +38,7 @@ use App\Support\CompanionExclusion;
 use App\Support\FleetSelfIps;
 use App\Support\UpgraderOutput;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -2317,12 +2318,15 @@ class SitesController extends Controller
             } catch (Throwable $e) {
                 $lastError = $e;
                 $msg = $e->getMessage();
-                if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
+                $status = ($e instanceof RequestException)
+                    ? $e->response->status()
+                    : null;
+                if ($status === 401 || preg_match('/\b(?:HTTP|status code)\s+401\b/i', $msg) === 1 || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
                     return back()->withInput($this->enrollSafeInput($request))->withErrors([
                         'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
                     ]);
                 }
-                if (str_contains($msg, '404')) {
+                if ($status === 404 || preg_match('/\b(?:HTTP|status code)\s+404\b/i', $msg) === 1) {
                     continue;
                 }
                 break;
@@ -2331,7 +2335,10 @@ class SitesController extends Controller
 
         if ($health === null && $lastError !== null) {
             $msg = $lastError->getMessage();
-            if (str_contains($msg, '404')) {
+            $status = ($lastError instanceof RequestException)
+                ? $lastError->response->status()
+                : null;
+            if ($status === 404 || preg_match('/\b(?:HTTP|status code)\s+404\b/i', $msg) === 1) {
                 return back()->withInput($this->enrollSafeInput($request))->withErrors([
                     'domain' => "Neither Clockwork Renegade nor Clockwork Companion REST API was found on {$domain} (HTTP 404). Ensure the plugin is installed and activated.",
                 ]);

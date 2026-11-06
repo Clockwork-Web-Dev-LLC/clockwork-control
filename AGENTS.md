@@ -19,3 +19,4 @@ Clockwork Control is a public/distributable codebase. **Never** include real cli
 ### Automated Enforcement:
 - `.githooks/pre-commit` and `.githooks/commit-msg` automatically sync and check staged changes and commit messages against `~/.config/clockwork/client-denylist.txt` (populated from the local `sites`, `clients`, and `client_report_schedules` tables).
 - Never bypass `.githooks/pre-commit` with `--no-verify` to work around a client-denylist or `gitleaks` block.
+
