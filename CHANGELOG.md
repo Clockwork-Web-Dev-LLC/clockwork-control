@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.3] - 2026-11-06
+
 ### Added
 - **Client Reports — Every report waits for approval** (on by default): the monthly run compiles and checks every report but emails nothing; operators send them from the Reports list. Switch it on or off on the Scheduling tab (`client_reports.require_approval`, logged as `client_report_approval_changed`).
 - **Client Reports — Approve & send all ready / Send selected** on the Reports list: send every Ready to send report of the period, or the ticked ones (held ones included), up to 25 per press, skipping outdated, replaced and already-sent reports.
