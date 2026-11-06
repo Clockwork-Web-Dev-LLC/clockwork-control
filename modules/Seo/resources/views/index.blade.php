@@ -6,6 +6,23 @@
 <x-page-header title="SEO"
     subtitle="Search engine indexability across the fleet, checked on every uptime probe (robots.txt daily)." />
 
+@include('seo::_nav')
+@include('seo::_flash')
+
+@if ($googleRevoked)
+    <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-sm flex items-center gap-3" role="alert" data-google-revoked>
+        <i class="fa-solid fa-plug-circle-xmark text-base"></i>
+        <span>
+            The Google connection for search data was revoked, so the nightly Search Console and GA4 sync is stopped.
+            @if (auth()->user()?->isAdmin())
+                <a href="{{ route('seo.settings') }}" class="underline font-semibold">Reconnect it in SEO settings.</a>
+            @else
+                Ask an admin to reconnect it in SEO settings.
+            @endif
+        </span>
+    </div>
+@endif
+
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <x-stat-box label="Indexable" :value="$totals['indexable']" icon="fa-circle-check" />
     <x-stat-box label="Blocking search" :value="$totals['blocking']" icon="fa-triangle-exclamation" />
@@ -36,6 +53,7 @@
                         <th class="px-5 py-2 font-semibold">Status</th>
                         <th class="px-5 py-2 font-semibold">Reason</th>
                         <th class="px-5 py-2 font-semibold">Checked</th>
+                        <th class="px-5 py-2 font-semibold">Search data</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -77,6 +95,18 @@
                             </td>
                             <td class="px-5 py-2 text-xs text-[var(--color-ink-soft)]">
                                 {{ $s->seo_checked_at?->diffForHumans() ?? 'never' }}
+                            </td>
+                            <td class="px-5 py-2 text-xs whitespace-nowrap">
+                                @if ($profile = $profiles->get($s->id))
+                                    <a href="{{ route('seo.sites.show', $s) }}" class="text-[var(--color-primary-600)] hover:underline">Numbers</a>
+                                    <span class="text-[var(--color-ink-soft)]">·</span>
+                                    <a href="{{ route('seo.sites.profile', $s) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">Profile</a>
+                                    @if ($profile->last_sync_error)
+                                        <span class="status-pill status-red text-[10px] ml-1" title="{{ $profile->last_sync_error }}">Sync error</span>
+                                    @endif
+                                @else
+                                    <a href="{{ route('seo.sites.profile', $s) }}" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">Set up</a>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

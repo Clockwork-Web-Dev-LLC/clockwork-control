@@ -5,6 +5,8 @@ namespace Modules\Seo\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Site;
 use Illuminate\View\View;
+use Modules\Seo\Models\GoogleConnection;
+use Modules\Seo\Models\SiteProfile;
 
 class SeoController extends Controller
 {
@@ -31,7 +33,15 @@ class SeoController extends Controller
             'disabled' => $sites->count() - $monitored->count(),
         ];
 
-        return view('seo::index', compact('sites', 'totals'));
+        $profiles = SiteProfile::query()->whereIn('site_id', $sites->pluck('id'))->get()->keyBy('site_id');
+        $connection = GoogleConnection::current();
+
+        return view('seo::index', [
+            'sites' => $sites,
+            'totals' => $totals,
+            'profiles' => $profiles,
+            'googleRevoked' => $connection?->isRevoked() ?? false,
+        ]);
     }
 
     private function attentionRank(Site $site): int

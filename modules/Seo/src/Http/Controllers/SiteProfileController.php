@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use InvalidArgumentException;
@@ -32,9 +31,11 @@ class SiteProfileController extends Controller
         $profile = SiteProfile::query()->firstOrNew(['site_id' => $site->id]);
         $connection = GoogleConnection::current();
 
-        $properties = $connection
-            ? GoogleProperty::query()->where('connection_id', $connection->id)->where('kind', GoogleProperty::KIND_GSC)->orderBy('property')->get()
-            : new Collection;
+        $properties = GoogleProperty::query()
+            ->where('connection_id', $connection->id ?? 0)
+            ->where('kind', GoogleProperty::KIND_GSC)
+            ->orderBy('property')
+            ->get();
         $latestSeen = $properties->max('last_seen_at');
 
         $suggested = $this->suggestedProperties($site->domain);

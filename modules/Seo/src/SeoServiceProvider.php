@@ -3,18 +3,24 @@
 namespace Modules\Seo;
 
 use App\Services\Diagnostics\DiagnosticCheck;
+use Illuminate\Console\Scheduling\Schedule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Seo\Console\SyncGoogleData;
 use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
+use Modules\Seo\Models\GoogleConnection;
 
 /**
- * The indexability watchdog itself stays in app/Services/Seo (core
- * monitoring, wired into the uptime probe and the Issues page — see
- * plans/seo-indexability-watchdog.md). This module only reads the
- * seo_* columns that watchdog writes.
+ * SEO tooling. Two halves:
+ *
+ * - The fleet indexability overview (/seo) only reads the seo_* columns on
+ *   sites that the core watchdog in app/Services/Seo writes. That watchdog
+ *   stays in core: the uptime prober and the Issues page depend on it.
+ * - The Search Console + GA4 sync (plans/seo-semrush-replacement.md) owns its
+ *   own Google connection, the seo_* tables and the nightly command.
  */
 class SeoServiceProvider extends ModuleServiceProvider
 {
@@ -36,6 +42,25 @@ class SeoServiceProvider extends ModuleServiceProvider
         if ($this->enabled()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
+
+        $this->commands([SyncGoogleData::class]);
+    }
+
+    /**
+     * 08:10 UTC is after midnight Pacific, so yesterday's Search Console day
+     * has closed, and it sits in the quiet 07:15 to 09:00 window. The guard
+     * checks a connection was ever made, not that it is active: a revoked
+     * connection still runs and exits failed so the Scheduled Jobs page shows
+     * it, while a deliberate disconnect (which deletes the row) stops it.
+     */
+    public function scheduledTasks(Schedule $schedule): void
+    {
+        $schedule->command('clockwork:seo-sync-google')
+            ->dailyAt('08:10')
+            ->withoutOverlapping(120)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => GoogleConnection::query()->exists());
     }
 
     public function manifest(): ModuleManifest

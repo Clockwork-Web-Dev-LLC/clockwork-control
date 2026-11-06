@@ -4,9 +4,13 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Modules\Core\InstalledModule;
 use Modules\Core\ModuleStateResolver;
+use Modules\Seo\Models\GoogleConnection;
+use Modules\Seo\Models\SiteProfile;
 use Tests\Concerns\RendersAuthenticatedPages;
+use Tests\Fixtures\GoogleOAuthFixtures;
 
 uses(RendersAuthenticatedPages::class);
 
@@ -103,4 +107,35 @@ it('drops the nav link when the module is disabled', function () {
         ->get(route('settings.diagnostics.index'))
         ->assertOk()
         ->assertDontSee(route('seo.index'), false);
+});
+
+describe('search data on /seo', function () {
+    it('links set-up sites to their numbers and others to set up, without calling Google', function () {
+        Http::preventStrayRequests();
+        $withProfile = Site::factory()->create(['server_id' => $this->server->id, 'domain' => 'client.com']);
+        Site::factory()->create(['server_id' => $this->server->id, 'domain' => 'other.com']);
+        SiteProfile::query()->create(['site_id' => $withProfile->id, 'is_enabled' => true]);
+
+        $this->actingAs(User::factory()->create())->get(route('seo.index'))
+            ->assertOk()
+            ->assertSee(route('seo.sites.show', $withProfile), false)
+            ->assertSee('Set up')
+            ->assertDontSee('data-google-revoked', false);
+    });
+
+    it('shows a red banner when the Google connection is revoked', function () {
+        GoogleOAuthFixtures::connection(['status' => GoogleConnection::STATUS_REVOKED]);
+
+        $this->actingAs(User::factory()->create())->get(route('seo.index'))
+            ->assertOk()
+            ->assertSee('data-google-revoked', false)
+            ->assertSee('Reconnect it in SEO settings');
+    });
+
+    it('renders the profile page without calling Google', function () {
+        Http::preventStrayRequests();
+        $site = Site::factory()->create(['server_id' => $this->server->id]);
+
+        $this->actingAs(User::factory()->create())->get(route('seo.sites.profile', $site))->assertOk();
+    });
 });
