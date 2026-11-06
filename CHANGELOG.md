@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SEO — Search Console and GA4 sync**: an agency Google connection owned by the SEO module (read-only, connected once as systems@ on **SEO → Settings**, refresh token encrypted, one chat alert if Google revokes it), per-site SEO profiles (Search Console and GA4 properties, brand terms, key events, report notes, AI impressions), and `clockwork:seo-sync-google` nightly at 08:10 UTC with a 16-month backfill for new profiles. `/seo/sites/{site}` shows a month against the previous month and last year from stored data only, with "not comparable" across Google's Sept 2025 `num=100` change, provisional months, and missing data never shown as 0. See [Features → SEO module](/docs/features/seo#search-console-and-ga4-sync).
+
+### Upgrade notes
+- Eleven new `seo_*` tables (`php artisan migrate`). Nothing syncs until a Google OAuth client is entered on **Settings → Integrations → SEO** and an admin connects Google on **SEO → Settings**; setup steps are in the SEO feature doc.
+
 ## [1.12.2] - 2026-11-06
 
 ### Added

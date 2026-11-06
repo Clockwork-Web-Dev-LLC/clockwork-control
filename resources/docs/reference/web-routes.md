@@ -233,7 +233,19 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/seo` | Fleet SEO overview: indexability state for every active, monitored site, blocking production sites first (`modules/Seo`). |
+| GET | `/seo` | Fleet SEO overview: indexability state for every active, monitored site, blocking production sites first, with links to each site's search numbers or profile (`modules/Seo`). |
+| GET | `/seo/sites/{site}` | One site's search numbers for a month (`?month=YYYY-MM`) against the previous month and last year, from stored rows only. |
+| GET | `/seo/sites/{site}/profile` | SEO profile: Search Console and GA4 properties, brand terms, key events, report notes, AI impressions form. |
+| PUT | `/seo/sites/{site}/profile` | Save the profile. A property or brand-terms change needs `confirm_purge`. |
+| POST | `/seo/sites/{site}/properties/refresh` | Queue a refresh of the Search Console property list (throttled 6/min). |
+| POST | `/seo/sites/{site}/sync` | Queue a sync for this site (throttled 6/min). |
+| POST | `/seo/sites/{site}/ai-impressions` | Record a month's AI impressions from the Generative AI report, or "not available". |
+| GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
+| POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
+| GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |
+| GET | `/seo/google/callback` | Admin. Google OAuth redirect URI; register it on the OAuth client. |
+| POST | `/seo/google/disconnect` | Admin. Revoke the token at Google and delete the connection; stored data is kept. |
+| POST | `/seo/google/test` | Admin. One `sites.list` call with the cached token (throttled 10/min). |
 
 ### Docs (this site)
 

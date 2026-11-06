@@ -212,6 +212,18 @@ No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms betwee
 
 Via `laravel/socialite` Google driver. Authorize → token → userinfo. `GOOGLE_HD` optionally pins to a Workspace domain.
 
+## Google Search Console API — `https://searchconsole.googleapis.com/webmasters/v3`
+
+`modules/Seo/src/Google/SearchConsoleClient.php`, on the SEO module's agency OAuth connection (`webmasters.readonly`). `GET /sites` lists the properties the connection can see; `POST /sites/{siteUrl}/searchAnalytics/query` with the URL-encoded property (`https://www.example.com/` or `sc-domain:example.com`). Daily `date` totals, plus `page`, `query` and `page,query` rows per calendar month, paged 25,000 rows with `startRow`, at most one call a second. Quotas: 1,200 queries/min per site and per user, plus a load quota. A 429, or a 403 `quotaExceeded`/`rateLimitExceeded`, is never resent: the site stops for the night. Days are Pacific Time; 16 months retention.
+
+## Google Analytics Data API — `https://analyticsdata.googleapis.com/v1beta`
+
+`modules/Seo/src/Google/AnalyticsDataClient.php`, same connection (`analytics.readonly`). `POST /properties/{id}:batchRunReports` with `returnPropertyQuota: true`: daily channel and AI-source rows for charts, and calendar-month reports (no `date` dimension) for every month figure. The sync stops a property below 1,000 hourly tokens (200,000/day and 40,000/hour per property).
+
+## Google OAuth (SEO data connection) — `accounts.google.com` + `oauth2.googleapis.com`
+
+`modules/Seo/src/Google/GoogleOAuth.php`, plain `Http`, separate from login. Consent with `access_type=offline`, `prompt=consent`; code exchange and refresh at `oauth2.googleapis.com/token`; `openidconnect.googleapis.com/v1/userinfo` for the connected email; `oauth2.googleapis.com/revoke` on disconnect. `invalid_grant` marks the connection revoked and sends one chat alert.
+
 ## Mailgun — `MAILGUN_ENDPOINT` (api.mailgun.net | api.eu.mailgun.net)
 
 Symfony Mailgun transport. Only active when `MAIL_MAILER=mailgun`. Sends contact-form failure / recovery alerts and the monthly summaries.

@@ -250,6 +250,14 @@ standard Laravel `s3` disk vars plus one prefix override. See
 
 See [Integrations → Slack](/documentation/integrations/slack). The per-site client-facing Slack channel (`ClientSlackNotifier`) has no env vars of its own — its webhook is client-configured per site — but it does read the **Operator identity** vars below for the operator name/support link it puts in client-facing messages.
 
+## SEO (Search Console + GA4)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_SEO_GOOGLE_CLIENT_ID` | empty | OAuth client for the SEO module's own Google connection (`modules/Seo`). Normally entered on **Settings → Integrations → SEO** (stored encrypted); this is the fallback. Left empty, the module falls back to the Google login client, which only works if that client also lists `/seo/google/callback`. |
+| `CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET` | empty | Its secret. |
+| `CLOCKWORK_SEO_GOOGLE_TIMEOUT` | `30` | Seconds, per Search Console or GA4 call. |
+
 ## Performance scans
 
 | Variable | Default | Notes |

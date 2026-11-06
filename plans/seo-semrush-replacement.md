@@ -10,6 +10,15 @@
 > **Decisions (2026-11-06):** Aaron answered 1 to 10 and 14 (see Decisions; the Semrush plan, client
 > count, cost math and exit dates below are updated to match). 11, 12 and the Claude-plan and
 > server parts of 13 are with Aaron R. Phase 1-data (steps 1 to 7 and 9) doesn't wait on them.
+> **Built (2026-11-06, `feature/seo`):** Phase 1 steps 2 to 5 and 9: the Google connection, property
+> discovery, per-site profiles, the nightly sync with backfill, `SearchNumbers` and the bare site
+> table, with tests and docs. Small changes from the text below: profiles also store `brand_terms`
+> (the regex is compiled from them); month rows start at the first full month in the window, so no
+> stored month is silently partial; SEO date columns use a date-only cast so MySQL and SQLite hold the
+> same value; `retry(2, ...)` means two attempts in all. Step 1's setup steps are in
+> `resources/docs/features/seo.md`; Aaron set up the Google Cloud side the same day. Still to do in
+> Phase 1-data: steps 6 and 7 (the MCP host on stdio and SEO tools 1 to 6), and the 1-data
+> acceptance check against a Chrome pull once it runs on the real install.
 > Source tags: **[docs]** official vendor page, **[secondary]** third-party source, **[inferred]**
 > our own reasoning or arithmetic. The research session's network allowlist blocked the Google,
 > DataForSEO and Semrush doc sites, so most [docs] items were read from search excerpts of the
