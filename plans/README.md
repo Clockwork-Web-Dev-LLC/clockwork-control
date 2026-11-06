@@ -16,9 +16,10 @@ this index is a map, not a claim that everything below is still unbuilt.
   can add tools to: 15 tools shipped phase by phase, per-user OAuth through Passport, and a
   path-restricted public hostname on the existing Cloudflare Tunnel so claude.ai and Cowork can reach
   it. Both SEO skills are rewritten to call the tools. Phases 1, 1b, 2, 2b and 3 to 5, a last round of
-  Semrush exports in November 2026, scope matrix, cost math, an exit criterion for cancelling
-  (earliest about mid-January 2027), and 14 decisions for Aaron (reachability, auth and Claude
-  surfaces among them).
+  Semrush exports in November 2026, scope matrix, cost math, an exit criterion for cancelling, and 14
+  decisions. Decisions 1 to 10 and 14 answered 2026-11-06: Semrush is a Guru-level plan at $1,027.70 a
+  month (renews on the 8th), about 12 SEO clients, earliest cancel 2027-01-08. 11, 12 and part of 13
+  (public hostname, Passport, Claude plan) are with Aaron R; Phase 1-data doesn't wait on them.
 
 ---
 

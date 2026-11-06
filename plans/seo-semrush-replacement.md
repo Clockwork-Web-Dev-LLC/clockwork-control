@@ -7,6 +7,9 @@
 > Claude reach everything through MCP (four more research passes, each verified: laravel/mcp, Claude
 > clients, auth in this codebase, the tool catalog), then revised again after a 24-point review of
 > the MCP design.
+> **Decisions (2026-11-06):** Aaron answered 1 to 10 and 14 (see Decisions; the Semrush plan, client
+> count, cost math and exit dates below are updated to match). 11, 12 and the Claude-plan and
+> server parts of 13 are with Aaron R. Phase 1-data (steps 1 to 7 and 9) doesn't wait on them.
 > Source tags: **[docs]** official vendor page, **[secondary]** third-party source, **[inferred]**
 > our own reasoning or arithmetic. The research session's network allowlist blocked the Google,
 > DataForSEO and Semrush doc sites, so most [docs] items were read from search excerpts of the
@@ -50,7 +53,7 @@ and our own page reads, all free.
 **What it costs in manual time.** Neither skill records time per step, so these are estimates
 [inferred]; decision 10 asks for a check against Teamwork timelogs.
 - Report numbers (roster lookup, GSC, Generative AI report, GA4, Semrush, re-pull after backfill):
-  about 30 to 45 minutes per client per month. At 15 clients, 7.5 to 11 hours a month.
+  about 30 to 45 minutes per client per month. At 12 clients, 6 to 9 hours a month.
 - Keyword map refresh: about 3 to 5 hours per client per refresh, roughly half of it the mechanical
   GSC scrape, Semrush lookup and Sheets paste and format.
 - The steps are fragile: coordinate clicks in Semrush, the `/u/1` "Verify it's you" wall, paste
@@ -58,8 +61,14 @@ and our own page reads, all free.
 
 Removing that work is worth more than the subscription saving (see Data sources and costs).
 
-**Client count.** The roster isn't in the repo. All cost math assumes **15 SEO clients**, the
-research's working figure (decision 2).
+**Measured time (decision 10).** Teamwork timelogs on SEO Projects for the last 3 months: 115 hours,
+about 38 a month (Aaron 96, Lara 16, others 3). That is all SEO project work, not only the
+mechanical steps above, and it leaves out Team Novo, Vicinity and Scottsdale time.
+
+**Client count.** 8 SEO clients today: Michelli, Surplus Steel, TLO, GMHC, ADM, Marker Girl, GAPHP
+and Continuum. E2E is starting and Kenes is expected to sign. Team Novo and Vicinity are separate
+projects, not SEO-plan clients. The cost math plans for **12 SEO clients** (decision 2). Sizing
+figures elsewhere that still say 15 sites (backfill calls, storage, sync time) are upper bounds.
 
 **Claude is the main consumer.** Aaron, 2026-10-30: "it needs to be an MCP so we can access
 everything from Claude." Read here as: every SEO capability in this plan is an MCP tool, shipped in
@@ -174,6 +183,14 @@ when a client needs it. Every row ships with its MCP tools in the same phase.
 | Local toolkit (listings, reviews, map rank) | No | Drop | | |
 | Traffic & Market, Content, Social, Advertising, AI PR, Keyword Strategy Builder | No | Drop (Claude skills cover content and clustering) | | |
 
+**Check before cancelling (from the subscription page, 2026-11-06).** The account has 4 of 4 seats,
+14 of 15 projects in use, 1,500 tracked keywords, and paid Local and AI Visibility add-ons. The "Used
+today" column above comes from the two skills, which use none of these. Before the cancel, confirm
+with each seat holder that nobody relies on a project's Position Tracking or Site Audit, Local
+listings (cancelling Local stops listing sync), or AI Visibility tracking. Anything in use either
+gets a row moved to "Replace now" or an export before the cancel. An add-on nobody uses can be
+dropped before the next renewal (2026-11-08, or 2026-12-08) without waiting for the rest.
+
 ## Data sources and costs
 
 ### Google Search Console API (free)
@@ -285,34 +302,35 @@ so one test call settles each]:
   the July increase applied [unresolved].
 - SERP API (Phase 5 only): $0.0006 per 10 results, Standard queue [docs].
 
-Monthly cost at 15 clients for what replaces today's Semrush use. 300 keywords per client per month
-is a generous upper bound; real map refreshes are less frequent.
+Monthly cost at 12 clients (decision 2) for what replaces today's Semrush use. 300 keywords per
+client per month is a generous upper bound; real map refreshes are less frequent.
 
 | Line | Arithmetic | $/month |
 |---|---|---|
-| Keyword metrics, one `keyword_overview` call | (0.012 + 300 × 0.00012) = 0.048 × 15 | 0.72 |
-| Same, worst case 3 calls (overview + KD + intent) | 0.048 × 3 × 15 | 2.16 |
-| City volume for local clients, 1 Live task | 0.09 to 0.108 × 15 | 1.35 to 1.62 |
-| Organic keyword count, `domain_rank_overview` (only with a third-party count, decision 5) | (0.012 + 0.00012) × 15 | 0.18 |
-| **Metered total** | | **2.07 to 3.96** |
-| Ad hoc research buffer, 10 keyword-idea calls of 1,000 items per client | 10 × (0.012 + 0.12) × 15 | 19.80 |
-| **Worst case with buffer** | | **about 24** |
+| Keyword metrics, one `keyword_overview` call | (0.012 + 300 × 0.00012) = 0.048 × 12 | 0.58 |
+| Same, worst case 3 calls (overview + KD + intent) | 0.048 × 3 × 12 | 1.73 |
+| City volume for local clients, 1 Live task | 0.09 to 0.108 × 12 | 1.08 to 1.30 |
+| Organic keyword count, `domain_rank_overview` (only with a third-party count, decision 5) | (0.012 + 0.00012) × 12 | 0.15 |
+| **Metered total** | | **1.66 to 3.18** |
+| Ad hoc research buffer, 10 keyword-idea calls of 1,000 items per client | 10 × (0.012 + 0.12) × 12 | 15.84 |
+| **Worst case with buffer** | | **about 19** |
 
 Budget cap: **$75/month**, enforced in code. Phase 5 costs, if it is ever built, are in Appendix B.
 
-**Against Semrush.** Clockwork's actual plan is unknown (decision 1). Today's workflow (Domain
-Overview plus bulk Keyword Overview, no Position Tracking) fits Pro / "SEO" at $139.95/month (about
-$117 billed annually). Guru is $249.95, Semrush One Pro+ $299, extra seats $45 to $100 each
-[secondary].
+**Against Semrush (decision 1).** The subscription page doesn't name the plan, but it isn't Pro: 4 of
+4 seats, 15 projects (14 used) and 1,500 tracked keywords are Guru-level limits, plus Local and AI
+Visibility add-ons. Billed monthly, renewing on the 8th; the 2026-11-08 renewal is $1,027.70. It has
+no Semrush API access (that needs Business), so DataForSEO stays the data source either way.
 
 | Compared with | Semrush $/month | DataForSEO $/month | Saving $/month |
 |---|---|---|---|
-| Pro, today's Semrush use | 139.95 | about 2 to 24 | about 116 to 138 |
-| Guru, today's Semrush use | 249.95 | about 2 to 24 | about 226 to 248 |
-| Pro, spending the full $75 cap | 139.95 | 75 | about 65 |
+| Today's subscription | 1,027.70 | about 2 to 19 | about 1,009 to 1,026 |
+| Today's subscription, spending the full $75 cap | 1,027.70 | 75 | about 953 |
 
-The subscription saving is real but modest. The manual time (7.5 to 11 hours a month on report
-numbers alone) is the bigger win.
+That is about $12,100 to $12,300 a year, and each month the cancel slips costs about $1,028. The
+saving assumes nothing in "Check before cancelling" above has to be kept or replaced with a paid
+tool. The manual time (6 to 9 hours a month on report numbers alone, against 38 hours a month of
+measured SEO project time) is the other win.
 
 ### Driver interface
 
@@ -1701,14 +1719,21 @@ Cancel when all of these are true:
    and each client's organic keyword history (imported only if decision 5 picks a third-party
    count).
 5. Nobody logged into Semrush for one full billing cycle, counted from the last login (the October
-   reports and exports in early November).
+   reports and exports in early November, unless decision 5's side-by-side needs later logins).
+6. Every seat holder confirmed nothing in "Check before cancelling" (under Scope matrix) is still in
+   use, or it was exported or replaced.
 
-Then cancel at the next renewal date (decision 1). Earliest cancel is the first renewal date that is
-at least one full billing cycle after the last Semrush login and after the December report is final
-(about 2027-01-06). That is mid-January only if the exports are done in November; otherwise February
-2027. It also assumes Phase 1 ships in November, so the November report written in early December
-comes from the tools, and Phase 2 in December; each month either slips moves the date by a month
-[inferred]. Phase 1 is now bigger (the MCP host, Passport, the edge setup, and the phpseclib and
+Then cancel before the next renewal (decision 1: monthly, on the 8th). The earliest cancel is the
+first renewal at least one full billing cycle after the last Semrush login and after the December
+report is final (about 2027-01-06):
+- **2027-01-08** if the last login is before 2026-12-08: decision 5's side-by-side either uses the
+  Semrush history exported in November (no login), or reads a live count for the November report
+  only, pulled before 12-08. This also needs Phase 1 to ship in November and Phase 2 in December.
+- **2027-02-08** if the side-by-side reads live Semrush counts for the November and December
+  reports, since the last login is then in early January.
+
+Each month either phase slips moves the date by a month, at about $1,028 a month [inferred].
+Phase 1 is now bigger (the MCP host, Passport, the edge setup, and the phpseclib and
 Socialite upgrade under decision 12's default), so decisions 11 to 13 are needed in early November.
 The upgrade can't hold the date: it runs in parallel, and its slip rule ships Passport 13.7.6 if it
 isn't merged by mid-November (Phase 1 step 8). If the endpoint itself slips, 1-data still lands:
@@ -1792,24 +1817,27 @@ criterion 2; criterion 1 waits for 1-endpoint. Phases 1b, 2b and 3 to 5 are not 
   deprecated) changed this year [docs]. Pin `laravel/mcp` ^1.1, run the MCP HTTP tests on every
   update, and reconnect once from claude.ai, Cowork and Claude Code after each.
 
-## Decisions needed from Aaron
+## Decisions
 
-| # | Decision | Recommended default |
-|---|---|---|
-| 1 | Semrush plan, seats, monthly or annual billing, renewal date | Needed to time the cancel and state the saving. The plan assumes Pro, monthly |
-| 2 | How many SEO clients, and which sites get profiles | SEO-plan clients only (15 assumed); fleet-wide later as a care-plan upsell |
-| 3 | Google auth | OAuth, Internal consent screen, connected once as systems@clockworkwd.com; a service account only for a client systems@ can't access |
-| 4 | Paid keyword provider and cap | DataForSEO, $50 top-up, $75/month cap |
-| 5 | What "organic keywords" means in client reports | GSC "queries with impressions", with a one-time note to clients; the Semrush history kept as a file. A third-party count adds the DataForSEO domain snapshot command, contract, driver and table, and keeps Semrush Domain Overview in use until Phase 2 |
-| 6 | GSC property per client | Keep the URL-prefix property the reports already use |
-| 7 | Where the keyword map lives | Control is the source of truth, edited through Claude's tools; each client's existing sheet imported once; dated tabs exported one way when Sheets is turned on (adds the `spreadsheets` scope), CSV otherwise. Phase 2's acceptance ("no pasting or formatting in Sheets") needs the switch on and the one-time reconnect; with it off, CSV plus a manual paste is accepted instead |
-| 8 | Client Reports SEO section | Opt-in per template; held for review while the month is provisional, then recompiled with Send now. Only care-plan sites get scheduled reports; SEO-only clients get their numbers through Claude |
-| 9 | Client search data in Claude | Yes: Claude already reads the same numbers in Chrome, and the tools send no contact details or credentials. A person reviews every draft; nothing is sent automatically. The OpenRouter draft is dropped |
-| 10 | Manual-time baseline | Pull the last 3 months of Teamwork timelogs on SEO tasks to replace the estimate |
-| 11 | Reachability for Claude | A dedicated hostname on the existing Cloudflare Tunnel: MCP and OAuth machine paths open to Anthropic's range, browser paths behind Access, everything else a 404 from the tunnel's ingress rules. It contradicts `security-model.md` ("Never put this app on a public IP"), which changes with it. First confirm which hostname the tunnel serves today, whether Access guards it, and the zone's bot setting. Phase 1-data doesn't wait on this. Alternatives: Anthropic MCP tunnels (Enterprise only, preview), or no public endpoint (Claude Code only, so the skills can't use Control from Cowork or claude.ai) |
-| 12 | Auth for Claude | Passport through `Mcp::oauthRoutes(registration: false)`, after migrating fleet SSH to phpseclib 4 as its own PR, which also upgrades Socialite (Google and GitHub login). Pinned 13.7.6 if that PR slips past mid-November. Alternatives: Passport pinned at 13.7.6 (no later security fixes), a hand-written CIMD-only authorization server (about 500 lines we own), Cloudflare Access Managed OAuth (beta, reported failing with claude.ai) |
-| 13 | Which Claude surfaces must work, and on which plan | claude.ai, Cowork and Claude Code with a subscription login, all through one org custom connector an Owner adds. That needs Team or Enterprise; on Pro or Max each person adds the connector, so the hosted client's secret goes to each person. The Owner keeps Claude in Chrome or the built-in browser enabled, since the AI step needs it and, in cloud Cowork, a connected desktop. Direct Claude Code connections (a plugin `.mcp.json` entry, API-key logins) only if someone needs them, which opens the edge to office IPs and adds a second OAuth client. Also: who runs Claude Code on the Control host if the endpoint isn't live by the November report? |
-| 14 | Who can write and spend from Claude | Any active user records AI impressions, edits brand terms, key events and maps, audits pages, asks for quotes and buys metrics within a monthly allowance of $10 per person [inferred default]; admins only for sheet import and export, and their fetches are held only by the $75 cap. Report notes are edited on the profile page only |
+Asked of Aaron on 2026-10-30; answers recorded 2026-11-06. 11, 12 and part of 13 are server
+security and company-account calls for Aaron R, and are needed first.
+
+| # | Decision | Recommended default | Answer (2026-11-06) |
+|---|---|---|---|
+| 1 | Semrush plan, seats, monthly or annual billing, renewal date | Needed to time the cancel and state the saving. The plan assumes Pro, monthly | **Decided.** Not Pro: Guru-level limits (4 of 4 seats, 15 projects with 14 used, 1,500 tracked keywords) plus Local and AI Visibility add-ons. Monthly, renews on the 8th; $1,027.70 on 2026-11-08. No Semrush API (needs Business), which supports DataForSEO |
+| 2 | How many SEO clients, and which sites get profiles | SEO-plan clients only (15 assumed); fleet-wide later as a care-plan upsell | **Decided.** Plan for about 12. Today 8: Michelli, Surplus Steel, TLO, GMHC, ADM, Marker Girl, GAPHP, Continuum. E2E starting, Kenes expected. Team Novo and Vicinity are separate projects |
+| 3 | Google auth | OAuth, Internal consent screen, connected once as systems@clockworkwd.com; a service account only for a client systems@ can't access | **Decided.** Default: systems@clockworkwd.com, which already has access to most client GSC and GA4 properties |
+| 4 | Paid keyword provider and cap | DataForSEO, $50 top-up, $75/month cap | **Decided.** Default: DataForSEO, $50 top-up, $75/month cap |
+| 5 | What "organic keywords" means in client reports | GSC "queries with impressions", with a one-time note to clients; the Semrush history kept as a file. A third-party count adds the DataForSEO domain snapshot command, contract, driver and table, and keeps Semrush Domain Overview in use until Phase 2 | **Decided, with a change.** GSC count, but shown next to the Semrush count for 1 to 2 months before switching, because some clients (Michelli) asked for ranking keyword counts. Using the Semrush history from the November exports for the overlap months needs no new login and keeps the 2027-01-08 cancel; live Semrush counts in the November and December reports move it to 2027-02-08 (see Exit criterion). A lasting ranking count for a client who wants one is the DataForSEO third-party count, at about $0.01 per client per month |
+| 6 | GSC property per client | Keep the URL-prefix property the reports already use | **Decided.** Default: the URL-prefix property the reports already use |
+| 7 | Where the keyword map lives | Control is the source of truth, edited through Claude's tools; each client's existing sheet imported once; dated tabs exported one way when Sheets is turned on (adds the `spreadsheets` scope), CSV otherwise. Phase 2's acceptance ("no pasting or formatting in Sheets") needs the switch on and the one-time reconnect; with it off, CSV plus a manual paste is accepted instead | **Decided.** Default: Control is the source of truth, edited through Claude; sheets imported once and exported as dated tabs, since that's how maps are shared with clients now. So the Sheets switch and its `spreadsheets` scope are on |
+| 8 | Client Reports SEO section | Opt-in per template; held for review while the month is provisional, then recompiled with Send now. Only care-plan sites get scheduled reports; SEO-only clients get their numbers through Claude | **Decided.** Default: opt-in per template, held for review while provisional |
+| 9 | Client search data in Claude | Yes: Claude already reads the same numbers in Chrome, and the tools send no contact details or credentials. A person reviews every draft; nothing is sent automatically. The OpenRouter draft is dropped | **Decided.** Default: yes, a person reviews every draft and nothing is sent automatically |
+| 10 | Manual-time baseline | Pull the last 3 months of Teamwork timelogs on SEO tasks to replace the estimate | **Decided.** Measured: 115 hours on SEO Projects in the last 3 months, about 38 a month (Aaron 96, Lara 16, others 3), not counting Team Novo, Vicinity or Scottsdale. See Context |
+| 11 | Reachability for Claude | A dedicated hostname on the existing Cloudflare Tunnel: MCP and OAuth machine paths open to Anthropic's range, browser paths behind Access, everything else a 404 from the tunnel's ingress rules. It contradicts `security-model.md` ("Never put this app on a public IP"), which changes with it. First confirm which hostname the tunnel serves today, whether Access guards it, and the zone's bot setting. Phase 1-data doesn't wait on this. Alternatives: Anthropic MCP tunnels (Enterprise only, preview), or no public endpoint (Claude Code only, so the skills can't use Control from Cowork or claude.ai) | **Aaron R to decide** (server security). Aaron prefers the locked-down Cloudflare hostname if Aaron R agrees to change the no-public-IP rule. Needed now for 1-endpoint; 1-data doesn't wait |
+| 12 | Auth for Claude | Passport through `Mcp::oauthRoutes(registration: false)`, after migrating fleet SSH to phpseclib 4 as its own PR, which also upgrades Socialite (Google and GitHub login). Pinned 13.7.6 if that PR slips past mid-November. Alternatives: Passport pinned at 13.7.6 (no later security fixes), a hand-written CIMD-only authorization server (about 500 lines we own), Cloudflare Access Managed OAuth (beta, reported failing with claude.ai) | **Aaron R to decide** (needs the phpseclib 4 and Socialite upgrade first). Needed now: the slip rule pins Passport 13.7.6 if 8a isn't merged by mid-November |
+| 13 | Which Claude surfaces must work, and on which plan | claude.ai, Cowork and Claude Code with a subscription login, all through one org custom connector an Owner adds. That needs Team or Enterprise; on Pro or Max each person adds the connector, so the hosted client's secret goes to each person. The Owner keeps Claude in Chrome or the built-in browser enabled, since the AI step needs it and, in cloud Cowork, a connected desktop. Direct Claude Code connections (a plugin `.mcp.json` entry, API-key logins) only if someone needs them, which opens the edge to office IPs and adds a second OAuth client. Also: who runs Claude Code on the Control host if the endpoint isn't live by the November report? | **Partly decided.** Cowork and Claude Code at minimum (claude.ai not required). **Aaron R to decide** which Claude plan the company is on, and so whether one org connector covers everyone. If the endpoint isn't ready for the November report, Aaron or Aaron R runs Claude Code on the Control host (stdio) |
+| 14 | Who can write and spend from Claude | Any active user records AI impressions, edits brand terms, key events and maps, audits pages, asks for quotes and buys metrics within a monthly allowance of $10 per person [inferred default]; admins only for sheet import and export, and their fetches are held only by the $75 cap. Report notes are edited on the profile page only | **Decided.** Default: any active user within $10 a month each; admins only for sheet import and export |
 
 ## Not doing
 
