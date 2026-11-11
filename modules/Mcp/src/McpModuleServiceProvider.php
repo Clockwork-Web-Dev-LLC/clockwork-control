@@ -3,6 +3,7 @@
 namespace Modules\Mcp;
 
 use Laravel\Mcp\Facades\Mcp;
+use Laravel\Passport\Passport;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Mcp\Servers\ClockworkServer;
@@ -21,6 +22,17 @@ use Modules\Mcp\Servers\ClockworkServer;
 class McpModuleServiceProvider extends ModuleServiceProvider
 {
     public const LOCAL_HANDLE = 'clockwork';
+
+    public function register(): void
+    {
+        parent::register();
+
+        // Passport registers its /oauth/* routes by itself as soon as it is
+        // installed. Control must have none until the network endpoint is
+        // built and an admin turns it on, so they are switched off here,
+        // whether or not this module is enabled.
+        Passport::ignoreRoutes();
+    }
 
     public function boot(): void
     {

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Server\Transport\StdioTransport;
@@ -145,4 +146,11 @@ describe('stdio', function () {
         expect(fn () => (new ClockworkServer(new StdioTransport))->start())->toThrow(RuntimeException::class);
         expect(auth()->user())->toBeNull();
     })->with(['', 'nobody@example.com', 'gone@example.com']);
+});
+
+it('exposes no network endpoint or sign-in routes yet', function () {
+    $uris = collect(Route::getRoutes()->getRoutes())->map->uri();
+
+    expect($uris->filter(fn (string $uri) => $uri === 'mcp' || str_starts_with($uri, 'oauth/') || str_starts_with($uri, '.well-known/oauth'))->values()->all())
+        ->toBe([]);
 });

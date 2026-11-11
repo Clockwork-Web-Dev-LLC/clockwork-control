@@ -53,6 +53,7 @@
         "jeremykendall/php-domain-parser": "^6.4",
         "laravel/framework": "^13.0",
         "laravel/mcp": "^1.1",
+        "laravel/passport": "13.7.6",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.32",
