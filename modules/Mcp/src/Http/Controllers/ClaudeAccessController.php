@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Services\ActionLog\ActionLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Illuminate\Http\Response;
 use Modules\Core\ModuleRegistry;
 use Modules\Mcp\Support\ClaudeConnector;
 use Modules\Mcp\Tools\ControlWhoAmI;
@@ -37,7 +37,7 @@ class ClaudeAccessController extends Controller
         private readonly ActionLogger $logger,
     ) {}
 
-    public function index(Request $request, ModuleRegistry $registry): View
+    public function index(Request $request, ModuleRegistry $registry): Response
     {
         /** @var User $user */
         $user = $request->user();
@@ -50,7 +50,9 @@ class ClaudeAccessController extends Controller
             return ['name' => $tool->name(), 'title' => $tool->title(), 'writes' => ! ($tool->toArray()['annotations']['readOnlyHint'] ?? false)];
         }, [ControlWhoAmI::class, ...$registry->mcpTools()]);
 
-        return view('claude-access::settings', [
+        // no-store: the page can show the client secret once, and a browser
+        // must not keep a copy of that page.
+        return response()->view('claude-access::settings', [
             'isAdmin' => $isAdmin,
             'enabled' => $this->connector->enabled(),
             'keysExist' => $this->connector->keysExist(),
@@ -63,7 +65,7 @@ class ClaudeAccessController extends Controller
             'tools' => $tools,
             // Present only on the request right after setup or a rotation.
             'newSecret' => session('claude_access_secret'),
-        ]);
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     public function update(Request $request): RedirectResponse

@@ -291,3 +291,15 @@ describe('clockwork:mcp-setup', function () {
         expect(DB::table('oauth_clients')->count())->toBe(0);
     });
 });
+
+it('issues nothing without a person: no client-only, password or secretless tokens', function (array $form) {
+    $response = $this->post('/oauth/token', $form + ['client_id' => $this->client->getKey()]);
+
+    expect($response->getStatusCode())->toBeGreaterThanOrEqual(400)
+        ->and($response->json('access_token'))->toBeNull()
+        ->and(DB::table('oauth_access_tokens')->count())->toBe(0);
+})->with([
+    'client credentials' => fn () => [['grant_type' => 'client_credentials', 'client_secret' => test()->secret, 'scope' => 'mcp:use']],
+    'password' => fn () => [['grant_type' => 'password', 'client_secret' => test()->secret, 'username' => 'lara@example.com', 'password' => 'password', 'scope' => 'mcp:use']],
+    'refresh without a secret' => fn () => [['grant_type' => 'refresh_token', 'refresh_token' => 'anything']],
+]);

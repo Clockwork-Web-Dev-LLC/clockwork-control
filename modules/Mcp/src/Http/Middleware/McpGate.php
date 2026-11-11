@@ -33,7 +33,7 @@ class McpGate
         $request->headers->set('Accept', 'application/json');
 
         $origin = $request->headers->get('Origin');
-        if ($origin !== null && $origin !== '' && ! in_array(rtrim($origin, '/'), $this->allowedOrigins(), true)) {
+        if ($origin !== null && $origin !== '' && ! in_array(mb_strtolower(rtrim($origin, '/')), $this->allowedOrigins(), true)) {
             return response()->json(['message' => 'This origin may not call Clockwork Control.'], 403);
         }
 
@@ -44,7 +44,7 @@ class McpGate
     private function allowedOrigins(): array
     {
         return array_map(
-            fn ($origin) => rtrim((string) $origin, '/'),
+            fn ($origin) => mb_strtolower(rtrim((string) $origin, '/')),
             (array) config('clockwork.mcp.allowed_origins', []),
         );
     }

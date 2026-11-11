@@ -188,7 +188,7 @@
                                 <td class="py-2 pr-4 text-[var(--color-ink)]">{{ $when($row['last_token_at']) }}</td>
                                 <td class="py-2 text-right">
                                     <form method="POST" action="{{ route('settings.claude-access.revoke', ['user' => $row['user_id'], 'client' => $row['client_id']]) }}"
-                                          onsubmit="return confirm('Disconnect Claude for {{ $row['user_name'] ?? 'this person' }}?')">
+                                          onsubmit="return confirm('Disconnect Claude for this person?')">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn-pill-nav text-xs">Disconnect</button>
