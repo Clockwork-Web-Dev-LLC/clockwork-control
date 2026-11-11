@@ -303,3 +303,85 @@ it('issues nothing without a person: no client-only, password or secretless toke
     'password' => fn () => [['grant_type' => 'password', 'client_secret' => test()->secret, 'username' => 'lara@example.com', 'password' => 'password', 'scope' => 'mcp:use']],
     'refresh without a secret' => fn () => [['grant_type' => 'refresh_token', 'refresh_token' => 'anything']],
 ]);
+
+it('never approves silently: prompt=none is an error for someone who already connected', function () {
+    ($this->signIn)($this->user);
+
+    $response = $this->actingAs($this->user, 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => CLAUDE_CALLBACK,
+        'scope' => 'mcp:use', 'state' => 's', 'prompt' => 'none',
+        'code_challenge' => pkcePair()[1], 'code_challenge_method' => 'S256',
+    ]));
+
+    $location = (string) $response->headers->get('Location');
+    expect($location)->not->toContain('code=')
+        ->and($location.$response->getContent())->toContain('consent_required')
+        ->and(DB::table('oauth_auth_codes')->count())->toBe(1);   // only the one from the real sign-in
+});
+
+it('refuses look-alike redirect addresses', function (string $redirect) {
+    $response = $this->actingAs($this->user, 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => $redirect,
+        'scope' => 'mcp:use', 'state' => 's', 'code_challenge' => pkcePair()[1], 'code_challenge_method' => 'S256',
+    ]));
+
+    expect($response->getStatusCode())->toBeGreaterThanOrEqual(400)
+        ->and($response->headers->has('Location'))->toBeFalse();
+})->with([
+    'https://claude.ai.evil.test/api/mcp/auth_callback',
+    'https://claude.ai/api/mcp/auth_callback/../../evil',
+    'https://claude.ai/api/mcp/auth_callback?next=https://evil.test',
+    'http://claude.ai/api/mcp/auth_callback',
+    'https://evil.test/?https://claude.ai/api/mcp/auth_callback',
+]);
+
+it('never hands out the all-access scope, even when asked for it', function () {
+    [$verifier, $challenge] = pkcePair();
+    $consent = $this->actingAs($this->user, 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => CLAUDE_CALLBACK,
+        'scope' => '* mcp:use made-up-scope', 'state' => 's', 'code_challenge' => $challenge, 'code_challenge_method' => 'S256',
+    ]));
+
+    if ($consent->getStatusCode() === 200) {
+        $approved = $this->actingAs($this->user, 'web')->post('/oauth/authorize', ['state' => 's', 'client_id' => $this->client->getKey(), 'auth_token' => $consent->viewData('authToken')]);
+        parse_str((string) parse_url($approved->headers->get('Location'), PHP_URL_QUERY), $back);
+        $this->post('/oauth/token', [
+            'grant_type' => 'authorization_code', 'client_id' => $this->client->getKey(), 'client_secret' => $this->secret,
+            'redirect_uri' => CLAUDE_CALLBACK, 'code_verifier' => $verifier, 'code' => $back['code'] ?? '',
+        ]);
+    }
+
+    $scopes = DB::table('oauth_access_tokens')->pluck('scopes')->map(fn ($s) => json_decode((string) $s, true))->flatten()->all();
+    expect($scopes)->not->toContain('*')->not->toContain('made-up-scope');
+});
+
+it('forbids showing the consent page inside a frame', function () {
+    $response = $this->actingAs($this->user, 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => CLAUDE_CALLBACK,
+        'scope' => 'mcp:use', 'state' => 's', 'code_challenge' => pkcePair()[1], 'code_challenge_method' => 'S256',
+    ]))->assertOk();
+
+    expect($response->headers->get('X-Frame-Options'))->toBe('DENY');
+});
+
+it('will not let a revoked person with a live browser session approve', function () {
+    $consent = $this->actingAs($this->user, 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => CLAUDE_CALLBACK,
+        'scope' => 'mcp:use', 'state' => 's', 'code_challenge' => pkcePair()[1], 'code_challenge_method' => 'S256',
+    ]));
+    $token = $consent->viewData('authToken');
+
+    $this->user->forceFill(['revoked_at' => now()])->save();
+
+    $response = $this->actingAs($this->user->fresh(), 'web')->post('/oauth/authorize', ['state' => 's', 'client_id' => $this->client->getKey(), 'auth_token' => $token]);
+
+    expect((string) $response->headers->get('Location'))->not->toContain('code=')
+        ->and(DB::table('oauth_auth_codes')->count())->toBe(0);
+
+    // And they can't open the consent page afresh either.
+    $again = $this->actingAs($this->user->fresh(), 'web')->get('/oauth/authorize?'.http_build_query([
+        'response_type' => 'code', 'client_id' => $this->client->getKey(), 'redirect_uri' => CLAUDE_CALLBACK,
+        'scope' => 'mcp:use', 'state' => 's', 'code_challenge' => pkcePair()[1], 'code_challenge_method' => 'S256',
+    ]));
+    expect($again->getStatusCode())->not->toBe(200);
+});
