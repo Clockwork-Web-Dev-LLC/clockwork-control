@@ -2,7 +2,7 @@
 title: SEO module
 section: Features
 order: 67
-updated: 2026-11-06
+updated: 2026-11-11
 author: Aaron Reimann
 tags: [seo, indexability, search-console, ga4, modules]
 tracks: [modules/Seo/**]
@@ -76,6 +76,10 @@ If Google revokes the connection, Control marks it revoked, sends one chat messa
 - **GA4 thresholding**: GA4 may withhold small numbers, often key events.
 
 Missing data shows as "—" or "not entered", never 0.
+
+## Reading it from Claude
+
+The same numbers are available to Claude through six `seo_` tools: list sites, month numbers, daily series, page and query rows, record AI impressions, and update brand terms, key events or the year-over-year flag. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. For now this works from Claude Code on the Control host only.
 
 ## Adding to it
 

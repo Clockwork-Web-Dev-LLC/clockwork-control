@@ -19,6 +19,15 @@
 > `resources/docs/features/seo.md`; Aaron set up the Google Cloud side the same day. Still to do in
 > Phase 1-data: steps 6 and 7 (the MCP host on stdio and SEO tools 1 to 6), and the 1-data
 > acceptance check against a Chrome pull once it runs on the real install.
+> **Built (2026-11-11, `feature/seo`):** Phase 1 steps 6 and 7: `laravel/mcp` (v1.2.0, not the 1.1.2
+> read for this plan), `modules/Mcp` with `ClockworkServer` and `control_whoami` on stdio, the
+> `mcpTools()` hook, and SEO tools 1 to 6 with `ResponseEnvelope`, tests and docs. Changes from the
+> text below: v1.2.0 checks `Origin` itself; `seo_month_numbers` always returns both comparisons and
+> both segments, so it takes no `compare` or `segment` input; the tools log their own writes, but
+> the profile page and the typed AI form don't write `action_logs` rows yet; cursors are row
+> offsets. Not run here: PHPStan (it can't be installed in the build container), so run
+> `composer gate` before merging. Still to do in Phase 1: step 8 (Passport, the `/mcp` route, the
+> settings page; decisions 11 to 13) and the 1-data acceptance check on the real install.
 > Source tags: **[docs]** official vendor page, **[secondary]** third-party source, **[inferred]**
 > our own reasoning or arithmetic. The research session's network allowlist blocked the Google,
 > DataForSEO and Semrush doc sites, so most [docs] items were read from search excerpts of the
