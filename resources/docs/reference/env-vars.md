@@ -258,6 +258,7 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 | `CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET` | empty | Its secret. |
 | `CLOCKWORK_SEO_GOOGLE_TIMEOUT` | `30` | Seconds, per Search Console or GA4 call. |
 | `CLOCKWORK_MCP_LOCAL_USER` | empty | Email of the active Control user the local MCP server acts as (`php artisan mcp:start clockwork`, for Claude Code on the Control host). Empty means the server is not registered. See [Claude access](/docs/features/claude-access). |
+| `CLOCKWORK_MCP_ALLOWED_ORIGINS` | `https://claude.ai,https://claude.com` | Browser origins allowed to call `/mcp`, comma separated. A request with no `Origin` header, which is how Claude's servers call, is not affected. The endpoint itself is turned on at **Settings → Claude access**, not here. |
 
 ## Performance scans
 

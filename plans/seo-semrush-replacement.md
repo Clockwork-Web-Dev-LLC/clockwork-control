@@ -28,6 +28,15 @@
 > offsets. Not run here: PHPStan (it can't be installed in the build container), so run
 > `composer gate` before merging. Still to do in Phase 1: step 8 (Passport, the `/mcp` route, the
 > settings page; decisions 11 to 13) and the 1-data acceptance check on the real install.
+> **Built (2026-11-11, later the same day):** step 8b on Passport pinned at 13.7.6 (the slip rule;
+> 8a is not done): `/settings/claude-access`, the gated `/mcp` route stack, four hand-registered
+> Passport routes, the always-shown consent page, `clockwork:mcp-setup`, token revocation in
+> `User::invalidateSessions()`, tests and docs. Changes from the text below: `mcp.enabled` is read in
+> `boot()` (settings can't be read in `register()`); setup also runs from the page and generates
+> keys with OpenSSL (`passport:keys` only exists on the command line); the client has both the
+> claude.ai and claude.com callbacks; `McpGate` wraps GET and DELETE too. Not done: 8a, the edge
+> (decision 11), a full independent security review, `composer gate` with PHPStan, and the
+> `sanitizeOutput()` scrub of error text.
 > Source tags: **[docs]** official vendor page, **[secondary]** third-party source, **[inferred]**
 > our own reasoning or arithmetic. The research session's network allowlist blocked the Google,
 > DataForSEO and Semrush doc sites, so most [docs] items were read from search excerpts of the

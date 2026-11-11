@@ -8,7 +8,7 @@ tags: [mcp, claude, seo, modules]
 tracks: [modules/Mcp/**, modules/Seo/src/Mcp/**]
 ---
 
-> Packaged as `modules/Mcp` (module id `mcp`). It hosts one MCP server that lets Claude read Control. Other modules add the tools; SEO is the first. Today it works for Claude Code running on the Control host only. There is no network endpoint yet, so claude.ai and Cowork can't reach it.
+> Packaged as `modules/Mcp` (module id `mcp`). It hosts one MCP server that lets Claude read Control. Other modules add the tools; SEO is the first. There are two ways in: a network endpoint for claude.ai and Cowork, switched on at **Settings → Claude access**, and a local one for Claude Code on the Control host.
 
 ## What you get
 
@@ -24,9 +24,54 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_ai_impressions_record` | Store a month's total from Search Console's Generative AI report, or mark it not available. | Yes |
 | `seo_site_profile_update` | Change brand terms, GA4 key events or the year-over-year flag. | Yes |
 
-## Turning it on (Claude Code on the Control host)
+## Connecting claude.ai and Cowork
 
-The server runs over stdio, started by Claude Code as a local command. Stdio has no login, so the server acts as one named Control user and refuses to start without one.
+Everything in Control is on one page: **Settings → Claude access** (also in the gear menu). The connection is off by default. While it is off, Control has no `/mcp`, `/oauth/*` or `/.well-known/oauth-*` address at all.
+
+### 1. Give Control a public address for these paths only
+
+Claude calls Control from Anthropic's servers, so Control needs a public https hostname. Control normally has none, and this is the one exception, so keep it narrow. On the network side (for example a Cloudflare Tunnel hostname), let through only:
+
+- `POST /mcp` (and `GET`/`DELETE /mcp`, which answer 405)
+- `GET /.well-known/oauth-protected-resource*` and `GET /.well-known/oauth-authorization-server*`
+- `POST /oauth/token`
+- `GET`, `POST` and `DELETE /oauth/authorize`, `/login` and the sign-in callbacks, for the person signing in from their browser
+
+Everything else on that hostname should answer 404. Add a rate limit at the edge for requests that carry no token: Control limits signed-in callers, but a request without a token is refused before that limit applies. This step is done outside Control, and whether to do it is a security decision for whoever owns the server.
+
+### 2. Run setup (an admin, once)
+
+On **Settings → Claude access**, click **Run setup**. It creates the signing keys (`storage/oauth-private.key`, readable only by the app user, and `storage/oauth-public.key`) and the one OAuth client Claude signs in through. The page then shows the **client secret once**. Copy it then: Control stores a scrambled copy and can't show it again. If it is lost, **Issue a new secret** makes a new one, and the old one stops working.
+
+`php artisan clockwork:mcp-setup` does the same from the command line, and `--rotate-secret` issues a new secret.
+
+Back up the two key files with the rest of `storage/`. If they are lost, run setup again; everyone then has to connect again.
+
+### 3. Turn it on
+
+Click **Turn on**. It can't be turned on before setup. **Turn off** closes the endpoint at once but keeps people's connections, so a short pause doesn't make everyone sign in again. **Disconnect everyone** is the separate button for that.
+
+### 4. Add the connector in Claude
+
+In Claude, an organization owner opens **Settings → Connectors → Add custom connector** and enters the **Connector URL**, **OAuth client ID** and **client secret** from the page. On a personal plan, each person adds it themselves. Open the settings page at Control's public https address so the connector URL shown is the right one.
+
+### 5. Each person connects
+
+In Claude, pick the connector and click Connect. You sign in to Control as usual, see a page asking "Let Claude into Clockwork Control?", and click **Allow**. That page is shown every time, even if you connected before. Claude then acts as you, with your role.
+
+## Who is connected, and cutting someone off
+
+The settings page lists who has connected. Everyone sees their own row and can disconnect themselves. Admins see everyone and can disconnect one person or all.
+
+- Revoking or deleting someone on **Settings → Users**, or changing their password, disconnects their Claude.
+- A revoked person is also refused on every single call, not just at sign-in.
+- Claude's access token lasts an hour and renews itself. A connection that isn't used for 90 days ends, and the person signs in again.
+- Each person can make 60 tool calls a minute.
+- Turning the switch on or off, setup, a new secret and every disconnect are written to the action log with who did it.
+
+## Claude Code on the Control host
+
+A second way in that needs no public address. The server runs over stdio, started by Claude Code as a local command. It has no login, so it acts as one named Control user and refuses to start without one. The switch on the settings page doesn't affect it.
 
 1. In Control's `.env`, set `CLOCKWORK_MCP_LOCAL_USER` to the email of an active Control user. Tool calls are logged as that user.
 2. Add the server to Claude Code on that machine:
@@ -37,9 +82,9 @@ The server runs over stdio, started by Claude Code as a local command. Stdio has
 
 3. In Claude Code, ask it to call `control_whoami`. It should name that user and list the tools.
 
-To inspect the server by hand, run `php artisan mcp:inspector clockwork`.
+To inspect the server by hand, run `php artisan mcp:inspector clockwork`. To turn this route off, remove `CLOCKWORK_MCP_LOCAL_USER`.
 
-To turn it off, remove `CLOCKWORK_MCP_LOCAL_USER` (the server is then not registered at all), or disable **Claude access** on **Settings → Modules**. Disabling the SEO module removes the `seo_` tools and leaves the server running.
+Disabling **Claude access** on **Settings → Modules** removes both routes and the settings page. Disabling the SEO module removes the `seo_` tools and leaves the server running.
 
 ## How the tools answer
 
@@ -57,11 +102,12 @@ To turn it off, remove `CLOCKWORK_MCP_LOCAL_USER` (the server is then not regist
 - Every change is written to the action log with the user, the tool, and the before and after values, so it can be undone by hand. These rows are not attached to the site, so they are never pushed to the client's WordPress activity log.
 - A revoked user's connection gets no `seo_` tools, and each tool refuses again if called anyway.
 
-## Not built yet
+## Limits to know about
 
-- The network endpoint at `/mcp` with per-user sign-in, which is what claude.ai and Cowork need. It waits on two decisions in `plans/seo-semrush-replacement.md` (11 and 12): how Control is reached from outside, and the sign-in library upgrade.
-- A settings page for Claude access.
-- Keyword map and keyword metric tools (Phase 2 of the plan).
+- **The sign-in library is pinned.** `laravel/passport` is held at 13.7.6, the newest release that works with the SSH library Control uses today. Newer releases need that library upgraded first. Until then Control doesn't get Passport's later fixes.
+- **No self-service clients.** There is one client, created by setup. Claude can't register its own, and there is no device-code sign-in.
+- **Route caching.** The endpoint's routes are added when a request starts, based on the switch. Don't run `php artisan route:cache` on an install that uses this, or the switch stops taking effect until the cache is cleared.
+- **Not built yet:** keyword map and keyword metric tools.
 
 ## Adding tools from another module
 

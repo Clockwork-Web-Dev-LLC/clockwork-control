@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-10-29
+updated: 2026-11-11
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -228,6 +228,27 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/email-auth/domains/{domain}/ignore` | Toggle advisory ignore state for a domain (silences degradation alerts for externally-managed client DNS). |
 | POST | `/email-auth/domains/{domain}/selectors` | Update custom DKIM selector probing list for a specific client domain. |
 | DELETE | `/email-auth/domains/{domain}` | Soft-delete a domain from tracking, removing it from views and scheduled weekly checks. |
+
+### Claude access
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings/claude-access` | The switch, one-time setup, connector details and who is connected (`modules/Mcp`). Everyone sees their own connection. |
+| PATCH | `/settings/claude-access` | Turn the network endpoint on or off. Admin only. |
+| POST | `/settings/claude-access/setup` | Create the signing keys and the Claude OAuth client. Admin only. |
+| POST | `/settings/claude-access/rotate-secret` | Issue a new client secret. Admin only. |
+| DELETE | `/settings/claude-access/authorizations/{user}/{client}` | Disconnect one person's Claude (your own, or anyone's as admin). |
+| DELETE | `/settings/claude-access/authorizations` | Disconnect everyone. Admin only. |
+
+These exist only while the switch is on:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/mcp` | The MCP endpoint Claude calls. Bearer token with scope `mcp:use`, active user, 60 calls a minute per person. Not in the `web` group. |
+| GET | `/.well-known/oauth-protected-resource[/mcp]`, `/.well-known/oauth-authorization-server` | Discovery documents that tell Claude where to sign in. |
+| GET | `/oauth/authorize` | The consent page, after the normal Control login. Shown every time. |
+| POST, DELETE | `/oauth/authorize` | Allow or refuse. |
+| POST | `/oauth/token` | Exchange the sign-in code, or a refresh token, for an access token. |
 
 ### SEO
 

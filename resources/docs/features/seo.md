@@ -79,7 +79,7 @@ Missing data shows as "—" or "not entered", never 0.
 
 ## Reading it from Claude
 
-The same numbers are available to Claude through six `seo_` tools: list sites, month numbers, daily series, page and query rows, record AI impressions, and update brand terms, key events or the year-over-year flag. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. For now this works from Claude Code on the Control host only.
+The same numbers are available to Claude through six `seo_` tools: list sites, month numbers, daily series, page and query rows, record AI impressions, and update brand terms, key events or the year-over-year flag. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.
 
 ## Adding to it
 
