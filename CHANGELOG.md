@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.4] - 2026-11-11
+
+### Security
+- **SSH, WP-CLI, & MySQL Hardening**: Replaced live execution of remote `wp-config.php` files with static PHP token parsing, hardened `SiteMySqlClient` (`--disable-local-infile`, INI quoting, and credential newline/leading-dash rejection), added Trust-On-First-Use (TOFU) SSH host-key pinning on `SshClient`, restricted custom SSH key paths, and enforced strict POSIX/path validation and shell quoting across Companion, WP Engine, Kinsta, Fail2ban, and console provisioners.
+- **Auth, RBAC, Installer Gate, & `.env` Integrity**: Escaped `\$` in double-quoted `.env` values so `vlucas/phpdotenv` cannot interpolate `${APP_KEY}` or other secrets, replaced `preg_replace` backreference hazards with `preg_replace_callback`, enforced `0600` `.env` permissions, required a cryptographic `reopen_token` when `clockwork:installer:reopen` unlocks `/install`, verified Google `email_verified` claims, blocked multi-tenant Microsoft `common`/`consumers` authorities without an explicit tenant ID, rejected OAuth sign-ins on provider ID mismatches, and enforced `'admin'` middleware across privileged settings, credential, server, module, and backup-relay routes.
+- **SSRF, Redirects, Sandboxed Previews, & XSS Guards**: Extended `SsrfGuard` to block bracketed IPv6 literals, CGNAT (`100.64.0.0/10`), NAT64 (`64:ff9b::/96`), IPv4-mapped IPv6, 6to4, Teredo, ULA, and link-local ranges; enforced `SsrfGuard` + cross-origin redirect and scheme checks across Companion branding, tarball downloads, Slack webhooks, Pressable backup streams, TurnkeyWP, and GeoIP lookups; sandboxed EmailAuth preview iframes (`sandbox=""` + CSP `sandbox`); escaped JSON strings assigned via `.innerHTML` and Alpine `@js(...)` expressions; validated SSO redirect hosts and internal `return_to` paths; and hardened `AiRemedy` (`<untrusted_telemetry>` prompt isolation, `RemedyExecutor` `ServerSiteContext` enforcement, allowlisted systemd units, and `ActionLogger` settings auditing).
+
+### Fixed
+- **Maintenance Mode & Comment Moderation Normalization (`ClockworkCompanionClient`)**: Merged nested `maintenance_mode` and `comments` response fields to the top level so the site dashboard accurately reflects active maintenance mode and comment counts across both Companion (`1.43.2`) and Renegade (`1.1.4`).
+- **Admin-AJAX Plugin & Theme Upgrade Fallback (`ClockworkCompanionClient`, `UpdatesController`)**: Added SSO-authenticated `admin-ajax.php` upgrade fallbacks for commercial plugins/themes whose updaters only register hooks inside `wp-admin`, fixed noisy-body JSON salvage (`salvageJsonBody`), and exposed target versions in batch update status responses.
+- **WP-CLI Path Redaction Bug (`ServerTelemetryCollector`)**: Anchored `-p` password redaction with `(?<=^|\s)-p` so `--path=/sites/...` arguments in server telemetry are no longer mangled.
+- **Backup Manifest Enumeration & Stream Validation (`BackupArchiveEnumerator`, `ArchiveSiteBackupJob`, `GlacierUploader`)**: Indexed `.manifest.json` sidecars in a two-pass scan so archive keys sorting before `.manifest.json` retain their metadata, rejected 0-byte backup streams before S3 upload, and surfaced S3 presigning errors instead of returning mock URLs in production.
+- **Installer HTTP Status Preservation (`bootstrap/app.php`)**: Preserved `403`, `404`, `419`, and `429` status codes on `/install*` routes instead of converting them into `500` responses.
+
 ## [1.12.3] - 2026-11-06
 
 ### Added
