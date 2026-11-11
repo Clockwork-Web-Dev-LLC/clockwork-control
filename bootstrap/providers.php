@@ -28,6 +28,7 @@ use Modules\Hetzner\HetznerServiceProvider;
 use Modules\Kinsta\KinstaServiceProvider;
 use Modules\Linode\LinodeServiceProvider;
 use Modules\Mattermost\MattermostServiceProvider;
+use Modules\Mcp\McpModuleServiceProvider;
 use Modules\PageSpeedInsights\PageSpeedInsightsServiceProvider;
 use Modules\Pressable\PressableServiceProvider;
 use Modules\Seo\SeoServiceProvider;
@@ -82,6 +83,8 @@ return [
     PageSpeedInsightsServiceProvider::class,
     // SEO (fleet indexability overview)
     SeoServiceProvider::class,
+    // Claude access: hosts the MCP server that modules add tools to.
+    McpModuleServiceProvider::class,
     // Security scanning & protection modules (ManageWP replacement suite, brute-force defense)
     SucuriServiceProvider::class,
     GatekeeperServiceProvider::class,

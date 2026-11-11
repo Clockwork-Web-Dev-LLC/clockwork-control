@@ -145,6 +145,72 @@ class SearchNumbers
         ];
     }
 
+    /**
+     * Monthly totals for the months up to and including $end, oldest first.
+     * Each row holds plain values (no comparisons), null where a month has
+     * no stored data.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function trend(SiteProfile $profile, CarbonImmutable $end, int $months): array
+    {
+        $end = $end->startOfMonth();
+        $rows = [];
+
+        for ($i = max(1, $months) - 1; $i >= 0; $i--) {
+            $month = $end->subMonthsNoOverflow($i);
+            $gsc = $this->gscMonth($profile, $month);
+            $ga4 = $this->ga4Month($profile, $month);
+
+            $rows[] = [
+                'month' => $month->format('Y-m'),
+                'data_state' => $this->dataState($profile, $month),
+                'clicks' => $gsc['clicks'],
+                'impressions' => $gsc['impressions'],
+                'ctr' => $gsc['ctr'],
+                'position' => $gsc['position'],
+                'nonbranded_clicks' => $gsc['nonbranded_clicks'],
+                'organic_keywords' => $gsc['organic_keywords'],
+                'organic_sessions' => $ga4['organic_sessions'],
+                'ai_assistant_sessions' => $ga4['ai_sessions'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * GA4 sessions per channel group for the month, with the previous
+     * month's sessions, largest first. Empty when the month isn't synced.
+     *
+     * @return list<array{channel: string, sessions: int, engaged_sessions: int, key_events: float, prev_sessions: ?int}>
+     */
+    public function channels(SiteProfile $profile, CarbonImmutable $month): array
+    {
+        $month = $month->startOfMonth();
+        $load = fn (CarbonImmutable $m) => DB::table('seo_ga4_months')
+            ->where('site_id', $profile->site_id)
+            ->where('month', $m->toDateString())
+            ->get()
+            ->keyBy('channel_group');
+
+        $current = $load($month);
+        $previous = $load($month->subMonthNoOverflow());
+
+        return $current
+            ->sortByDesc('sessions')
+            ->map(fn (object $row) => [
+                'channel' => (string) $row->channel_group,
+                'sessions' => (int) $row->sessions,
+                'engaged_sessions' => (int) $row->engaged_sessions,
+                'key_events' => (float) $row->key_events,
+                // No rows at all last month means it wasn't synced.
+                'prev_sessions' => $previous->isEmpty() ? null : (int) ($previous->get($row->channel_group)->sessions ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
+
     /** Months with any stored GSC or GA4 data, newest first. @return list<string> Y-m */
     public function availableMonths(SiteProfile $profile): array
     {

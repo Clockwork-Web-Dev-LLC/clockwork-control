@@ -1,0 +1,10 @@
+{
+  "id": "mcp",
+  "name": "Claude access",
+  "version": "0.1.0",
+  "description": "Hosts the MCP server that lets Claude read Control. Other modules add tools to it.",
+  "enabled": true,
+  "requires": ["core"],
+  "capabilities": ["mcp"],
+  "namespace": "Modules\\Mcp"
+}

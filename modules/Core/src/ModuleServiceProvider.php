@@ -88,6 +88,19 @@ abstract class ModuleServiceProvider extends ServiceProvider
     }
 
     /**
+     * Tools this module adds to the Claude access (MCP) server hosted by
+     * modules/Mcp. Class names only, so Core imports nothing from
+     * laravel/mcp. A disabled module never reaches the registry, so its
+     * tools drop out with it.
+     *
+     * @return list<class-string>
+     */
+    public function mcpTools(): array
+    {
+        return [];
+    }
+
+    /**
      * Contribute schedule() entries. No-op by default — the Azure/Hetzner/
      * DigitalOcean modules built in Phase 4 are polled by shared
      * cross-provider commands (clockwork:poll-servers, clockwork:reconcile-

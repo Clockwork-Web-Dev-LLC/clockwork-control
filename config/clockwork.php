@@ -538,6 +538,14 @@ return [
         'google_timeout' => (int) env('CLOCKWORK_SEO_GOOGLE_TIMEOUT', 30),
     ],
 
+    // Claude access (modules/Mcp): the MCP server Claude reads Control
+    // through. Only the local stdio transport exists so far, and stdio has
+    // no login, so the server acts as this one active user (their email)
+    // and refuses to start without it. Leave empty to keep stdio off.
+    'mcp' => [
+        'local_user' => env('CLOCKWORK_MCP_LOCAL_USER'),
+    ],
+
     // Fleet-wide care plans policy.
     // When enabled (default): sites can be enrolled in care plans individually,
     // gating automated maintenance, update loops, and routine scans.

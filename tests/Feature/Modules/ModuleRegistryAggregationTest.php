@@ -49,10 +49,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 36 registered modules', function () {
+    it('aggregates a manifest from every one of the 37 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(36);
+        expect($manifests)->toHaveCount(37);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -93,6 +93,7 @@ describe('ModuleRegistry aggregation', function () {
             'client-management',
             'email-auth',
             'seo',
+            'mcp',
         ]);
     });
 

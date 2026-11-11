@@ -11,6 +11,12 @@ use Modules\Seo\Console\SyncGoogleData;
 use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
+use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoDailySeries;
+use Modules\Seo\Mcp\Tools\SeoListSites;
+use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
+use Modules\Seo\Mcp\Tools\SeoSearchRows;
+use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Models\GoogleConnection;
 
 /**
@@ -81,6 +87,22 @@ class SeoServiceProvider extends ModuleServiceProvider
     public function diagnosticCheck(): ?DiagnosticCheck
     {
         return $this->app->make(GoogleConnectionCheck::class);
+    }
+
+    /**
+     * The tools Claude reaches SEO data through, on the server modules/Mcp
+     * hosts. All read stored rows only; none calls Google.
+     */
+    public function mcpTools(): array
+    {
+        return [
+            SeoListSites::class,
+            SeoMonthNumbers::class,
+            SeoDailySeries::class,
+            SeoSearchRows::class,
+            SeoAiImpressionsRecord::class,
+            SeoSiteProfileUpdate::class,
+        ];
     }
 
     public function navItems(): array
