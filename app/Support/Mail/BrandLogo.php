@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Services\Companion\CompanionBrandingManager;
+use App\Support\SsrfGuard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +17,8 @@ use Throwable;
  */
 class BrandLogo
 {
+    private const MAX_BYTES = 2_097_152;
+
     /**
      * Raw image bytes, or null when the URL is unusable or the fetch fails.
      *
@@ -36,10 +39,24 @@ class BrandLogo
 
         try {
             $encoded = Cache::remember('client-report-logo:'.md5($url), now()->addDay(), function () use ($url) {
-                $response = Http::timeout(5)->get($url);
+                SsrfGuard::assertPublic($url);
+                $response = Http::timeout(5)
+                    ->withOptions([
+                        'allow_redirects' => [
+                            'max' => 3,
+                            'strict' => true,
+                            'protocols' => ['http', 'https'],
+                            'on_redirect' => SsrfGuard::onRedirect(),
+                        ],
+                    ])
+                    ->get($url);
 
-                return $response->successful() && str_starts_with((string) $response->header('Content-Type'), 'image/')
-                    ? base64_encode($response->body())
+                $body = $response->body();
+
+                return $response->successful()
+                    && str_starts_with((string) $response->header('Content-Type'), 'image/')
+                    && strlen($body) <= self::MAX_BYTES
+                    ? base64_encode($body)
                     : '';
             });
         } catch (Throwable) {

@@ -80,8 +80,11 @@ class TurnkeyWpHostingProvider implements HostingProvider
         }
 
         // The API base is <app>/api/v1; the site page is <app>/servers/{server}/sites/{site}.
-        $app = preg_replace('#/api/v1/?$#', '', $this->client->baseUrl());
+        $app = trim((string) preg_replace('#/api/v1/?$#', '', $this->client->baseUrl()));
+        if (! preg_match('#^https?://#i', $app)) {
+            return null;
+        }
 
-        return rtrim((string) $app, '/')."/servers/{$serverId}/sites/{$site->turnkeywp_site_id}";
+        return rtrim($app, '/').'/servers/'.rawurlencode((string) $serverId).'/sites/'.rawurlencode((string) $site->turnkeywp_site_id);
     }
 }

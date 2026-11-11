@@ -677,11 +677,17 @@ class EnvCredentialManager
 
         $meta = $defs[$field];
         $envKey = $meta['env_var'];
-        // Strip embedded newlines/CRs, not just leading/trailing whitespace —
+        // Strip embedded newlines/CRs/NULs, not just leading/trailing whitespace —
         // an unstripped one would let a pasted credential value inject an
         // extra line into .env (e.g. a crafted "token\nMAIL_HOST=evil"),
         // silently adding or overwriting an unrelated variable.
-        $cleanVal = trim(str_replace(["\r", "\n"], '', $value));
+        $cleanVal = trim(str_replace(["\r", "\n", "\0"], '', $value));
+
+        if ($serviceId === 'ssh' && $field === 'default_key_path' && $cleanVal !== '') {
+            if (! self::isSafeSshKeyPath($cleanVal)) {
+                return false;
+            }
+        }
 
         $written = $this->writeEnv($envKey, $cleanVal);
 
@@ -744,6 +750,10 @@ class EnvCredentialManager
      */
     public function writeEnv(string $key, ?string $value): bool
     {
+        if (! preg_match('/^[A-Z][A-Z0-9_]*$/', $key)) {
+            return false;
+        }
+
         $path = $this->envPath();
         if (! file_exists($path)) {
             $examplePath = base_path('.env.example');
@@ -769,12 +779,20 @@ class EnvCredentialManager
         $pattern = '/^#?\s*'.preg_quote($key, '/').'\s*=.*$/m';
 
         if (preg_match($pattern, $contents)) {
-            $newContents = preg_replace($pattern, $newLine, $contents);
+            $newContents = preg_replace_callback($pattern, static fn (): string => $newLine, $contents);
+            if ($newContents === null) {
+                return false;
+            }
         } else {
             $newContents = rtrim($contents).PHP_EOL.$newLine.PHP_EOL;
         }
 
-        return file_put_contents($path, $newContents, LOCK_EX) !== false;
+        $written = file_put_contents($path, $newContents, LOCK_EX) !== false;
+        if ($written && file_exists($path)) {
+            @chmod($path, 0600);
+        }
+
+        return $written;
     }
 
     /**
@@ -782,6 +800,10 @@ class EnvCredentialManager
      */
     public function removeEnv(string $key): bool
     {
+        if (! preg_match('/^[A-Z][A-Z0-9_]*$/', $key)) {
+            return false;
+        }
+
         $path = $this->envPath();
         if (! file_exists($path)) {
             return true;
@@ -795,7 +817,10 @@ class EnvCredentialManager
         $pattern = '/^#?\s*'.preg_quote($key, '/').'\s*=.*$/m';
 
         if (preg_match($pattern, $contents)) {
-            $newContents = preg_replace($pattern, "{$key}=", $contents);
+            $newContents = preg_replace_callback($pattern, static fn (): string => "{$key}=", $contents);
+            if ($newContents === null) {
+                return false;
+            }
 
             return file_put_contents($path, $newContents, LOCK_EX) !== false;
         }
@@ -805,14 +830,32 @@ class EnvCredentialManager
 
     protected function formatEnvValue(string $value): string
     {
+        $value = str_replace(["\r", "\n", "\0"], '', $value);
         if ($value === '') {
             return '';
         }
 
         if (preg_match('/\s|"|\'|#|\$|\\\\/', $value)) {
-            return '"'.str_replace(['\\', '"'], ['\\\\', '\"'], $value).'"';
+            // Escape \", \\, and \$ so vlucas/phpdotenv never expands ${OTHER_SECRET} inside double quotes.
+            return '"'.str_replace(['\\', '"', '$'], ['\\\\', '\"', '\$'], $value).'"';
         }
 
         return $value;
+    }
+
+    public static function isSafeSshKeyPath(string $path): bool
+    {
+        if ($path === '' || preg_match('/[\r\n\0]/', $path) || str_contains($path, '://') || str_contains($path, '..')) {
+            return false;
+        }
+
+        $normalized = str_replace('\\', '/', $path);
+        foreach (['/etc/', '/proc/', '/sys/', '/dev/', '/var/log/', '/var/mail/'] as $forbiddenPrefix) {
+            if (str_starts_with($normalized, $forbiddenPrefix)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

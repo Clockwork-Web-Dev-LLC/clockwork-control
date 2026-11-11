@@ -184,7 +184,7 @@ class UptimeDiagnostician
     {
         $sections = $this->splitSections($output);
 
-        $maintRaw = trim($sections['MAINT'] ?? '');
+        $maintRaw = self::redactSecrets(trim($sections['MAINT'] ?? ''));
         $maintenanceMode = $maintRaw !== '';
 
         $fpmSockPath = trim($sections['FPM_SOCK'] ?? '');
@@ -207,7 +207,7 @@ class UptimeDiagnostician
             $cores = null;
         }
 
-        $recentErrors = trim($sections['SITE_ERR'] ?? '');
+        $recentErrors = self::redactSecrets(trim($sections['SITE_ERR'] ?? ''));
         if ($recentErrors === '') {
             $recentErrors = null;
         } else {
@@ -323,5 +323,27 @@ class UptimeDiagnostician
             'summary' => '',
             'error' => null,
         ];
+    }
+
+    /**
+     * Strip credentials, API tokens, and private keys from SSH log excerpts
+     * before persisting to the database or forwarding to chat webhooks.
+     */
+    private static function redactSecrets(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        $patterns = [
+            '/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/' => '[REDACTED_PRIVATE_KEY]',
+            '/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/i' => 'Bearer [REDACTED]',
+            '/\bsk-(?:or-)?[A-Za-z0-9_-]{16,}\b/' => '[REDACTED_API_KEY]',
+            '/(?<=^|\s)-p["\']?[^\s"\'&]+["\']?/' => '-p[REDACTED]',
+            '/\b(password|passwd|pwd|secret|api_key|apikey|app_key|access_token|refresh_token|auth_token|client_secret)\s*([=:]\s*["\']?)([^\s"\'&,;}{]{4,})(["\']?)/i' => '$1$2[REDACTED]$4',
+            '#([a-z][a-z0-9+.-]*://[^/\s:@]+:)([^@\s/]+)(@)#i' => '$1[REDACTED]$3',
+        ];
+
+        return (string) preg_replace(array_keys($patterns), array_values($patterns), $text);
     }
 }

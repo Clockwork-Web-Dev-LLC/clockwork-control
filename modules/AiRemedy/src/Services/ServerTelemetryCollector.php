@@ -226,8 +226,8 @@ BASH;
         // Redact bearer tokens
         $text = (string) preg_replace('/(bearer\s+)[a-zA-Z0-9_\-\.]{8,}/i', '$1[REDACTED_TOKEN]', $text);
 
-        // Redact CLI passwords e.g. -pMySecretPass or -p"MySecretPass"
-        $text = (string) preg_replace('/(-p)["\']?[^\s"\'&]+["\']?/i', '-p[REDACTED_PASSWORD]', $text);
+        // Redact CLI passwords e.g. -pMySecretPass or -p"MySecretPass" without mangling long flags like --path=...
+        $text = (string) preg_replace('/(?<=^|\s)-p["\']?[^\s"\'&]+["\']?/i', '-p[REDACTED_PASSWORD]', $text);
 
         // Redact query string / env key patterns (password=..., secret=..., api_key=...)
         $text = (string) preg_replace('/((?:password|passwd|secret|token|api_key|app_key|auth)=)[^\s&]+/i', '$1[REDACTED]', $text);

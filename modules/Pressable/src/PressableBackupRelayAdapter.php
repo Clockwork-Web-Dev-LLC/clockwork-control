@@ -3,6 +3,7 @@
 namespace Modules\Pressable;
 
 use App\Models\Site;
+use App\Support\SsrfGuard;
 use Carbon\Carbon;
 use Modules\Core\Contracts\BackupRef;
 use Modules\Core\Contracts\BackupRelayAdapter;
@@ -71,20 +72,73 @@ class PressableBackupRelayAdapter implements BackupRelayAdapter
     public function openBackupStream(Site $site, BackupRef $ref)
     {
         $downloadUrl = $ref->metadata['download_url'] ?? null;
-        if ($downloadUrl) {
+        if (! is_string($downloadUrl) || ! str_starts_with(strtolower($downloadUrl), 'https://')) {
+            return null;
+        }
+
+        SsrfGuard::assertPublic($downloadUrl);
+
+        // Do not auto-follow redirects with the Pressable Bearer token attached:
+        // Pressable backup endpoints redirect to presigned S3/CDN URLs where
+        // forwarding `Authorization: Bearer` leaks the API token cross-origin
+        // and breaks S3 SigV4 query-authenticated requests.
+        $currentUrl = $downloadUrl;
+        $sendAuth = true;
+
+        for ($hop = 0; $hop <= 5; $hop++) {
+            $headers = ['User-Agent: ClockworkControl-BackupRelay/1.0'];
+            if ($sendAuth) {
+                $headers[] = 'Authorization: Bearer '.$this->client->getAccessToken();
+            }
+
             $context = stream_context_create([
                 'http' => [
-                    'header' => 'Authorization: Bearer '.$this->client->getAccessToken(),
-                    'follow_location' => 1,
+                    'header' => implode("\r\n", $headers),
+                    'follow_location' => 0,
+                    'ignore_errors' => true,
                     'timeout' => 60,
                 ],
             ]);
-            $stream = @fopen($downloadUrl, 'r', false, $context);
-            if ($stream) {
+
+            $http_response_header = [];
+            $stream = @fopen($currentUrl, 'r', false, $context);
+            if ($stream === false) {
+                return null;
+            }
+
+            $statusLine = $http_response_header[0] ?? '';
+            $statusCode = preg_match('#^HTTP/\S+\s+(\d{3})#i', $statusLine, $m) ? (int) $m[1] : 0;
+
+            if ($statusCode >= 200 && $statusCode < 300) {
                 return $stream;
             }
+
+            fclose($stream);
+
+            if (in_array($statusCode, [301, 302, 303, 307, 308], true)) {
+                $location = null;
+                foreach ($http_response_header as $hdr) {
+                    if (stripos($hdr, 'Location:') === 0) {
+                        $location = trim(substr($hdr, strlen('Location:')));
+                        break;
+                    }
+                }
+
+                if ($location === null || ! str_starts_with(strtolower($location), 'https://')) {
+                    return null;
+                }
+
+                SsrfGuard::assertPublic($location);
+                $sameHost = strtolower((string) parse_url($location, PHP_URL_HOST)) === strtolower((string) parse_url($downloadUrl, PHP_URL_HOST));
+                $sendAuth = $sameHost;
+                $currentUrl = $location;
+
+                continue;
+            }
+
+            return null;
         }
 
-        return fopen('php://temp', 'r+');
+        return null;
     }
 }

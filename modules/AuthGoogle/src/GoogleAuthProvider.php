@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider as SocialiteGoogleProvider;
 use Modules\Core\Contracts\AuthProvider;
+use Modules\Core\ModuleStateResolver;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -52,6 +53,10 @@ class GoogleAuthProvider implements AuthProvider
 
     public function isConfigured(): bool
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('auth_google')) {
+            return false;
+        }
+
         $clientId = $this->resolver->get('auth_google.client_id') ?? config('services.google.client_id');
         $clientSecret = $this->resolver->get('auth_google.client_secret') ?? config('services.google.client_secret');
 
@@ -60,6 +65,13 @@ class GoogleAuthProvider implements AuthProvider
 
     public function handleRedirect(): Response
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('auth_google')) {
+            return redirect()->route('login')->with(
+                'login_denial',
+                'Google sign-in is currently disabled.'
+            );
+        }
+
         $driver = $this->driver();
 
         $hd = $this->hostedDomain();
@@ -72,6 +84,13 @@ class GoogleAuthProvider implements AuthProvider
 
     public function handleCallback(Request $request): RedirectResponse
     {
+        if (! app(ModuleStateResolver::class)->isEnabled('auth_google')) {
+            return redirect()->route('login')->with(
+                'login_denial',
+                'Google sign-in is currently disabled.'
+            );
+        }
+
         try {
             $googleUser = $this->driver()->user();
         } catch (Throwable $e) {
@@ -80,6 +99,17 @@ class GoogleAuthProvider implements AuthProvider
             return redirect()->route('login')->with(
                 'login_denial',
                 'Google sign-in failed. Try again, and let an administrator know if it keeps happening.'
+            );
+        }
+
+        $rawUser = is_array($googleUser->user ?? null) ? $googleUser->user : [];
+        if (
+            (array_key_exists('email_verified', $rawUser) && $rawUser['email_verified'] !== true)
+            || (array_key_exists('verified_email', $rawUser) && $rawUser['verified_email'] !== true)
+        ) {
+            return redirect()->route('login')->with(
+                'login_denial',
+                'Your Google account email address is not verified.'
             );
         }
 

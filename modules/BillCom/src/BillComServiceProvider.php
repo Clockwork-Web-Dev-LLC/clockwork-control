@@ -38,7 +38,9 @@ class BillComServiceProvider extends ModuleServiceProvider
 
     public function boot(): void
     {
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        if ($this->enabled()) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
 
         $this->commands([
             BillComTest::class,
@@ -71,6 +73,10 @@ class BillComServiceProvider extends ModuleServiceProvider
 
     public function navItems(): array
     {
+        if (! $this->enabled()) {
+            return [];
+        }
+
         $r = $this->app->make(CredentialResolver::class);
 
         if (! (bool) $r->get('bill_com.enabled', false)) {

@@ -279,11 +279,15 @@ class EmailAuthController extends Controller
         $domainModel = EmailAuthDomain::where('domain', $domain)->firstOrFail();
 
         $validated = $request->validate([
-            'selectors' => ['nullable', 'string'],
+            'selectors' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $selectorsStr = (string) ($validated['selectors'] ?? '');
-        $selectors = array_values(array_unique(array_filter(array_map('trim', explode(',', $selectorsStr)))));
+        $selectors = array_values(array_unique(array_filter(
+            array_map('trim', explode(',', $selectorsStr)),
+            fn (string $sel) => $sel !== '' && preg_match('/^[a-z0-9](?:[a-z0-9._-]{0,61}[a-z0-9])?$/i', $sel) === 1,
+        )));
+        $selectors = array_slice($selectors, 0, 20);
 
         $domainModel->update([
             'custom_dkim_selectors' => $selectors,

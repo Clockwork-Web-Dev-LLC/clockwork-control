@@ -166,11 +166,12 @@
                         method: 'POST',
                         headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
                     }).then(r => r.json()).then(d => {
+                        const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&quot;/g, '&quot;');
                         if (d.ok) {
-                            btn.innerHTML = '<i class=\'fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1\'></i> ' + d.message;
+                            btn.innerHTML = '<i class=\'fa-solid fa-circle-check text-emerald-500 text-[10px] mr-1\'></i> ' + esc(d.message);
                             setTimeout(() => { window.location.reload(); }, 600);
                         } else {
-                            btn.innerHTML = '<i class=\'fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1\'></i> ' + (d.message || 'Error');
+                            btn.innerHTML = '<i class=\'fa-solid fa-circle-xmark text-rose-500 text-[10px] mr-1\'></i> ' + esc(d.message || 'Error');
                             setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3000);
                         }
                     }).catch(() => {

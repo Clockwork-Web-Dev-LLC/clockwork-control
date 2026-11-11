@@ -153,7 +153,9 @@ class ReportRecipientsSyncService
             $wpUpdatedAt = null;
             if ($updatedAtRaw !== null) {
                 try {
-                    $wpUpdatedAt = Carbon::parse($updatedAtRaw);
+                    $parsed = Carbon::parse($updatedAtRaw);
+                    $maxSkew = now()->addMinutes(5);
+                    $wpUpdatedAt = $parsed->gt($maxSkew) ? now() : $parsed;
                 } catch (Throwable) {
                     $wpUpdatedAt = null;
                 }
@@ -186,9 +188,8 @@ class ReportRecipientsSyncService
                 return;
             }
 
-            $isNewer = $wpUpdatedAt === null
-                || $schedule->updated_at === null
-                || $wpUpdatedAt->gt($schedule->updated_at);
+            $isNewer = $wpUpdatedAt !== null
+                && ($schedule->updated_at === null || $wpUpdatedAt->gt($schedule->updated_at));
 
             if (! $isNewer) {
                 // Control is newer. If WordPress still shows older values (e.g. an

@@ -120,7 +120,7 @@
         @elseif ($hasUpdate)
             <div class="mb-4 rounded-md border border-dashed border-[var(--color-border-light)] p-3 text-xs text-[var(--color-ink-soft)]">
                 <i class="fa-solid fa-circle-info"></i>
-                Per-package detail not yet polled. Runs daily at 04:15, or trigger now: <code class="font-data">php artisan clockwork:poll-system-updates --server={{ $server->name }}</code>
+                Per-package detail not yet polled. Runs daily at 04:15, or trigger now: <code class="font-data">php artisan clockwork:poll-system-updates --server={{ escapeshellarg($server->name) }}</code>
             </div>
         @endif
 
@@ -322,14 +322,20 @@
                             method: 'POST',
                             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
                         });
+                        const escHtml = (s) => String(s ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;');
                         const data = await r.json();
                         if (data.ok) {
                             result.className = 'mb-3 text-sm status-pill ' + (data.reboot_required ? 'status-yellow' : 'status-green') + ' inline-block';
-                            result.innerHTML = '<i class="fa-solid ' + (data.reboot_required ? 'fa-triangle-exclamation' : 'fa-circle-check') + '"></i> ' + data.message + ' Reloading…';
+                            result.innerHTML = '<i class="fa-solid ' + (data.reboot_required ? 'fa-triangle-exclamation' : 'fa-circle-check') + '"></i> ' + escHtml(data.message) + ' Reloading…';
                             setTimeout(() => location.reload(), 1200);
                         } else {
                             result.className = 'mb-3 text-sm status-pill status-red inline-block';
-                            result.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
+                            result.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + escHtml(data.message || 'Failed.');
                         }
                     } catch (e) {
                         result.className = 'mb-3 text-sm status-pill status-red inline-block';

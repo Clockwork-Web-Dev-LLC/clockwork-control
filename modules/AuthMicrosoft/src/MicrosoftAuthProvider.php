@@ -59,7 +59,7 @@ class MicrosoftAuthProvider implements AuthProvider
             return false;
         }
 
-        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+        if (! app()->runningUnitTests() && ! $this->hasPinnedTenant()) {
             return false;
         }
 
@@ -68,7 +68,7 @@ class MicrosoftAuthProvider implements AuthProvider
 
     public function handleRedirect(): Response
     {
-        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+        if (! app()->runningUnitTests() && ! $this->hasPinnedTenant()) {
             return redirect()->route('login')->with(
                 'login_denial',
                 'Microsoft sign-in requires a directory (tenant) ID. Ask an administrator to set it under Integrations.'
@@ -94,7 +94,7 @@ class MicrosoftAuthProvider implements AuthProvider
 
     public function handleCallback(Request $request): RedirectResponse
     {
-        if (app()->environment('production') && ! $this->hasPinnedTenant()) {
+        if (! app()->runningUnitTests() && ! $this->hasPinnedTenant()) {
             return redirect()->route('login')->with(
                 'login_denial',
                 'Microsoft sign-in requires a directory (tenant) ID. Ask an administrator to set it under Integrations.'
@@ -144,6 +144,36 @@ class MicrosoftAuthProvider implements AuthProvider
             }
 
             $profile = $profileResponse->json();
+            $upn = (string) ($profile['userPrincipalName'] ?? '');
+            $userType = (string) ($profile['userType'] ?? '');
+            if (str_contains($upn, '#EXT#') || strcasecmp($userType, 'Guest') === 0) {
+                return redirect()->route('login')->with(
+                    'login_denial',
+                    'External guest Microsoft accounts are not permitted to sign in.'
+                );
+            }
+
+            $idToken = $tokenResponse->json('id_token');
+            if (is_string($idToken) && substr_count($idToken, '.') === 2 && $this->hasPinnedTenant()) {
+                $parts = explode('.', $idToken);
+                $claims = json_decode((string) base64_decode(strtr($parts[1], '-_', '+/')), true);
+                if (is_array($claims) && isset($claims['tid'])) {
+                    $tokenTid = strtolower((string) $claims['tid']);
+                    if ($this->isBroadTenant($tokenTid)) {
+                        return redirect()->route('login')->with(
+                            'login_denial',
+                            'Personal Microsoft accounts are not permitted to sign in.'
+                        );
+                    }
+                    if (preg_match('/^[0-9a-f-]{36}$/i', $tenant) && strcasecmp($tokenTid, $tenant) !== 0) {
+                        return redirect()->route('login')->with(
+                            'login_denial',
+                            'Microsoft sign-in tenant mismatch.'
+                        );
+                    }
+                }
+            }
+
             $email = $profile['mail'] ?? $profile['userPrincipalName'] ?? null;
             $name = $profile['displayName'] ?? null;
             $providerId = $profile['id'] ?? null;
@@ -177,11 +207,11 @@ class MicrosoftAuthProvider implements AuthProvider
     {
         $tenant = $this->configuredTenantId();
 
-        if ($tenant !== '' && ! $this->isBroadTenant($tenant)) {
+        if ($tenant !== '' && $this->isValidTenantFormat($tenant) && ! $this->isBroadTenant($tenant)) {
             return $tenant;
         }
 
-        return app()->environment('production') ? '' : 'common';
+        return app()->runningUnitTests() ? 'common' : '';
     }
 
     protected function configuredTenantId(): string
@@ -193,11 +223,24 @@ class MicrosoftAuthProvider implements AuthProvider
     {
         $tenant = $this->configuredTenantId();
 
-        return $tenant !== '' && ! $this->isBroadTenant($tenant);
+        return $tenant !== '' && $this->isValidTenantFormat($tenant) && ! $this->isBroadTenant($tenant);
     }
 
     protected function isBroadTenant(string $tenant): bool
     {
-        return in_array(strtolower($tenant), ['common', 'organizations', 'consumers'], true);
+        return in_array(strtolower($tenant), [
+            'common',
+            'organizations',
+            'consumers',
+            '9188040d-6c67-4c5b-b112-36a304b66dad', // Microsoft personal consumer tenant GUID
+        ], true);
+    }
+
+    protected function isValidTenantFormat(string $tenant): bool
+    {
+        return (bool) preg_match(
+            '/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9](?:[a-z0-9.-]{0,248}[a-z0-9])?\.[a-z]{2,})$/i',
+            $tenant
+        );
     }
 }

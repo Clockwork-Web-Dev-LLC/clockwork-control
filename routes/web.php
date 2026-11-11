@@ -91,29 +91,31 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->middleware(RedirectToSetupIfFreshInstall::class)
         ->name('dashboard');
 
-    Route::get('/setup', [SetupController::class, 'step1'])->name('setup.index');
-    Route::get('/setup/step-1', [SetupController::class, 'step1'])->name('setup.step1');
-    Route::post('/setup/step-1', [SetupController::class, 'step1Save'])->name('setup.step1.save');
-    Route::post('/setup/toggle', [SetupController::class, 'toggleService'])->name('setup.toggle');
-    Route::get('/setup/configure', [SetupController::class, 'step2'])->name('setup.step2');
-    Route::post('/setup/configure', [SetupController::class, 'step2Save'])->name('setup.step2.save');
-    Route::get('/setup/modules', [SetupController::class, 'step1'])->name('setup.modules.edit');
-    Route::patch('/setup/modules', [SetupController::class, 'step1Save'])->name('setup.modules.update');
+    Route::middleware('admin')->group(function () {
+        Route::get('/setup', [SetupController::class, 'step1'])->name('setup.index');
+        Route::get('/setup/step-1', [SetupController::class, 'step1'])->name('setup.step1');
+        Route::post('/setup/step-1', [SetupController::class, 'step1Save'])->name('setup.step1.save');
+        Route::post('/setup/toggle', [SetupController::class, 'toggleService'])->name('setup.toggle');
+        Route::get('/setup/configure', [SetupController::class, 'step2'])->name('setup.step2');
+        Route::post('/setup/configure', [SetupController::class, 'step2Save'])->name('setup.step2.save');
+        Route::get('/setup/modules', [SetupController::class, 'step1'])->name('setup.modules.edit');
+        Route::patch('/setup/modules', [SetupController::class, 'step1Save'])->name('setup.modules.update');
 
-    Route::get('/servers/credentials', [ServerCredentialsController::class, 'bulk'])
-        ->name('servers.credentials.bulk');
-    Route::post('/servers/credentials', [ServerCredentialsController::class, 'bulkUpdate'])
-        ->name('servers.credentials.bulkUpdate');
+        Route::get('/servers/credentials', [ServerCredentialsController::class, 'bulk'])
+            ->name('servers.credentials.bulk');
+        Route::post('/servers/credentials', [ServerCredentialsController::class, 'bulkUpdate'])
+            ->name('servers.credentials.bulkUpdate');
 
-    Route::get('/servers/credentials/feed', [ServerCredentialsController::class, 'feed'])
-        ->name('servers.credentials.feed');
-    Route::post('/servers/credentials/feed', [ServerCredentialsController::class, 'feedParse'])
-        ->name('servers.credentials.feedParse');
-    Route::post('/servers/credentials/feed/apply', [ServerCredentialsController::class, 'feedApply'])
-        ->name('servers.credentials.feedApply');
+        Route::get('/servers/credentials/feed', [ServerCredentialsController::class, 'feed'])
+            ->name('servers.credentials.feed');
+        Route::post('/servers/credentials/feed', [ServerCredentialsController::class, 'feedParse'])
+            ->name('servers.credentials.feedParse');
+        Route::post('/servers/credentials/feed/apply', [ServerCredentialsController::class, 'feedApply'])
+            ->name('servers.credentials.feedApply');
 
-    Route::get('/servers/new', [ServersController::class, 'create'])->name('servers.create');
-    Route::post('/servers', [ServersController::class, 'store'])->name('servers.store');
+        Route::get('/servers/new', [ServersController::class, 'create'])->name('servers.create');
+        Route::post('/servers', [ServersController::class, 'store'])->name('servers.store');
+    });
 
     Route::post('/servers/refresh-spinupwp', [ServersController::class, 'refreshFromSpinupWp'])
         ->name('servers.refreshFromSpinupWp');
@@ -129,16 +131,21 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->whereIn('tab', ['sites', 'stats', 'updates', 'bans', 'settings'])
         ->name('servers.show');
     Route::get('/servers/{server}/edit', [ServerCredentialsController::class, 'edit'])
+        ->middleware('admin')
         ->name('servers.credentials.edit');
     Route::patch('/servers/{server}/credentials', [ServerCredentialsController::class, 'update'])
+        ->middleware('admin')
         ->name('servers.credentials.update');
     Route::post('/servers/{server}/test', [ServerCredentialsController::class, 'test'])
+        ->middleware('admin')
         ->name('servers.test');
     Route::post('/servers/{server}/toggle-ignore', [ServersController::class, 'toggleIgnore'])
         ->name('servers.toggleIgnore');
     Route::delete('/servers/{server}', [ServersController::class, 'destroy'])
+        ->middleware('admin')
         ->name('servers.destroy');
     Route::post('/servers/{server}/provision/fail2ban', [ServerProvisionController::class, 'fail2ban'])
+        ->middleware('admin')
         ->name('servers.provision.fail2ban');
     Route::post('/servers/{server}/ban-ip', [BlockedIpsController::class, 'ban'])
         ->name('servers.ban');
@@ -167,8 +174,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/bans/queue', [BansController::class, 'queue'])->name('bans.queue');
     Route::get('/bans/active', [BansController::class, 'active'])->name('bans.active');
     Route::get('/bans/history', [BansController::class, 'history'])->name('bans.history');
-    Route::patch('/bans/retention', [BansController::class, 'updateRetention'])->name('bans.retention.update');
-    Route::post('/bans/prune', [BansController::class, 'bulkClear'])->name('bans.prune');
+    Route::patch('/bans/retention', [BansController::class, 'updateRetention'])->middleware('admin')->name('bans.retention.update');
+    Route::post('/bans/prune', [BansController::class, 'bulkClear'])->middleware('admin')->name('bans.prune');
 
     // Old GET URLs → 301 to the new tabs. Keeps bookmarks working but retrains muscle memory.
     // request()->query() returns the array of query params directly (no ->all() needed).
@@ -230,7 +237,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::prefix('security')->name('security.')->group(function () {
         Route::get('/scans', [SecurityScansController::class, 'index'])->name('scans');
         Route::get('/admins', [SecurityAdminsController::class, 'index'])->name('admins');
-        Route::patch('/admins/allowlist', [SecurityAdminsController::class, 'updateAllowlist'])->name('admins.allowlist');
+        Route::patch('/admins/allowlist', [SecurityAdminsController::class, 'updateAllowlist'])->middleware('admin')->name('admins.allowlist');
         Route::post('/admins/{site}/ignore', [SecurityAdminsController::class, 'ignore'])->name('admins.ignore');
         Route::delete('/admins/{site}/ignore/{ignoredWpAdmin}', [SecurityAdminsController::class, 'unignore'])->name('admins.unignore');
         Route::post('/scans/{site}/run', [SecurityScansController::class, 'runForSite'])->name('scans.run');
@@ -332,11 +339,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/sites/{site}/backups-history', [SitesController::class, 'backupsHistory'])->name('sites.backups.history');
     Route::patch('/sites/{site}/backup-relay', [SitesController::class, 'updateBackupRelay'])->name('sites.backup-relay.update');
     Route::post('/sites/{site}/backup-relay/run-now', [SitesController::class, 'runBackupNow'])->name('sites.backup-relay.run-now');
-    Route::post('/sites/{site}/backup-relay/restore/stage', [SitesController::class, 'backupRelayRestoreStage'])->name('sites.backup-relay.restore.stage');
-    Route::post('/sites/{site}/backup-relay/restore/apply', [SitesController::class, 'backupRelayRestoreApply'])->name('sites.backup-relay.restore.apply');
-    Route::get('/sites/{site}/backup-relay/restore/status', [SitesController::class, 'backupRelayRestoreStatus'])->name('sites.backup-relay.restore.status');
-    Route::get('/sites/{site}/backup-relay/restore/precheck', [SitesController::class, 'backupRelayRestorePrecheck'])->name('sites.backup-relay.restore.precheck');
-    Route::post('/sites/{site}/backup-relay/restore/discard', [SitesController::class, 'backupRelayRestoreDiscard'])->name('sites.backup-relay.restore.discard');
+    Route::post('/sites/{site}/backup-relay/restore/stage', [SitesController::class, 'backupRelayRestoreStage'])->middleware('admin')->name('sites.backup-relay.restore.stage');
+    Route::post('/sites/{site}/backup-relay/restore/apply', [SitesController::class, 'backupRelayRestoreApply'])->middleware('admin')->name('sites.backup-relay.restore.apply');
+    Route::get('/sites/{site}/backup-relay/restore/status', [SitesController::class, 'backupRelayRestoreStatus'])->middleware('admin')->name('sites.backup-relay.restore.status');
+    Route::get('/sites/{site}/backup-relay/restore/precheck', [SitesController::class, 'backupRelayRestorePrecheck'])->middleware('admin')->name('sites.backup-relay.restore.precheck');
+    Route::post('/sites/{site}/backup-relay/restore/discard', [SitesController::class, 'backupRelayRestoreDiscard'])->middleware('admin')->name('sites.backup-relay.restore.discard');
     Route::post('/sites/{site}/care-plan', [SitesController::class, 'toggleCarePlan'])->name('sites.care-plan');
     Route::post('/sites/{site}/care-plan/clear-override', [SitesController::class, 'clearCarePlanOverride'])->name('sites.care-plan.clear-override');
     Route::post('/sites/{site}/auto-updates/toggle', [SitesController::class, 'togglePauseAutoUpdates'])->name('sites.auto-updates.toggle');
@@ -369,73 +376,77 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Settings — ingest schedule (LLAR pull + future ingest sources)
     Route::get('/settings/ingest', [IngestSettingsController::class, 'index'])->name('settings.ingest.index');
-    Route::patch('/settings/ingest', [IngestSettingsController::class, 'update'])->name('settings.ingest.update');
-    Route::patch('/settings/ingest/retention', [IngestSettingsController::class, 'updateRetention'])->name('settings.ingest.retention');
-    Route::post('/settings/ingest/prune-now', [IngestSettingsController::class, 'pruneNow'])->name('settings.ingest.pruneNow');
-    Route::post('/settings/ingest/rebuild-partitions', [IngestSettingsController::class, 'rebuildPartitions'])->name('settings.ingest.rebuildPartitions');
+    Route::patch('/settings/ingest', [IngestSettingsController::class, 'update'])->middleware('admin')->name('settings.ingest.update');
+    Route::patch('/settings/ingest/retention', [IngestSettingsController::class, 'updateRetention'])->middleware('admin')->name('settings.ingest.retention');
+    Route::post('/settings/ingest/prune-now', [IngestSettingsController::class, 'pruneNow'])->middleware('admin')->name('settings.ingest.pruneNow');
+    Route::post('/settings/ingest/rebuild-partitions', [IngestSettingsController::class, 'rebuildPartitions'])->middleware('admin')->name('settings.ingest.rebuildPartitions');
     Route::post('/settings/ingest/run-now', [IngestSettingsController::class, 'runNow'])->name('settings.ingest.runNow');
     Route::get('/settings/wordpress-plugins', [WordPressPluginsController::class, 'index'])->name('settings.wordpress-plugins.index');
-    Route::patch('/settings/wordpress-plugins/protected', [WordPressPluginsController::class, 'updateProtectedPlugins'])->name('settings.wordpress-plugins.protected.update');
+    Route::patch('/settings/wordpress-plugins/protected', [WordPressPluginsController::class, 'updateProtectedPlugins'])->middleware('admin')->name('settings.wordpress-plugins.protected.update');
 
     // Companion white-label branding & customization settings
     Route::get('/settings/companion', [CompanionSettingsController::class, 'index'])->name('settings.companion.index');
     Route::get('/settings/companion/preview', [CompanionSettingsController::class, 'preview'])->name('settings.companion.preview');
-    Route::match(['patch', 'post'], '/settings/companion', [CompanionSettingsController::class, 'update'])->name('settings.companion.update');
-    Route::post('/settings/companion/logo', [CompanionSettingsController::class, 'uploadLogo'])->name('settings.companion.logo');
-    Route::post('/settings/companion/sync', [CompanionSettingsController::class, 'sync'])->name('settings.companion.sync');
-    Route::post('/settings/companion/reset', [CompanionSettingsController::class, 'reset'])->name('settings.companion.reset');
-    Route::post('/settings/companion/reset-renegade', [CompanionSettingsController::class, 'resetRenegade'])->name('settings.companion.reset-renegade');
-    Route::post('/settings/companion/reset-reports', [CompanionSettingsController::class, 'resetReports'])->name('settings.companion.reset-reports');
-    Route::post('/settings/companion/reset-email', [CompanionSettingsController::class, 'resetEmail'])->name('settings.companion.reset-email');
-    Route::post('/settings/companion/test-email', [CompanionSettingsController::class, 'sendTestEmail'])->name('settings.companion.test-email');
+    Route::middleware('admin')->group(function () {
+        Route::match(['patch', 'post'], '/settings/companion', [CompanionSettingsController::class, 'update'])->name('settings.companion.update');
+        Route::post('/settings/companion/logo', [CompanionSettingsController::class, 'uploadLogo'])->name('settings.companion.logo');
+        Route::post('/settings/companion/sync', [CompanionSettingsController::class, 'sync'])->name('settings.companion.sync');
+        Route::post('/settings/companion/reset', [CompanionSettingsController::class, 'reset'])->name('settings.companion.reset');
+        Route::post('/settings/companion/reset-renegade', [CompanionSettingsController::class, 'resetRenegade'])->name('settings.companion.reset-renegade');
+        Route::post('/settings/companion/reset-reports', [CompanionSettingsController::class, 'resetReports'])->name('settings.companion.reset-reports');
+        Route::post('/settings/companion/reset-email', [CompanionSettingsController::class, 'resetEmail'])->name('settings.companion.reset-email');
+        Route::post('/settings/companion/test-email', [CompanionSettingsController::class, 'sendTestEmail'])->name('settings.companion.test-email');
+    });
 
     // Security scans (Sucuri SiteCheck + wp core verify-checksums) — toggles + run-now.
     Route::get('/settings/security-scans', [SecurityScansSettingsController::class, 'index'])->name('settings.security-scans.index');
-    Route::patch('/settings/security-scans', [SecurityScansSettingsController::class, 'update'])->name('settings.security-scans.update');
+    Route::patch('/settings/security-scans', [SecurityScansSettingsController::class, 'update'])->middleware('admin')->name('settings.security-scans.update');
     Route::post('/settings/security-scans/run-now', [SecurityScansSettingsController::class, 'runNow'])->name('settings.security-scans.runNow');
 
     // Backup Relay (S3 Glacier IR) settings & on-demand execution
     Route::get('/settings/backup-relay', [BackupRelaySettingsController::class, 'index'])->name('settings.backup-relay.index');
-    Route::patch('/settings/backup-relay', [BackupRelaySettingsController::class, 'update'])->name('settings.backup-relay.update');
-    Route::post('/settings/backup-relay/run-now', [BackupRelaySettingsController::class, 'runNow'])->name('settings.backup-relay.runNow');
+    Route::patch('/settings/backup-relay', [BackupRelaySettingsController::class, 'update'])->middleware('admin')->name('settings.backup-relay.update');
+    Route::post('/settings/backup-relay/run-now', [BackupRelaySettingsController::class, 'runNow'])->middleware('admin')->name('settings.backup-relay.runNow');
     Route::get('/settings/backup-relay/sites/{site}/archives', [BackupRelaySettingsController::class, 'archives'])->name('settings.backup-relay.archives');
-    Route::get('/settings/backup-relay/sites/{site}/download', [BackupRelaySettingsController::class, 'download'])->name('settings.backup-relay.download');
+    Route::get('/settings/backup-relay/sites/{site}/download', [BackupRelaySettingsController::class, 'download'])->middleware('admin')->name('settings.backup-relay.download');
 
     // Care Plans fleet policy settings
     Route::get('/settings/care-plans', [CarePlanSettingsController::class, 'index'])->name('settings.care-plans.index');
-    Route::patch('/settings/care-plans', [CarePlanSettingsController::class, 'update'])->name('settings.care-plans.update');
+    Route::patch('/settings/care-plans', [CarePlanSettingsController::class, 'update'])->middleware('admin')->name('settings.care-plans.update');
 
     // Gatekeeper login lockouts fleet policy settings
     Route::get('/settings/gatekeeper', [GatekeeperSettingsController::class, 'index'])->name('settings.gatekeeper.index');
-    Route::patch('/settings/gatekeeper', [GatekeeperSettingsController::class, 'update'])->name('settings.gatekeeper.update');
-    Route::post('/settings/gatekeeper/sync', [GatekeeperSettingsController::class, 'syncNow'])->name('settings.gatekeeper.syncNow');
+    Route::patch('/settings/gatekeeper', [GatekeeperSettingsController::class, 'update'])->middleware('admin')->name('settings.gatekeeper.update');
+    Route::post('/settings/gatekeeper/sync', [GatekeeperSettingsController::class, 'syncNow'])->middleware('admin')->name('settings.gatekeeper.syncNow');
 
     // Scheduled jobs dashboard — view every cron entry's last outcome, run one on demand.
     Route::get('/settings/scheduled-jobs', [ScheduledJobsController::class, 'index'])->name('settings.scheduled-jobs.index');
-    Route::post('/settings/scheduled-jobs/run', [ScheduledJobsController::class, 'run'])->name('settings.scheduled-jobs.run');
+    Route::post('/settings/scheduled-jobs/run', [ScheduledJobsController::class, 'run'])->middleware('admin')->name('settings.scheduled-jobs.run');
 
     // Mattermost and Slack per-event opt-out routes moved to
     // modules/Mattermost/routes/web.php and modules/Slack/routes/web.php.
     // Bill.com routes moved to Modules\BillCom\BillComServiceProvider.
 
     // API credentials for every provider client — DB-backed (encrypted),
-    // .env stays the permanent fallback.
-    Route::get('/settings/integrations', [IntegrationCredentialsController::class, 'index'])->name('settings.integrations.index');
-    Route::patch('/settings/integrations', [IntegrationCredentialsController::class, 'update'])->name('settings.integrations.update');
-    Route::post('/settings/integrations/{integration}/test', [IntegrationCredentialsController::class, 'test'])->name('settings.integrations.test');
+    // .env stays the permanent fallback. Admin-only.
+    Route::middleware('admin')->group(function () {
+        Route::get('/settings/integrations', [IntegrationCredentialsController::class, 'index'])->name('settings.integrations.index');
+        Route::patch('/settings/integrations', [IntegrationCredentialsController::class, 'update'])->name('settings.integrations.update');
+        Route::post('/settings/integrations/{integration}/test', [IntegrationCredentialsController::class, 'test'])->name('settings.integrations.test');
 
-    // API limits, rate limiting documentation, and connection tuning per integration.
-    Route::get('/settings/integrations/{service}/limits', [ServiceApiLimitsController::class, 'show'])->name('settings.integrations.limits');
-    Route::patch('/settings/integrations/{service}/limits', [ServiceApiLimitsController::class, 'update'])->name('settings.integrations.limits.update');
-    Route::post('/settings/integrations/{service}/limits/reset', [ServiceApiLimitsController::class, 'reset'])->name('settings.integrations.limits.reset');
-    Route::post('/settings/integrations/{service}/credentials/{field}/remove', [ServiceApiLimitsController::class, 'removeCredential'])->name('settings.integrations.credentials.remove');
-    Route::post('/settings/integrations/{service}/reconcile', [ServiceApiLimitsController::class, 'reconcile'])->name('settings.integrations.reconcile');
-    Route::post('/settings/integrations/{service}/import-instance', [ServiceApiLimitsController::class, 'importInstance'])->name('settings.integrations.importInstance');
+        // API limits, rate limiting documentation, and connection tuning per integration.
+        Route::get('/settings/integrations/{service}/limits', [ServiceApiLimitsController::class, 'show'])->name('settings.integrations.limits');
+        Route::patch('/settings/integrations/{service}/limits', [ServiceApiLimitsController::class, 'update'])->name('settings.integrations.limits.update');
+        Route::post('/settings/integrations/{service}/limits/reset', [ServiceApiLimitsController::class, 'reset'])->name('settings.integrations.limits.reset');
+        Route::post('/settings/integrations/{service}/credentials/{field}/remove', [ServiceApiLimitsController::class, 'removeCredential'])->name('settings.integrations.credentials.remove');
+        Route::post('/settings/integrations/{service}/reconcile', [ServiceApiLimitsController::class, 'reconcile'])->name('settings.integrations.reconcile');
+        Route::post('/settings/integrations/{service}/import-instance', [ServiceApiLimitsController::class, 'importInstance'])->name('settings.integrations.importInstance');
+    });
 
     // Module Directory (official feed & community ecosystem browser)
     Route::get('/settings/modules', [ModuleDirectoryController::class, 'index'])->name('settings.modules.index');
     Route::post('/settings/modules/refresh', [ModuleDirectoryController::class, 'refresh'])->name('settings.modules.refresh');
-    Route::post('/settings/modules/toggle', [ModuleDirectoryController::class, 'toggle'])->name('settings.modules.toggle');
+    Route::post('/settings/modules/toggle', [ModuleDirectoryController::class, 'toggle'])->middleware('admin')->name('settings.modules.toggle');
 
     Route::get('/settings/weird-stats', [WeirdStatsController::class, 'index'])->name('settings.weird-stats.index');
 
@@ -452,8 +463,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/settings/maintenance/backup', [MaintenanceController::class, 'downloadBackup'])
         ->middleware('admin')
         ->name('settings.maintenance.backup');
-    Route::patch('/settings/maintenance/telemetry', [MaintenanceController::class, 'updateTelemetry'])->name('settings.maintenance.telemetry.update');
-    Route::post('/settings/maintenance/telemetry/send-now', [MaintenanceController::class, 'sendTelemetryNow'])->name('settings.maintenance.telemetry.sendNow');
+    Route::patch('/settings/maintenance/telemetry', [MaintenanceController::class, 'updateTelemetry'])->middleware('admin')->name('settings.maintenance.telemetry.update');
+    Route::post('/settings/maintenance/telemetry/send-now', [MaintenanceController::class, 'sendTelemetryNow'])->middleware('admin')->name('settings.maintenance.telemetry.sendNow');
 
     // Diagnostics — connectivity check across every external integration the app
     // uses. Read-only on every check; mutation actions (e.g. send-test-email)

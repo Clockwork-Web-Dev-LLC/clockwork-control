@@ -921,10 +921,10 @@ class SitesController extends Controller
             'body' => ['nullable', 'string', 'max:1000'],
             'support_label' => ['nullable', 'string', 'max:100'],
             'support_email' => ['nullable', 'email', 'max:255'],
-            'support_url' => ['nullable', 'url', 'max:255'],
+            'support_url' => ['nullable', 'url:http,https', 'max:255'],
             'show_ip' => ['nullable', 'in:default,1,0'],
             'show_unlock_link' => ['nullable', 'in:default,1,0'],
-            'unlock_url' => ['nullable', 'url', 'max:255'],
+            'unlock_url' => ['nullable', 'url:http,https', 'max:255'],
             'ignore_ips' => ['nullable', 'string'],
             'ignore_cidrs' => ['nullable', 'string'],
         ]);
@@ -1530,6 +1530,22 @@ class SitesController extends Controller
             return back()->with('status_error', 'Companion returned an empty URL.');
         }
 
+        $loginUrl = $result['url'];
+        $loginScheme = strtolower((string) parse_url($loginUrl, PHP_URL_SCHEME));
+        $loginHost = (string) parse_url($loginUrl, PHP_URL_HOST);
+        if ($loginScheme !== 'https' || $loginHost === '' || ! ClockworkCompanionClient::isSameSiteHost($loginHost, $site->domain)) {
+            $logger->record(
+                actionType: ActionLog::TYPE_SSO_LOGIN,
+                summary: "SSO launch blocked: untrusted redirect host ({$loginHost}) for {$site->domain}.",
+                site: $site,
+                target: $login,
+                ok: false,
+                error: 'untrusted_sso_redirect_host',
+            );
+
+            return back()->with('status_error', 'Companion returned an untrusted SSO URL outside the site domain.');
+        }
+
         $logger->record(
             actionType: ActionLog::TYPE_SSO_LOGIN,
             summary: "Logged in as {$login} on {$site->domain}.",
@@ -1538,7 +1554,7 @@ class SitesController extends Controller
             details: ['expires_at' => $result['expires_at']],
         );
 
-        return redirect()->away($result['url']);
+        return redirect()->away($loginUrl);
     }
 
     /**
@@ -2274,7 +2290,11 @@ class SitesController extends Controller
         $domain = explode(':', $domain)[0];
         $domain = strtolower(trim($domain));
 
-        if ($domain === '' || ! str_contains($domain, '.')) {
+        if (
+            $domain === ''
+            || strlen($domain) > 253
+            || ! preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $domain)
+        ) {
             return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'domain' => 'Please enter a valid domain name (e.g. example.com).',
             ]);

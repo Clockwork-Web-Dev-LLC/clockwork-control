@@ -30,15 +30,24 @@ class MicrosoftOAuthCheck implements DiagnosticCheck
         $resolver = app(CredentialResolver::class);
         $clientId = (string) ($resolver->get('auth_microsoft.client_id') ?? config('services.microsoft.client_id', ''));
         $clientSecret = (string) ($resolver->get('auth_microsoft.client_secret') ?? config('services.microsoft.client_secret', ''));
-        $tenantId = (string) ($resolver->get('auth_microsoft.tenant_id') ?? config('services.microsoft.tenant_id', 'common'));
-        if ($tenantId === '') {
-            $tenantId = 'common';
-        }
+        $tenantId = trim((string) ($resolver->get('auth_microsoft.tenant_id') ?? config('services.microsoft.tenant_id', '')));
 
         if ($clientId === '' || $clientSecret === '') {
             return CheckResult::fail(
                 'Missing MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET',
                 'Set both in .env to enable Microsoft login.',
+            );
+        }
+
+        $broadTenants = ['common', 'organizations', 'consumers', '9188040d-6c67-4c5b-b112-36a304b66dad'];
+        if (
+            $tenantId === ''
+            || in_array(strtolower($tenantId), $broadTenants, true)
+            || ! preg_match('/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9](?:[a-z0-9.-]{0,248}[a-z0-9])?\.[a-z]{2,})$/i', $tenantId)
+        ) {
+            return CheckResult::fail(
+                'Missing or unpinned MICROSOFT_TENANT_ID',
+                'Configure a dedicated Entra directory tenant UUID or verified domain (not common/organizations/consumers).',
             );
         }
 

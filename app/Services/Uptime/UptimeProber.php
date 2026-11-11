@@ -120,7 +120,9 @@ class UptimeProber
         // emit 503 + Retry-After (or recognizable maintenance copy) for SEO
         // protection. The origin is alive and intentionally in scheduled maintenance.
         if ($status === 503) {
-            $retryAfter = $response->header('Retry-After') ?: null;
+            $rawRetry = $response->header('Retry-After');
+            $cleanRetry = $rawRetry !== '' ? trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $rawRetry)) : '';
+            $retryAfter = $cleanRetry !== '' ? mb_substr($cleanRetry, 0, 64) : null;
             $bodySample = mb_substr($body, 0, 4000);
 
             $hasRetryAfter = $retryAfter !== null;

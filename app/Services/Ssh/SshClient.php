@@ -3,6 +3,7 @@
 namespace App\Services\Ssh;
 
 use App\Models\Server;
+use App\Support\EnvCredentialManager;
 use Illuminate\Support\Carbon;
 use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SSH2;
@@ -47,6 +48,17 @@ class SshClient
 
         if ($server->hostname === '' || $server->ssh_user === '') {
             throw new RuntimeException("Server #{$server->id} is missing hostname or ssh_user.");
+        }
+
+        if (
+            preg_match('/[\r\n\0\s]/', $server->hostname)
+            || str_contains($server->hostname, '://')
+            || (
+                filter_var($server->hostname, FILTER_VALIDATE_IP) === false
+                && ! preg_match('/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/i', $server->hostname)
+            )
+        ) {
+            throw new RuntimeException("Server #{$server->id} has an invalid hostname.");
         }
 
         $connectTimeout = $this->connectTimeout;
@@ -238,6 +250,12 @@ class SshClient
         $path = $this->defaultKeyPath;
 
         if ($path === '') {
+            return null;
+        }
+
+        if (! EnvCredentialManager::isSafeSshKeyPath($path) || is_link($path) || ! is_file($path)) {
+            $errors[] = "default key path rejected or not a regular file: {$path}";
+
             return null;
         }
 

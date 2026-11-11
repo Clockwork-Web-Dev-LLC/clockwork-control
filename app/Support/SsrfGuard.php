@@ -86,22 +86,93 @@ final class SsrfGuard
             return;
         }
 
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            throw new InvalidArgumentException("Refusing to fetch URL with unsupported scheme: {$url}");
+        }
+
         $host = parse_url($url, PHP_URL_HOST);
         if (! is_string($host) || $host === '') {
             throw new InvalidArgumentException("Refusing to fetch a URL with no host: {$url}");
         }
 
-        $ips = filter_var($host, FILTER_VALIDATE_IP) !== false ? [$host] : self::resolve($host);
+        $cleanHost = str_starts_with($host, '[') && str_ends_with($host, ']')
+            ? substr($host, 1, -1)
+            : $host;
+
+        $ips = filter_var($cleanHost, FILTER_VALIDATE_IP) !== false
+            ? [$cleanHost]
+            : self::resolve($cleanHost);
 
         if ($ips === []) {
             throw new RuntimeException("Could not resolve host: {$host}");
         }
 
         foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            if (! self::isPublicIp($ip)) {
                 throw new RuntimeException("Refusing to fetch a private/reserved address ({$ip}) for host {$host}.");
             }
         }
+    }
+
+    private static function isPublicIp(string $ip): bool
+    {
+        $flags = FILTER_FLAG_NO_PRIV_RANGE
+            | FILTER_FLAG_NO_RES_RANGE
+            | (defined('FILTER_FLAG_GLOBAL_RANGE') ? FILTER_FLAG_GLOBAL_RANGE : 0);
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, $flags) === false) {
+            return false;
+        }
+
+        $packed = @inet_pton($ip);
+        if ($packed === false) {
+            return false;
+        }
+
+        // Explicit IPv4 CGNAT check (100.64.0.0/10) in case FILTER_FLAG_GLOBAL_RANGE is unavailable.
+        if (strlen($packed) === 4) {
+            $b0 = ord($packed[0]);
+            $b1 = ord($packed[1]);
+            if ($b0 === 100 && ($b1 & 0xC0) === 64) {
+                return false;
+            }
+
+            return true;
+        }
+
+        // IPv6 transition / private / link-local / NAT64 / IPv4-mapped ranges.
+        if (strlen($packed) === 16) {
+            // IPv4-mapped IPv6 ::ffff:0:0/96
+            if (substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
+                $mappedV4 = inet_ntop(substr($packed, 12, 4));
+
+                return is_string($mappedV4) && self::isPublicIp($mappedV4);
+            }
+
+            // NAT64 well-known prefix 64:ff9b::/96 and local-use 64:ff9b:1::/48
+            if (substr($packed, 0, 12) === "\x00\x64\xff\x9b\x00\x00\x00\x00\x00\x00\x00\x00"
+                || substr($packed, 0, 6) === "\x00\x64\xff\x9b\x00\x01") {
+                return false;
+            }
+
+            // 6to4 2002::/16, Teredo 2001:0000::/32, Benchmarking 2001:2::/48, Documentation 2001:db8::/32
+            if (substr($packed, 0, 2) === "\x20\x02"
+                || substr($packed, 0, 4) === "\x20\x01\x00\x00"
+                || substr($packed, 0, 6) === "\x20\x01\x00\x02\x00\x00"
+                || substr($packed, 0, 4) === "\x20\x01\x0d\xb8") {
+                return false;
+            }
+
+            // Unique Local fc00::/7 and Link-Local fe80::/10
+            $first = ord($packed[0]);
+            $second = ord($packed[1]);
+            if (($first & 0xFE) === 0xFC || ($first === 0xFE && ($second & 0xC0) === 0x80)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -39,6 +39,7 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
         ->name('client-reports.schedules.quick-all');
     // Whether every report waits for a person to send it (on by default).
     Route::post('/client-reports/schedules/approval', [SchedulesController::class, 'setApproval'])
+        ->middleware('admin')
         ->name('client-reports.schedules.approval');
     Route::resource('/client-reports/schedules', SchedulesController::class)
         ->except(['show'])

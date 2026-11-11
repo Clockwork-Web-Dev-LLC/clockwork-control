@@ -158,8 +158,8 @@ class FeedbackController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'url' => ['required', 'string'],
-            'path' => ['required', 'string'],
+            'url' => ['required', 'string', 'max:2048', 'regex:/^(?:https?:\/\/|\/(?!\/))/i'],
+            'path' => ['required', 'string', 'max:2048'],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
             'type' => ['nullable', 'string', 'in:bug,tweak,feature,copy'],
@@ -341,7 +341,16 @@ class FeedbackController extends Controller
      */
     public function batchPrompt(Request $request, FeedbackPromptBuilder $builder): JsonResponse
     {
-        $status = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+        $rawStatus = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+        $allowedStatuses = [
+            'all',
+            FeedbackItem::STATUS_OPEN,
+            FeedbackItem::STATUS_APPROVED,
+            FeedbackItem::STATUS_IN_PROGRESS,
+            FeedbackItem::STATUS_RESOLVED,
+            FeedbackItem::STATUS_DISMISSED,
+        ];
+        $status = in_array($rawStatus, $allowedStatuses, true) ? $rawStatus : FeedbackItem::STATUS_APPROVED;
 
         $query = FeedbackItem::query()
             ->with(['user', 'comments.user'])
@@ -393,7 +402,16 @@ class FeedbackController extends Controller
             $prompt = $builder->buildForSingle($item);
             $filename = "clockwork-feedback-item-{$item->id}-".now()->format('Y-m-d').'.md';
         } else {
-            $status = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+            $rawStatus = (string) $request->input('status', FeedbackItem::STATUS_APPROVED);
+            $allowedStatuses = [
+                'all',
+                FeedbackItem::STATUS_OPEN,
+                FeedbackItem::STATUS_APPROVED,
+                FeedbackItem::STATUS_IN_PROGRESS,
+                FeedbackItem::STATUS_RESOLVED,
+                FeedbackItem::STATUS_DISMISSED,
+            ];
+            $status = in_array($rawStatus, $allowedStatuses, true) ? $rawStatus : FeedbackItem::STATUS_APPROVED;
             $query = FeedbackItem::query()
                 ->with(['user', 'comments.user'])
                 ->orderBy('id', 'asc');

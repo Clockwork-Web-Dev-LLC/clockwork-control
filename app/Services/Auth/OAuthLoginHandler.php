@@ -61,16 +61,35 @@ class OAuthLoginHandler
             );
         }
 
+        $safeAvatarUrl = is_string($avatarUrl) && preg_match('#^https?://#i', $avatarUrl)
+            ? $avatarUrl
+            : null;
+
         $fillData = [
             'name' => (string) ($name ?: $user->name ?: $normalizedEmail),
             // Unconditional, not `if ($avatarUrl)` — a user who removes their
             // provider avatar (or a provider that omits it on a given login)
             // should clear the stored URL, not keep showing a stale photo.
-            'avatar_url' => $avatarUrl,
+            'avatar_url' => $safeAvatarUrl,
             'last_login_at' => now(),
         ];
 
         if ($providerIdColumn && $providerId) {
+            $existingProviderId = $user->{$providerIdColumn} ?? null;
+            if (is_string($existingProviderId) && $existingProviderId !== '' && ! hash_equals($existingProviderId, (string) $providerId)) {
+                $this->logger->record(
+                    actionType: ActionLog::TYPE_LOGIN,
+                    summary: "Rejected {$providerName} sign-in for {$user->email}: provider ID mismatch.",
+                    ok: false,
+                    actor: $user->email,
+                );
+
+                return redirect()->route('login')->with(
+                    'login_denial',
+                    "This {$providerName} account doesn't match the identity linked to {$normalizedEmail}. Ask an administrator to verify your account."
+                );
+            }
+
             $fillData[$providerIdColumn] = $providerId;
         }
 

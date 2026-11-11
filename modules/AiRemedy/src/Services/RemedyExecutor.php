@@ -96,6 +96,15 @@ class RemedyExecutor
             return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $reason];
         }
 
+        // Enforce site-path and site-user pairing for every execution path
+        // (including direct PHP callers), not just the HTTP review UI.
+        $siteContext = app(ServerSiteContext::class);
+        foreach ($commandsToRun as $cmd) {
+            if (($siteProblem = $siteContext->problem($cmd, $server)) !== null) {
+                return ['ok' => false, 'output' => '', 'run' => $run, 'error' => $siteProblem];
+            }
+        }
+
         // One execution per server at a time: two fixes racing on the same box
         // (or a double-click) must never interleave SSH commands.
         $lock = Cache::lock("ai-remedy:execute:server:{$server->id}", 300);

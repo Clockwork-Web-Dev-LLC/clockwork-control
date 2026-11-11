@@ -5,11 +5,11 @@
 @section('content')
 <div class="card p-6 md:p-8 shadow-sm"
      x-data="{
-        host: '{{ old('host', $data['host'] ?? '127.0.0.1') }}',
-        port: '{{ old('port', $data['port'] ?? '3306') }}',
-        database: '{{ old('database', $data['database'] ?? 'clockwork') }}',
-        username: '{{ old('username', $data['username'] ?? 'root') }}',
-        password: '{{ old('password', $data['password'] ?? '') }}',
+        host: @js(old('host', $data['host'] ?? '127.0.0.1')),
+        port: @js(old('port', $data['port'] ?? '3306')),
+        database: @js(old('database', $data['database'] ?? 'clockwork')),
+        username: @js(old('username', $data['username'] ?? 'root')),
+        password: @js(old('password', $data['password'] ?? '')),
         testing: false,
         testedOk: false,
         statusMessage: '',

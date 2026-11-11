@@ -410,6 +410,7 @@ class UpdatesController extends Controller
                 'name' => $r->target_name ?: $r->target_slug,
                 'before' => $r->before_version,
                 'after' => $r->after_version,
+                'target' => $r->target_version,
                 'status' => $r->status,
                 'error' => $r->error,
                 'elapsed_ms' => $r->elapsed_ms,

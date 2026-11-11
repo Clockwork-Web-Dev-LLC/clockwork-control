@@ -55,13 +55,17 @@ class InstallerEnvWriter
         }
 
         foreach ($keyValues as $key => $value) {
-            $valStr = (string) ($value ?? '');
+            if (! preg_match('/^[A-Z][A-Z0-9_]*$/', (string) $key)) {
+                continue;
+            }
+
+            $valStr = str_replace(["\r", "\n", "\0"], '', (string) ($value ?? ''));
             $formatted = $this->formatEnvValue($valStr);
             $newLine = "{$key}={$formatted}";
             $pattern = '/^#?\s*'.preg_quote($key, '/').'\s*=.*$/m';
 
             if (preg_match($pattern, $contents)) {
-                $contents = preg_replace($pattern, $newLine, $contents);
+                $contents = preg_replace_callback($pattern, static fn (): string => $newLine, $contents) ?? $contents;
             } else {
                 $contents = rtrim($contents).PHP_EOL.$newLine.PHP_EOL;
             }
@@ -107,12 +111,13 @@ class InstallerEnvWriter
      */
     public function formatEnvValue(string $value): string
     {
+        $value = str_replace(["\r", "\n", "\0"], '', $value);
         if ($value === '') {
             return '';
         }
 
         if (preg_match('/\s|"|\'|#|\$|\\\\/', $value)) {
-            return '"'.str_replace(['\\', '"'], ['\\\\', '\"'], $value).'"';
+            return '"'.str_replace(['\\', '"', '$'], ['\\\\', '\"', '\$'], $value).'"';
         }
 
         return $value;

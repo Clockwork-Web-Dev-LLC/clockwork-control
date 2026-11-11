@@ -2,6 +2,7 @@
 
 namespace App\Services\Companion;
 
+use App\Support\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -79,7 +80,21 @@ class CompanionTarballBuilder
             );
         }
 
-        $response = Http::timeout(60)->get($url);
+        if (! str_starts_with(strtolower($url), 'https://')) {
+            throw new RuntimeException("Companion dist URL must use HTTPS: {$url}");
+        }
+        SsrfGuard::assertPublic($url);
+
+        $response = Http::timeout(60)
+            ->withOptions([
+                'allow_redirects' => [
+                    'max' => 5,
+                    'strict' => true,
+                    'protocols' => ['https'],
+                    'on_redirect' => SsrfGuard::onRedirect(),
+                ],
+            ])
+            ->get($url);
         if ($response->failed()) {
             throw new RuntimeException("Companion dist URL fetch failed: HTTP {$response->status()} from {$url}");
         }
@@ -382,7 +397,21 @@ class CompanionTarballBuilder
      */
     private function fetchReleaseZipBytes(string $url, string $label): string
     {
-        $response = Http::timeout(60)->get($url);
+        if (! str_starts_with(strtolower($url), 'https://')) {
+            throw new RuntimeException("{$label} release zip URL must use HTTPS: {$url}");
+        }
+        SsrfGuard::assertPublic($url);
+
+        $response = Http::timeout(60)
+            ->withOptions([
+                'allow_redirects' => [
+                    'max' => 5,
+                    'strict' => true,
+                    'protocols' => ['https'],
+                    'on_redirect' => SsrfGuard::onRedirect(),
+                ],
+            ])
+            ->get($url);
         if ($response->failed()) {
             throw new RuntimeException("{$label} release zip fetch failed: HTTP {$response->status()} from {$url}");
         }
@@ -417,6 +446,28 @@ class CompanionTarballBuilder
         }
 
         try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entryName = (string) $zip->getNameIndex($i);
+                if (
+                    $entryName === ''
+                    || str_contains($entryName, "\0")
+                    || str_contains($entryName, '\\')
+                    || str_starts_with($entryName, '/')
+                    || in_array('..', explode('/', $entryName), true)
+                ) {
+                    throw new RuntimeException("Unsafe path in Companion release zip: {$entryName}");
+                }
+
+                $opsys = 0;
+                $extAttr = 0;
+                if ($zip->getExternalAttributesIndex($i, $opsys, $extAttr, \ZipArchive::FL_UNCHANGED)) {
+                    $unixMode = ($extAttr >> 16) & 0xFFFF;
+                    if (($unixMode & 0170000) === 0120000) {
+                        throw new RuntimeException("Refusing symlink entry in Companion release zip: {$entryName}");
+                    }
+                }
+            }
+
             if (! mkdir($extractDir, 0755, true) || ! $zip->extractTo($extractDir)) {
                 throw new RuntimeException("Could not extract Companion release zip to {$extractDir}.");
             }

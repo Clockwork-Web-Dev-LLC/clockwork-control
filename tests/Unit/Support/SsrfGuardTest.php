@@ -26,6 +26,26 @@ it('rejects an IPv6 loopback literal', function () {
     SsrfGuard::assertPublic('https://[::1]/');
 })->throws(RuntimeException::class);
 
+it('rejects an IPv6 loopback literal even when DNS faking is active', function () {
+    SsrfGuard::fake();
+
+    SsrfGuard::assertPublic('https://[::1]/');
+})->throws(RuntimeException::class);
+
+it('rejects CGNAT and NAT64 metadata literals', function (string $url) {
+    SsrfGuard::fake();
+
+    SsrfGuard::assertPublic($url);
+})->with([
+    'https://100.64.0.1/',
+    'https://[64:ff9b::a9fe:a9fe]/',
+    'https://[::ffff:169.254.169.254]/',
+])->throws(RuntimeException::class);
+
+it('rejects non-HTTP schemes', function () {
+    SsrfGuard::assertPublic('file:///etc/passwd');
+})->throws(InvalidArgumentException::class);
+
 it('rejects a URL with no host', function () {
     SsrfGuard::assertPublic('not-a-url');
 })->throws(InvalidArgumentException::class);

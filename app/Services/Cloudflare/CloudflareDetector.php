@@ -146,7 +146,10 @@ class CloudflareDetector
                 $response = Http::timeout(5)->get(self::CF_IPV4_URL);
                 if ($response->successful()) {
                     $lines = preg_split('/\r?\n/', trim((string) $response->body())) ?: [];
-                    $clean = array_values(array_filter(array_map('trim', $lines)));
+                    $clean = array_values(array_filter(
+                        array_map('trim', $lines),
+                        fn (string $line): bool => $this->isValidCidr($line, v6: false),
+                    ));
                     if ($clean !== []) {
                         return $clean;
                     }
@@ -174,7 +177,10 @@ class CloudflareDetector
                 $response = Http::timeout(5)->get(self::CF_IPV6_URL);
                 if ($response->successful()) {
                     $lines = preg_split('/\r?\n/', trim((string) $response->body())) ?: [];
-                    $clean = array_values(array_filter(array_map('trim', $lines)));
+                    $clean = array_values(array_filter(
+                        array_map('trim', $lines),
+                        fn (string $line): bool => $this->isValidCidr($line, v6: true),
+                    ));
                     if ($clean !== []) {
                         return $clean;
                     }
@@ -189,13 +195,40 @@ class CloudflareDetector
         });
     }
 
+    private function isValidCidr(string $cidr, bool $v6): bool
+    {
+        if (! str_contains($cidr, '/')) {
+            return false;
+        }
+
+        [$subnet, $bits] = explode('/', $cidr, 2);
+        if (! ctype_digit($bits)) {
+            return false;
+        }
+
+        $bitCount = (int) $bits;
+        if ($v6) {
+            return filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+                && $bitCount >= 16 && $bitCount <= 128;
+        }
+
+        return filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
+            && $bitCount >= 8 && $bitCount <= 32;
+    }
+
     private function ipInCidr(string $ip, string $cidr): bool
     {
         if (! str_contains($cidr, '/')) {
             return $ip === $cidr;
         }
         [$subnet, $bits] = explode('/', $cidr, 2);
+        if (! ctype_digit($bits)) {
+            return false;
+        }
         $bits = (int) $bits;
+        if ($bits < 8 || $bits > 32) {
+            return false;
+        }
 
         $ipLong = ip2long($ip);
         $subnetLong = ip2long($subnet);
@@ -203,7 +236,7 @@ class CloudflareDetector
             return false;
         }
 
-        $mask = $bits === 0 ? 0 : (-1 << (32 - $bits)) & 0xFFFFFFFF;
+        $mask = (-1 << (32 - $bits)) & 0xFFFFFFFF;
 
         return ($ipLong & $mask) === ($subnetLong & $mask);
     }

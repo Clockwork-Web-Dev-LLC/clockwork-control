@@ -124,7 +124,7 @@
                 <span class="font-semibold text-[var(--color-ink-strong)]"><i class="fa-regular fa-envelope mr-1"></i> Preview</span>
                 <span class="text-[var(--color-ink-soft)]" x-show="loading">Updating…</span>
             </div>
-            <iframe title="Email preview" :srcdoc="previewHtml" class="w-full bg-[#f1f5f9]" style="height: 78vh; border: 0;"></iframe>
+            <iframe title="Email preview" sandbox="" :srcdoc="previewHtml" class="w-full bg-[#f1f5f9]" style="height: 78vh; border: 0;"></iframe>
         </div>
     </div>
 </div>

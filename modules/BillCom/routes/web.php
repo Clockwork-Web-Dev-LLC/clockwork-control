@@ -5,6 +5,6 @@ use Modules\BillCom\BillComSettingsController;
 
 Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/settings/bill-com', [BillComSettingsController::class, 'index'])->name('settings.bill-com.index');
-    Route::post('/settings/bill-com/run-customer-sync', [BillComSettingsController::class, 'runCustomerSync'])->name('settings.bill-com.run-customer-sync');
-    Route::post('/settings/bill-com/run-care-plan-sync', [BillComSettingsController::class, 'runCarePlanSync'])->name('settings.bill-com.run-care-plan-sync');
+    Route::post('/settings/bill-com/run-customer-sync', [BillComSettingsController::class, 'runCustomerSync'])->middleware('admin')->name('settings.bill-com.run-customer-sync');
+    Route::post('/settings/bill-com/run-care-plan-sync', [BillComSettingsController::class, 'runCarePlanSync'])->middleware('admin')->name('settings.bill-com.run-care-plan-sync');
 });

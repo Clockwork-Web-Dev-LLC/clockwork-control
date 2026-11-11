@@ -56,7 +56,7 @@ class MattermostServiceProvider extends ModuleServiceProvider
 
     public function navItems(): array
     {
-        if (! config('clockwork.mattermost.enabled')) {
+        if (! $this->enabled() || ! config('clockwork.mattermost.enabled')) {
             return [];
         }
 

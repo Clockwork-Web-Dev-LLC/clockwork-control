@@ -78,10 +78,10 @@ class GatekeeperSettingsController extends Controller
             'body' => ['nullable', 'string', 'max:1000'],
             'support_label' => ['nullable', 'string', 'max:100'],
             'support_email' => ['nullable', 'email', 'max:255'],
-            'support_url' => ['nullable', 'url', 'max:255'],
+            'support_url' => ['nullable', 'url:http,https', 'max:255'],
             'show_ip' => ['nullable', 'boolean'],
             'show_unlock_link' => ['nullable', 'boolean'],
-            'unlock_url' => ['nullable', 'url', 'max:255'],
+            'unlock_url' => ['nullable', 'url:http,https', 'max:255'],
             'ignore_ips' => ['nullable', 'string'],
             'ignore_cidrs' => ['nullable', 'string'],
         ]);
@@ -109,7 +109,24 @@ class GatekeeperSettingsController extends Controller
 
         $ignoreCidrs = array_values(array_filter(
             array_map('trim', preg_split('/[\r\n,]+/', (string) ($validated['ignore_cidrs'] ?? '')) ?: []),
-            fn ($cidr) => str_contains($cidr, '/')
+            static function (string $cidr): bool {
+                if (! str_contains($cidr, '/')) {
+                    return false;
+                }
+                [$subnet, $mask] = explode('/', $cidr, 2);
+                if (! ctype_digit($mask)) {
+                    return false;
+                }
+                $maskInt = (int) $mask;
+                if (filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+                    return $maskInt >= 8 && $maskInt <= 32;
+                }
+                if (filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+                    return $maskInt >= 24 && $maskInt <= 128;
+                }
+
+                return false;
+            }
         ));
         $settings->put('gatekeeper.ignore_cidrs', $ignoreCidrs);
 

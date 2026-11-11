@@ -144,6 +144,25 @@ class EnforceInstallerGate
             return $next($request);
         }
 
+        // If reopened via CLI (`clockwork:installer:reopen`), enforce the one-time
+        // reopen token stored in `storage/installer_reopened` so unauthenticated
+        // internet scanners cannot hijack `/install` during maintenance.
+        $reopenPath = storage_path('installer_reopened');
+        if (file_exists($reopenPath)) {
+            $expectedToken = trim((string) @file_get_contents($reopenPath));
+            if ($expectedToken !== '' && ($request->is('install') || $request->is('install/*'))) {
+                $givenToken = (string) $request->query('reopen_token', '');
+                if ($givenToken !== '' && hash_equals($expectedToken, $givenToken)) {
+                    $request->session()->put('install.reopen_verified', $expectedToken);
+                }
+
+                $verifiedToken = (string) $request->session()->get('install.reopen_verified', '');
+                if ($verifiedToken === '' || ! hash_equals($expectedToken, $verifiedToken)) {
+                    abort(403, 'A valid installer reopen token is required.');
+                }
+            }
+        }
+
         // Pre-installation gate: allow installer wizard, health check, and static assets.
         if (
             $request->is('install') ||

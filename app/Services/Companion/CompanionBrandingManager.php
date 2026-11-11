@@ -234,7 +234,11 @@ class CompanionBrandingManager
     {
         $this->deleteStoredLogoFile();
 
-        $extension = $file->getClientOriginalExtension() ?: 'png';
+        $extension = match (strtolower((string) $file->getMimeType())) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
         $filename = 'companion-logo-'.Str::uuid()->toString().'.'.$extension;
         $path = $file->storeAs('branding', $filename, self::LOGO_DISK);
         $url = Storage::disk(self::LOGO_DISK)->url($path);

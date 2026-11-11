@@ -170,7 +170,7 @@ class Fail2banProvisioner
         ME=$(whoami)
         cat > "$STAGE/clockwork-sudoers" <<SUDOERS_EOF
         # Managed by Clockwork - do not edit
-        $ME ALL=(ALL) NOPASSWD: /usr/bin/fail2ban-client
+        $ME ALL=(root) NOPASSWD: /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status clockwork, /usr/bin/fail2ban-client reload clockwork, /usr/bin/fail2ban-client get clockwork ignoreip, /usr/bin/fail2ban-client set clockwork banip *, /usr/bin/fail2ban-client set clockwork unbanip *
         SUDOERS_EOF
 
         if ! do_sudo visudo -cf "$STAGE/clockwork-sudoers" >/dev/null; then

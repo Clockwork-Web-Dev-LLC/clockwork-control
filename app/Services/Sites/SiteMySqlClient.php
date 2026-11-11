@@ -84,12 +84,17 @@ class SiteMySqlClient
     {
         $this->guardCredentials($site);
 
+        $dbHost = $site->db_host ?: 'localhost';
+        $dbPort = (int) ($site->db_port ?: 3306);
+
+        $quoteIni = static fn (string $val): string => '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $val).'"';
+
         $defaults = sprintf(
             "[client]\nuser=%s\npassword=%s\nhost=%s\nport=%d\n",
-            $site->db_user,
-            $site->db_password,
-            $site->db_host ?: 'localhost',
-            $site->db_port ?: 3306,
+            $quoteIni((string) $site->db_user),
+            $quoteIni((string) $site->db_password),
+            $quoteIni($dbHost),
+            $dbPort,
         );
 
         // base64-encode so the credentials transit the SSH command line as opaque bytes.
@@ -97,16 +102,16 @@ class SiteMySqlClient
 
         // Build a remote shell pipeline that:
         //  1. writes the defaults to a 600-mode tempfile
-        //  2. runs mysql --defaults-file=$TMP -B -e "$SQL" "$DB"
+        //  2. runs mysql --defaults-file=$TMP --disable-local-infile -B -e "$SQL" -- "$DB"
         //  3. removes the tempfile (trap covers errors)
         // -B = batch (TSV) output, NULLs become "NULL".
         $remoteScript = sprintf(
-            'set -e; TMP=$(mktemp); chmod 600 "$TMP"; trap "rm -f $TMP" EXIT; '
-            .'echo %s | base64 -d > "$TMP"; '
-            .'mysql --defaults-file="$TMP" -B -e %s %s',
+            'set -e; TMP=$(mktemp); chmod 600 "$TMP"; trap \'rm -f "$TMP"\' EXIT; '
+            .'printf %%s %s | base64 -d > "$TMP"; '
+            .'mysql --defaults-file="$TMP" --disable-local-infile -B -e %s -- %s',
             escapeshellarg($encoded),
             escapeshellarg($sql),
-            escapeshellarg($site->db_name ?? ''),
+            escapeshellarg((string) $site->db_name),
         );
 
         $cmd = sprintf('bash -c %s 2>&1', escapeshellarg($remoteScript));
@@ -130,6 +135,25 @@ class SiteMySqlClient
             throw new RuntimeException(
                 "Site {$site->domain} is missing DB credentials. Run clockwork:extract-wp-configs first."
             );
+        }
+
+        foreach (['db_name' => $site->db_name, 'db_user' => $site->db_user, 'db_password' => $site->db_password, 'db_host' => $site->db_host ?? ''] as $field => $val) {
+            if (preg_match('/[\r\n\0]/', (string) $val)) {
+                throw new RuntimeException("Site {$site->domain} has invalid control characters in {$field}.");
+            }
+        }
+
+        if (str_starts_with((string) $site->db_name, '-')) {
+            throw new RuntimeException("Site {$site->domain} has invalid db_name starting with '-'.");
+        }
+
+        $dbHost = (string) ($site->db_host ?: 'localhost');
+        if (
+            $dbHost !== 'localhost'
+            && filter_var($dbHost, FILTER_VALIDATE_IP) === false
+            && ! preg_match('/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/i', $dbHost)
+        ) {
+            throw new RuntimeException("Site {$site->domain} has an invalid db_host.");
         }
     }
 

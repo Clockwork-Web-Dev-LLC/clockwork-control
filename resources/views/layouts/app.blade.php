@@ -11,6 +11,9 @@
     if ($initialTheme === 'midnight') {
         $initialTheme = 'dark';
     }
+    if (! in_array($initialTheme, ['light', 'dark', 'high-contrast'], true)) {
+        $initialTheme = 'light';
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ $initialTheme }}" data-layout-style="modern">
@@ -38,6 +41,9 @@
                 }
                 if (resolvedTheme === 'midnight') {
                     resolvedTheme = 'dark';
+                }
+                if (resolvedTheme !== 'dark' && resolvedTheme !== 'light' && resolvedTheme !== 'high-contrast') {
+                    resolvedTheme = 'light';
                 }
                 document.documentElement.setAttribute('data-theme', resolvedTheme);
 

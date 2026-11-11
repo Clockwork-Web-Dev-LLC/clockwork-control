@@ -7,6 +7,7 @@ use App\Installer\InstallerEnvWriter;
 use App\Models\IntegrationCredential;
 use App\Models\User;
 use App\Support\Settings;
+use App\Support\SsrfGuard;
 use App\Support\UserProvisioner;
 use Exception;
 use Illuminate\Encryption\Encrypter;
@@ -201,7 +202,8 @@ class InstallerController extends Controller
             'port' => ! empty($saved['port']) ? (string) $saved['port'] : (string) config('database.connections.mysql.port', 3306),
             'database' => ! empty($saved['database']) ? $saved['database'] : (string) config('database.connections.mysql.database', 'clockwork'),
             'username' => ! empty($saved['username']) ? $saved['username'] : (string) config('database.connections.mysql.username', 'root'),
-            'password' => array_key_exists('password', $saved) && $saved['password'] !== null ? (string) $saved['password'] : (string) config('database.connections.mysql.password', ''),
+            // Never echo live .env DB_PASSWORD into the HTML response on initial page load.
+            'password' => array_key_exists('password', $saved) && $saved['password'] !== null ? (string) $saved['password'] : '',
         ];
 
         return view('install.database', [
@@ -216,11 +218,11 @@ class InstallerController extends Controller
     public function testDatabase(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'host' => ['required', 'string'],
-            'port' => ['required', 'numeric'],
-            'database' => ['required', 'string'],
-            'username' => ['required', 'string'],
-            'password' => ['nullable', 'string'],
+            'host' => ['required', 'string', 'max:253', 'regex:/^[a-zA-Z0-9.:_-]+$/'],
+            'port' => ['required', 'integer', 'min:1', 'max:65535'],
+            'database' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'username' => ['required', 'string', 'max:128'],
+            'password' => ['nullable', 'string', 'max:512'],
         ]);
 
         $host = $validated['host'];
@@ -235,6 +237,9 @@ class InstallerController extends Controller
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_TIMEOUT => 3,
             ];
+            if (defined('PDO::MYSQL_ATTR_LOCAL_INFILE')) {
+                $options[PDO::MYSQL_ATTR_LOCAL_INFILE] = false;
+            }
 
             new PDO($dsn, $username, $password, $options);
 
@@ -258,11 +263,11 @@ class InstallerController extends Controller
     public function saveDatabase(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'host' => ['required', 'string'],
-            'port' => ['required', 'numeric'],
-            'database' => ['required', 'string'],
-            'username' => ['required', 'string'],
-            'password' => ['nullable', 'string'],
+            'host' => ['required', 'string', 'max:253', 'regex:/^[a-zA-Z0-9.:_-]+$/'],
+            'port' => ['required', 'integer', 'min:1', 'max:65535'],
+            'database' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'username' => ['required', 'string', 'max:128'],
+            'password' => ['nullable', 'string', 'max:512'],
         ]);
 
         $request->session()->put('install.wizard.database', $validated);
@@ -318,7 +323,8 @@ class InstallerController extends Controller
             'host' => ! empty($saved['host']) ? $saved['host'] : (string) config('mail.mailers.smtp.host', '127.0.0.1'),
             'port' => ! empty($saved['port']) ? (string) $saved['port'] : (string) config('mail.mailers.smtp.port', 587),
             'username' => ! empty($saved['username']) ? $saved['username'] : (string) config('mail.mailers.smtp.username', ''),
-            'password' => ! empty($saved['password']) ? $saved['password'] : (string) config('mail.mailers.smtp.password', ''),
+            // Never echo live .env MAIL_PASSWORD into the HTML response on initial page load.
+            'password' => ! empty($saved['password']) ? $saved['password'] : '',
             'from_address' => ! empty($saved['from_address']) ? $saved['from_address'] : (string) config('mail.from.address', 'hello@example.com'),
             'from_name' => ! empty($saved['from_name']) ? $saved['from_name'] : (string) config('mail.from.name', 'Clockwork Control'),
             'skipped' => $isSkipped,
@@ -333,12 +339,21 @@ class InstallerController extends Controller
     public function testMail(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'host' => ['required', 'string'],
-            'port' => ['required', 'numeric'],
+            'host' => ['required', 'string', 'max:253', 'regex:/^[a-zA-Z0-9.-]+$/'],
+            'port' => ['required', 'integer', 'min:1', 'max:65535'],
         ]);
 
         $host = $validated['host'];
         $port = (int) $validated['port'];
+
+        try {
+            SsrfGuard::assertPublic("https://{$host}");
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'SMTP host must be a valid public hostname or IP address.',
+            ], 422);
+        }
 
         $fp = @fsockopen($host, $port, $errno, $errstr, 4);
 
@@ -353,20 +368,20 @@ class InstallerController extends Controller
 
         return response()->json([
             'ok' => false,
-            'message' => "Could not connect to SMTP server: {$errstr} ({$errno})",
+            'message' => "Could not connect to SMTP server ({$errno}).",
         ], 422);
     }
 
     public function saveMail(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'mailer' => ['required', 'string'],
-            'host' => ['required', 'string'],
-            'port' => ['required', 'numeric'],
-            'username' => ['nullable', 'string'],
-            'password' => ['nullable', 'string'],
+            'mailer' => ['required', 'string', 'in:smtp,log,sendmail,postmark,ses,resend'],
+            'host' => ['required', 'string', 'max:253', 'regex:/^[a-zA-Z0-9.-]+$/'],
+            'port' => ['required', 'integer', 'min:1', 'max:65535'],
+            'username' => ['nullable', 'string', 'max:255'],
+            'password' => ['nullable', 'string', 'max:512'],
             'from_address' => ['required', 'email'],
-            'from_name' => ['required', 'string'],
+            'from_name' => ['required', 'string', 'max:120'],
         ]);
 
         $validated['skipped'] = false;
@@ -965,8 +980,9 @@ class InstallerController extends Controller
             json_encode($sentinelData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
         );
 
-        // Clear wizard session and mark completed
-        $request->session()->forget('install.wizard');
+        // Clear wizard session, remove any reopen token file, and mark completed
+        @unlink(storage_path('installer_reopened'));
+        $request->session()->forget(['install.wizard', 'install.reopen_verified']);
         $request->session()->put('install.just_installed', true);
 
         return redirect()->route('install.done');

@@ -44,7 +44,10 @@ class ReopenInstaller extends Command
         }
 
         if (@unlink($sentinel)) {
-            @touch(storage_path('installer_reopened'));
+            $token = bin2hex(random_bytes(24));
+            $reopenPath = storage_path('installer_reopened');
+            file_put_contents($reopenPath, $token, LOCK_EX);
+            @chmod($reopenPath, 0600);
 
             $logger->record(
                 actionType: ActionLog::TYPE_INSTALLER_REOPENED,
@@ -54,7 +57,7 @@ class ReopenInstaller extends Command
             );
 
             $this->info('Web installer has been reopened.');
-            $this->line('Navigate to /install in your browser to run the wizard.');
+            $this->line("Navigate to /install?reopen_token={$token} in your browser to run the wizard.");
 
             return self::SUCCESS;
         }

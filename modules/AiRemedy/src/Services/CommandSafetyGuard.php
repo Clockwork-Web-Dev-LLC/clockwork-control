@@ -56,7 +56,7 @@ class CommandSafetyGuard
             'label' => 'Reload Web & PHP Services',
             'command_example' => 'sudo systemctl reload nginx / php8.x-fpm',
             'description' => 'Gracefully reloads worker processes without dropping active HTTP connections.',
-            'pattern' => '/^sudo\s+(systemctl\s+(reload|status)\s+([a-zA-Z0-9_\-\.]+)|service\s+([a-zA-Z0-9_\-\.]+)\s+(reload|status))$/i',
+            'pattern' => '/^sudo\s+(systemctl\s+(reload|status)\s+(nginx|apache2|php[0-9\.]*-fpm|redis|redis-server|memcached|fail2ban)(?:\.service)?|service\s+(nginx|apache2|php[0-9\.]*-fpm|redis|redis-server|memcached|fail2ban)\s+(reload|status))$/i',
             'default_tier' => self::TIER_1_SAFE,
         ],
         'restart_web_services' => [
@@ -80,7 +80,7 @@ class CommandSafetyGuard
             'label' => 'Clear WordPress .maintenance Flag',
             'command_example' => 'rm -f /path/to/site/.maintenance',
             'description' => 'Deletes stuck maintenance lock file left behind by crashed updates.',
-            'pattern' => '/^rm\s+(-f\s+)?([a-zA-Z0-9_\-\.\/]+)\/\.maintenance$/i',
+            'pattern' => '/^rm\s+(-f\s+)?(\/[a-zA-Z0-9_\-\.\/]+)\/\.maintenance$/i',
             'default_tier' => self::TIER_1_SAFE,
         ],
         'wp_cache_flush' => [
@@ -88,7 +88,7 @@ class CommandSafetyGuard
             'label' => 'Flush WordPress Object Cache & Transients',
             'command_example' => 'wp cache flush / wp transient delete --all',
             'description' => 'Purges Redis, Memcached, and transient cache tables via WP-CLI.',
-            'pattern' => '/^(sudo\s+-u\s+[a-zA-Z0-9_\-\.]+\s+)?wp\s+(cache\s+flush|transient\s+delete(\s+--all)?)((\s+--path=[\'"]?[a-zA-Z0-9_\-\.\/]+[\'"]?|\s+--allow-root))*$/i',
+            'pattern' => '/^(sudo\s+-u\s+[a-zA-Z0-9_\-\.]+\s+)?wp\s+(cache\s+flush|transient\s+delete(\s+--all)?)(\s+--path=[\'"]?\/[a-zA-Z0-9_\-\.\/]+[\'"]?)*$/i',
             'default_tier' => self::TIER_1_SAFE,
         ],
         'logrotate_flush' => [
@@ -128,7 +128,7 @@ class CommandSafetyGuard
             'label' => 'Deactivate Crashing WordPress Plugin',
             'command_example' => 'wp plugin deactivate <slug>',
             'description' => 'Deactivates an active plugin causing fatal PHP errors or memory exhaustion.',
-            'pattern' => '/^(sudo\s+-u\s+[a-zA-Z0-9_\-\.]+\s+)?wp\s+plugin\s+(activate|deactivate|status)(\s+[a-zA-Z0-9_\-]+)?((\s+--path=[\'"]?[a-zA-Z0-9_\-\.\/]+[\'"]?|\s+--allow-root))*$/i',
+            'pattern' => '/^(sudo\s+-u\s+[a-zA-Z0-9_\-\.]+\s+)?wp\s+plugin\s+(activate|deactivate|status)(\s+[a-zA-Z0-9_\-]+)?(\s+--path=[\'"]?\/[a-zA-Z0-9_\-\.\/]+[\'"]?)*$/i',
             'default_tier' => self::TIER_2_CAUTIOUS,
         ],
         'service_stop_start' => [
@@ -136,7 +136,7 @@ class CommandSafetyGuard
             'label' => 'Stop or Start System Services',
             'command_example' => 'sudo systemctl stop <service>',
             'description' => 'Stops or starts system daemons directly.',
-            'pattern' => '/^sudo\s+(systemctl\s+(stop|start)\s+([a-zA-Z0-9_\-\.]+)|service\s+([a-zA-Z0-9_\-\.]+)\s+(stop|start))$/i',
+            'pattern' => '/^sudo\s+(systemctl\s+(stop|start)\s+(nginx|apache2|php[0-9\.]*-fpm|redis|redis-server|memcached|mysql|mariadb)(?:\.service)?|service\s+(nginx|apache2|php[0-9\.]*-fpm|redis|redis-server|memcached|mysql|mariadb)\s+(stop|start))$/i',
             'default_tier' => self::TIER_2_CAUTIOUS,
         ],
     ];

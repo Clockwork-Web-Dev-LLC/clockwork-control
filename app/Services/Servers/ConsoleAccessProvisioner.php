@@ -6,14 +6,15 @@ use App\Models\Server;
 use App\Services\Ssh\SshClient;
 
 /**
- * Drops a Match-loopback sshd config so DigitalOcean's Web Console can log in
+ * Drops a Match-User sshd config so DigitalOcean's Web Console can log in
  * as root via the droplet-agent on SpinupWP-hardened boxes.
  *
  * SpinupWP installs /etc/ssh/sshd_config.d/00-spinupwp.conf with
  * `PermitRootLogin no`, which blocks the agent's root SSH key injection. We
- * add /etc/ssh/sshd_config.d/99-droplet-console.conf with a Match block that
- * re-enables root key auth ONLY for connections from 127.0.0.1/::1 — the
- * loopback path the droplet-agent uses. Public root login stays disabled.
+ * add /etc/ssh/sshd_config.d/99-droplet-console.conf with a Match User root
+ * block that enables key-only root auth (`PermitRootLogin prohibit-password`)
+ * for droplet-agent port-knocked console sessions while keeping password root
+ * login disabled.
  *
  * Safety: validate via `sshd -t` BEFORE reload, use `reload` (SIGHUP) not
  * `restart`, verify post-reload state, auto-rollback on any failure.
@@ -56,7 +57,7 @@ class ConsoleAccessProvisioner
                 'ok' => true,
                 'status' => 'already_active',
                 'output' => $output,
-                'message' => 'Console-access drop-in already in place; loopback root login confirmed.',
+                'message' => 'Console-access drop-in already in place; key-only root login confirmed.',
             ];
         }
 
@@ -65,7 +66,7 @@ class ConsoleAccessProvisioner
                 'ok' => true,
                 'status' => 'provisioned',
                 'output' => $output,
-                'message' => 'Drop-in installed, sshd reloaded, loopback root login confirmed.',
+                'message' => 'Drop-in installed, sshd reloaded, key-only root login confirmed.',
             ];
         }
 

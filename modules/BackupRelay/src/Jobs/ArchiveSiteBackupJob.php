@@ -192,8 +192,18 @@ class ArchiveSiteBackupJob implements ShouldQueue
                 }
             }
 
+            $uploadedBytes = $this->objectSize($disk, $destinationKey);
+            if ($uploadedBytes !== null && $uploadedBytes <= 0) {
+                try {
+                    $disk->delete($destinationKey);
+                } catch (Throwable) {
+                    // Best-effort cleanup of empty object
+                }
+                throw new RuntimeException("BackupRelay: Refusing to archive empty (0-byte) backup stream for {$site->domain} ({$ref->externalId}).");
+            }
+
             $this->markArchived($site, [
-                'size_bytes' => $this->objectSize($disk, $destinationKey),
+                'size_bytes' => $uploadedBytes,
             ]);
         }
 

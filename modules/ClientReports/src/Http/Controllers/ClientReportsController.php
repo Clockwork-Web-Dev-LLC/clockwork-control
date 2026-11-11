@@ -7,6 +7,7 @@ use App\Models\Site;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -175,14 +176,20 @@ class ClientReportsController extends Controller
     /**
      * Public read-only client-facing report view.
      */
-    public function publicShow(string $token): View
+    public function publicShow(string $token): Response
     {
         $report = ClientReport::query()
             ->where('public_token', $token)
+            ->where('status', '!=', ClientReport::STATUS_SUPERSEDED)
             ->with('site')
             ->firstOrFail();
 
-        return view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false]);
+        return response()
+            ->view('client-reports::reports.show', ['report' => $report, 'isOperatorPreview' => false])
+            ->withHeaders([
+                'X-Robots-Tag' => 'noindex, nofollow',
+                'Referrer-Policy' => 'no-referrer',
+            ]);
     }
 
     /**

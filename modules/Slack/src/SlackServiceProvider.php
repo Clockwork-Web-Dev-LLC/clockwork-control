@@ -49,7 +49,7 @@ class SlackServiceProvider extends ModuleServiceProvider
 
     public function navItems(): array
     {
-        if (! config('clockwork.slack.enabled')) {
+        if (! $this->enabled() || ! config('clockwork.slack.enabled')) {
             return [];
         }
 

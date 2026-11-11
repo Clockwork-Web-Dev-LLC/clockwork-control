@@ -333,16 +333,31 @@ class WpCoreChecksumVerifier
         // (newer 2.x). Without both, a stripped-readme.html site falls all
         // the way through to the "wp-cli failed" branch and gets recorded
         // as STATUS_FAILED instead of as a parseable finding.
+        $isSafeRelPath = static fn (string $p): bool => $p !== ''
+            && ! str_starts_with($p, '/')
+            && ! str_contains($p, '..')
+            && ! str_contains($p, '\\')
+            && ! preg_match('/[\r\n\0]/', $p);
+
         $modified = [];
         $missing = [];
         $shouldNotExist = [];
         foreach (preg_split('/\r?\n/', $rawTrim) as $line) {
             if (preg_match('/^(?:Warning:\s+)?File doesn\'t verify against checksum:\s*(.+)$/', $line, $m)) {
-                $modified[] = trim($m[1]);
+                $candidate = trim($m[1]);
+                if ($isSafeRelPath($candidate)) {
+                    $modified[] = $candidate;
+                }
             } elseif (preg_match('/^(?:Warning:\s+)?File (?:is missing|doesn\'t exist):\s*(.+)$/', $line, $m)) {
-                $missing[] = trim($m[1]);
+                $candidate = trim($m[1]);
+                if ($isSafeRelPath($candidate)) {
+                    $missing[] = $candidate;
+                }
             } elseif (preg_match('/^(?:Warning:\s+)?File should not exist:\s*(.+)$/', $line, $m)) {
-                $shouldNotExist[] = trim($m[1]);
+                $candidate = trim($m[1]);
+                if ($isSafeRelPath($candidate)) {
+                    $shouldNotExist[] = $candidate;
+                }
             }
         }
 

@@ -117,15 +117,19 @@ class BackupArchiveEnumerator
                 $items = [];
             }
 
+            $itemsList = [];
             foreach ($items as $item) {
-                if (! method_exists($item, 'isFile') || ! $item->isFile()) {
-                    continue;
+                if (method_exists($item, 'isFile') && $item->isFile()) {
+                    $itemsList[] = $item;
+                    if (str_ends_with($item->path(), '.manifest.json')) {
+                        $manifestSidecars[$item->path()] = true;
+                    }
                 }
+            }
 
+            foreach ($itemsList as $item) {
                 $file = $item->path();
                 if (str_ends_with($file, '.manifest.json')) {
-                    $manifestSidecars[$file] = true;
-
                     continue;
                 }
 
@@ -425,10 +429,16 @@ class BackupArchiveEnumerator
                 $manifest = json_decode((string) $disk->get($manifestKey), true, flags: JSON_THROW_ON_ERROR);
                 if (isset($manifest['sites'][$domain])) {
                     $siteLinks = $manifest['sites'][$domain];
+                    $fsUrl = is_string($siteLinks['fs_download_url'] ?? null) && preg_match('#^https?://#i', $siteLinks['fs_download_url']) === 1
+                        ? $siteLinks['fs_download_url']
+                        : null;
+                    $dbUrl = is_string($siteLinks['db_download_url'] ?? null) && preg_match('#^https?://#i', $siteLinks['db_download_url']) === 1
+                        ? $siteLinks['db_download_url']
+                        : null;
 
                     return [
-                        'fs_download_url' => $siteLinks['fs_download_url'] ?? null,
-                        'db_download_url' => $siteLinks['db_download_url'] ?? null,
+                        'fs_download_url' => $fsUrl,
+                        'db_download_url' => $dbUrl,
                         'last_archived_at' => $manifest['generated_at'] ?? null,
                         'expires_at' => $manifest['expires_at'] ?? null,
                     ];

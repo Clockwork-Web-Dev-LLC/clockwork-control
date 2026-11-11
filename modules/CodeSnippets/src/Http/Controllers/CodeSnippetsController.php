@@ -67,6 +67,10 @@ class CodeSnippetsController extends Controller
      */
     public function update(CodeSnippet $snippet, Request $request): RedirectResponse
     {
+        if ($snippet->is_preset) {
+            return back()->with('status_error', 'Built-in preset snippets cannot be modified.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -156,6 +160,8 @@ class CodeSnippetsController extends Controller
                     site: $site,
                     target: 'snippet',
                     details: [
+                        'code_sha256' => hash('sha256', $code),
+                        'code_preview' => mb_strimwidth($code, 0, 200, '…'),
                         'duration_ms' => $execResult['duration_ms'] ?? 0,
                         'memory_used_bytes' => $execResult['memory_used_bytes'] ?? 0,
                         'ok' => $execResult['ok'] ?? false,
@@ -176,6 +182,10 @@ class CodeSnippetsController extends Controller
                     summary: "Failed executing snippet on {$site->domain}: {$e->getMessage()}",
                     site: $site,
                     target: 'snippet',
+                    details: [
+                        'code_sha256' => hash('sha256', $code),
+                        'code_preview' => mb_strimwidth($code, 0, 200, '…'),
+                    ],
                     ok: false,
                     error: $e->getMessage(),
                 );

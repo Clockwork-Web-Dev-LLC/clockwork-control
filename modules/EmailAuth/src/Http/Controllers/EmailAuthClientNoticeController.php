@@ -65,7 +65,10 @@ class EmailAuthClientNoticeController extends Controller
         // CID images only resolve inside a real email; point the preview at the logo URL.
         $html = (string) preg_replace('/src="cid:[^"]+"/', 'src="'.e($mail->branding()['logo_url']).'"', $mail->render());
 
-        return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
+        return response($html)
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            ->header('Content-Security-Policy', "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; sandbox")
+            ->header('X-Content-Type-Options', 'nosniff');
     }
 
     public function store(Request $request, EmailAuthDomain $domain, ActionLogger $actionLogger): RedirectResponse
