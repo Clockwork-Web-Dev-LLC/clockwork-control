@@ -13,6 +13,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
+use Laravel\Passport\Passport;
 
 /**
  * @property int $id
@@ -31,10 +34,10 @@ use Illuminate\Support\Str;
  */
 #[Fillable(['name', 'email', 'password', 'last_login_at', 'google_id', 'github_id', 'microsoft_id', 'avatar_url', 'theme', 'role'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     public const ROLE_ADMIN = 'admin';
 
@@ -83,6 +86,10 @@ class User extends Authenticatable
             'remember_token' => Str::random(60),
         ])->save();
 
+        // Before the early return below: Claude's tokens must die with the
+        // sessions, whatever the session driver is.
+        $this->revokeClaudeAccess();
+
         if (! Schema::hasTable('sessions')) {
             return;
         }
@@ -97,6 +104,34 @@ class User extends Authenticatable
         }
 
         $query->delete();
+    }
+
+    /**
+     * Revoke every Claude access (OAuth) token this user holds, access and
+     * refresh, so a connected Claude stops working on its next call. Always
+     * all of them: there is no "current" token to keep, unlike a session.
+     *
+     * @return int access tokens revoked
+     */
+    public function revokeClaudeAccess(?string $clientId = null): int
+    {
+        if (! Schema::hasTable('oauth_access_tokens')) {
+            return 0;
+        }
+
+        $tokenIds = Passport::token()->newQuery()
+            ->where('user_id', $this->id)
+            ->where('revoked', false)
+            ->when($clientId !== null, fn ($query) => $query->where('client_id', $clientId))
+            ->pluck('id');
+
+        if ($tokenIds->isEmpty()) {
+            return 0;
+        }
+
+        Passport::refreshToken()->newQuery()->whereIn('access_token_id', $tokenIds)->update(['revoked' => true]);
+
+        return Passport::token()->newQuery()->whereIn('id', $tokenIds)->update(['revoked' => true]);
     }
 
     /**

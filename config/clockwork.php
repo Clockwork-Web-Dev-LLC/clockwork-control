@@ -544,6 +544,14 @@ return [
     // and refuses to start without it. Leave empty to keep stdio off.
     'mcp' => [
         'local_user' => env('CLOCKWORK_MCP_LOCAL_USER'),
+
+        // Browser origins allowed to call the network endpoint (/mcp). A
+        // request with no Origin header, which is what Anthropic's servers
+        // send, is not affected. Comma separated.
+        'allowed_origins' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('CLOCKWORK_MCP_ALLOWED_ORIGINS', 'https://claude.ai,https://claude.com')),
+        ))),
     ],
 
     // Fleet-wide care plans policy.

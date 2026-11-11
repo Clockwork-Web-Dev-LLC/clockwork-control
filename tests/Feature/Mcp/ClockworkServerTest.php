@@ -148,7 +148,7 @@ describe('stdio', function () {
     })->with(['', 'nobody@example.com', 'gone@example.com']);
 });
 
-it('exposes no network endpoint or sign-in routes yet', function () {
+it('exposes no network endpoint or sign-in routes while Claude access is off, which is the default', function () {
     $uris = collect(Route::getRoutes()->getRoutes())->map->uri();
 
     expect($uris->filter(fn (string $uri) => $uri === 'mcp' || str_starts_with($uri, 'oauth/') || str_starts_with($uri, '.well-known/oauth'))->values()->all())

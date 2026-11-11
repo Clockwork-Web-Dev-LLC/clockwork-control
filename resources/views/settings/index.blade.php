@@ -385,6 +385,21 @@
                         <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
                     </a>
 
+                    @if (Route::has('settings.claude-access.index'))
+                    <a href="{{ route('settings.claude-access.index') }}"
+                       x-show="matches('claude access mcp ai connector cowork seo numbers oauth connect')"
+                       class="group py-2.5 px-2 -mx-2 rounded-lg flex items-center justify-between hover:bg-[var(--color-surface-alt)] transition-colors">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <i class="fa-solid fa-plug text-[var(--color-ink-muted)] group-hover:text-[var(--color-brand)] text-xs mt-1 w-4 transition-colors"></i>
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold text-[var(--color-ink-strong)] group-hover:text-[var(--color-brand)] transition-colors">Claude Access</div>
+                                <div class="text-[11px] text-[var(--color-ink-soft)] truncate">Let Claude read SEO numbers from Control, and see who is connected</div>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-[var(--color-ink-muted)] group-hover:translate-x-0.5 transition-transform ml-3"></i>
+                    </a>
+                    @endif
+
                     @if (Route::has('feedback.index'))
                     <a href="{{ route('feedback.index') }}"
                        x-show="matches('feedback notes bug report pins claude atarim working list module comments')"
