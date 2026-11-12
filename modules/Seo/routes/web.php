@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
+use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
 use Modules\Seo\Http\Controllers\SeoController;
 use Modules\Seo\Http\Controllers\SeoSettingsController;
@@ -26,5 +27,8 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
         Route::get('/seo/google/callback', [GoogleConnectionController::class, 'callback'])->name('seo.google.callback');
         Route::post('/seo/google/disconnect', [GoogleConnectionController::class, 'disconnect'])->name('seo.google.disconnect');
         Route::post('/seo/google/test', [GoogleConnectionController::class, 'test'])->middleware('throttle:10,1')->name('seo.google.test');
+
+        Route::put('/seo/dataforseo/budget', [DataForSeoSettingsController::class, 'updateBudget'])->name('seo.dataforseo.budget');
+        Route::post('/seo/dataforseo/test', [DataForSeoSettingsController::class, 'test'])->middleware('throttle:10,1')->name('seo.dataforseo.test');
     });
 });

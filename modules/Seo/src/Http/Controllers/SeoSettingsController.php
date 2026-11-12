@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\Seo\DataForSeo\BudgetGuard;
+use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\Google\GoogleOAuth;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
@@ -14,7 +16,7 @@ use Modules\Seo\Support\SeoSettings;
 
 class SeoSettingsController extends Controller
 {
-    public function index(GoogleOAuth $oauth, SeoSettings $settings): View
+    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget): View
     {
         $connection = GoogleConnection::current();
 
@@ -31,6 +33,15 @@ class SeoSettingsController extends Controller
                 ? GoogleProperty::query()->where('connection_id', $connection->id)->where('kind', GoogleProperty::KIND_GSC)->count()
                 : 0,
             'profileCount' => SiteProfile::query()->count(),
+            // Read from the ledger only: opening this page never calls DataForSEO.
+            'dataForSeo' => [
+                'configured' => $dataForSeo->isConfigured(),
+                'sandbox' => $dataForSeo->usesSandbox(),
+                'features' => $budget->summary(),
+                'spent' => $budget->spentThisMonth(),
+                'totalCap' => $budget->totalCap(),
+                'personAllowance' => $budget->personAllowance(),
+            ],
         ]);
     }
 

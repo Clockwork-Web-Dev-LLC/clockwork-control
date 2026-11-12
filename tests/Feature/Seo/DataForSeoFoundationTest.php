@@ -2,6 +2,7 @@
 
 use App\Models\Site;
 use App\Models\User;
+use App\Support\IssueCounter;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -257,5 +258,78 @@ describe('TaskRunner', function () {
         });
 
         expect($summary)->toBe(['collected' => 1, 'pending' => 0, 'failed' => 1]);
+    });
+});
+
+describe('DataForSEO card on /seo/settings', function () {
+    beforeEach(function () {
+        $this->partialMock(IssueCounter::class, fn ($mock) => $mock->shouldReceive('total')->andReturn(0));
+        $this->withoutVite();
+        $this->admin = User::factory()->admin()->create();
+    });
+
+    it('shows spend and caps from the ledger without calling DataForSEO', function () {
+        Http::fake();
+        spend(Feature::RANK_TRACKING, 70.25);
+        spend(Feature::KEYWORDS, 1.5);
+
+        $this->actingAs($this->admin)->get(route('seo.settings'))
+            ->assertOk()
+            ->assertSee('data-dataforseo-state="configured"', false)
+            ->assertSee('Position tracking')
+            ->assertSee('$70.25')
+            ->assertSee('$71.75')
+            ->assertDontSee('api-password-canary');
+
+        Http::assertNothingSent();
+    });
+
+    it('says how to set it up when there is no login', function () {
+        config(['clockwork.seo.dataforseo_login' => null]);
+
+        $this->actingAs($this->admin)->get(route('seo.settings'))
+            ->assertOk()
+            ->assertSee('data-dataforseo-state="missing"', false)
+            ->assertSee('Not set up');
+    });
+
+    it('saves the caps, and warns when they add up to more than the total', function () {
+        $caps = array_fill_keys(array_keys(Feature::ALL), 10);
+        $caps[Feature::RANK_TRACKING] = 150;
+
+        $this->actingAs($this->admin)->put(route('seo.dataforseo.budget'), ['caps' => $caps, 'total_cap' => 120, 'person_allowance' => 5])
+            ->assertRedirect(route('seo.settings'))
+            ->assertSessionHas('status', fn (string $message) => str_contains($message, 'more than the $120.00 total'));
+
+        $guard = app(BudgetGuard::class);
+        expect($guard->featureCap(Feature::RANK_TRACKING))->toBe(150.0)
+            ->and($guard->totalCap())->toBe(120.0)
+            ->and($guard->personAllowance())->toBe(5.0);
+    });
+
+    it('rejects a missing or negative cap', function () {
+        $this->actingAs($this->admin)->put(route('seo.dataforseo.budget'), ['caps' => [Feature::KEYWORDS => -1], 'total_cap' => 100, 'person_allowance' => 5])
+            ->assertSessionHasErrors(['caps.'.Feature::KEYWORDS, 'caps.'.Feature::RANK_TRACKING]);
+    });
+
+    it('tests the connection and reports the balance', function () {
+        Http::fake([DataForSeoFixtures::API => Http::response(DataForSeoFixtures::userData(48.25))]);
+
+        $this->actingAs($this->admin)->post(route('seo.dataforseo.test'))
+            ->assertSessionHas('status', fn (string $message) => str_contains($message, 'agency@example.com') && str_contains($message, '$48.25'));
+    });
+
+    it('reports a failed test in plain words', function () {
+        Http::fake([DataForSeoFixtures::API => Http::response(DataForSeoFixtures::error(40100, 'You are not authorized.'), 401)]);
+
+        $this->actingAs($this->admin)->post(route('seo.dataforseo.test'))
+            ->assertSessionHas('warning', fn (string $message) => str_contains($message, 'rejected the API login'));
+    });
+
+    it('keeps operators out', function () {
+        $operator = User::factory()->operator()->create();
+
+        $this->actingAs($operator)->put(route('seo.dataforseo.budget'), [])->assertForbidden();
+        $this->actingAs($operator)->post(route('seo.dataforseo.test'))->assertForbidden();
     });
 });

@@ -118,5 +118,91 @@
             <button type="submit" class="btn-primary text-sm px-4 py-2">Save</button>
         </form>
     </x-card>
+
+    <x-card title="DataForSEO" icon="fa-coins"
+        subtitle="The paid data source for keyword metrics, rank tracking, site audits, backlinks, local and AI visibility. You pay per call; these caps stop spending before it runs away.">
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-4" data-dataforseo-state="{{ $dataForSeo['configured'] ? 'configured' : 'missing' }}">
+            <p class="text-sm text-[var(--color-ink)]">
+                @if ($dataForSeo['configured'])
+                    <span class="status-pill status-green text-[10px] mr-1">Login saved</span>
+                    Use Test to check it works and see the balance.
+                @else
+                    <span class="status-pill status-unknown text-[10px] mr-1">Not set up</span>
+                    Add the API login and password under <strong>SEO</strong> on
+                    <a href="{{ route('settings.integrations.index') }}" class="text-[var(--color-primary-600)] hover:underline">Settings → Integrations</a>.
+                    They are the API ones from DataForSEO's API Access page, not the account sign-in.
+                @endif
+            </p>
+            <form method="POST" action="{{ route('seo.dataforseo.test') }}">
+                @csrf
+                <button type="submit" class="btn-pill-nav text-sm" @disabled(! $dataForSeo['configured'])>
+                    <i class="fa-solid fa-plug-circle-check mr-1.5"></i> Test
+                </button>
+            </form>
+        </div>
+
+        @if ($dataForSeo['sandbox'])
+            <p class="text-sm mb-4 p-3 rounded status-yellow">
+                <i class="fa-solid fa-flask mr-1"></i>
+                Sandbox mode is on. Calls go to DataForSEO's free sandbox, cost nothing, and return sample data, not real data. Turn it off in Control's settings file (CLOCKWORK_SEO_DATAFORSEO_SANDBOX) before relying on any number.
+            </p>
+        @endif
+
+        <form method="POST" action="{{ route('seo.dataforseo.budget') }}">
+            @csrf
+            @method('PUT')
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-left text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">
+                        <tr>
+                            <th class="py-2 pr-4 font-semibold">Used for</th>
+                            <th class="py-2 pr-4 font-semibold text-right">Spent this month</th>
+                            <th class="py-2 font-semibold text-right">Monthly cap ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--color-border-light)]">
+                        @foreach ($dataForSeo['features'] as $row)
+                            <tr data-dataforseo-feature="{{ $row['feature'] }}">
+                                <td class="py-2 pr-4 text-[var(--color-ink-strong)]">
+                                    <label for="cap-{{ $row['feature'] }}">{{ $row['label'] }}</label>
+                                </td>
+                                <td class="py-2 pr-4 text-right font-data {{ $row['cap'] > 0 && $row['spent'] >= $row['cap'] * 0.8 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-ink)]' }}">
+                                    ${{ number_format($row['spent'], 2) }}
+                                </td>
+                                <td class="py-2 text-right">
+                                    <input type="number" step="0.01" min="0" max="5000" id="cap-{{ $row['feature'] }}" name="caps[{{ $row['feature'] }}]"
+                                           value="{{ old('caps.'.$row['feature'], number_format($row['cap'], 2, '.', '')) }}"
+                                           class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-28 text-right font-data">
+                                </td>
+                            </tr>
+                        @endforeach
+                        <tr>
+                            <td class="py-2 pr-4 font-semibold text-[var(--color-ink-strong)]"><label for="total_cap">Everything together</label></td>
+                            <td class="py-2 pr-4 text-right font-data font-semibold text-[var(--color-ink-strong)]">${{ number_format($dataForSeo['spent'], 2) }}</td>
+                            <td class="py-2 text-right">
+                                <input type="number" step="0.01" min="0" max="5000" id="total_cap" name="total_cap"
+                                       value="{{ old('total_cap', number_format($dataForSeo['totalCap'], 2, '.', '')) }}"
+                                       class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-28 text-right font-data">
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <label class="block text-sm mt-4">
+                <span class="font-medium text-[var(--color-ink-strong)]">Monthly allowance per person ($)</span>
+                <input type="number" step="0.01" min="0" max="5000" name="person_allowance"
+                       value="{{ old('person_allowance', number_format($dataForSeo['personAllowance'], 2, '.', '')) }}"
+                       class="mt-1 text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-28 font-data">
+                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">What someone who isn't an admin can spend on lookups they ask for, through Claude or in Control. Admins and scheduled jobs are held by the caps above only.</span>
+            </label>
+
+            <p class="text-xs text-[var(--color-ink-muted)] mt-3">
+                "Spent" is what DataForSEO itself reported for each call, from Control's ledger. A call that would pass a cap is not made. When a scheduled job hits its cap it stops and reports the failure, so a cap that is too low for rank tracking leaves gaps in the history: raise it here if that happens.
+            </p>
+
+            <button type="submit" class="btn-primary text-sm px-4 py-2 mt-4">Save caps</button>
+        </form>
+    </x-card>
 </div>
 @endsection
