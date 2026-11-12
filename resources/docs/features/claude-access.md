@@ -36,6 +36,7 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_domain_research_fetch` | Buys a domain's ranking-keyword count (about 1 cent), its ranked-keyword list (about 13 cents for 1,000) or its search competitors (about 2 cents). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
 | `seo_competitors` | The competitors named on a site's profile and the domains discovered to rank for the same keywords. | No |
 | `seo_keyword_gap` | Compares a site with up to 5 competitors from stored keyword lists: missing, untapped, weak, strong, shared and unique keywords. | No |
+| `seo_keyword_ideas` | Keyword ideas from seed keywords (same topics, phrase suggestions or related searches), each with volume, difficulty, CPC and intent. Lists and re-reads stored idea lists for free; a new list costs about 13 cents per 1,000 and is priced first. | Only when buying a new list |
 
 ## Connecting claude.ai and Cowork
 

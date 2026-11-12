@@ -151,6 +151,16 @@ What to know about the numbers:
 
 A gap is a lead to check, not proof: a stored list holds a domain's top keywords (up to 1,000), so "does not rank" means "is not in that list". A competitor with no stored list is left out of the comparison and named, never counted as ranking for nothing.
 
+## Keyword ideas
+
+From one or more seed keywords, Control can buy a list of new keyword ideas from DataForSEO, each with volume, difficulty, CPC and intent. Three kinds: **ideas** (keywords in the same topics as up to 20 seeds), **suggestions** (longer searches containing one seed phrase) and **related** (searches Google itself lists as related to one seed). About 13 cents per 1,000 ideas.
+
+Claude does this through `seo_keyword_ideas`: it gives the price first and buys only with the cost a person agreed to. Every idea's figures go into the keyword store, so they are never bought again, and a stored list can be re-read and filtered (minimum volume, maximum difficulty, containing a word, questions only) for free. Ideas are country-level; grouping them into topics is left to Claude.
+
+## The Research page
+
+**SEO → Clients → Research** (`/seo/sites/{site}/research`) puts this in one place for a client: ranking-keyword counts for it and its named competitors with the change from the month before, who else ranks for the same keywords, the keyword gap, the client's top keywords and the idea lists bought so far. The page only reads stored data. Each buy button states its price, asks for confirmation, and goes through the research cap and the per-person allowance. Only the client and its named competitors can be bought from the page.
+
 ## Keyword maps
 
 A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.

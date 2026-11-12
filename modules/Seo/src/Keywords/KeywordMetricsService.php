@@ -250,6 +250,17 @@ class KeywordMetricsService
     /**
      * @param  ?array<string, mixed>  $item  one keyword_overview item, or null when DataForSEO had nothing
      */
+    /**
+     * Store figures that arrived with another purchase (keyword ideas),
+     * in the same shape as a keyword_overview item.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    public function storeItem(string $keyword, Market $market, array $item): void
+    {
+        $this->store($keyword, $market, $item);
+    }
+
     private function store(string $keyword, Market $market, ?array $item): void
     {
         $info = (array) ($item['keyword_info'] ?? []);

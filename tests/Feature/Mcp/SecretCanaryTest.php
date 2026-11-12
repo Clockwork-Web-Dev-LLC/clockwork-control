@@ -54,6 +54,8 @@ it('never returns a credential from any tool', function () {
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
         'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
         'seo_rankings' => ['site' => 'acme.com'],
+        // Without seeds it only lists stored idea lists.
+        'seo_keyword_ideas' => ['site' => 'acme.com'],
         'seo_competitors' => ['site' => 'acme.com'],
         'seo_keyword_gap' => ['site' => 'acme.com', 'competitors' => ['rival.com']],
         'seo_domain_overview' => ['site' => 'acme.com'],
@@ -90,5 +92,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(19);
+    expect($called)->toHaveCount(20);
 });

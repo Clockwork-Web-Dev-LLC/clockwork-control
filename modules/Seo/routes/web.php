@@ -6,6 +6,7 @@ use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
 use Modules\Seo\Http\Controllers\KeywordMapController;
 use Modules\Seo\Http\Controllers\RankingsController;
+use Modules\Seo\Http\Controllers\ResearchController;
 use Modules\Seo\Http\Controllers\SeoClientsController;
 use Modules\Seo\Http\Controllers\SeoController;
 use Modules\Seo\Http\Controllers\SeoSettingsController;
@@ -31,6 +32,9 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keyword-map/version', [KeywordMapController::class, 'newVersion'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.version');
     Route::post('/seo/sites/{site}/keyword-map/fill', [KeywordMapController::class, 'fill'])->name('seo.sites.keyword-map.fill');
     Route::get('/seo/sites/{site}/keyword-map/{map}/download', [KeywordMapController::class, 'download'])->name('seo.sites.keyword-map.download');
+
+    Route::get('/seo/sites/{site}/research', [ResearchController::class, 'show'])->name('seo.sites.research');
+    Route::post('/seo/sites/{site}/research/buy', [ResearchController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.research.buy');
 
     Route::get('/seo/sites/{site}/rankings', [RankingsController::class, 'show'])->name('seo.sites.rankings');
     Route::post('/seo/sites/{site}/rankings', [RankingsController::class, 'store'])->middleware('throttle:20,1')->name('seo.sites.rankings.store');

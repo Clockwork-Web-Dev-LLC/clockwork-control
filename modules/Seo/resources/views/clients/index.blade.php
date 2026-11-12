@@ -123,6 +123,7 @@
                                 <a href="{{ route('seo.sites.show', $p->site) }}" class="btn-pill-nav text-xs">Numbers</a>
                                 <a href="{{ route('seo.sites.rankings', $p->site) }}" class="btn-pill-nav text-xs">Rankings</a>
                                 <a href="{{ route('seo.sites.keyword-map', $p->site) }}" class="btn-pill-nav text-xs">Map</a>
+                                <a href="{{ route('seo.sites.research', $p->site) }}" class="btn-pill-nav text-xs">Research</a>
                                 <a href="{{ route('seo.sites.profile', $p->site) }}" class="btn-pill-nav text-xs">Profile</a>
                             </td>
                         </tr>

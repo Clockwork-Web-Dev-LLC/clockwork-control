@@ -274,6 +274,8 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keyword-map/version` | Start a new dated version as a copy of the current map (throttled 10/min). |
 | POST | `/seo/sites/{site}/keyword-map/fill` | Fill volume, difficulty and CPC on the current map from keyword data already bought. Spends nothing. |
 | GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
+| GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
+| POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
