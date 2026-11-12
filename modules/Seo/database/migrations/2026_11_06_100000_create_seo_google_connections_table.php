@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // One row: the agency's Google connection (systems@), separate from
+        // One row: the agency's Google connection (a shared agency account), separate from
         // the Google login in modules/AuthGoogle, which throws its token away.
         Schema::create('seo_google_connections', function (Blueprint $table) {
             $table->id();

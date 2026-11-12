@@ -11,6 +11,7 @@ use Illuminate\View\View;
 use InvalidArgumentException;
 use Modules\Seo\Jobs\RefreshGooglePropertiesJob;
 use Modules\Seo\Jobs\SyncSiteGoogleDataJob;
+use Modules\Seo\Keywords\Market;
 use Modules\Seo\Models\AiImpressionEntry;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
@@ -71,7 +72,11 @@ class SiteProfileController extends Controller
             'report_notes' => ['nullable', 'string', 'max:5000'],
             'is_enabled' => ['nullable', 'boolean'],
             'confirm_purge' => ['nullable', 'boolean'],
+            'market_location_code' => ['nullable', 'integer', 'min:1', 'max:99999999'],
+            'market_language_code' => ['nullable', 'string', 'regex:/^[a-z]{2}(-[A-Za-z]{2,4})?$/'],
+            'market_city' => ['nullable', 'string', 'max:191'],
         ], [
+            'market_language_code.regex' => 'Use a language code such as en or es.',
             'ga4_property_id.regex' => 'The GA4 property ID is the number from GA4 Admin → Property details, e.g. 123456789.',
         ]);
 
@@ -90,6 +95,13 @@ class SiteProfileController extends Controller
             'report_notes' => $this->blank($validated['report_notes'] ?? null),
             'is_enabled' => $request->boolean('is_enabled'),
         ];
+
+        // The keyword market. A form that doesn't send it leaves it alone.
+        if ($request->has('market_location_code')) {
+            $attributes['market_location_code'] = (int) ($validated['market_location_code'] ?? Market::DEFAULT_LOCATION_CODE);
+            $attributes['market_language_code'] = $validated['market_language_code'] ?? Market::DEFAULT_LANGUAGE_CODE;
+            $attributes['market_city'] = $this->blank($validated['market_city'] ?? null);
+        }
 
         if ($attributes['gsc_site_url'] !== null) {
             $attributes['gsc_permission_level'] = GoogleProperty::query()

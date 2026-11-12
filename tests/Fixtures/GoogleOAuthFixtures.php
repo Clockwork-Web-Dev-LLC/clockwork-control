@@ -38,7 +38,7 @@ final class GoogleOAuthFixtures
     }
 
     /** @return array<string, mixed> */
-    public static function userinfo(string $email = 'systems@clockworkwd.com'): array
+    public static function userinfo(string $email = 'systems@agency.example'): array
     {
         return ['sub' => '1234567890', 'email' => $email, 'email_verified' => true];
     }
@@ -55,7 +55,7 @@ final class GoogleOAuthFixtures
     public static function connection(array $overrides = []): GoogleConnection
     {
         return GoogleConnection::query()->create($overrides + [
-            'account_email' => 'systems@clockworkwd.com',
+            'account_email' => 'systems@agency.example',
             'scopes' => GoogleOAuth::SCOPES,
             'refresh_token' => self::REFRESH_TOKEN,
             'status' => GoogleConnection::STATUS_ACTIVE,

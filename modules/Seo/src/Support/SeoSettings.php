@@ -10,7 +10,8 @@ use App\Support\Settings;
  */
 class SeoSettings
 {
-    public const DEFAULT_LOGIN_HINT = 'systems@clockworkwd.com';
+    /** No account is assumed: each agency names its own, or leaves it empty. */
+    public const DEFAULT_LOGIN_HINT = '';
 
     public const DEFAULT_FINAL_AFTER_DAYS = 5;
 
@@ -40,10 +41,10 @@ class SeoSettings
         return $value !== '' ? $value : self::DEFAULT_AI_REFERRER_REGEX;
     }
 
-    /** @param array{login_hint: string, final_after_days: int, ai_referrer_regex: ?string} $values */
+    /** @param array{login_hint: ?string, final_after_days: int, ai_referrer_regex: ?string} $values */
     public function save(array $values): void
     {
-        $this->settings->put('clockwork.seo.login_hint', trim($values['login_hint']));
+        $this->settings->put('clockwork.seo.login_hint', trim((string) $values['login_hint']));
         $this->settings->put('clockwork.seo.final_after_days', $values['final_after_days']);
         $this->settings->put('clockwork.seo.ai_referrer_regex', trim((string) $values['ai_referrer_regex']));
     }

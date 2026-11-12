@@ -255,6 +255,9 @@ These exist only while the switch is on:
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/seo` | Fleet SEO overview: indexability state for every active, monitored site, blocking production sites first, with links to each site's search numbers or profile (`modules/Seo`). |
+| GET | `/seo/clients` | SEO clients: every site with an SEO profile, with status, last complete month's Google clicks and last sync, plus a getting-started checklist until setup is done. |
+| GET | `/seo/clients/new` | Add-client form. |
+| POST | `/seo/clients` | Add a client from a domain: reuses or creates the site, creates its SEO profile, queues the first sync (throttled 20/min). |
 | GET | `/seo/sites/{site}` | One site's search numbers for a month (`?month=YYYY-MM`) against the previous month and last year, from stored rows only. |
 | GET | `/seo/sites/{site}/profile` | SEO profile: Search Console and GA4 properties, brand terms, key events, report notes, AI impressions form. |
 | PUT | `/seo/sites/{site}/profile` | Save the profile. A property or brand-terms change needs `confirm_purge`. |

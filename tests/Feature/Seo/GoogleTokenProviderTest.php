@@ -35,7 +35,7 @@ it('marks the connection revoked on invalid_grant and alerts once', function () 
     $connection = GoogleOAuthFixtures::connection();
     $provider = app(GoogleTokenProvider::class);
 
-    $this->chat->shouldReceive('send')->once()->withArgs(fn (string $text) => str_contains($text, 'systems@clockworkwd.com') && str_contains($text, 'revoked'))->andReturn(true);
+    $this->chat->shouldReceive('send')->once()->withArgs(fn (string $text) => str_contains($text, 'systems@agency.example') && str_contains($text, 'revoked'))->andReturn(true);
 
     expect(fn () => $provider->accessToken($connection))->toThrow(GoogleOAuthException::class);
     expect($connection->fresh()->status)->toBe(GoogleConnection::STATUS_REVOKED)

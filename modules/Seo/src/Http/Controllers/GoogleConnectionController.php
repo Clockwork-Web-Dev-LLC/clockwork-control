@@ -18,7 +18,7 @@ use Modules\Seo\Support\SeoSettings;
 
 /**
  * Connect, reconnect, test and disconnect the agency Google connection.
- * Admin only. Connect once as systems@; every reconnect issues a new refresh
+ * Admin only. Connect once as the shared agency account; every reconnect issues a new refresh
  * token and Google silently drops the oldest past 100 per client, so don't
  * reconnect casually.
  */

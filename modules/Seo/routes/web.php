@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
+use Modules\Seo\Http\Controllers\SeoClientsController;
 use Modules\Seo\Http\Controllers\SeoController;
 use Modules\Seo\Http\Controllers\SeoSettingsController;
 use Modules\Seo\Http\Controllers\SiteProfileController;
@@ -11,6 +12,10 @@ use Modules\Seo\Http\Controllers\SiteSearchController;
 
 Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/seo', [SeoController::class, 'index'])->name('seo.index');
+
+    Route::get('/seo/clients', [SeoClientsController::class, 'index'])->name('seo.clients.index');
+    Route::get('/seo/clients/new', [SeoClientsController::class, 'create'])->name('seo.clients.create');
+    Route::post('/seo/clients', [SeoClientsController::class, 'store'])->middleware('throttle:20,1')->name('seo.clients.store');
 
     Route::get('/seo/sites/{site}', [SiteSearchController::class, 'show'])->name('seo.sites.show');
     Route::get('/seo/sites/{site}/profile', [SiteProfileController::class, 'show'])->name('seo.sites.profile');

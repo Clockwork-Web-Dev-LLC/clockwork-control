@@ -66,7 +66,7 @@ class SeoListSites extends SeoTool
             ->filter(fn (SiteProfile $p) => $search === ''
                 || str_contains(mb_strtolower((string) $p->site->domain), $search)
                 || str_contains(mb_strtolower((string) $p->site->client?->name), $search))
-            ->filter(fn (SiteProfile $p) => $state === 'any' || $this->state($p) === $state)
+            ->filter(fn (SiteProfile $p) => $state === 'any' || $p->state() === $state)
             ->sortBy(fn (SiteProfile $p) => $p->site->domain)
             ->values();
 
@@ -86,7 +86,7 @@ class SeoListSites extends SeoTool
                 $p->site_id,
                 $p->site->domain,
                 $p->site->client?->name,
-                $this->state($p),
+                $p->state(),
                 $p->gsc_site_url,
                 $p->gsc_permission_level,
                 $p->ga4_property_id,
@@ -130,17 +130,6 @@ class SeoListSites extends SeoTool
                 'A site that is not listed has no SEO profile. Profiles are set up on /seo in Control.',
             ],
         ]);
-    }
-
-    private function state(SiteProfile $profile): string
-    {
-        return match (true) {
-            ! $profile->hasGsc() && ! $profile->hasGa4() => 'not_set_up',
-            filled($profile->last_sync_error) => 'sync_error',
-            ($profile->hasGsc() && $profile->last_gsc_synced_at === null)
-                || ($profile->hasGa4() && $profile->last_ga4_synced_at === null) => 'syncing',
-            default => 'ok',
-        };
     }
 
     /**

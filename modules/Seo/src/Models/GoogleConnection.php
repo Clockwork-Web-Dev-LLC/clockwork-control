@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * The agency's one Google connection (systems@), owned by the SEO module and
+ * The agency's one Google connection (a shared agency account), owned by the SEO module and
  * separate from Google login. The refresh token is encrypted at rest and never
  * rendered or returned.
  *

@@ -10,7 +10,7 @@
 
 <div class="max-w-4xl space-y-6">
     <x-card title="Google connection" icon="fa-plug"
-        subtitle="One read-only connection for the whole agency. Connect once as {{ $loginHint }}: whatever that account sees in Search Console and GA4 is what Control can sync.">
+        subtitle="One read-only connection for the whole agency. Connect once as a shared agency Google account{{ $loginHint ? ' ('.$loginHint.')' : '' }}: whatever that account sees in Search Console and GA4 is what Control can sync.">
         <dl class="grid grid-cols-1 sm:grid-cols-[12rem_1fr] gap-x-4 gap-y-2 text-sm mb-5">
             <dt class="text-[var(--color-ink-muted)]">Status</dt>
             <dd>
@@ -96,9 +96,9 @@
             @csrf
             <label class="block text-sm">
                 <span class="font-medium text-[var(--color-ink-strong)]">Google account to connect</span>
-                <input type="email" name="login_hint" value="{{ old('login_hint', $loginHint) }}" required
+                <input type="email" name="login_hint" value="{{ old('login_hint', $loginHint) }}" placeholder="seo@your-agency.com"
                        class="mt-1 text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full max-w-sm font-data">
-                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">Pre-fills Google's sign-in and limits it to this account's Workspace domain.</span>
+                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">Optional. Pre-fills Google's sign-in and limits it to this account's Workspace domain, so nobody connects a personal account by mistake. Use a shared account that already has access to your clients' properties.</span>
             </label>
 
             <label class="block text-sm">

@@ -1,6 +1,7 @@
 @php
     $seoTabs = [
-        ['label' => 'Overview', 'icon' => 'fa-magnifying-glass-chart', 'url' => route('seo.index'), 'active' => request()->routeIs('seo.index', 'seo.sites.*')],
+        ['label' => 'Overview', 'icon' => 'fa-magnifying-glass-chart', 'url' => route('seo.index'), 'active' => request()->routeIs('seo.index')],
+        ['label' => 'Clients', 'icon' => 'fa-users', 'url' => route('seo.clients.index'), 'active' => request()->routeIs('seo.clients.*', 'seo.sites.*')],
     ];
     if (auth()->user()?->isAdmin()) {
         $seoTabs[] = ['label' => 'Settings', 'icon' => 'fa-gear', 'url' => route('seo.settings'), 'active' => request()->routeIs('seo.settings')];

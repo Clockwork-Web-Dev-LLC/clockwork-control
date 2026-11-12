@@ -33,19 +33,33 @@ The plan behind this is `plans/seo-semrush-replacement.md` (Phase 1).
 
 ### One-time setup
 
-1. **Google Cloud project.** In the agency's Google Workspace organization (clockworkwd.com), create a project with the OAuth consent screen set to **Internal**. Internal apps skip Google's verification and the 7-day testing expiry.
+1. **Google Cloud project.** In your agency's Google Workspace organization, create a project with the OAuth consent screen set to **Internal**. Internal apps skip Google's verification and the 7-day testing expiry.
 2. **Enable three APIs:** Google Search Console API, Google Analytics Data API, Google Analytics Admin API.
 3. **OAuth client.** Credentials → Create OAuth client ID → Web application. Add the redirect URI that **SEO → Settings** shows, `https://<control host>/seo/google/callback`. It differs from the login callback (`/auth/google/callback`) on purpose.
 4. **Enter the client.** Paste the client ID and secret on **Settings → Integrations → SEO** (stored encrypted). `CLOCKWORK_SEO_GOOGLE_CLIENT_ID` / `_SECRET` in `.env` are the fallback.
-5. **Connect.** An admin opens **SEO → Settings → Connect Google** and signs in as **systems@clockworkwd.com**. Whatever that account can see in Search Console and GA4 is what Control can sync; nothing is set up per client in Google. Control asks only for read-only access.
+5. **Connect.** An admin opens **SEO → Settings → Connect Google** and signs in as a **shared agency Google account** that already has access to your clients' properties. Whatever that account can see in Search Console and GA4 is what Control can sync; nothing is set up per client in Google. Control asks only for read-only access.
 
 Reconnect only when needed: Google keeps at most 100 refresh tokens per account and client, and silently drops the oldest.
+
+### Adding and viewing clients
+
+**SEO → Clients** (`/seo/clients`) is the list of SEO clients: every site that has an SEO profile, with its status, Google clicks for the last complete month, the change from the month before, and when it last synced. A month with no stored data shows a dash, never 0.
+
+**Add client** needs only a domain. If the site is already in Control it is reused. If not, it is added as a plain monitored site (host "custom", not WordPress), so a client on any host or platform can be tracked. On the form:
+
+- **Search Console property**: leave on Automatic and Control picks the property the connected Google account can see for that domain, trying `https://www.`, `https://`, then the `sc-domain:` form. If none is visible, the client is saved without one; share the property with the connected account and choose it on the profile.
+- **GA4 property ID**, **brand terms** and **compare with last year**: optional, same meaning as on the profile.
+- **Keyword market**: country, language and optional city used for DataForSEO keyword lookups. Defaults to United States, English.
+
+Saving queues the 16-month backfill when a property is set and Google is connected.
+
+Until setup is finished the page shows a **Getting started** checklist: add a Google OAuth client, connect Google, add a DataForSEO login (optional), add a first client, turn on Claude access (optional). It reads local state only.
 
 ### Per-site profiles
 
 Each SEO client gets a profile at `/seo/sites/{site}/profile` (any active user):
 
-- **Search Console property**, picked from the list the connection sees (with its access level). Keep the URL-prefix property the monthly reports already use; systems@ often can't read the `sc-domain:` property. **Refresh list** queues a new `sites.list`.
+- **Search Console property**, picked from the list the connection sees (with its access level). Keep the URL-prefix property the monthly reports already use; the connected account often can't read the `sc-domain:` property. **Refresh list** queues a new `sites.list`.
 - **GA4 property ID** (GA4 Admin → Property details), and a checkbox when the property has a custom primary channel group.
 - **Brand terms** (comma separated). Queries containing any of them are left out of the non-branded numbers. The preview shows which of last month's top queries count as branded.
 - **Key events** (default `generate_lead`, `form_submit`, `contact_link_click`), the seasonal YoY toggle, the Semrush domain, and **report notes** (tone, angle, things to avoid). Report notes can only be edited on this page.

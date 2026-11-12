@@ -102,6 +102,28 @@ class SiteProfile extends Model
         return $this->ga4_property_id !== null && $this->ga4_property_id !== '';
     }
 
+    /** not_set_up, sync_error, syncing (waiting for its first sync) or ok. */
+    public function state(): string
+    {
+        return match (true) {
+            ! $this->hasGsc() && ! $this->hasGa4() => 'not_set_up',
+            filled($this->last_sync_error) => 'sync_error',
+            ($this->hasGsc() && $this->last_gsc_synced_at === null)
+                || ($this->hasGa4() && $this->last_ga4_synced_at === null) => 'syncing',
+            default => 'ok',
+        };
+    }
+
+    public function stateLabel(): string
+    {
+        return match ($this->state()) {
+            'not_set_up' => 'Not set up',
+            'sync_error' => 'Sync error',
+            'syncing' => 'First sync pending',
+            default => 'OK',
+        };
+    }
+
     /** The GA4 channel dimension: the custom primary group when the property has one. */
     public function ga4ChannelDimension(): string
     {

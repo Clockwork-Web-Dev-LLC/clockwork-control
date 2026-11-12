@@ -48,13 +48,13 @@ class SeoSettingsController extends Controller
     public function update(Request $request, SeoSettings $settings): RedirectResponse
     {
         $validated = $request->validate([
-            'login_hint' => ['required', 'email', 'max:191'],
+            'login_hint' => ['nullable', 'email', 'max:191'],
             'final_after_days' => ['required', 'integer', 'min:2', 'max:15'],
             'ai_referrer_regex' => ['nullable', 'string', 'max:4096'],
         ]);
 
         $settings->save([
-            'login_hint' => $validated['login_hint'],
+            'login_hint' => $validated['login_hint'] ?? null,
             'final_after_days' => (int) $validated['final_after_days'],
             'ai_referrer_regex' => $validated['ai_referrer_regex'] ?? null,
         ]);

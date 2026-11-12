@@ -31,8 +31,8 @@ it('sends the admin to Google with offline access, consent, the read-only scopes
         ->and($query['prompt'])->toBe('consent')
         ->and(explode(' ', $query['scope']))->toBe(GoogleOAuth::SCOPES)
         ->and($query['redirect_uri'])->toBe(route('seo.google.callback'))
-        ->and($query['login_hint'])->toBe('systems@clockworkwd.com')
-        ->and($query['hd'])->toBe('clockworkwd.com')
+        // No account is assumed until an agency names one.
+        ->and($query)->not->toHaveKeys(['login_hint', 'hd'])
         ->and($query['state'])->toBe(session('seo.google.oauth_state'));
 });
 
@@ -68,7 +68,7 @@ it('stores the refresh token encrypted, never renders it, and loads the property
         ->assertSessionHas('status');
 
     $connection = GoogleConnection::current();
-    expect($connection->account_email)->toBe('systems@clockworkwd.com')
+    expect($connection->account_email)->toBe('systems@agency.example')
         ->and($connection->status)->toBe(GoogleConnection::STATUS_ACTIVE)
         ->and($connection->refresh_token)->toBe(GoogleOAuthFixtures::REFRESH_TOKEN)
         ->and($connection->connected_by_user_id)->toBe($this->admin->id);
@@ -84,7 +84,7 @@ it('stores the refresh token encrypted, never renders it, and loads the property
 
     $this->actingAs($this->admin)->get(route('seo.settings'))
         ->assertOk()
-        ->assertSee('systems@clockworkwd.com')
+        ->assertSee('systems@agency.example')
         ->assertDontSee(GoogleOAuthFixtures::REFRESH_TOKEN);
 });
 
@@ -144,13 +144,13 @@ it('renders the settings page with the redirect URI to register and saves sync s
         ->assertSee('Connect Google');
 
     $this->actingAs($this->admin)->post(route('seo.settings.update'), [
-        'login_hint' => 'seo@clockworkwd.com',
+        'login_hint' => 'seo@agency.example',
         'final_after_days' => 6,
         'ai_referrer_regex' => '(chatgpt\.com)',
     ])->assertRedirect(route('seo.settings'));
 
     $settings = app(SeoSettings::class);
-    expect($settings->loginHint())->toBe('seo@clockworkwd.com')
+    expect($settings->loginHint())->toBe('seo@agency.example')
         ->and($settings->finalAfterDays())->toBe(6)
         ->and($settings->aiReferrerRegex())->toBe('(chatgpt\.com)');
 });

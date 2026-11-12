@@ -46,7 +46,7 @@
                         <option value="{{ $profile->gsc_site_url }}" selected>{{ $profile->gsc_site_url }} (not in the list)</option>
                     @endif
                 </select>
-                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">Keep the URL-prefix property the monthly reports already use. systems@ often can't read the sc-domain property.</span>
+                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">Keep the property your reports already use, so numbers stay comparable. A URL-prefix property and a domain (sc-domain) property are separate, and the connected account may only have access to one.</span>
             </label>
             @if ($connection)
                 <button type="submit" form="refresh-properties" class="btn-pill-nav text-xs mb-4"><i class="fa-solid fa-rotate"></i> Refresh list</button>
@@ -81,6 +81,7 @@
                 <input type="text" name="key_events" value="{{ old('key_events', implode(', ', $profile->keyEvents())) }}" class="{{ $inputClass }} font-data">
                 <span class="block text-xs text-[var(--color-ink-soft)] mt-1">GA4 event names the report counts.</span>
             </label>
+            @include('seo::clients._market', ['profile' => $profile, 'inputClass' => $inputClass])
             <label class="block text-sm mb-4">
                 <span class="font-medium text-[var(--color-ink-strong)]">Semrush domain</span>
                 <input type="text" name="semrush_domain" value="{{ old('semrush_domain', $profile->semrush_domain) }}" class="{{ $inputClass }} font-data">
