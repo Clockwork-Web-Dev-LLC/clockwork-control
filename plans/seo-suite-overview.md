@@ -282,6 +282,17 @@ An agency's own report and keyword-map workflows (Claude skills or prompts, outs
 changed along the way: the monthly report once the public address works, the keyword map after
 step 4.
 
+### Smaller items still to do
+
+Not steps of their own, but owed. Each is small.
+
+| Item | What is missing today | What done looks like |
+|---|---|---|
+| **Before-and-after log for edits made on the pages** | Changes made through Claude's tools are written to `action_logs` with who made them and the before and after values. The same changes made in the back end are not logged: keyword map rows (edit, add, hide), tracked keywords (add, pause, delete), competitors, the SEO profile, spending caps and rank tracking settings. | Every one of those writes a row through the same `AuditLog` helper (no site on the row, actor `user:{id}`, before and after values), so a change can be traced and undone by hand whichever way it was made. |
+| Keyword map export to Google Sheets | Only CSV download exists. | New dated tabs written to the client's sheet; needs the `spreadsheets` scope and one reconnect of the Google account. |
+| Rank history import | Tracking starts from the first check in Control. | A CSV of exported rank history imported as a separately labelled series. Needs one real export file to build against. |
+| Browse and filter stored research in the back end | The Research page shows the top 25 keywords and only the "missing" gap group. | A full ranked-keyword list with filters, and every gap group. |
+
 ## Money and safety rails
 
 **Estimated monthly cost with the paid suite fully replaced, for an example install with 12 client
