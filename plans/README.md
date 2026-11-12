@@ -5,28 +5,20 @@ have already shipped (installer, theme system, SemVer/release cadence, backup re
 domain expiration, SEO indexability). Treat each file's own status notes as authoritative;
 this index is a map, not a claim that everything below is still unbuilt.
 
-## Current focus: SEO module (2026-10-30, Claude)
+## Current focus: SEO module
 
 - [`seo-suite-overview.md`](./seo-suite-overview.md): **start here.** A short map of the whole SEO
-  suite: the parts and what is built, how data flows, the two jobs step by step, what depends on
-  what, the build order, cost, staged cancel and who is being waited on. Rewritten 2026-11-12 after
-  Aaron widened the scope to everything the team uses in Semrush.
-- [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md): the research behind that wider
-  scope. Per feature: the DataForSEO APIs, prices with their sources, what it can't do, cost
-  scenarios, a build outline and risks. Prices are unconfirmed until a test call per endpoint.
-- [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): grow `modules/Seo` so the agency can
-  cancel Semrush, with Claude as the main consumer. Nightly Search Console + GA4 sync (free, one agency
-  OAuth connection as systems@) replaces the Chrome pulls behind the monthly SEO report; a DataForSEO
-  driver (about $2 to $24/month) plus a keyword map in Control (existing client sheets imported, dated
-  tabs exported) replaces Semrush Keyword Overview and the Sheets paste hacks. Everything is reachable
-  from Claude through one MCP server (`laravel/mcp`) in a new `modules/Mcp` host that other modules
-  can add tools to: 15 tools shipped phase by phase, per-user OAuth through Passport, and a
-  path-restricted public hostname on the existing Cloudflare Tunnel so claude.ai and Cowork can reach
-  it. Both SEO skills are rewritten to call the tools. Phases 1, 1b, 2, 2b and 3 to 5, a last round of
-  Semrush exports in November 2026, scope matrix, cost math, an exit criterion for cancelling, and 14
-  decisions. Decisions 1 to 10 and 14 answered 2026-11-06: Semrush is a Guru-level plan at $1,027.70 a
-  month (renews on the 8th), about 12 SEO clients, earliest cancel 2027-01-08. 11, 12 and part of 13
-  (public hostname, Passport, Claude plan) are with Aaron R; Phase 1-data doesn't wait on them.
+  suite: the parts and what is built, how data flows, what depends on what, the build order, cost,
+  and what each install has to supply (its own Google OAuth client and DataForSEO login).
+- [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md): the research behind the suite.
+  Per feature: the DataForSEO APIs, prices with their sources, what it can't do, cost scenarios, a
+  build outline and risks. Prices are unconfirmed until a test call per endpoint.
+- [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): the original long plan for growing
+  `modules/Seo` so an agency can move off a paid suite such as Semrush, with Claude as the main
+  consumer. Nightly Search Console + GA4 sync through one shared agency Google connection, a
+  DataForSEO driver and a keyword map in Control, all reachable from Claude through one MCP server
+  (`laravel/mcp`) in `modules/Mcp` that other modules can add tools to, with per-user OAuth through
+  Passport. Its scope was later widened by the overview above, which wins where they differ.
 
 ---
 
