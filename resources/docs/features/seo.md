@@ -29,8 +29,6 @@ That page doesn't fetch anything itself. It reads the `seo_*` columns on `sites`
 
 ## Search Console and GA4 sync
 
-The plan behind this is `plans/seo-semrush-replacement.md` (Phase 1).
-
 ### One-time setup
 
 1. **Google Cloud project.** In your agency's Google Workspace organization, create a project with the OAuth consent screen set to **Internal**. Internal apps skip Google's verification and the 7-day testing expiry.
@@ -62,7 +60,7 @@ Each SEO client gets a profile at `/seo/sites/{site}/profile` (any active user):
 - **Search Console property**, picked from the list the connection sees (with its access level). Keep the URL-prefix property the monthly reports already use; the connected account often can't read the `sc-domain:` property. **Refresh list** queues a new `sites.list`.
 - **GA4 property ID** (GA4 Admin → Property details), and a checkbox when the property has a custom primary channel group.
 - **Brand terms** (comma separated). Queries containing any of them are left out of the non-branded numbers. The preview shows which of last month's top queries count as branded.
-- **Key events** (default `generate_lead`, `form_submit`, `contact_link_click`), the seasonal YoY toggle, the Semrush domain, and **report notes** (tone, angle, things to avoid). Report notes can only be edited on this page.
+- **Key events** (default `generate_lead`, `form_submit`, `contact_link_click`), the seasonal YoY toggle, the keyword market, and **report notes** (tone, angle, things to avoid). Report notes can only be edited on this page.
 - **AI impressions** from Search Console's Generative AI report, which has no API: type the month's number, or mark it "not available". It's never stored as 0.
 
 Saving a new profile pulls 16 months of history in the background. Changing a property asks first, then deletes that property's stored history for the site and re-pulls 16 months, so comparisons never mix two properties. Changing brand terms re-marks stored queries and re-pulls the non-branded daily totals Google still holds; when older stored days keep the old terms, an annotation at the boundary puts a caveat on comparisons that cross it.

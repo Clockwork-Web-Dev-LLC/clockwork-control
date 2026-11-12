@@ -20,7 +20,7 @@
     </label>
     <label class="block text-sm">
         <span class="font-medium text-[var(--color-ink-strong)]">City <span class="font-normal text-[var(--color-ink-soft)]">(optional)</span></span>
-        <input type="text" name="market_city" maxlength="191" value="{{ old('market_city', $profile?->market_city) }}" placeholder="Scottsdale, Arizona" class="{{ $inputClass }}">
+        <input type="text" name="market_city" maxlength="191" value="{{ old('market_city', $profile?->market_city) }}" placeholder="Austin,Texas,United States" class="{{ $inputClass }}">
     </label>
-    <p class="sm:col-span-3 text-xs text-[var(--color-ink-soft)] -mt-2">Where this client's customers search. Keyword volume and difficulty are looked up for this country and language.</p>
+    <p class="sm:col-span-3 text-xs text-[var(--color-ink-soft)] -mt-2">Where this client's customers search. Keyword volume and difficulty are looked up for this country and language. For local search volume, write the city the way Google Ads names it: City,Region,Country.</p>
 </div>

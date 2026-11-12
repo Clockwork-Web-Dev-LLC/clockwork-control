@@ -56,7 +56,7 @@
                 <label class="block text-sm">
                     <span class="font-medium text-[var(--color-ink-strong)]">GA4 property ID</span>
                     <input type="text" name="ga4_property_id" inputmode="numeric" value="{{ old('ga4_property_id', $profile->ga4_property_id) }}" placeholder="123456789" class="{{ $inputClass }} font-data">
-                    <span class="block text-xs text-[var(--color-ink-soft)] mt-1">GA4 Admin → Property details. The client roster lists it.</span>
+                    <span class="block text-xs text-[var(--color-ink-soft)] mt-1">GA4 Admin → Property details.</span>
                 </label>
                 <label class="block text-sm">
                     <span class="font-medium text-[var(--color-ink-strong)]">GA4 property name (optional)</span>
@@ -82,11 +82,6 @@
                 <span class="block text-xs text-[var(--color-ink-soft)] mt-1">GA4 event names the report counts.</span>
             </label>
             @include('seo::clients._market', ['profile' => $profile, 'inputClass' => $inputClass])
-            <label class="block text-sm mb-4">
-                <span class="font-medium text-[var(--color-ink-strong)]">Semrush domain</span>
-                <input type="text" name="semrush_domain" value="{{ old('semrush_domain', $profile->semrush_domain) }}" class="{{ $inputClass }} font-data">
-                <span class="block text-xs text-[var(--color-ink-soft)] mt-1">Matches the exported keyword history. Removed after Semrush is cancelled.</span>
-            </label>
             <label class="block text-sm mb-4">
                 <span class="font-medium text-[var(--color-ink-strong)]">Report notes</span>
                 <textarea name="report_notes" rows="4" class="{{ $inputClass }}" placeholder="Tone, angle, things to avoid">{{ old('report_notes', $profile->report_notes) }}</textarea>

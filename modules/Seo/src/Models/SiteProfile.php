@@ -25,7 +25,6 @@ use Modules\Seo\Casts\DateOnly;
  * @property ?array<int, string> $key_events
  * @property bool $compare_yoy
  * @property ?string $report_notes
- * @property ?string $semrush_domain
  * @property bool $is_enabled
  * @property ?Carbon $history_starts_on
  * @property ?Carbon $last_gsc_synced_at
@@ -54,7 +53,6 @@ class SiteProfile extends Model
         'key_events',
         'compare_yoy',
         'report_notes',
-        'semrush_domain',
         'market_location_code',
         'market_language_code',
         'market_city',

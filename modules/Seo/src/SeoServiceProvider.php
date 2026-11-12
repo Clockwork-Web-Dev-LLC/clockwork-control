@@ -27,7 +27,7 @@ use Modules\Seo\Models\GoogleConnection;
  * - The fleet indexability overview (/seo) only reads the seo_* columns on
  *   sites that the core watchdog in app/Services/Seo writes. That watchdog
  *   stays in core: the uptime prober and the Issues page depend on it.
- * - The Search Console + GA4 sync (plans/seo-semrush-replacement.md) owns its
+ * - The Search Console + GA4 sync owns its
  *   own Google connection, the seo_* tables and the nightly command.
  */
 class SeoServiceProvider extends ModuleServiceProvider

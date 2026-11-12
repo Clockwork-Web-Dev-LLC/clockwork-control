@@ -38,7 +38,6 @@ function profileForm(array $overrides = []): array
         'brand_terms' => 'acme',
         'key_events' => 'generate_lead, form_submit',
         'compare_yoy' => '0',
-        'semrush_domain' => 'acme.com',
         'report_notes' => 'Keep it short; owner reads on a phone.',
         'is_enabled' => '1',
     ];

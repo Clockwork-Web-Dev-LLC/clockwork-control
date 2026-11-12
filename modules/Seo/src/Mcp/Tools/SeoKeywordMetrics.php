@@ -34,7 +34,7 @@ class SeoKeywordMetrics extends SeoTool
             'market' => $schema->object([
                 'location_code' => $schema->integer()->description('DataForSEO location code. 2840 is the United States.'),
                 'language_code' => $schema->string()->description('e.g. en'),
-                'city' => $schema->string()->description('For local volume, e.g. "Phoenix,Arizona,United States". Costs extra.'),
+                'city' => $schema->string()->description('For local volume, e.g. "Austin,Texas,United States". Costs extra.'),
             ])->description('Overrides the site\'s market. Default: United States, English, no city.'),
             'max_age_days' => $schema->integer()->min(1)->max(90)->description('Treat stored figures older than this as stale. Default 30.'),
         ];
@@ -91,7 +91,7 @@ class SeoKeywordMetrics extends SeoTool
             'rejected' => $cleaned['rejected'],
             'quote' => $quote,
             'notes' => [
-                'Difficulty is DataForSEO\'s 0 to 100 score with default bands that are not calibrated. Do not call it KD % or compare it with Semrush.',
+                'Difficulty is DataForSEO\'s 0 to 100 score with default bands that are not calibrated. Do not call it KD % or compare it with a difficulty score from another tool.',
                 'Volume is country-level. city_volume is only filled when a city was asked for and bought.',
                 'state no_data means DataForSEO had no figures for the keyword. It is not zero searches.',
             ],
@@ -126,7 +126,7 @@ class SeoKeywordMetrics extends SeoTool
             return 'market needs a numeric location_code (2840 is the United States) and a language_code such as en.';
         }
         if ($city !== null && (! is_string($city) || mb_strlen($city) > 191)) {
-            return 'market.city must be a place name such as "Phoenix,Arizona,United States".';
+            return 'market.city must be a place name such as "Austin,Texas,United States".';
         }
 
         return new Market($location, $language, $city === '' ? null : $city);

@@ -20,8 +20,8 @@ use Modules\Seo\Services\BrandRegex;
 use Modules\Seo\Services\SiteProfileService;
 
 /**
- * /seo/sites/{site}/profile, for any active user. Holds the GSC, GA4 and
- * Semrush lookups and the notes from the client roster. It never calls
+ * /seo/sites/{site}/profile, for any active user. Holds the Search Console
+ * and GA4 properties, the keyword market and the report notes. It never calls
  * Google: the property list comes from seo_google_properties, which the
  * nightly sync and the queued "Refresh list" button fill.
  */
@@ -68,7 +68,6 @@ class SiteProfileController extends Controller
             'brand_terms' => ['nullable', 'string', 'max:2048'],
             'key_events' => ['nullable', 'string', 'max:1000'],
             'compare_yoy' => ['nullable', 'boolean'],
-            'semrush_domain' => ['nullable', 'string', 'max:255'],
             'report_notes' => ['nullable', 'string', 'max:5000'],
             'is_enabled' => ['nullable', 'boolean'],
             'confirm_purge' => ['nullable', 'boolean'],
@@ -91,7 +90,6 @@ class SiteProfileController extends Controller
             'brand_terms' => $validated['brand_terms'] ?? null,
             'key_events' => $this->keyEvents($validated['key_events'] ?? null),
             'compare_yoy' => $request->boolean('compare_yoy'),
-            'semrush_domain' => $this->blank($validated['semrush_domain'] ?? null),
             'report_notes' => $this->blank($validated['report_notes'] ?? null),
             'is_enabled' => $request->boolean('is_enabled'),
         ];

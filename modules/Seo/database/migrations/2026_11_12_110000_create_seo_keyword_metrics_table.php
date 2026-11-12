@@ -39,7 +39,7 @@ return new class extends Migration
             // (DataForSEO location 2840), English.
             $table->unsignedInteger('market_location_code')->nullable()->after('semrush_domain');
             $table->string('market_language_code', 8)->nullable()->after('market_location_code');
-            // For local clients: "Phoenix,Arizona,United States".
+            // For local clients: "Austin,Texas,United States".
             $table->string('market_city', 191)->nullable()->after('market_language_code');
         });
     }

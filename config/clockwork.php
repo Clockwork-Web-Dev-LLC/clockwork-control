@@ -551,7 +551,7 @@ return [
 
         // Labels for DataForSEO's 0 to 100 keyword difficulty: each band
         // runs up to and including its number. Fixed defaults, not
-        // calibrated against Semrush's KD %, and shown as such.
+        // calibrated against any other tool's score, and shown as such.
         'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
     ],
 
