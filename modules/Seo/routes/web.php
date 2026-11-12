@@ -33,6 +33,10 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keyword-map/import', [KeywordMapController::class, 'import'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.import');
     Route::post('/seo/sites/{site}/keyword-map/version', [KeywordMapController::class, 'newVersion'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.version');
     Route::post('/seo/sites/{site}/keyword-map/fill', [KeywordMapController::class, 'fill'])->name('seo.sites.keyword-map.fill');
+    Route::get('/seo/sites/{site}/keyword-map/rows/new', [KeywordMapController::class, 'createRow'])->name('seo.sites.keyword-map.rows.create');
+    Route::post('/seo/sites/{site}/keyword-map/rows', [KeywordMapController::class, 'storeRow'])->name('seo.sites.keyword-map.rows.store');
+    Route::get('/seo/sites/{site}/keyword-map/rows/{row}/edit', [KeywordMapController::class, 'editRow'])->name('seo.sites.keyword-map.rows.edit');
+    Route::put('/seo/sites/{site}/keyword-map/rows/{row}', [KeywordMapController::class, 'updateRow'])->name('seo.sites.keyword-map.rows.update');
     Route::get('/seo/sites/{site}/keyword-map/{map}/download', [KeywordMapController::class, 'download'])->name('seo.sites.keyword-map.download');
 
     Route::get('/seo/sites/{site}/keywords', [KeywordToolsController::class, 'show'])->name('seo.sites.keywords');

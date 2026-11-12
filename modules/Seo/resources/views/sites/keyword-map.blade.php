@@ -6,6 +6,9 @@
 <x-page-header :title="$site->domain" subtitle="Keyword map: which page targets which keyword, the title and description proposed for it, and how far the work has got.">
     <x-slot:actions>
         @if ($map)
+            @if ($map->isCurrent())
+                <a href="{{ route('seo.sites.keyword-map.rows.create', $site) }}" class="btn-primary text-sm"><i class="fa-solid fa-plus"></i> Add a page</a>
+            @endif
             <a href="{{ route('seo.sites.keyword-map.download', [$site, $map]) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-download"></i> Download CSV</a>
         @endif
     </x-slot:actions>
@@ -35,7 +38,7 @@
                     {{ $rows->where('excluded', false)->where('ship_status', 'live')->count() }} live ·
                     {{ $rows->where('excluded', false)->where('ship_status', 'drafted')->count() }} drafted ·
                     created {{ $map->created_at?->toDateString() }}.
-                    Rows are edited by asking Claude; this page shows the result.
+                    Edit a row here or by asking Claude; both follow the same checks.
                 </p>
             </div>
             @if ($versions->count() > 1)
@@ -69,6 +72,7 @@
                         <th class="px-4 py-2 font-semibold text-right">Difficulty</th>
                         <th class="px-4 py-2 font-semibold">Proposed title and description</th>
                         <th class="px-4 py-2 font-semibold">Status</th>
+                        <th class="px-4 py-2 font-semibold"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-border-light)]">
@@ -120,6 +124,11 @@
                                 <span class="status-pill {{ $statusPill[$row->ship_status] ?? 'status-unknown' }} text-[10px]">{{ \Modules\Seo\Models\KeywordMapRow::STATUSES[$row->ship_status] ?? $row->ship_status }}</span>
                                 @if ($row->shipped_on)<span class="block text-xs text-[var(--color-ink-soft)] mt-1">{{ $row->shipped_on->toDateString() }}</span>@endif
                                 @if ($row->ship_note)<span class="block text-xs text-[var(--color-ink-soft)] mt-1 whitespace-normal">{{ $row->ship_note }}</span>@endif
+                            </td>
+                            <td class="px-4 py-2 text-right">
+                                @if ($map->isCurrent())
+                                    <a href="{{ route('seo.sites.keyword-map.rows.edit', [$site, $row]) }}" class="btn-pill-nav text-xs">Edit</a>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

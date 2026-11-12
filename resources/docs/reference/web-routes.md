@@ -273,6 +273,10 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keyword-map/import` | Import a CSV (uploaded file or pasted text) as the new current map (throttled 10/min). |
 | POST | `/seo/sites/{site}/keyword-map/version` | Start a new dated version as a copy of the current map (throttled 10/min). |
 | POST | `/seo/sites/{site}/keyword-map/fill` | Fill volume, difficulty and CPC on the current map from keyword data already bought. Spends nothing. |
+| GET | `/seo/sites/{site}/keyword-map/rows/new` | Form to add a page to the current map. |
+| POST | `/seo/sites/{site}/keyword-map/rows` | Add a page to the current map. |
+| GET | `/seo/sites/{site}/keyword-map/rows/{row}/edit` | Form to edit one row of the current map. |
+| PUT | `/seo/sites/{site}/keyword-map/rows/{row}` | Save a row. Refused if the row changed since the form was loaded, or if the map is an older version. |
 | GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
 | GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
 | POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |

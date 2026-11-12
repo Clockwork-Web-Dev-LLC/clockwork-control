@@ -197,7 +197,7 @@ Open a client from **SEO → Clients** and choose **Map** (`/seo/sites/{site}/ke
 - **Start a new dated version** before a new round of work, so last month's map stays as it was.
 - **Fill from stored data** puts volume, difficulty and CPC on every row Control already has figures for. It never spends; missing keywords are bought through Claude, on a quote a person approves.
 - **Download CSV** gives the fixed column layout, ready to paste into a client's sheet.
-- **Editing rows** is done by asking Claude, which uses `seo_keyword_map_get` and `seo_keyword_map_update`. Every edit is checked by the same rules and written to the action log with before and after values.
+- **Editing rows**: use **Edit** on a row or **Add a page**, or ask Claude (`seo_keyword_map_get`, `seo_keyword_map_update`). Both go through the same rules. The form counts title and description characters as you type, and if someone else saved the row while you were editing, your save is refused and their version is shown with what you typed kept in the boxes. Edits made through Claude are written to the action log with before and after values; edits made on the page are not logged yet.
 
 Writing straight to a Google Sheet is not built yet; use the CSV download.
 
