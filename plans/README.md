@@ -7,6 +7,10 @@ this index is a map, not a claim that everything below is still unbuilt.
 
 ## Current focus: SEO module (2026-10-30, Claude)
 
+- [`seo-suite-overview.md`](./seo-suite-overview.md): **start here.** A short map of the whole SEO
+  suite: the parts and what is built, how data flows, the two jobs step by step, what depends on
+  what, the Phase 2 build order, the cancel dates and who is being waited on. Checked 2026-11-12
+  against the code and the full plan.
 - [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): grow `modules/Seo` so the agency can
   cancel Semrush, with Claude as the main consumer. Nightly Search Console + GA4 sync (free, one agency
   OAuth connection as systems@) replaces the Chrome pulls behind the monthly SEO report; a DataForSEO
