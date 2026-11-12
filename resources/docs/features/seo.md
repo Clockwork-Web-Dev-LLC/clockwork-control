@@ -125,11 +125,13 @@ Open a client from **SEO → Clients** and choose **Rankings** (`/seo/sites/{sit
 - **Competitors**: up to 10 domains. Their positions come from the same results page, so they cost nothing extra; history starts from the next check.
 - **How often and how deep** is set by an admin on **SEO → Settings → Rank tracking**, with the price per check and the expected monthly cost for the keywords tracked.
 
-Built against DataForSEO's published specification and not yet run against the live API. Reading ranks from Claude is the next piece.
+Claude reads the same data through `seo_rankings` and `seo_rank_history`, and can add, pause or resume keywords with `seo_tracked_keywords_update` (see [Claude access](/docs/features/claude-access)).
+
+Built against DataForSEO's published specification and not yet run against the live API.
 
 ## Reading it from Claude
 
-The same numbers are available to Claude through six `seo_` tools: list sites, month numbers, daily series, page and query rows, record AI impressions, and update brand terms, key events or the year-over-year flag. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.
+The same numbers are available to Claude through `seo_` tools: list sites, month numbers, daily series, page and query rows, keyword metrics, rankings and rank history, plus a few that record or change things. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.
 
 ## Adding to it
 

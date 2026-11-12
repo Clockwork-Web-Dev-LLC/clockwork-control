@@ -52,6 +52,9 @@ it('never returns a credential from any tool', function () {
         'seo_ai_impressions_record' => ['site' => 'acme.com', 'month' => '2026-10', 'status' => 'entered', 'ai_impressions' => 10],
         'seo_site_profile_update' => ['site' => 'acme.com', 'brand_terms' => ['acme', 'apex'], 'confirm_purge' => true],
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
+        'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
+        'seo_rankings' => ['site' => 'acme.com'],
+        'seo_rank_history' => ['site' => 'acme.com', 'keywords' => ['emergency plumber']],
     ];
 
     $tools = [ControlWhoAmI::class, ...app(ModuleRegistry::class)->mcpTools()];
@@ -75,5 +78,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(8);
+    expect($called)->toHaveCount(11);
 });

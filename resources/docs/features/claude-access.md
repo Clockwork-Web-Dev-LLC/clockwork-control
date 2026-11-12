@@ -25,6 +25,9 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_site_profile_update` | Change brand terms, GA4 key events or the year-over-year flag. | Yes |
 | `seo_keyword_metrics` | Search volume, difficulty, CPC and intent for up to 700 keywords from what Control already bought, plus a quote for the ones it doesn't have. Never spends. | No |
 | `seo_keyword_metrics_fetch` | Buys the keywords in a quote from DataForSEO. Spends money, so Claude asks first. | Yes, and spends |
+| `seo_rankings` | Where a site ranks on Google for its tracked keywords: latest position, change, ranking page, competitor positions and AI Overview. Filters for top 3, top 10, improved, declined and not found. | No |
+| `seo_rank_history` | Every stored rank check for up to 20 tracked keywords over a date range. | No |
+| `seo_tracked_keywords_update` | Start tracking keywords, or pause or resume them. Adding is a recurring cost, so Claude asks first and reports the monthly estimate. Cannot delete keywords or history. | Yes, and adds recurring spend |
 
 ## Connecting claude.ai and Cowork
 
@@ -102,7 +105,8 @@ Disabling **Claude access** on **Settings → Modules** removes both routes and 
 - `seo_site_profile_update` applies a brand terms change only with `confirm_purge`, because that re-pulls 16 months of non-branded totals. Without it, the call returns a preview and saves nothing, including any other field in the same call.
 - **Not from Claude, on purpose:** a site's Search Console or GA4 property (changing one deletes stored history) and its report notes (whoever writes the report follows them, so nothing Claude read elsewhere may be able to set them). Both are edited on the site's profile page.
 - Every change is written to the action log with the user, the tool, and the before and after values, so it can be undone by hand. These rows are not attached to the site, so they are never pushed to the client's WordPress activity log.
-- `seo_keyword_metrics_fetch` is the only tool that spends money. It needs a quote from `seo_keyword_metrics` (good once, for 15 minutes, for the person it was made for) and the cost the person agreed to. It is refused if a spending cap would be passed. The real cost goes in the ledger on **SEO → Settings**.
+- `seo_keyword_metrics_fetch` is the only tool that spends money straight away. It needs a quote from `seo_keyword_metrics` (good once, for 15 minutes, for the person it was made for) and the cost the person agreed to. It is refused if a spending cap would be passed. The real cost goes in the ledger on **SEO → Settings**.
+- `seo_tracked_keywords_update` spends nothing itself, but each keyword it adds is checked on schedule from then on. It reports the expected monthly cost, the checks stay inside the rank tracking cap, and it can only pause, never delete.
 - A revoked user's connection gets no `seo_` tools, and each tool refuses again if called anyway.
 
 ## Limits to know about

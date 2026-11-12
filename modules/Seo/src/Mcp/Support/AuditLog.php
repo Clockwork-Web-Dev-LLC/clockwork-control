@@ -19,6 +19,8 @@ class AuditLog
 
     public const PROFILE_UPDATED = 'seo_profile_updated';
 
+    public const TRACKED_KEYWORDS_UPDATED = 'seo_tracked_keywords_updated';
+
     public function __construct(private readonly ActionLogger $logger) {}
 
     /**
