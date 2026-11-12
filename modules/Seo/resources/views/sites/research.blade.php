@@ -4,14 +4,10 @@
 
 @section('content')
 <x-page-header :title="$site->domain" subtitle="Research: how many keywords this site and its competitors rank for, which ones, and where the gaps are.">
-    <x-slot:actions>
-        <a href="{{ route('seo.sites.rankings', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-ranking-star"></i> Rankings</a>
-        <a href="{{ route('seo.sites.keyword-map', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-map"></i> Keyword map</a>
-        <a href="{{ route('seo.sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-table"></i> Numbers</a>
-    </x-slot:actions>
 </x-page-header>
 
 @include('seo::_nav')
+@include('seo::sites._tabs')
 @include('seo::_flash')
 
 @php

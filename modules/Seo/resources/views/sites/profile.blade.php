@@ -5,14 +5,12 @@
 @section('content')
 <x-page-header :title="$site->domain" subtitle="SEO profile: which Search Console and GA4 properties to sync, and the notes the monthly report follows.">
     <x-slot:actions>
-        @if ($profile->exists)
-            <a href="{{ route('seo.sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-table"></i> Numbers</a>
-        @endif
         <a href="{{ route('sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Site</a>
     </x-slot:actions>
 </x-page-header>
 
 @include('seo::_nav')
+@include('seo::sites._tabs')
 @include('seo::_flash')
 
 @php

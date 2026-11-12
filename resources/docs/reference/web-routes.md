@@ -276,6 +276,12 @@ These exist only while the switch is on:
 | GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
 | GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
 | POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |
+| GET | `/seo/sites/{site}/keywords` | Keywords: a lookup form, a keyword ideas form and the idea lists bought for this client (`?list=` opens one). |
+| POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
+| POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
+| POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/page-audit` | Page audit: a form and the latest audit of each page audited on this site. |
+| POST | `/seo/sites/{site}/page-audit` | Audit up to 5 pages on the site's own domain. Free (throttled 12/min). |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |

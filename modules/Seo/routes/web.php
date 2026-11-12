@@ -5,6 +5,8 @@ use Modules\Seo\Http\Controllers\AiImpressionsController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
 use Modules\Seo\Http\Controllers\KeywordMapController;
+use Modules\Seo\Http\Controllers\KeywordToolsController;
+use Modules\Seo\Http\Controllers\PageAuditController;
 use Modules\Seo\Http\Controllers\RankingsController;
 use Modules\Seo\Http\Controllers\ResearchController;
 use Modules\Seo\Http\Controllers\SeoClientsController;
@@ -32,6 +34,13 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keyword-map/version', [KeywordMapController::class, 'newVersion'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.version');
     Route::post('/seo/sites/{site}/keyword-map/fill', [KeywordMapController::class, 'fill'])->name('seo.sites.keyword-map.fill');
     Route::get('/seo/sites/{site}/keyword-map/{map}/download', [KeywordMapController::class, 'download'])->name('seo.sites.keyword-map.download');
+
+    Route::get('/seo/sites/{site}/keywords', [KeywordToolsController::class, 'show'])->name('seo.sites.keywords');
+    Route::post('/seo/sites/{site}/keywords/lookup', [KeywordToolsController::class, 'lookup'])->middleware('throttle:30,1')->name('seo.sites.keywords.lookup');
+    Route::post('/seo/sites/{site}/keywords/buy', [KeywordToolsController::class, 'buy'])->middleware('throttle:10,1')->name('seo.sites.keywords.buy');
+    Route::post('/seo/sites/{site}/keywords/ideas', [KeywordToolsController::class, 'ideas'])->middleware('throttle:10,1')->name('seo.sites.keywords.ideas');
+    Route::get('/seo/sites/{site}/page-audit', [PageAuditController::class, 'show'])->name('seo.sites.page-audit');
+    Route::post('/seo/sites/{site}/page-audit', [PageAuditController::class, 'run'])->middleware('throttle:12,1')->name('seo.sites.page-audit.run');
 
     Route::get('/seo/sites/{site}/research', [ResearchController::class, 'show'])->name('seo.sites.research');
     Route::post('/seo/sites/{site}/research/buy', [ResearchController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.research.buy');

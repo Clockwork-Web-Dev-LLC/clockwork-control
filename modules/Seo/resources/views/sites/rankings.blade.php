@@ -4,15 +4,10 @@
 
 @section('content')
 <x-page-header :title="$site->domain" subtitle="Rankings: where this site appears on Google for its tracked keywords.">
-    <x-slot:actions>
-        <a href="{{ route('seo.sites.research', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-binoculars"></i> Research</a>
-        <a href="{{ route('seo.sites.keyword-map', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-map"></i> Keyword map</a>
-        <a href="{{ route('seo.sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-table"></i> Numbers</a>
-        <a href="{{ route('seo.sites.profile', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-sliders"></i> Profile</a>
-    </x-slot:actions>
 </x-page-header>
 
 @include('seo::_nav')
+@include('seo::sites._tabs')
 @include('seo::_flash')
 
 @php

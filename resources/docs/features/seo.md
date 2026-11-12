@@ -105,6 +105,22 @@ To try it without spending, set `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true`: calls g
 
 This has been built against DataForSEO's published API specification and tested with sample responses. No live call has been made yet, so treat the first real one as the test.
 
+## Finding your way around
+
+Every client has the same row of tabs on its SEO pages:
+
+| Tab | What it is for |
+|---|---|
+| **Numbers** | Clicks, impressions and sessions from Search Console and GA4, by month. |
+| **Rankings** | Tracked keywords and where the client ranks for them; competitors are named here. |
+| **Keyword map** | Which page targets which keyword; import, versions, CSV download. |
+| **Keywords** | Look up volume, difficulty, CPC and intent for a list; buy keyword ideas. |
+| **Research** | Ranking-keyword counts, competitors and the keyword gap. |
+| **Page audit** | What a live page says about itself: title, description, headings, schema. |
+| **Profile** | The client's Google properties, brand terms, keyword market and report notes. |
+
+Anything that costs money shows its price on the button and asks for confirmation. Looking things up, the page audit and everything read from storage are free.
+
 ## Rank tracking
 
 Control checks where a client ranks on Google for a list of tracked keywords, using DataForSEO's results-page API on its cheapest (queued) price.

@@ -8,12 +8,11 @@
         @if ($map)
             <a href="{{ route('seo.sites.keyword-map.download', [$site, $map]) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-download"></i> Download CSV</a>
         @endif
-        <a href="{{ route('seo.sites.rankings', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-ranking-star"></i> Rankings</a>
-        <a href="{{ route('seo.sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-table"></i> Numbers</a>
     </x-slot:actions>
 </x-page-header>
 
 @include('seo::_nav')
+@include('seo::sites._tabs')
 @include('seo::_flash')
 
 @php
