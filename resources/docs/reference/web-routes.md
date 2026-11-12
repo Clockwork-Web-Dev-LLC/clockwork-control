@@ -279,6 +279,7 @@ These exist only while the switch is on:
 | PUT | `/seo/sites/{site}/keyword-map/rows/{row}` | Save a row. Refused if the row changed since the form was loaded, or if the map is an older version. |
 | GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
 | GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
+| GET | `/seo/sites/{site}/research/keywords` | Every stored ranked keyword for the client or a competitor (`?domain=`), with filters for position, text, ranking page and volume, sorted and paged. Stored data only. |
 | POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |
 | GET | `/seo/sites/{site}/keywords` | Keywords: a lookup form, a keyword ideas form and the idea lists bought for this client (`?list=` opens one). |
 | POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |

@@ -177,6 +177,8 @@ Claude does this through `seo_keyword_ideas`: it gives the price first and buys 
 
 **SEO → Clients → Research** (`/seo/sites/{site}/research`) puts this in one place for a client: ranking-keyword counts for it and its named competitors with the change from the month before, who else ranks for the same keywords, the keyword gap, the client's top keywords and the idea lists bought so far. The page only reads stored data. Each buy button states its price, asks for confirmation, and goes through the research cap and the per-person allowance. Only the client and its named competitors can be bought from the page.
 
+From there, **See and filter the full list** (or the keyword count beside any domain) opens every stored keyword for the client or a competitor, with filters for position, words in the keyword, the ranking page and volume, and quick links for the top 3, page one and page two.
+
 ## Keyword maps
 
 A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.

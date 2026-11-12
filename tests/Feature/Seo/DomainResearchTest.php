@@ -171,6 +171,11 @@ describe('read tools', function () {
         $pageTwo = researchTool($this->user, SeoRankedKeywords::class, ['site' => 'acme.com', 'min_position' => 11, 'max_position' => 20, 'contains' => 'AUSTIN']);
         expect(array_column($pageTwo['rows'], $cols['keyword']))->toBe(['drain cleaning austin'])->and($pageTwo['rows_matching'])->toBe(1);
 
+        // % and _ in a search are plain characters, not wildcards.
+        RankedKeyword::create(['domain' => 'acme.com', 'market_key' => '2840-en', 'provider' => 'dataforseo', 'keyword' => '50% off_plumbing', 'position' => 30, 'fetched_at' => now()]);
+        expect(array_column(researchTool($this->user, SeoRankedKeywords::class, ['site' => 'acme.com', 'contains' => '50%'])['rows'], 0))->toBe(['50% off_plumbing'])
+            ->and(researchTool($this->user, SeoRankedKeywords::class, ['site' => 'acme.com', 'contains' => '_r'])['rows'])->toBe([]);
+
         $none = researchTool($this->user, SeoRankedKeywords::class, ['site' => 'acme.com', 'domain' => 'rival.com']);
         expect($none['rows'])->toBe([])->and(array_column($none['meta']['caveats'], 'code'))->toContain('nothing_stored');
         Http::assertNothingSent();

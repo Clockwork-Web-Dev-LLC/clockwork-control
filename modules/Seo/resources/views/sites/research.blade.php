@@ -58,7 +58,13 @@
                         <td class="px-5 py-2 text-right font-data">{{ $s?->top10 !== null ? number_format($s->top10) : '—' }}</td>
                         <td class="px-5 py-2 text-right font-data">{{ $s?->estimated_traffic !== null ? number_format($s->estimated_traffic) : '—' }}</td>
                         <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $s?->month->format('M Y') ?? 'Not yet' }}</td>
-                        <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">{{ $row['list_stored'] > 0 ? number_format($row['list_stored']).' stored '.$row['list_fetched'] : 'Not bought' }}</td>
+                        <td class="px-5 py-2 text-xs text-[var(--color-ink-muted)]">
+                            @if ($row['list_stored'] > 0)
+                                <a href="{{ route('seo.sites.research.keywords', [$site, 'domain' => $row['domain']]) }}" class="underline text-[var(--color-primary-600)]">{{ number_format($row['list_stored']) }} keywords</a> · {{ $row['list_fetched'] }}
+                            @else
+                                Not bought
+                            @endif
+                        </td>
                         <td class="px-5 py-2 text-right whitespace-nowrap">
                             @foreach (array_filter([$row['counted_this_month'] ? null : $buy('count', $row['domain'], 'Count'), $buy('ranked_keywords', $row['domain'], $row['list_stored'] > 0 ? 'Refresh list' : 'Buy list')]) as $b)
                                 <form method="POST" action="{{ route('seo.sites.research.buy', $site) }}" class="inline"
@@ -148,7 +154,7 @@
                     @endforeach
                 </tbody>
             </table>
-            <p class="text-xs text-[var(--color-ink-soft)] mt-3">The 25 with the most estimated traffic. Ask Claude to filter the full list.</p>
+            <p class="text-xs text-[var(--color-ink-soft)] mt-3">The 25 with the most estimated traffic. <a href="{{ route('seo.sites.research.keywords', $site) }}" class="underline text-[var(--color-primary-600)]">See and filter the full list</a>.</p>
         @endif
     </x-card>
 

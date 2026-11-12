@@ -47,6 +47,7 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/page-audit', [PageAuditController::class, 'run'])->middleware('throttle:12,1')->name('seo.sites.page-audit.run');
 
     Route::get('/seo/sites/{site}/research', [ResearchController::class, 'show'])->name('seo.sites.research');
+    Route::get('/seo/sites/{site}/research/keywords', [ResearchController::class, 'keywords'])->name('seo.sites.research.keywords');
     Route::post('/seo/sites/{site}/research/buy', [ResearchController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.research.buy');
 
     Route::get('/seo/sites/{site}/rankings', [RankingsController::class, 'show'])->name('seo.sites.rankings');

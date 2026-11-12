@@ -152,3 +152,52 @@ describe('research page', function () {
         Http::assertSentCount(1);
     });
 });
+
+describe('ranked keywords page', function () {
+    beforeEach(function () {
+        Http::fake();
+        foreach ([['plumber austin', 3, 1300, 210.4, '/'], ['drain cleaning austin', 14, 880, 12.0, '/drains'], ['leak repair', 22, 90, 1.5, '/blog/leaks'], ['100% off_sale', 40, null, null, '/x']] as [$kw, $pos, $vol, $etv, $path]) {
+            RankedKeyword::create(['domain' => 'acme.com', 'market_key' => '2840-en', 'provider' => 'dataforseo', 'keyword' => $kw, 'position' => $pos, 'volume' => $vol, 'estimated_traffic' => $etv, 'url' => "https://www.acme.com{$path}", 'fetched_at' => now()]);
+        }
+        RankedKeyword::create(['domain' => 'rival.com', 'market_key' => '2840-en', 'provider' => 'dataforseo', 'keyword' => 'emergency plumber', 'position' => 4, 'volume' => 2000, 'fetched_at' => now()]);
+        $this->rows = fn (array $query) => (function (string $html) {
+            preg_match_all('/data-ranked-keyword="([^"]+)"/', $html, $m);
+
+            return array_map('html_entity_decode', $m[1]);
+        })($this->actingAs($this->user)->get(route('seo.sites.research.keywords', [$this->site] + $query))->assertOk()->getContent());
+    });
+
+    afterEach(fn () => Http::assertNothingSent());
+
+    it('lists the client by default, most traffic first, with unknowns as dashes', function () {
+        expect(($this->rows)([]))->toBe(['plumber austin', 'drain cleaning austin', 'leak repair', '100% off_sale']);
+
+        $this->actingAs($this->user)->get(route('seo.sites.research.keywords', $this->site))
+            ->assertSee('4 of 4 stored keywords match')->assertSee('not all of them')->assertSee('/blog/leaks');
+    });
+
+    it('filters by position, text, page and volume, and sorts', function () {
+        expect(($this->rows)(['min_position' => 11, 'max_position' => 20]))->toBe(['drain cleaning austin'])
+            ->and(($this->rows)(['contains' => 'AUSTIN', 'sort' => 'keyword']))->toBe(['drain cleaning austin', 'plumber austin'])
+            ->and(($this->rows)(['url_contains' => '/blog/']))->toBe(['leak repair'])
+            ->and(($this->rows)(['min_volume' => 500, 'sort' => 'position']))->toBe(['plumber austin', 'drain cleaning austin'])
+            // % and _ in a search are plain characters, not wildcards.
+            ->and(($this->rows)(['contains' => '100%']))->toBe(['100% off_sale'])
+            ->and(($this->rows)(['contains' => '_r']))->toBe([]);
+    });
+
+    it('shows a competitor\'s list and says when a domain has none', function () {
+        expect(($this->rows)(['domain' => 'https://www.rival.com/']))->toBe(['emergency plumber']);
+
+        $this->actingAs($this->user)->get(route('seo.sites.research.keywords', [$this->site, 'domain' => 'nolist.com']))
+            ->assertOk()->assertSee('No keyword list is stored for this domain');
+
+        $this->actingAs($this->user)->get(route('seo.sites.research', $this->site))
+            ->assertSee(route('seo.sites.research.keywords', $this->site), false);
+    });
+
+    it('rejects bad filter values', function () {
+        $this->actingAs($this->user)->get(route('seo.sites.research.keywords', [$this->site, 'sort' => 'drop table', 'min_position' => 500]))
+            ->assertSessionHasErrors(['sort', 'min_position']);
+    });
+});

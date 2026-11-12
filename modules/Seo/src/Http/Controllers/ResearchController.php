@@ -79,6 +79,59 @@ class ResearchController extends Controller
         ]);
     }
 
+    /** Every stored keyword for the client or one competitor, with filters. Reads storage only. */
+    public function keywords(Request $request, Site $site): View
+    {
+        $validated = $request->validate([
+            'domain' => ['nullable', 'string', 'max:191'],
+            'contains' => ['nullable', 'string', 'max:100'],
+            'url_contains' => ['nullable', 'string', 'max:200'],
+            'min_position' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'max_position' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'min_volume' => ['nullable', 'integer', 'min:0'],
+            'sort' => ['nullable', 'string', 'in:traffic,position,volume,keyword'],
+        ]);
+
+        $profile = SiteProfile::query()->where('site_id', $site->id)->first();
+        $market = Market::forProfile($profile);
+        $own = DomainResearch::domain((string) $site->domain);
+        $named = array_map([DomainResearch::class, 'domain'], array_filter((array) ($profile?->competitors ?? []), 'is_string'));
+        $domain = filled($validated['domain'] ?? null) ? DomainResearch::domain((string) $validated['domain']) : $own;
+
+        $base = RankedKeyword::query()->where('domain', $domain)->where('market_key', $market->key());
+        // '!' as the escape character: MySQL and SQLite read a backslash in
+        // a LIKE pattern differently.
+        $like = fn (string $text) => '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($text)).'%';
+
+        $query = (clone $base)
+            ->when(isset($validated['min_position']), fn ($q) => $q->where('position', '>=', (int) $validated['min_position']))
+            ->when(isset($validated['max_position']), fn ($q) => $q->where('position', '<=', (int) $validated['max_position']))
+            ->when(isset($validated['min_volume']), fn ($q) => $q->where('volume', '>=', (int) $validated['min_volume']))
+            ->when(filled($validated['contains'] ?? null), fn ($q) => $q->whereRaw("LOWER(keyword) LIKE ? ESCAPE '!'", [$like((string) $validated['contains'])]))
+            ->when(filled($validated['url_contains'] ?? null), fn ($q) => $q->whereRaw("LOWER(url) LIKE ? ESCAPE '!'", [$like((string) $validated['url_contains'])]));
+
+        [$column, $direction] = match ($validated['sort'] ?? 'traffic') {
+            'position' => ['position', 'asc'],
+            'volume' => ['volume', 'desc'],
+            'keyword' => ['keyword', 'asc'],
+            default => ['estimated_traffic', 'desc'],
+        };
+
+        return view('seo::sites.research-keywords', [
+            'site' => $site,
+            'market' => $market,
+            'domain' => $domain,
+            'isClient' => $domain === $own,
+            // The client, its named competitors, and whichever domain was asked for.
+            'domains' => array_values(array_unique([$own, ...$named, $domain])),
+            'stored' => (clone $base)->count(),
+            'fetched' => (clone $base)->max('fetched_at'),
+            'keywords' => $query->orderBy($column, $direction)->orderBy('keyword')->paginate(100)->withQueryString(),
+            'filters' => $validated + ['sort' => 'traffic'],
+            'listPrice' => DomainResearch::rankedCost(DomainResearch::MAX_KEYWORDS),
+        ]);
+    }
+
     public function buy(Request $request, Site $site, DomainResearch $research, BudgetGuard $budget, DataForSeoClient $client): RedirectResponse
     {
         $validated = $request->validate([
