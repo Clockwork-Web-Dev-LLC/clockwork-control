@@ -536,6 +536,18 @@ return [
         'google_client_id' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_ID'),
         'google_client_secret' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET'),
         'google_timeout' => (int) env('CLOCKWORK_SEO_GOOGLE_TIMEOUT', 30),
+
+        // DataForSEO: the paid data behind keyword metrics, rank tracking,
+        // audits, backlinks, local and AI visibility. The login and password
+        // are the API ones from app.dataforseo.com/api-access, not the
+        // account sign-in. Normally entered on Settings → Integrations
+        // (stored encrypted); these env values are the fallback.
+        'dataforseo_login' => env('CLOCKWORK_SEO_DATAFORSEO_LOGIN'),
+        'dataforseo_password' => env('CLOCKWORK_SEO_DATAFORSEO_PASSWORD'),
+        // True sends every call to DataForSEO's free sandbox, which answers
+        // with sample data and charges nothing. For a first try only.
+        'dataforseo_sandbox' => (bool) env('CLOCKWORK_SEO_DATAFORSEO_SANDBOX', false),
+        'dataforseo_timeout' => (int) env('CLOCKWORK_SEO_DATAFORSEO_TIMEOUT', 60),
     ],
 
     // Claude access (modules/Mcp): the MCP server Claude reads Control

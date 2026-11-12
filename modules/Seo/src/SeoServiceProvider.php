@@ -78,6 +78,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             credentialFields: [
                 'google_client_id' => ['label' => 'Google OAuth client ID (Search Console + GA4)', 'secret' => false],
                 'google_client_secret' => ['label' => 'Google OAuth client secret', 'secret' => true],
+                'dataforseo_login' => ['label' => 'DataForSEO API login', 'secret' => false],
+                'dataforseo_password' => ['label' => 'DataForSEO API password', 'secret' => true],
             ],
             status: ModuleManifest::STATUS_VERIFIED,
             statusNote: 'Reads the indexability watchdog that already runs with every uptime probe.',
