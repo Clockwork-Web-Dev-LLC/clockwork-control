@@ -8,15 +8,18 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
+use Modules\Seo\DataForSeo\Pricing;
 use Modules\Seo\Google\GoogleOAuth;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
 use Modules\Seo\Models\SiteProfile;
+use Modules\Seo\Models\TrackedKeyword;
+use Modules\Seo\Ranks\RankSettings;
 use Modules\Seo\Support\SeoSettings;
 
 class SeoSettingsController extends Controller
 {
-    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget): View
+    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget, RankSettings $rankSettings): View
     {
         $connection = GoogleConnection::current();
 
@@ -41,6 +44,13 @@ class SeoSettingsController extends Controller
                 'spent' => $budget->spentThisMonth(),
                 'totalCap' => $budget->totalCap(),
                 'personAllowance' => $budget->personAllowance(),
+            ],
+            'rankTracking' => [
+                'frequency' => $rankSettings->frequency(),
+                'depth' => $rankSettings->depth(),
+                'depths' => array_combine(RankSettings::DEPTHS, array_map(fn (int $d) => Pricing::serp($d), RankSettings::DEPTHS)),
+                'keywords' => $tracked = TrackedKeyword::query()->where('is_active', true)->count(),
+                'estimate' => $rankSettings->monthlyEstimate($tracked),
             ],
         ]);
     }

@@ -204,5 +204,33 @@
             <button type="submit" class="btn-primary text-sm px-4 py-2 mt-4">Save caps</button>
         </form>
     </x-card>
+
+    <x-card title="Rank tracking" icon="fa-ranking-star"
+            subtitle="How often tracked keywords are checked on Google, and how far down the results each check looks.">
+        <form method="POST" action="{{ route('seo.rank-tracking.update') }}" data-rank-tracking-settings>
+            @csrf @method('PUT')
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                <label class="block text-sm">
+                    <span class="font-medium text-[var(--color-ink-strong)]">How often</span>
+                    <select name="frequency" class="mt-1 text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
+                        <option value="weekly" @selected(old('frequency', $rankTracking['frequency']) === 'weekly')>Weekly</option>
+                        <option value="daily" @selected(old('frequency', $rankTracking['frequency']) === 'daily')>Daily (about 7 times the cost)</option>
+                    </select>
+                </label>
+                <label class="block text-sm">
+                    <span class="font-medium text-[var(--color-ink-strong)]">How deep</span>
+                    <select name="depth" class="mt-1 text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
+                        @foreach ($rankTracking['depths'] as $depth => $price)
+                            <option value="{{ $depth }}" @selected((int) old('depth', $rankTracking['depth']) === $depth)>Top {{ $depth }} (${{ rtrim(rtrim(number_format($price, 5), '0'), '.') }} a check)</option>
+                        @endforeach
+                    </select>
+                </label>
+            </div>
+            <p class="text-xs text-[var(--color-ink-muted)] mb-4">
+                {{ $rankTracking['keywords'] }} tracked {{ Str::plural('keyword', $rankTracking['keywords']) }} across all clients: about ${{ number_format($rankTracking['estimate'], 2) }} a month at the current settings, held by the rank tracking cap above. A site ranking below the depth is recorded as "not in top N". Prices are DataForSEO's published ones and are not yet confirmed by a real call.
+            </p>
+            <button type="submit" class="btn-primary text-sm px-4 py-2">Save rank tracking</button>
+        </form>
+    </x-card>
 </div>
 @endsection

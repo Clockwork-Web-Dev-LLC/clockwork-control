@@ -115,7 +115,17 @@ Control checks where a client ranks on Google for a list of tracked keywords, us
 - **Cost**: a check costs about $0.0006 for the first ten results and $0.00045 for each further ten, so $0.0015 at the top 30 and $0.00465 at the top 100. The defaults are weekly at the top 30. Spend goes through the rank tracking cap on **SEO → Settings**; when the cap is reached nothing is queued and the keywords stay due.
 - **Only for clients that are switched on**: keywords of a client whose SEO profile is disabled are not checked.
 
-Built against DataForSEO's published specification and not yet run against the live API. Adding keywords from the back end and reading ranks from Claude are the next pieces.
+### Using it
+
+Open a client from **SEO → Clients** and choose **Rankings** (`/seo/sites/{site}/rankings`).
+
+- **Add keywords**: paste one per line, tick desktop, mobile or both, and optionally name a city (`City,Region,Country`, the way Google Ads writes it). Without a city the whole country from the profile's keyword market is checked. The same keyword on another device or in another city is tracked separately. Keywords with search operators such as `site:` are refused because they cost five times as much.
+- **The table**: latest position, change from the check before, the page that ranks (flagged when more than one of the site's pages rank), each competitor's position, and whether an AI Overview shows and cites the site. "Not in top 30" means it was checked and not found; a dash means not checked yet. A keyword that appears or disappears says "New" or "Dropped out" instead of a number.
+- **Pause** stops checks and keeps the history. **Delete** removes the keyword and its history.
+- **Competitors**: up to 10 domains. Their positions come from the same results page, so they cost nothing extra; history starts from the next check.
+- **How often and how deep** is set by an admin on **SEO → Settings → Rank tracking**, with the price per check and the expected monthly cost for the keywords tracked.
+
+Built against DataForSEO's published specification and not yet run against the live API. Reading ranks from Claude is the next piece.
 
 ## Reading it from Claude
 

@@ -50,6 +50,7 @@
 @section('content')
 <x-page-header :title="$site->domain" subtitle="Search numbers from the nightly Search Console and GA4 sync.">
     <x-slot:actions>
+        <a href="{{ route('seo.sites.rankings', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-ranking-star"></i> Rankings</a>
         <a href="{{ route('seo.sites.profile', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-sliders"></i> Profile</a>
     </x-slot:actions>
 </x-page-header>

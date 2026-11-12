@@ -264,6 +264,12 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/properties/refresh` | Queue a refresh of the Search Console property list (throttled 6/min). |
 | POST | `/seo/sites/{site}/sync` | Queue a sync for this site (throttled 6/min). |
 | POST | `/seo/sites/{site}/ai-impressions` | Record a month's AI impressions from the Generative AI report, or "not available". |
+| GET | `/seo/sites/{site}/rankings` | Rankings: the site's tracked keywords with latest Google position, change from the check before, ranking page, competitor positions and AI Overview, from stored checks only. Forms to add keywords and name competitors. |
+| POST | `/seo/sites/{site}/rankings` | Track keywords (one per line) for the chosen devices and optional city (throttled 20/min). Needs an SEO profile. |
+| PATCH | `/seo/sites/{site}/rankings/{keyword}` | Pause or resume a tracked keyword. History is kept. |
+| DELETE | `/seo/sites/{site}/rankings/{keyword}` | Delete a tracked keyword and its rank history. |
+| PUT | `/seo/sites/{site}/competitors` | Save up to 10 competitor domains whose positions are stored with each check. |
+| PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
 | GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |

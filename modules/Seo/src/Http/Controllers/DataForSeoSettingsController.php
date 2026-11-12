@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Feature;
+use Modules\Seo\Models\TrackedKeyword;
+use Modules\Seo\Ranks\RankSettings;
 
 /**
  * The DataForSEO card on /seo/settings: spending caps and a connection
@@ -43,6 +45,24 @@ class DataForSeoSettingsController extends Controller
         }
 
         return redirect()->route('seo.settings')->with('status', $message);
+    }
+
+    /** How often and how deep ranks are checked: the two choices that set most of the bill. */
+    public function updateRankTracking(Request $request, RankSettings $settings): RedirectResponse
+    {
+        $validated = $request->validate([
+            'frequency' => ['required', 'string', 'in:'.implode(',', array_keys(RankSettings::FREQUENCIES))],
+            'depth' => ['required', 'integer', 'in:'.implode(',', RankSettings::DEPTHS)],
+        ]);
+
+        $settings->save($validated['frequency'], (int) $validated['depth']);
+
+        $keywords = TrackedKeyword::query()->where('is_active', true)->count();
+
+        return redirect()->route('seo.settings')->with('status', sprintf(
+            'Rank tracking set to %s, top %d. With %d tracked %s that is about $%.2f a month.',
+            $validated['frequency'], (int) $validated['depth'], $keywords, $keywords === 1 ? 'keyword' : 'keywords', $settings->monthlyEstimate($keywords),
+        ));
     }
 
     /** One free call that proves the login works and reads the balance. */
