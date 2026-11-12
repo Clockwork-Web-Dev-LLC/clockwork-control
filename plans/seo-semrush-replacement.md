@@ -1,5 +1,15 @@
 # Plan: Grow the SEO module so the agency can cancel Semrush
 
+> **Scope changed (2026-11-12).** Aaron said the team uses nearly all of Semrush (Position Tracking,
+> Site Audit, competitor research, Backlinks, the Local and AI Visibility add-ons, a true ranking
+> count) and wants DataForSEO to replace it. This overrides decisions 4 and 5's "GSC count only",
+> the Scope matrix's "Later" and "Drop" verdicts, Phase 5's "optional", the $75 cap, the "$2 to $19
+> a month" cost, the "Check before cancelling" assumption and the 2027-01-08 exit date. Read
+> [`seo-suite-overview.md`](./seo-suite-overview.md) for the current scope, order, cost and dates,
+> and [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md) for the research. What is
+> below still stands for Phase 1 (built), the MCP design, and the Phase 2 keyword metrics, keyword
+> map, page audit and Sheets detail.
+
 > **Status (2026-10-30):** plan only, nothing built. Branch `feature/seo`. Written by Claude for Aaron
 > from four research passes run the same day (codebase map, Google APIs, paid data providers, what
 > Semrush does for us today), each followed by a verification pass whose corrections are applied

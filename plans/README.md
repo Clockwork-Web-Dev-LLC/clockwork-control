@@ -9,8 +9,11 @@ this index is a map, not a claim that everything below is still unbuilt.
 
 - [`seo-suite-overview.md`](./seo-suite-overview.md): **start here.** A short map of the whole SEO
   suite: the parts and what is built, how data flows, the two jobs step by step, what depends on
-  what, the Phase 2 build order, the cancel dates and who is being waited on. Checked 2026-11-12
-  against the code and the full plan.
+  what, the build order, cost, staged cancel and who is being waited on. Rewritten 2026-11-12 after
+  Aaron widened the scope to everything the team uses in Semrush.
+- [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md): the research behind that wider
+  scope. Per feature: the DataForSEO APIs, prices with their sources, what it can't do, cost
+  scenarios, a build outline and risks. Prices are unconfirmed until a test call per endpoint.
 - [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): grow `modules/Seo` so the agency can
   cancel Semrush, with Claude as the main consumer. Nightly Search Console + GA4 sync (free, one agency
   OAuth connection as systems@) replaces the Chrome pulls behind the monthly SEO report; a DataForSEO
