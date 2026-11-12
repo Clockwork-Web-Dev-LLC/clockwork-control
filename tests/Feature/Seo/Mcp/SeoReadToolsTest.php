@@ -317,6 +317,23 @@ describe('seo_search_rows', function () {
             ->and($content['meta']['period']['baseline_months'])->toBe(['2026-09']);
     });
 
+    it('lists the biggest drops first, including a query that fell to nothing', function () {
+        // Had traffic in September, none at all in October.
+        SeoStoredData::row($this->siteId, '2026-09', 'query', null, 'water heater repair', 25, 500, 6.0);
+        SeoStoredData::row($this->siteId, '2026-09', 'query', null, 'site:acme.com old', 9, 9);
+
+        $content = seoTool($this->user, SeoSearchRows::class, [
+            'site' => 'acme.com', 'dimension' => 'query', 'end_month' => '2026-10', 'compare' => 'previous_period', 'sort' => 'click_loss',
+        ]);
+        $rows = seoRows($content);
+
+        expect($rows[0])->toMatchArray(['query' => 'water heater repair', 'clicks' => 0, 'impressions' => 0, 'position' => null, 'prev_clicks' => 25, 'click_change' => -25])
+            // Gains come last, and a junk query that disappeared stays out.
+            ->and(end($rows)['query'])->toBe('emergency plumber')
+            ->and(array_column($rows, 'query'))->not->toContain('site:acme.com old')
+            ->and($content['total_rows'])->toBe(4);
+    });
+
     it('leaves a comparison null when the baseline was never synced', function () {
         $content = seoTool($this->user, SeoSearchRows::class, ['site' => 'acme.com', 'dimension' => 'query', 'end_month' => '2026-10', 'compare' => 'yoy']);
 

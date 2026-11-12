@@ -27,7 +27,10 @@ class SeoSearchRows extends SeoTool
 {
     private const DIMENSIONS = ['page', 'query', 'page_query'];
 
-    private const SORTS = ['clicks', 'impressions', 'ctr', 'position', 'click_change', 'impression_change'];
+    private const SORTS = ['clicks', 'impressions', 'ctr', 'position', 'click_change', 'impression_change', 'click_loss', 'impression_loss'];
+
+    /** Sorts that only mean something next to a comparison period. */
+    private const CHANGE_SORTS = ['click_change', 'impression_change', 'click_loss', 'impression_loss'];
 
     private const COMPARES = ['none', 'previous_period', 'yoy'];
 
@@ -50,7 +53,7 @@ class SeoSearchRows extends SeoTool
             'segment' => $schema->string()->enum(['all', 'nonbranded'])->description('nonbranded leaves out brand queries. With dimension page it adds up the page\'s non-brand queries. Default all.'),
             'exclude_junk' => $schema->boolean()->description('Leave out quoted queries and search operators such as site:. Default true.'),
             'compare' => $schema->string()->enum(self::COMPARES)->description('Default none.'),
-            'sort' => $schema->string()->enum(self::SORTS)->description('Default clicks. The change sorts need compare.'),
+            'sort' => $schema->string()->enum(self::SORTS)->description('Default clicks. click_change and impression_change list the biggest gains first; click_loss and impression_loss list the biggest drops first, including rows that fell to nothing. These four need compare.'),
             'min_impressions' => $schema->integer()->min(0)->description('Default 0.'),
             'limit' => $schema->integer()->min(1)->max(200)->description('Rows per page. Default 25.'),
             'cursor' => $schema->string()->description('next_cursor from the previous page.'),
@@ -89,7 +92,7 @@ class SeoSearchRows extends SeoTool
         $limit = max(1, min(200, (int) ($request->get('limit') ?? 25)));
         $offset = max(0, (int) $request->get('cursor', 0));
 
-        if (in_array($sort, ['click_change', 'impression_change'], true) && $compare === 'none') {
+        if (in_array($sort, self::CHANGE_SORTS, true) && $compare === 'none') {
             return Response::error("sort {$sort} needs compare set to previous_period or yoy.");
         }
         if ($segment === 'nonbranded' && $profile->brand_regex === null) {
@@ -123,6 +126,22 @@ class SeoSearchRows extends SeoTool
             $baseline = $searchRows->aggregate($profile->site_id, $dimension, $baselineMonths, $segment === 'nonbranded', ['min_impressions' => 0] + $filters)['rows'];
             $baselineSynced = array_filter($baselineMonths, fn (CarbonImmutable $m) => $searchRows->monthSynced($profile->site_id, $m)) !== [];
 
+            // A page or query that had traffic before and none now is the
+            // biggest loser of all, and it has no row in the current
+            // period. Add it with zeros, when both periods were synced.
+            $currentSynced = array_filter($months, fn (CarbonImmutable $m) => $searchRows->monthSynced($profile->site_id, $m)) !== [];
+            if ($baselineSynced && $currentSynced && ! $current['cut_off']) {
+                foreach ($baseline as $key => $before) {
+                    if (isset($rows[$key]) || $before['impressions'] < $filters['min_impressions']) {
+                        continue;
+                    }
+                    if ($excludeJunk && $dimension !== 'page' && QueryFilters::isJunk((string) $before['query'])) {
+                        continue;
+                    }
+                    $rows[$key] = ['page' => $before['page'], 'query' => $before['query'], 'clicks' => 0, 'impressions' => 0, 'ctr' => null, 'position' => null];
+                }
+            }
+
             foreach ($rows as $key => $row) {
                 // Absent from a synced baseline is a real zero; an unsynced
                 // baseline is unknown.
@@ -139,6 +158,13 @@ class SeoSearchRows extends SeoTool
         uasort($rows, function (array $a, array $b) use ($sort) {
             if ($sort === 'position') {
                 return [$a['position'] ?? PHP_FLOAT_MAX, $b['impressions']] <=> [$b['position'] ?? PHP_FLOAT_MAX, $a['impressions']];
+            }
+
+            // "Loss" sorts are the change sorts turned over: most negative first.
+            if (in_array($sort, ['click_loss', 'impression_loss'], true)) {
+                $field = $sort === 'click_loss' ? 'click_change' : 'impression_change';
+
+                return [$a[$field] ?? PHP_INT_MAX, $b['impressions']] <=> [$b[$field] ?? PHP_INT_MAX, $a['impressions']];
             }
 
             return [$b[$sort] ?? PHP_INT_MIN, $b['impressions']] <=> [$a[$sort] ?? PHP_INT_MIN, $a['impressions']];
