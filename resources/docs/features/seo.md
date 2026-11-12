@@ -129,6 +129,19 @@ Claude reads the same data through `seo_rankings` and `seo_rank_history`, and ca
 
 Built against DataForSEO's published specification and not yet run against the live API.
 
+## Keyword maps
+
+A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.
+
+- **Dated versions**: one map per site is current. Starting a new version copies the current one and archives it; archived maps are read-only.
+- **Rows are hidden, not deleted**, and an edit names the version of the row it was based on, so two editors can't silently overwrite each other.
+- **Checks**: title outside 50 to 60 characters, meta description outside 140 to 160, a page with no primary keyword, two pages sharing a primary keyword, and em dashes in text a client will see (refused on edit, flagged on import).
+- **Figures**: volume, difficulty, CPC and intent are filled from keyword data Control has already bought, never typed in. Figures that arrive in an imported file are kept but marked as imported, because another tool's difficulty is not comparable.
+- **Next page**: the page not started with the most non-branded Google impressions over the last three complete months, with that number shown.
+- **CSV in and out**: the importer finds the header row under any title lines and accepts common column names (Page, URL, Primary Keyword, Volume, Difficulty or KD, CPC, Secondary Keywords, Intent, Proposed Title, Proposed Meta, Schema, Status, Notes). Unknown columns are reported and ignored. A status it cannot read is kept word for word and flagged for review. The export uses one fixed column order and neutralises cells that a spreadsheet would run as formulas.
+
+The pages and Claude tools for maps are the next pieces; this part has no screen yet.
+
 ## Page audit
 
 Control can read a live page on a client's site and report what it says about itself: title and meta description with character counts, H1s and H2s, canonical, robots tag, schema types (including those inside `@graph`) and a word count that leaves out menus, the footer and code. Claude uses it through `seo_page_audit`, up to 5 pages at a time, to see the current state of a page before proposing changes.
