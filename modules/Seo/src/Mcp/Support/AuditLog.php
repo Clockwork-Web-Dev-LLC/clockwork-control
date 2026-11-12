@@ -21,6 +21,8 @@ class AuditLog
 
     public const TRACKED_KEYWORDS_UPDATED = 'seo_tracked_keywords_updated';
 
+    public const KEYWORD_MAP_UPDATED = 'seo_keyword_map_updated';
+
     public function __construct(private readonly ActionLogger $logger) {}
 
     /**

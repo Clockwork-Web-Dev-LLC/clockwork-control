@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
+use Modules\Seo\Http\Controllers\KeywordMapController;
 use Modules\Seo\Http\Controllers\RankingsController;
 use Modules\Seo\Http\Controllers\SeoClientsController;
 use Modules\Seo\Http\Controllers\SeoController;
@@ -24,6 +25,12 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/properties/refresh', [SiteProfileController::class, 'refreshProperties'])->middleware('throttle:6,1')->name('seo.sites.properties.refresh');
     Route::post('/seo/sites/{site}/sync', [SiteProfileController::class, 'sync'])->middleware('throttle:6,1')->name('seo.sites.sync');
     Route::post('/seo/sites/{site}/ai-impressions', [AiImpressionsController::class, 'store'])->name('seo.sites.ai-impressions.store');
+
+    Route::get('/seo/sites/{site}/keyword-map', [KeywordMapController::class, 'show'])->name('seo.sites.keyword-map');
+    Route::post('/seo/sites/{site}/keyword-map/import', [KeywordMapController::class, 'import'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.import');
+    Route::post('/seo/sites/{site}/keyword-map/version', [KeywordMapController::class, 'newVersion'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.version');
+    Route::post('/seo/sites/{site}/keyword-map/fill', [KeywordMapController::class, 'fill'])->name('seo.sites.keyword-map.fill');
+    Route::get('/seo/sites/{site}/keyword-map/{map}/download', [KeywordMapController::class, 'download'])->name('seo.sites.keyword-map.download');
 
     Route::get('/seo/sites/{site}/rankings', [RankingsController::class, 'show'])->name('seo.sites.rankings');
     Route::post('/seo/sites/{site}/rankings', [RankingsController::class, 'store'])->middleware('throttle:20,1')->name('seo.sites.rankings.store');

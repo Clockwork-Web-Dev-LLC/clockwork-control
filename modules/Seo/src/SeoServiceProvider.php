@@ -15,6 +15,8 @@ use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
+use Modules\Seo\Mcp\Tools\SeoKeywordMapGet;
+use Modules\Seo\Mcp\Tools\SeoKeywordMapUpdate;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetricsFetch;
 use Modules\Seo\Mcp\Tools\SeoListSites;
@@ -128,6 +130,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoRankHistory::class,
             SeoTrackedKeywordsUpdate::class,
             SeoPageAudit::class,
+            SeoKeywordMapGet::class,
+            SeoKeywordMapUpdate::class,
         ];
     }
 

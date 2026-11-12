@@ -269,6 +269,11 @@ These exist only while the switch is on:
 | PATCH | `/seo/sites/{site}/rankings/{keyword}` | Pause or resume a tracked keyword. History is kept. |
 | DELETE | `/seo/sites/{site}/rankings/{keyword}` | Delete a tracked keyword and its rank history. |
 | PUT | `/seo/sites/{site}/competitors` | Save up to 10 competitor domains whose positions are stored with each check. |
+| GET | `/seo/sites/{site}/keyword-map` | Keyword map: the current map (or `?version=` for an older, read-only one) with checks to fix and the recommended next page. Forms to import a CSV, start a new version and fill figures. |
+| POST | `/seo/sites/{site}/keyword-map/import` | Import a CSV (uploaded file or pasted text) as the new current map (throttled 10/min). |
+| POST | `/seo/sites/{site}/keyword-map/version` | Start a new dated version as a copy of the current map (throttled 10/min). |
+| POST | `/seo/sites/{site}/keyword-map/fill` | Fill volume, difficulty and CPC on the current map from keyword data already bought. Spends nothing. |
+| GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |

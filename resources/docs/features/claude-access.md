@@ -29,6 +29,8 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_rank_history` | Every stored rank check for up to 20 tracked keywords over a date range. | No |
 | `seo_tracked_keywords_update` | Start tracking keywords, or pause or resume them. Adding is a recurring cost, so Claude asks first and reports the monthly estimate. Cannot delete keywords or history. | Yes, and adds recurring spend |
 | `seo_page_audit` | Fetches up to 5 live pages on a client's own site and reads title, meta description, headings, canonical, robots tag, schema types and word count. Free. A page a firewall blocks comes back as blocked, not empty. | Stores the latest audit |
+| `seo_keyword_map_get` | A site's keyword map: pages, keywords, figures, proposed titles and descriptions with character counts, status, the checks to fix and the recommended next page. | No |
+| `seo_keyword_map_update` | Start a new dated version, edit or add rows, or fill figures from stored keyword data. Cannot delete rows, type in figures, or overwrite a row someone else changed. | Yes |
 
 ## Connecting claude.ai and Cowork
 

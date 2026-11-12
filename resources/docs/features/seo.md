@@ -140,7 +140,18 @@ A keyword map says which page of a client's site targets which keyword, with the
 - **Next page**: the page not started with the most non-branded Google impressions over the last three complete months, with that number shown.
 - **CSV in and out**: the importer finds the header row under any title lines and accepts common column names (Page, URL, Primary Keyword, Volume, Difficulty or KD, CPC, Secondary Keywords, Intent, Proposed Title, Proposed Meta, Schema, Status, Notes). Unknown columns are reported and ignored. A status it cannot read is kept word for word and flagged for review. The export uses one fixed column order and neutralises cells that a spreadsheet would run as formulas.
 
-The pages and Claude tools for maps are the next pieces; this part has no screen yet.
+### Using it
+
+Open a client from **SEO → Clients** and choose **Map** (`/seo/sites/{site}/keyword-map`).
+
+- **Import from CSV**: upload the file (in Google Sheets: File → Download → Comma-separated values, with the map tab open). The import becomes the current map and the previous one is kept read-only.
+- **The page** shows the map, the list of things to check and the page to work on next. Older versions can be picked from the version list.
+- **Start a new dated version** before a new round of work, so last month's map stays as it was.
+- **Fill from stored data** puts volume, difficulty and CPC on every row Control already has figures for. It never spends; missing keywords are bought through Claude, on a quote a person approves.
+- **Download CSV** gives the fixed column layout, ready to paste into a client's sheet.
+- **Editing rows** is done by asking Claude, which uses `seo_keyword_map_get` and `seo_keyword_map_update`. Every edit is checked by the same rules and written to the action log with before and after values.
+
+Writing straight to a Google Sheet is not built yet; use the CSV download.
 
 ## Page audit
 

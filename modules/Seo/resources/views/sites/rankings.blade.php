@@ -5,6 +5,7 @@
 @section('content')
 <x-page-header :title="$site->domain" subtitle="Rankings: where this site appears on Google for its tracked keywords.">
     <x-slot:actions>
+        <a href="{{ route('seo.sites.keyword-map', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-map"></i> Keyword map</a>
         <a href="{{ route('seo.sites.show', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-table"></i> Numbers</a>
         <a href="{{ route('seo.sites.profile', $site) }}" class="btn-pill-nav text-sm"><i class="fa-solid fa-sliders"></i> Profile</a>
     </x-slot:actions>

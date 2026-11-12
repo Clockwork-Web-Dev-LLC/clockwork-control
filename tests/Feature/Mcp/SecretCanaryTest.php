@@ -54,6 +54,8 @@ it('never returns a credential from any tool', function () {
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
         'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
         'seo_rankings' => ['site' => 'acme.com'],
+        'seo_keyword_map_update' => ['site' => 'acme.com', 'action' => 'new_version'],
+        'seo_keyword_map_get' => ['site' => 'acme.com'],
         'seo_page_audit' => ['site' => 'acme.com', 'urls' => ['https://www.acme.com/services']],
         'seo_rank_history' => ['site' => 'acme.com', 'keywords' => ['emergency plumber']],
     ];
@@ -82,5 +84,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(12);
+    expect($called)->toHaveCount(14);
 });
