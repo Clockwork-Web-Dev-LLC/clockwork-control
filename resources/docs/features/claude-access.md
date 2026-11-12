@@ -31,6 +31,9 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_page_audit` | Fetches up to 5 live pages on a client's own site and reads title, meta description, headings, canonical, robots tag, schema types and word count. Free. A page a firewall blocks comes back as blocked, not empty. | Stores the latest audit |
 | `seo_keyword_map_get` | A site's keyword map: pages, keywords, figures, proposed titles and descriptions with character counts, status, the checks to fix and the recommended next page. | No |
 | `seo_keyword_map_update` | Start a new dated version, edit or add rows, or fill figures from stored keyword data. Cannot delete rows, type in figures, or overwrite a row someone else changed. | Yes |
+| `seo_domain_overview` | How many keywords a site and its named competitors rank for, month by month, with top 3, top 10 and estimated traffic. | No |
+| `seo_ranked_keywords` | The stored list of keywords a domain ranks for, with filters for position, text, page and volume. | No |
+| `seo_domain_research_fetch` | Buys a domain's ranking-keyword count (about 1 cent) or its ranked-keyword list (about 13 cents for 1,000). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
 
 ## Connecting claude.ai and Cowork
 

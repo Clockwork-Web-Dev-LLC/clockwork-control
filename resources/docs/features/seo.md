@@ -129,6 +129,20 @@ Claude reads the same data through `seo_rankings` and `seo_rank_history`, and ca
 
 Built against DataForSEO's published specification and not yet run against the live API.
 
+## Ranking-keyword counts and ranked keywords
+
+Control stores how many keywords a domain ranks for on Google, and the list of those keywords, from DataForSEO Labs.
+
+- **Monthly count**: `clockwork:seo-snapshot-domains` runs on the 6th and stores, for every enabled client and each competitor named on its Rankings page, the number of ranking keywords in the client's country, split into top 3, top 10, top 20 and top 100, with estimated traffic. About a cent per domain. A competitor shared by two clients is bought once.
+- **Ranked-keyword list**: the top keywords a domain ranks for (up to 1,000, best estimated traffic first) with position, ranking page, volume, difficulty and intent. Bought on request, about 13 cents per 1,000, and each pull replaces the last.
+- **From Claude**: `seo_domain_overview` and `seo_ranked_keywords` read what is stored and never spend. `seo_domain_research_fetch` gives the price first and buys only when called again with the cost a person agreed to. All spending is held by the research cap on **SEO → Settings**.
+
+What to know about the numbers:
+
+- They come from DataForSEO's own database, which is smaller than some other tools'. The count will be lower than, and is not comparable with, a figure from another tool. Never put the two on one trend line.
+- Each keyword's results are re-read every 30 to 90 days, for a whole country. A ranking gained last week may not show, and nothing here is city-level. For recent movement use Search Console or the tracked keywords under Rankings.
+- A domain the provider knows nothing about is stored with empty figures, not zeros.
+
 ## Keyword maps
 
 A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.

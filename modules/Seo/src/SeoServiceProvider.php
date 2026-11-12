@@ -7,6 +7,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Seo\Console\SnapshotDomains;
 use Modules\Seo\Console\SyncGoogleData;
 use Modules\Seo\Console\TrackRanks;
 use Modules\Seo\DataForSeo\DataForSeoClient;
@@ -15,6 +16,8 @@ use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
+use Modules\Seo\Mcp\Tools\SeoDomainOverview;
+use Modules\Seo\Mcp\Tools\SeoDomainResearchFetch;
 use Modules\Seo\Mcp\Tools\SeoKeywordMapGet;
 use Modules\Seo\Mcp\Tools\SeoKeywordMapUpdate;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
@@ -22,12 +25,14 @@ use Modules\Seo\Mcp\Tools\SeoKeywordMetricsFetch;
 use Modules\Seo\Mcp\Tools\SeoListSites;
 use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
 use Modules\Seo\Mcp\Tools\SeoPageAudit;
+use Modules\Seo\Mcp\Tools\SeoRankedKeywords;
 use Modules\Seo\Mcp\Tools\SeoRankHistory;
 use Modules\Seo\Mcp\Tools\SeoRankings;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
 use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Mcp\Tools\SeoTrackedKeywordsUpdate;
 use Modules\Seo\Models\GoogleConnection;
+use Modules\Seo\Models\SiteProfile;
 use Modules\Seo\Models\TrackedKeyword;
 
 /**
@@ -60,7 +65,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class, TrackRanks::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class]);
     }
 
     /**
@@ -78,6 +83,15 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // Ranking-keyword counts for clients and their competitors, on the
+        // 6th so the provider's monthly refresh has landed.
+        $schedule->command('clockwork:seo-snapshot-domains')
+            ->monthlyOn(6, '08:40')
+            ->withoutOverlapping(120)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && SiteProfile::query()->where('is_enabled', true)->exists());
 
         // Rank tracking: store finished checks and queue the due ones. Hourly
         // so a slow queue or a missed run catches up the same day.
@@ -132,6 +146,9 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoPageAudit::class,
             SeoKeywordMapGet::class,
             SeoKeywordMapUpdate::class,
+            SeoDomainOverview::class,
+            SeoRankedKeywords::class,
+            SeoDomainResearchFetch::class,
         ];
     }
 

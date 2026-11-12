@@ -142,6 +142,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | 07:15 | `clockwork:check-robots-txt` | Check root `/robots.txt` across monitored sites to detect accidental crawler disallow directives. |
 | 08:10 | `clockwork:seo-sync-google` | Search Console and GA4 sync for every enabled SEO profile, via `SeoServiceProvider::scheduledTasks()`. After midnight Pacific, so yesterday's Search Console day has closed. Re-pulls the last 5 days and every month not yet final (month end + 5 days). Runs only once Google was connected on `/seo/settings`; a revoked connection still runs and exits failed so it shows here. See [Features → SEO module](/docs/features/seo#search-console-and-ga4-sync). |
 | hourly at :20 | `clockwork:seo-track-ranks` | Rank tracking: stores finished rank checks and queues the due ones. Only runs when a DataForSEO login is set and at least one keyword is tracked. |
+| 6th of the month, 08:40 | `clockwork:seo-snapshot-domains` | Ranking-keyword counts for every SEO client and its named competitors. Only runs when a DataForSEO login is set. |
 | 09:00 | `clockwork:feedback-prompt` | Compile approved feedback into a master Claude implementation prompt at `storage/app/prompts/latest-feedback-prompt.md`, via `FeedbackServiceProvider::scheduledTasks()`. |
 
 

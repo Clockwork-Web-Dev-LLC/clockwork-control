@@ -63,7 +63,7 @@ describe('with Claude access on', function () {
             ->assertOk()
             ->json('result.tools.*.name');
 
-        expect($names)->toHaveCount(15)->toContain('control_whoami', 'seo_month_numbers');
+        expect($names)->toHaveCount(18)->toContain('control_whoami', 'seo_month_numbers');
     });
 
     it('answers 401 with the sign-in pointer when there is no token, whatever the client accepts', function (array $headers) {

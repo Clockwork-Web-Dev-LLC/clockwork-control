@@ -57,4 +57,10 @@ final class Pricing
 
         return round(self::SERP_FIRST_PAGE + ($pages - 1) * self::SERP_NEXT_PAGE, 5);
     }
+
+    /** One DataForSEO Labs call returning this many rows. */
+    public static function labs(int $items): float
+    {
+        return round(self::LABS_PER_TASK + max(0, $items) * self::LABS_PER_ITEM, 5);
+    }
 }
