@@ -222,6 +222,12 @@ class SpfValidator
             return;
         }
 
+        // Hard DNS amplification ceiling: once past 20 lookups, stop issuing
+        // outbound TXT queries into deeper nested includes.
+        if ($lookupCount > 20) {
+            return;
+        }
+
         $visited[] = $target;
 
         $targetQuery = $this->resolver->query($target, 'TXT');

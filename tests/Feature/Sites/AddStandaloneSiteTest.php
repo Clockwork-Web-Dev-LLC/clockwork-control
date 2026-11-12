@@ -107,6 +107,7 @@ describe('Add Standalone Site', function () {
     it('handles companion 404 route not found gracefully', function () {
         Http::fake([
             'https://wpengine-client.com/wp-json/clockwork/v1/health*' => Http::response('Not Found', 404),
+            'https://wpengine-client.com/wp-json/clockwork-renegade/v1/health*' => Http::response('Not Found', 404),
         ]);
 
         $response = $this->post(route('sites.store'), [
@@ -115,6 +116,7 @@ describe('Add Standalone Site', function () {
         ]);
 
         $response->assertSessionHasErrors('domain');
+        expect(session('errors')->first('domain'))->toContain('HTTP 404');
         expect(Site::where('domain', 'wpengine-client.com')->exists())->toBeFalse();
     });
 

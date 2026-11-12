@@ -166,6 +166,12 @@ class ClientReportMail extends Mailable
         // Names come from WordPress with HTML entities ("Example &amp; Co");
         // the views escape what they print, so decode them here.
         $summary = html_entity_decode($summary, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // An update run from the site's Updates tab was logged as "Updated
+        // contact-form-7/wp-contact-form-7.php 6.0.6 → 6.1 on example.com.":
+        // name it from its folder instead.
+        if (preg_match('/^\s*Updated\s+(\S+)\s+(\S+\s*→\s*\S+)\s+on\s+\S+?\.?\s*$/u', $summary, $m) === 1) {
+            return Str::headline(Str::before($m[1], '/')).' '.$m[2];
+        }
         $clean = preg_replace('/^\s*(plugin|theme|core|wordpress(?: core)?)\s+updated\s*:\s*/i', '', $summary) ?? $summary;
         $clean = trim(preg_replace('/\s*\[[^\]]*\]\s*$/', '', $clean) ?? $clean);
 

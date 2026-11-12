@@ -430,10 +430,13 @@ describe('recompile', function () {
      */
     function recompileSite(): Site
     {
-        return Site::factory()->carePlan()->create([
+        $site = Site::factory()->carePlan()->create([
             'domain' => 'site-'.Str::lower(Str::random(6)).'.example.com', 'hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM,
             'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear(),
         ]);
+        cleanSecurityScans($site);
+
+        return $site;
     }
 
     function recompileSchedule(Site $site, array $attributes = []): ClientReportSchedule
@@ -461,6 +464,9 @@ describe('recompile', function () {
     }
 
     beforeEach(function () {
+        // A schedule that has never sent holds its first report only when
+        // clean reports send themselves (approval off).
+        clientReportsSendThemselves();
         // A month later than the reports: "last month" is November, not October.
         $this->travelTo(Carbon::parse('2026-12-10 09:00:00'));
     });

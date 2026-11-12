@@ -30,8 +30,8 @@ class WPEngineSshCommandRunner implements SiteCommandRunner
     public function run(Site $site, string $command, ?int $timeoutSeconds = null): string
     {
         $install = (string) $site->wpengine_install_name;
-        if ($install === '') {
-            throw new RuntimeException("Site #{$site->id} ({$site->domain}) has no wpengine_install_name — cannot run commands over SSH.");
+        if ($install === '' || ! preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/i', $install)) {
+            throw new RuntimeException("Site #{$site->id} ({$site->domain}) has an invalid or missing wpengine_install_name — cannot run commands over SSH.");
         }
 
         if ($this->privateKey === null || $this->privateKey === '') {

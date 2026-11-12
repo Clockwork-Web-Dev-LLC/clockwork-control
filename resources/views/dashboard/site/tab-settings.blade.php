@@ -1936,6 +1936,13 @@
         certToggle?.addEventListener('click', () => showCertEdit(true));
         certCancel?.addEventListener('click', () => showCertEdit(false));
 
+        const escHtml = (s) => String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
         // Cert recheck
         const certRecheck = document.getElementById('cert-recheck');
         const certResult = document.getElementById('cert-recheck-result');
@@ -1953,11 +1960,11 @@
                 const data = await r.json();
                 if (data.ok) {
                     certResult.className = 'mb-3 text-xs status-pill status-green inline-block';
-                    certResult.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + data.message + ' Reloading…';
+                    certResult.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + escHtml(data.message) + ' Reloading…';
                     setTimeout(() => location.reload(), 800);
                 } else {
                     certResult.className = 'mb-3 text-xs status-pill status-red inline-block';
-                    certResult.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + (data.message || 'Failed.');
+                    certResult.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> ' + escHtml(data.message || 'Failed.');
                 }
             } catch (e) {
                 certResult.className = 'mb-3 text-xs status-pill status-red inline-block';
@@ -1989,7 +1996,7 @@
                 const cls = data.all_ok ? 'status-green' : (data.ok ? 'status-yellow' : 'status-red');
                 const icon = data.all_ok ? 'fa-circle-check' : (data.ok ? 'fa-circle-info' : 'fa-circle-xmark');
                 companionPushResult.className = 'mt-2 status-pill ' + cls + ' inline-block text-xs';
-                companionPushResult.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + (data.message || 'Done.');
+                companionPushResult.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + escHtml(data.message || 'Done.');
             } catch (e) {
                 companionPushResult.className = 'mt-2 status-pill status-red inline-block text-xs';
                 companionPushResult.textContent = 'Network error: ' + e.message;
@@ -2017,13 +2024,13 @@
                 const data = await r.json();
                 if (r.ok) {
                     companionInstallResult.className = 'text-xs mt-2 text-[var(--color-status-green)]';
-                    companionInstallResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${data.message ?? 'Installed.'} Refreshing…`;
+                    companionInstallResult.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${escHtml(data.message ?? 'Installed.')} Refreshing…`;
                     setTimeout(() => window.location.reload(), 1500);
                 } else {
                     companionInstallResult.className = 'text-xs mt-2 text-[var(--color-status-red)]';
-                    let html = `<i class="fa-solid fa-circle-xmark"></i> ${data.message ?? 'Failed'}`;
+                    let html = `<i class="fa-solid fa-circle-xmark"></i> ${escHtml(data.message ?? 'Failed')}`;
                     if (data.output) {
-                        const escaped = data.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const escaped = escHtml(data.output);
                         html += `
                             <details class="mt-2">
                                 <summary class="cursor-pointer text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">Show wp-cli / SSH output</summary>

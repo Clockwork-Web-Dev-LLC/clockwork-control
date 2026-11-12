@@ -3,7 +3,7 @@
 namespace Modules\ClientReports\Support;
 
 use Modules\ClientReports\Models\ClientReport;
-use Modules\ClientReports\Models\ClientReportSchedule;
+use Modules\ClientReports\Services\ScheduledReportRunner;
 
 /**
  * Where a report stands for the operator screens, worked out the same way
@@ -39,7 +39,7 @@ final class ReportState
     private const META = [
         self::NEEDS_REVIEW => ['label' => 'Needs review', 'pill' => 'status-orange', 'icon' => 'fa-hand', 'hint' => 'Held: something in it needs checking or fixing before it goes out.'],
         self::OUTDATED => ['label' => 'Outdated', 'pill' => 'cr-pill-purple', 'icon' => 'fa-clock-rotate-left', 'hint' => 'Compiled before the latest report fixes. Recompile it before sending.'],
-        self::READY => ['label' => 'Ready to send', 'pill' => 'cr-pill-blue', 'icon' => 'fa-paper-plane', 'hint' => 'Nothing to fix: waiting for someone to send it (a schedule\'s first report always waits).'],
+        self::READY => ['label' => 'Ready to send', 'pill' => 'cr-pill-blue', 'icon' => 'fa-paper-plane', 'hint' => 'Nothing to fix: waiting for someone to approve and send it.'],
         self::PARTLY_SENT => ['label' => 'Partly sent', 'pill' => 'status-yellow', 'icon' => 'fa-circle-half-stroke', 'hint' => 'Some recipients have it; sending again only emails the rest.'],
         self::SENT => ['label' => 'Sent', 'pill' => 'status-green', 'icon' => 'fa-circle-check', 'hint' => 'Everyone on it has it.'],
         self::SUPERSEDED => ['label' => 'Replaced', 'pill' => 'status-unknown', 'icon' => 'fa-clone', 'hint' => 'A newer copy for this period replaced it. It can\'t be sent.'],
@@ -117,10 +117,13 @@ final class ReportState
         $lines = [$to === []
             ? 'Email this report? You will be asked for the address to send it to.'
             : 'Email report to '.implode(', ', $to).'?'];
+        if ($report->status === ClientReport::STATUS_SENT) {
+            array_unshift($lines, 'This report was already sent'.($report->sent_at ? ' on '.$report->sent_at->format('M j, Y') : '').'. Sending it again emails everyone on it a second copy.');
+        }
         $lines[] = 'They get it straight away and the report is marked as sent.';
 
         $schedule = $report->schedule;
-        if ($schedule !== null && $schedule->last_sent_at === null && $schedule->delivery_mode === ClientReportSchedule::MODE_AUTO) {
+        if ($schedule !== null && $schedule->last_sent_at === null && ScheduledReportRunner::sendsByItself($schedule)) {
             $lines[] = 'This is the first report from this schedule: once it has been sent, the schedule emails its clean reports automatically every month (anything that needs a look is still held for review).';
         } elseif ($schedule !== null && $schedule->last_sent_at === null) {
             $lines[] = 'This is the first report sent from this schedule.';

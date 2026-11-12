@@ -145,7 +145,13 @@ class CoreChecksumAllowlist
      */
     public function bucketForPathInLatestScan(Site $site, string $path): ?string
     {
-        if ($path === '' || str_contains($path, '..') || str_starts_with($path, '/')) {
+        if (
+            $path === ''
+            || str_contains($path, '..')
+            || str_starts_with($path, '/')
+            || str_contains($path, '\\')
+            || preg_match('/[\r\n\0]/', $path)
+        ) {
             return null;
         }
 

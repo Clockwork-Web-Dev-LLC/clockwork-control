@@ -244,10 +244,16 @@
                             'Accept': 'application/json',
                         },
                     });
+                    const escHtml = (s) => String(s ?? '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
                     const data = await res.json();
 
                     if (data.ok) {
-                        provisionMessage.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--color-status-green)"></i> ' + data.message + ' <span class="text-[var(--color-ink-soft)]">Refreshing…</span>';
+                        provisionMessage.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--color-status-green)"></i> ' + escHtml(data.message) + ' <span class="text-[var(--color-ink-soft)]">Refreshing…</span>';
                         provisionOutput.textContent = data.output || '(no output)';
                         // Reload so the status pill, button label, and last_provision_log
                         // block reflect the new state. Brief delay so the success message
@@ -256,10 +262,11 @@
                         return;
                     }
 
-                    provisionMessage.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + data.message;
+                    provisionMessage.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + escHtml(data.message);
                     provisionOutput.textContent = data.output || '(no output)';
                 } catch (e) {
-                    provisionMessage.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + e.message;
+                    const msg = String(e?.message ?? 'Error').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    provisionMessage.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + msg;
                 }
 
                 provisionBtn.disabled = false;
@@ -272,6 +279,13 @@
         const btn = document.getElementById('ssh-test-btn');
         const result = document.getElementById('ssh-test-result');
         if (!btn || !result) return;
+
+        const escHtml = (s) => String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 
         btn.addEventListener('click', async () => {
             const original = btn.innerHTML;
@@ -291,12 +305,12 @@
                 const data = await res.json();
 
                 if (data.ok) {
-                    result.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--color-status-green)"></i> ' + data.message;
+                    result.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--color-status-green)"></i> ' + escHtml(data.message);
                 } else {
-                    result.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + data.message;
+                    result.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + escHtml(data.message);
                 }
             } catch (e) {
-                result.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + e.message;
+                result.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--color-status-red)"></i> ' + escHtml(e.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = original;

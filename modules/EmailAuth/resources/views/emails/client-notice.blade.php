@@ -39,8 +39,8 @@
 
     <tr><td style="background:{{ $primary }}; padding:28px 32px 24px 32px;" bgcolor="{{ $primary }}">
         @if ($logoBytes)
-            <img src="{{ $message->embedData($logoBytes, 'logo.png', 'image/png') }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
-        @elseif ($branding['logo_url'] !== '')
+            <img src="{{ $message->embedData($logoBytes, 'logo', \App\Support\Mail\BrandLogo::mimeType($logoBytes)) }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
+        @elseif (\App\Support\Mail\BrandLogo::linkable($branding['logo_url']))
             <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['company_name'] }}" height="40" style="display:block; height:40px; width:auto; border:0; color:#ffffff; font-size:18px; font-weight:700;">
         @else
             <div style="color:#ffffff; font-size:20px; font-weight:800;">{{ $branding['company_name'] }}</div>

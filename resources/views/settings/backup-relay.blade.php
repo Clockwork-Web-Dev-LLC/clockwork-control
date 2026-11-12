@@ -237,7 +237,7 @@
                     <tbody class="divide-y divide-[var(--color-border-light)]">
                         @forelse ($sites as $site)
                             <tr class="hover:bg-[var(--color-surface-alt)]/50 transition-colors"
-                                x-show="matchesSearch('{{ $site['domain'] }}', '{{ $site['provider'] }}')">
+                                x-show="matchesSearch(@js($site['domain']), @js($site['provider']))">
                                 <td class="px-6 py-3.5 text-center">
                                     <input type="checkbox"
                                            name="sites[]"
@@ -317,7 +317,7 @@
                             </tr>
 
                             {{-- Expandable S3 Glacier Archives Row --}}
-                            <tr x-show="expandedSite === {{ $site['id'] }} && matchesSearch('{{ $site['domain'] }}', '{{ $site['provider'] }}')"
+                            <tr x-show="expandedSite === {{ $site['id'] }} && matchesSearch(@js($site['domain']), @js($site['provider']))"
                                 x-cloak
                                 class="bg-[var(--color-surface-alt)]/40 border-b border-[var(--color-border-light)]">
                                 <td colspan="6" class="p-0">

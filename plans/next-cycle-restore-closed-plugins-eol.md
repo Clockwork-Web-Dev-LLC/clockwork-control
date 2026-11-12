@@ -33,7 +33,7 @@ Standalone enroll + Companion → S3 Glacier Instant Retrieval backups just land
 
 Companion may be a **regular plugin** (`wp-content/plugins/clockwork-companion/`), not an mu-plugin. Never use `WPMU_PLUGIN_URL` as the default asset base.
 
-Live proof site (custom): `desatechpr.com`, Control site id **315**. Host PHP **8.1**, **no `php-zip`**, nginx ~60s gateway timeout. An ~81MB PclZip backup already 504’d when adding files one-by-one. Restore of that archive is harder than create.
+Live proof site (custom): `example-custom.com`, Control site id **315**. Host PHP **8.1**, **no `php-zip`**, nginx ~60s gateway timeout. An ~81MB PclZip backup already 504’d when adding files one-by-one. Restore of that archive is harder than create.
 
 Create already does `@set_time_limit(900)` and `memory_limit=512M` in `BackupCreateRoute`. Restore must assume the HTTP request can still die at the **proxy** (~60s) even if PHP wants 15 minutes. Design for that (see Phase 1b).
 

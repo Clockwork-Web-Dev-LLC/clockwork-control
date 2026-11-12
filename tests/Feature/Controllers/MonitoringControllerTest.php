@@ -491,7 +491,7 @@ describe('MonitoringController', function () {
         $server = Server::factory()->create();
         Site::factory()->spinupwp()->create([
             'server_id' => $server->id,
-            'domain' => 'michelli.mystagingwebsite.com',
+            'domain' => 'staging-demo.mystagingwebsite.com',
             'uptime_monitoring_enabled' => true,
             'uptime_state' => 'down',
             'uptime_down_since' => now()->subHours(2),
@@ -508,7 +508,7 @@ describe('MonitoringController', function () {
 
         $response->assertOk()
             ->assertSee('prod.example.com')
-            ->assertDontSee('michelli.mystagingwebsite.com')
+            ->assertDontSee('staging-demo.mystagingwebsite.com')
             ->assertViewHas('currentlyDown', 0)
             ->assertViewHas('currentlyUp', 1);
     });
@@ -519,7 +519,7 @@ describe('MonitoringController', function () {
         $server = Server::factory()->create();
         Site::factory()->spinupwp()->create([
             'server_id' => $server->id,
-            'domain' => 'michelli.mystagingwebsite.com',
+            'domain' => 'staging-demo.mystagingwebsite.com',
             'uptime_monitoring_enabled' => true,
         ]);
 
@@ -530,7 +530,7 @@ describe('MonitoringController', function () {
             ->assertSee('Ignored domains')
             ->assertSee('*.mystagingwebsite.com')
             ->assertSee('Currently ignoring 1 site')
-            ->assertSee('michelli.mystagingwebsite.com');
+            ->assertSee('staging-demo.mystagingwebsite.com');
     });
 
     it('classifies individual historical uptime event', function () {

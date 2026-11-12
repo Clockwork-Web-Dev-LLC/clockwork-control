@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property string $external_ref
  * @property Carbon $backup_at
  * @property ?int $bytes
+ * @property ?int $database_bytes the database half of a full backup, when known
  * @property bool $is_manual
  * @property ?array $manifest
  * @property Carbon $first_seen_at
@@ -43,6 +44,7 @@ class SiteBackup extends Model
         'external_ref',
         'backup_at',
         'bytes',
+        'database_bytes',
         'is_manual',
         'manifest',
         'first_seen_at',
@@ -54,6 +56,7 @@ class SiteBackup extends Model
         return [
             'backup_at' => 'datetime',
             'bytes' => 'integer',
+            'database_bytes' => 'integer',
             'is_manual' => 'boolean',
             'manifest' => 'array',
             'first_seen_at' => 'datetime',

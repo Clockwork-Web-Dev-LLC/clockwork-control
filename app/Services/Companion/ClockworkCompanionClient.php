@@ -4,6 +4,7 @@ namespace App\Services\Companion;
 
 use App\Models\Site;
 use App\Support\SsrfGuard;
+use GuzzleHttp\Cookie\CookieJar;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
@@ -355,6 +356,16 @@ class ClockworkCompanionClient
     }
 
     /**
+     * Installed theme inventory. See ThemesRoute for shape.
+     *
+     * @return array<string, mixed>
+     */
+    public function themes(): array
+    {
+        return $this->getJson('/themes');
+    }
+
+    /**
      * Administrator-role users. See AdminsRoute for shape.
      *
      * @return array<string, mixed>
@@ -502,7 +513,26 @@ class ClockworkCompanionClient
      */
     public function comments(array $filters = []): array
     {
-        return $this->getJson('/comments', $filters);
+        $res = $this->getJson('/comments', $filters);
+        $rawItems = $res['comments'] ?? $res['items'] ?? [];
+        if (is_array($rawItems)) {
+            $normalized = [];
+            foreach ($rawItems as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $author = (string) ($item['author_name'] ?? $item['author'] ?? '');
+                $date = (string) ($item['date'] ?? $item['date_gmt'] ?? '');
+                $item['author_name'] = $author;
+                $item['author'] = $author;
+                $item['date'] = $date;
+                $normalized[] = $item;
+            }
+            $res['comments'] = $normalized;
+            $res['items'] = $normalized;
+        }
+
+        return $res;
     }
 
     /**
@@ -519,10 +549,17 @@ class ClockworkCompanionClient
      */
     public function moderateComments(array $commentIds, string $action): array
     {
-        return $this->postJson('/comments/moderate', [
-            'comment_ids' => array_values(array_map('intval', $commentIds)),
+        $ids = array_values(array_map('intval', $commentIds));
+        $res = $this->postJson('/comments/moderate', [
+            'ids' => $ids,
+            'comment_ids' => $ids,
             'action' => $action,
         ]);
+
+        $res['success_count'] = (int) ($res['success_count'] ?? $res['updated'] ?? 0);
+        $res['fail_count'] = (int) ($res['fail_count'] ?? $res['failed_count'] ?? count((array) ($res['failed'] ?? [])));
+
+        return $res;
     }
 
     /**
@@ -537,9 +574,17 @@ class ClockworkCompanionClient
      */
     public function cleanupComments(int $olderThanDays = 30): array
     {
-        return $this->postJson('/comments/cleanup', [
+        $res = $this->postJson('/comments/cleanup', [
             'older_than_days' => max(0, $olderThanDays),
         ]);
+
+        $purgedSpam = (int) ($res['purged_spam'] ?? 0);
+        $purgedTrash = (int) ($res['purged_trash'] ?? 0);
+        $res['purged_spam'] = $purgedSpam;
+        $res['purged_trash'] = $purgedTrash;
+        $res['total_purged'] = (int) ($res['total_purged'] ?? $res['deleted'] ?? ($purgedSpam + $purgedTrash));
+
+        return $res;
     }
 
     /**
@@ -556,7 +601,12 @@ class ClockworkCompanionClient
      */
     public function maintenanceMode(): array
     {
-        return $this->getJson('/maintenance-mode');
+        $res = $this->getJson('/maintenance-mode');
+        if (isset($res['maintenance_mode']) && is_array($res['maintenance_mode'])) {
+            return array_merge($res['maintenance_mode'], $res);
+        }
+
+        return $res;
     }
 
     /**
@@ -584,7 +634,12 @@ class ClockworkCompanionClient
             $body['secret_key'] = $secretKey;
         }
 
-        return $this->postJson('/maintenance-mode', $body);
+        $res = $this->postJson('/maintenance-mode', $body);
+        if (isset($res['maintenance_mode']) && is_array($res['maintenance_mode'])) {
+            return array_merge($res['maintenance_mode'], $res);
+        }
+
+        return $res;
     }
 
     /**
@@ -661,10 +716,208 @@ class ClockworkCompanionClient
      */
     public function updatePlugin(string $slug): array
     {
-        return $this->postJson('/plugins/update', ['slug' => $slug], [
+        $result = $this->postJson('/plugins/update', ['slug' => $slug], [
             'timeout' => 120,
             'retries' => 1,
         ]);
+
+        $combinedErrorText = (string) ($result['error'] ?? '')."\n".implode("\n", (array) ($result['messages'] ?? []));
+        $alreadyUpToDateNoOp = ($result['ok'] ?? false) === true
+            && ($result['before_version'] ?? '') !== ''
+            && ($result['before_version'] ?? '') === ($result['after_version'] ?? '')
+            && str_contains($combinedErrorText, 'Plugin is already up to date.');
+
+        if (
+            $this->site->companion_variant === 'renegade'
+            && (str_contains($combinedErrorText, 'Could not copy file.') || $alreadyUpToDateNoOp)
+        ) {
+            $fallback = $this->updatePluginViaAdminAjax($slug);
+            if (($fallback['ok'] ?? false) === true) {
+                return $fallback;
+            }
+
+            $fallbackErr = (string) ($fallback['error'] ?? '');
+            if (
+                str_contains($combinedErrorText, 'Could not copy file.')
+                && $fallbackErr !== ''
+                && ! str_starts_with($fallbackErr, 'admin_ajax_fallback_')
+            ) {
+                return $fallback;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Fallback for managed hosts (e.g. WP Engine) whose front-end Disk Write
+     * Protection blocks `/index.php` (`/wp-json/...`) from writing `.php` files
+     * under `wp-content/plugins/`, while permitting authenticated requests to
+     * `/wp-admin/admin-ajax.php` (`action=update-plugin`).
+     *
+     * @return array{
+     *     ok: bool,
+     *     upgrade_completed?: bool,
+     *     slug: string,
+     *     before_version: string,
+     *     after_version: ?string,
+     *     was_active: bool,
+     *     reactivated: bool,
+     *     messages: array<int, string>,
+     *     elapsed_ms: int,
+     *     error?: string,
+     * }
+     */
+    protected function updatePluginViaAdminAjax(string $slug): array
+    {
+        $start = microtime(true);
+
+        try {
+            $beforeList = $this->plugins()['plugins'] ?? [];
+            $beforePlugin = collect($beforeList)->firstWhere('slug', $slug);
+            $beforeVersion = (string) ($beforePlugin['version'] ?? '');
+            $wasActive = (bool) ($beforePlugin['active'] ?? false);
+
+            $admins = $this->admins()['admins'] ?? [];
+            if (! is_array($admins) || $admins === []) {
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => 0, 'error' => 'admin_ajax_fallback_no_admins'];
+            }
+
+            // Sort agency logins first (exempt from 2FA EnrollmentNudge in Renegade 1.1.3+),
+            // then fall back to remaining administrators.
+            usort($admins, static function (array $a, array $b): int {
+                $aAgency = str_ends_with(strtolower((string) ($a['email'] ?? '')), '@clockworkwd.com')
+                    || str_ends_with(strtolower((string) ($a['email'] ?? '')), '@clockworkwp.com');
+                $bAgency = str_ends_with(strtolower((string) ($b['email'] ?? '')), '@clockworkwd.com')
+                    || str_ends_with(strtolower((string) ($b['email'] ?? '')), '@clockworkwp.com');
+
+                return $bAgency <=> $aAgency;
+            });
+
+            $jar = null;
+            $nonce = '';
+            $baseUrl = '';
+
+            foreach ($admins as $admin) {
+                $login = (string) ($admin['login'] ?? '');
+                if ($login === '') {
+                    continue;
+                }
+
+                $sso = $this->generateSsoLink($login, 90, '/wp-admin/plugins.php');
+                $ssoUrl = (string) ($sso['url'] ?? '');
+                if ($ssoUrl === '') {
+                    continue;
+                }
+
+                $parts = parse_url($ssoUrl);
+                if (
+                    ! is_array($parts)
+                    || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+                    || empty($parts['host'])
+                    || ! self::isSameSiteHost((string) $parts['host'], (string) $this->site->domain)
+                ) {
+                    continue;
+                }
+
+                $candidateBase = 'https://'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '');
+                SsrfGuard::assertPublic($ssoUrl);
+
+                $candidateJar = new CookieJar;
+                $page = Http::withHeaders(['User-Agent' => self::USER_AGENT])
+                    ->withOptions([
+                        'cookies' => $candidateJar,
+                        'verify' => (bool) config('clockwork.companion.verify_tls', false),
+                        'allow_redirects' => [
+                            'max' => 5,
+                            'strict' => true,
+                            'protocols' => ['https'],
+                            'on_redirect' => SsrfGuard::onRedirect(),
+                        ],
+                    ])
+                    ->timeout(45)
+                    ->get($ssoUrl);
+
+                if (preg_match('/"ajax_nonce":"([a-f0-9]+)"/i', $page->body(), $m)) {
+                    $jar = $candidateJar;
+                    $nonce = $m[1];
+                    $baseUrl = $candidateBase;
+                    break;
+                }
+            }
+
+            if ($jar === null || $nonce === '' || $baseUrl === '') {
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => 0, 'error' => 'admin_ajax_fallback_no_nonce'];
+            }
+
+            $slugDir = explode('/', $slug)[0];
+            $up = Http::withHeaders(['User-Agent' => self::USER_AGENT])
+                ->withOptions([
+                    'cookies' => $jar,
+                    'verify' => (bool) config('clockwork.companion.verify_tls', false),
+                    'allow_redirects' => [
+                        'max' => 5,
+                        'strict' => true,
+                        'protocols' => ['https'],
+                        'on_redirect' => SsrfGuard::onRedirect(),
+                    ],
+                ])
+                ->asForm()
+                ->timeout(120)
+                ->post($baseUrl.'/wp-admin/admin-ajax.php', [
+                    'action' => 'update-plugin',
+                    'plugin' => $slug,
+                    'slug' => $slugDir,
+                    '_ajax_nonce' => $nonce,
+                ]);
+
+            $json = $this->salvageJsonBody($up);
+
+            $afterList = $this->plugins()['plugins'] ?? [];
+            $afterPlugin = collect($afterList)->firstWhere('slug', $slug);
+            $afterVersion = (string) ($afterPlugin['version'] ?? $beforeVersion);
+            $activeNow = (bool) ($afterPlugin['active'] ?? false);
+            $versionAdvanced = $beforeVersion !== '' && $afterVersion !== '' && version_compare($afterVersion, $beforeVersion, '>');
+
+            if ((! is_array($json) || ($json['success'] ?? false) !== true) && ! $versionAdvanced) {
+                $errMsg = (string) ($json['data']['errorMessage'] ?? 'admin-ajax update-plugin returned false');
+
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => (int) round((microtime(true) - $start) * 1000), 'error' => 'upgrade_failed: '.$errMsg];
+            }
+
+            if ($wasActive && ! $activeNow) {
+                try {
+                    $this->togglePlugin($slug, 'activate');
+                    $activeNow = true;
+                } catch (\Throwable) {
+                    $activeNow = false;
+                }
+            }
+
+            return [
+                'ok' => ! $wasActive || $activeNow,
+                'upgrade_completed' => true,
+                'slug' => $slug,
+                'before_version' => $beforeVersion,
+                'after_version' => $afterVersion,
+                'was_active' => $wasActive,
+                'reactivated' => ! $wasActive || $activeNow,
+                'messages' => ['Updated via wp-admin/admin-ajax.php fallback.'],
+                'elapsed_ms' => (int) round((microtime(true) - $start) * 1000),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'slug' => $slug,
+                'before_version' => '',
+                'after_version' => null,
+                'was_active' => false,
+                'reactivated' => false,
+                'messages' => [],
+                'elapsed_ms' => (int) round((microtime(true) - $start) * 1000),
+                'error' => 'admin_ajax_fallback_exception: '.$e->getMessage(),
+            ];
+        }
     }
 
     /**
@@ -688,10 +941,186 @@ class ClockworkCompanionClient
      */
     public function updateTheme(string $slug): array
     {
-        return $this->postJson('/themes/update', ['slug' => $slug], [
+        $result = $this->postJson('/themes/update', ['slug' => $slug], [
             'timeout' => 120,
             'retries' => 1,
         ]);
+
+        $combinedErrorText = (string) ($result['error'] ?? '')."\n".implode("\n", (array) ($result['messages'] ?? []));
+
+        if (
+            $this->site->companion_variant === 'renegade'
+            && str_contains($combinedErrorText, 'Could not copy file.')
+        ) {
+            $fallback = $this->updateThemeViaAdminAjax($slug);
+            if (($fallback['ok'] ?? false) === true) {
+                return $fallback;
+            }
+
+            $fallbackErr = (string) ($fallback['error'] ?? '');
+            if ($fallbackErr !== '' && ! str_starts_with($fallbackErr, 'admin_ajax_fallback_')) {
+                return $fallback;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Fallback for managed hosts (e.g. WP Engine) whose front-end Disk Write
+     * Protection blocks `/index.php` (`/wp-json/...`) from writing `.php` files
+     * under `wp-content/themes/`, while permitting authenticated requests to
+     * `/wp-admin/admin-ajax.php` (`action=update-theme`).
+     *
+     * @return array{
+     *   ok: bool,
+     *   slug: string,
+     *   before_version: string,
+     *   after_version: ?string,
+     *   was_active: bool,
+     *   reactivated: bool,
+     *   messages: array<int, string>,
+     *   elapsed_ms: int,
+     *   error?: string,
+     * }
+     */
+    protected function updateThemeViaAdminAjax(string $slug): array
+    {
+        $start = microtime(true);
+
+        try {
+            $beforePayload = $this->getJson('/themes');
+            $beforeList = $beforePayload['items'] ?? $beforePayload['themes'] ?? [];
+            $beforeTheme = collect($beforeList)->firstWhere('slug', $slug);
+            $beforeVersion = (string) ($beforeTheme['version'] ?? '');
+            $wasActive = (bool) ($beforeTheme['active'] ?? false);
+
+            $admins = $this->admins()['admins'] ?? [];
+            if (! is_array($admins) || $admins === []) {
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => 0, 'error' => 'admin_ajax_fallback_no_admins'];
+            }
+
+            usort($admins, static function (array $a, array $b): int {
+                $aAgency = str_ends_with(strtolower((string) ($a['email'] ?? '')), '@clockworkwd.com')
+                    || str_ends_with(strtolower((string) ($a['email'] ?? '')), '@clockworkwp.com');
+                $bAgency = str_ends_with(strtolower((string) ($b['email'] ?? '')), '@clockworkwd.com')
+                    || str_ends_with(strtolower((string) ($b['email'] ?? '')), '@clockworkwp.com');
+
+                return $bAgency <=> $aAgency;
+            });
+
+            $jar = null;
+            $nonce = '';
+            $baseUrl = '';
+
+            foreach ($admins as $admin) {
+                $login = (string) ($admin['login'] ?? '');
+                if ($login === '') {
+                    continue;
+                }
+
+                $sso = $this->generateSsoLink($login, 90, '/wp-admin/themes.php');
+                $ssoUrl = (string) ($sso['url'] ?? '');
+                if ($ssoUrl === '') {
+                    continue;
+                }
+
+                $parts = parse_url($ssoUrl);
+                if (
+                    ! is_array($parts)
+                    || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+                    || empty($parts['host'])
+                    || ! self::isSameSiteHost((string) $parts['host'], (string) $this->site->domain)
+                ) {
+                    continue;
+                }
+
+                $candidateBase = 'https://'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '');
+                SsrfGuard::assertPublic($ssoUrl);
+
+                $candidateJar = new CookieJar;
+                $page = Http::withHeaders(['User-Agent' => self::USER_AGENT])
+                    ->withOptions([
+                        'cookies' => $candidateJar,
+                        'verify' => (bool) config('clockwork.companion.verify_tls', false),
+                        'allow_redirects' => [
+                            'max' => 5,
+                            'strict' => true,
+                            'protocols' => ['https'],
+                            'on_redirect' => SsrfGuard::onRedirect(),
+                        ],
+                    ])
+                    ->timeout(45)
+                    ->get($ssoUrl);
+
+                if (preg_match('/"ajax_nonce":"([a-f0-9]+)"/i', $page->body(), $m)) {
+                    $jar = $candidateJar;
+                    $nonce = $m[1];
+                    $baseUrl = $candidateBase;
+                    break;
+                }
+            }
+
+            if ($jar === null || $nonce === '' || $baseUrl === '') {
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => 0, 'error' => 'admin_ajax_fallback_no_nonce'];
+            }
+
+            $up = Http::withHeaders(['User-Agent' => self::USER_AGENT])
+                ->withOptions([
+                    'cookies' => $jar,
+                    'verify' => (bool) config('clockwork.companion.verify_tls', false),
+                    'allow_redirects' => [
+                        'max' => 5,
+                        'strict' => true,
+                        'protocols' => ['https'],
+                        'on_redirect' => SsrfGuard::onRedirect(),
+                    ],
+                ])
+                ->asForm()
+                ->timeout(120)
+                ->post($baseUrl.'/wp-admin/admin-ajax.php', [
+                    'action' => 'update-theme',
+                    'slug' => $slug,
+                    '_ajax_nonce' => $nonce,
+                ]);
+
+            $json = $this->salvageJsonBody($up);
+
+            $afterPayload = $this->getJson('/themes');
+            $afterList = $afterPayload['items'] ?? $afterPayload['themes'] ?? [];
+            $afterTheme = collect($afterList)->firstWhere('slug', $slug);
+            $afterVersion = (string) ($afterTheme['version'] ?? $beforeVersion);
+            $versionAdvanced = $beforeVersion !== '' && $afterVersion !== '' && version_compare($afterVersion, $beforeVersion, '>');
+
+            if ((! is_array($json) || ($json['success'] ?? false) !== true) && ! $versionAdvanced) {
+                $errMsg = (string) ($json['data']['errorMessage'] ?? 'admin-ajax update-theme returned false');
+
+                return ['ok' => false, 'slug' => $slug, 'before_version' => $beforeVersion, 'after_version' => null, 'was_active' => $wasActive, 'reactivated' => false, 'messages' => [], 'elapsed_ms' => (int) round((microtime(true) - $start) * 1000), 'error' => 'upgrade_failed: '.$errMsg];
+            }
+
+            return [
+                'ok' => true,
+                'slug' => $slug,
+                'before_version' => $beforeVersion,
+                'after_version' => $afterVersion,
+                'was_active' => $wasActive,
+                'reactivated' => $wasActive,
+                'messages' => ['Updated via wp-admin/admin-ajax.php fallback.'],
+                'elapsed_ms' => (int) round((microtime(true) - $start) * 1000),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'slug' => $slug,
+                'before_version' => '',
+                'after_version' => null,
+                'was_active' => false,
+                'reactivated' => false,
+                'messages' => [],
+                'elapsed_ms' => (int) round((microtime(true) - $start) * 1000),
+                'error' => 'admin_ajax_fallback_exception: '.$e->getMessage(),
+            ];
+        }
     }
 
     /**
@@ -848,7 +1277,7 @@ class ClockworkCompanionClient
         // before REST JSON (the timezone-redirect case), a raw parse fails,
         // the rotation is reported as failed — but the plugin HAS already
         // swapped to the new secret, which is then lost. That desync silenced
-        // amymartinauctioneer for 3 days (2026-09-11 → 09-15) and needs a
+        // an affected site for 3 days (2026-09-11 → 09-15) and needs a
         // cache-flush + DB realign to recover from. Never discard a rotate
         // response without trying to salvage the secret out of it.
         $body = $this->salvageJsonBody($response) ?? [];
@@ -1044,7 +1473,7 @@ class ClockworkCompanionClient
             return $decoded;
         }
 
-        $excerpt = mb_strimwidth((string) $response->body(), 0, 200, '…');
+        $excerpt = self::sanitizeBodyExcerpt((string) $response->body());
         throw new RuntimeException(
             "Clockwork Companion {$method} {$route} on {$this->site->domain} returned a non-JSON or malformed body: {$excerpt}"
         );
@@ -1236,7 +1665,7 @@ class ClockworkCompanionClient
             // clockwork:check-ssl-certs job is where chain validity gets
             // tracked; it's not this client's job.
             ->withOptions([
-                'verify' => false,
+                'verify' => (bool) ($options['verify'] ?? config('clockwork.companion.verify_tls', false)),
                 'allow_redirects' => [
                     'max' => 5,
                     'strict' => true,
@@ -1292,12 +1721,27 @@ class ClockworkCompanionClient
     protected function guard(Response $response, string $method, string $route): Response
     {
         if ($response->failed()) {
-            $excerpt = mb_strimwidth((string) $response->body(), 0, 200, '…');
+            $excerpt = self::sanitizeBodyExcerpt((string) $response->body());
             throw new RuntimeException(
                 "Clockwork Companion {$method} {$route} on {$this->site->domain} failed: HTTP {$response->status()} {$excerpt}"
             );
         }
 
         return $response;
+    }
+
+    public static function isSameSiteHost(string $candidateHost, string $siteDomain): bool
+    {
+        $a = preg_replace('/^www\./i', '', strtolower(trim($candidateHost, '.')));
+        $b = preg_replace('/^www\./i', '', strtolower(trim($siteDomain, '.')));
+
+        return $a !== '' && $a === $b;
+    }
+
+    private static function sanitizeBodyExcerpt(string $raw): string
+    {
+        $clean = (string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $raw);
+
+        return mb_strimwidth(trim($clean), 0, 200, '…');
     }
 }

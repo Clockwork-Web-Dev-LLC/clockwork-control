@@ -506,7 +506,7 @@ describe('clockwork:import-spinupwp', function () {
 
         $server = Server::factory()->create(['spinupwp_id' => '12345']);
         $existing = Site::factory()->create([
-            'domain' => 'caringworksinc.org',
+            'domain' => 'example-nonprofit.org',
             'server_id' => $server->id,
             'spinupwp_id' => '67890',
             'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
@@ -524,9 +524,9 @@ describe('clockwork:import-spinupwp', function () {
                     SpinupWpFixtures::site([
                         'id' => 67890,
                         'server_id' => 12345,
-                        'domain' => 'www.caringworksinc.org',
+                        'domain' => 'www.example-nonprofit.org',
                         'additional_domains' => [
-                            ['domain' => 'caringworksinc.org'],
+                            ['domain' => 'example-nonprofit.org'],
                         ],
                         'is_wordpress' => true,
                     ]),
@@ -540,7 +540,7 @@ describe('clockwork:import-spinupwp', function () {
         expect(Site::withoutGlobalScopes()->where('spinupwp_id', '67890')->count())->toBe(1);
         $site = Site::withoutGlobalScopes()->where('spinupwp_id', '67890')->first();
         expect($site->id)->toBe($existing->id)
-            ->and($site->domain)->toBe('caringworksinc.org');
+            ->and($site->domain)->toBe('example-nonprofit.org');
     });
 
     it('matches an existing site by www/root variant when spinupwp_id was null', function () {
@@ -548,7 +548,7 @@ describe('clockwork:import-spinupwp', function () {
 
         $server = Server::factory()->create(['spinupwp_id' => '12345']);
         $existing = Site::factory()->create([
-            'domain' => 'caringworksinc.org',
+            'domain' => 'example-nonprofit.org',
             'server_id' => $server->id,
             'spinupwp_id' => null,
             'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP,
@@ -566,7 +566,7 @@ describe('clockwork:import-spinupwp', function () {
                     SpinupWpFixtures::site([
                         'id' => 67890,
                         'server_id' => 12345,
-                        'domain' => 'www.caringworksinc.org',
+                        'domain' => 'www.example-nonprofit.org',
                         'is_wordpress' => true,
                     ]),
                 ]),

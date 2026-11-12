@@ -5,5 +5,5 @@ use Modules\Mattermost\MattermostSettingsController;
 
 Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::get('/settings/mattermost', [MattermostSettingsController::class, 'index'])->name('settings.mattermost.index');
-    Route::patch('/settings/mattermost/events/{key}', [MattermostSettingsController::class, 'toggleEvent'])->name('settings.mattermost.events.update');
+    Route::patch('/settings/mattermost/events/{key}', [MattermostSettingsController::class, 'toggleEvent'])->middleware('admin')->name('settings.mattermost.events.update');
 });

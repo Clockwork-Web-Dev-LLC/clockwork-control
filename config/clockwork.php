@@ -11,7 +11,7 @@ return [
     // despite the code (and every other artifact of the update) being
     // genuinely current. Bump the literal string below at each release
     // per RELEASING.md; do not reintroduce an env() wrapper here.
-    'version' => '1.12.2',
+    'version' => '1.12.4',
 
     // Demo mode interlock for marketing screenshots and anonymized datasets.
     // Gates screenshot Dusk runs to prevent running against live production,
@@ -322,7 +322,7 @@ return [
     ],
 
     'companion' => [
-        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.43.1'),
+        'version' => env('CLOCKWORK_COMPANION_VERSION', '1.43.2'),
 
         // Where the Clockwork Companion mu-plugin .zip is published.
         // Empty during development — installer falls back to local rsync from companion_local_path.
@@ -354,10 +354,16 @@ return [
         // Long calls (plugin/theme/core update) ignore this — they pass their
         // own timeout in $options.
         'timeout_multisite' => env('CLOCKWORK_COMPANION_TIMEOUT_MULTISITE', 60),
+
+        // Opt-in strict TLS chain validation for Companion/Renegade REST calls.
+        // Defaults to false because origin hosts with incomplete Sectigo/GoDaddy
+        // intermediate chains (common in shared/managed hosting) fail cURL chain
+        // verification even though browsers resolve intermediates via AIA.
+        'verify_tls' => (bool) env('CLOCKWORK_COMPANION_VERIFY_TLS', false),
     ],
 
     'renegade' => [
-        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.1.3'),
+        'version' => env('CLOCKWORK_RENEGADE_VERSION', '1.1.4'),
 
         // Public GitHub Release .zip fallback when local_path is absent on self-hosted instances.
         'release_zip_url' => env(

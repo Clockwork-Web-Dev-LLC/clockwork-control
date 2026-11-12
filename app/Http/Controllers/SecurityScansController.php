@@ -115,8 +115,19 @@ class SecurityScansController extends Controller
             ? "Nothing to run for {$site->domain} (not a WordPress site)."
             : 'Ran '.implode(' + ', $ranLabels)." on {$site->domain}.";
 
+        $referer = (string) $request->headers->get('referer', '');
+        $safeTarget = route('security.scans');
+        if ($referer !== '') {
+            $originPrefix = $request->getSchemeAndHttpHost().'/';
+            if (str_starts_with($referer, $originPrefix)) {
+                $safeTarget = $referer;
+            } elseif (str_starts_with($referer, '/') && ! str_starts_with($referer, '//') && ! str_starts_with($referer, '/\\')) {
+                $safeTarget = $referer;
+            }
+        }
+
         return redirect()
-            ->to($request->headers->get('referer') ?: route('security.scans'))
+            ->to($safeTarget)
             ->with('flash', $message);
     }
 
@@ -152,13 +163,24 @@ class SecurityScansController extends Controller
 
         $absolute = rtrim($wpPath, '/').'/'.$path;
 
-        // Cap the read at 64KB. Hardening files are tiny; if a flagged file is
-        // bigger than that it's almost certainly malicious and we'd rather not
-        // dump the whole payload to the operator's browser anyway.
-        $command = sprintf(
-            'ls -la %1$s 2>&1; echo "---STAT---"; stat -c "%%y" %1$s 2>&1; echo "---SIZE---"; wc -c %1$s 2>&1; echo "---HEAD---"; head -c 65536 %1$s 2>&1',
+        // Cap the read at 64KB and enforce realpath containment + symlink rejection
+        // so a compromised tenant cannot symlink a flagged path to /etc/shadow or
+        // another tenant's wp-config.php.
+        $innerScript = sprintf(
+            'WP_REAL=$(readlink -f %1$s 2>/dev/null || true); TARGET=%2$s; TARGET_REAL=$(readlink -f "$TARGET" 2>/dev/null || true); '
+            .'if [ -z "$WP_REAL" ] || [ -z "$TARGET_REAL" ] || [ -L "$TARGET" ] || [ ! -f "$TARGET" ]; then echo "Refused: symlink or non-regular file."; exit 1; fi; '
+            .'case "$TARGET_REAL" in "$WP_REAL"/*) ;; *) echo "Refused: path escapes WordPress root."; exit 1 ;; esac; '
+            .'ls -la "$TARGET" 2>&1; echo "---STAT---"; stat -c "%%y" "$TARGET" 2>&1; echo "---SIZE---"; wc -c "$TARGET" 2>&1; echo "---HEAD---"; head -c 65536 "$TARGET" 2>&1',
+            escapeshellarg(rtrim($wpPath, '/')),
             escapeshellarg($absolute),
         );
+
+        $siteUser = (string) $site->site_user;
+        if ($site->server?->ssh_user === 'root' && preg_match('/^[a-z_][a-z0-9_-]{0,31}$/i', $siteUser)) {
+            $command = 'sudo -n -u '.escapeshellarg($siteUser).' bash -c '.escapeshellarg($innerScript);
+        } else {
+            $command = 'bash -c '.escapeshellarg($innerScript);
+        }
 
         try {
             $output = $ssh->exec($site->server, $command, 30);
@@ -166,6 +188,12 @@ class SecurityScansController extends Controller
             return redirect()
                 ->route('sites.show', [$site, 'security'])
                 ->with('flash', 'SSH read failed: '.$e->getMessage());
+        }
+
+        if (str_starts_with(trim($output), 'Refused:')) {
+            return redirect()
+                ->route('sites.show', [$site, 'security'])
+                ->with('flash', trim($output));
         }
 
         $sections = $this->splitFileOutput($output);

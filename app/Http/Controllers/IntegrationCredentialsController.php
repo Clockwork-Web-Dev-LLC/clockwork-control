@@ -6,6 +6,7 @@ use App\Services\Diagnostics\Checks\CloudflareCheck;
 use App\Services\Diagnostics\Checks\DigitalOceanSpacesCheck;
 use App\Services\Diagnostics\Checks\GoogleSafeBrowsingCheck;
 use App\Support\CredentialResolver;
+use App\Support\EnvCredentialManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -168,6 +169,9 @@ class IntegrationCredentialsController extends Controller
                 if ($clear) {
                     $resolver->forget($path);
                 } elseif (is_string($value) && $value !== '') {
+                    if ($path === 'ssh.default_key_path' && ! EnvCredentialManager::isSafeSshKeyPath(trim($value))) {
+                        return back()->withErrors(['value_ssh_default_key_path' => 'Invalid or unsafe SSH key path.']);
+                    }
                     $resolver->put($path, $value);
                 }
                 // Blank, non-cleared submit leaves the stored value untouched.

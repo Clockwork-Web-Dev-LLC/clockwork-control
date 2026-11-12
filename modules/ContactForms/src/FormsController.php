@@ -71,7 +71,7 @@ class FormsController extends Controller
         $validated = $request->validate([
             'form_id' => ['required', 'string', 'max:64'],
             'form_plugin' => ['nullable', 'string', 'max:32'],
-            'form_url' => ['nullable', 'url', 'max:255'],
+            'form_url' => ['nullable', 'url:http,https', 'max:255'],
             // Daily is accepted unconditionally; the UI only exposes it on
             // ?admin=1, but the controller stays plain so tinker / DB edits
             // also work.
@@ -107,7 +107,7 @@ class FormsController extends Controller
         $validated = $request->validate([
             'form_id' => ['nullable', 'string', 'max:64'],
             'form_plugin' => ['nullable', 'string', 'max:32'],
-            'form_url' => ['nullable', 'url', 'max:255'],
+            'form_url' => ['nullable', 'url:http,https', 'max:255'],
             'frequency' => ['nullable', 'in:daily,weekly'],
             'enabled' => ['nullable', 'boolean'],
         ]);

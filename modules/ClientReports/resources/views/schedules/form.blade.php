@@ -109,13 +109,18 @@
                             <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">Aggregates the previous full calendar month.</p>
                         </div>
                     </label>
+                    {{-- Every run reports on the previous calendar month, so "weekly" only
+                         re-checks it each week. Offered only to a schedule already set to it
+                         (from wp-admin, say), with what it really does. --}}
+                    @if ($freq === 'weekly')
                     <label class="card p-3.5 flex items-start gap-3 cursor-pointer hover:bg-[var(--color-surface-alt)]/60 transition-colors border border-[var(--color-border-light)] rounded-xl">
-                        <input type="radio" name="frequency" value="weekly" {{ $freq === 'weekly' ? 'checked' : '' }} class="mt-1 text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
+                        <input type="radio" name="frequency" value="weekly" checked class="mt-1 text-[var(--color-brand)] focus:ring-[var(--color-brand)]">
                         <div>
                             <span class="text-sm font-semibold text-[var(--color-ink-strong)]">Weekly</span>
-                            <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">Aggregates metrics and updates for the previous 7 days.</p>
+                            <p class="text-xs text-[var(--color-ink-muted)] mt-0.5">Runs weekly but still reports on the previous calendar month, and never emails the same month twice. Switch to Monthly.</p>
                         </div>
                     </label>
+                    @endif
                 </div>
             </div>
 
@@ -147,6 +152,12 @@
                         </div>
                     </label>
                 </div>
+                @if (\Modules\ClientReports\Services\ScheduledReportRunner::approvalRequired())
+                    <p class="text-xs text-[var(--color-ink-muted)] mt-2">
+                        <i class="fa-solid fa-user-check mr-1"></i>Approval is on for every schedule, so Automatic reports also wait for you to send them.
+                        Change it on the <a href="{{ route('client-reports.schedules.index') }}" class="underline">Scheduling</a> tab.
+                    </p>
+                @endif
             </div>
 
             {{-- Recipient Emails --}}
@@ -170,6 +181,8 @@
             {{-- Enabled Toggle --}}
             <div class="pt-2 border-t border-[var(--color-border-light)]">
                 <label class="flex items-start gap-3 cursor-pointer select-none">
+                    {{-- An unchecked box sends nothing, and the controller reads a missing field as "on". --}}
+                    <input type="hidden" name="is_enabled" value="0">
                     <input type="checkbox"
                            name="is_enabled"
                            value="1"

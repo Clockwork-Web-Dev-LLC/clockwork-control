@@ -100,7 +100,9 @@ it('records SpinupWP runs from the Spaces bucket', function () {
     expect(SiteBackup::where('site_id', $site->id)->sole())
         ->source->toBe(SiteBackup::SOURCE_SPINUPWP_SPACES)
         ->kind->toBe(SiteBackup::KIND_FULL)
-        ->bytes->toBe(6000);
+        ->bytes->toBe(6000)
+        // The database half on its own, so a broken dump can't hide behind the files.
+        ->database_bytes->toBe(1000);
 });
 
 it('records our own S3 archives for sites we do not host', function () {

@@ -3,6 +3,7 @@
 namespace Modules\TurnkeyWp;
 
 use App\Support\Settings;
+use App\Support\SsrfGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
@@ -304,8 +305,14 @@ class TurnkeyWpClient
             throw new RuntimeException('TurnkeyWP API token is not configured.');
         }
 
+        if (! str_starts_with(strtolower($this->baseUrl()), 'https://')) {
+            throw new RuntimeException("TurnkeyWP base URL must use HTTPS: {$this->baseUrl()}");
+        }
+        SsrfGuard::assertPublic($this->baseUrl());
+
         $request = Http::withToken((string) $this->token)
             ->timeout((int) $this->timeout)
+            ->withoutRedirecting()
             ->acceptJson()
             ->withHeaders(['User-Agent' => 'ClockworkControl-TurnkeyWP/1.0']);
 

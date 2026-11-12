@@ -4,6 +4,7 @@ namespace Modules\AiRemedy\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use App\Services\ActionLog\ActionLogger;
 use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -71,21 +72,22 @@ class AiRemedySettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, ActionLogger $actionLogger): RedirectResponse
     {
         $validated = $request->validate([
-            'openrouter_api_key' => 'nullable|string',
-            'model' => 'required|string',
-            'mode' => 'required|string|in:watch,interactive,auto_heal',
-            'auto_triage_spikes' => 'nullable|boolean',
-            'cpu_spike_threshold' => 'required|integer|min:50|max:99',
-            'cooldown_minutes' => 'required|integer|min:5|max:1440',
-            'auto_mute_maintenance_alerts' => 'nullable|boolean',
-            'allowed_maintenance_processes' => 'nullable|string',
-            'safety_tier_rules' => 'nullable|string',
+            'openrouter_api_key' => ['nullable', 'string', 'max:512'],
+            'model' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._:-]{0,95}$/i'],
+            'mode' => ['required', 'string', 'in:watch,interactive,auto_heal'],
+            'auto_triage_spikes' => ['nullable', 'boolean'],
+            'cpu_spike_threshold' => ['required', 'integer', 'min:50', 'max:99'],
+            'cooldown_minutes' => ['required', 'integer', 'min:5', 'max:1440'],
+            'auto_mute_maintenance_alerts' => ['nullable', 'boolean'],
+            'allowed_maintenance_processes' => ['nullable', 'string', 'max:1000'],
+            'safety_tier_rules' => ['nullable', 'string', 'max:16384'],
         ]);
 
-        if ($request->filled('openrouter_api_key')) {
+        $apiKeyUpdated = $request->filled('openrouter_api_key');
+        if ($apiKeyUpdated) {
             $this->client->setApiKey($validated['openrouter_api_key']);
         }
 
@@ -97,12 +99,14 @@ class AiRemedySettingsController extends Controller
         $this->settings->put('clockwork.ai_remedy.cooldown_minutes', (int) $validated['cooldown_minutes']);
         $this->settings->put('clockwork.ai_remedy.auto_mute_maintenance_alerts', $request->boolean('auto_mute_maintenance_alerts'));
 
+        $processesList = null;
         if ($request->has('allowed_maintenance_processes')) {
             $rawProcesses = (string) $request->input('allowed_maintenance_processes');
             $processesList = array_values(array_filter(array_map('trim', explode(',', strtolower($rawProcesses)))));
             $this->settings->put('clockwork.ai_remedy.allowed_maintenance_processes', $processesList);
         }
 
+        $sanitizedRules = null;
         if ($request->filled('safety_tier_rules')) {
             $decodedRules = json_decode((string) $request->input('safety_tier_rules'), true);
             if (is_array($decodedRules)) {
@@ -116,6 +120,24 @@ class AiRemedySettingsController extends Controller
                 $this->settings->put('clockwork.ai_remedy.safety_tier_rules', $sanitizedRules);
             }
         }
+
+        $user = $request->user();
+        $actor = $user !== null ? $user->email : 'manual';
+        $actionLogger->record(
+            actionType: 'ai_remedy_settings_updated',
+            summary: sprintf('Updated AiRemedy settings (mode: %s, model: %s)', $validated['mode'], $validated['model']),
+            target: 'ai-remedy',
+            details: [
+                'mode' => $validated['mode'],
+                'model' => $validated['model'],
+                'api_key_updated' => $apiKeyUpdated,
+                'auto_triage_spikes' => $request->boolean('auto_triage_spikes'),
+                'cpu_spike_threshold' => (int) $validated['cpu_spike_threshold'],
+                'cooldown_minutes' => (int) $validated['cooldown_minutes'],
+                'safety_tier_rules' => $sanitizedRules,
+            ],
+            actor: $actor,
+        );
 
         return back()->with('status', 'AiRemedy settings updated successfully.');
     }

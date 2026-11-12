@@ -52,7 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     return null;
                 }
 
-                if ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 404) {
+                if ($e instanceof HttpExceptionInterface && in_array($e->getStatusCode(), [403, 404, 419, 429], true)) {
                     return null;
                 }
 

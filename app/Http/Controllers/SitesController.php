@@ -38,6 +38,7 @@ use App\Support\CompanionExclusion;
 use App\Support\FleetSelfIps;
 use App\Support\UpgraderOutput;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -920,10 +921,10 @@ class SitesController extends Controller
             'body' => ['nullable', 'string', 'max:1000'],
             'support_label' => ['nullable', 'string', 'max:100'],
             'support_email' => ['nullable', 'email', 'max:255'],
-            'support_url' => ['nullable', 'url', 'max:255'],
+            'support_url' => ['nullable', 'url:http,https', 'max:255'],
             'show_ip' => ['nullable', 'in:default,1,0'],
             'show_unlock_link' => ['nullable', 'in:default,1,0'],
-            'unlock_url' => ['nullable', 'url', 'max:255'],
+            'unlock_url' => ['nullable', 'url:http,https', 'max:255'],
             'ignore_ips' => ['nullable', 'string'],
             'ignore_cidrs' => ['nullable', 'string'],
         ]);
@@ -1529,6 +1530,22 @@ class SitesController extends Controller
             return back()->with('status_error', 'Companion returned an empty URL.');
         }
 
+        $loginUrl = $result['url'];
+        $loginScheme = strtolower((string) parse_url($loginUrl, PHP_URL_SCHEME));
+        $loginHost = (string) parse_url($loginUrl, PHP_URL_HOST);
+        if ($loginScheme !== 'https' || $loginHost === '' || ! ClockworkCompanionClient::isSameSiteHost($loginHost, $site->domain)) {
+            $logger->record(
+                actionType: ActionLog::TYPE_SSO_LOGIN,
+                summary: "SSO launch blocked: untrusted redirect host ({$loginHost}) for {$site->domain}.",
+                site: $site,
+                target: $login,
+                ok: false,
+                error: 'untrusted_sso_redirect_host',
+            );
+
+            return back()->with('status_error', 'Companion returned an untrusted SSO URL outside the site domain.');
+        }
+
         $logger->record(
             actionType: ActionLog::TYPE_SSO_LOGIN,
             summary: "Logged in as {$login} on {$site->domain}.",
@@ -1537,7 +1554,7 @@ class SitesController extends Controller
             details: ['expires_at' => $result['expires_at']],
         );
 
-        return redirect()->away($result['url']);
+        return redirect()->away($loginUrl);
     }
 
     /**
@@ -1592,7 +1609,8 @@ class SitesController extends Controller
         $summary = $result['ok']
             ? ($result['before_version'] === $result['after_version']
                 ? "Plugin already up to date: {$slug} ({$result['before_version']}) on {$site->domain}."
-                : "Updated {$slug} {$result['before_version']} → {$result['after_version']} on {$site->domain}.")
+                // Worded as the update jobs word it: client reports list this.
+                : sprintf('Plugin updated: %s %s → %s', $this->snapshotPluginName($site, $slug), $result['before_version'], $result['after_version']))
             : "Plugin update failed: {$slug} on {$site->domain}.";
 
         $logger->record(
@@ -1607,6 +1625,18 @@ class SitesController extends Controller
         );
 
         return response()->json($result);
+    }
+
+    /** The plugin's name from the site's Companion snapshot, or its slug. */
+    private function snapshotPluginName(Site $site, string $slug): string
+    {
+        foreach ((array) ($site->companion_snapshot['plugins']['plugins'] ?? []) as $plugin) {
+            if (is_array($plugin) && ($plugin['slug'] ?? null) === $slug && trim((string) ($plugin['name'] ?? '')) !== '') {
+                return html_entity_decode(trim((string) $plugin['name']), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+        }
+
+        return $slug;
     }
 
     /**
@@ -2260,7 +2290,11 @@ class SitesController extends Controller
         $domain = explode(':', $domain)[0];
         $domain = strtolower(trim($domain));
 
-        if ($domain === '' || ! str_contains($domain, '.')) {
+        if (
+            $domain === ''
+            || strlen($domain) > 253
+            || ! preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $domain)
+        ) {
             return back()->withInput($this->enrollSafeInput($request))->withErrors([
                 'domain' => 'Please enter a valid domain name (e.g. example.com).',
             ]);
@@ -2304,12 +2338,15 @@ class SitesController extends Controller
             } catch (Throwable $e) {
                 $lastError = $e;
                 $msg = $e->getMessage();
-                if (str_contains($msg, '401') || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
+                $status = ($e instanceof RequestException)
+                    ? $e->response->status()
+                    : null;
+                if ($status === 401 || preg_match('/\b(?:HTTP|status code)\s+401\b/i', $msg) === 1 || str_contains($msg, 'invalid_signature') || str_contains($msg, 'unauthorized')) {
                     return back()->withInput($this->enrollSafeInput($request))->withErrors([
                         'companion_secret' => "Authentication failed (HTTP 401). The Companion secret does not match the secret on {$domain}.",
                     ]);
                 }
-                if (str_contains($msg, '404')) {
+                if ($status === 404 || preg_match('/\b(?:HTTP|status code)\s+404\b/i', $msg) === 1) {
                     continue;
                 }
                 break;
@@ -2318,7 +2355,10 @@ class SitesController extends Controller
 
         if ($health === null && $lastError !== null) {
             $msg = $lastError->getMessage();
-            if (str_contains($msg, '404')) {
+            $status = ($lastError instanceof RequestException)
+                ? $lastError->response->status()
+                : null;
+            if ($status === 404 || preg_match('/\b(?:HTTP|status code)\s+404\b/i', $msg) === 1) {
                 return back()->withInput($this->enrollSafeInput($request))->withErrors([
                     'domain' => "Neither Clockwork Renegade nor Clockwork Companion REST API was found on {$domain} (HTTP 404). Ensure the plugin is installed and activated.",
                 ]);

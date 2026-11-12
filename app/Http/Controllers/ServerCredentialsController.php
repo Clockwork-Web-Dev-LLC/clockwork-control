@@ -26,7 +26,7 @@ class ServerCredentialsController extends Controller
     public function bulkUpdate(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'ssh_user' => ['nullable', 'string', 'max:255'],
+            'ssh_user' => ['nullable', 'string', 'max:32', 'regex:/^[a-z_][a-z0-9_.-]{0,31}$/i'],
             'passwords' => ['array'],
             'passwords.*' => ['nullable', 'string'],
         ]);
@@ -75,7 +75,7 @@ class ServerCredentialsController extends Controller
     public function update(Request $request, Server $server, SshClient $ssh): RedirectResponse
     {
         $validated = $request->validate([
-            'ssh_user' => ['required', 'string', 'max:255'],
+            'ssh_user' => ['required', 'string', 'max:32', 'regex:/^[a-z_][a-z0-9_.-]{0,31}$/i'],
             'ssh_port' => ['required', 'integer', 'min:1', 'max:65535'],
             'ssh_password' => ['nullable', 'string'],
             'clear_password' => ['nullable', 'boolean'],
@@ -212,13 +212,19 @@ class ServerCredentialsController extends Controller
                     $server->ssh_password = $row['password'];
                 }
 
-                if (! empty($row['user']) && ! empty($row['update_user']) && $row['user'] !== $server->ssh_user) {
+                if (
+                    ! empty($row['user'])
+                    && ! empty($row['update_user'])
+                    && preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', (string) $row['user']) === 1
+                    && $row['user'] !== $server->ssh_user
+                ) {
                     $server->ssh_user = $row['user'];
                     $userUpdates++;
                 }
 
-                if (! empty($row['port']) && (int) $row['port'] !== (int) $server->ssh_port) {
-                    $server->ssh_port = (int) $row['port'];
+                $port = isset($row['port']) ? (int) $row['port'] : 0;
+                if ($port >= 1 && $port <= 65535 && $port !== (int) $server->ssh_port) {
+                    $server->ssh_port = $port;
                 }
 
                 $server->save();
@@ -227,7 +233,15 @@ class ServerCredentialsController extends Controller
                 // Defensive checks before creating — feed was supposed to validate
                 // these upstream but a hand-crafted POST could skip server_id without
                 // having all the create-required fields.
-                if (empty($row['name']) || empty($row['ip']) || empty($row['user'])) {
+                $rowName = trim((string) ($row['name'] ?? ''));
+                $rowIp = trim((string) ($row['ip'] ?? ''));
+                $rowUser = trim((string) ($row['user'] ?? ''));
+                $rowPort = (int) ($row['port'] ?? 22);
+                $validHost = filter_var($rowIp, FILTER_VALIDATE_IP) !== false
+                    || preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i', $rowIp) === 1;
+                $validUser = preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $rowUser) === 1;
+
+                if ($rowName === '' || ! $validHost || ! $validUser || $rowPort < 1 || $rowPort > 65535) {
                     $skipped++;
 
                     continue;
@@ -236,8 +250,8 @@ class ServerCredentialsController extends Controller
                 // Skip if a server with this name OR IP showed up between parse and
                 // apply (race avoidance). Operator can re-paste.
                 $existing = Server::query()
-                    ->where(function ($q) use ($row) {
-                        $q->where('name', $row['name'])->orWhere('hostname', $row['ip']);
+                    ->where(function ($q) use ($rowName, $rowIp) {
+                        $q->where('name', $rowName)->orWhere('hostname', $rowIp);
                     })
                     ->first();
                 if ($existing) {
@@ -247,10 +261,10 @@ class ServerCredentialsController extends Controller
                 }
 
                 $server = Server::create([
-                    'name' => $row['name'],
-                    'hostname' => $row['ip'],
-                    'ssh_user' => $row['user'],
-                    'ssh_port' => (int) ($row['port'] ?? 22),
+                    'name' => $rowName,
+                    'hostname' => $rowIp,
+                    'ssh_user' => $rowUser,
+                    'ssh_port' => $rowPort,
                     'ssh_password' => $row['password'] ?? '',
                     'status' => Server::STATUS_UNKNOWN,
                     'is_ignored' => false,

@@ -63,8 +63,16 @@ class ServerSiteContext
             return "{$path} isn't a WordPress site Clockwork knows on this server.";
         }
 
-        if ($isWp && preg_match('/^sudo\s+-u\s+(\S+)\s/i', $command, $um) && $site['site_user'] && $um[1] !== $site['site_user']) {
-            return "{$site['domain']} runs as {$site['site_user']}, not {$um[1]}.";
+        if ($isWp && $site['site_user']) {
+            if (preg_match('/(?:^|\s)--allow-root(?:\s|$)/i', $command)) {
+                return "{$site['domain']} runs as {$site['site_user']}; do not use --allow-root.";
+            }
+            if (! preg_match('/^sudo\s+-u\s+(\S+)\s/i', $command, $um)) {
+                return "{$site['domain']} runs as {$site['site_user']}; prefix wp-cli with sudo -u {$site['site_user']}.";
+            }
+            if ($um[1] !== $site['site_user']) {
+                return "{$site['domain']} runs as {$site['site_user']}, not {$um[1]}.";
+            }
         }
 
         return null;

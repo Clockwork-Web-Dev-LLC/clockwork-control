@@ -112,8 +112,8 @@ class ImportPressable extends Command
         // adds/renames the primary domain to www.example.com) while `id`
         // stays stable — a domain-only lookup would miss that existing row
         // and then crash on the pressable_site_id unique constraint trying
-        // to insert a "new" one. Found live 2026-09-12: tlolawfirm.com's
-        // Pressable id started reporting url=www.tlolawfirm.com, which blew
+        // to insert a "new" one. Found live 2026-09-12: example-law.com's
+        // Pressable id started reporting url=www.example-law.com, which blew
         // up the entire fleet-wide import (one bad row rolls back the whole
         // transaction) until this lookup order was fixed.
         $site = $pressableId !== null

@@ -338,8 +338,14 @@
                                 {{ strtoupper(str_replace('_', ' ', $item->status)) }}
                             </span>
 
-                            <a href="{{ $item->url }}{{ str_contains($item->url, '?') ? '&' : '?' }}feedback_pin={{ $item->id }}"
+                            @php
+                                $safeItemUrl = preg_match('#^(?:https?://|/(?!/))#i', (string) $item->url)
+                                    ? $item->url
+                                    : ('/' . ltrim((string) $item->path, '/'));
+                            @endphp
+                            <a href="{{ $safeItemUrl }}{{ str_contains($safeItemUrl, '?') ? '&' : '?' }}feedback_pin={{ $item->id }}"
                                target="_blank"
+                               rel="noopener noreferrer"
                                class="font-data text-[11px] text-[var(--color-brand)] hover:underline flex items-center gap-1"
                                title="Jump to page and highlight pin">
                                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>

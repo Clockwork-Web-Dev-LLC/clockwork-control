@@ -205,14 +205,17 @@ class ImportTurnkeyWp extends Command
         }
 
         // A server still being created has no IP yet; pick it up next run.
-        $ip = $row['ip_address'] ?? null;
-        if (! is_string($ip) || $ip === '') {
+        $ip = is_string($row['ip_address'] ?? null) ? trim($row['ip_address']) : '';
+        if ($ip === '' || filter_var($ip, FILTER_VALIDATE_IP) === false) {
             $stats['skipped_no_ip']++;
 
             return;
         }
 
         $sshPort = (int) ($row['ssh_port'] ?? 22);
+        if ($sshPort < 1 || $sshPort > 65535) {
+            $sshPort = 22;
+        }
 
         $server = Server::where('turnkeywp_server_id', $turnkeyId)->first()
             ?? Server::where('hostname', $ip)->where('ssh_port', $sshPort)->first();
@@ -271,7 +274,10 @@ class ImportTurnkeyWp extends Command
             // TurnkeyWP disables root login after provisioning; its sudo
             // user is `turnkey`. Only set on create so an operator's
             // change (e.g. to a dedicated deploy user) sticks.
-            $server->ssh_user = (string) ($row['ssh_user'] ?? 'turnkey') ?: 'turnkey';
+            $rawSshUser = trim((string) ($row['ssh_user'] ?? 'turnkey'));
+            $server->ssh_user = preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $rawSshUser) === 1
+                ? $rawSshUser
+                : 'turnkey';
             $server->passwordless_sudo = $this->hasPasswordlessSudo($server->ssh_user);
             $server->status = Server::STATUS_UNKNOWN;
             $server->save();
@@ -305,7 +311,11 @@ class ImportTurnkeyWp extends Command
     {
         $domain = strtolower(trim((string) ($row['domain'] ?? '')));
         $turnkeyId = isset($row['id']) ? (string) $row['id'] : '';
-        if ($domain === '' || $turnkeyId === '') {
+        if (
+            $domain === ''
+            || $turnkeyId === ''
+            || preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/i', $domain) !== 1
+        ) {
             return;
         }
 
@@ -414,10 +424,16 @@ class ImportTurnkeyWp extends Command
         }
 
         if (! empty($row['site_user'])) {
-            $attributes['site_user'] = (string) $row['site_user'];
+            $candidateSiteUser = trim((string) $row['site_user']);
+            if (preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $candidateSiteUser) === 1) {
+                $attributes['site_user'] = $candidateSiteUser;
+            }
         }
         if (! empty($row['database']['table_prefix'])) {
-            $attributes['table_prefix'] = (string) $row['database']['table_prefix'];
+            $candidatePrefix = trim((string) $row['database']['table_prefix']);
+            if (preg_match('/^[a-zA-Z0-9_]{1,64}$/', $candidatePrefix) === 1) {
+                $attributes['table_prefix'] = $candidatePrefix;
+            }
         }
 
         // Certificates are checked by the live TLS probe. Keep a manual

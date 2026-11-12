@@ -70,8 +70,12 @@ class GlacierUploader
                 'url' => (string) ($presigned['url'] ?? ''),
                 'headers' => $this->normalizePutHeaders($presigned['headers'] ?? []),
             ];
-        } catch (Throwable) {
-            // Local/fake disks do not support S3 upload URLs.
+        } catch (Throwable $e) {
+            if (! app()->runningUnitTests() && config("filesystems.disks.{$this->diskName}.driver") === 's3') {
+                throw $e;
+            }
+
+            // Local/fake disks in dev or test runs do not support S3 upload URLs.
             return [
                 'url' => "https://s3.amazonaws.com/{$this->diskName}/{$destinationKey}?mock-presigned=true",
                 'headers' => ['x-amz-storage-class' => 'GLACIER_IR'],

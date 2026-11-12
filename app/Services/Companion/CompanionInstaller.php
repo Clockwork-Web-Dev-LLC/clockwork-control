@@ -162,8 +162,8 @@ class CompanionInstaller implements CompanionInstallerContract
         if (! $site->server) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Site has no linked server.'];
         }
-        if (! $site->site_user) {
-            return ['result' => self::RESULT_FAILED, 'message' => 'Site has no site_user; cannot drop privileges to install.'];
+        if (! $site->site_user || ! preg_match('/^[a-z_][a-z0-9_-]{0,31}$/i', (string) $site->site_user)) {
+            return ['result' => self::RESULT_FAILED, 'message' => 'Site has no valid site_user; cannot drop privileges to install.'];
         }
         if (! $site->server->hasSudoAccess()) {
             return ['result' => self::RESULT_FAILED, 'message' => 'Server has no sudo password stored; cannot run wp-cli as the site user.'];
@@ -189,6 +189,7 @@ class CompanionInstaller implements CompanionInstallerContract
         }
 
         $escapedB64Path = escapeshellarg($remoteB64Path);
+        $escapedWpPath = escapeshellarg($wpPath);
 
         // Atomic swap pattern: stage in .clockwork-stage inside wp-content/plugins,
         // move clockwork-companion.php into clockwork-companion/ so it runs as a
@@ -200,8 +201,9 @@ class CompanionInstaller implements CompanionInstallerContract
         // block — the site_user can't delete a file it doesn't own.
         $script = <<<BASH
 set -euo pipefail
-PLUGINS="{$wpPath}/wp-content/plugins"
-MU="{$wpPath}/wp-content/mu-plugins"
+WP_PATH={$escapedWpPath}
+PLUGINS="\$WP_PATH/wp-content/plugins"
+MU="\$WP_PATH/wp-content/mu-plugins"
 mkdir -p "\$PLUGINS"
 cd "\$PLUGINS"
 rm -rf .clockwork-stage
@@ -218,8 +220,8 @@ rm -rf "\$MU/clockwork-companion"
 rm -f "\$MU/clockwork-renegade.php"
 rm -rf "\$MU/clockwork-renegade"
 rm -rf clockwork-renegade
-/usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true
-/usr/local/bin/wp --path="{$wpPath}" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
+/usr/local/bin/wp --path="\$WP_PATH" --skip-plugins --skip-themes plugin deactivate clockwork-renegade >/dev/null 2>&1 || true
+/usr/local/bin/wp --path="\$WP_PATH" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
 echo "OK: companion staged at \$PLUGINS/clockwork-companion"
 BASH;
 

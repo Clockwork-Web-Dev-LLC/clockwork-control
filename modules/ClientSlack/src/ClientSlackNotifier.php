@@ -8,6 +8,7 @@ use App\Models\Server;
 use App\Models\Site;
 use App\Models\SiteSecurityScan;
 use App\Services\Chat\ChatNotifier;
+use App\Support\SsrfGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -248,18 +249,23 @@ class ClientSlackNotifier implements ChatNotifier
             return '';
         }
 
-        $url = $snapshot['client_notifications']['slack_webhook_url'] ?? '';
+        $url = trim((string) ($snapshot['client_notifications']['slack_webhook_url'] ?? ''));
 
-        return is_string($url) && str_starts_with($url, 'https://') ? $url : '';
+        return preg_match('#^https://hooks\.slack(?:-gov)?\.com/services/[A-Za-z0-9/_-]+$#', $url) === 1
+            ? $url
+            : '';
     }
 
     private function post(string $webhook, string $text, array $attachments): bool
     {
         try {
-            $response = Http::timeout(10)->post($webhook, [
-                'text' => $text,
-                'attachments' => $attachments,
-            ]);
+            SsrfGuard::assertPublic($webhook);
+            $response = Http::timeout(10)
+                ->withoutRedirecting()
+                ->post($webhook, [
+                    'text' => $text,
+                    'attachments' => $attachments,
+                ]);
         } catch (\Throwable $e) {
             Log::error('ClientSlackNotifier POST failed', ['exception' => $e->getMessage()]);
 

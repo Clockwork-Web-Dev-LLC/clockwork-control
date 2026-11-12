@@ -218,7 +218,7 @@ class CompanionSettingsController extends Controller
             'menu_title' => 'nullable|string|max:60',
             'menu_icon' => 'nullable|string|max:60',
             'brand_text' => 'nullable|string|max:60',
-            'logo_url' => 'nullable|string|max:500',
+            'logo_url' => self::logoUrlRules(),
             'primary_color' => CompanionBrandingManager::hexColorRules(),
             'accent_color' => CompanionBrandingManager::hexColorRules(),
             'hide_plugin_row' => 'nullable|boolean',
@@ -474,5 +474,47 @@ class CompanionSettingsController extends Controller
         $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
 
         return ! is_string($appHost) || $host !== rtrim(strtolower($appHost), '.');
+    }
+
+    /**
+     * Rules for the white-label logo URL: empty, a relative `/storage/branding/...`
+     * path (or APP_URL-prefixed uploaded logo URL), or a public http(s) URL.
+     *
+     * @return list<mixed>
+     */
+    private static function logoUrlRules(): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:500',
+            function (string $attribute, mixed $value, Closure $fail): void {
+                $url = trim((string) $value);
+                if ($url === '') {
+                    return;
+                }
+
+                // Allow locally uploaded public-disk logos (`/storage/branding/...` or `<APP_URL>/storage/branding/...`).
+                if (str_starts_with($url, '/storage/branding/') && ! str_contains($url, '..')) {
+                    return;
+                }
+
+                $appUrl = rtrim((string) config('app.url'), '/');
+                if ($appUrl !== '' && str_starts_with($url, $appUrl.'/storage/branding/') && ! str_contains($url, '..')) {
+                    return;
+                }
+
+                if (! preg_match('#^https?://#i', $url)) {
+                    $fail('The :attribute must be an http(s) URL or an uploaded branding path.');
+
+                    return;
+                }
+
+                $host = parse_url($url, PHP_URL_HOST);
+                if (! is_string($host) || $host === '' || ! self::isPublicHost($host)) {
+                    $fail('The :attribute must point to a public web host, not localhost or a private network address.');
+                }
+            },
+        ];
     }
 }

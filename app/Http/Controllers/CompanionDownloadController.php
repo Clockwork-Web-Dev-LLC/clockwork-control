@@ -21,7 +21,7 @@ class CompanionDownloadController extends Controller
             'name' => 'Clockwork Companion',
             'edition' => 'Private Edition (Mu-Plugin / Standard Plugin)',
             'slug' => 'clockwork-companion',
-            'version' => (string) config('clockwork.companion.version', '1.43.1'),
+            'version' => (string) config('clockwork.companion.version', '1.43.2'),
             'available' => (is_dir($companionPath) && is_file($companionPath.'/clockwork-companion.php'))
                 || trim((string) config('clockwork.companion.release_zip_url')) !== '',
             'download_url' => route('companion.download'),
@@ -36,7 +36,7 @@ class CompanionDownloadController extends Controller
             'name' => 'Clockwork Renegade',
             'edition' => 'Official WordPress.org Directory Edition',
             'slug' => 'clockwork-renegade',
-            'version' => (string) config('clockwork.renegade.version', '1.1.3'),
+            'version' => (string) config('clockwork.renegade.version', '1.1.4'),
             'available' => (is_dir($renegadePath) && is_file($renegadePath.'/clockwork-renegade.php'))
                 || trim((string) config('clockwork.renegade.release_zip_url')) !== '',
             'download_url' => route('renegade.download'),

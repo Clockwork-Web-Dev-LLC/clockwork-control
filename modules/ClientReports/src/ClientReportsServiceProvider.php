@@ -30,6 +30,10 @@ class ClientReportsServiceProvider extends ModuleServiceProvider
 
     public function scheduledTasks(Schedule $schedule): void
     {
+        if (! $this->enabled()) {
+            return;
+        }
+
         $schedule->command('clockwork:send-client-reports')
             ->dailyAt('06:00')
             ->withoutOverlapping()

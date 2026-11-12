@@ -487,11 +487,11 @@
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block">
                             <span class="text-xs text-[var(--color-ink-soft)]">Contact Name</span>
-                            <input type="text" name="name" placeholder="e.g. John Sandor" class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full" required>
+                            <input type="text" name="name" placeholder="e.g. Jane Doe" class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full" required>
                         </label>
                         <label class="block">
                             <span class="text-xs text-[var(--color-ink-soft)]">Company (optional)</span>
-                            <input type="text" name="company" placeholder="e.g. Sandor Development" class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
+                            <input type="text" name="company" placeholder="e.g. Acme Corp" class="text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full">
                         </label>
                         <label class="block">
                             <span class="text-xs text-[var(--color-ink-soft)]">Phone (E.164, e.g. +14045550100)</span>

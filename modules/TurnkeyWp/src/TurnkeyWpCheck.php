@@ -5,6 +5,7 @@ namespace Modules\TurnkeyWp;
 use App\Services\Diagnostics\CheckResult;
 use App\Services\Diagnostics\DiagnosticCheck;
 use App\Support\CredentialResolver;
+use App\Support\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -38,9 +39,15 @@ class TurnkeyWpCheck implements DiagnosticCheck
 
         $start = microtime(true);
         try {
+            if (! str_starts_with(strtolower($baseUrl), 'https://')) {
+                return CheckResult::fail('Insecure base URL', 'TurnkeyWP base URL must use HTTPS.', 0);
+            }
+            SsrfGuard::assertPublic($baseUrl);
+
             $response = Http::baseUrl($baseUrl)
                 ->withToken($token)
                 ->timeout(8)
+                ->withoutRedirecting()
                 ->acceptJson()
                 ->get('/user');
 

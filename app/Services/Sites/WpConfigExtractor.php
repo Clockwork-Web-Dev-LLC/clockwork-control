@@ -21,12 +21,17 @@ class WpConfigExtractor
         $escaped = escapeshellarg($path);
 
         // Try a plain read first (works for 0644 files, the SpinupWP default).
-        $contents = $this->ssh->exec($site->server, "cat {$escaped} 2>/dev/null");
+        // Reject symlinks so a compromised tenant cannot symlink wp-config.php to /etc/shadow or another site's config.
+        $contents = $this->ssh->exec($site->server, "test ! -L {$escaped} && cat {$escaped} 2>/dev/null");
 
         if ($contents === '' && $site->server->hasSudoAccess()) {
             // Some sites have wp-config.php at mode 0600 owned by the site user — only sudo can read.
-            // Pass the password via env-var, never on the command line.
-            $script = "printf '%s\\n' \"\$CW_SUDO_PW\" | sudo -S cat {$escaped} 2>/dev/null";
+            // Drop to site_user when valid so we never read files owned by root or another tenant.
+            $siteUser = (string) $site->site_user;
+            $userFlag = preg_match('/^[a-z_][a-z0-9_-]{0,31}$/i', $siteUser)
+                ? ' -u '.escapeshellarg($siteUser)
+                : '';
+            $script = "printf '%s\\n' \"\$CW_SUDO_PW\" | sudo -S -p ''{$userFlag} sh -c 'test ! -L \"\$1\" && cat \"\$1\"' _ {$escaped} 2>/dev/null";
             $cmd = sprintf(
                 'CW_SUDO_PW=%s bash -c %s',
                 escapeshellarg((string) $site->server->ssh_password),
@@ -84,12 +89,16 @@ class WpConfigExtractor
         foreach ($defines as $constant => $key) {
             $pattern = '/define\s*\(\s*[\'"]'.preg_quote($constant, '/').'[\'"]\s*,\s*[\'"](.*?)[\'"]\s*\)/s';
             if (preg_match($pattern, $contents, $m)) {
-                $result[$key] = $m[1];
+                $val = str_replace(["\r", "\n", "\0"], '', $m[1]);
+                $result[$key] = $val;
             }
         }
 
         if (preg_match('/\$table_prefix\s*=\s*[\'"](.*?)[\'"]/', $contents, $m)) {
-            $result['table_prefix'] = $m[1];
+            $prefix = str_replace(["\r", "\n", "\0"], '', $m[1]);
+            if (preg_match('/^[a-zA-Z0-9_]+$/', $prefix)) {
+                $result['table_prefix'] = $prefix;
+            }
         }
 
         // DB_HOST may be "host:port" or "host:/path/to/socket" — strip non-numeric ports.

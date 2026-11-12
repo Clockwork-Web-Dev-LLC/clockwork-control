@@ -31,9 +31,9 @@ describe('DomainIgnoreList', function () {
         ]);
         $list = app(DomainIgnoreList::class);
 
-        expect($list->matches('michelli.mystagingwebsite.com'))->toBeTrue()
+        expect($list->matches('staging-demo.mystagingwebsite.com'))->toBeTrue()
             ->and($list->matches('a.b.mystagingwebsite.com'))->toBeTrue()
-            ->and($list->matches('Michelli.MyStagingWebsite.com'))->toBeTrue()
+            ->and($list->matches('Staging-Demo.MyStagingWebsite.com'))->toBeTrue()
             ->and($list->matches('staging.example.com'))->toBeTrue()
             // The wildcard requires a subdomain — the bare apex is NOT covered.
             ->and($list->matches('mystagingwebsite.com'))->toBeFalse()
@@ -60,7 +60,7 @@ describe('DomainIgnoreList', function () {
             'staging.example.com',
         ]);
 
-        Site::factory()->create(['domain' => 'michelli.mystagingwebsite.com']);
+        Site::factory()->create(['domain' => 'staging-demo.mystagingwebsite.com']);
         Site::factory()->create(['domain' => 'staging.example.com']);
         $kept = Site::factory()->create(['domain' => 'prod.example.com']);
         // Apex of a `*.` pattern is not covered — subdomains only.

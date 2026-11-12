@@ -128,8 +128,21 @@ class ServersController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'hostname' => ['required', 'string', 'max:255'],
-            'ssh_user' => ['nullable', 'string', 'max:255'],
+            'hostname' => [
+                'required',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $host = trim((string) $value);
+                    if (
+                        filter_var($host, FILTER_VALIDATE_IP) === false
+                        && ! preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i', $host)
+                    ) {
+                        $fail('The server hostname must be a valid IP address or domain name.');
+                    }
+                },
+            ],
+            'ssh_user' => ['nullable', 'string', 'max:32', 'regex:/^[a-z_][a-z0-9_.-]{0,31}$/i'],
             'ssh_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'ssh_password' => ['nullable', 'string'],
             'is_ignored' => ['nullable', 'boolean'],
@@ -238,7 +251,12 @@ class ServersController extends Controller
             $message = "{$server->name} is now ignored.";
         }
 
-        return redirect($request->input('return_to', route('servers.show', $server)))
+        $returnTo = (string) $request->input('return_to', '');
+        $safeRedirect = ($returnTo !== '' && str_starts_with($returnTo, '/') && ! str_starts_with($returnTo, '//') && ! str_starts_with($returnTo, '/\\'))
+            ? $returnTo
+            : route('servers.show', $server);
+
+        return redirect($safeRedirect)
             ->with('status', $message);
     }
 

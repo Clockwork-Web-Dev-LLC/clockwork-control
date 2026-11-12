@@ -142,8 +142,8 @@ describe('clockwork:import-pressable', function () {
 
     it('renames an existing row in place when Pressable reports a changed url for the same site id, instead of crashing on the pressable_site_id unique constraint', function () {
         // Regression, found live 2026-09-12: Pressable's url for an
-        // already-tracked site changed from tlolawfirm.com to
-        // www.tlolawfirm.com while the id stayed stable. The old
+        // already-tracked site changed from example-law.com to
+        // www.example-law.com while the id stayed stable. The old
         // domain-only lookup missed the existing row and tried to INSERT a
         // "new" site with the same pressable_site_id, throwing a
         // UniqueConstraintViolationException that rolled back the entire
@@ -152,14 +152,14 @@ describe('clockwork:import-pressable', function () {
         pressableConfig();
 
         $existing = Site::factory()->pressable()->create([
-            'domain' => 'tlolawfirm.com',
+            'domain' => 'example-law.com',
             'pressable_site_id' => '1789853',
         ]);
 
         Http::fake(array_merge(fakePressableAuth(), [
             'my.pressable.com/v1/sites*' => Http::response(
                 PressableFixtures::listResponse([
-                    PressableFixtures::site(['id' => '1789853', 'url' => 'www.tlolawfirm.com', 'state' => 'live']),
+                    PressableFixtures::site(['id' => '1789853', 'url' => 'www.example-law.com', 'state' => 'live']),
                 ]),
                 200
             ),
@@ -170,8 +170,8 @@ describe('clockwork:import-pressable', function () {
             ->expectsOutputToContain('"created":0');
 
         expect(Site::withoutGlobalScopes()->count())->toBe(1);
-        expect($existing->fresh()->domain)->toBe('www.tlolawfirm.com');
-        expect(Site::withoutGlobalScopes()->where('domain', 'tlolawfirm.com')->exists())->toBeFalse();
+        expect($existing->fresh()->domain)->toBe('www.example-law.com');
+        expect(Site::withoutGlobalScopes()->where('domain', 'example-law.com')->exists())->toBeFalse();
     });
 
     it('skips a domain that is still an active SpinupWP site instead of repurposing it', function () {

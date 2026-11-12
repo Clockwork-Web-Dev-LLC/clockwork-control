@@ -1,8 +1,9 @@
 @php
     $cookieTheme = request()->cookie('cw_theme');
-    $initialTheme = ($cookieTheme && $cookieTheme !== 'system')
+    $candidateTheme = ($cookieTheme && $cookieTheme !== 'system')
         ? ($cookieTheme === 'midnight' ? 'dark' : $cookieTheme)
         : 'light';
+    $initialTheme = in_array($candidateTheme, ['light', 'dark', 'high-contrast'], true) ? $candidateTheme : 'light';
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ $initialTheme }}">
@@ -29,6 +30,9 @@
                 }
                 if (resolved === 'midnight') {
                     resolved = 'dark';
+                }
+                if (resolved !== 'dark' && resolved !== 'light' && resolved !== 'high-contrast') {
+                    resolved = 'light';
                 }
                 document.documentElement.setAttribute('data-theme', resolved);
             } catch (e) {}

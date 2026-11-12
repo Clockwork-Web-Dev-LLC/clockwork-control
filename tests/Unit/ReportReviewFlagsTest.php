@@ -437,3 +437,23 @@ describe('malware findings marked reviewed', function () {
             ->and(ReportReviewFlags::canMarkMalwareReviewed($marked))->toBeFalse();
     });
 });
+
+describe('rows the client would read as "Not checked"', function () {
+    it('holds a missing malware or blocklist result only when that scan was switched on', function () {
+        $missing = ['malware_status' => null, 'blacklist_status' => null];
+
+        expect(ReportReviewFlags::reasons(['security' => [...$missing, 'malware_expected' => true, 'blacklist_expected' => true]]))->toBe([
+            'No malware scan finished this month, so the client would read "Not checked this month".',
+            'No blocklist check finished this month, so the client would read "Not checked this month".',
+        ])
+            ->and(ReportReviewFlags::reasons(['security' => [...$missing, 'malware_expected' => false, 'blacklist_expected' => false]]))->toBe([])
+            // Reports compiled before these keys were kept say nothing.
+            ->and(ReportReviewFlags::reasons(['security' => $missing]))->toBe([]);
+    });
+
+    it('holds a long rate-limited stretch that counts as up, but not a short one', function () {
+        expect(ReportReviewFlags::reasons(['uptime' => ['probe_blocked_minutes' => 125]]))
+            ->toBe(['The uptime monitor was blocked (HTTP 429) for 2h 5m this month. That time counts as up in the uptime figure, but nobody could see the site.'])
+            ->and(ReportReviewFlags::reasons(['uptime' => ['probe_blocked_minutes' => 59]]))->toBe([]);
+    });
+});

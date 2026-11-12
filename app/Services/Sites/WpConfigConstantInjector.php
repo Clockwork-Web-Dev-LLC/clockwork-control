@@ -79,19 +79,23 @@ class WpConfigConstantInjector
 
     private function insertBeforeWpSettings(string $contents, string $name, bool|int|string $value): string
     {
+        if (is_string($value) && str_contains($value, "\0")) {
+            throw new RuntimeException('NUL bytes are not allowed in wp-config constant values.');
+        }
+
         $literal = $this->phpLiteral($value);
         $injection = self::PROVENANCE_COMMENT."\ndefine('{$name}', {$literal});\n\n";
 
-        $new = preg_replace(
+        $new = preg_replace_callback(
             '/^([ \t]*require_once[ \t(].*wp-settings\.php.*)$/m',
-            $injection.'$1',
+            static fn (array $m): string => $injection.$m[1],
             $contents,
             1,
             $count
         );
 
         if ($count !== 1 || $new === null) {
-            throw new RuntimeException('preg_replace failed to insert before wp-settings marker.');
+            throw new RuntimeException('preg_replace_callback failed to insert before wp-settings marker.');
         }
 
         return $new;
@@ -114,10 +118,14 @@ class WpConfigConstantInjector
     private function readWpConfig(Site $site, string $path): string
     {
         $escaped = escapeshellarg($path);
-        $contents = $this->ssh->exec($site->server, "cat {$escaped} 2>/dev/null");
+        $contents = $this->ssh->exec($site->server, "test ! -L {$escaped} && cat {$escaped} 2>/dev/null");
 
         if ($contents === '' && $site->server->ssh_password) {
-            $script = 'printf "%s\n" "$CW_SUDO_PW" | sudo -S cat '.$escaped.' 2>/dev/null';
+            $siteUser = (string) $site->site_user;
+            $userFlag = preg_match('/^[a-z_][a-z0-9_-]{0,31}$/i', $siteUser)
+                ? ' -u '.escapeshellarg($siteUser)
+                : '';
+            $script = 'printf "%s\n" "$CW_SUDO_PW" | sudo -S -p ""'.$userFlag.' sh -c \'test ! -L "$1" && cat "$1"\' _ '.$escaped.' 2>/dev/null';
             $cmd = sprintf(
                 'CW_SUDO_PW=%s bash -c %s',
                 escapeshellarg((string) $site->server->ssh_password),
@@ -150,28 +158,68 @@ class WpConfigConstantInjector
         $tmp = $file.'.clockwork-tmp.'.bin2hex(random_bytes(4));
         $encoded = base64_encode($newContents);
 
-        $shell = sprintf(
-            'set -e; cd %s'
-            .' && cp -p %s %s'
-            .' && printf %%s %s | base64 -d > %s'
-            .' && chown --reference=%s %s'
-            .' && chmod --reference=%s %s'
-            .' && mv %s %s',
-            escapeshellarg($dir),
-            escapeshellarg($file), escapeshellarg($bak),
-            escapeshellarg($encoded), escapeshellarg($tmp),
-            escapeshellarg($file), escapeshellarg($tmp),
-            escapeshellarg($file), escapeshellarg($tmp),
-            escapeshellarg($tmp), escapeshellarg($file),
-        );
+        $siteUser = (string) $site->site_user;
+        $hasValidSiteUser = (bool) preg_match('/^[a-z_][a-z0-9_-]{0,31}$/i', $siteUser);
 
-        $output = $this->execAsRoot($site, $shell);
+        if ($hasValidSiteUser) {
+            $shell = sprintf(
+                'set -e; test ! -L %1$s && cd %1$s'
+                .' && test -f %2$s && test ! -L %2$s && test ! -L %3$s'
+                .' && rm -f %3$s && cp -P -p %2$s %3$s'
+                .' && printf %%s %4$s | base64 -d > %5$s'
+                .' && chmod --reference=%2$s %5$s'
+                .' && mv -f %5$s %2$s',
+                escapeshellarg($dir),
+                escapeshellarg($file),
+                escapeshellarg($bak),
+                escapeshellarg($encoded),
+                escapeshellarg($tmp),
+            );
+            $output = $this->execAsUser($site, $siteUser, $shell);
+        } else {
+            $shell = sprintf(
+                'set -e; test ! -L %1$s && cd %1$s'
+                .' && test -f %2$s && test ! -L %2$s && test ! -L %3$s'
+                .' && rm -f %3$s && cp -P -p %2$s %3$s'
+                .' && printf %%s %4$s | base64 -d > %5$s'
+                .' && chown -h --reference=%2$s %5$s'
+                .' && chmod --reference=%2$s %5$s'
+                .' && mv -f %5$s %2$s',
+                escapeshellarg($dir),
+                escapeshellarg($file),
+                escapeshellarg($bak),
+                escapeshellarg($encoded),
+                escapeshellarg($tmp),
+            );
+            $output = $this->execAsRoot($site, $shell);
+        }
 
         // Most failures will have already aborted via `set -e`, but if the
         // command produced any unexpected output, surface it.
         if ($output !== '' && ! $this->looksLikeBenignSudoBanner($output)) {
             throw new RuntimeException('wp-config write returned unexpected output: '.trim($output));
         }
+    }
+
+    private function execAsUser(Site $site, string $siteUser, string $shellCmd): string
+    {
+        if ($site->server && $site->server->ssh_user === $siteUser) {
+            return $this->ssh->exec($site->server, 'bash -c '.escapeshellarg($shellCmd));
+        }
+
+        $pw = $site->server->ssh_password;
+        if ($pw) {
+            $script = 'printf "%s\n" "$CW_SUDO_PW" | sudo -S -p "" -u '.escapeshellarg($siteUser).' bash -c '.escapeshellarg($shellCmd);
+            $wrapped = sprintf(
+                'CW_SUDO_PW=%s bash -c %s',
+                escapeshellarg((string) $pw),
+                escapeshellarg($script),
+            );
+
+            return $this->ssh->exec($site->server, $wrapped);
+        }
+
+        return $this->ssh->exec($site->server, 'sudo -n -u '.escapeshellarg($siteUser).' bash -c '.escapeshellarg($shellCmd));
     }
 
     /**

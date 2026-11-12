@@ -353,6 +353,7 @@ describe('operator preview and email version', function () {
     });
 
     it('groups the hold reasons by category with a link to the site tab, and disables Send with the reason when it can\'t be sent', function () {
+        clientReportsSendThemselves();
         $held = listReport('held.example.com', '2026-10', meta: ['review_reasons' => [
             ScheduledReportRunner::FIRST_REPORT_REASON, 'The malware scan flagged something (scan #3).', 'No backups were found this month.',
         ]], compiled: true);

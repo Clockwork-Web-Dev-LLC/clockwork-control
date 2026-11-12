@@ -264,7 +264,7 @@
                             {{-- Post Context --}}
                             <td class="px-4 py-3 align-top text-xs text-[var(--color-ink-muted)]">
                                 @if (!empty($c['post_title']))
-                                    @if (!empty($c['post_url']))
+                                    @if (!empty($c['post_url']) && preg_match('#^https?://#i', (string) $c['post_url']))
                                         <a href="{{ $c['post_url'] }}" target="_blank" rel="noopener noreferrer" class="font-medium text-[var(--color-ink-strong)] hover:text-[var(--color-brand)] hover:underline block line-clamp-2">
                                             {{ $c['post_title'] }}
                                         </a>

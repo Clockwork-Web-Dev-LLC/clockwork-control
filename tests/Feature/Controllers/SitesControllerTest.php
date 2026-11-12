@@ -131,19 +131,19 @@ describe('index', function () {
     });
 
     it('finds parent site when searching by consolidated alias domain', function () {
-        $parent = Site::factory()->spinupwp()->create(['domain' => 'caringworksinc.org']);
+        $parent = Site::factory()->spinupwp()->create(['domain' => 'example-nonprofit.org']);
         Site::factory()->spinupwp()->create([
-            'domain' => 'www.caringworksinc.org',
+            'domain' => 'www.example-nonprofit.org',
             'consolidated_into_site_id' => $parent->id,
             'archived_at' => now(),
             'is_inactive' => true,
         ]);
 
         $searched = $this->actingAs(User::factory()->create())
-            ->get(route('sites.index', ['q' => 'www.caringworksinc']));
+            ->get(route('sites.index', ['q' => 'www.example-nonprofit']));
         $searched->assertOk()
-            ->assertSee('caringworksinc.org')
-            ->assertDontSee('+ www.caringworksinc.org');
+            ->assertSee('example-nonprofit.org')
+            ->assertDontSee('+ www.example-nonprofit.org');
     });
 
     it('only shows tabs/counts/filter for enabled hosting-provider modules — not every provider with data', function () {

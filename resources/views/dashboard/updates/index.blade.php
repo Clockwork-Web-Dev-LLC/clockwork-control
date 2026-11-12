@@ -180,7 +180,7 @@
                             <span class="text-[var(--color-ink-soft)]" x-text="`on ${r.site_domain || ('site #' + r.site_id)}`"></span>
                             <span class="text-[var(--color-ink-soft)]"
                                   x-show="r.before || r.after"
-                                  x-text="` · ${r.before || '?'} → ${r.after || '?'}`"></span>
+                                  x-text="versionLabel(r)"></span>
                             <span class="ml-auto text-[var(--color-ink-soft)]"
                                   x-show="r.elapsed_ms"
                                   x-text="`${(r.elapsed_ms / 1000).toFixed(1)}s`"></span>
@@ -230,6 +230,18 @@
                     toggleLog(id) {
                         this.openLogs[id] = !this.openLogs[id];
                     },
+                    // A failed job never moved, so "X → X" is misleading: say
+                    // what it stayed on and what it was trying to reach.
+                    versionLabel(r) {
+                        const before = r.before || '?';
+                        if (r.status === 'failed' || r.status === 'skipped' || r.status === 'cancelled') {
+                            const stayed = r.after || before;
+                            return r.target && r.target !== stayed
+                                ? ` · stayed on ${stayed} (wanted ${r.target})`
+                                : ` · stayed on ${stayed}`;
+                        }
+                        return ` · ${before} → ${r.after || '?'}`;
+                    },
                     renderLog(r) {
                         // For a running/finished job, stitch together: timing line,
                         // wp-cli messages, and any error text. Strip HTML entities
@@ -238,7 +250,7 @@
                         if (r.started_at) lines.push(`▸ started ${new Date(r.started_at).toLocaleString()}`);
                         if (r.completed_at) lines.push(`▸ finished ${new Date(r.completed_at).toLocaleString()}`);
                         if (typeof r.elapsed_ms === 'number') lines.push(`▸ elapsed ${(r.elapsed_ms / 1000).toFixed(2)}s`);
-                        if (r.before || r.after) lines.push(`▸ ${r.before || '?'} → ${r.after || '?'}`);
+                        if (r.before || r.after) lines.push(`▸ ${this.versionLabel(r).replace(/^ · /, '')}`);
                         if (lines.length) lines.push('');
                         const decode = (s) => (s || '').replace(/&[#a-zA-Z0-9]+;/g, m => {
                             const map = { '&amp;': '&', '&#8230;': '…', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#039;': "'" };

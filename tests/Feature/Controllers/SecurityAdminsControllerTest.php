@@ -40,14 +40,14 @@ describe('Security admins directory', function () {
     it('renders sortable headers with up/down arrows for administrators table', function () {
         $user = User::factory()->create();
         Site::factory()->create([
-            'domain' => 'bookhouse.net',
+            'domain' => 'example-books.net',
             'companion_installed' => true,
             'companion_snapshot' => [
                 'admins' => [
                     'admins' => [
                         [
                             'login' => 'admin',
-                            'email' => 'rebornpearl@gmail.com',
+                            'email' => 'admin@example-books.net',
                             'last_seen_at' => '2016-09-14 12:00:00',
                         ],
                     ],
@@ -70,9 +70,9 @@ describe('Security admins directory', function () {
         $response->assertSee("sortBy('flags')", false);
 
         // Verifies row carries data-sort attributes for all 5 columns
-        $response->assertSee('data-sort-site="bookhouse.net"', false);
+        $response->assertSee('data-sort-site="example-books.net"', false);
         $response->assertSee('data-sort-login="admin"', false);
-        $response->assertSee('data-sort-email="rebornpearl@gmail.com"', false);
+        $response->assertSee('data-sort-email="admin@example-books.net"', false);
         $response->assertSee('data-sort-last_seen="1473854400"', false);
         $response->assertSee('data-sort-flags="2_default_login"', false);
     });

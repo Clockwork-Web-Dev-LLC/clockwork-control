@@ -101,7 +101,7 @@ Deliberately NOT touched:
 
 ## Gotchas for future work
 
-- The two screenshot sites (`michelli.mystagingwebsite.com`,
+- The two screenshot sites (`staging-demo.mystagingwebsite.com`,
   `headlesstesting.mystagingwebsite.com`) will keep their stale `down` state
   rows in the DB after the patterns are added — harmless, everything that
   displays them is filtered, but don't be surprised seeing `uptime_state =

@@ -217,9 +217,20 @@ class AzureClient
         $response = $this->get($path, $query)->json();
         $all = array_merge($all, $response['value'] ?? []);
 
+        $pages = 0;
+        $maxPages = 50;
+        $basePrefix = rtrim((string) $this->baseUrl, '/').'/';
+
         while ($nextLink = ($response['nextLink'] ?? null)) {
-            // nextLink is an absolute URL — strip the base so Http::baseUrl works.
-            $relative = str_replace($this->baseUrl, '', $nextLink);
+            if (++$pages > $maxPages) {
+                throw new RuntimeException("Azure pagination exceeded {$maxPages} pages on {$path}; aborting.");
+            }
+            if (! is_string($nextLink) || ! str_starts_with($nextLink, $basePrefix)) {
+                throw new RuntimeException("Refusing untrusted Azure pagination nextLink: {$nextLink}");
+            }
+
+            // nextLink is an absolute URL under $this->baseUrl — strip the base so Http::baseUrl works.
+            $relative = '/'.ltrim(substr($nextLink, strlen($basePrefix)), '/');
             $response = $this->get($relative)->json();
             $all = array_merge($all, $response['value'] ?? []);
         }

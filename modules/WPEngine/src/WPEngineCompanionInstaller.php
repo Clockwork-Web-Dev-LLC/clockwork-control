@@ -54,8 +54,8 @@ class WPEngineCompanionInstaller implements CompanionInstallerContract
         }
 
         $install = (string) $site->wpengine_install_name;
-        if ($install === '') {
-            return ['result' => self::RESULT_FAILED, 'message' => 'Site has no wpengine_install_name.'];
+        if ($install === '' || ! preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/i', $install)) {
+            return ['result' => self::RESULT_FAILED, 'message' => 'Site has an invalid or missing wpengine_install_name.'];
         }
 
         if ($this->privateKey === null || $this->privateKey === '') {
@@ -155,13 +155,15 @@ class WPEngineCompanionInstaller implements CompanionInstallerContract
         }
 
         $escapedB64Path = escapeshellarg($remoteB64Path);
+        $escapedWpPath = escapeshellarg($wpPath);
 
         // No sudo, no site_user drop needed — the SSH session already IS
         // the right user for this one install.
         $script = <<<BASH
 set -euo pipefail
-PLUGINS="{$wpPath}/wp-content/plugins"
-MU="{$wpPath}/wp-content/mu-plugins"
+WP_PATH={$escapedWpPath}
+PLUGINS="\$WP_PATH/wp-content/plugins"
+MU="\$WP_PATH/wp-content/mu-plugins"
 mkdir -p "\$PLUGINS"
 cd "\$PLUGINS"
 rm -rf .clockwork-stage
@@ -176,7 +178,7 @@ rm -rf .clockwork-stage
 rm -f "\$MU/clockwork-companion.php"
 rm -rf "\$MU/clockwork-companion"
 rm -f {$escapedB64Path}
-wp --path="{$wpPath}" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
+wp --path="\$WP_PATH" --skip-plugins --skip-themes plugin activate clockwork-companion >/dev/null 2>&1 || true
 echo "OK: companion staged at \$PLUGINS/clockwork-companion"
 BASH;
 

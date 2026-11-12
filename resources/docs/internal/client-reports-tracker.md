@@ -2,34 +2,38 @@
 title: Client reports tracker
 section: Internal
 order: 30
-updated: 2026-11-03
+updated: 2026-11-06
 author: Aaron Reimann
 tags: [client-reports, tracker, roadmap, known-issues]
 ---
 
 The running to-do list for the Client Reports module. For how the feature works, see [Features → Client reports](/docs/features/client-reports). Keep this page current: when something here gets fixed, move it to **Done** with the commit or PR, and bump `updated:`.
 
-## Where things stand (2026-10-22)
+## Where things stand (2026-11-06)
 
 - **Goal:** recreate the ManageWP client report in Control, then retire ManageWP.
-- **Branch:** `feature/client-reports` (draft PR #50). Code-complete for 2026-11-01, **not merged or deployed yet**; see the checklist below. What's left is mostly operations (deploy, AWS key, data fixes, decisions).
-- **2026-10-22:** each schedule's first report is now held for review automatically, so the first send can't go out unreviewed even if nobody switches the schedules to draft. Also fixed: first-month backup counts, the Security intro wording (#20), the email preview (#21), partial vulnerability-feed refreshes (#14), and re-sending a partly sent report.
-- The original plan, `plans/client-reports-templates-scheduling.md`, is **fully shipped** now: phases 1–3 (scheduler fixes, templates, scheduling UI) were already live, and phase 4 (conditional delivery) shipped as **hold for review**. That plan's own "not yet implemented" header is out of date. Treat this page as the source of truth.
-- **Decisions (2026-10-15):** reports are for **care-plan customers only**; the **first send on 2026-11-01 goes out as drafts** for review; after that, clean reports send themselves and flagged ones are held (**review only the exceptions**); unchecked sections are hidden from the client and flagged in the preview.
+- **Shipped:** PR #50 (the Nov 1 work) and PR #63 (Clients tab, report verification fixes, schema 7) are merged into `main` as **v1.12.1**. The Nov 1 run held every report as a first report, as planned.
+- **Every report now waits for approval (2026-11-06).** The Dec 1 run compiles and checks every report and **emails nothing**. Send them from the Reports tab: **Approve & send all ready** for the clean ones, then look at the held ones and send them one by one or ticked. The switch is on the Scheduling tab; turning it off would let Automatic schedules email clean reports by themselves again.
+- **2026-11-06 audit for Dec 1** (5 reviewers over the run path, every section, the emails and the operator screens; each finding checked against the code before fixing). The fixes are on `feature/client-reports`, **not merged or deployed yet**; see Done and the checklist below. What wasn't fixed is listed under Open issues (#23 on).
+- The original plan, `plans/client-reports-templates-scheduling.md`, is fully shipped; this page is the source of truth.
+- **Decisions (2026-10-15):** reports are for **care-plan customers only**; after the first send, clean reports send themselves and flagged ones are held (**review only the exceptions**); unchecked sections are hidden from the client and flagged in the preview.
 
-## Heads-up: first send on 2026-11-01
+## Before 2026-12-01 (checklist)
 
-As of the 2026-10-15 production DB snapshot there are **72 schedules**, all enabled, `monthly`, `auto`, on the default template, none ever sent, and all with `next_run_at = 2026-11-01 00:00`. **45** of those sites have a care plan and will get a report; the other **27** are skipped until someone decides about them (checklist).
-
-None of them has ever sent, so the 06:00 UTC run holds **every** report for review ("This is the first report from this schedule"), plus any other reasons. **Nothing is emailed automatically on Nov 1.** Switching the schedules to Draft is no longer needed.
-
-### On the day (runbook)
-
-1. **06:00 UTC:** `clockwork:send-client-reports` compiles October for the 45 care-plan sites and holds each one. The 27 without a care plan are skipped and move on to Dec 1. An `auto` schedule with no recipients is skipped and retried daily, so give it one. **Expect 45 Needs review reports in history.** Scheduled Jobs only shows OK/failed and a duration; it goes red if any site's report crashed or any recipient's email failed. To see per-site results, run `php artisan clockwork:send-client-reports` by hand: handled sites print "skipped (not due until Dec 1)", and any site that crashed or has no recipients is still due and runs again (errors are also in `laravel.log`, "Failed sending scheduled client report for …").
-2. **Client reports → history:** every report shows **Needs review**. Open each one (↗). The amber box lists why it was held. Click **Email version** to see exactly what the client gets.
-3. **Only "first report" listed:** send it with the paper-plane button.
-4. **Other reasons too:** fix the cause (or confirm it's fine), then either send as-is, or press **Recompile** on the report (history ↻ or the preview) to compile its own period again from current data. Recompile never sends: the new copy is held again as a first report; check it and send by hand. The older copy is marked superseded. A recompile reads today's vulnerability list (shown "checked" today); updates applied since Oct 31 still count as waiting at month end, so the Updates section won't turn into "already up to date". Don't use **Send now** for this: it compiles last month only (from Dec 1 that's November), and once a schedule has sent it emails a clean report straight away. See [Refreshing held drafts](/docs/features/client-reports#refreshing-held-drafts-recompile).
-5. **From December:** sending a report by hand stamps the schedule's `last_sent_at`, so the Dec 1 run emails clean reports by itself and holds only flagged ones.
+- [ ] **Merge `feature/client-reports` and deploy** before Nov 30. Then:
+  - `php artisan migrate` (adds `site_backups.database_bytes`, widens `client_reports.client_email` to text).
+  - `php artisan clockwork:record-site-backups` once, so SpinupWP rows get their database size.
+  - `php artisan clockwork:refresh-plugin-vulnerabilities` once, to start the per-plugin lookup record (#22).
+  - Report schema is now **8**: any unsent report is outdated. `php artisan clockwork:recompile-held-client-reports --outdated --dry-run`, then without `--dry-run` (never sends).
+  - `npm run build`, clear the view cache, `php artisan queue:restart`.
+- [ ] **On Dec 1:** open Client Reports → Reports (November). Press **Approve & send all ready** (25 per press; press again until none are left), then work through **Needs review**: fix, Recompile or send. Nothing reaches a client until you do.
+- [ ] **Expect more held reports than before.** New holds: SiteCheck hits, earlier core-file/blocklist problems, no malware or blocklist scan all month, stale vulnerability list, never-looked-up plugins, files-only backups, a failed or early backup read, 429 blocks or maintenance of hours, a care plan switched off on Dec 1. Each one is a client email that would have been wrong or unexplained.
+- [ ] **Off-site backups (#11):** put a valid AWS key in production `.env`. Until then every relay site is held.
+- [ ] **Check the 04:45 and 05:30 UTC jobs finish before 06:00** (#34): Scheduled Jobs → `pressable-traffic-report` and `record-site-backups` end times in November.
+- [ ] **Logo:** if the report logo was uploaded in Settings, check the Email version shows it. It's now embedded from disk; before, an uploaded logo's `/storage/…` link was broken in every inbox.
+- [ ] Mark the known-safe "PHP in uploads" paths with `clockwork:suppress-malware-path` (#17).
+- [ ] After `migrate`, confirm sites 315, 330, 331 and 332 now have `is_wordpress = 1` (#15).
+- [ ] Don't **Run** schedules or **Create all** between 7 PM ET on Nov 30 and the 06:00 UTC run (#28).
 
 ## Open issues
 
@@ -37,38 +41,38 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | # | Issue | Why it matters | Where |
 |---|---|---|---|
-| 1 | **Weekly schedules report on the wrong period.** The scheduled path hard-codes "last calendar month", whatever the frequency. | A weekly schedule sends last month's report once, on its first weekly run of the month (the 1st to the 7th), and nothing the other weeks; a held one is recompiled and held again each week. No weekly schedules exist yet. Fix the period or drop "weekly" from the form. | `ScheduledReportRunner::run()` |
-| 10 | **The work log is empty** (`site_work_logs` has 0 rows), but `work_log` is in the default template. | The section is hidden unless hours get logged, so ManageWP-style "extra work" never appears. | Data / process |
-| 11 | **⚠️ Off-site backups have stopped (operations).** Every backup-relay run since 2026-09-13 failed with S3 `403 Forbidden`. Listing the bucket with the key in the production `.env` copy fails with `InvalidAccessKeyId`, so the key was deleted or rotated in AWS and not updated in Control. | Unhosted sites aren't being backed up, and their report section shows **Could not check** (held for review). | `AWS_ACCESS_KEY_ID`, `modules/BackupRelay/` |
-| 12 | **Vulnerability count is "as of the snapshot", not the month.** No history of installed plugin versions is kept. It's labelled "(as of …)". | The count can differ from what was true during the month. Acceptable. | `ClientReportCompiler::compileSecurity()` |
-| 15 | **4 scheduled sites are flagged `is_wordpress = 0` but run WordPress** (ids 315, 330, 331, 332). The report detects them via Companion's `wp_core`, but the flag keeps the core-checksum scanner off them. | No core-file checks run on those sites. | Data fix on `sites.is_wordpress` |
-| 16 | **20 SpinupWP sites have no backups in the Spaces bucket** (first recorder run, 2026-10-15); 2 have report schedules. List kept locally, not in the repo. | Their backups section is hidden and the report held. Either SpinupWP backups are off for them or stored elsewhere. | SpinupWP dashboard / `SpacesClient` |
-| 17 | **Harmless "PHP in uploads" malware warnings hold reports.** Plugins such as WP All Import, Sucuri, BackWPup and Smush put PHP files in `uploads/`; the scan marks them for review, which holds that site's report. | Clean sites get held every month until the paths are marked safe. | `clockwork:suppress-malware-path` (operator) |
-| 18 | **Pressable can skip a month's speed test.** Pressable tests each site about once a month on its own schedule (no way to trigger one); about 1 site in 70 had a gap in Aug–Sep. | That site's Speed section is hidden for that month. Acceptable unless it becomes common. | Pressable |
-| 19 | **Non-Pressable sites get desktop speed only.** GTmetrix on our plan has no phone emulation. | No mobile score for the ~17 non-Pressable report sites. Options: GTmetrix plan with mobile, or PSI for mobile only (noisier). | `RunPerformanceScans` |
-| 21 | **The operator preview's layout still differs from the email** below the header (e.g. updates as a table of plugin file names). Reviewers now have **Email version** (the real email), so this is cosmetic. | The preview is what prints as the PDF. | `reports/show.blade.php` |
-| 22 | **A plugin whose vulnerability lookup has never succeeded reads "None found".** Since #14 a failed lookup keeps the plugin's previous entries, but a plugin with no earlier entries has nothing to keep, and the feed still counts as fresh. | Rare (a new plugin plus a lookup failure that night), but it's a "None found" nobody checked. Fix: store failed slugs and report those plugins as not checked. | `WpVulnerabilityClient`, `ClientReportCompiler::compileSecurity()` |
-
-## Before 2026-11-01 (deploy checklist)
-
-- [ ] **Merge PR #50 and deploy this week** (by 2026-10-28 to be safe), then run `php artisan migrate` (adds `site_backups` + `site_backup_checks`) before the scheduler fires again. Pressable keeps daily backups for only ~8 days and the email lists Oct 22–31, so the recorder must have run by about Oct 29 for Oct 22 to still be readable. (The month's "backed up on N days" count is left out automatically for sites whose records start mid-month.)
-- [ ] Run `php artisan clockwork:record-site-backups` once by hand straight after deploy to backfill; check the output for `[fail]` lines. (Local run 2026-10-15: 261 sites, 251 OK, ~5 min; the 10 failures were all S3, see #11.)
-- [ ] Put a valid AWS key in production `.env` (#11). Without it the unhosted sites' backups can't be read **or** made.
-- [x] ~~Switch the first run to drafts~~: no longer needed. Every schedule's first report is held for review automatically (2026-10-22). Leave the schedules on Auto.
-- [ ] Decide each of the **27 scheduled sites with no care plan**: turn the care plan back on, or delete the schedule. Until then each month is skipped.
-- [ ] Set the report colour in production: **Settings → Companion & White Label → Client Reports → Primary `#5B21B6`** (it's a setting, not code).
-- [ ] Mark the known-safe "PHP in uploads" paths with `clockwork:suppress-malware-path` (#17), and look at anything that isn't a known plugin's files by hand.
-- [ ] Set `is_wordpress = 1` for the 4 misflagged sites (#15): `UPDATE sites SET is_wordpress = 1 WHERE id IN (315, 330, 331, 332);` (check the ids match the domains first).
-- [ ] **Load the ManageWP report recipients.** Copy the ManageWP export CSV to the server (outside the repo: it holds client emails and must never be committed), then run `php artisan clockwork:import-report-recipients ~/managewp-recipients.csv` for a dry run and check the table. If it looks right, run it again with `--apply`. Add any sites it lists as "Site not found in Control" by hand on the **Scheduling** page.
-- [ ] Optional: log any October extra work on the site pages (#10) before Nov 1, or the Additional work section stays hidden.
+| 1 | **"Weekly" still exists.** Every run reports on the last calendar month; a weekly schedule re-checks it each week and never emails a month twice. The form no longer offers weekly for new schedules (2026-11-06), but wp-admin can still set it. | Decide: drop weekly everywhere (Control, Companion's wp-admin screen and the sync), or build a real weekly report. | `ScheduledReportRunner::run()`, `ReportRecipientsSyncService` |
+| 10 | **The work log is empty** (`site_work_logs` had 0 rows), but `work_log` is in the default template. | The section is hidden unless hours get logged, so ManageWP-style "extra work" never appears. | Data / process |
+| 11 | **⚠️ Off-site backups have stopped (operations).** Every backup-relay run since 2026-09-13 failed with S3 `403 Forbidden`; the production key returns `InvalidAccessKeyId`. | Unhosted sites aren't being backed up, and their reports are held. | `AWS_ACCESS_KEY_ID`, `modules/BackupRelay/` |
+| 12 | **Vulnerability count is "as of the snapshot", not the month.** It's labelled "(as of …)". | Acceptable. | `ClientReportCompiler::compileSecurity()` |
+| 15 | **4 scheduled sites flagged `is_wordpress = 0` but run WordPress** (ids 315, 330, 331, 332). v1.12.1's backfill migration should fix custom-host Companion sites; check these four after `migrate`. | No core-file checks on them until it's fixed. | `sites.is_wordpress` |
+| 16 | **20 SpinupWP sites have no backups in the Spaces bucket**; 2 have report schedules. | Their reports are held. | SpinupWP dashboard / `SpacesClient` |
+| 17 | **Harmless "PHP in uploads" warnings hold reports** (WP All Import, Sucuri, BackWPup, Smush). | Clean sites held every month until the paths are marked safe. | `clockwork:suppress-malware-path` |
+| 18 | **Pressable can skip a month's speed test.** | That site's Speed section is hidden that month. Acceptable. | Pressable |
+| 19 | **Non-Pressable sites get desktop speed only** (GTmetrix plan). | No mobile score for ~17 sites. | `RunPerformanceScans` |
+| 21 | **The preview/PDF still differs from the email** in small ways: no blocklist row; raw ISO dates (updates, work log, "Checked …"); "1 scans"; "LCP: ms" when missing; downtime in minutes; "Not checked this period". | Cosmetic, but it's what prints as the PDF. | `reports/show.blade.php` |
+| 23 | **wp-admin recipient sync compares against the schedule's `updated_at`**, which every run and hand send bumps. A client's wp-admin edit made just before a run can be pushed back over. | A recipient change made in wp-admin around report day may be lost. | `ReportRecipientsSyncService::reconcileFromSnapshot()` |
+| 24 | **Re-enabling a paused schedule** whose `next_run_at` is in the past sends the missed month next morning (one click on the Paused pill, no confirm). | A stale month's report goes out. | `SchedulesController::toggle()` |
+| 25 | **The Reports list follows the newest period with any report**: a one-off generated with this month's dates switches the list and its badge to it. | November's held queue hides behind the period picker. | `ReportBrowser::periods()` |
+| 26 | **Deleting and recreating a schedule** resets it to "first report", and its old reports become one-offs that can't be recompiled. | Everything is held again. | `SchedulesController::destroy()` |
+| 27 | **The Sent tile counts partly sent reports** (also counted under Waiting). | Tile and list disagree. | `index.blade.php` |
+| 28 | **Before 06:00 UTC on the 1st it's still the evening before in New York.** A manual Run, Send now or a schedule created between 7 PM ET and the 06:00 run compiles the month before it has ended there, or schedules the first report a month later. | Partial last day, or a missed month. | `ScheduledReportRunner::run()`, `ClientReportSchedule::computeNextRun()` |
+| 29 | **Updates made outside Control are recorded only from the v1.12.1 deploy.** WordPress auto-updates between Nov 1 and the deploy aren't listed in November. | Undercount; a site with nothing else could read "No updates were applied this month". | `ObservedUpdateRecorder` |
+| 30 | **A missing `update_available` key counts as "nothing waiting"** (Companion before 1.15.0 doesn't send it). | Such a site could read "Everything was up to date". | `ClientReportCompiler::pendingUpdates()` |
+| 31 | **A failed Spamhaus DNS lookup reads as "not listed"**; with no Google key, "Not listed" can rest on one timed-out lookup. | Blocklist row overstates. | `BlacklistChecker` |
+| 32 | **"Data transferred" for a site that moved host mid-month** counts only the old host's days. | Understated figure, no hold. | `compileTraffic()` |
+| 33 | **The work-log form defaults to the UTC date**, so hours logged after 7 PM ET land on the next day (and month). | Late Nov 30 hours miss November. | `_widget-work_logs.blade.php` |
+| 34 | **04:45 and 05:30 UTC jobs run one after another** with the SSH-heavy jobs due at the same minute; nothing makes the 06:00 run wait. | If late, reports are held (safe), not wrong. Check the job end times. | `routes/console.php`, `PressableServiceProvider` |
+| 35 | **Wording between the two emails:** "1 live test submissions", "· 1 hrs", outages "125 min" in text vs "2h 5m" in HTML, section order differs; the greeting is worked out from the report's stored recipients, not a typed address. | Cosmetic. | `emails/report-text.blade.php`, `ClientReportMail` |
+| 36 | **Silent skips:** an inactive site or an auto schedule with no recipients is skipped with no action-log entry and the run still exits OK. | A site can quietly never get a report. | `SendScheduledClientReports` |
 
 ## Ideas and backlog
 
 - **SEO Ranking section** (ManageWP parity; decided for after Nov 1). The SEMrush data behind the monthly SEO reports is the obvious source.
-- **Google Analytics section** (ManageWP parity; after Nov 1). Control only has server-log visit counts; GA4 needs an integration.
+- **Google Analytics section** (ManageWP parity). Control only has server-log visit counts; GA4 needs an integration.
 - **PDF attachment** for clients who forward the report.
 - **A personal note per month** on the schedule (the field exists on manual reports only).
-- **Sent-email audit.** `sent_to` records *who* got each report, not *when* or *by whom*. `action_logs` entries would show it on the site's activity log.
+- **Sent-email audit.** `sent_to` records *who* got each report, not *when* or *by whom*.
 - **A "preview the next batch" view.** What the next scheduled run would send, and to whom.
 - **Remove the public `/reports/view/{token}` route, or decide its purpose.** Clients can't reach it and the email doesn't link to it.
 
@@ -76,6 +80,21 @@ Numbers stay stable as items are fixed; fixed ones move to **Done**.
 
 | Date | What | Ref |
 |---|---|---|
+| 2026-11-06 | **Every report waits for approval** (on by default; switch on the Scheduling tab), with **Approve & send all ready** and **Send selected** on the Reports list. The confirm dialog now submits through the clicked button, so a button's `formaction` and value survive it. | `feature/client-reports` |
+| 2026-11-06 | **Audit for the first unattended run (Dec 1)**, 5 reviewers, every finding checked against the code. Below, from "Schedule form" to "Report schema 8". | `feature/client-reports` |
+| 2026-11-06 | **Schedule form:** unchecking **Enable** did nothing, and saving a paused schedule switched it back on (an unchecked box sends nothing; the controller read that as on). | `feature/client-reports` |
+| 2026-11-06 | **Security holds:** a Sucuri SiteCheck hit is held even when the malware row comes from a clean Companion scan; a core-file or blocklist problem earlier in the month is held when a later clean check hides it; a month in which no malware scan or blocklist check finished is held (when those scans are on). | `feature/client-reports` |
+| 2026-11-06 | **#22:** the vulnerability refresh records each plugin's last successful lookup; a report with a plugin never looked up is held, naming it. A vulnerability list older than 48h holds every report instead of sending "Not checked". | `feature/client-reports` |
+| 2026-11-06 | **Uptime:** 429-blocked time of an hour or more, and maintenance mode of 2 hours or more, are held (both count as up); uptime is rounded down, so a 2-minute outage reads 99.99%, not 100%; a site added late on Nov 1 (a 25-hour day) no longer counts as a partial month. | `feature/client-reports` |
+| 2026-11-06 | **Updates run from a site's Updates tab** showed the raw log line ("Updated example-forms/example-forms.php 6.0.6 → 6.1 on …") in the email; now the plugin's name, and the tab logs in the jobs' wording. | `feature/client-reports` |
+| 2026-11-06 | **Backups:** SpinupWP's database half is stored apart (`database_bytes`) so a broken dump can't hide behind the files; files-only months, a failed latest read and a read from before the month ended are held. | `feature/client-reports` |
+| 2026-11-06 | **Small guards:** a speed test with no score is skipped (it showed a red 0/100); requests with zero visits are suspect traffic; vulnerable plugin names are entity-decoded ("&amp;amp;"); the inbox preview text follows the template. | `feature/client-reports` |
+| 2026-11-06 | **Sending:** editing a schedule's recipients updates its unsent reports (Send used the compile-time list); recipients are de-duplicated ignoring case; sends to one report are locked, so a double click can't email twice; Send on a sent report warns first; a draft-mode Run doesn't add a second live report beside a sent one. | `feature/client-reports` |
+| 2026-11-06 | **Logo:** an uploaded logo is embedded from disk; a relative or Control-host logo URL is never hot-linked (it was broken in every inbox). | `feature/client-reports` |
+| 2026-11-06 | **Care plan ended with the month:** Bill.com's 01:30 UTC sync on the 1st turned it off before the run, so the month's report was skipped. It's now compiled and held; the sync logs its flips (local only). | `feature/client-reports` |
+| 2026-11-06 | **Recipient push** no longer writes an older Companion snapshot back over a newer one; `client_reports.client_email` is text (8+ long addresses crashed the insert under MySQL strict mode). | `feature/client-reports` |
+| 2026-11-06 | **Report schema 8**, so unsent reports compiled before these checks are recompiled before sending. | `feature/client-reports` |
+| 2026-11-06 | **Done since the last update:** Clients tab, Send test to me, Recompile, Mark findings reviewed, schema 7 report-content fixes (v1.12.1); #20, #21 (mostly) and #14 earlier. | PR #63 |
 | 2026-10-22 | **Independent review of the Nov 1 changes** (5 reviewers, each finding checked by a skeptic; 7 confirmed, all fixed). Below, from "Sent reports reused" to "Plain-text email". | PR #50 |
 | 2026-10-22 | **Sent reports reused for their period:** a run that was finished by hand after a failure, or **Send now** pressed again, no longer recompiles and emails everyone a second copy. | PR #50 |
 | 2026-10-22 | **"Already up to date" only when nothing was waiting at month end:** themes and WordPress core now count (only plugins did), updates applied after the period count as waiting then, and a Companion snapshot more than 48h older than the period end makes it unknown and holds the report. | PR #50 |

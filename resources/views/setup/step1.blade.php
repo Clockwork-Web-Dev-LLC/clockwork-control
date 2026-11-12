@@ -1313,12 +1313,13 @@
                 const badgeContainer = row.querySelector('.service-status-badge');
                 if (!badgeContainer) return;
 
+                const escAttr = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 if (status === 'ok') {
-                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300" title="${summary || 'Healthy'}"><i class="fa-solid fa-circle-check text-emerald-600"></i><span>Healthy</span></span>`;
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300" title="${escAttr(summary || 'Healthy')}"><i class="fa-solid fa-circle-check text-emerald-600"></i><span>Healthy</span></span>`;
                 } else if (status === 'warn') {
-                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title="${summary || 'Degraded'}"><i class="fa-solid fa-triangle-exclamation text-amber-600"></i><span>Degraded</span></span>`;
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title="${escAttr(summary || 'Degraded')}"><i class="fa-solid fa-triangle-exclamation text-amber-600"></i><span>Degraded</span></span>`;
                 } else if (status === 'fail' || status === 'error') {
-                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300" title="${summary || 'Offline'}"><i class="fa-solid fa-circle-xmark text-rose-600"></i><span>Offline</span></span>`;
+                    badgeContainer.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300" title="${escAttr(summary || 'Offline')}"><i class="fa-solid fa-circle-xmark text-rose-600"></i><span>Offline</span></span>`;
                 } else {
                     badgeContainer.innerHTML = '';
                 }

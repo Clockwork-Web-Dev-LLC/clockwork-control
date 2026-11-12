@@ -71,13 +71,14 @@ class SiteBackupRecorder
             if ($rows !== []) {
                 SiteBackup::query()->upsert(
                     array_map(fn (array $row) => $row + [
+                        'database_bytes' => null,
                         'site_id' => $site->id,
                         'source' => $source,
                         'first_seen_at' => $now,
                         'last_seen_at' => $now,
                     ], $rows),
                     ['site_id', 'source', 'kind', 'external_ref'],
-                    ['backup_at', 'bytes', 'is_manual', 'last_seen_at'],
+                    ['backup_at', 'bytes', 'database_bytes', 'is_manual', 'last_seen_at'],
                 );
             }
         } catch (Throwable $e) {
@@ -137,7 +138,7 @@ class SiteBackupRecorder
         return $rows;
     }
 
-    /** @return list<array{kind: string, external_ref: string, backup_at: Carbon, bytes: ?int, is_manual: bool}> */
+    /** @return list<array{kind: string, external_ref: string, backup_at: Carbon, bytes: ?int, database_bytes: ?int, is_manual: bool}> */
     protected function fromSpaces(Site $site): array
     {
         $rows = [];
@@ -158,6 +159,8 @@ class SiteBackupRecorder
                 'external_ref' => (string) $run['date'],
                 'backup_at' => Carbon::parse($run['date'])->utc(),
                 'bytes' => (int) $database + (int) $files,
+                // Kept apart so a broken dump can't hide behind the files.
+                'database_bytes' => $database,
                 'is_manual' => false,
             ];
         }

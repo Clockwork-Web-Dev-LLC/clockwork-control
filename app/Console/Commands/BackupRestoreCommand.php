@@ -306,7 +306,23 @@ class BackupRestoreCommand extends Command
             try {
                 $statusRes = $client->backupRestoreStatus();
                 if ($statusRes !== []) {
-                    $latest = array_merge($latest, $statusRes);
+                    $allowedRemoteKeys = [
+                        'status',
+                        'staged_id',
+                        'has_sql',
+                        'has_files',
+                        'table_prefix',
+                        'error',
+                        'error_detail',
+                        'maintenance',
+                        'step',
+                        'percent',
+                        'message',
+                        'updated_at',
+                        'http_code',
+                    ];
+                    $safeStatus = array_intersect_key($statusRes, array_flip($allowedRemoteKeys));
+                    $latest = array_merge($latest, $safeStatus);
                     Cache::put($cacheKey, $latest, now()->addHours(2));
 
                     if (in_array($latest['status'] ?? '', $terminalStatuses, true)) {

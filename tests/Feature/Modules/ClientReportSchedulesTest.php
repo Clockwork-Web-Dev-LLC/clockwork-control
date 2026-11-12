@@ -16,11 +16,18 @@ use Modules\ClientReports\Models\ClientReport;
 use Modules\ClientReports\Models\ClientReportSchedule;
 use Modules\ClientReports\Models\ClientReportTemplate;
 use Modules\ClientReports\Services\ClientReportCompiler;
+use Modules\ClientReports\Services\ClientReportSender;
 use Modules\ClientReports\Services\ReportRecipientsSyncService;
 use Modules\ClientReports\Services\ScheduledReportRunner;
+use Modules\ClientReports\Support\ReportState;
 use Tests\Concerns\RendersAuthenticatedPages;
 
 uses(RendersAuthenticatedPages::class);
+
+// Most of these tests cover Automatic schedules emailing clean reports by
+// themselves, which needs approval switched off; the approval-on run has
+// its own describe block below.
+beforeEach(fn () => clientReportsSendThemselves());
 
 /**
  * A care-plan site whose compiled report has nothing to hold for review (no
@@ -29,7 +36,10 @@ uses(RendersAuthenticatedPages::class);
  */
 function reportableSite(array $attributes = []): Site
 {
-    return Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear()], $attributes));
+    $site = Site::factory()->carePlan()->create(array_merge(['hosting_provider' => Site::HOSTING_PROVIDER_CUSTOM, 'backup_relay_enabled' => false, 'uptime_last_checked_at' => now(), 'created_at' => now()->subYear()], $attributes));
+    cleanSecurityScans($site);
+
+    return $site;
 }
 
 /**
@@ -223,6 +233,34 @@ describe('Schedules UI & CRUD', function () {
             ->and($schedule->delivery_mode)->toBe(ClientReportSchedule::MODE_DRAFT)
             ->and($schedule->recipients)->toBe(['new@example.com'])
             ->and($schedule->is_enabled)->toBeFalse();
+    });
+
+    it('sends is_enabled=0 when the Enable box is unchecked, so saving a paused schedule keeps it paused', function () {
+        $user = User::factory()->create();
+        $site = Site::factory()->create(['domain' => 'paused-sched.test']);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id,
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['client@example.com'],
+            'is_enabled' => false,
+        ]);
+
+        // A browser omits an unchecked checkbox; the hidden input before it
+        // is what reaches the controller.
+        $html = $this->actingAs($user)->get(route('client-reports.schedules.edit', $schedule))
+            ->assertOk()
+            ->getContent();
+        expect(preg_match('/<input type="hidden" name="is_enabled" value="0">\s*<input type="checkbox"\s+name="is_enabled"\s+value="1"\s+class/', $html))->toBe(1);
+
+        $this->actingAs($user)->put(route('client-reports.schedules.update', $schedule), [
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => 'client@example.com',
+            'is_enabled' => '0',
+        ])->assertRedirect(route('client-reports.schedules.index'));
+
+        expect($schedule->refresh()->is_enabled)->toBeFalse();
     });
 
     it('toggles schedule is_enabled status via toggle endpoint', function () {
@@ -419,7 +457,7 @@ describe('Console Command: clockwork:send-client-reports', function () {
         ]);
 
         $this->artisan('clockwork:send-client-reports')
-            ->expectsOutputToContain('generated draft report (awaiting operator review)')
+            ->expectsOutputToContain('compiled, waiting for approval (nothing sent)')
             ->assertExitCode(0);
 
         Mail::assertNothingSent();
@@ -755,6 +793,7 @@ describe('hold for review', function () {
         // A SpinupWP site whose backups were never checked: "Backups could not be checked."
         $site = Site::factory()->carePlan()->create(['domain' => 'flagged.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
         checkedCoreFiles($site);
+        cleanSecurityScans($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['client@flagged.test'],
@@ -784,6 +823,7 @@ describe('hold for review', function () {
         Mail::fake();
         $site = Site::factory()->carePlan()->create(['domain' => 'was-draft.test', 'hosting_provider' => Site::HOSTING_PROVIDER_SPINUPWP, 'uptime_last_checked_at' => now()]);
         checkedCoreFiles($site);
+        cleanSecurityScans($site);
         $schedule = ClientReportSchedule::create([
             'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
             'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@was-draft.test'],
@@ -1209,4 +1249,140 @@ describe('bidirectional WordPress report recipient sync', function () {
         // pushToSite short-circuits without Companion; the removal flag is exercised via the controller path.
         expect($service->pushToSite($site, null, scheduleRemoved: true))->toBeFalse();
     });
+});
+
+describe('sending safely around the monthly run', function () {
+    it('applies edited schedule recipients to its unsent reports, not to sent ones', function () {
+        $user = User::factory()->create();
+        $site = reportableSite();
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_AUTO, 'recipients' => ['old@client.test', 'wrong@client.test'], 'is_enabled' => true,
+        ]);
+        $report = fn (string $status, array $sentTo = []) => ClientReport::create([
+            'site_id' => $site->id, 'schedule_id' => $schedule->id, 'title' => 'Report', 'period_start' => '2026-10-01', 'period_end' => '2026-10-31',
+            'sections_data' => [], 'client_email' => 'old@client.test, wrong@client.test', 'status' => $status, 'sent_to' => $sentTo,
+        ]);
+        $held = $report(ClientReport::STATUS_GENERATED);
+        $sent = $report(ClientReport::STATUS_SENT, ['old@client.test', 'wrong@client.test']);
+
+        $this->actingAs($user)->put(route('client-reports.schedules.update', $schedule), [
+            'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => "old@client.test\nnew@client.test", 'is_enabled' => '1',
+        ])->assertRedirect();
+
+        expect($held->refresh()->recipients())->toBe(['old@client.test', 'new@client.test'])
+            ->and($held->recipientsToSend())->toBe(['old@client.test', 'new@client.test'])
+            ->and($sent->refresh()->client_email)->toBe('old@client.test, wrong@client.test');
+    });
+
+    it('treats addresses that differ only in case as one recipient', function () {
+        expect(ClientReport::parseRecipients('Jane@Client.test, jane@client.test; bob@client.test'))->toBe(['Jane@Client.test', 'bob@client.test']);
+
+        $report = new ClientReport(['client_email' => 'Jane@Client.test, bob@client.test', 'status' => ClientReport::STATUS_GENERATED]);
+        $report->sent_to = ['jane@client.test'];
+        expect($report->recipientsToSend())->toBe(['bob@client.test']);
+    });
+
+    it('does not email someone a second send already reached while it waited', function () {
+        Mail::fake();
+        $site = reportableSite();
+        $report = ClientReport::create([
+            'site_id' => $site->id, 'title' => 'Report', 'period_start' => '2026-10-01', 'period_end' => '2026-10-31',
+            'sections_data' => ['meta' => ['schema_version' => ClientReportCompiler::SCHEMA_VERSION]], 'client_email' => 'a@client.test, b@client.test', 'status' => ClientReport::STATUS_GENERATED,
+        ]);
+        // A double click: both requests loaded the report before either sent.
+        $second = ClientReport::find($report->id);
+        app(ClientReportSender::class)->send($report, ['a@client.test', 'b@client.test']);
+
+        $failed = app(ClientReportSender::class)->send($second, ['a@client.test', 'b@client.test']);
+
+        expect($failed)->toBe([]);
+        Mail::assertSent(ClientReportMail::class, 2);
+    });
+
+    it('does not compile a second live report when a draft schedule is run after its report was sent', function () {
+        Mail::fake();
+        $schedule = ClientReportSchedule::create([
+            'site_id' => reportableSite()->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY,
+            'delivery_mode' => ClientReportSchedule::MODE_DRAFT, 'recipients' => ['client@client.test'], 'is_enabled' => true,
+            'next_run_at' => now()->subHour(),
+        ]);
+        $month = now()->subMonthNoOverflow();
+        $sent = ClientReport::create([
+            'site_id' => $schedule->site_id, 'schedule_id' => $schedule->id, 'title' => 'Report',
+            'period_start' => $month->copy()->startOfMonth(), 'period_end' => $month->copy()->endOfMonth()->startOfDay(),
+            'sections_data' => [], 'client_email' => 'client@client.test', 'status' => ClientReport::STATUS_SENT, 'sent_to' => ['client@client.test'],
+        ]);
+
+        $run = app(ScheduledReportRunner::class)->run($schedule);
+
+        expect($run->report->is($sent))->toBeTrue()
+            ->and(ClientReport::count())->toBe(1);
+        Mail::assertNothingSent();
+    });
+
+    it('warns before sending a report that was already sent', function () {
+        $report = new ClientReport(['client_email' => 'client@client.test', 'status' => ClientReport::STATUS_SENT]);
+        $report->sent_at = Carbon::parse('2026-12-01 06:00');
+
+        expect(ReportState::sendConfirmation($report))
+            ->toStartWith('This report was already sent on Dec 1, 2026. Sending it again emails everyone on it a second copy.');
+    });
+});
+
+describe('a care plan that ended as the month did', function () {
+    it('still compiles the month, held, when the care plan was switched off after it ended', function () {
+        Mail::fake();
+        $this->travelTo(Carbon::parse('2026-12-01 06:00:00'));
+        $site = reportableSite(['domain' => 'lapsed.test', 'care_plan_enabled' => false]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_CARE_PLAN_TOGGLED, 'target' => 'off',
+            'summary' => 'Marked lapsed.test as NOT on a care plan (Bill.com sync).', 'details' => ['previous' => true, 'now' => false, 'source' => 'bill_com'],
+            'ok' => true, 'actor' => 'scheduled', 'ran_at' => Carbon::parse('2026-12-01 01:30:00')]);
+        $schedule = ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['client@lapsed.test'], 'is_enabled' => true, 'last_sent_at' => Carbon::parse('2026-11-01 06:10'),
+            'next_run_at' => Carbon::parse('2026-12-01 00:00:00'),
+        ]);
+        checkedCoreFiles($site);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        $report = ClientReport::query()->where('schedule_id', $schedule->id)->sole();
+        expect($report->period_start->toDateString())->toBe('2026-11-01')
+            ->and($report->sections_data['meta']['review_reasons'])->toContain('The care plan was switched off Nov 30, 8:30 PM EST, when this period had ended. The period was covered, but confirm the client should still get this report.');
+        Mail::assertNothingSent();
+    });
+
+    it('still skips a site whose care plan was already off during the month', function () {
+        $this->travelTo(Carbon::parse('2026-12-01 06:00:00'));
+        $site = reportableSite(['domain' => 'off-all-month.test', 'care_plan_enabled' => false]);
+        ActionLog::create(['site_id' => $site->id, 'action_type' => ActionLog::TYPE_CARE_PLAN_TOGGLED, 'target' => 'off',
+            'summary' => 'off', 'details' => ['previous' => true, 'now' => false], 'ok' => true, 'actor' => 'manual', 'ran_at' => Carbon::parse('2026-10-20 12:00:00')]);
+        ClientReportSchedule::create([
+            'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+            'recipients' => ['client@off.test'], 'is_enabled' => true, 'next_run_at' => Carbon::parse('2026-12-01 00:00:00'),
+        ]);
+
+        $this->artisan('clockwork:send-client-reports')->assertSuccessful();
+
+        expect(ClientReport::count())->toBe(0);
+    });
+});
+
+it('merges the pushed recipients into the snapshot as it is now, not as the run loaded it', function () {
+    $site = reportableSite(['domain' => 'snap.test', 'companion_installed' => true, 'companion_secret' => str_repeat('s', 64),
+        'companion_snapshot' => ['marker' => 'loaded-by-the-run']]);
+    $schedule = ClientReportSchedule::create([
+        'site_id' => $site->id, 'frequency' => ClientReportSchedule::FREQUENCY_MONTHLY, 'delivery_mode' => ClientReportSchedule::MODE_AUTO,
+        'recipients' => ['client@snap.test'], 'is_enabled' => true,
+    ]);
+    // The nightly refresh lands after the run loaded the site.
+    Site::query()->whereKey($site->id)->update(['companion_snapshot' => json_encode(['marker' => 'refreshed-since'])]);
+    Http::fake(['snap.test/*' => Http::response(['client_notifications' => ['report_recipients' => ['client@snap.test']]])]);
+
+    expect(app(ReportRecipientsSyncService::class)->pushToSite($site, $schedule))->toBeTrue();
+
+    expect($site->fresh()->companion_snapshot)->toMatchArray(['marker' => 'refreshed-since'])
+        ->and($site->fresh()->companion_snapshot['client_notifications']['report_recipients'])->toBe(['client@snap.test']);
 });

@@ -121,8 +121,10 @@ it('extracts Companion into wp-content/plugins/clockwork-companion, cleans up le
     $ssh->shouldReceive('exec')
         ->once()
         ->withArgs(function (Server $s, string $cmd): bool {
-            return str_contains($cmd, 'PLUGINS="/sites/example.com/files/wp-content/plugins"')
-                && str_contains($cmd, 'MU="/sites/example.com/files/wp-content/mu-plugins"')
+            return str_contains($cmd, 'WP_PATH=')
+                && str_contains($cmd, '/sites/example.com/files')
+                && str_contains($cmd, 'PLUGINS="$WP_PATH/wp-content/plugins"')
+                && str_contains($cmd, 'MU="$WP_PATH/wp-content/mu-plugins"')
                 && str_contains($cmd, 'mv .clockwork-stage/clockwork-companion.php .clockwork-stage/clockwork-companion/clockwork-companion.php')
                 && str_contains($cmd, 'rm -f "$MU/clockwork-companion.php"')
                 && str_contains($cmd, 'plugin activate clockwork-companion');
@@ -143,4 +145,42 @@ it('extracts Companion into wp-content/plugins/clockwork-companion, cleans up le
 
     expect($result['exit'])->toBe(0)
         ->and($result['output'])->toContain('wp-content/plugins/clockwork-companion');
+});
+
+it('single-quotes shell metacharacters in wpPath during extractOnRemote', function () {
+    $ssh = Mockery::mock(SshClient::class);
+    $server = Server::factory()->create(['ssh_password' => 'sudo-pw', 'ssh_user' => 'siteuser']);
+    $site = Site::factory()->for($server, 'server')->create([
+        'site_user' => 'siteuser',
+        'table_prefix' => 'wp_',
+    ]);
+
+    $maliciousWpPath = '/sites/example.com/$(touch /tmp/pwned)/"quoted"';
+
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(fn (Server $s, string $cmd) => str_starts_with($cmd, 'printf %s '))
+        ->andReturn('');
+
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(function (Server $s, string $cmd) use ($maliciousWpPath): bool {
+            // When ssh_user === site_user, cmd is `bash -c '<script>' ...`
+            // Verify WP_PATH is assigned via escapeshellarg (single-quoted), never double-quoted!
+            return ! str_contains($cmd, 'PLUGINS="'.$maliciousWpPath)
+                && str_contains($cmd, 'PLUGINS="$WP_PATH/wp-content/plugins"');
+        })
+        ->andReturn(sentinelOutput('OK: companion staged', 0));
+
+    $ssh->shouldReceive('exec')
+        ->once()
+        ->withArgs(fn (Server $s, string $cmd) => str_starts_with($cmd, 'rm -f '))
+        ->andReturn('');
+
+    $installer = new CompanionInstaller($ssh, Mockery::mock(CompanionTarballBuilder::class));
+    $method = new ReflectionMethod(CompanionInstaller::class, 'extractOnRemote');
+    $method->setAccessible(true);
+
+    $result = $method->invoke($installer, $site, $maliciousWpPath, base64_encode('fake-tarball'));
+    expect($result['exit'])->toBe(0);
 });
