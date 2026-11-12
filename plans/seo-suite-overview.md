@@ -129,8 +129,8 @@ Three rules hold the whole thing together:
 | Claude access settings page and network endpoint | The switch, one-click setup, who is connected, per-person sign-in | Built, switched off, not yet reachable from outside |
 | **Public address for Claude** | A hostname that lets only the Claude paths through | **Not done: outside the code, Aaron R's decision** |
 | **The two skills rewritten to call the tools** | The actual removal of the hand work | **Not done: outside the repo** |
-| DataForSEO connection, ledger, budget cap | Buys keyword volume, difficulty, CPC and intent | Not built (Phase 2) |
-| Keyword metric tools | Quote, then buy | Not built (Phase 2) |
+| DataForSEO connection, spend ledger, caps per feature, task runner, settings card | The plumbing every paid feature uses | Built 2026-11-12 (build step 1). Not yet run against the live API |
+| Keyword metrics and its two tools | Stored volume, difficulty, CPC, intent; quote, then buy; 30-day cache; city volume | Built 2026-11-12 (build step 2). Not yet run against the live API |
 | Keyword maps | Imported from each client's sheet, edited through Claude, checked on every edit | Not built (Phase 2) |
 | Page audit | Reads a live page's title, meta, H1s, schema and word count | Not built (Phase 2) |
 | Sheets import and export | Reads the existing map; writes new dated tabs in the existing format | Not built (Phase 2) |

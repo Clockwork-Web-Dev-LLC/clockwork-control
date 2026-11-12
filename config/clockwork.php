@@ -548,6 +548,11 @@ return [
         // with sample data and charges nothing. For a first try only.
         'dataforseo_sandbox' => (bool) env('CLOCKWORK_SEO_DATAFORSEO_SANDBOX', false),
         'dataforseo_timeout' => (int) env('CLOCKWORK_SEO_DATAFORSEO_TIMEOUT', 60),
+
+        // Labels for DataForSEO's 0 to 100 keyword difficulty: each band
+        // runs up to and including its number. Fixed defaults, not
+        // calibrated against Semrush's KD %, and shown as such.
+        'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
     ],
 
     // Claude access (modules/Mcp): the MCP server Claude reads Control

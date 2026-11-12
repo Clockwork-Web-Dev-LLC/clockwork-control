@@ -2,7 +2,7 @@
 title: SEO module
 section: Features
 order: 67
-updated: 2026-11-11
+updated: 2026-11-12
 author: Aaron Reimann
 tags: [seo, indexability, search-console, ga4, modules]
 tracks: [modules/Seo/**]
@@ -76,6 +76,22 @@ If Google revokes the connection, Control marks it revoked, sends one chat messa
 - **GA4 thresholding**: GA4 may withhold small numbers, often key events.
 
 Missing data shows as "—" or "not entered", never 0.
+
+## DataForSEO: paid keyword data
+
+Search Console and GA4 cover a client's own traffic. Keyword volume, difficulty, CPC and intent are bought from DataForSEO, pay as you go.
+
+1. Open a DataForSEO account and top it up. On its API Access page, copy the **API login and password** (not the account sign-in).
+2. Enter them under **SEO** on **Settings → Integrations**. They are stored encrypted.
+3. On **SEO → Settings**, click **Test** in the DataForSEO card. It makes one free call and shows the balance.
+
+The same card shows what each kind of work has spent this month and lets an admin set a **monthly cap per feature**, a cap on everything, and an **allowance per person** for non-admins. "Spent" is what DataForSEO itself reported for each call. A call that would pass a cap is not made.
+
+Keyword metrics are kept for 30 days, so the same keyword isn't bought twice. Buying is always two steps: a quote that spends nothing, then the purchase, which names the quoted cost. Difficulty is DataForSEO's 0 to 100 score with default bands (Easy up to 29, Medium to 49, Hard to 69, Very hard above). It is not Semrush's KD % and the two are not comparable. A site's market (country, language, and a city for local volume) is stored on its profile; there is no form field for it yet, so it defaults to United States, English.
+
+To try it without spending, set `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true`: calls go to DataForSEO's free sandbox and return sample data.
+
+This has been built against DataForSEO's published API specification and tested with sample responses. No live call has been made yet, so treat the first real one as the test.
 
 ## Reading it from Claude
 

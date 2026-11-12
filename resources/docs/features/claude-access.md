@@ -2,7 +2,7 @@
 title: Claude access (MCP)
 section: Features
 order: 68
-updated: 2026-11-11
+updated: 2026-11-12
 author: Aaron Reimann
 tags: [mcp, claude, seo, modules]
 tracks: [modules/Mcp/**, modules/Seo/src/Mcp/**]
@@ -23,6 +23,8 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_search_rows` | Search Console rows by page, query, or both, added up over 1 to 16 months, filtered, compared and paged. | No |
 | `seo_ai_impressions_record` | Store a month's total from Search Console's Generative AI report, or mark it not available. | Yes |
 | `seo_site_profile_update` | Change brand terms, GA4 key events or the year-over-year flag. | Yes |
+| `seo_keyword_metrics` | Search volume, difficulty, CPC and intent for up to 700 keywords from what Control already bought, plus a quote for the ones it doesn't have. Never spends. | No |
+| `seo_keyword_metrics_fetch` | Buys the keywords in a quote from DataForSEO. Spends money, so Claude asks first. | Yes, and spends |
 
 ## Connecting claude.ai and Cowork
 
@@ -100,6 +102,7 @@ Disabling **Claude access** on **Settings → Modules** removes both routes and 
 - `seo_site_profile_update` applies a brand terms change only with `confirm_purge`, because that re-pulls 16 months of non-branded totals. Without it, the call returns a preview and saves nothing, including any other field in the same call.
 - **Not from Claude, on purpose:** a site's Search Console or GA4 property (changing one deletes stored history) and its report notes (whoever writes the report follows them, so nothing Claude read elsewhere may be able to set them). Both are edited on the site's profile page.
 - Every change is written to the action log with the user, the tool, and the before and after values, so it can be undone by hand. These rows are not attached to the site, so they are never pushed to the client's WordPress activity log.
+- `seo_keyword_metrics_fetch` is the only tool that spends money. It needs a quote from `seo_keyword_metrics` (good once, for 15 minutes, for the person it was made for) and the cost the person agreed to. It is refused if a spending cap would be passed. The real cost goes in the ledger on **SEO → Settings**.
 - A revoked user's connection gets no `seo_` tools, and each tool refuses again if called anyway.
 
 ## Limits to know about

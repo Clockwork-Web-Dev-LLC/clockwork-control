@@ -13,6 +13,8 @@ use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
+use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
+use Modules\Seo\Mcp\Tools\SeoKeywordMetricsFetch;
 use Modules\Seo\Mcp\Tools\SeoListSites;
 use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
@@ -104,6 +106,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoSearchRows::class,
             SeoAiImpressionsRecord::class,
             SeoSiteProfileUpdate::class,
+            SeoKeywordMetrics::class,
+            SeoKeywordMetricsFetch::class,
         ];
     }
 

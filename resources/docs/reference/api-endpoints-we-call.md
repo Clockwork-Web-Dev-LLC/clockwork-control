@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-11-05
+updated: 2026-11-12
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -183,6 +183,14 @@ No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms betwee
 ## Google PageSpeed Insights v5 — `https://www.googleapis.com/pagespeedonline/v5/runPagespeed`
 
 `modules/PageSpeedInsights/src/PageSpeedInsightsClient.php` · `key=CLOCKWORK_PSI_API_KEY` (free 25k/day). **Fallback engine** — called when GTmetrix encounters an error or reaches capacity; rows tagged `engine='psi-fallback'`. One request asks for four Lighthouse categories via repeating `category=` params (`performance`, `accessibility`, `best-practices`, `seo`). Bracket arrays (`category[0]=`) are ignored by PSI v5.
+
+## DataForSEO v3 — `https://api.dataforseo.com` (SEO module)
+
+`modules/Seo/src/DataForSeo/DataForSeoClient.php` · HTTP basic auth with the API login and password. Every request is a JSON array of task objects; every response carries `status_code`, `cost` and a `tasks` array. Each paid call passes `BudgetGuard` first and is written to `seo_api_usage` with the cost DataForSEO reported. Refusals (401, 402 out of funds, 429) are never retried. `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true` swaps the host for `sandbox.dataforseo.com`.
+
+- `GET /v3/appendix/user_data` — free; the Test button and balance.
+- `POST /v3/dataforseo_labs/google/keyword_overview/live` — up to 700 keywords per call: volume, CPC, competition, difficulty and intent in one answer.
+- `POST /v3/keywords_data/google_ads/search_volume/live` — up to 1,000 keywords per call: city-level volume, only when a site has a market city.
 
 ## Google Cloud Web Risk — `https://webrisk.googleapis.com/v1/uris:search`
 

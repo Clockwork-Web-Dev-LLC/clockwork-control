@@ -31,6 +31,7 @@ it('never returns a credential from any tool', function () {
         'companion_secret' => 'CANARY-companion-secret',
     ]);
     IntegrationCredential::query()->create(['integration' => 'seo', 'key' => 'google_client_secret', 'value' => 'CANARY-client-secret']);
+    IntegrationCredential::query()->create(['integration' => 'seo', 'key' => 'dataforseo_password', 'value' => 'CANARY-dataforseo-password']);
     GoogleConnection::query()->create([
         'account_email' => 'systems@example.com', 'refresh_token' => 'CANARY-refresh-token',
         'status' => 'error', 'last_error' => 'temporarily unavailable',
@@ -50,6 +51,7 @@ it('never returns a credential from any tool', function () {
         'seo_search_rows' => ['site' => 'acme.com', 'dimension' => 'page_query', 'end_month' => '2026-10', 'compare' => 'yoy'],
         'seo_ai_impressions_record' => ['site' => 'acme.com', 'month' => '2026-10', 'status' => 'entered', 'ai_impressions' => 10],
         'seo_site_profile_update' => ['site' => 'acme.com', 'brand_terms' => ['acme', 'apex'], 'confirm_purge' => true],
+        'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
     ];
 
     $tools = [ControlWhoAmI::class, ...app(ModuleRegistry::class)->mcpTools()];
@@ -57,6 +59,10 @@ it('never returns a credential from any tool', function () {
 
     foreach ($tools as $class) {
         $name = app($class)->name();
+        // Spends money on a quote; covered by KeywordMetricsToolsTest.
+        if ($name === 'seo_keyword_metrics_fetch') {
+            continue;
+        }
         // A new tool must be added here before it ships.
         expect($arguments)->toHaveKey($name);
 
@@ -69,5 +75,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(7);
+    expect($called)->toHaveCount(8);
 });
