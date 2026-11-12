@@ -19,6 +19,7 @@ use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetricsFetch;
 use Modules\Seo\Mcp\Tools\SeoListSites;
 use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
+use Modules\Seo\Mcp\Tools\SeoPageAudit;
 use Modules\Seo\Mcp\Tools\SeoRankHistory;
 use Modules\Seo\Mcp\Tools\SeoRankings;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
@@ -126,6 +127,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoRankings::class,
             SeoRankHistory::class,
             SeoTrackedKeywordsUpdate::class,
+            SeoPageAudit::class,
         ];
     }
 

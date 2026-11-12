@@ -54,8 +54,12 @@ it('never returns a credential from any tool', function () {
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
         'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
         'seo_rankings' => ['site' => 'acme.com'],
+        'seo_page_audit' => ['site' => 'acme.com', 'urls' => ['https://www.acme.com/services']],
         'seo_rank_history' => ['site' => 'acme.com', 'keywords' => ['emergency plumber']],
     ];
+
+    // The page audit is the one tool that fetches: give it a page.
+    Http::fake(['https://www.acme.com/*' => Http::response('<html><head><title>Acme</title></head><body><h1>Acme</h1></body></html>', 200, ['Content-Type' => 'text/html'])]);
 
     $tools = [ControlWhoAmI::class, ...app(ModuleRegistry::class)->mcpTools()];
     $called = [];
@@ -78,5 +82,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(11);
+    expect($called)->toHaveCount(12);
 });

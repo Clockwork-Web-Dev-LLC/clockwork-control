@@ -28,6 +28,7 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_rankings` | Where a site ranks on Google for its tracked keywords: latest position, change, ranking page, competitor positions and AI Overview. Filters for top 3, top 10, improved, declined and not found. | No |
 | `seo_rank_history` | Every stored rank check for up to 20 tracked keywords over a date range. | No |
 | `seo_tracked_keywords_update` | Start tracking keywords, or pause or resume them. Adding is a recurring cost, so Claude asks first and reports the monthly estimate. Cannot delete keywords or history. | Yes, and adds recurring spend |
+| `seo_page_audit` | Fetches up to 5 live pages on a client's own site and reads title, meta description, headings, canonical, robots tag, schema types and word count. Free. A page a firewall blocks comes back as blocked, not empty. | Stores the latest audit |
 
 ## Connecting claude.ai and Cowork
 

@@ -554,6 +554,9 @@ return [
         // calibrated against any other tool's score, and shown as such.
         'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
 
+        // Seconds to wait for a client page when auditing it.
+        'page_audit_timeout' => (int) env('CLOCKWORK_SEO_PAGE_AUDIT_TIMEOUT', 12),
+
         // Rank tracking defaults, changed on SEO settings. Weekly at the
         // top 30 is the cheap starting point; daily and deeper cost more.
         'rank_tracking' => [

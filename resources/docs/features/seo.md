@@ -129,6 +129,15 @@ Claude reads the same data through `seo_rankings` and `seo_rank_history`, and ca
 
 Built against DataForSEO's published specification and not yet run against the live API.
 
+## Page audit
+
+Control can read a live page on a client's site and report what it says about itself: title and meta description with character counts, H1s and H2s, canonical, robots tag, schema types (including those inside `@graph`) and a word count that leaves out menus, the footer and code. Claude uses it through `seo_page_audit`, up to 5 pages at a time, to see the current state of a page before proposing changes.
+
+- **Only the client's own site**: it fetches `https` pages on the site's domain (bare or `www`) and nothing else. Redirects that leave the site or point at a private address are refused.
+- **Blocked is not empty**: when a firewall, login or "checking your browser" page stops Control, the audit is stored as blocked and its fields are unknown. It never reports "no title" for a page it could not read.
+- **No JavaScript**: pages are read as the server sends them, so text a page adds in the browser is not counted.
+- The latest audit per URL is kept in `seo_page_audits`; a new audit replaces it. It costs nothing.
+
 ## Reading it from Claude
 
 The same numbers are available to Claude through `seo_` tools: list sites, month numbers, daily series, page and query rows, keyword metrics, rankings and rank history, plus a few that record or change things. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.

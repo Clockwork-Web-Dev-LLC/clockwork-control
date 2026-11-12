@@ -17,6 +17,7 @@ use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetricsFetch;
 use Modules\Seo\Mcp\Tools\SeoListSites;
 use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
+use Modules\Seo\Mcp\Tools\SeoPageAudit;
 use Modules\Seo\Mcp\Tools\SeoRankHistory;
 use Modules\Seo\Mcp\Tools\SeoRankings;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
@@ -35,6 +36,7 @@ const SEO_TOOLS = [
     SeoRankings::class,
     SeoRankHistory::class,
     SeoTrackedKeywordsUpdate::class,
+    SeoPageAudit::class,
 ];
 
 /** tools/list as Claude receives it, as plain arrays. */
@@ -73,7 +75,7 @@ it('drops a module\'s tools when the module is turned off', function () {
 it('names every tool control_ or seo_ and gives each a title, a description and hints', function () {
     $tools = listedTools($this->user);
 
-    expect($tools)->toHaveCount(12);
+    expect($tools)->toHaveCount(13);
 
     foreach ($tools as $tool) {
         expect($tool['name'])->toMatch('/^(control|seo)_[a-z_]+$/')
@@ -89,7 +91,7 @@ it('names every tool control_ or seo_ and gives each a title, a description and 
     }
 
     expect(collect($tools)->where('annotations.readOnlyHint', false)->pluck('name')->sort()->values()->all())
-        ->toBe(['seo_ai_impressions_record', 'seo_keyword_metrics_fetch', 'seo_site_profile_update', 'seo_tracked_keywords_update']);
+        ->toBe(['seo_ai_impressions_record', 'seo_keyword_metrics_fetch', 'seo_page_audit', 'seo_site_profile_update', 'seo_tracked_keywords_update']);
 });
 
 it('returns every tool on the first page', function () {
