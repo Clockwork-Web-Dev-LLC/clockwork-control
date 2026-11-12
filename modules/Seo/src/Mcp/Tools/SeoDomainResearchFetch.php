@@ -23,7 +23,7 @@ use Modules\Seo\Research\DomainResearch;
 
 #[Name('seo_domain_research_fetch')]
 #[Title('Buy ranking data for a domain')]
-#[Description('Spends money. Buys from DataForSEO either this month\'s ranking-keyword count for a domain (what "count", about 1 cent) or the list of keywords it ranks for (what "ranked_keywords", up to 1,000, about 13 cents). Call it first WITHOUT confirm_cost_usd to get the price and spend nothing; tell the person the price and what it buys; call again with confirm_cost_usd only after they agree. Read the result afterwards with seo_domain_overview or seo_ranked_keywords.')]
+#[Description('Spends money. Buys from DataForSEO either this month\'s ranking-keyword count for a domain (what "count", about 1 cent) the list of keywords it ranks for (what "ranked_keywords", up to 1,000, about 13 cents), or the domains that compete with it in search (what "competitors", up to 100, about 2 cents). Call it first WITHOUT confirm_cost_usd to get the price and spend nothing; tell the person the price and what it buys; call again with confirm_cost_usd only after they agree. Read the result afterwards with seo_domain_overview, seo_ranked_keywords or seo_competitors.')]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
 #[IsIdempotent(false)]
@@ -39,9 +39,9 @@ class SeoDomainResearchFetch extends SeoTool
     {
         return [
             'site' => $schema->string()->description('The client this is for: a Control site id or a domain. Sets the country and whose budget line it goes on.')->required(),
-            'what' => $schema->string()->enum(['count', 'ranked_keywords'])->required(),
+            'what' => $schema->string()->enum(['count', 'ranked_keywords', 'competitors'])->required(),
             'domain' => $schema->string()->description('The domain to look up. Default: the site itself.'),
-            'limit' => $schema->integer()->min(10)->max(1000)->description('For ranked_keywords: how many keywords, best traffic first. Default 1000. Fewer costs less.'),
+            'limit' => $schema->integer()->min(10)->max(1000)->description('For ranked_keywords: how many keywords, best traffic first, default 1000. For competitors: how many, up to 100, default 50. Fewer costs less.'),
             'confirm_cost_usd' => $schema->number()->description('The price the person agreed to. Leave out to get the price only.'),
         ];
     }
@@ -59,8 +59,8 @@ class SeoDomainResearchFetch extends SeoTool
         }
 
         $what = (string) $request->get('what');
-        if (! in_array($what, ['count', 'ranked_keywords'], true)) {
-            return Response::error('what must be count or ranked_keywords.');
+        if (! in_array($what, ['count', 'ranked_keywords', 'competitors'], true)) {
+            return Response::error('what must be count, ranked_keywords or competitors.');
         }
 
         $domain = DomainResearch::domain(filled($request->get('domain')) ? (string) $request->get('domain') : (string) $profile->site->domain);
@@ -68,12 +68,20 @@ class SeoDomainResearchFetch extends SeoTool
             return Response::error('domain must be a domain such as example.com.');
         }
 
-        $limit = max(10, min(DomainResearch::MAX_KEYWORDS, (int) $request->get('limit', DomainResearch::MAX_KEYWORDS)));
+        $limit = $what === 'competitors'
+            ? max(10, min(DomainResearch::MAX_COMPETITORS, (int) $request->get('limit', 50)))
+            : max(10, min(DomainResearch::MAX_KEYWORDS, (int) $request->get('limit', DomainResearch::MAX_KEYWORDS)));
         $market = Market::forProfile($profile);
-        $estimate = $what === 'count' ? DomainResearch::overviewCost() : DomainResearch::rankedCost($limit);
-        $buys = $what === 'count'
-            ? "this month's ranking-keyword count for {$domain}"
-            : "up to {$limit} keywords {$domain} ranks for";
+        $estimate = match ($what) {
+            'count' => DomainResearch::overviewCost(),
+            'competitors' => DomainResearch::competitorsCost($limit),
+            default => DomainResearch::rankedCost($limit),
+        };
+        $buys = match ($what) {
+            'count' => "this month's ranking-keyword count for {$domain}",
+            'competitors' => "up to {$limit} domains that compete with {$domain} in search",
+            default => "up to {$limit} keywords {$domain} ranks for",
+        };
 
         $refusal = $budget->refusal(Feature::RESEARCH, $estimate, $user);
         $confirm = $request->get('confirm_cost_usd');
@@ -103,9 +111,11 @@ class SeoDomainResearchFetch extends SeoTool
             return Response::error($refusal.' Nothing was bought.');
         }
 
-        $result = $what === 'count'
-            ? $research->snapshot($domain, $market, $profile->site_id, $user)
-            : $research->pullRankedKeywords($domain, $market, $limit, $profile->site_id, $user);
+        $result = match ($what) {
+            'count' => $research->snapshot($domain, $market, $profile->site_id, $user),
+            'competitors' => $research->discoverCompetitors($domain, $market, $limit, $profile->site_id, $user),
+            default => $research->pullRankedKeywords($domain, $market, $limit, $profile->site_id, $user),
+        };
 
         if (! $result['ok']) {
             return Response::error('DataForSEO did not return the data: '.$result['error'].' Nothing was stored.');
@@ -115,9 +125,11 @@ class SeoDomainResearchFetch extends SeoTool
 
         return Response::structured([
             'summary' => sprintf('Bought %s for $%.4f. ', $buys, $result['cost'])
-                .($what === 'count'
-                    ? ($snapshot?->keywords !== null ? "{$domain} ranks for ".number_format($snapshot->keywords).' keywords by DataForSEO\'s count.' : "DataForSEO has no ranking data for {$domain}.")
-                    : "Stored {$result['stored']} keywords".($result['total'] !== null ? ' of '.number_format($result['total']).' it ranks for' : '').'. Read them with seo_ranked_keywords.'),
+                .match ($what) {
+                    'count' => $snapshot?->keywords !== null ? "{$domain} ranks for ".number_format($snapshot->keywords).' keywords by DataForSEO\'s count.' : "DataForSEO has no ranking data for {$domain}.",
+                    'competitors' => "Stored {$result['stored']} competing domains. Read them with seo_competitors.",
+                    default => "Stored {$result['stored']} keywords".(($result['total'] ?? null) !== null ? ' of '.number_format($result['total']).' it ranks for' : '').'. Read them with seo_ranked_keywords.',
+                },
             'bought' => true,
             'site' => ResponseEnvelope::site($profile),
             'domain' => $domain,
@@ -125,7 +137,7 @@ class SeoDomainResearchFetch extends SeoTool
             'cost_usd' => $result['cost'],
             'keywords' => $snapshot?->keywords,
             'top10' => $snapshot?->top10,
-            'stored_keywords' => $result['stored'] ?? null,
+            'stored' => $result['stored'] ?? null,
             'spent_this_month_usd' => round($budget->spentThisMonth(), 4),
         ]);
     }

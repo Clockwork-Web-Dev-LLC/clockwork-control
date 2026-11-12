@@ -15,9 +15,11 @@ use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoCompetitors;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
 use Modules\Seo\Mcp\Tools\SeoDomainOverview;
 use Modules\Seo\Mcp\Tools\SeoDomainResearchFetch;
+use Modules\Seo\Mcp\Tools\SeoKeywordGap;
 use Modules\Seo\Mcp\Tools\SeoKeywordMapGet;
 use Modules\Seo\Mcp\Tools\SeoKeywordMapUpdate;
 use Modules\Seo\Mcp\Tools\SeoKeywordMetrics;
@@ -149,6 +151,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoDomainOverview::class,
             SeoRankedKeywords::class,
             SeoDomainResearchFetch::class,
+            SeoCompetitors::class,
+            SeoKeywordGap::class,
         ];
     }
 

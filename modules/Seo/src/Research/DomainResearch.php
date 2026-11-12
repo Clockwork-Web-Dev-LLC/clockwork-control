@@ -10,6 +10,7 @@ use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Feature;
 use Modules\Seo\DataForSeo\Pricing;
 use Modules\Seo\Keywords\Market;
+use Modules\Seo\Models\DomainCompetitor;
 use Modules\Seo\Models\DomainSnapshot;
 use Modules\Seo\Models\RankedKeyword;
 use Modules\Seo\Ranks\SerpParser;
@@ -29,7 +30,11 @@ class DomainResearch
 
     public const RANKED_PATH = '/v3/dataforseo_labs/google/ranked_keywords/live';
 
+    public const COMPETITORS_PATH = '/v3/dataforseo_labs/google/competitors_domain/live';
+
     public const MAX_KEYWORDS = 1000;
+
+    public const MAX_COMPETITORS = 100;
 
     public function __construct(private readonly DataForSeoClient $client) {}
 
@@ -148,6 +153,71 @@ class DomainResearch
         }
 
         return ['ok' => true, 'stored' => count($rows), 'total' => isset($data['total_count']) ? (int) $data['total_count'] : null, 'cost' => $result->cost, 'error' => null, 'refused' => false];
+    }
+
+    public static function competitorsCost(int $limit): float
+    {
+        return Pricing::labs(max(1, min(self::MAX_COMPETITORS, $limit)));
+    }
+
+    /**
+     * Buy the domains that rank for the same keywords, most shared first,
+     * and replace the stored list. The very largest sites (encyclopedias,
+     * social networks, marketplaces) are left out: they overlap with
+     * everyone and are nobody's real competitor.
+     *
+     * @return array{ok: bool, stored: int, cost: float, error: ?string, refused: bool}
+     */
+    public function discoverCompetitors(string $domain, Market $market, int $limit = 50, ?int $siteId = null, ?User $user = null): array
+    {
+        $domain = self::domain($domain);
+        $limit = max(1, min(self::MAX_COMPETITORS, $limit));
+
+        $result = $this->client->post(self::COMPETITORS_PATH, [[
+            'target' => $domain,
+            'location_code' => $market->locationCode,
+            'language_code' => $market->languageCode,
+            'item_types' => ['organic'],
+            'exclude_top_domains' => true,
+            'limit' => $limit,
+            'order_by' => ['intersections,desc'],
+        ]], Feature::RESEARCH, self::competitorsCost($limit), $siteId, $user);
+
+        if (! $result->ok) {
+            return ['ok' => false, 'stored' => 0, 'cost' => 0.0, 'error' => $result->error, 'refused' => $result->refused];
+        }
+
+        $items = $result->firstResult()[0]['items'] ?? [];
+        $now = Carbon::now();
+        $rows = [];
+
+        foreach (is_array($items) ? $items : [] as $item) {
+            $competitor = self::domain((string) ($item['domain'] ?? ''));
+            // The API lists the domain itself first, with every keyword shared.
+            if ($competitor === '' || $competitor === $domain || mb_strlen($competitor) > 191 || isset($rows[$competitor])) {
+                continue;
+            }
+
+            $full = (array) ($item['full_domain_metrics']['organic'] ?? $item['full_domain_metrics'] ?? []);
+            $rows[$competitor] = [
+                'domain' => $domain, 'market_key' => $market->key(), 'provider' => DataForSeoClient::PROVIDER,
+                'competitor_domain' => $competitor,
+                'shared_keywords' => isset($item['intersections']) ? max(0, (int) $item['intersections']) : null,
+                'avg_position' => isset($item['avg_position']) ? round((float) $item['avg_position'], 2) : null,
+                'competitor_keywords' => isset($full['count']) ? max(0, (int) $full['count']) : null,
+                'competitor_traffic' => isset($full['etv']) ? round((float) $full['etv'], 2) : null,
+                'fetched_at' => $now,
+            ];
+        }
+
+        DB::transaction(function () use ($domain, $market, $rows): void {
+            DomainCompetitor::query()->where('domain', $domain)->where('market_key', $market->key())->where('provider', DataForSeoClient::PROVIDER)->delete();
+            foreach (array_chunk(array_values($rows), 100) as $chunk) {
+                DomainCompetitor::query()->insert($chunk);
+            }
+        });
+
+        return ['ok' => true, 'stored' => count($rows), 'cost' => $result->cost, 'error' => null, 'refused' => false];
     }
 
     public function latestSnapshot(string $domain, Market $market): ?DomainSnapshot

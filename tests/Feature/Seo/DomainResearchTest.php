@@ -189,7 +189,7 @@ describe('seo_domain_research_fetch', function () {
         Http::assertNothingSent();
 
         $bought = researchTool($this->user, SeoDomainResearchFetch::class, ['site' => 'acme.com', 'what' => 'ranked_keywords', 'domain' => 'rival.com', 'confirm_cost_usd' => 0.14]);
-        expect($bought)->toMatchArray(['bought' => true, 'stored_keywords' => 1, 'cost_usd' => 0.01236, 'keywords' => 480])
+        expect($bought)->toMatchArray(['bought' => true, 'stored' => 1, 'cost_usd' => 0.01236, 'keywords' => 480])
             ->and(RankedKeyword::query()->where('domain', 'rival.com')->count())->toBe(1);
 
         $usage = ApiUsage::query()->sole();

@@ -143,6 +143,14 @@ What to know about the numbers:
 - Each keyword's results are re-read every 30 to 90 days, for a whole country. A ranking gained last week may not show, and nothing here is city-level. For recent movement use Search Console or the tracked keywords under Rankings.
 - A domain the provider knows nothing about is stored with empty figures, not zeros.
 
+## Competitors and keyword gap
+
+- **Finding competitors**: Control can ask DataForSEO which domains rank for the same keywords as a client, most shared keywords first (up to 100, about 2 cents). The very largest sites are left out. The list still mixes directories and publishers with real rivals, so a person picks which ones to name on the client's Rankings page.
+- **Keyword gap**: compares a client with up to 5 competitors and sorts keywords into six groups: missing (every competitor ranks, the client doesn't), untapped (at least one competitor ranks), weak (the client ranks below them), strong (above them), shared and unique. It is worked out inside Control from the ranked-keyword lists already stored, so the comparison itself costs nothing; each domain's list has to be bought once first.
+- **From Claude**: `seo_competitors` and `seo_keyword_gap` read stored data. Discovery is bought through `seo_domain_research_fetch`, price first.
+
+A gap is a lead to check, not proof: a stored list holds a domain's top keywords (up to 1,000), so "does not rank" means "is not in that list". A competitor with no stored list is left out of the comparison and named, never counted as ranking for nothing.
+
 ## Keyword maps
 
 A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.

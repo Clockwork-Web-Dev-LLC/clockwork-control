@@ -33,7 +33,9 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_keyword_map_update` | Start a new dated version, edit or add rows, or fill figures from stored keyword data. Cannot delete rows, type in figures, or overwrite a row someone else changed. | Yes |
 | `seo_domain_overview` | How many keywords a site and its named competitors rank for, month by month, with top 3, top 10 and estimated traffic. | No |
 | `seo_ranked_keywords` | The stored list of keywords a domain ranks for, with filters for position, text, page and volume. | No |
-| `seo_domain_research_fetch` | Buys a domain's ranking-keyword count (about 1 cent) or its ranked-keyword list (about 13 cents for 1,000). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
+| `seo_domain_research_fetch` | Buys a domain's ranking-keyword count (about 1 cent), its ranked-keyword list (about 13 cents for 1,000) or its search competitors (about 2 cents). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
+| `seo_competitors` | The competitors named on a site's profile and the domains discovered to rank for the same keywords. | No |
+| `seo_keyword_gap` | Compares a site with up to 5 competitors from stored keyword lists: missing, untapped, weak, strong, shared and unique keywords. | No |
 
 ## Connecting claude.ai and Cowork
 
