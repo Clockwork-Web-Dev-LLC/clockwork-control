@@ -560,6 +560,14 @@ return [
         // calibrated against any other tool's score, and shown as such.
         'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
 
+        // Site audit defaults, changed on SEO settings: how often every
+        // client is crawled (off, weekly, monthly) and the page cap, which
+        // is also the most one crawl can cost.
+        'site_audit' => [
+            'frequency' => env('CLOCKWORK_SEO_SITE_AUDIT_FREQUENCY', 'monthly'),
+            'max_pages' => (int) env('CLOCKWORK_SEO_SITE_AUDIT_MAX_PAGES', 500),
+        ],
+
         // Seconds to wait for a client page when auditing it.
         'page_audit_timeout' => (int) env('CLOCKWORK_SEO_PAGE_AUDIT_TIMEOUT', 12),
 

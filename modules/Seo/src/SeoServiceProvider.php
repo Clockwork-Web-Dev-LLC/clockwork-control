@@ -7,6 +7,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Seo\Console\RunSiteAudits;
 use Modules\Seo\Console\SnapshotDomains;
 use Modules\Seo\Console\SyncGoogleData;
 use Modules\Seo\Console\TrackRanks;
@@ -68,7 +69,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class]);
     }
 
     /**
@@ -86,6 +87,14 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // Site audits: store finished crawls and start the due ones.
+        $schedule->command('clockwork:seo-site-audit')
+            ->hourlyAt(50)
+            ->withoutOverlapping(55)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && SiteProfile::query()->where('is_enabled', true)->exists());
 
         // Ranking-keyword counts for clients and their competitors, on the
         // 6th so the provider's monthly refresh has landed.

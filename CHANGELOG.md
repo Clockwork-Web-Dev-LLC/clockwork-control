@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SEO — site audit crawl**: Control crawls each client's whole site through DataForSEO (monthly by default, 500 pages at most, about 8 cents a crawl) and stores every page with the checks it failed, site totals, site-wide findings and a score. `clockwork:seo-site-audit` runs hourly to store finished crawls and start the due ones, inside the site audit cap. Stores data only for now: issues, trend, screen and Claude tools come next. Not yet run against the live API.
 - **SEO — ranked keywords page**: browse every stored keyword for a client or a competitor from the Research page, with filters for position, text, ranking page and volume.
 - **SEO — edit keyword map rows on the page**: each row of the current map has an **Edit** form, and **Add a page** adds one, with live character counts for the title and description. Saves follow the same rules as Claude's edits and are refused if someone else changed the row in the meantime.
 - **SEO — tabs, Keywords page and Page audit page**: every client's SEO pages share one tab bar (Numbers, Rankings, Keyword map, Keywords, Research, Page audit, Profile). The new **Keywords** page looks up stored figures for a pasted list, prices and buys the missing ones, and buys and shows keyword idea lists. The new **Page audit** page audits up to 5 pages and keeps the latest result per page. These were reachable only through Claude before.

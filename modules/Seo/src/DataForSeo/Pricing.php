@@ -63,4 +63,15 @@ final class Pricing
     {
         return round(self::LABS_PER_TASK + max(0, $items) * self::LABS_PER_ITEM, 5);
     }
+
+    /** A site crawl, per page crawled. Rendering JavaScript costs ten times as much. */
+    public const ON_PAGE_PER_PAGE = 0.00015;
+
+    public const ON_PAGE_PER_PAGE_JAVASCRIPT = 0.0015;
+
+    /** The most a crawl capped at this many pages can cost. */
+    public static function onPage(int $pages, bool $javascript = false): float
+    {
+        return round(max(0, $pages) * ($javascript ? self::ON_PAGE_PER_PAGE_JAVASCRIPT : self::ON_PAGE_PER_PAGE), 4);
+    }
 }

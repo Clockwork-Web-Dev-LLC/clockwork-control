@@ -94,6 +94,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:security-check --ssh --quiet-ok',
         'clockwork:send-client-reports',
         'clockwork:send-telemetry',
+        'clockwork:seo-site-audit',
         'clockwork:seo-snapshot-domains',
         'clockwork:seo-sync-google',
         'clockwork:seo-track-ranks',

@@ -203,6 +203,19 @@ Open a client from **SEO → Clients** and choose **Map** (`/seo/sites/{site}/ke
 
 Writing straight to a Google Sheet is not built yet; use the CSV download.
 
+## Site audit
+
+Control crawls a client's whole site through DataForSEO and keeps the result: every page with its status, title, description, H1, canonical, word count, depth, load time and the checks it failed, plus site totals (broken links, duplicate titles, non-indexable pages), a count of pages failing each check, site-wide findings (sitemap, robots.txt, HTTPS redirect) and a 0 to 100 score.
+
+- **Schedule**: `clockwork:seo-site-audit` runs every hour at :50. It stores crawls that have finished, then starts one for every enabled client whose last crawl is older than the interval (monthly by default; weekly or off are the other choices).
+- **Cost**: a crawl is paid for when it starts, by the page, up to the page cap (500 by default): about $0.00015 a page, so at most about 8 cents for 500 pages. Reading the result is free. Rendering pages with JavaScript costs ten times as much and is off by default. Spend goes through the site audit cap on **SEO → Settings**.
+- **One at a time**: a site is not crawled again while a crawl of it is running. A crawl that has not finished after 48 hours is written off.
+- **Kept here**: DataForSEO deletes a crawl after 30 days and has no history between crawls, so each one is copied into Control when it finishes. That is what makes a trend possible.
+
+The score is DataForSEO's own formula. It is not comparable with another tool's site health figure and must not be put on the same trend line.
+
+Turning the raw checks into issues with a severity and a fix, the crawl-to-crawl trend, the screen and the Claude tools are the next pieces; this part stores the data only. Built against DataForSEO's published specification and not yet run against the live API.
+
 ## Page audit
 
 Control can read a live page on a client's site and report what it says about itself: title and meta description with character counts, H1s and H2s, canonical, robots tag, schema types (including those inside `@graph`) and a word count that leaves out menus, the footer and code. Claude uses it through `seo_page_audit`, up to 5 pages at a time, to see the current state of a page before proposing changes.
