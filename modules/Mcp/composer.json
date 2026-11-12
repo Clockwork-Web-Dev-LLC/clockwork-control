@@ -1,0 +1,24 @@
+{
+    "name": "clockwork/mcp",
+    "description": "Claude access (MCP server host) module for Clockwork Control.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "clockwork/core": "@dev",
+        "laravel/mcp": "^1.1",
+        "laravel/passport": "13.7.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Mcp\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Mcp\\McpModuleServiceProvider"
+            ]
+        }
+    }
+}

@@ -42,6 +42,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Claude access (modules/Mcp): bearer tokens issued by Passport for
+        // the /mcp endpoint. Nothing else uses this guard. It must be named
+        // "api": Passport's HasApiTokens reads auth.guards.api.provider.
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

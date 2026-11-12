@@ -72,6 +72,24 @@ class ModuleRegistry
     }
 
     /**
+     * Tool classes contributed to the Claude access (MCP) server, from
+     * enabled modules only.
+     *
+     * @return list<class-string>
+     */
+    public function mcpTools(): array
+    {
+        $tools = [];
+        foreach ($this->providers as $provider) {
+            if ($provider->enabled()) {
+                array_push($tools, ...$provider->mcpTools());
+            }
+        }
+
+        return array_values(array_unique($tools));
+    }
+
+    /**
      * @return list<HostingProvider>
      */
     public function hostingProviders(): array

@@ -2,7 +2,7 @@
 title: Web routes
 section: Reference
 order: 20
-updated: 2026-10-04
+updated: 2026-11-11
 author: Aaron Reimann
 tags: [reference, routes, http]
 tracks: [routes/web.php]
@@ -228,6 +228,67 @@ If the Google-verified email isn't in the `users` table (or `revoked_at IS NOT N
 | POST | `/email-auth/domains/{domain}/ignore` | Toggle advisory ignore state for a domain (silences degradation alerts for externally-managed client DNS). |
 | POST | `/email-auth/domains/{domain}/selectors` | Update custom DKIM selector probing list for a specific client domain. |
 | DELETE | `/email-auth/domains/{domain}` | Soft-delete a domain from tracking, removing it from views and scheduled weekly checks. |
+
+### Claude access
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings/claude-access` | The switch, one-time setup, connector details and who is connected (`modules/Mcp`). Everyone sees their own connection. |
+| PATCH | `/settings/claude-access` | Turn the network endpoint on or off. Admin only. |
+| POST | `/settings/claude-access/setup` | Create the signing keys and the Claude OAuth client. Admin only. |
+| POST | `/settings/claude-access/rotate-secret` | Issue a new client secret. Admin only. |
+| DELETE | `/settings/claude-access/authorizations/{user}/{client}` | Disconnect one person's Claude (your own, or anyone's as admin). |
+| DELETE | `/settings/claude-access/authorizations` | Disconnect everyone. Admin only. |
+
+These exist only while the switch is on:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/mcp` | The MCP endpoint Claude calls. Bearer token with scope `mcp:use`, active user, 60 calls a minute per person. Not in the `web` group. |
+| GET | `/.well-known/oauth-protected-resource[/mcp]`, `/.well-known/oauth-authorization-server` | Discovery documents that tell Claude where to sign in. |
+| GET | `/oauth/authorize` | The consent page, after the normal Control login. Shown every time. |
+| POST, DELETE | `/oauth/authorize` | Allow or refuse. |
+| POST | `/oauth/token` | Exchange the sign-in code, or a refresh token, for an access token. |
+
+### SEO
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/seo` | Fleet SEO overview: indexability state for every active, monitored site, blocking production sites first, with links to each site's search numbers or profile (`modules/Seo`). |
+| GET | `/seo/clients` | SEO clients: every site with an SEO profile, with status, last complete month's Google clicks and last sync, plus a getting-started checklist until setup is done. |
+| GET | `/seo/clients/new` | Add-client form. |
+| POST | `/seo/clients` | Add a client from a domain: reuses or creates the site, creates its SEO profile, queues the first sync (throttled 20/min). |
+| GET | `/seo/sites/{site}` | One site's search numbers for a month (`?month=YYYY-MM`) against the previous month and last year, from stored rows only. |
+| GET | `/seo/sites/{site}/profile` | SEO profile: Search Console and GA4 properties, brand terms, key events, report notes, AI impressions form. |
+| PUT | `/seo/sites/{site}/profile` | Save the profile. A property or brand-terms change needs `confirm_purge`. |
+| POST | `/seo/sites/{site}/properties/refresh` | Queue a refresh of the Search Console property list (throttled 6/min). |
+| POST | `/seo/sites/{site}/sync` | Queue a sync for this site (throttled 6/min). |
+| POST | `/seo/sites/{site}/ai-impressions` | Record a month's AI impressions from the Generative AI report, or "not available". |
+| GET | `/seo/sites/{site}/rankings` | Rankings: the site's tracked keywords with latest Google position, change from the check before, ranking page, competitor positions and AI Overview, from stored checks only. Forms to add keywords and name competitors. |
+| POST | `/seo/sites/{site}/rankings` | Track keywords (one per line) for the chosen devices and optional city (throttled 20/min). Needs an SEO profile. |
+| PATCH | `/seo/sites/{site}/rankings/{keyword}` | Pause or resume a tracked keyword. History is kept. |
+| DELETE | `/seo/sites/{site}/rankings/{keyword}` | Delete a tracked keyword and its rank history. |
+| PUT | `/seo/sites/{site}/competitors` | Save up to 10 competitor domains whose positions are stored with each check. |
+| GET | `/seo/sites/{site}/keyword-map` | Keyword map: the current map (or `?version=` for an older, read-only one) with checks to fix and the recommended next page. Forms to import a CSV, start a new version and fill figures. |
+| POST | `/seo/sites/{site}/keyword-map/import` | Import a CSV (uploaded file or pasted text) as the new current map (throttled 10/min). |
+| POST | `/seo/sites/{site}/keyword-map/version` | Start a new dated version as a copy of the current map (throttled 10/min). |
+| POST | `/seo/sites/{site}/keyword-map/fill` | Fill volume, difficulty and CPC on the current map from keyword data already bought. Spends nothing. |
+| GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
+| GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
+| POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |
+| GET | `/seo/sites/{site}/keywords` | Keywords: a lookup form, a keyword ideas form and the idea lists bought for this client (`?list=` opens one). |
+| POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
+| POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
+| POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/page-audit` | Page audit: a form and the latest audit of each page audited on this site. |
+| POST | `/seo/sites/{site}/page-audit` | Audit up to 5 pages on the site's own domain. Free (throttled 12/min). |
+| PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
+| GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
+| POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
+| GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |
+| GET | `/seo/google/callback` | Admin. Google OAuth redirect URI; register it on the OAuth client. |
+| POST | `/seo/google/disconnect` | Admin. Revoke the token at Google and delete the connection; stored data is kept. |
+| POST | `/seo/google/test` | Admin. One `sites.list` call with the cached token (throttled 10/min). |
 
 ### Docs (this site)
 

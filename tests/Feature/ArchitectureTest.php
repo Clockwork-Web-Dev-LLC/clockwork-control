@@ -112,9 +112,21 @@ arch('every module service provider extends the shared base')
         'Modules\AuthGitHub\GitHubAuthServiceProvider',
         'Modules\AuthMicrosoft\MicrosoftAuthServiceProvider',
         'Modules\EmailAuth\EmailAuthServiceProvider',
+        'Modules\Seo\SeoServiceProvider',
+        'Modules\Mcp\McpModuleServiceProvider',
     ])
     ->toExtend('Modules\Core\ModuleServiceProvider');
 
 arch('installer classes never depend on Modules')
     ->expect('App\Installer')
     ->not->toUse('Modules');
+
+// Tools answer Claude, so they stay away from anything that holds fleet
+// credentials. Each namespace is named: a module that adds tools adds its own.
+arch('MCP tools never touch servers, stored credentials or SSH')
+    ->expect(['Modules\Mcp', 'Modules\Seo\Mcp'])
+    ->not->toUse([
+        'App\Models\Server',
+        'App\Support\CredentialResolver',
+        'App\Services\Ssh',
+    ]);

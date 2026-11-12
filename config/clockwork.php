@@ -532,6 +532,59 @@ return [
     'seo' => [
         'monitoring_enabled' => (bool) env('CLOCKWORK_SEO_MONITORING_ENABLED', true),
         'robots_txt_timeout' => (int) env('CLOCKWORK_SEO_ROBOTS_TXT_TIMEOUT', 10),
+
+        // modules/Seo's own Google connection (Search Console + GA4 data),
+        // separate from Google login. Normally set on Settings → Integrations
+        // (stored encrypted); these env values are the fallback. Left null,
+        // the module falls back to the Google login client
+        // (auth_google.* / services.google.*), which only works if that
+        // client also lists /seo/google/callback as a redirect URI.
+        'google_client_id' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_ID'),
+        'google_client_secret' => env('CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET'),
+        'google_timeout' => (int) env('CLOCKWORK_SEO_GOOGLE_TIMEOUT', 30),
+
+        // DataForSEO: the paid data behind keyword metrics, rank tracking,
+        // audits, backlinks, local and AI visibility. The login and password
+        // are the API ones from app.dataforseo.com/api-access, not the
+        // account sign-in. Normally entered on Settings → Integrations
+        // (stored encrypted); these env values are the fallback.
+        'dataforseo_login' => env('CLOCKWORK_SEO_DATAFORSEO_LOGIN'),
+        'dataforseo_password' => env('CLOCKWORK_SEO_DATAFORSEO_PASSWORD'),
+        // True sends every call to DataForSEO's free sandbox, which answers
+        // with sample data and charges nothing. For a first try only.
+        'dataforseo_sandbox' => (bool) env('CLOCKWORK_SEO_DATAFORSEO_SANDBOX', false),
+        'dataforseo_timeout' => (int) env('CLOCKWORK_SEO_DATAFORSEO_TIMEOUT', 60),
+
+        // Labels for DataForSEO's 0 to 100 keyword difficulty: each band
+        // runs up to and including its number. Fixed defaults, not
+        // calibrated against any other tool's score, and shown as such.
+        'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
+
+        // Seconds to wait for a client page when auditing it.
+        'page_audit_timeout' => (int) env('CLOCKWORK_SEO_PAGE_AUDIT_TIMEOUT', 12),
+
+        // Rank tracking defaults, changed on SEO settings. Weekly at the
+        // top 30 is the cheap starting point; daily and deeper cost more.
+        'rank_tracking' => [
+            'frequency' => env('CLOCKWORK_SEO_RANK_FREQUENCY', 'weekly'),
+            'depth' => (int) env('CLOCKWORK_SEO_RANK_DEPTH', 30),
+        ],
+    ],
+
+    // Claude access (modules/Mcp): the MCP server Claude reads Control
+    // through. Only the local stdio transport exists so far, and stdio has
+    // no login, so the server acts as this one active user (their email)
+    // and refuses to start without it. Leave empty to keep stdio off.
+    'mcp' => [
+        'local_user' => env('CLOCKWORK_MCP_LOCAL_USER'),
+
+        // Browser origins allowed to call the network endpoint (/mcp). A
+        // request with no Origin header, which is what Anthropic's servers
+        // send, is not affected. Comma separated.
+        'allowed_origins' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('CLOCKWORK_MCP_ALLOWED_ORIGINS', 'https://claude.ai,https://claude.com')),
+        ))),
     ],
 
     // Fleet-wide care plans policy.

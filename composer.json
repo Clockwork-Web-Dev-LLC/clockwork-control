@@ -52,6 +52,8 @@
         "doctrine/dbal": "^4.4",
         "jeremykendall/php-domain-parser": "^6.4",
         "laravel/framework": "^13.0",
+        "laravel/mcp": "^1.1",
+        "laravel/passport": "13.7.6",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.32",
@@ -271,7 +273,9 @@
             "Modules\\Feedback\\": "modules/Feedback/src/",
             "Modules\\AiRemedy\\": "modules/AiRemedy/src/",
             "Modules\\EmailAuth\\": "modules/EmailAuth/src/",
-            "Modules\\ExploitShield\\": "modules/ExploitShield/src/"
+            "Modules\\ExploitShield\\": "modules/ExploitShield/src/",
+            "Modules\\Seo\\": "modules/Seo/src/",
+            "Modules\\Mcp\\": "modules/Mcp/src/"
         }
     },
     "autoload-dev": {

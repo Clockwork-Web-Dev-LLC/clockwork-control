@@ -1,0 +1,22 @@
+{
+    "name": "clockwork/seo",
+    "description": "Fleet-wide SEO overview module for Clockwork Control.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "clockwork/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Seo\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Seo\\SeoServiceProvider"
+            ]
+        }
+    }
+}
