@@ -8,6 +8,8 @@ use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
 use Modules\Seo\Console\SyncGoogleData;
+use Modules\Seo\Console\TrackRanks;
+use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
@@ -20,6 +22,7 @@ use Modules\Seo\Mcp\Tools\SeoMonthNumbers;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
 use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Models\GoogleConnection;
+use Modules\Seo\Models\TrackedKeyword;
 
 /**
  * SEO tooling. Two halves:
@@ -51,7 +54,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class]);
     }
 
     /**
@@ -69,6 +72,15 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // Rank tracking: store finished checks and queue the due ones. Hourly
+        // so a slow queue or a missed run catches up the same day.
+        $schedule->command('clockwork:seo-track-ranks')
+            ->hourlyAt(20)
+            ->withoutOverlapping(55)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && TrackedKeyword::query()->where('is_active', true)->exists());
     }
 
     public function manifest(): ModuleManifest

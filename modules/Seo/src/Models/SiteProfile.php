@@ -61,6 +61,7 @@ class SiteProfile extends Model
         'last_gsc_synced_at',
         'last_ga4_synced_at',
         'last_sync_error',
+        'competitors',
     ];
 
     protected function casts(): array
@@ -71,6 +72,7 @@ class SiteProfile extends Model
             'compare_yoy' => 'boolean',
             'is_enabled' => 'boolean',
             'history_starts_on' => DateOnly::class,
+            'competitors' => 'array',
             'last_gsc_synced_at' => 'datetime',
             'last_ga4_synced_at' => 'datetime',
         ];

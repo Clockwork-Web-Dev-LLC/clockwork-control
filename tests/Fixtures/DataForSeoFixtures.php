@@ -82,4 +82,42 @@ class DataForSeoFixtures
             'money' => ['total' => 50.0, 'balance' => $balance],
         ]])]);
     }
+
+    /**
+     * One Google results page as task_get/advanced returns it.
+     *
+     * @param  list<string>  $domains  organic results in order
+     * @param  list<string>  $aiOverviewSources  domains an AI Overview cites; [] for none
+     * @return array<string, mixed>
+     */
+    public static function serp(string $keyword, array $domains, array $aiOverviewSources = [], bool $aiOverview = false): array
+    {
+        $items = [];
+        $absolute = 0;
+        if ($aiOverview || $aiOverviewSources !== []) {
+            $items[] = ['type' => 'ai_overview', 'rank_group' => 1, 'rank_absolute' => ++$absolute, 'items' => [[
+                'type' => 'ai_overview_element',
+                'text' => 'Summary',
+                'references' => array_map(fn (string $d) => ['type' => 'ai_overview_reference', 'domain' => $d, 'url' => "https://{$d}/source"], $aiOverviewSources),
+            ]]];
+        }
+        $items[] = ['type' => 'people_also_ask', 'rank_group' => 1, 'rank_absolute' => ++$absolute, 'items' => []];
+        foreach (array_values($domains) as $index => $domain) {
+            $items[] = ['type' => 'organic', 'rank_group' => $index + 1, 'rank_absolute' => ++$absolute, 'domain' => $domain, 'url' => "https://{$domain}/page-".($index + 1), 'title' => 'Result'];
+        }
+
+        return [
+            'keyword' => $keyword,
+            'type' => 'organic',
+            'se_domain' => 'google.com',
+            'location_code' => 2840,
+            'language_code' => 'en',
+            'check_url' => 'https://www.google.com/search?q='.urlencode($keyword),
+            'datetime' => '2026-11-11 18:05:00 +00:00',
+            'item_types' => array_values(array_unique(array_column($items, 'type'))),
+            'se_results_count' => 1000,
+            'items_count' => count($items),
+            'items' => $items,
+        ];
+    }
 }

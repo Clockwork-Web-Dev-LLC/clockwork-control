@@ -105,6 +105,18 @@ To try it without spending, set `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true`: calls g
 
 This has been built against DataForSEO's published API specification and tested with sample responses. No live call has been made yet, so treat the first real one as the test.
 
+## Rank tracking
+
+Control checks where a client ranks on Google for a list of tracked keywords, using DataForSEO's results-page API on its cheapest (queued) price.
+
+- **What is stored for each check**: the site's position among the organic results (a subdomain counts as the site), the page that ranks, how many of its pages rank, the positions of the competitor domains named on the profile, the first ten domains, which features are on the page, whether there is an AI Overview and whether it cites the site.
+- **Not found is not zero**: a check where the site is not within the depth looked at is stored with an empty position. A day with no check has no row at all.
+- **Schedule**: `clockwork:seo-track-ranks` runs every hour at :20. Each run stores finished checks, then queues every keyword that is due. A keyword is due when its last check is older than the chosen interval, so a missed run catches up by itself. A day that was never checked cannot be bought later.
+- **Cost**: a check costs about $0.0006 for the first ten results and $0.00045 for each further ten, so $0.0015 at the top 30 and $0.00465 at the top 100. The defaults are weekly at the top 30. Spend goes through the rank tracking cap on **SEO → Settings**; when the cap is reached nothing is queued and the keywords stay due.
+- **Only for clients that are switched on**: keywords of a client whose SEO profile is disabled are not checked.
+
+Built against DataForSEO's published specification and not yet run against the live API. Adding keywords from the back end and reading ranks from Claude are the next pieces.
+
 ## Reading it from Claude
 
 The same numbers are available to Claude through six `seo_` tools: list sites, month numbers, daily series, page and query rows, record AI impressions, and update brand terms, key events or the year-over-year flag. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.

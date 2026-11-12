@@ -22,6 +22,14 @@ final class Pricing
     /** Google Ads search volume (the only city-level source): per call of up to 1,000 keywords. */
     public const ADS_VOLUME_PER_TASK = 0.108;
 
+    /**
+     * A Google results page on the standard queue: the first page of ten
+     * results, then each further page at 75% of that.
+     */
+    public const SERP_FIRST_PAGE = 0.0006;
+
+    public const SERP_NEXT_PAGE = 0.00045;
+
     public const KEYWORD_OVERVIEW_MAX = 700;
 
     public const ADS_VOLUME_MAX = 1000;
@@ -40,5 +48,13 @@ final class Pricing
         $calls = (int) ceil($keywords / self::ADS_VOLUME_MAX);
 
         return ['calls' => $calls, 'usd' => round($calls * self::ADS_VOLUME_PER_TASK, 4)];
+    }
+
+    /** One rank check looking at this many organic results. */
+    public static function serp(int $depth): float
+    {
+        $pages = max(1, (int) ceil($depth / 10));
+
+        return round(self::SERP_FIRST_PAGE + ($pages - 1) * self::SERP_NEXT_PAGE, 5);
     }
 }

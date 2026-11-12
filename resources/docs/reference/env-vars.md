@@ -261,6 +261,8 @@ See [Integrations → Slack](/documentation/integrations/slack). The per-site cl
 | `CLOCKWORK_SEO_DATAFORSEO_PASSWORD` | empty | The matching API password. Same fallback rule. |
 | `CLOCKWORK_SEO_DATAFORSEO_SANDBOX` | `false` | `true` sends every DataForSEO call to its free sandbox: sample data, no charge, caps not applied. For a first try only. |
 | `CLOCKWORK_SEO_DATAFORSEO_TIMEOUT` | `60` | Seconds to wait for a DataForSEO call. |
+| `CLOCKWORK_SEO_RANK_FREQUENCY` | `weekly` | Default for how often tracked keywords are checked: `daily` or `weekly`. |
+| `CLOCKWORK_SEO_RANK_DEPTH` | `30` | Default for how many Google results each rank check looks at: 10, 20, 30, 50 or 100. |
 | `CLOCKWORK_MCP_LOCAL_USER` | empty | Email of the active Control user the local MCP server acts as (`php artisan mcp:start clockwork`, for Claude Code on the Control host). Empty means the server is not registered. See [Claude access](/docs/features/claude-access). |
 | `CLOCKWORK_MCP_ALLOWED_ORIGINS` | `https://claude.ai,https://claude.com` | Browser origins allowed to call `/mcp`, comma separated. A request with no `Origin` header, which is how Claude's servers call, is not affected. The endpoint itself is turned on at **Settings → Claude access**, not here. |
 

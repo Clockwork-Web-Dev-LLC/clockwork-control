@@ -553,6 +553,13 @@ return [
         // runs up to and including its number. Fixed defaults, not
         // calibrated against any other tool's score, and shown as such.
         'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
+
+        // Rank tracking defaults, changed on SEO settings. Weekly at the
+        // top 30 is the cheap starting point; daily and deeper cost more.
+        'rank_tracking' => [
+            'frequency' => env('CLOCKWORK_SEO_RANK_FREQUENCY', 'weekly'),
+            'depth' => (int) env('CLOCKWORK_SEO_RANK_DEPTH', 30),
+        ],
     ],
 
     // Claude access (modules/Mcp): the MCP server Claude reads Control
