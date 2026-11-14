@@ -12,7 +12,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.6.4",
-        "@tailwindcss/vite": "^4.3.3",
+        "@tailwindcss/vite": "^4.3.5",
         "@types/alpinejs": "^3.17.0",
         "concurrently": "^10.0.5",
         "laravel-vite-plugin": "^3.2.0",
