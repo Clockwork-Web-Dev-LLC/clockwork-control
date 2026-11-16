@@ -37,6 +37,8 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_competitors` | The competitors named on a site's profile and the domains discovered to rank for the same keywords. | No |
 | `seo_keyword_gap` | Compares a site with up to 5 competitors from stored keyword lists: missing, untapped, weak, strong, shared and unique keywords. | No |
 | `seo_keyword_ideas` | Keyword ideas from seed keywords (same topics, phrase suggestions or related searches), each with volume, difficulty, CPC and intent. Lists and re-reads stored idea lists for free; a new list costs about 13 cents per 1,000 and is priced first. | Only when buying a new list |
+| `seo_site_audit` | A site's technical audit from its latest stored crawl: score, issues worst first with what to do, the pages behind one issue, and what changed since the crawl before. | No |
+| `seo_site_audit_run` | Starts a crawl of a site (500 pages and about 8 cents at most by default). Gives the most it can cost first; starts only with the cost the person agreed to. | Yes, and spends |
 
 ## Connecting claude.ai and Cowork
 

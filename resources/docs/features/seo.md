@@ -116,6 +116,7 @@ Every client has the same row of tabs on its SEO pages:
 | **Keyword map** | Which page targets which keyword; import, versions, CSV download. |
 | **Keywords** | Look up volume, difficulty, CPC and intent for a list; buy keyword ideas. |
 | **Research** | Ranking-keyword counts, competitors and the keyword gap. |
+| **Site audit** | Technical problems found by crawling the whole site, and what changed since the last crawl. |
 | **Page audit** | What a live page says about itself: title, description, headings, schema. |
 | **Profile** | The client's Google properties, brand terms, keyword market and report notes. |
 
@@ -225,7 +226,20 @@ DataForSEO only answers each check true or false. Control turns those answers in
 
 The check names come from DataForSEO's documentation and have not been confirmed against a real crawl; a name that never appears simply never fires.
 
-The screen and the Claude tools are the next pieces; so far this is stored data. Built against DataForSEO's published specification and not yet run against the live API.
+### Using it
+
+Open a client and choose the **Site audit** tab (`/seo/sites/{site}/site-audit`).
+
+- **At the top**: the score, how many kinds of error, warning and notice were found, and how many pages were crawled. If the crawl stopped at the page cap, it says part of the site was not checked.
+- **Since the last crawl**: how many page-and-problem pairs were fixed, are new, or are still open, and which issues were cleared completely.
+- **Issues**: worst first. Choosing one shows what to do about it and the pages it affects.
+- **Crawl now** starts a crawl straight away. The button shows the most it can cost and asks for confirmation; it is refused while a crawl of the site is running or when the site audit cap would be passed.
+- **Crawls**: every crawl of the site with its result and cost. An older one can be opened.
+- **Settings** (admins, **SEO → Settings → Site audit**): monthly, weekly or off; the page cap, with what each cap costs; and whether to run JavaScript.
+
+Claude reads the same audit with `seo_site_audit` and can start a crawl with `seo_site_audit_run`, which gives the most it can cost first.
+
+Built against DataForSEO's published specification and not yet run against the live API.
 
 ## Page audit
 

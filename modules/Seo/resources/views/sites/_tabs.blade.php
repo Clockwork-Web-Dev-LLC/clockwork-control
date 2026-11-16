@@ -6,6 +6,7 @@
         ['Keyword map', 'fa-map', 'seo.sites.keyword-map', ['seo.sites.keyword-map', 'seo.sites.keyword-map.*']],
         ['Keywords', 'fa-key', 'seo.sites.keywords', ['seo.sites.keywords', 'seo.sites.keywords.*']],
         ['Research', 'fa-binoculars', 'seo.sites.research', ['seo.sites.research', 'seo.sites.research.*']],
+        ['Site audit', 'fa-spider', 'seo.sites.site-audit', ['seo.sites.site-audit']],
         ['Page audit', 'fa-file-circle-check', 'seo.sites.page-audit', ['seo.sites.page-audit']],
         ['Profile', 'fa-sliders', 'seo.sites.profile', ['seo.sites.profile']],
     ];

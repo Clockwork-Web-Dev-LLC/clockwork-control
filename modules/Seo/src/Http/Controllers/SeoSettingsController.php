@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\Seo\Audit\SiteAuditSettings;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Pricing;
@@ -19,7 +20,7 @@ use Modules\Seo\Support\SeoSettings;
 
 class SeoSettingsController extends Controller
 {
-    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget, RankSettings $rankSettings): View
+    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget, RankSettings $rankSettings, SiteAuditSettings $auditSettings): View
     {
         $connection = GoogleConnection::current();
 
@@ -44,6 +45,12 @@ class SeoSettingsController extends Controller
                 'spent' => $budget->spentThisMonth(),
                 'totalCap' => $budget->totalCap(),
                 'personAllowance' => $budget->personAllowance(),
+            ],
+            'siteAudit' => [
+                'frequency' => $auditSettings->frequency(),
+                'max_pages' => $auditSettings->maxPages(),
+                'javascript' => $auditSettings->javascript(),
+                'caps' => SiteAuditController::capPrices($auditSettings->javascript()),
             ],
             'rankTracking' => [
                 'frequency' => $rankSettings->frequency(),

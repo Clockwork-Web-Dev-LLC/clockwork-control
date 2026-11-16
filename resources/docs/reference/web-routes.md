@@ -285,9 +285,12 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
 | POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
 | POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/site-audit` | Site audit: the latest crawl (or `?crawl=` for an older one) as issues with severity and fix, the change since the crawl before, the pages behind one issue (`?issue=`) and the crawl history. Stored data only. |
+| POST | `/seo/sites/{site}/site-audit/run` | Start a crawl of the site now, inside the site audit cap. Refused while one is running (throttled 6/min). |
 | GET | `/seo/sites/{site}/page-audit` | Page audit: a form and the latest audit of each page audited on this site. |
 | POST | `/seo/sites/{site}/page-audit` | Audit up to 5 pages on the site's own domain. Free (throttled 12/min). |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
+| PUT | `/seo/site-audit` | Admin. Set how often sites are crawled (off, weekly, monthly), the page cap per crawl and whether JavaScript is run. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
 | GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |

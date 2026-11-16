@@ -12,6 +12,7 @@ use Modules\Seo\Http\Controllers\ResearchController;
 use Modules\Seo\Http\Controllers\SeoClientsController;
 use Modules\Seo\Http\Controllers\SeoController;
 use Modules\Seo\Http\Controllers\SeoSettingsController;
+use Modules\Seo\Http\Controllers\SiteAuditController;
 use Modules\Seo\Http\Controllers\SiteProfileController;
 use Modules\Seo\Http\Controllers\SiteSearchController;
 
@@ -43,6 +44,8 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keywords/lookup', [KeywordToolsController::class, 'lookup'])->middleware('throttle:30,1')->name('seo.sites.keywords.lookup');
     Route::post('/seo/sites/{site}/keywords/buy', [KeywordToolsController::class, 'buy'])->middleware('throttle:10,1')->name('seo.sites.keywords.buy');
     Route::post('/seo/sites/{site}/keywords/ideas', [KeywordToolsController::class, 'ideas'])->middleware('throttle:10,1')->name('seo.sites.keywords.ideas');
+    Route::get('/seo/sites/{site}/site-audit', [SiteAuditController::class, 'show'])->name('seo.sites.site-audit');
+    Route::post('/seo/sites/{site}/site-audit/run', [SiteAuditController::class, 'run'])->middleware('throttle:6,1')->name('seo.sites.site-audit.run');
     Route::get('/seo/sites/{site}/page-audit', [PageAuditController::class, 'show'])->name('seo.sites.page-audit');
     Route::post('/seo/sites/{site}/page-audit', [PageAuditController::class, 'run'])->middleware('throttle:12,1')->name('seo.sites.page-audit.run');
 
@@ -57,6 +60,7 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::put('/seo/sites/{site}/competitors', [RankingsController::class, 'competitors'])->name('seo.sites.competitors');
 
     Route::middleware('admin')->group(function () {
+        Route::put('/seo/site-audit', [SiteAuditController::class, 'updateSettings'])->name('seo.site-audit.update');
         Route::put('/seo/rank-tracking', [DataForSeoSettingsController::class, 'updateRankTracking'])->name('seo.rank-tracking.update');
         Route::get('/seo/settings', [SeoSettingsController::class, 'index'])->name('seo.settings');
         Route::post('/seo/settings', [SeoSettingsController::class, 'update'])->name('seo.settings.update');

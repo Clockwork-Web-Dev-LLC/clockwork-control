@@ -33,6 +33,8 @@ use Modules\Seo\Mcp\Tools\SeoRankedKeywords;
 use Modules\Seo\Mcp\Tools\SeoRankHistory;
 use Modules\Seo\Mcp\Tools\SeoRankings;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
+use Modules\Seo\Mcp\Tools\SeoSiteAudit;
+use Modules\Seo\Mcp\Tools\SeoSiteAuditRun;
 use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Mcp\Tools\SeoTrackedKeywordsUpdate;
 use Modules\Seo\Models\GoogleConnection;
@@ -164,6 +166,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoCompetitors::class,
             SeoKeywordGap::class,
             SeoKeywordIdeas::class,
+            SeoSiteAudit::class,
+            SeoSiteAuditRun::class,
         ];
     }
 
