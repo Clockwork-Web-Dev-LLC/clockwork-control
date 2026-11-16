@@ -160,6 +160,19 @@ What to know about the numbers:
 - Each keyword's results are re-read every 30 to 90 days, for a whole country. A ranking gained last week may not show, and nothing here is city-level. For recent movement use Search Console or the tracked keywords under Rankings.
 - A domain the provider knows nothing about is stored with empty figures, not zeros.
 
+## Backlinks
+
+Control stores a domain's backlink totals and the domains that link to a client, from DataForSEO's Backlinks API.
+
+- **Monthly totals**: `clockwork:seo-snapshot-backlinks` runs on the 7th and stores, for each enabled client and each named competitor, the number of backlinks, referring domains, broken backlinks, and DataForSEO's rank and spam score (both 0 to 100). About 2 cents per domain.
+- **Referring domains**: the same run pulls the domains linking to each client, strongest first, up to 1,000 (about 6 cents). Each pull is reconciled with the last: a domain that is new is dated, and one that has gone is marked lost, so new and lost links are known without buying them separately.
+- **Lost is only claimed when it is certain**: if a site has more than 1,000 referring domains the pull stops at the cut, and a domain missing from it may simply be past the cut. In that case nothing is marked lost.
+- **From Claude**: `seo_backlinks` reads what is stored. Totals or a referring-domain list for another domain are bought through `seo_domain_research_fetch`, price first. Spending is held by the backlinks cap on **SEO → Settings**.
+
+What to know about the numbers: every backlink index is different, so these counts will not match another tool's and must not share a trend line with them. Rank and spam score are DataForSEO's own measures, not Authority Score, Domain Rating or a toxicity score, and a high spam score alone is not a reason to disavow a link.
+
+A screen for backlinks, the backlink gap against competitors and a disavow list are not built yet. Built against DataForSEO's published specification and not yet run against the live API.
+
 ## Competitors and keyword gap
 
 - **Finding competitors**: Control can ask DataForSEO which domains rank for the same keywords as a client, most shared keywords first (up to 100, about 2 cents). The very largest sites are left out. The list still mixes directories and publishers with real rivals, so a person picks which ones to name on the client's Rankings page.

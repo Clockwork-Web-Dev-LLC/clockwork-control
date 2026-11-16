@@ -12,6 +12,7 @@ use Modules\Mcp\McpModuleServiceProvider;
 use Modules\Mcp\Servers\ClockworkServer;
 use Modules\Mcp\Tools\ControlWhoAmI;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoBacklinks;
 use Modules\Seo\Mcp\Tools\SeoCompetitors;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
 use Modules\Seo\Mcp\Tools\SeoDomainOverview;
@@ -57,6 +58,7 @@ const SEO_TOOLS = [
     SeoKeywordIdeas::class,
     SeoSiteAudit::class,
     SeoSiteAuditRun::class,
+    SeoBacklinks::class,
 ];
 
 /** tools/list as Claude receives it, as plain arrays. */
@@ -95,7 +97,7 @@ it('drops a module\'s tools when the module is turned off', function () {
 it('names every tool control_ or seo_ and gives each a title, a description and hints', function () {
     $tools = listedTools($this->user);
 
-    expect($tools)->toHaveCount(23);
+    expect($tools)->toHaveCount(24);
 
     foreach ($tools as $tool) {
         expect($tool['name'])->toMatch('/^(control|seo)_[a-z_]+$/')

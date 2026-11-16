@@ -8,6 +8,7 @@ use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
 use Modules\Seo\Console\RunSiteAudits;
+use Modules\Seo\Console\SnapshotBacklinks;
 use Modules\Seo\Console\SnapshotDomains;
 use Modules\Seo\Console\SyncGoogleData;
 use Modules\Seo\Console\TrackRanks;
@@ -16,6 +17,7 @@ use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoBacklinks;
 use Modules\Seo\Mcp\Tools\SeoCompetitors;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
 use Modules\Seo\Mcp\Tools\SeoDomainOverview;
@@ -71,7 +73,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class, SnapshotBacklinks::class]);
     }
 
     /**
@@ -89,6 +91,14 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // Backlink totals and referring domains, on the 7th.
+        $schedule->command('clockwork:seo-snapshot-backlinks')
+            ->monthlyOn(7, '08:50')
+            ->withoutOverlapping(120)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && SiteProfile::query()->where('is_enabled', true)->exists());
 
         // Site audits: store finished crawls and start the due ones.
         $schedule->command('clockwork:seo-site-audit')
@@ -168,6 +178,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoKeywordIdeas::class,
             SeoSiteAudit::class,
             SeoSiteAuditRun::class,
+            SeoBacklinks::class,
         ];
     }
 

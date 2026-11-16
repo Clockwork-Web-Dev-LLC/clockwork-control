@@ -54,6 +54,7 @@ it('never returns a credential from any tool', function () {
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
         'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
         'seo_rankings' => ['site' => 'acme.com'],
+        'seo_backlinks' => ['site' => 'acme.com'],
         'seo_site_audit' => ['site' => 'acme.com'],
         // Without confirm_cost_usd it only prices.
         'seo_site_audit_run' => ['site' => 'acme.com'],
@@ -95,5 +96,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(22);
+    expect($called)->toHaveCount(23);
 });

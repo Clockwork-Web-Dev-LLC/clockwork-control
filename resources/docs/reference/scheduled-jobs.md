@@ -144,6 +144,7 @@ The scheduler itself is watched by `clockwork:scheduler-heartbeat` (every minute
 | hourly at :20 | `clockwork:seo-track-ranks` | Rank tracking: stores finished rank checks and queues the due ones. Only runs when a DataForSEO login is set and at least one keyword is tracked. |
 | hourly at :50 | `clockwork:seo-site-audit` | Site audit: stores finished crawls and starts the due ones (monthly by default). Only runs when a DataForSEO login is set. |
 | 6th of the month, 08:40 | `clockwork:seo-snapshot-domains` | Ranking-keyword counts for every SEO client and its named competitors. Only runs when a DataForSEO login is set. |
+| 7th of the month, 08:50 | `clockwork:seo-snapshot-backlinks` | Backlink totals for every SEO client and its named competitors, and each client's referring domains. Only runs when a DataForSEO login is set. |
 | 09:00 | `clockwork:feedback-prompt` | Compile approved feedback into a master Claude implementation prompt at `storage/app/prompts/latest-feedback-prompt.md`, via `FeedbackServiceProvider::scheduledTasks()`. |
 
 
