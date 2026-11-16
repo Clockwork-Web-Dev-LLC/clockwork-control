@@ -95,7 +95,7 @@ class ResearchController extends Controller
         $profile = SiteProfile::query()->where('site_id', $site->id)->first();
         $market = Market::forProfile($profile);
         $own = DomainResearch::domain((string) $site->domain);
-        $named = array_map([DomainResearch::class, 'domain'], array_filter((array) ($profile?->competitors ?? []), 'is_string'));
+        $named = array_map([DomainResearch::class, 'domain'], array_filter((array) ($profile->competitors ?? []), 'is_string'));
         $domain = filled($validated['domain'] ?? null) ? DomainResearch::domain((string) $validated['domain']) : $own;
 
         $base = RankedKeyword::query()->where('domain', $domain)->where('market_key', $market->key());
