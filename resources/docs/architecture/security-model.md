@@ -2,7 +2,7 @@
 title: Security model
 section: Architecture
 order: 50
-updated: 2026-09-28
+updated: 2026-11-11
 author: Aaron Reimann
 tags: [architecture, security, auth, secrets, pressable]
 tracks: [app/Http/Controllers/Auth/**, app/Http/Controllers/UsersSettingsController.php, app/Http/Controllers/MaintenanceController.php, app/Http/Controllers/SitesController.php, app/Services/Companion/**, modules/BackupRelay/src/Services/BackupArchiveEnumerator.php, modules/Pressable/src/**, config/clockwork.php]
@@ -29,6 +29,7 @@ The network posture above assumes the machine itself is safe. It might not be �
 - **Run this on a desktop, not a laptop.** A laptop is designed to leave the building — a bag on a train, a car break-in, a conference. A desktop that never leaves a locked office removes the theft-in-transit scenario this app is specifically exposed to: a single stolen device would otherwise hand an attacker SSH keys and passwords for the entire managed fleet, not just this app's own data.
 - **If a portable machine is genuinely unavoidable**, full-disk encryption (FileVault/BitLocker/LUKS) plus a locked screen and a real login password are the floor, not the solution — they reduce the window of opportunity, they don't change the "one stolen device = one fully compromised fleet" property above.
 - **Never put this app on a public IP.** Reinforcing the [Network posture](#network-posture) section above: no port-forwarding, no public DNS record, no `php artisan serve --host 0.0.0.0`. Combined with the point above, a publicly reachable instance turns a *remote* compromise into the same blast radius as a *physical theft* — an attacker doesn't even need to be in the same city.
+  - **One exception, off by default: Claude access.** If an admin turns it on at Settings → Claude access, a public hostname may expose `/mcp`, `/oauth/*`, `/.well-known/oauth-*` and the login pages, and nothing else. `/mcp` needs a per-user token and re-checks on every call that the user is still active. New things to protect: the signing key in `storage/oauth-private.key`, the Claude client secret, and people's tokens (revoked with the user). See [Claude access](/docs/features/claude-access).
 
 ## Human auth
 

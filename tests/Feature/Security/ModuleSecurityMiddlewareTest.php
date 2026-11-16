@@ -15,6 +15,8 @@ describe('Module Security Middleware', function () {
             'settings.bill-com.',
             'settings.mattermost.',
             'settings.slack.',
+            'settings.claude-access.',
+            'seo.',
         ];
 
         $routes = Route::getRoutes();
@@ -42,6 +44,14 @@ describe('Module Security Middleware', function () {
         $snippetsStore = Route::getRoutes()->getByName('snippets.store');
         expect($snippetsStore)->not->toBeNull();
         expect($snippetsStore?->gatherMiddleware())->toContain('admin');
+    });
+
+    it('limits the Claude access switch, setup and disconnect-everyone to admins', function () {
+        foreach (['update', 'setup', 'rotate-secret', 'revoke-all'] as $name) {
+            $route = Route::getRoutes()->getByName("settings.claude-access.{$name}");
+            expect($route)->not->toBeNull();
+            expect($route?->gatherMiddleware())->toContain('admin');
+        }
     });
 
     it('enforces rate limiting on the public client report link', function () {

@@ -2,7 +2,7 @@
 title: APIs we call
 section: Reference
 order: 10
-updated: 2026-11-06
+updated: 2026-11-12
 author: Aaron Reimann
 tags: [reference, api, integrations]
 tracks: [app/Services/*/*Client.php, modules/*/src/*Client.php, app/Services/Companion/ClockworkCompanionClient.php]
@@ -184,6 +184,14 @@ No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms betwee
 
 `modules/PageSpeedInsights/src/PageSpeedInsightsClient.php` · `key=CLOCKWORK_PSI_API_KEY` (free 25k/day). **Fallback engine** — called when GTmetrix encounters an error or reaches capacity; rows tagged `engine='psi-fallback'`. One request asks for four Lighthouse categories via repeating `category=` params (`performance`, `accessibility`, `best-practices`, `seo`). Bracket arrays (`category[0]=`) are ignored by PSI v5.
 
+## DataForSEO v3 — `https://api.dataforseo.com` (SEO module)
+
+`modules/Seo/src/DataForSeo/DataForSeoClient.php` · HTTP basic auth with the API login and password. Every request is a JSON array of task objects; every response carries `status_code`, `cost` and a `tasks` array. Each paid call passes `BudgetGuard` first and is written to `seo_api_usage` with the cost DataForSEO reported. Refusals (401, 402 out of funds, 429) are never retried. `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true` swaps the host for `sandbox.dataforseo.com`.
+
+- `GET /v3/appendix/user_data` — free; the Test button and balance.
+- `POST /v3/dataforseo_labs/google/keyword_overview/live` — up to 700 keywords per call: volume, CPC, competition, difficulty and intent in one answer.
+- `POST /v3/keywords_data/google_ads/search_volume/live` — up to 1,000 keywords per call: city-level volume, only when a site has a market city.
+
 ## Google Cloud Web Risk — `https://webrisk.googleapis.com/v1/uris:search`
 
 `GET` with `key=CLOCKWORK_GOOGLE_WEB_RISK_KEY` and repeating `threatTypes=`. Primary source for `clockwork:check-blacklists`. Empty JSON `{}` means clean.
@@ -211,6 +219,18 @@ No auth, ~30 req/min ceiling — `clockwork:scan-sitecheck` sleeps 250 ms betwee
 ## Google OAuth — `accounts.google.com` + `oauth2.googleapis.com`
 
 Via `laravel/socialite` Google driver. Authorize → token → userinfo. `GOOGLE_HD` optionally pins to a Workspace domain.
+
+## Google Search Console API — `https://searchconsole.googleapis.com/webmasters/v3`
+
+`modules/Seo/src/Google/SearchConsoleClient.php`, on the SEO module's agency OAuth connection (`webmasters.readonly`). `GET /sites` lists the properties the connection can see; `POST /sites/{siteUrl}/searchAnalytics/query` with the URL-encoded property (`https://www.example.com/` or `sc-domain:example.com`). Daily `date` totals, plus `page`, `query` and `page,query` rows per calendar month, paged 25,000 rows with `startRow`, at most one call a second. Quotas: 1,200 queries/min per site and per user, plus a load quota. A 429, or a 403 `quotaExceeded`/`rateLimitExceeded`, is never resent: the site stops for the night. Days are Pacific Time; 16 months retention.
+
+## Google Analytics Data API — `https://analyticsdata.googleapis.com/v1beta`
+
+`modules/Seo/src/Google/AnalyticsDataClient.php`, same connection (`analytics.readonly`). `POST /properties/{id}:batchRunReports` with `returnPropertyQuota: true`: daily channel and AI-source rows for charts, and calendar-month reports (no `date` dimension) for every month figure. The sync stops a property below 1,000 hourly tokens (200,000/day and 40,000/hour per property).
+
+## Google OAuth (SEO data connection) — `accounts.google.com` + `oauth2.googleapis.com`
+
+`modules/Seo/src/Google/GoogleOAuth.php`, plain `Http`, separate from login. Consent with `access_type=offline`, `prompt=consent`; code exchange and refresh at `oauth2.googleapis.com/token`; `openidconnect.googleapis.com/v1/userinfo` for the connected email; `oauth2.googleapis.com/revoke` on disconnect. `invalid_grant` marks the connection revoked and sends one chat alert.
 
 ## Mailgun — `MAILGUN_ENDPOINT` (api.mailgun.net | api.eu.mailgun.net)
 

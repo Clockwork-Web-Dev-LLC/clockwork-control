@@ -5,6 +5,23 @@ have already shipped (installer, theme system, SemVer/release cadence, backup re
 domain expiration, SEO indexability). Treat each file's own status notes as authoritative;
 this index is a map, not a claim that everything below is still unbuilt.
 
+## Current focus: SEO module
+
+- [`seo-suite-overview.md`](./seo-suite-overview.md): **start here.** A short map of the whole SEO
+  suite: the parts and what is built, how data flows, what depends on what, the build order, cost,
+  and what each install has to supply (its own Google OAuth client and DataForSEO login).
+- [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md): the research behind the suite.
+  Per feature: the DataForSEO APIs, prices with their sources, what it can't do, cost scenarios, a
+  build outline and risks. Prices are unconfirmed until a test call per endpoint.
+- [`seo-semrush-replacement.md`](./seo-semrush-replacement.md): the original long plan for growing
+  `modules/Seo` so an agency can move off a paid suite such as Semrush, with Claude as the main
+  consumer. Nightly Search Console + GA4 sync through one shared agency Google connection, a
+  DataForSEO driver and a keyword map in Control, all reachable from Claude through one MCP server
+  (`laravel/mcp`) in `modules/Mcp` that other modules can add tools to, with per-user OAuth through
+  Passport. Its scope was later widened by the overview above, which wins where they differ.
+
+---
+
 Recommended build order: **versioning** (mostly process, unblocks tagging real releases for the
 rest) → **theme-system** → **installer** → **backup-relay-generalization**.
 
@@ -49,7 +66,8 @@ rest) → **theme-system** → **installer** → **backup-relay-generalization**
   similar) to diagnose and auto-remediate problems on customer servers, potentially as a premium tier.
   Covers: what self-healing already exists in this codebase (more than expected), why a bespoke
   tool-calling loop beats MCP for this specific use case (but a separate read-only `laravel/mcp` server
-  is a good, lower-risk idea), model/quantization recommendations, a tiered-autonomy safety architecture
+  is a good, lower-risk idea; the MCP host in `seo-semrush-replacement.md` is where its fleet tools
+  would go), model/quantization recommendations, a tiered-autonomy safety architecture
   (rule-based → LLM-assisted-with-human-approval → opt-in trusted auto-execute), six concrete playbook
   candidates ranked by safety, and an honest business-case assessment against the RMM/AI-SRE market.
   **Paused at the user's request — research/architecture only, not being built next.**

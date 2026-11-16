@@ -2,7 +2,7 @@
 title: Environment variables
 section: Reference
 order: 40
-updated: 2026-11-04
+updated: 2026-11-12
 author: Aaron Reimann
 tags: [reference, configuration, env]
 tracks: [.env.example, config/clockwork.php, config/services.php]
@@ -249,6 +249,23 @@ standard Laravel `s3` disk vars plus one prefix override. See
 | `CLOCKWORK_SLACK_ICON_EMOJI` | `:lock:` | |
 
 See [Integrations → Slack](/documentation/integrations/slack). The per-site client-facing Slack channel (`ClientSlackNotifier`) has no env vars of its own — its webhook is client-configured per site — but it does read the **Operator identity** vars below for the operator name/support link it puts in client-facing messages.
+
+## SEO (Search Console + GA4)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CLOCKWORK_SEO_GOOGLE_CLIENT_ID` | empty | OAuth client for the SEO module's own Google connection (`modules/Seo`). Normally entered on **Settings → Integrations → SEO** (stored encrypted); this is the fallback. Left empty, the module falls back to the Google login client, which only works if that client also lists `/seo/google/callback`. |
+| `CLOCKWORK_SEO_GOOGLE_CLIENT_SECRET` | empty | Its secret. |
+| `CLOCKWORK_SEO_GOOGLE_TIMEOUT` | `30` | Seconds, per Search Console or GA4 call. |
+| `CLOCKWORK_SEO_DATAFORSEO_LOGIN` | empty | DataForSEO API login (from its API Access page). Fallback only: normally entered under SEO on Settings → Integrations. |
+| `CLOCKWORK_SEO_DATAFORSEO_PASSWORD` | empty | The matching API password. Same fallback rule. |
+| `CLOCKWORK_SEO_DATAFORSEO_SANDBOX` | `false` | `true` sends every DataForSEO call to its free sandbox: sample data, no charge, caps not applied. For a first try only. |
+| `CLOCKWORK_SEO_DATAFORSEO_TIMEOUT` | `60` | Seconds to wait for a DataForSEO call. |
+| `CLOCKWORK_SEO_RANK_FREQUENCY` | `weekly` | Default for how often tracked keywords are checked: `daily` or `weekly`. |
+| `CLOCKWORK_SEO_RANK_DEPTH` | `30` | Default for how many Google results each rank check looks at: 10, 20, 30, 50 or 100. |
+| `CLOCKWORK_SEO_PAGE_AUDIT_TIMEOUT` | `12` | Seconds to wait for a client page when auditing it. |
+| `CLOCKWORK_MCP_LOCAL_USER` | empty | Email of the active Control user the local MCP server acts as (`php artisan mcp:start clockwork`, for Claude Code on the Control host). Empty means the server is not registered. See [Claude access](/docs/features/claude-access). |
+| `CLOCKWORK_MCP_ALLOWED_ORIGINS` | `https://claude.ai,https://claude.com` | Browser origins allowed to call `/mcp`, comma separated. A request with no `Origin` header, which is how Claude's servers call, is not affected. The endpoint itself is turned on at **Settings → Claude access**, not here. |
 
 ## Performance scans
 
