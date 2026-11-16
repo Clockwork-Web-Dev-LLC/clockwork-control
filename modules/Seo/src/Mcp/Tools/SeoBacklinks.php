@@ -19,12 +19,12 @@ use Modules\Seo\Models\ReferringDomain;
 
 #[Name('seo_backlinks')]
 #[Title('Backlinks and referring domains')]
-#[Description('Backlinks for a site and its named competitors: month-by-month totals (backlinks, referring domains, rank, spam score), and the list of domains linking to the site with the ones that are new or lost. From storage; never spends money. Counts come from DataForSEO\'s own link index and will not match another tool\'s. Rank and spam score are DataForSEO\'s 0 to 100 measures, not Authority Score, Domain Rating or a toxicity score. A high spam score alone is not a reason to disavow a link.')]
+#[Description('Backlinks for a site and its named competitors: month-by-month totals (backlinks, referring domains, rank, spam score), the list of domains linking to the site with the ones that are new or lost, and the backlink gap (domains that link to competitors but not to the site). From storage; never spends money. Counts come from DataForSEO\'s own link index and will not match another tool\'s. Rank and spam score are DataForSEO\'s 0 to 100 measures, not Authority Score, Domain Rating or a toxicity score. A high spam score alone is not a reason to disavow a link.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class SeoBacklinks extends SeoTool
 {
-    private const SHOW = ['all', 'new', 'lost', 'high_spam'];
+    private const SHOW = ['all', 'new', 'lost', 'high_spam', 'gap'];
 
     private const HIGH_SPAM = 60;
 
@@ -32,7 +32,7 @@ class SeoBacklinks extends SeoTool
     {
         return [
             'site' => $schema->string()->description('A Control site id or a domain.')->required(),
-            'show' => $schema->string()->enum(self::SHOW)->description('Which referring domains to list: all live ones, new since the pull before, lost, or with a spam score of 60 or more. Default all.'),
+            'show' => $schema->string()->enum(self::SHOW)->description('Which domains to list: all live referring domains, new since the pull before, lost, with a spam score of 60 or more, or gap (domains that link to competitors but not to this site, which are link prospects). Default all.'),
             'days' => $schema->integer()->min(1)->max(400)->description('For new and lost: how far back. Default 45.'),
             'contains' => $schema->string()->max(100)->description('Only referring domains containing this text.'),
             'limit' => $schema->integer()->min(1)->max(1000)->description('Default 100, strongest first.'),
@@ -40,7 +40,7 @@ class SeoBacklinks extends SeoTool
         ];
     }
 
-    public function handle(Request $request): Response|ResponseFactory
+    public function handle(Request $request, BacklinkResearch $backlinks): Response|ResponseFactory
     {
         if ($this->caller($request) === null) {
             return Response::error(self::NO_USER);
@@ -97,6 +97,21 @@ class SeoBacklinks extends SeoTool
             $r->referring_domain, $r->rank, $r->backlinks, $r->spam_score, $r->first_seen?->toDateString(), $r->found_at?->toDateString(), $r->lost_at?->toDateString(),
         ])->all();
 
+        $gap = null;
+        if ($show === 'gap') {
+            $result = $backlinks->gap($own, null, $limit);
+            $gap = [
+                'compared_with' => $result['compared'],
+                'columns' => ['domain', 'rank', 'spam_score', 'links_to_competitors', 'competitor_count'],
+                'rows' => array_map(fn (array $r) => [$r['domain'], $r['rank'], $r['spam_score'], $r['competitors'], count($r['competitors'])], $result['rows']),
+                'rows_matching' => $result['total'],
+                'truncated' => $result['total'] > count($result['rows']),
+                'not_bought_for' => array_values(array_diff(array_slice($domains, 1), $result['compared'])),
+            ];
+            $rows = [];
+            $matching = $result['total'];
+        }
+
         $caveats = [
             ['code' => 'provider_index', 'message' => 'Link counts come from DataForSEO\'s own index. They will differ from another tool\'s and must not share a trend line with them.'],
             ['code' => 'provider_scores', 'message' => 'Rank and spam score are DataForSEO\'s 0 to 100 measures. Do not call them Authority Score, DR, DA or toxicity. A high spam score alone is not a reason to disavow.'],
@@ -113,13 +128,20 @@ class SeoBacklinks extends SeoTool
             $caveats[] = ['code' => 'between_pulls', 'message' => 'New and lost are worked out between Control\'s own monthly pulls, so the dates are when Control noticed, not the day the link changed.'];
         }
 
+        if ($gap !== null) {
+            $caveats[] = ['code' => 'gap_is_prospects', 'message' => 'A gap domain is a lead, not a recommendation. Many are directories, scrapers or sites that would never link to this business; check each before suggesting outreach. Only the strongest 500 per competitor are stored.'];
+            if ($gap['not_bought_for'] !== []) {
+                $caveats[] = ['code' => 'gap_not_bought', 'message' => 'No gap is stored against: '.implode(', ', $gap['not_bought_for']).sprintf('. Each costs about $%.3f with seo_domain_research_fetch (what "backlink_gap", domain the competitor).', BacklinkResearch::gapCost())];
+            }
+        }
+
         $client = $totals[0];
 
         return Response::structured(ResponseEnvelope::make(
             summary: ($client['referring_domains'] === null
                 ? "{$own}: no backlink totals stored yet."
                 : "{$own}: ".number_format((int) $client['backlinks']).' backlinks from '.number_format($client['referring_domains'])." referring domains ({$client['latest_month']}, DataForSEO index).")
-                .' Listing '.count($rows)." of {$matching} {$show} referring domains.",
+                .($gap !== null ? ' Listing '.count($gap['rows'])." of {$matching} gap domains." : ' Listing '.count($rows)." of {$matching} {$show} referring domains."),
             profile: $profile,
             period: ['months' => $months, 'referring_domains_pulled' => $pulled !== null ? substr((string) $pulled, 0, 10) : null],
             dataState: null,
@@ -128,7 +150,8 @@ class SeoBacklinks extends SeoTool
             data: [
                 'history_columns' => ['month', 'backlinks', 'referring_domains', 'rank'],
                 'totals' => $totals,
-                'referring_domains' => [
+                'gap' => $gap,
+                'referring_domains' => $gap !== null ? null : [
                     'show' => $show,
                     'live_stored' => $live,
                     'columns' => ['domain', 'rank', 'backlinks', 'spam_score', 'first_seen_by_provider', 'found_by_control', 'lost'],

@@ -12,6 +12,7 @@ use Modules\Seo\DataForSeo\Pricing;
 use Modules\Seo\Mcp\Tools\SeoBacklinks;
 use Modules\Seo\Mcp\Tools\SeoDomainResearchFetch;
 use Modules\Seo\Models\ApiUsage;
+use Modules\Seo\Models\BacklinkGapDomain;
 use Modules\Seo\Models\BacklinkSnapshot;
 use Modules\Seo\Models\ReferringDomain;
 use Modules\Seo\Models\SiteProfile;
@@ -180,6 +181,112 @@ describe('tools', function () {
         // The backlinks cap, not the research cap, holds it.
         app(BudgetGuard::class)->save(['caps' => ['backlinks' => 0, 'research' => 50]]);
         ClockworkServer::actingAs($this->user)->tool(SeoDomainResearchFetch::class, ['site' => 'acme.com', 'what' => 'backlink_summary', 'confirm_cost_usd' => 1])->assertHasErrors();
+        Http::assertSentCount(1);
+    });
+});
+
+function gapResponse(array $domains, int $total = 0): array
+{
+    $items = [];
+    foreach ($domains as $domain => [$rank, $spam]) {
+        $items[] = ['domain_intersection' => ['1' => ['type' => 'backlinks_domain_intersection', 'target' => $domain, 'rank' => $rank, 'backlinks' => 4, 'backlinks_spam_score' => $spam]], 'summary' => ['intersections_count' => 1]];
+    }
+
+    return DataForSeoFixtures::envelope([DataForSeoFixtures::task('di', [['targets' => ['1' => 'rival.com'], 'total_count' => $total ?: count($items), 'items_count' => count($items), 'items' => $items]], 0.0241)]);
+}
+
+describe('backlink gap', function () {
+    it('stores the domains linking to a competitor but not the client, replacing the last pull', function () {
+        BacklinkGapDomain::create(['domain' => 'acme.com', 'competitor_domain' => 'rival.com', 'provider' => 'dataforseo', 'referring_domain' => 'stale.com']);
+        Http::fake(['*/backlinks/domain_intersection/live' => Http::response(gapResponse(['chamber.org' => [70, 2], 'www.trade.com' => [55, 8], 'rival.com' => [40, 1], 'acme.com' => [41, 1]], 900))]);
+
+        $result = $this->backlinks->pullGap('www.acme.com', 'rival.com', 500, $this->site->id);
+
+        expect($result)->toMatchArray(['ok' => true, 'stored' => 2, 'total' => 900])
+            ->and(BacklinkGapDomain::query()->orderByDesc('rank')->pluck('referring_domain')->all())->toBe(['chamber.org', 'trade.com']);
+
+        Http::assertSent(fn (Request $r) => $r->data()[0]['targets'] === ['1' => 'rival.com'] && $r->data()[0]['exclude_targets'] === ['acme.com'] && $r->data()[0]['limit'] === 500);
+
+        expect($this->backlinks->pullGap('acme.com', 'acme.com')['ok'])->toBeFalse();
+        Http::assertSentCount(1);
+    });
+
+    it('lists each gap domain once, the ones linking to most competitors first', function () {
+        $row = fn (string $competitor, string $domain, int $rank, int $spam = 5) => BacklinkGapDomain::create(['domain' => 'acme.com', 'competitor_domain' => $competitor, 'provider' => 'dataforseo', 'referring_domain' => $domain, 'rank' => $rank, 'spam_score' => $spam, 'backlinks' => 2]);
+        $row('rival.com', 'chamber.org', 70);
+        $row('other.com', 'chamber.org', 70);
+        $row('rival.com', 'bigmag.com', 90);
+        $row('other.com', 'junk.biz', 10, 95);
+
+        $gap = $this->backlinks->gap('acme.com');
+        expect(array_column($gap['rows'], 'domain'))->toBe(['chamber.org', 'bigmag.com', 'junk.biz'])
+            ->and($gap['rows'][0])->toMatchArray(['competitors' => ['rival.com', 'other.com'], 'backlinks' => 4, 'rank' => 70])
+            ->and($gap['compared'])->toBe(['rival.com', 'other.com'])
+            ->and(array_column($this->backlinks->gap('acme.com', null, 200, 60)['rows'], 'domain'))->toBe(['chamber.org', 'bigmag.com'])
+            ->and(array_column($this->backlinks->gap('acme.com', ['other.com'])['rows'], 'domain'))->toBe(['chamber.org', 'junk.biz']);
+
+        Http::fake();
+        $content = backlinkTool($this->user, SeoBacklinks::class, ['site' => 'acme.com', 'show' => 'gap']);
+        expect($content['gap']['rows'][0])->toBe(['chamber.org', 70, 5, ['rival.com', 'other.com'], 2])
+            ->and($content['referring_domains'])->toBeNull()
+            ->and(array_column($content['meta']['caveats'], 'code'))->toContain('gap_is_prospects');
+        Http::assertNothingSent();
+    });
+
+    it('buys the gap through the fetch tool against a competitor only', function () {
+        Http::fake(['*/backlinks/domain_intersection/live' => Http::response(gapResponse(['chamber.org' => [70, 2]]))]);
+
+        ClockworkServer::actingAs($this->user)->tool(SeoDomainResearchFetch::class, ['site' => 'acme.com', 'what' => 'backlink_gap', 'confirm_cost_usd' => 1])->assertHasErrors();
+        $quote = backlinkTool($this->user, SeoDomainResearchFetch::class, ['site' => 'acme.com', 'what' => 'backlink_gap', 'domain' => 'rival.com']);
+        expect($quote)->toMatchArray(['bought' => false, 'estimated_cost_usd' => 0.042]);
+        Http::assertNothingSent();
+
+        $bought = backlinkTool($this->user, SeoDomainResearchFetch::class, ['site' => 'acme.com', 'what' => 'backlink_gap', 'domain' => 'rival.com', 'confirm_cost_usd' => 0.05]);
+        expect($bought['bought'])->toBeTrue()->and($bought['summary'])->toContain('link to rival.com but not to acme.com');
+    });
+});
+
+describe('backlinks page', function () {
+    beforeEach(fn () => mockIssueCounterZero());
+
+    it('shows totals, linking domains with filters, and the gap, from stored data', function () {
+        Http::fake();
+        BacklinkSnapshot::create(['domain' => 'acme.com', 'month' => '2026-09-01', 'provider' => 'dataforseo', 'backlinks' => 5000, 'referring_domains' => 300, 'rank' => 40]);
+        BacklinkSnapshot::create(['domain' => 'acme.com', 'month' => '2026-10-01', 'provider' => 'dataforseo', 'backlinks' => 5230, 'referring_domains' => 310, 'rank' => 41, 'spam_score' => 12]);
+        ReferringDomain::create(['domain' => 'acme.com', 'provider' => 'dataforseo', 'referring_domain' => 'news.com', 'rank' => 80, 'seen_at' => now()]);
+        ReferringDomain::create(['domain' => 'acme.com', 'provider' => 'dataforseo', 'referring_domain' => 'gone.net', 'rank' => 30, 'seen_at' => now(), 'lost_at' => now()->subDays(2)]);
+        BacklinkGapDomain::create(['domain' => 'acme.com', 'competitor_domain' => 'rival.com', 'provider' => 'dataforseo', 'referring_domain' => 'chamber.org', 'rank' => 70]);
+
+        $html = $this->actingAs($this->user)->get(route('seo.sites.backlinks', $this->site))
+            ->assertOk()
+            ->assertSee('310')->assertSee('+10')->assertSee('5,230')
+            ->assertSee('news.com')->assertDontSee('gone.net')
+            ->assertSee('chamber.org')
+            ->assertSee('Refresh gap ($0.042)', false)
+            ->assertSee('data-site-tabs', false)
+            ->getContent();
+
+        $row = substr($html, strpos($html, 'data-backlink-row="rival.com"'));
+        expect(substr($row, strpos($row, 'data-referring'), 60))->toContain('—');
+
+        $this->actingAs($this->user)->get(route('seo.sites.backlinks', [$this->site, 'show' => 'lost']))->assertOk()->assertSee('gone.net')->assertSee('Lost');
+        $this->actingAs($this->user)->get(route('seo.sites.backlinks', [$this->site, 'show' => 'everything']))->assertSessionHasErrors('show');
+        Http::assertNothingSent();
+    });
+
+    it('buys only for the client and its named competitors, inside the backlinks cap', function () {
+        Http::fake(['*/backlinks/summary/live' => Http::response(backlinkSummary())]);
+
+        $this->actingAs($this->user)->post(route('seo.sites.backlinks.buy', $this->site), ['what' => 'backlink_summary', 'domain' => 'evil.com'])->assertSessionHas('warning');
+        $this->actingAs($this->user)->post(route('seo.sites.backlinks.buy', $this->site), ['what' => 'backlink_gap', 'domain' => 'acme.com'])->assertSessionHas('warning');
+        Http::assertNothingSent();
+
+        $this->actingAs($this->user)->post(route('seo.sites.backlinks.buy', $this->site), ['what' => 'backlink_summary', 'domain' => 'rival.com'])
+            ->assertRedirect(route('seo.sites.backlinks', $this->site))->assertSessionHas('status');
+        expect(BacklinkSnapshot::query()->where('domain', 'rival.com')->exists())->toBeTrue();
+
+        app(BudgetGuard::class)->save(['caps' => ['backlinks' => 0]]);
+        $this->actingAs($this->user)->post(route('seo.sites.backlinks.buy', $this->site), ['what' => 'referring_domains'])->assertSessionHas('warning', fn (string $m) => str_contains($m, 'cap'));
         Http::assertSentCount(1);
     });
 });

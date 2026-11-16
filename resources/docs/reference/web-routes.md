@@ -285,6 +285,8 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
 | POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
 | POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/backlinks` | Backlinks: totals for the client and its named competitors, the domains linking to the client (`?show=` all, new, lost or high_spam; `?contains=`), and the backlink gap. Stored data only. |
+| POST | `/seo/sites/{site}/backlinks/buy` | Buy backlink totals, the client's referring domains or the gap against a named competitor, inside the backlinks cap (throttled 20/min). |
 | GET | `/seo/sites/{site}/site-audit` | Site audit: the latest crawl (or `?crawl=` for an older one) as issues with severity and fix, the change since the crawl before, the pages behind one issue (`?issue=`) and the crawl history. Stored data only. |
 | POST | `/seo/sites/{site}/site-audit/run` | Start a crawl of the site now, inside the site audit cap. Refused while one is running (throttled 6/min). |
 | GET | `/seo/sites/{site}/page-audit` | Page audit: a form and the latest audit of each page audited on this site. |

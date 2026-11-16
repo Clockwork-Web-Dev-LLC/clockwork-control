@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
+use Modules\Seo\Http\Controllers\BacklinksController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
 use Modules\Seo\Http\Controllers\KeywordMapController;
@@ -44,6 +45,8 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keywords/lookup', [KeywordToolsController::class, 'lookup'])->middleware('throttle:30,1')->name('seo.sites.keywords.lookup');
     Route::post('/seo/sites/{site}/keywords/buy', [KeywordToolsController::class, 'buy'])->middleware('throttle:10,1')->name('seo.sites.keywords.buy');
     Route::post('/seo/sites/{site}/keywords/ideas', [KeywordToolsController::class, 'ideas'])->middleware('throttle:10,1')->name('seo.sites.keywords.ideas');
+    Route::get('/seo/sites/{site}/backlinks', [BacklinksController::class, 'show'])->name('seo.sites.backlinks');
+    Route::post('/seo/sites/{site}/backlinks/buy', [BacklinksController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.backlinks.buy');
     Route::get('/seo/sites/{site}/site-audit', [SiteAuditController::class, 'show'])->name('seo.sites.site-audit');
     Route::post('/seo/sites/{site}/site-audit/run', [SiteAuditController::class, 'run'])->middleware('throttle:6,1')->name('seo.sites.site-audit.run');
     Route::get('/seo/sites/{site}/page-audit', [PageAuditController::class, 'show'])->name('seo.sites.page-audit');

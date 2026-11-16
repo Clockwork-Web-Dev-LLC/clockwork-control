@@ -116,6 +116,7 @@ Every client has the same row of tabs on its SEO pages:
 | **Keyword map** | Which page targets which keyword; import, versions, CSV download. |
 | **Keywords** | Look up volume, difficulty, CPC and intent for a list; buy keyword ideas. |
 | **Research** | Ranking-keyword counts, competitors and the keyword gap. |
+| **Backlinks** | Who links to the site, what is new or lost, and who links to competitors but not here. |
 | **Site audit** | Technical problems found by crawling the whole site, and what changed since the last crawl. |
 | **Page audit** | What a live page says about itself: title, description, headings, schema. |
 | **Profile** | The client's Google properties, brand terms, keyword market and report notes. |
@@ -171,7 +172,17 @@ Control stores a domain's backlink totals and the domains that link to a client,
 
 What to know about the numbers: every backlink index is different, so these counts will not match another tool's and must not share a trend line with them. Rank and spam score are DataForSEO's own measures, not Authority Score, Domain Rating or a toxicity score, and a high spam score alone is not a reason to disavow a link.
 
-A screen for backlinks, the backlink gap against competitors and a disavow list are not built yet. Built against DataForSEO's published specification and not yet run against the live API.
+### Backlink gap
+
+For a client and a named competitor, Control can buy the domains that link to the competitor but not to the client, strongest first (up to 500, about 4 cents). Across several competitors, a domain is listed once with the competitors it links to, and those linking to the most competitors come first. These are link prospects to check, not recommendations: many are directories or sites that would never link to the business.
+
+### Using it
+
+The **Backlinks** tab (`/seo/sites/{site}/backlinks`) shows the totals for the client and its named competitors with the change in referring domains from the month before, the domains linking to the client (all live, new, lost, or spam score 60 and over, with a text filter), and the gap. Buttons to count a domain, pull the client's list again or find the gap against a competitor state their price and go through the backlinks cap; only the client and its named competitors can be bought from the page.
+
+Claude reads all of it with `seo_backlinks` (`show` set to `gap` for the gap).
+
+A disavow list is not built yet. Built against DataForSEO's published specification and not yet run against the live API.
 
 ## Competitors and keyword gap
 

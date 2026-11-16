@@ -24,7 +24,7 @@ use Modules\Seo\Research\DomainResearch;
 
 #[Name('seo_domain_research_fetch')]
 #[Title('Buy ranking data for a domain')]
-#[Description('Spends money. Buys from DataForSEO either this month\'s ranking-keyword count for a domain (what "count", about 1 cent) the list of keywords it ranks for (what "ranked_keywords", up to 1,000, about 13 cents), the domains that compete with it in search (what "competitors", up to 100, about 2 cents), its backlink totals (what "backlink_summary", about 2 cents) or the domains linking to it (what "referring_domains", up to 1,000, about 6 cents). Call it first WITHOUT confirm_cost_usd to get the price and spend nothing; tell the person the price and what it buys; call again with confirm_cost_usd only after they agree. Read the result afterwards with seo_domain_overview, seo_ranked_keywords, seo_competitors or seo_backlinks.')]
+#[Description('Spends money. Buys from DataForSEO either this month\'s ranking-keyword count for a domain (what "count", about 1 cent) the list of keywords it ranks for (what "ranked_keywords", up to 1,000, about 13 cents), the domains that compete with it in search (what "competitors", up to 100, about 2 cents), its backlink totals (what "backlink_summary", about 2 cents) the domains linking to it (what "referring_domains", up to 1,000, about 6 cents), or the backlink gap (what "backlink_gap": domains that link to the competitor named in domain but not to the site, up to 1,000, about 4 cents for 500). Call it first WITHOUT confirm_cost_usd to get the price and spend nothing; tell the person the price and what it buys; call again with confirm_cost_usd only after they agree. Read the result afterwards with seo_domain_overview, seo_ranked_keywords, seo_competitors or seo_backlinks.')]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
 #[IsIdempotent(false)]
@@ -33,7 +33,7 @@ class SeoDomainResearchFetch extends SeoTool
 {
     public const NAME = 'seo_domain_research_fetch';
 
-    private const WHAT = ['count', 'ranked_keywords', 'competitors', 'backlink_summary', 'referring_domains'];
+    private const WHAT = ['count', 'ranked_keywords', 'competitors', 'backlink_summary', 'referring_domains', 'backlink_gap'];
 
     /** @var array<string, mixed> */
     protected ?array $meta = ['anthropic/requiresUserInteraction' => true];
@@ -71,15 +71,22 @@ class SeoDomainResearchFetch extends SeoTool
             return Response::error('domain must be a domain such as example.com.');
         }
 
-        $limit = $what === 'competitors'
-            ? max(10, min(DomainResearch::MAX_COMPETITORS, (int) $request->get('limit', 50)))
-            : max(10, min(DomainResearch::MAX_KEYWORDS, (int) $request->get('limit', DomainResearch::MAX_KEYWORDS)));
+        $limit = match ($what) {
+            'competitors' => max(10, min(DomainResearch::MAX_COMPETITORS, (int) $request->get('limit', 50))),
+            'backlink_gap' => max(10, min(BacklinkResearch::MAX_DOMAINS, (int) $request->get('limit', BacklinkResearch::GAP_LIMIT))),
+            default => max(10, min(DomainResearch::MAX_KEYWORDS, (int) $request->get('limit', DomainResearch::MAX_KEYWORDS))),
+        };
+        $own = DomainResearch::domain((string) $profile->site->domain);
+        if ($what === 'backlink_gap' && $domain === $own) {
+            return Response::error('For backlink_gap, domain must be a competitor, not the site itself.');
+        }
         $market = Market::forProfile($profile);
         $estimate = match ($what) {
             'count' => DomainResearch::overviewCost(),
             'competitors' => DomainResearch::competitorsCost($limit),
             'backlink_summary' => BacklinkResearch::summaryCost(),
             'referring_domains' => BacklinkResearch::referringCost($limit),
+            'backlink_gap' => BacklinkResearch::gapCost($limit),
             default => DomainResearch::rankedCost($limit),
         };
         $buys = match ($what) {
@@ -87,10 +94,11 @@ class SeoDomainResearchFetch extends SeoTool
             'competitors' => "up to {$limit} domains that compete with {$domain} in search",
             'backlink_summary' => "this month's backlink totals for {$domain}",
             'referring_domains' => "up to {$limit} domains linking to {$domain}",
+            'backlink_gap' => "up to {$limit} domains that link to {$domain} but not to {$own}",
             default => "up to {$limit} keywords {$domain} ranks for",
         };
 
-        $feature = in_array($what, ['backlink_summary', 'referring_domains'], true) ? Feature::BACKLINKS : Feature::RESEARCH;
+        $feature = in_array($what, ['backlink_summary', 'referring_domains', 'backlink_gap'], true) ? Feature::BACKLINKS : Feature::RESEARCH;
         $refusal = $budget->refusal($feature, $estimate, $user);
         $confirm = $request->get('confirm_cost_usd');
 
@@ -124,6 +132,7 @@ class SeoDomainResearchFetch extends SeoTool
             'competitors' => $research->discoverCompetitors($domain, $market, $limit, $profile->site_id, $user),
             'backlink_summary' => $backlinks->snapshot($domain, $profile->site_id, $user),
             'referring_domains' => $backlinks->pullReferringDomains($domain, $limit, $profile->site_id, $user),
+            'backlink_gap' => $backlinks->pullGap($own, $domain, $limit, $profile->site_id, $user),
             default => $research->pullRankedKeywords($domain, $market, $limit, $profile->site_id, $user),
         };
 
@@ -139,6 +148,7 @@ class SeoDomainResearchFetch extends SeoTool
                     'count' => $snapshot?->keywords !== null ? "{$domain} ranks for ".number_format($snapshot->keywords).' keywords by DataForSEO\'s count.' : "DataForSEO has no ranking data for {$domain}.",
                     'competitors' => "Stored {$result['stored']} competing domains. Read them with seo_competitors.",
                     'backlink_summary' => ($result['snapshot']?->referring_domains !== null ? "{$domain} has ".number_format((int) $result['snapshot']->backlinks).' backlinks from '.number_format($result['snapshot']->referring_domains).' referring domains by DataForSEO\'s index.' : "DataForSEO has no backlink data for {$domain}.").' Read it with seo_backlinks.',
+                    'backlink_gap' => "Stored {$result['stored']} domains that link to {$domain} but not to {$own}. Read them with seo_backlinks (show \"gap\").",
                     'referring_domains' => "Stored {$result['stored']} referring domains ({$result['new']} new, {$result['lost']} lost since the pull before). Read them with seo_backlinks.",
                     default => "Stored {$result['stored']} keywords".(($result['total'] ?? null) !== null ? ' of '.number_format($result['total']).' it ranks for' : '').'. Read them with seo_ranked_keywords.',
                 },
