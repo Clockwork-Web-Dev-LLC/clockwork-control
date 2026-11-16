@@ -152,7 +152,7 @@ class RankTracker
         }
 
         $competitors = array_values(array_filter(
-            (array) (SiteProfile::query()->where('site_id', $keyword->site_id)->first()?->competitors ?? []),
+            (array) (SiteProfile::query()->where('site_id', $keyword->site_id)->first()->competitors ?? []),
             'is_string',
         ));
 

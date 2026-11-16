@@ -171,7 +171,7 @@ class ClaudeAccessController extends Controller
             actionType: $type,
             summary: $summary,
             target: $target,
-            actor: (string) ($request->user()?->email ?? 'manual'),
+            actor: (string) ($request->user()->email ?? 'manual'),
         );
     }
 }

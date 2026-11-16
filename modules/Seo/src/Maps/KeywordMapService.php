@@ -84,7 +84,7 @@ class KeywordMapService
             $previous = $this->current($site->id);
             $map = $this->startMap($site, $name, $previous === null ? 'manual' : 'copy', $previous?->id, $userId);
 
-            foreach ($previous?->rows ?? [] as $row) {
+            foreach ($previous->rows ?? [] as $row) {
                 $map->rows()->create(collect($row->getAttributes())->except(['id', 'map_id', 'created_at', 'updated_at'])->all());
             }
 

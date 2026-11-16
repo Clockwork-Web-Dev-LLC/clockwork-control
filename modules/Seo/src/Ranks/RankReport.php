@@ -81,7 +81,7 @@ class RankReport
                 'pages_ranking' => $latest?->pages_ranking,
                 'has_ai_overview' => $latest?->has_ai_overview,
                 'cited_in_ai_overview' => $latest?->cited_in_ai_overview,
-                'competitors' => $latest?->competitors ?? [],
+                'competitors' => $latest->competitors ?? [],
                 'best_position' => $history->pluck('position')->filter()->min(),
             ];
         }

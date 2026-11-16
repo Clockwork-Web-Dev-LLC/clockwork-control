@@ -158,7 +158,7 @@ class SeoKeywordIdeas extends SeoTool
             $m = $stored->get($keyword);
             if (($contains !== null && $contains !== '' && ! str_contains($keyword, $contains))
                 || ($request->get('questions_only') && preg_match($questions, $keyword) !== 1)
-                || (is_numeric($request->get('min_volume')) && (int) ($m?->volume ?? 0) < (int) $request->get('min_volume'))
+                || (is_numeric($request->get('min_volume')) && (int) ($m->volume ?? 0) < (int) $request->get('min_volume'))
                 || (is_numeric($request->get('max_difficulty')) && ($m?->difficulty === null || $m->difficulty > (int) $request->get('max_difficulty')))) {
                 continue;
             }
