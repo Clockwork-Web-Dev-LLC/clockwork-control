@@ -107,7 +107,8 @@ it('stores a finished crawl: totals, counts per check, site-wide findings and ev
         ->and($audit->finished_at)->not->toBeNull();
 
     $services = SiteAuditPage::query()->where('url', 'https://acme.com/services/')->sole();
-    expect($services->failed_checks)->toBe(['no_description', 'title_too_long'])
+    expect(array_keys(array_filter($services->checks)))->toBe(['no_description', 'title_too_long'])
+        ->and($services->checks['is_https'])->toBeFalse()
         ->and($services->description)->toBeNull()
         ->and($services->word_count)->toBe(512)
         ->and($services->load_ms)->toBe(420)

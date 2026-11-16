@@ -214,7 +214,18 @@ Control crawls a client's whole site through DataForSEO and keeps the result: ev
 
 The score is DataForSEO's own formula. It is not comparable with another tool's site health figure and must not be put on the same trend line.
 
-Turning the raw checks into issues with a severity and a fix, the crawl-to-crawl trend, the screen and the Claude tools are the next pieces; this part stores the data only. Built against DataForSEO's published specification and not yet run against the live API.
+### Issues and what changed
+
+DataForSEO only answers each check true or false. Control turns those answers into issues a person can act on (`IssueRules`): each has a severity, a category, a plain title and what to do about it.
+
+- **Severity is Control's judgement**: an **error** is likely to cost rankings or break the page (broken pages, http pages, missing titles, duplicate titles, redirect loops), a **warning** is worth fixing but rarely urgent (missing descriptions and H1s, long titles, slow pages, orphan pages), and a **notice** is worth knowing and often intentional (redirects, short pages, pages that cannot be indexed).
+- **Each check is read the right way round**: for some checks true is the problem, for others false is. A check with no rule is not reported.
+- **Site-wide issues** (no sitemap, http not redirecting to https, no valid certificate) are listed beside page issues.
+- **Crawl against crawl**: for each issue, the pages that are new, fixed and still open since the previous crawl. A page the newer crawl did not reach is counted as "not crawled this time", never as fixed, so a smaller crawl cannot look like progress. If the two crawls used different settings, the comparison says so.
+
+The check names come from DataForSEO's documentation and have not been confirmed against a real crawl; a name that never appears simply never fires.
+
+The screen and the Claude tools are the next pieces; so far this is stored data. Built against DataForSEO's published specification and not yet run against the live API.
 
 ## Page audit
 

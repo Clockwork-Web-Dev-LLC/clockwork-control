@@ -39,6 +39,7 @@ class SiteAuditRunner
     public function __construct(
         private readonly DataForSeoClient $client,
         private readonly SiteAuditSettings $settings,
+        private readonly SiteAuditIssues $issues,
     ) {}
 
     /**
@@ -216,7 +217,9 @@ class SiteAuditRunner
         $totals = array_filter(array_diff_key($metrics, ['checks' => true, 'onpage_score' => true]), 'is_numeric');
         $siteChecks = array_filter((array) ($data['domain_info']['checks'] ?? []), 'is_bool');
 
-        DB::transaction(function () use ($audit, $pages, $data, $metrics, $checkCounts, $totals, $siteChecks): void {
+        $issues = $this->issues->fromRows(array_map(fn (array $row) => (array) json_decode($row['checks'], true), array_values($pages)), $siteChecks, array_map('intval', $totals));
+
+        DB::transaction(function () use ($audit, $pages, $data, $metrics, $checkCounts, $totals, $siteChecks, $issues): void {
             SiteAuditPage::query()->where('audit_id', $audit->id)->delete();
             foreach (array_chunk(array_values($pages), 200) as $chunk) {
                 SiteAuditPage::query()->insert($chunk);
@@ -229,6 +232,10 @@ class SiteAuditRunner
                 'totals' => $totals === [] ? null : array_map('intval', $totals),
                 'check_counts' => $checkCounts === [] ? null : $checkCounts,
                 'site_checks' => $siteChecks === [] ? null : $siteChecks,
+                'issue_counts' => array_column($issues, 'pages', 'key'),
+                'errors' => count(array_filter($issues, fn (array $i) => $i['severity'] === 'error')),
+                'warnings' => count(array_filter($issues, fn (array $i) => $i['severity'] === 'warning')),
+                'notices' => count(array_filter($issues, fn (array $i) => $i['severity'] === 'notice')),
                 'finished_at' => now(),
                 'error' => null,
             ])->save();
@@ -250,13 +257,7 @@ class SiteAuditRunner
         $int = fn ($v): ?int => is_numeric($v) ? max(0, (int) $v) : null;
         $text = fn ($v, int $max): ?string => is_string($v) && trim($v) !== '' ? mb_substr(trim($v), 0, $max) : null;
 
-        // Only the checks that failed are kept, by name.
-        $failed = [];
-        foreach ((array) ($item['checks'] ?? []) as $name => $value) {
-            if ($value === true) {
-                $failed[] = (string) $name;
-            }
-        }
+        $checks = array_filter((array) ($item['checks'] ?? []), 'is_bool');
 
         return [
             'audit_id' => $auditId,
@@ -274,7 +275,7 @@ class SiteAuditRunner
             'size_bytes' => $int($item['size'] ?? null),
             'load_ms' => $int($item['page_timing']['duration_time'] ?? null),
             'score' => is_numeric($item['onpage_score'] ?? null) ? round((float) $item['onpage_score'], 2) : null,
-            'failed_checks' => json_encode($failed),
+            'checks' => json_encode($checks),
         ];
     }
 

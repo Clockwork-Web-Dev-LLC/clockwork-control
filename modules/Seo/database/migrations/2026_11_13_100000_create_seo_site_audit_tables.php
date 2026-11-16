@@ -29,6 +29,13 @@ return new class extends Migration
             $table->json('check_counts')->nullable();
             // Site-wide findings: no sitemap, no robots.txt, no HTTPS redirect...
             $table->json('site_checks')->nullable();
+            // Worked out when the crawl is stored, so a trend across many
+            // crawls doesn't need every page: pages affected per issue,
+            // and how many issues of each severity were found.
+            $table->json('issue_counts')->nullable();
+            $table->unsignedInteger('errors')->nullable();
+            $table->unsignedInteger('warnings')->nullable();
+            $table->unsignedInteger('notices')->nullable();
             $table->decimal('cost_usd', 10, 4)->default(0);
             $table->string('error', 500)->nullable();
             $table->foreignId('started_by')->nullable()->constrained('users')->nullOnDelete();
@@ -57,8 +64,9 @@ return new class extends Migration
             $table->unsignedInteger('size_bytes')->nullable();
             $table->unsignedInteger('load_ms')->nullable();
             $table->decimal('score', 5, 2)->nullable();
-            // The names of the checks this page failed.
-            $table->json('failed_checks')->nullable();
+            // Every check as the provider answered it, true or false. Whether
+            // true is good or bad depends on the check; IssueRules knows.
+            $table->json('checks')->nullable();
 
             $table->unique(['audit_id', 'url_hash'], 'seo_site_audit_pages_unique');
         });

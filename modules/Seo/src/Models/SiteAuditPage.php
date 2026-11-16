@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ?int $size_bytes
  * @property ?int $load_ms
  * @property ?float $score
- * @property ?list<string> $failed_checks
+ * @property ?array<string, bool> $checks
  */
 class SiteAuditPage extends Model
 {
@@ -37,7 +37,7 @@ class SiteAuditPage extends Model
     {
         return [
             'status_code' => 'integer', 'word_count' => 'integer', 'click_depth' => 'integer', 'internal_links' => 'integer',
-            'external_links' => 'integer', 'size_bytes' => 'integer', 'load_ms' => 'integer', 'score' => 'float', 'failed_checks' => 'array',
+            'external_links' => 'integer', 'size_bytes' => 'integer', 'load_ms' => 'integer', 'score' => 'float', 'checks' => 'array',
         ];
     }
 }

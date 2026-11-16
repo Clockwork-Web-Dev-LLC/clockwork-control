@@ -23,6 +23,10 @@ use Illuminate\Support\Carbon;
  * @property ?array<string, mixed> $totals
  * @property ?array<string, int> $check_counts
  * @property ?array<string, bool> $site_checks
+ * @property ?array<string, int> $issue_counts
+ * @property ?int $errors
+ * @property ?int $warnings
+ * @property ?int $notices
  * @property float $cost_usd
  * @property ?string $error
  * @property ?int $started_by
@@ -48,7 +52,7 @@ class SiteAudit extends Model
     {
         return [
             'max_pages' => 'integer', 'javascript' => 'boolean', 'pages_crawled' => 'integer', 'score' => 'float',
-            'totals' => 'array', 'check_counts' => 'array', 'site_checks' => 'array', 'cost_usd' => 'float',
+            'totals' => 'array', 'check_counts' => 'array', 'site_checks' => 'array', 'issue_counts' => 'array', 'errors' => 'integer', 'warnings' => 'integer', 'notices' => 'integer', 'cost_usd' => 'float',
             'started_at' => 'datetime', 'finished_at' => 'datetime', 'attempts' => 'integer',
         ];
     }
