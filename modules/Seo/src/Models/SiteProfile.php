@@ -30,6 +30,10 @@ use Modules\Seo\Casts\DateOnly;
  * @property ?Carbon $last_gsc_synced_at
  * @property ?Carbon $last_ga4_synced_at
  * @property ?string $last_sync_error
+ * @property ?int $market_location_code
+ * @property ?string $market_language_code
+ * @property ?string $market_city
+ * @property ?list<string> $competitors
  * @property ?Carbon $created_at
  * @property ?Carbon $updated_at
  * @property-read Site $site

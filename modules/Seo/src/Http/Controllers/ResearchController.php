@@ -31,7 +31,7 @@ class ResearchController extends Controller
         $profile = SiteProfile::query()->where('site_id', $site->id)->first();
         $market = Market::forProfile($profile);
         $own = DomainResearch::domain((string) $site->domain);
-        $named = array_values(array_filter((array) ($profile?->competitors ?? []), 'is_string'));
+        $named = array_values(array_filter((array) ($profile->competitors ?? []), 'is_string'));
         $domains = array_values(array_unique([$own, ...$named]));
 
         $snapshots = DomainSnapshot::query()->whereIn('domain', $domains)->where('market_key', $market->key())

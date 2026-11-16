@@ -75,7 +75,7 @@ class ResponseEnvelope
 
     public static function connectionStatus(): string
     {
-        return GoogleConnection::current()?->status ?? 'not_connected';
+        return GoogleConnection::current()->status ?? 'not_connected';
     }
 
     public static function time(?CarbonInterface $time): ?string

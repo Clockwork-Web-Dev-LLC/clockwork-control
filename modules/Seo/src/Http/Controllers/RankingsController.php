@@ -33,7 +33,7 @@ class RankingsController extends Controller
             'profile' => $profile,
             'rows' => $data['rows'],
             'summary' => $data['summary'],
-            'competitors' => array_values(array_filter((array) ($profile?->competitors ?? []), 'is_string')),
+            'competitors' => array_values(array_filter((array) ($profile->competitors ?? []), 'is_string')),
             'market' => Market::forProfile($profile),
             'frequency' => $settings->frequency(),
             'depth' => $settings->depth(),

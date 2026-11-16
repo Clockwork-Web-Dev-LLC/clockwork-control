@@ -35,7 +35,7 @@ class KeywordMapController extends Controller
             'hasProfile' => SiteProfile::query()->where('site_id', $site->id)->exists(),
             'map' => $map,
             'versions' => $versions,
-            'rows' => $map?->rows ?? collect(),
+            'rows' => $map->rows ?? collect(),
             'warnings' => $map !== null ? $maps->warnings($map) : [],
             'next' => $map !== null && $map->isCurrent() ? $maps->recommendedNext($map) : null,
             'bands' => fn (?int $difficulty) => KeywordMetricsService::difficultyBand($difficulty),

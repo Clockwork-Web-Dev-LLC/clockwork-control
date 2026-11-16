@@ -127,7 +127,7 @@ class KeywordToolsController extends Controller
                 ->whereIn('keyword', $pull->keywords)->get()->keyBy('keyword');
             $ideaRows = collect($pull->keywords)
                 ->map(fn (string $k) => ['keyword' => $k, 'metric' => $stored->get($k)])
-                ->sortByDesc(fn (array $r) => $r['metric']?->volume ?? -1)->values();
+                ->sortByDesc(fn (array $r) => $r['metric']->volume ?? -1)->values();
         }
 
         return view('seo::sites.keywords', [
