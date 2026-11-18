@@ -7,14 +7,20 @@ use Illuminate\Console\Scheduling\Schedule;
 use Modules\Core\ModuleManifest;
 use Modules\Core\ModuleServiceProvider;
 use Modules\Core\NavItem;
+use Modules\Seo\Console\RunSiteAudits;
+use Modules\Seo\Console\SnapshotBacklinks;
 use Modules\Seo\Console\SnapshotDomains;
 use Modules\Seo\Console\SyncGoogleData;
+use Modules\Seo\Console\TrackAiVisibility;
 use Modules\Seo\Console\TrackRanks;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoAiPromptsUpdate;
+use Modules\Seo\Mcp\Tools\SeoAiVisibility;
+use Modules\Seo\Mcp\Tools\SeoBacklinks;
 use Modules\Seo\Mcp\Tools\SeoCompetitors;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
 use Modules\Seo\Mcp\Tools\SeoDomainOverview;
@@ -32,8 +38,11 @@ use Modules\Seo\Mcp\Tools\SeoRankedKeywords;
 use Modules\Seo\Mcp\Tools\SeoRankHistory;
 use Modules\Seo\Mcp\Tools\SeoRankings;
 use Modules\Seo\Mcp\Tools\SeoSearchRows;
+use Modules\Seo\Mcp\Tools\SeoSiteAudit;
+use Modules\Seo\Mcp\Tools\SeoSiteAuditRun;
 use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Mcp\Tools\SeoTrackedKeywordsUpdate;
+use Modules\Seo\Models\AiPrompt;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\SiteProfile;
 use Modules\Seo\Models\TrackedKeyword;
@@ -68,7 +77,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class, SnapshotBacklinks::class, TrackAiVisibility::class]);
     }
 
     /**
@@ -86,6 +95,30 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // AI visibility: store finished answers and queue the due prompts.
+        $schedule->command('clockwork:seo-track-ai')
+            ->hourlyAt(35)
+            ->withoutOverlapping(55)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && AiPrompt::query()->where('is_active', true)->exists());
+
+        // Backlink totals and referring domains, on the 7th.
+        $schedule->command('clockwork:seo-snapshot-backlinks')
+            ->monthlyOn(7, '08:50')
+            ->withoutOverlapping(120)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && SiteProfile::query()->where('is_enabled', true)->exists());
+
+        // Site audits: store finished crawls and start the due ones.
+        $schedule->command('clockwork:seo-site-audit')
+            ->hourlyAt(50)
+            ->withoutOverlapping(55)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && SiteProfile::query()->where('is_enabled', true)->exists());
 
         // Ranking-keyword counts for clients and their competitors, on the
         // 6th so the provider's monthly refresh has landed.
@@ -155,6 +188,11 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoCompetitors::class,
             SeoKeywordGap::class,
             SeoKeywordIdeas::class,
+            SeoSiteAudit::class,
+            SeoSiteAuditRun::class,
+            SeoBacklinks::class,
+            SeoAiVisibility::class,
+            SeoAiPromptsUpdate::class,
         ];
     }
 

@@ -273,16 +273,31 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keyword-map/import` | Import a CSV (uploaded file or pasted text) as the new current map (throttled 10/min). |
 | POST | `/seo/sites/{site}/keyword-map/version` | Start a new dated version as a copy of the current map (throttled 10/min). |
 | POST | `/seo/sites/{site}/keyword-map/fill` | Fill volume, difficulty and CPC on the current map from keyword data already bought. Spends nothing. |
+| GET | `/seo/sites/{site}/keyword-map/rows/new` | Form to add a page to the current map. |
+| POST | `/seo/sites/{site}/keyword-map/rows` | Add a page to the current map. |
+| GET | `/seo/sites/{site}/keyword-map/rows/{row}/edit` | Form to edit one row of the current map. |
+| PUT | `/seo/sites/{site}/keyword-map/rows/{row}` | Save a row. Refused if the row changed since the form was loaded, or if the map is an older version. |
 | GET | `/seo/sites/{site}/keyword-map/{map}/download` | Download one map version as CSV. |
 | GET | `/seo/sites/{site}/research` | Research: ranking-keyword counts for the client and its named competitors, discovered competitors, the keyword gap, the client's top keywords and stored idea lists. Stored data only. |
+| GET | `/seo/sites/{site}/research/keywords` | Every stored ranked keyword for the client or a competitor (`?domain=`), with filters for position, text, ranking page and volume, sorted and paged. Stored data only. |
 | POST | `/seo/sites/{site}/research/buy` | Buy a ranking-keyword count, a ranked-keyword list or a competitor discovery for the client or one of its named competitors, inside the research cap (throttled 20/min). |
 | GET | `/seo/sites/{site}/keywords` | Keywords: a lookup form, a keyword ideas form and the idea lists bought for this client (`?list=` opens one). |
 | POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
 | POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
 | POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/ai-visibility` | AI visibility: per engine, how many of the client's prompts mentioned or cited it in the latest round, competitors on the same prompts, each prompt's latest result, the trend by week, and the stored answers for one prompt (`?prompt=`). Stored data only. |
+| POST | `/seo/sites/{site}/ai-visibility` | Track prompts, one per line (throttled 20/min). Needs an SEO profile. |
+| PATCH | `/seo/sites/{site}/ai-visibility/{prompt}` | Pause or resume a prompt. History is kept. |
+| DELETE | `/seo/sites/{site}/ai-visibility/{prompt}` | Delete a prompt and its stored answers. |
+| GET | `/seo/sites/{site}/backlinks` | Backlinks: totals for the client and its named competitors, the domains linking to the client (`?show=` all, new, lost or high_spam; `?contains=`), and the backlink gap. Stored data only. |
+| POST | `/seo/sites/{site}/backlinks/buy` | Buy backlink totals, the client's referring domains or the gap against a named competitor, inside the backlinks cap (throttled 20/min). |
+| GET | `/seo/sites/{site}/site-audit` | Site audit: the latest crawl (or `?crawl=` for an older one) as issues with severity and fix, the change since the crawl before, the pages behind one issue (`?issue=`) and the crawl history. Stored data only. |
+| POST | `/seo/sites/{site}/site-audit/run` | Start a crawl of the site now, inside the site audit cap. Refused while one is running (throttled 6/min). |
 | GET | `/seo/sites/{site}/page-audit` | Page audit: a form and the latest audit of each page audited on this site. |
 | POST | `/seo/sites/{site}/page-audit` | Audit up to 5 pages on the site's own domain. Free (throttled 12/min). |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
+| PUT | `/seo/site-audit` | Admin. Set how often sites are crawled (off, weekly, monthly), the page cap per crawl and whether JavaScript is run. |
+| PUT | `/seo/ai-visibility` | Admin. Set how often prompts are asked (off, weekly, daily) and of which AI engines. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
 | GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |

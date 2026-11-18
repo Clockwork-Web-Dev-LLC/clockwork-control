@@ -62,13 +62,15 @@ class SeoRankedKeywords extends SeoTool
         $stored = (clone $base)->count();
         $fetched = (clone $base)->max('fetched_at');
 
-        $like = fn (string $text) => '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], mb_strtolower($text)).'%';
+        // '!' as the escape character: MySQL and SQLite read a backslash in
+        // a LIKE pattern differently.
+        $like = fn (string $text) => '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($text)).'%';
         $query = (clone $base)
             ->when(is_numeric($request->get('max_position')), fn ($q) => $q->where('position', '<=', (int) $request->get('max_position')))
             ->when(is_numeric($request->get('min_position')), fn ($q) => $q->where('position', '>=', (int) $request->get('min_position')))
             ->when(is_numeric($request->get('min_volume')), fn ($q) => $q->where('volume', '>=', (int) $request->get('min_volume')))
-            ->when(filled($request->get('contains')), fn ($q) => $q->where('keyword', 'like', $like((string) $request->get('contains'))))
-            ->when(filled($request->get('url_contains')), fn ($q) => $q->whereRaw('LOWER(url) LIKE ?', [$like((string) $request->get('url_contains'))]));
+            ->when(filled($request->get('contains')), fn ($q) => $q->whereRaw("LOWER(keyword) LIKE ? ESCAPE '!'", [$like((string) $request->get('contains'))]))
+            ->when(filled($request->get('url_contains')), fn ($q) => $q->whereRaw("LOWER(url) LIKE ? ESCAPE '!'", [$like((string) $request->get('url_contains'))]));
 
         $matching = (clone $query)->count();
         [$column, $direction] = self::SORTS[$request->get('sort')] ?? self::SORTS['traffic'];

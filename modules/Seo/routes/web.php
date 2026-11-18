@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
+use Modules\Seo\Http\Controllers\AiVisibilityController;
+use Modules\Seo\Http\Controllers\BacklinksController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
 use Modules\Seo\Http\Controllers\KeywordMapController;
@@ -12,6 +14,7 @@ use Modules\Seo\Http\Controllers\ResearchController;
 use Modules\Seo\Http\Controllers\SeoClientsController;
 use Modules\Seo\Http\Controllers\SeoController;
 use Modules\Seo\Http\Controllers\SeoSettingsController;
+use Modules\Seo\Http\Controllers\SiteAuditController;
 use Modules\Seo\Http\Controllers\SiteProfileController;
 use Modules\Seo\Http\Controllers\SiteSearchController;
 
@@ -33,16 +36,29 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keyword-map/import', [KeywordMapController::class, 'import'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.import');
     Route::post('/seo/sites/{site}/keyword-map/version', [KeywordMapController::class, 'newVersion'])->middleware('throttle:10,1')->name('seo.sites.keyword-map.version');
     Route::post('/seo/sites/{site}/keyword-map/fill', [KeywordMapController::class, 'fill'])->name('seo.sites.keyword-map.fill');
+    Route::get('/seo/sites/{site}/keyword-map/rows/new', [KeywordMapController::class, 'createRow'])->name('seo.sites.keyword-map.rows.create');
+    Route::post('/seo/sites/{site}/keyword-map/rows', [KeywordMapController::class, 'storeRow'])->name('seo.sites.keyword-map.rows.store');
+    Route::get('/seo/sites/{site}/keyword-map/rows/{row}/edit', [KeywordMapController::class, 'editRow'])->name('seo.sites.keyword-map.rows.edit');
+    Route::put('/seo/sites/{site}/keyword-map/rows/{row}', [KeywordMapController::class, 'updateRow'])->name('seo.sites.keyword-map.rows.update');
     Route::get('/seo/sites/{site}/keyword-map/{map}/download', [KeywordMapController::class, 'download'])->name('seo.sites.keyword-map.download');
 
     Route::get('/seo/sites/{site}/keywords', [KeywordToolsController::class, 'show'])->name('seo.sites.keywords');
     Route::post('/seo/sites/{site}/keywords/lookup', [KeywordToolsController::class, 'lookup'])->middleware('throttle:30,1')->name('seo.sites.keywords.lookup');
     Route::post('/seo/sites/{site}/keywords/buy', [KeywordToolsController::class, 'buy'])->middleware('throttle:10,1')->name('seo.sites.keywords.buy');
     Route::post('/seo/sites/{site}/keywords/ideas', [KeywordToolsController::class, 'ideas'])->middleware('throttle:10,1')->name('seo.sites.keywords.ideas');
+    Route::get('/seo/sites/{site}/ai-visibility', [AiVisibilityController::class, 'show'])->name('seo.sites.ai-visibility');
+    Route::post('/seo/sites/{site}/ai-visibility', [AiVisibilityController::class, 'store'])->middleware('throttle:20,1')->name('seo.sites.ai-visibility.store');
+    Route::patch('/seo/sites/{site}/ai-visibility/{prompt}', [AiVisibilityController::class, 'toggle'])->name('seo.sites.ai-visibility.toggle');
+    Route::delete('/seo/sites/{site}/ai-visibility/{prompt}', [AiVisibilityController::class, 'destroy'])->name('seo.sites.ai-visibility.destroy');
+    Route::get('/seo/sites/{site}/backlinks', [BacklinksController::class, 'show'])->name('seo.sites.backlinks');
+    Route::post('/seo/sites/{site}/backlinks/buy', [BacklinksController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.backlinks.buy');
+    Route::get('/seo/sites/{site}/site-audit', [SiteAuditController::class, 'show'])->name('seo.sites.site-audit');
+    Route::post('/seo/sites/{site}/site-audit/run', [SiteAuditController::class, 'run'])->middleware('throttle:6,1')->name('seo.sites.site-audit.run');
     Route::get('/seo/sites/{site}/page-audit', [PageAuditController::class, 'show'])->name('seo.sites.page-audit');
     Route::post('/seo/sites/{site}/page-audit', [PageAuditController::class, 'run'])->middleware('throttle:12,1')->name('seo.sites.page-audit.run');
 
     Route::get('/seo/sites/{site}/research', [ResearchController::class, 'show'])->name('seo.sites.research');
+    Route::get('/seo/sites/{site}/research/keywords', [ResearchController::class, 'keywords'])->name('seo.sites.research.keywords');
     Route::post('/seo/sites/{site}/research/buy', [ResearchController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.research.buy');
 
     Route::get('/seo/sites/{site}/rankings', [RankingsController::class, 'show'])->name('seo.sites.rankings');
@@ -52,6 +68,8 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::put('/seo/sites/{site}/competitors', [RankingsController::class, 'competitors'])->name('seo.sites.competitors');
 
     Route::middleware('admin')->group(function () {
+        Route::put('/seo/ai-visibility', [AiVisibilityController::class, 'updateSettings'])->name('seo.ai-visibility.update');
+        Route::put('/seo/site-audit', [SiteAuditController::class, 'updateSettings'])->name('seo.site-audit.update');
         Route::put('/seo/rank-tracking', [DataForSeoSettingsController::class, 'updateRankTracking'])->name('seo.rank-tracking.update');
         Route::get('/seo/settings', [SeoSettingsController::class, 'index'])->name('seo.settings');
         Route::post('/seo/settings', [SeoSettingsController::class, 'update'])->name('seo.settings.update');
