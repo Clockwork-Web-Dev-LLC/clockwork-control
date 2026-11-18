@@ -105,6 +105,79 @@ To try it without spending, set `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true`: calls g
 
 This has been built against DataForSEO's published API specification and tested with sample responses. No live call has been made yet, so treat the first real one as the test.
 
+## Going live: from merge to working
+
+Everything below is safe to do in order on a fresh install or an existing one. Nothing in the SEO module calls Google or DataForSEO, or spends anything, until its key is entered.
+
+### 1. After the code is merged and deployed
+
+| Step | How | How to tell it worked |
+|---|---|---|
+| Run migrations | `php artisan migrate` | New `seo_*` and `oauth_*` tables exist. |
+| Build assets | `npm ci && npm run build` | The SEO pages load with styling. |
+| Clear cached routes and config, if the install caches them | `php artisan optimize:clear` (then re-cache as usual) | **SEO → Clients** opens. |
+| Confirm the scheduler runs | It is the same scheduler as the rest of Control. | The SEO commands appear on the Scheduled Jobs page. |
+
+### 2. Search Console and GA4 (free)
+
+1. Create the Google OAuth client and enter it on **Settings → Integrations → SEO** (steps under [One-time setup](#one-time-setup)).
+2. An admin presses **Connect Google** on **SEO → Settings** and signs in as the shared agency account.
+3. Press **Test connection**. It should name the account and list properties.
+
+### 3. DataForSEO (paid, pay as you go)
+
+1. Open a DataForSEO account and add the minimum top-up.
+2. Enter the **API login and API password** (from DataForSEO's API Access page, not the website sign-in) on **Settings → Integrations → SEO**.
+3. On **SEO → Settings**, press **Test** on the DataForSEO card. It should show the login and the balance. This call is free.
+4. Check the monthly caps on the same card before anything runs. The defaults are deliberately low.
+
+### 4. First client
+
+1. **SEO → Clients → Add client**, with just the domain. Check its Search Console property was matched; set brand terms and competitors on its Profile and Rankings tabs.
+2. Add a few tracked keywords on **Rankings** and a few prompts on **AI visibility**.
+3. Either wait for the hourly jobs, or run them once by hand to see results sooner:
+
+```bash
+php artisan clockwork:seo-sync-google --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-track-ranks --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-track-ai --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-site-audit --site=example.com --now
+```
+
+```bash
+php artisan clockwork:seo-snapshot-domains --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-snapshot-backlinks --site=example.com
+```
+
+Rank checks, AI answers and crawls are queued at DataForSEO and collected by a later run of the same command, so run each again after a few minutes (a crawl can take longer).
+
+### 5. Check the first real results
+
+This module was built from DataForSEO's published API specification and tested against stand-in responses. No call had been made to the live service when it was written, so the first real run is the test. Look for:
+
+- **The ledger**: the DataForSEO card on **SEO → Settings** shows what each feature actually cost. Compare it with the estimates shown on buttons; if they differ, correct the figures in `modules/Seo/src/DataForSeo/Pricing.php` and `modules/Seo/src/Ai/AiEngines.php`.
+- **Rankings**: positions appear for keywords you know the client ranks for.
+- **Site audit**: issues appear after the first crawl. If a crawl finishes with pages but no issues at all, the check names in `modules/Seo/src/Audit/IssueRules.php` need matching to what DataForSEO returned.
+- **Backlink gap**: gap rows have domain names in them. If they are empty, the field read in `BacklinkResearch::pullGap()` is the one to check.
+- **AI visibility**: answers have text and sources. If mentions are never found, check the client's brand terms first.
+- **Failed jobs**: a command that fails says why on the Scheduled Jobs page; a refused call names the cap or the login.
+
+### 6. Claude (optional)
+
+Local use on the Control host needs only `CLOCKWORK_MCP_LOCAL_USER`. Reaching Control from claude.ai needs **Settings → Claude access** switched on and a public address limited to the Claude paths; see [Claude access](/docs/features/claude-access). It is off until an admin turns it on.
+
 ## Finding your way around
 
 Every client has the same row of tabs on its SEO pages:
