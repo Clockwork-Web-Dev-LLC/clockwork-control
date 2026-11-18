@@ -11,12 +11,15 @@ use Modules\Seo\Console\RunSiteAudits;
 use Modules\Seo\Console\SnapshotBacklinks;
 use Modules\Seo\Console\SnapshotDomains;
 use Modules\Seo\Console\SyncGoogleData;
+use Modules\Seo\Console\TrackAiVisibility;
 use Modules\Seo\Console\TrackRanks;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Seo\Google\GoogleApi;
 use Modules\Seo\Google\GoogleTokenProvider;
 use Modules\Seo\Mcp\Tools\SeoAiImpressionsRecord;
+use Modules\Seo\Mcp\Tools\SeoAiPromptsUpdate;
+use Modules\Seo\Mcp\Tools\SeoAiVisibility;
 use Modules\Seo\Mcp\Tools\SeoBacklinks;
 use Modules\Seo\Mcp\Tools\SeoCompetitors;
 use Modules\Seo\Mcp\Tools\SeoDailySeries;
@@ -39,6 +42,7 @@ use Modules\Seo\Mcp\Tools\SeoSiteAudit;
 use Modules\Seo\Mcp\Tools\SeoSiteAuditRun;
 use Modules\Seo\Mcp\Tools\SeoSiteProfileUpdate;
 use Modules\Seo\Mcp\Tools\SeoTrackedKeywordsUpdate;
+use Modules\Seo\Models\AiPrompt;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\SiteProfile;
 use Modules\Seo\Models\TrackedKeyword;
@@ -73,7 +77,7 @@ class SeoServiceProvider extends ModuleServiceProvider
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
 
-        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class, SnapshotBacklinks::class]);
+        $this->commands([SyncGoogleData::class, TrackRanks::class, SnapshotDomains::class, RunSiteAudits::class, SnapshotBacklinks::class, TrackAiVisibility::class]);
     }
 
     /**
@@ -91,6 +95,14 @@ class SeoServiceProvider extends ModuleServiceProvider
             ->onOneServer()
             ->runInBackground()
             ->when(fn () => GoogleConnection::query()->exists());
+
+        // AI visibility: store finished answers and queue the due prompts.
+        $schedule->command('clockwork:seo-track-ai')
+            ->hourlyAt(35)
+            ->withoutOverlapping(55)
+            ->onOneServer()
+            ->runInBackground()
+            ->when(fn () => app(DataForSeoClient::class)->isConfigured() && AiPrompt::query()->where('is_active', true)->exists());
 
         // Backlink totals and referring domains, on the 7th.
         $schedule->command('clockwork:seo-snapshot-backlinks')
@@ -179,6 +191,8 @@ class SeoServiceProvider extends ModuleServiceProvider
             SeoSiteAudit::class,
             SeoSiteAuditRun::class,
             SeoBacklinks::class,
+            SeoAiVisibility::class,
+            SeoAiPromptsUpdate::class,
         ];
     }
 

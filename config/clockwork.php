@@ -560,6 +560,12 @@ return [
         // calibrated against any other tool's score, and shown as such.
         'difficulty_bands' => ['Easy' => 29, 'Medium' => 49, 'Hard' => 69, 'Very hard' => 100],
 
+        // AI visibility default, changed on SEO settings: how often each
+        // client's prompts are asked of the AI engines (off, weekly, daily).
+        'ai_visibility' => [
+            'frequency' => env('CLOCKWORK_SEO_AI_VISIBILITY_FREQUENCY', 'weekly'),
+        ],
+
         // Site audit defaults, changed on SEO settings: how often every
         // client is crawled (off, weekly, monthly) and the page cap, which
         // is also the most one crawl can cost.

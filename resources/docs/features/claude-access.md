@@ -40,6 +40,8 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_site_audit` | A site's technical audit from its latest stored crawl: score, issues worst first with what to do, the pages behind one issue, and what changed since the crawl before. | No |
 | `seo_site_audit_run` | Starts a crawl of a site (500 pages and about 8 cents at most by default). Gives the most it can cost first; starts only with the cost the person agreed to. | Yes, and spends |
 | `seo_backlinks` | Backlink totals month by month for a site and its named competitors, and the domains linking to the site, with filters for new, lost and high spam score. | No |
+| `seo_ai_visibility` | How often a site is mentioned or cited when ChatGPT, Gemini and Google AI Mode are asked its tracked prompts, per engine, against named competitors and by week; or the stored answers for one prompt. | No |
+| `seo_ai_prompts_update` | Start tracking AI visibility prompts, or pause or resume them. Adding is a recurring cost, so Claude asks first and reports the monthly estimate. Cannot delete prompts or history. | Yes, and adds recurring spend |
 
 ## Connecting claude.ai and Cowork
 

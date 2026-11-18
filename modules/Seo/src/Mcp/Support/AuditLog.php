@@ -23,6 +23,8 @@ class AuditLog
 
     public const KEYWORD_MAP_UPDATED = 'seo_keyword_map_updated';
 
+    public const AI_PROMPTS_UPDATED = 'seo_ai_prompts_updated';
+
     public function __construct(private readonly ActionLogger $logger) {}
 
     /**

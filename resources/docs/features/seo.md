@@ -161,6 +161,24 @@ What to know about the numbers:
 - Each keyword's results are re-read every 30 to 90 days, for a whole country. A ranking gained last week may not show, and nothing here is city-level. For recent movement use Search Console or the tracked keywords under Rankings.
 - A domain the provider knows nothing about is stored with empty figures, not zeros.
 
+## AI visibility
+
+Control asks AI assistants a list of questions for each client and records whether the client came up. The questions (prompts) are ones a customer would ask an assistant, such as "who is the best emergency plumber in Austin?", not keywords.
+
+- **Engines**: ChatGPT, Gemini and Google AI Mode, through DataForSEO, as a logged-out person in the client's country would see them. About $0.0012 per prompt per engine.
+- **What is stored for each answer**: whether the client was **mentioned** (its brand terms or domain appear in the answer's words), whether it was **cited** (its site is among the sources the answer links to), the same for each named competitor, the domains cited, and the first part of the answer.
+- **Schedule**: `clockwork:seo-track-ai` runs every hour at :35. It stores answers that have come back, then queues every prompt that is due. Weekly by default; daily or off are the other choices. Up to 50 active prompts per client. At the defaults, 25 prompts on three engines cost about 40 cents a month.
+- **Reading it**: per engine, the share of the client's prompts where it was mentioned or cited in the latest round, the same counts for competitors, and the rate by week.
+- **From Claude**: `seo_ai_visibility` reads the stored results; `seo_ai_prompts_update` adds, pauses or resumes prompts, asks the person first and reports the monthly cost. Spending is held by the AI visibility cap on **SEO → Settings**.
+
+What to know about the numbers:
+
+- An AI answer changes from one asking to the next. One check is a sample; only the rate over many prompts and weeks means anything. Never report it as "the brand appears in X% of AI answers".
+- A mention is found by matching brand terms and the domain as whole words, so set the client's brand terms on its profile. A competitor is matched by its domain and, when long enough not to be an ordinary word, the name part of the domain.
+- It says nothing about how many people saw an answer. Real visits from AI assistants are the AI assistant sessions on the Numbers tab, and Search Console's AI impressions are still entered by hand.
+
+Perplexity, Copilot and the Claude app are not covered. A screen for this is not built yet. Built against DataForSEO's published specification and not yet run against the live API.
+
 ## Backlinks
 
 Control stores a domain's backlink totals and the domains that link to a client, from DataForSEO's Backlinks API.

@@ -98,6 +98,7 @@ class ScheduleSnapshotTest extends TestCase
         'clockwork:seo-snapshot-backlinks',
         'clockwork:seo-snapshot-domains',
         'clockwork:seo-sync-google',
+        'clockwork:seo-track-ai',
         'clockwork:seo-track-ranks',
         'clockwork:sync-allowed-bots',
         'clockwork:sync-bill-care-plans',

@@ -54,6 +54,8 @@ it('never returns a credential from any tool', function () {
         'seo_keyword_metrics' => ['keywords' => ['emergency plumber'], 'site' => 'acme.com'],
         'seo_tracked_keywords_update' => ['site' => 'acme.com', 'action' => 'add', 'keywords' => ['emergency plumber']],
         'seo_rankings' => ['site' => 'acme.com'],
+        'seo_ai_prompts_update' => ['site' => 'acme.com', 'action' => 'add', 'prompts' => ['who is the best emergency plumber in Austin?']],
+        'seo_ai_visibility' => ['site' => 'acme.com'],
         'seo_backlinks' => ['site' => 'acme.com'],
         'seo_site_audit' => ['site' => 'acme.com'],
         // Without confirm_cost_usd it only prices.
@@ -96,5 +98,5 @@ it('never returns a credential from any tool', function () {
         $called[] = $name;
     }
 
-    expect($called)->toHaveCount(23);
+    expect($called)->toHaveCount(25);
 });
