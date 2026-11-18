@@ -66,9 +66,10 @@ class AiVisibilityReport
         }
 
         foreach ($engines as $engine => $totals) {
-            // A rate needs something to divide by; otherwise it is unknown.
-            $engines[$engine]['mention_rate'] = $totals['checked'] > 0 ? round($totals['mentioned'] / $totals['checked'] * 100, 1) : null;
-            $engines[$engine]['citation_rate'] = $totals['checked'] > 0 ? round($totals['cited'] / $totals['checked'] * 100, 1) : null;
+            // An engine is only in this list once it has a check, so there
+            // is always something to divide by.
+            $engines[$engine]['mention_rate'] = round($totals['mentioned'] / $totals['checked'] * 100, 1);
+            $engines[$engine]['citation_rate'] = round($totals['cited'] / $totals['checked'] * 100, 1);
         }
 
         // By week, every check in that week, all engines together.
