@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Seo\Http\Controllers\AiImpressionsController;
+use Modules\Seo\Http\Controllers\AiVisibilityController;
 use Modules\Seo\Http\Controllers\BacklinksController;
 use Modules\Seo\Http\Controllers\DataForSeoSettingsController;
 use Modules\Seo\Http\Controllers\GoogleConnectionController;
@@ -45,6 +46,10 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::post('/seo/sites/{site}/keywords/lookup', [KeywordToolsController::class, 'lookup'])->middleware('throttle:30,1')->name('seo.sites.keywords.lookup');
     Route::post('/seo/sites/{site}/keywords/buy', [KeywordToolsController::class, 'buy'])->middleware('throttle:10,1')->name('seo.sites.keywords.buy');
     Route::post('/seo/sites/{site}/keywords/ideas', [KeywordToolsController::class, 'ideas'])->middleware('throttle:10,1')->name('seo.sites.keywords.ideas');
+    Route::get('/seo/sites/{site}/ai-visibility', [AiVisibilityController::class, 'show'])->name('seo.sites.ai-visibility');
+    Route::post('/seo/sites/{site}/ai-visibility', [AiVisibilityController::class, 'store'])->middleware('throttle:20,1')->name('seo.sites.ai-visibility.store');
+    Route::patch('/seo/sites/{site}/ai-visibility/{prompt}', [AiVisibilityController::class, 'toggle'])->name('seo.sites.ai-visibility.toggle');
+    Route::delete('/seo/sites/{site}/ai-visibility/{prompt}', [AiVisibilityController::class, 'destroy'])->name('seo.sites.ai-visibility.destroy');
     Route::get('/seo/sites/{site}/backlinks', [BacklinksController::class, 'show'])->name('seo.sites.backlinks');
     Route::post('/seo/sites/{site}/backlinks/buy', [BacklinksController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.backlinks.buy');
     Route::get('/seo/sites/{site}/site-audit', [SiteAuditController::class, 'show'])->name('seo.sites.site-audit');
@@ -63,6 +68,7 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
     Route::put('/seo/sites/{site}/competitors', [RankingsController::class, 'competitors'])->name('seo.sites.competitors');
 
     Route::middleware('admin')->group(function () {
+        Route::put('/seo/ai-visibility', [AiVisibilityController::class, 'updateSettings'])->name('seo.ai-visibility.update');
         Route::put('/seo/site-audit', [SiteAuditController::class, 'updateSettings'])->name('seo.site-audit.update');
         Route::put('/seo/rank-tracking', [DataForSeoSettingsController::class, 'updateRankTracking'])->name('seo.rank-tracking.update');
         Route::get('/seo/settings', [SeoSettingsController::class, 'index'])->name('seo.settings');

@@ -7,6 +7,7 @@
         ['Keywords', 'fa-key', 'seo.sites.keywords', ['seo.sites.keywords', 'seo.sites.keywords.*']],
         ['Research', 'fa-binoculars', 'seo.sites.research', ['seo.sites.research', 'seo.sites.research.*']],
         ['Backlinks', 'fa-link', 'seo.sites.backlinks', ['seo.sites.backlinks']],
+        ['AI visibility', 'fa-robot', 'seo.sites.ai-visibility', ['seo.sites.ai-visibility']],
         ['Site audit', 'fa-spider', 'seo.sites.site-audit', ['seo.sites.site-audit']],
         ['Page audit', 'fa-file-circle-check', 'seo.sites.page-audit', ['seo.sites.page-audit']],
         ['Profile', 'fa-sliders', 'seo.sites.profile', ['seo.sites.profile']],

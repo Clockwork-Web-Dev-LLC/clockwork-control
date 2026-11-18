@@ -285,6 +285,10 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/keywords/lookup` | Show stored volume, difficulty, CPC and intent for a pasted list and price the keywords with no stored figures. Spends nothing (throttled 30/min). |
 | POST | `/seo/sites/{site}/keywords/buy` | Buy figures for the keywords in the list that have none stored, inside the keywords cap (throttled 10/min). |
 | POST | `/seo/sites/{site}/keywords/ideas` | Buy a keyword idea list from seed keywords, inside the research cap (throttled 10/min). |
+| GET | `/seo/sites/{site}/ai-visibility` | AI visibility: per engine, how many of the client's prompts mentioned or cited it in the latest round, competitors on the same prompts, each prompt's latest result, the trend by week, and the stored answers for one prompt (`?prompt=`). Stored data only. |
+| POST | `/seo/sites/{site}/ai-visibility` | Track prompts, one per line (throttled 20/min). Needs an SEO profile. |
+| PATCH | `/seo/sites/{site}/ai-visibility/{prompt}` | Pause or resume a prompt. History is kept. |
+| DELETE | `/seo/sites/{site}/ai-visibility/{prompt}` | Delete a prompt and its stored answers. |
 | GET | `/seo/sites/{site}/backlinks` | Backlinks: totals for the client and its named competitors, the domains linking to the client (`?show=` all, new, lost or high_spam; `?contains=`), and the backlink gap. Stored data only. |
 | POST | `/seo/sites/{site}/backlinks/buy` | Buy backlink totals, the client's referring domains or the gap against a named competitor, inside the backlinks cap (throttled 20/min). |
 | GET | `/seo/sites/{site}/site-audit` | Site audit: the latest crawl (or `?crawl=` for an older one) as issues with severity and fix, the change since the crawl before, the pages behind one issue (`?issue=`) and the crawl history. Stored data only. |
@@ -293,6 +297,7 @@ These exist only while the switch is on:
 | POST | `/seo/sites/{site}/page-audit` | Audit up to 5 pages on the site's own domain. Free (throttled 12/min). |
 | PUT | `/seo/rank-tracking` | Admin. Set how often (daily or weekly) and how deep (top 10 to 100) ranks are checked. |
 | PUT | `/seo/site-audit` | Admin. Set how often sites are crawled (off, weekly, monthly), the page cap per crawl and whether JavaScript is run. |
+| PUT | `/seo/ai-visibility` | Admin. Set how often prompts are asked (off, weekly, daily) and of which AI engines. |
 | GET | `/seo/settings` | Admin. Google connection status, redirect URI to register, sync settings. |
 | POST | `/seo/settings` | Admin. Save the login hint, final-after days and AI referrer pattern. |
 | GET | `/seo/google/connect` | Admin. Start the Google OAuth consent (offline, read-only Search Console and Analytics). |

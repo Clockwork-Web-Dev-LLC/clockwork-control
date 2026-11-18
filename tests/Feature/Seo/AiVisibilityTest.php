@@ -252,3 +252,76 @@ describe('report and tools', function () {
         ClockworkServer::actingAs($this->user)->tool(SeoAiPromptsUpdate::class, ['site' => 'acmeplumbing.com', 'action' => 'delete', 'prompts' => ['x']])->assertHasErrors();
     });
 });
+
+describe('AI visibility page', function () {
+    beforeEach(function () {
+        mockIssueCounterZero();
+        Http::fake();
+    });
+
+    afterEach(fn () => Http::assertNothingSent());
+
+    it('adds prompts from the form and shows results with words, not zeros', function () {
+        $this->actingAs($this->user)->get(route('seo.sites.ai-visibility', $this->site))
+            ->assertOk()->assertSee('No prompts yet')->assertSee('data-site-tabs', false)->assertDontSee('data-no-brand-terms', false);
+
+        $this->actingAs($this->user)->post(route('seo.sites.ai-visibility.store', $this->site), ['prompts' => "Best emergency plumber in Austin?\n\nhi\nHow much does drain cleaning cost?"])
+            ->assertRedirect(route('seo.sites.ai-visibility', $this->site))
+            ->assertSessionHas('status', fn (string $m) => str_contains($m, '2 prompts added'))
+            ->assertSessionHas('warning', fn (string $m) => str_contains($m, 'too short'));
+
+        [$a, $b] = AiPrompt::query()->orderBy('id')->get()->all();
+        aiCheck($a, 'chat_gpt', '2026-11-11', true, true, ['rivalrooter.com' => ['mentioned' => true, 'cited' => false]]);
+        aiCheck($a, 'gemini', '2026-11-11', false, false);
+
+        $html = $this->actingAs($this->user)->get(route('seo.sites.ai-visibility', $this->site))
+            ->assertOk()
+            ->assertSee('Mentioned + cited')->assertSee('Not there')
+            ->assertSee('1 <span', false)->assertSee('of 1 prompts mentioned')
+            ->assertSee('rivalrooter.com')
+            ->assertSee('one check is a sample')
+            ->getContent();
+
+        // The prompt with no answers shows a dash in every engine column.
+        $row = substr($html, strpos($html, 'data-prompt-row="'.$b->id.'"'));
+        $row = substr($row, 0, strpos($row, '</tr>'));
+        expect(substr_count($row, '—'))->toBe(3);
+
+        $this->actingAs($this->user)->get(route('seo.sites.ai-visibility', [$this->site, 'prompt' => $a->id]))
+            ->assertOk()->assertSee('An answer.')->assertSee('Sources: yelp.com');
+    });
+
+    it('warns when the client has no brand terms', function () {
+        SiteProfile::query()->update(['brand_terms' => null]);
+        $this->actingAs($this->user)->get(route('seo.sites.ai-visibility', $this->site))->assertOk()->assertSee('No brand terms are set');
+    });
+
+    it('pauses, resumes and deletes a prompt, and not through another site', function () {
+        app(AiPrompts::class)->add($this->site, ['Best emergency plumber in Austin?']);
+        $prompt = AiPrompt::query()->sole();
+        aiCheck($prompt, 'chat_gpt', '2026-11-11', true, false);
+        $other = Site::factory()->create(['domain' => 'other.com']);
+
+        $this->actingAs($this->user)->patch(route('seo.sites.ai-visibility.toggle', [$other, $prompt]))->assertNotFound();
+        $this->actingAs($this->user)->delete(route('seo.sites.ai-visibility.destroy', [$other, $prompt]))->assertNotFound();
+
+        $this->actingAs($this->user)->patch(route('seo.sites.ai-visibility.toggle', [$this->site, $prompt]))->assertRedirect();
+        expect($prompt->fresh()->is_active)->toBeFalse()->and(AiCheck::count())->toBe(1);
+
+        $this->actingAs($this->user)->delete(route('seo.sites.ai-visibility.destroy', [$this->site, $prompt]))->assertRedirect();
+        expect(AiPrompt::count())->toBe(0)->and(AiCheck::count())->toBe(0);
+    });
+
+    it('lets only an admin choose the engines and frequency', function () {
+        $this->actingAs($this->user)->put(route('seo.ai-visibility.update'), ['frequency' => 'daily', 'engines' => ['chat_gpt']])->assertForbidden();
+
+        $admin = User::factory()->create();
+        $this->actingAs($admin)->put(route('seo.ai-visibility.update'), ['frequency' => 'hourly', 'engines' => ['bing']])->assertSessionHasErrors(['frequency', 'engines.0']);
+        $this->actingAs($admin)->put(route('seo.ai-visibility.update'), ['frequency' => 'daily', 'engines' => ['chat_gpt', 'gemini']])
+            ->assertRedirect(route('seo.settings'))->assertSessionHas('status', fn (string $m) => str_contains($m, 'daily on ChatGPT, Gemini'));
+
+        $settings = app(AiVisibilitySettings::class);
+        expect($settings->frequency())->toBe('daily')->and($settings->engines())->toBe(['chat_gpt', 'gemini']);
+        $this->actingAs($admin)->get(route('seo.settings'))->assertOk()->assertSee('Save AI visibility');
+    });
+});

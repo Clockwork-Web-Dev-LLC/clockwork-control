@@ -266,5 +266,32 @@
             <button type="submit" class="btn-primary text-sm px-4 py-2">Save site audit</button>
         </form>
     </x-card>
+
+    <x-card title="AI visibility" icon="fa-robot"
+            subtitle="How often each client's prompts are asked, and of which AI assistants.">
+        <form method="POST" action="{{ route('seo.ai-visibility.update') }}" data-ai-visibility-settings>
+            @csrf @method('PUT')
+            <label class="block text-sm mb-3">
+                <span class="font-medium text-[var(--color-ink-strong)]">How often</span>
+                <select name="frequency" class="mt-1 text-sm px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded w-full sm:w-64">
+                    @foreach (['weekly' => 'Weekly', 'daily' => 'Daily (about 7 times the cost)', 'off' => 'Off'] as $value => $label)
+                        <option value="{{ $value }}" @selected(old('frequency', $aiVisibility['frequency']) === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <div class="text-sm mb-3">
+                <span class="font-medium text-[var(--color-ink-strong)]">Ask</span>
+                <div class="flex flex-wrap gap-4 mt-1">
+                    @foreach ($aiVisibility['engines'] as $key => $engine)
+                        <label class="flex items-center gap-2"><input type="checkbox" name="engines[]" value="{{ $key }}" @checked(in_array($key, old('engines', $aiVisibility['active']), true))> {{ $engine['label'] }} <span class="text-xs text-[var(--color-ink-soft)]">(${{ rtrim(rtrim(number_format($engine['price'], 4), '0'), '.') }} a prompt)</span></label>
+                    @endforeach
+                </div>
+            </div>
+            <p class="text-xs text-[var(--color-ink-muted)] mb-4">
+                {{ $aiVisibility['prompts'] }} tracked {{ Str::plural('prompt', $aiVisibility['prompts']) }} across all clients: about ${{ number_format($aiVisibility['estimate'], 2) }} a month at the current settings, held by the AI visibility cap above. Answers are those a logged-out person in each client's country would get. Prices are DataForSEO's published ones and are not yet confirmed by a real call.
+            </p>
+            <button type="submit" class="btn-primary text-sm px-4 py-2">Save AI visibility</button>
+        </form>
+    </x-card>
 </div>
 @endsection

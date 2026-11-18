@@ -24,7 +24,7 @@ beforeEach(function () {
 
 it('links every client page from one tab bar', function () {
     Http::fake();
-    $routes = ['seo.sites.show', 'seo.sites.rankings', 'seo.sites.keyword-map', 'seo.sites.keywords', 'seo.sites.research', 'seo.sites.backlinks', 'seo.sites.site-audit', 'seo.sites.page-audit', 'seo.sites.profile'];
+    $routes = ['seo.sites.show', 'seo.sites.rankings', 'seo.sites.keyword-map', 'seo.sites.keywords', 'seo.sites.research', 'seo.sites.backlinks', 'seo.sites.ai-visibility', 'seo.sites.site-audit', 'seo.sites.page-audit', 'seo.sites.profile'];
 
     foreach ($routes as $name) {
         $response = $this->actingAs($this->user)->get(route($name, $this->site))->assertOk()->assertSee('data-site-tabs', false);

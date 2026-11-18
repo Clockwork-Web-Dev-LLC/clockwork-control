@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\Seo\Ai\AiEngines;
+use Modules\Seo\Ai\AiVisibilitySettings;
 use Modules\Seo\Audit\SiteAuditSettings;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Pricing;
 use Modules\Seo\Google\GoogleOAuth;
+use Modules\Seo\Models\AiPrompt;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
 use Modules\Seo\Models\SiteProfile;
@@ -20,7 +23,7 @@ use Modules\Seo\Support\SeoSettings;
 
 class SeoSettingsController extends Controller
 {
-    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget, RankSettings $rankSettings, SiteAuditSettings $auditSettings): View
+    public function index(GoogleOAuth $oauth, SeoSettings $settings, DataForSeoClient $dataForSeo, BudgetGuard $budget, RankSettings $rankSettings, SiteAuditSettings $auditSettings, AiVisibilitySettings $aiSettings): View
     {
         $connection = GoogleConnection::current();
 
@@ -45,6 +48,13 @@ class SeoSettingsController extends Controller
                 'spent' => $budget->spentThisMonth(),
                 'totalCap' => $budget->totalCap(),
                 'personAllowance' => $budget->personAllowance(),
+            ],
+            'aiVisibility' => [
+                'frequency' => $aiSettings->frequency(),
+                'active' => $aiSettings->engines(),
+                'engines' => array_map(fn (array $e) => ['label' => $e[0], 'price' => $e[3]], AiEngines::ALL),
+                'prompts' => $prompts = AiPrompt::query()->where('is_active', true)->count(),
+                'estimate' => $aiSettings->monthlyEstimate($prompts),
             ],
             'siteAudit' => [
                 'frequency' => $auditSettings->frequency(),

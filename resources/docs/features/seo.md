@@ -117,6 +117,7 @@ Every client has the same row of tabs on its SEO pages:
 | **Keywords** | Look up volume, difficulty, CPC and intent for a list; buy keyword ideas. |
 | **Research** | Ranking-keyword counts, competitors and the keyword gap. |
 | **Backlinks** | Who links to the site, what is new or lost, and who links to competitors but not here. |
+| **AI visibility** | How often the client comes up when AI assistants are asked its tracked questions. |
 | **Site audit** | Technical problems found by crawling the whole site, and what changed since the last crawl. |
 | **Page audit** | What a live page says about itself: title, description, headings, schema. |
 | **Profile** | The client's Google properties, brand terms, keyword market and report notes. |
@@ -177,7 +178,17 @@ What to know about the numbers:
 - A mention is found by matching brand terms and the domain as whole words, so set the client's brand terms on its profile. A competitor is matched by its domain and, when long enough not to be an ordinary word, the name part of the domain.
 - It says nothing about how many people saw an answer. Real visits from AI assistants are the AI assistant sessions on the Numbers tab, and Search Console's AI impressions are still entered by hand.
 
-Perplexity, Copilot and the Claude app are not covered. A screen for this is not built yet. Built against DataForSEO's published specification and not yet run against the live API.
+### Using it
+
+The **AI visibility** tab (`/seo/sites/{site}/ai-visibility`) shows, for each engine, how many of the client's prompts mentioned or cited it in the latest round; the same counts for named competitors; each prompt with its latest result per engine; and the rate by week. Choosing a prompt shows the start of what each engine answered and the sources it cited.
+
+- **Add prompts**: one per line, written as the full question a customer would ask, with the city for a local business, and without naming the client.
+- **A dash** means not checked yet; **Not there** means it was checked and the client did not come up.
+- **Pause** stops asking and keeps the history. **Delete** removes the prompt and its stored answers.
+- The page warns when the client has no brand terms, because mentions are then only found by the domain name.
+- **Settings** (admins, **SEO → Settings → AI visibility**): weekly, daily or off, and which engines to ask, with the price per prompt.
+
+Perplexity, Copilot and the Claude app are not covered. Built against DataForSEO's published specification and not yet run against the live API.
 
 ## Backlinks
 
