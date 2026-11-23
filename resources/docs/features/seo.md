@@ -1,0 +1,385 @@
+---
+title: SEO module
+section: Features
+order: 67
+updated: 2026-11-12
+author: Aaron Reimann
+tags: [seo, indexability, search-console, ga4, modules]
+tracks: [modules/Seo/**]
+---
+
+> Packaged as `modules/Seo` (module id `seo`). It's the home for SEO tooling in Clockwork Control. It does two things: it shows the indexability of every monitored site, and it syncs Search Console and GA4 data for SEO clients every night so the monthly report's numbers come from Control instead of from Chrome.
+
+## What you get
+
+**`/seo`** (gear menu → **SEO**) lists every active, monitored site with its search engine indexability:
+
+- **Blocking Search Engines** (red): the site is sending `noindex` or blocking crawlers in `robots.txt`. These sort to the top.
+- **Not checked yet** (yellow): monitoring is on but no probe has run yet.
+- **Indexable** (green): all clear.
+- **Disabled** (gray): SEO monitoring is off for the site.
+
+The tiles across the top count each state, and the Reason column says which signal tripped (meta `noindex`, `X-Robots-Tag`, or `robots.txt` Disallow). The **Search data** column links each site to its numbers and profile, or to **Set up**. A red banner shows when the Google connection was revoked.
+
+Sites on staging-tagged servers aren't listed. Monitoring skips those servers, so the watchdog never checks them.
+
+## Where the indexability data comes from
+
+That page doesn't fetch anything itself. It reads the `seo_*` columns on `sites` that the [SEO indexability watchdog](/docs/features/seo-indexability-watchdog) writes. That watchdog runs with every uptime probe, plus a daily `robots.txt` check. The watchdog stays in core (`app/Services/Seo/`) because the uptime prober and the Issues page depend on it. Turn this module off at **Settings → Modules** and the watchdog, its alerts and its Issues section keep working.
+
+## Search Console and GA4 sync
+
+### One-time setup
+
+1. **Google Cloud project.** In your agency's Google Workspace organization, create a project with the OAuth consent screen set to **Internal**. Internal apps skip Google's verification and the 7-day testing expiry.
+2. **Enable three APIs:** Google Search Console API, Google Analytics Data API, Google Analytics Admin API.
+3. **OAuth client.** Credentials → Create OAuth client ID → Web application. Add the redirect URI that **SEO → Settings** shows, `https://<control host>/seo/google/callback`. It differs from the login callback (`/auth/google/callback`) on purpose.
+4. **Enter the client.** Paste the client ID and secret on **Settings → Integrations → SEO** (stored encrypted). `CLOCKWORK_SEO_GOOGLE_CLIENT_ID` / `_SECRET` in `.env` are the fallback.
+5. **Connect.** An admin opens **SEO → Settings → Connect Google** and signs in as a **shared agency Google account** that already has access to your clients' properties. Whatever that account can see in Search Console and GA4 is what Control can sync; nothing is set up per client in Google. Control asks only for read-only access.
+
+Reconnect only when needed: Google keeps at most 100 refresh tokens per account and client, and silently drops the oldest.
+
+### Adding and viewing clients
+
+**SEO → Clients** (`/seo/clients`) is the list of SEO clients: every site that has an SEO profile, with its status, Google clicks for the last complete month, the change from the month before, and when it last synced. A month with no stored data shows a dash, never 0.
+
+**Add client** needs only a domain. If the site is already in Control it is reused. If not, it is added as a plain monitored site (host "custom", not WordPress), so a client on any host or platform can be tracked. On the form:
+
+- **Search Console property**: leave on Automatic and Control picks the property the connected Google account can see for that domain, trying `https://www.`, `https://`, then the `sc-domain:` form. If none is visible, the client is saved without one; share the property with the connected account and choose it on the profile.
+- **GA4 property ID**, **brand terms** and **compare with last year**: optional, same meaning as on the profile.
+- **Keyword market**: country, language and optional city used for DataForSEO keyword lookups. Defaults to United States, English.
+
+Saving queues the 16-month backfill when a property is set and Google is connected.
+
+Until setup is finished the page shows a **Getting started** checklist: add a Google OAuth client, connect Google, add a DataForSEO login (optional), add a first client, turn on Claude access (optional). It reads local state only.
+
+### Per-site profiles
+
+Each SEO client gets a profile at `/seo/sites/{site}/profile` (any active user):
+
+- **Search Console property**, picked from the list the connection sees (with its access level). Keep the URL-prefix property the monthly reports already use; the connected account often can't read the `sc-domain:` property. **Refresh list** queues a new `sites.list`.
+- **GA4 property ID** (GA4 Admin → Property details), and a checkbox when the property has a custom primary channel group.
+- **Brand terms** (comma separated). Queries containing any of them are left out of the non-branded numbers. The preview shows which of last month's top queries count as branded.
+- **Key events** (default `generate_lead`, `form_submit`, `contact_link_click`), the seasonal YoY toggle, the keyword market, and **report notes** (tone, angle, things to avoid). Report notes can only be edited on this page.
+- **AI impressions** from Search Console's Generative AI report, which has no API: type the month's number, or mark it "not available". It's never stored as 0.
+
+Saving a new profile pulls 16 months of history in the background. Changing a property asks first, then deletes that property's stored history for the site and re-pulls 16 months, so comparisons never mix two properties. Changing brand terms re-marks stored queries and re-pulls the non-branded daily totals Google still holds; when older stored days keep the old terms, an annotation at the boundary puts a caveat on comparisons that cross it.
+
+### The nightly sync
+
+`clockwork:seo-sync-google` runs at **08:10 UTC** (after midnight Pacific, when Search Console's day has closed), one site at a time:
+
+- **Search Console:** daily site totals (all and non-branded), re-pulling the last 5 days because late data keeps filling in; and page, query and page×query rows per calendar month until the month is **final** (month end + 5 days, set on SEO → Settings).
+- **GA4:** daily channel and AI-referral rows for charts, and month figures from a request for the whole calendar month. GA4 counts sessions approximately and a session crossing midnight counts on both days, so summed days never equal the month figure in GA4.
+
+A quota answer from Google stops that site for the night; the trailing window catches up the next night. One site's error doesn't stop the next. The command exits failed if any site errored or the connection was revoked, so it shows on the Scheduled Jobs page. **Sync now** on a profile queues one site.
+
+If Google revokes the connection, Control marks it revoked, sends one chat message, and shows a banner on `/seo` until an admin reconnects. Disconnecting on purpose stops the schedule; stored data is kept.
+
+### Reading the numbers
+
+`/seo/sites/{site}` shows a month (default: last month) against the previous month and the same month last year: clicks, impressions, CTR, average position, non-branded clicks and impressions, organic keywords, organic sessions, engaged sessions, engagement rate, AI assistant sessions, each key event, and AI impressions with their share of web impressions. Caveats are listed under the table:
+
+- **Not comparable.** Google's `num=100` change (2025-09-10 to 14) cut impressions and lifted average position overnight. Position comparisons whose baseline starts on or before 2025-09-14 show "not comparable"; impressions and CTR get a caveat.
+- **Provisional** until month end + 5 days.
+- **Non-branded = known queries only**: Google never lists anonymized queries.
+- **Organic keywords** = distinct Search Console queries with impressions, not a ranking tool's count.
+- **AI assistant sessions** before GA4's AI Assistant channel (2026-05-13) are an estimate from referral sources (SEO → Settings → AI referrer pattern).
+- **GA4 thresholding**: GA4 may withhold small numbers, often key events.
+
+Missing data shows as "—" or "not entered", never 0.
+
+## DataForSEO: paid keyword data
+
+Search Console and GA4 cover a client's own traffic. Keyword volume, difficulty, CPC and intent are bought from DataForSEO, pay as you go.
+
+1. Open a DataForSEO account and top it up. On its API Access page, copy the **API login and password** (not the account sign-in).
+2. Enter them under **SEO** on **Settings → Integrations**. They are stored encrypted.
+3. On **SEO → Settings**, click **Test** in the DataForSEO card. It makes one free call and shows the balance.
+
+The same card shows what each kind of work has spent this month and lets an admin set a **monthly cap per feature**, a cap on everything, and an **allowance per person** for non-admins. "Spent" is what DataForSEO itself reported for each call. A call that would pass a cap is not made.
+
+Keyword metrics are kept for 30 days, so the same keyword isn't bought twice. Buying is always two steps: a quote that spends nothing, then the purchase, which names the quoted cost. Difficulty is DataForSEO's 0 to 100 score with default bands (Easy up to 29, Medium to 49, Hard to 69, Very hard above). It is not Semrush's KD % and the two are not comparable. A site's market (country, language, and a city for local volume) is stored on its profile; there is no form field for it yet, so it defaults to United States, English.
+
+To try it without spending, set `CLOCKWORK_SEO_DATAFORSEO_SANDBOX=true`: calls go to DataForSEO's free sandbox and return sample data.
+
+This has been built against DataForSEO's published API specification and tested with sample responses. No live call has been made yet, so treat the first real one as the test.
+
+## Going live: from merge to working
+
+Everything below is safe to do in order on a fresh install or an existing one. Nothing in the SEO module calls Google or DataForSEO, or spends anything, until its key is entered.
+
+### 1. After the code is merged and deployed
+
+| Step | How | How to tell it worked |
+|---|---|---|
+| Run migrations | `php artisan migrate` | New `seo_*` and `oauth_*` tables exist. |
+| Build assets | `npm ci && npm run build` | The SEO pages load with styling. |
+| Clear cached routes and config, if the install caches them | `php artisan optimize:clear` (then re-cache as usual) | **SEO → Clients** opens. |
+| Confirm the scheduler runs | It is the same scheduler as the rest of Control. | The SEO commands appear on the Scheduled Jobs page. |
+
+### 2. Search Console and GA4 (free)
+
+1. Create the Google OAuth client and enter it on **Settings → Integrations → SEO** (steps under [One-time setup](#one-time-setup)).
+2. An admin presses **Connect Google** on **SEO → Settings** and signs in as the shared agency account.
+3. Press **Test connection**. It should name the account and list properties.
+
+### 3. DataForSEO (paid, pay as you go)
+
+1. Open a DataForSEO account and add the minimum top-up.
+2. Enter the **API login and API password** (from DataForSEO's API Access page, not the website sign-in) on **Settings → Integrations → SEO**.
+3. On **SEO → Settings**, press **Test** on the DataForSEO card. It should show the login and the balance. This call is free.
+4. Check the monthly caps on the same card before anything runs. The defaults are deliberately low.
+
+### 4. First client
+
+1. **SEO → Clients → Add client**, with just the domain. Check its Search Console property was matched; set brand terms and competitors on its Profile and Rankings tabs.
+2. Add a few tracked keywords on **Rankings** and a few prompts on **AI visibility**.
+3. Either wait for the hourly jobs, or run them once by hand to see results sooner:
+
+```bash
+php artisan clockwork:seo-sync-google --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-track-ranks --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-track-ai --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-site-audit --site=example.com --now
+```
+
+```bash
+php artisan clockwork:seo-snapshot-domains --site=example.com
+```
+
+```bash
+php artisan clockwork:seo-snapshot-backlinks --site=example.com
+```
+
+Rank checks, AI answers and crawls are queued at DataForSEO and collected by a later run of the same command, so run each again after a few minutes (a crawl can take longer).
+
+### 5. Check the first real results
+
+This module was built from DataForSEO's published API specification and tested against stand-in responses. No call had been made to the live service when it was written, so the first real run is the test. Look for:
+
+- **The ledger**: the DataForSEO card on **SEO → Settings** shows what each feature actually cost. Compare it with the estimates shown on buttons; if they differ, correct the figures in `modules/Seo/src/DataForSeo/Pricing.php` and `modules/Seo/src/Ai/AiEngines.php`.
+- **Rankings**: positions appear for keywords you know the client ranks for.
+- **Site audit**: issues appear after the first crawl. If a crawl finishes with pages but no issues at all, the check names in `modules/Seo/src/Audit/IssueRules.php` need matching to what DataForSEO returned.
+- **Backlink gap**: gap rows have domain names in them. If they are empty, the field read in `BacklinkResearch::pullGap()` is the one to check.
+- **AI visibility**: answers have text and sources. If mentions are never found, check the client's brand terms first.
+- **Failed jobs**: a command that fails says why on the Scheduled Jobs page; a refused call names the cap or the login.
+
+### 6. Claude (optional)
+
+Local use on the Control host needs only `CLOCKWORK_MCP_LOCAL_USER`. Reaching Control from claude.ai needs **Settings → Claude access** switched on and a public address limited to the Claude paths; see [Claude access](/docs/features/claude-access). It is off until an admin turns it on.
+
+## Finding your way around
+
+Every client has the same row of tabs on its SEO pages:
+
+| Tab | What it is for |
+|---|---|
+| **Numbers** | Clicks, impressions and sessions from Search Console and GA4, by month. |
+| **Rankings** | Tracked keywords and where the client ranks for them; competitors are named here. |
+| **Keyword map** | Which page targets which keyword; import, versions, CSV download. |
+| **Keywords** | Look up volume, difficulty, CPC and intent for a list; buy keyword ideas. |
+| **Research** | Ranking-keyword counts, competitors and the keyword gap. |
+| **Backlinks** | Who links to the site, what is new or lost, and who links to competitors but not here. |
+| **AI visibility** | How often the client comes up when AI assistants are asked its tracked questions. |
+| **Site audit** | Technical problems found by crawling the whole site, and what changed since the last crawl. |
+| **Page audit** | What a live page says about itself: title, description, headings, schema. |
+| **Profile** | The client's Google properties, brand terms, keyword market and report notes. |
+
+Anything that costs money shows its price on the button and asks for confirmation. Looking things up, the page audit and everything read from storage are free.
+
+## Rank tracking
+
+Control checks where a client ranks on Google for a list of tracked keywords, using DataForSEO's results-page API on its cheapest (queued) price.
+
+- **What is stored for each check**: the site's position among the organic results (a subdomain counts as the site), the page that ranks, how many of its pages rank, the positions of the competitor domains named on the profile, the first ten domains, which features are on the page, whether there is an AI Overview and whether it cites the site.
+- **Not found is not zero**: a check where the site is not within the depth looked at is stored with an empty position. A day with no check has no row at all.
+- **Schedule**: `clockwork:seo-track-ranks` runs every hour at :20. Each run stores finished checks, then queues every keyword that is due. A keyword is due when its last check is older than the chosen interval, so a missed run catches up by itself. A day that was never checked cannot be bought later.
+- **Cost**: a check costs about $0.0006 for the first ten results and $0.00045 for each further ten, so $0.0015 at the top 30 and $0.00465 at the top 100. The defaults are weekly at the top 30. Spend goes through the rank tracking cap on **SEO → Settings**; when the cap is reached nothing is queued and the keywords stay due.
+- **Only for clients that are switched on**: keywords of a client whose SEO profile is disabled are not checked.
+
+### Using it
+
+Open a client from **SEO → Clients** and choose **Rankings** (`/seo/sites/{site}/rankings`).
+
+- **Add keywords**: paste one per line, tick desktop, mobile or both, and optionally name a city (`City,Region,Country`, the way Google Ads writes it). Without a city the whole country from the profile's keyword market is checked. The same keyword on another device or in another city is tracked separately. Keywords with search operators such as `site:` are refused because they cost five times as much.
+- **The table**: latest position, change from the check before, the page that ranks (flagged when more than one of the site's pages rank), each competitor's position, and whether an AI Overview shows and cites the site. "Not in top 30" means it was checked and not found; a dash means not checked yet. A keyword that appears or disappears says "New" or "Dropped out" instead of a number.
+- **Pause** stops checks and keeps the history. **Delete** removes the keyword and its history.
+- **Competitors**: up to 10 domains. Their positions come from the same results page, so they cost nothing extra; history starts from the next check.
+- **How often and how deep** is set by an admin on **SEO → Settings → Rank tracking**, with the price per check and the expected monthly cost for the keywords tracked.
+
+Claude reads the same data through `seo_rankings` and `seo_rank_history`, and can add, pause or resume keywords with `seo_tracked_keywords_update` (see [Claude access](/docs/features/claude-access)).
+
+Built against DataForSEO's published specification and not yet run against the live API.
+
+## Ranking-keyword counts and ranked keywords
+
+Control stores how many keywords a domain ranks for on Google, and the list of those keywords, from DataForSEO Labs.
+
+- **Monthly count**: `clockwork:seo-snapshot-domains` runs on the 6th and stores, for every enabled client and each competitor named on its Rankings page, the number of ranking keywords in the client's country, split into top 3, top 10, top 20 and top 100, with estimated traffic. About a cent per domain. A competitor shared by two clients is bought once.
+- **Ranked-keyword list**: the top keywords a domain ranks for (up to 1,000, best estimated traffic first) with position, ranking page, volume, difficulty and intent. Bought on request, about 13 cents per 1,000, and each pull replaces the last.
+- **From Claude**: `seo_domain_overview` and `seo_ranked_keywords` read what is stored and never spend. `seo_domain_research_fetch` gives the price first and buys only when called again with the cost a person agreed to. All spending is held by the research cap on **SEO → Settings**.
+
+What to know about the numbers:
+
+- They come from DataForSEO's own database, which is smaller than some other tools'. The count will be lower than, and is not comparable with, a figure from another tool. Never put the two on one trend line.
+- Each keyword's results are re-read every 30 to 90 days, for a whole country. A ranking gained last week may not show, and nothing here is city-level. For recent movement use Search Console or the tracked keywords under Rankings.
+- A domain the provider knows nothing about is stored with empty figures, not zeros.
+
+## AI visibility
+
+Control asks AI assistants a list of questions for each client and records whether the client came up. The questions (prompts) are ones a customer would ask an assistant, such as "who is the best emergency plumber in Austin?", not keywords.
+
+- **Engines**: ChatGPT, Gemini and Google AI Mode, through DataForSEO, as a logged-out person in the client's country would see them. About $0.0012 per prompt per engine.
+- **What is stored for each answer**: whether the client was **mentioned** (its brand terms or domain appear in the answer's words), whether it was **cited** (its site is among the sources the answer links to), the same for each named competitor, the domains cited, and the first part of the answer.
+- **Schedule**: `clockwork:seo-track-ai` runs every hour at :35. It stores answers that have come back, then queues every prompt that is due. Weekly by default; daily or off are the other choices. Up to 50 active prompts per client. At the defaults, 25 prompts on three engines cost about 40 cents a month.
+- **Reading it**: per engine, the share of the client's prompts where it was mentioned or cited in the latest round, the same counts for competitors, and the rate by week.
+- **From Claude**: `seo_ai_visibility` reads the stored results; `seo_ai_prompts_update` adds, pauses or resumes prompts, asks the person first and reports the monthly cost. Spending is held by the AI visibility cap on **SEO → Settings**.
+
+What to know about the numbers:
+
+- An AI answer changes from one asking to the next. One check is a sample; only the rate over many prompts and weeks means anything. Never report it as "the brand appears in X% of AI answers".
+- A mention is found by matching brand terms and the domain as whole words, so set the client's brand terms on its profile. A competitor is matched by its domain and, when long enough not to be an ordinary word, the name part of the domain.
+- It says nothing about how many people saw an answer. Real visits from AI assistants are the AI assistant sessions on the Numbers tab, and Search Console's AI impressions are still entered by hand.
+
+### Using it
+
+The **AI visibility** tab (`/seo/sites/{site}/ai-visibility`) shows, for each engine, how many of the client's prompts mentioned or cited it in the latest round; the same counts for named competitors; each prompt with its latest result per engine; and the rate by week. Choosing a prompt shows the start of what each engine answered and the sources it cited.
+
+- **Add prompts**: one per line, written as the full question a customer would ask, with the city for a local business, and without naming the client.
+- **A dash** means not checked yet; **Not there** means it was checked and the client did not come up.
+- **Pause** stops asking and keeps the history. **Delete** removes the prompt and its stored answers.
+- The page warns when the client has no brand terms, because mentions are then only found by the domain name.
+- **Settings** (admins, **SEO → Settings → AI visibility**): weekly, daily or off, and which engines to ask, with the price per prompt.
+
+Perplexity, Copilot and the Claude app are not covered. Built against DataForSEO's published specification and not yet run against the live API.
+
+## Backlinks
+
+Control stores a domain's backlink totals and the domains that link to a client, from DataForSEO's Backlinks API.
+
+- **Monthly totals**: `clockwork:seo-snapshot-backlinks` runs on the 7th and stores, for each enabled client and each named competitor, the number of backlinks, referring domains, broken backlinks, and DataForSEO's rank and spam score (both 0 to 100). About 2 cents per domain.
+- **Referring domains**: the same run pulls the domains linking to each client, strongest first, up to 1,000 (about 6 cents). Each pull is reconciled with the last: a domain that is new is dated, and one that has gone is marked lost, so new and lost links are known without buying them separately.
+- **Lost is only claimed when it is certain**: if a site has more than 1,000 referring domains the pull stops at the cut, and a domain missing from it may simply be past the cut. In that case nothing is marked lost.
+- **From Claude**: `seo_backlinks` reads what is stored. Totals or a referring-domain list for another domain are bought through `seo_domain_research_fetch`, price first. Spending is held by the backlinks cap on **SEO → Settings**.
+
+What to know about the numbers: every backlink index is different, so these counts will not match another tool's and must not share a trend line with them. Rank and spam score are DataForSEO's own measures, not Authority Score, Domain Rating or a toxicity score, and a high spam score alone is not a reason to disavow a link.
+
+### Backlink gap
+
+For a client and a named competitor, Control can buy the domains that link to the competitor but not to the client, strongest first (up to 500, about 4 cents). Across several competitors, a domain is listed once with the competitors it links to, and those linking to the most competitors come first. These are link prospects to check, not recommendations: many are directories or sites that would never link to the business.
+
+### Using it
+
+The **Backlinks** tab (`/seo/sites/{site}/backlinks`) shows the totals for the client and its named competitors with the change in referring domains from the month before, the domains linking to the client (all live, new, lost, or spam score 60 and over, with a text filter), and the gap. Buttons to count a domain, pull the client's list again or find the gap against a competitor state their price and go through the backlinks cap; only the client and its named competitors can be bought from the page.
+
+Claude reads all of it with `seo_backlinks` (`show` set to `gap` for the gap).
+
+A disavow list is not built yet. Built against DataForSEO's published specification and not yet run against the live API.
+
+## Competitors and keyword gap
+
+- **Finding competitors**: Control can ask DataForSEO which domains rank for the same keywords as a client, most shared keywords first (up to 100, about 2 cents). The very largest sites are left out. The list still mixes directories and publishers with real rivals, so a person picks which ones to name on the client's Rankings page.
+- **Keyword gap**: compares a client with up to 5 competitors and sorts keywords into six groups: missing (every competitor ranks, the client doesn't), untapped (at least one competitor ranks), weak (the client ranks below them), strong (above them), shared and unique. It is worked out inside Control from the ranked-keyword lists already stored, so the comparison itself costs nothing; each domain's list has to be bought once first.
+- **From Claude**: `seo_competitors` and `seo_keyword_gap` read stored data. Discovery is bought through `seo_domain_research_fetch`, price first.
+
+A gap is a lead to check, not proof: a stored list holds a domain's top keywords (up to 1,000), so "does not rank" means "is not in that list". A competitor with no stored list is left out of the comparison and named, never counted as ranking for nothing.
+
+## Keyword ideas
+
+From one or more seed keywords, Control can buy a list of new keyword ideas from DataForSEO, each with volume, difficulty, CPC and intent. Three kinds: **ideas** (keywords in the same topics as up to 20 seeds), **suggestions** (longer searches containing one seed phrase) and **related** (searches Google itself lists as related to one seed). About 13 cents per 1,000 ideas.
+
+Claude does this through `seo_keyword_ideas`: it gives the price first and buys only with the cost a person agreed to. Every idea's figures go into the keyword store, so they are never bought again, and a stored list can be re-read and filtered (minimum volume, maximum difficulty, containing a word, questions only) for free. Ideas are country-level; grouping them into topics is left to Claude.
+
+## The Research page
+
+**SEO → Clients → Research** (`/seo/sites/{site}/research`) puts this in one place for a client: ranking-keyword counts for it and its named competitors with the change from the month before, who else ranks for the same keywords, the keyword gap, the client's top keywords and the idea lists bought so far. The page only reads stored data. Each buy button states its price, asks for confirmation, and goes through the research cap and the per-person allowance. Only the client and its named competitors can be bought from the page.
+
+From there, **See and filter the full list** (or the keyword count beside any domain) opens every stored keyword for the client or a competitor, with filters for position, words in the keyword, the ranking page and volume, and quick links for the top 3, page one and page two.
+
+## Keyword maps
+
+A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.
+
+- **Dated versions**: one map per site is current. Starting a new version copies the current one and archives it; archived maps are read-only.
+- **Rows are hidden, not deleted**, and an edit names the version of the row it was based on, so two editors can't silently overwrite each other.
+- **Checks**: title outside 50 to 60 characters, meta description outside 140 to 160, a page with no primary keyword, two pages sharing a primary keyword, and em dashes in text a client will see (refused on edit, flagged on import).
+- **Figures**: volume, difficulty, CPC and intent are filled from keyword data Control has already bought, never typed in. Figures that arrive in an imported file are kept but marked as imported, because another tool's difficulty is not comparable.
+- **Next page**: the page not started with the most non-branded Google impressions over the last three complete months, with that number shown.
+- **CSV in and out**: the importer finds the header row under any title lines and accepts common column names (Page, URL, Primary Keyword, Volume, Difficulty or KD, CPC, Secondary Keywords, Intent, Proposed Title, Proposed Meta, Schema, Status, Notes). Unknown columns are reported and ignored. A status it cannot read is kept word for word and flagged for review. The export uses one fixed column order and neutralises cells that a spreadsheet would run as formulas.
+
+### Using it
+
+Open a client from **SEO → Clients** and choose **Map** (`/seo/sites/{site}/keyword-map`).
+
+- **Import from CSV**: upload the file (in Google Sheets: File → Download → Comma-separated values, with the map tab open). The import becomes the current map and the previous one is kept read-only.
+- **The page** shows the map, the list of things to check and the page to work on next. Older versions can be picked from the version list.
+- **Start a new dated version** before a new round of work, so last month's map stays as it was.
+- **Fill from stored data** puts volume, difficulty and CPC on every row Control already has figures for. It never spends; missing keywords are bought through Claude, on a quote a person approves.
+- **Download CSV** gives the fixed column layout, ready to paste into a client's sheet.
+- **Editing rows**: use **Edit** on a row or **Add a page**, or ask Claude (`seo_keyword_map_get`, `seo_keyword_map_update`). Both go through the same rules. The form counts title and description characters as you type, and if someone else saved the row while you were editing, your save is refused and their version is shown with what you typed kept in the boxes. Edits made through Claude are written to the action log with before and after values; edits made on the page are not logged yet.
+
+Writing straight to a Google Sheet is not built yet; use the CSV download.
+
+## Site audit
+
+Control crawls a client's whole site through DataForSEO and keeps the result: every page with its status, title, description, H1, canonical, word count, depth, load time and the checks it failed, plus site totals (broken links, duplicate titles, non-indexable pages), a count of pages failing each check, site-wide findings (sitemap, robots.txt, HTTPS redirect) and a 0 to 100 score.
+
+- **Schedule**: `clockwork:seo-site-audit` runs every hour at :50. It stores crawls that have finished, then starts one for every enabled client whose last crawl is older than the interval (monthly by default; weekly or off are the other choices).
+- **Cost**: a crawl is paid for when it starts, by the page, up to the page cap (500 by default): about $0.00015 a page, so at most about 8 cents for 500 pages. Reading the result is free. Rendering pages with JavaScript costs ten times as much and is off by default. Spend goes through the site audit cap on **SEO → Settings**.
+- **One at a time**: a site is not crawled again while a crawl of it is running. A crawl that has not finished after 48 hours is written off.
+- **Kept here**: DataForSEO deletes a crawl after 30 days and has no history between crawls, so each one is copied into Control when it finishes. That is what makes a trend possible.
+
+The score is DataForSEO's own formula. It is not comparable with another tool's site health figure and must not be put on the same trend line.
+
+### Issues and what changed
+
+DataForSEO only answers each check true or false. Control turns those answers into issues a person can act on (`IssueRules`): each has a severity, a category, a plain title and what to do about it.
+
+- **Severity is Control's judgement**: an **error** is likely to cost rankings or break the page (broken pages, http pages, missing titles, duplicate titles, redirect loops), a **warning** is worth fixing but rarely urgent (missing descriptions and H1s, long titles, slow pages, orphan pages), and a **notice** is worth knowing and often intentional (redirects, short pages, pages that cannot be indexed).
+- **Each check is read the right way round**: for some checks true is the problem, for others false is. A check with no rule is not reported.
+- **Site-wide issues** (no sitemap, http not redirecting to https, no valid certificate) are listed beside page issues.
+- **Crawl against crawl**: for each issue, the pages that are new, fixed and still open since the previous crawl. A page the newer crawl did not reach is counted as "not crawled this time", never as fixed, so a smaller crawl cannot look like progress. If the two crawls used different settings, the comparison says so.
+
+The check names come from DataForSEO's documentation and have not been confirmed against a real crawl; a name that never appears simply never fires.
+
+### Using it
+
+Open a client and choose the **Site audit** tab (`/seo/sites/{site}/site-audit`).
+
+- **At the top**: the score, how many kinds of error, warning and notice were found, and how many pages were crawled. If the crawl stopped at the page cap, it says part of the site was not checked.
+- **Since the last crawl**: how many page-and-problem pairs were fixed, are new, or are still open, and which issues were cleared completely.
+- **Issues**: worst first. Choosing one shows what to do about it and the pages it affects.
+- **Crawl now** starts a crawl straight away. The button shows the most it can cost and asks for confirmation; it is refused while a crawl of the site is running or when the site audit cap would be passed.
+- **Crawls**: every crawl of the site with its result and cost. An older one can be opened.
+- **Settings** (admins, **SEO → Settings → Site audit**): monthly, weekly or off; the page cap, with what each cap costs; and whether to run JavaScript.
+
+Claude reads the same audit with `seo_site_audit` and can start a crawl with `seo_site_audit_run`, which gives the most it can cost first.
+
+Built against DataForSEO's published specification and not yet run against the live API.
+
+## Page audit
+
+Control can read a live page on a client's site and report what it says about itself: title and meta description with character counts, H1s and H2s, canonical, robots tag, schema types (including those inside `@graph`) and a word count that leaves out menus, the footer and code. Claude uses it through `seo_page_audit`, up to 5 pages at a time, to see the current state of a page before proposing changes.
+
+- **Only the client's own site**: it fetches `https` pages on the site's domain (bare or `www`) and nothing else. Redirects that leave the site or point at a private address are refused.
+- **Blocked is not empty**: when a firewall, login or "checking your browser" page stops Control, the audit is stored as blocked and its fields are unknown. It never reports "no title" for a page it could not read.
+- **No JavaScript**: pages are read as the server sends them, so text a page adds in the browser is not counted.
+- The latest audit per URL is kept in `seo_page_audits`; a new audit replaces it. It costs nothing.
+
+## Reading it from Claude
+
+The same numbers are available to Claude through `seo_` tools: list sites, month numbers, daily series, page and query rows, keyword metrics, rankings and rank history, plus a few that record or change things. `seo_month_numbers` returns exactly what the site page shows, so the two can't disagree. See [Claude access (MCP)](/docs/features/claude-access) for setup and the full list. It works from claude.ai and Cowork once an admin turns it on at **Settings → Claude access** and Control has a public address for it, and from Claude Code on the Control host.
+
+## Adding to it
+
+New SEO features go in `modules/Seo/`: controllers in `src/Http/Controllers/`, Google clients in `src/Google/`, services in `src/Services/`, views under the `seo::` namespace, migrations in `database/migrations/`, and routes in `routes/web.php`, which load only while the module is enabled. Pages and reports read the `seo_*` tables, never the Google APIs.

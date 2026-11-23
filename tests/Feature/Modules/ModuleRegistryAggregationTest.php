@@ -25,6 +25,7 @@ use Modules\Linode\LinodeCloudProvider;
 use Modules\Mattermost\MattermostCheck;
 use Modules\Pressable\PressableCheck;
 use Modules\Pressable\PressableHostingProvider;
+use Modules\Seo\Diagnostics\GoogleConnectionCheck;
 use Modules\Slack\SlackCheck;
 use Modules\SpinupWp\SpinupWpCheck;
 use Modules\SpinupWp\SpinupWpHostingProvider;
@@ -48,10 +49,10 @@ describe('ModuleRegistry aggregation', function () {
         $this->registry = app(ModuleRegistry::class);
     });
 
-    it('aggregates a manifest from every one of the 35 registered modules', function () {
+    it('aggregates a manifest from every one of the 37 registered modules', function () {
         $manifests = $this->registry->manifests();
 
-        expect($manifests)->toHaveCount(35);
+        expect($manifests)->toHaveCount(37);
 
         $ids = array_map(fn ($m) => $m->id, $manifests);
 
@@ -91,6 +92,8 @@ describe('ModuleRegistry aggregation', function () {
             'site-maintenance',
             'client-management',
             'email-auth',
+            'seo',
+            'mcp',
         ]);
     });
 
@@ -139,7 +142,7 @@ describe('ModuleRegistry aggregation', function () {
         expect($names)->toEqualCanonicalizing(['Google', 'GitHub', 'Microsoft']);
     });
 
-    it('includes all 20 module-contributed diagnostic checks', function () {
+    it('includes all 22 module-contributed diagnostic checks', function () {
         $checks = $this->registry->diagnosticChecks();
 
         $classes = array_map(fn ($c) => get_class($c), $checks);
@@ -166,6 +169,7 @@ describe('ModuleRegistry aggregation', function () {
             GoogleOAuthCheck::class,
             GitHubOAuthCheck::class,
             MicrosoftOAuthCheck::class,
+            GoogleConnectionCheck::class,
         ]);
     });
 

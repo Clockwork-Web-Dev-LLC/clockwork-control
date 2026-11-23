@@ -28,7 +28,7 @@
             'label' => 'Integrations & Alerts',
             'icon' => 'fa-plug',
             'route' => 'settings.integrations.index',
-            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*') || request()->routeIs('feedback.*') || request()->routeIs('ai-remedy.settings'),
+            'active' => request()->routeIs('settings.integrations.*') || request()->routeIs('settings.modules.*') || request()->routeIs('settings.notifications.*') || request()->routeIs('settings.slack.*') || request()->routeIs('settings.mattermost.*') || request()->routeIs('settings.bill-com.*') || request()->routeIs('feedback.*') || request()->routeIs('ai-remedy.settings') || request()->routeIs('settings.claude-access.*'),
         ],
         [
             'key' => 'system',
@@ -66,6 +66,9 @@
                 : null,
             app(\Modules\Core\ModuleStateResolver::class)->isEnabled('feedback')
                 ? ['label' => 'Feedback Notes', 'icon' => 'fa-solid fa-comment-dots', 'route' => 'feedback.index', 'active' => request()->routeIs('feedback.*')]
+                : null,
+            app(\Modules\Core\ModuleStateResolver::class)->isEnabled('mcp')
+                ? ['label' => 'Claude Access', 'icon' => 'fa-solid fa-plug', 'route' => 'settings.claude-access.index', 'active' => request()->routeIs('settings.claude-access.*')]
                 : null,
             ['label' => 'SMS Alerts', 'icon' => 'fa-solid fa-comment-sms', 'route' => 'settings.notifications.index', 'active' => request()->routeIs('settings.notifications.*')],
             ['label' => 'Slack Alerts', 'icon' => 'fa-brands fa-slack', 'route' => 'settings.slack.index', 'active' => request()->routeIs('settings.slack.*')],
