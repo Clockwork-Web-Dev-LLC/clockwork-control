@@ -187,3 +187,68 @@ describe('seo_keyword_map_update', function () {
         expect($row)->toMatchArray(['volume' => 720, 'difficulty' => 22, 'difficulty_band' => 'Easy', 'metrics_source' => 'dataforseo']);
     });
 });
+
+describe('editing rows on the page', function () {
+    beforeEach(function () {
+        $this->map = app(KeywordMapService::class)->importCsv($this->site, MAP_CSV)['map'];
+        $this->row = $this->map->rows()->where('page_name', 'Services')->sole();
+        $this->form = fn (array $overrides = []) => $overrides + [
+            'expected_updated_at' => $this->row->updated_at->toIso8601String(),
+            'page_name' => 'Services', 'url' => '/services/', 'primary_keyword' => 'drain cleaning', 'ship_status' => 'not_started',
+        ];
+    });
+
+    it('shows the form and saves an edit through the same rules', function () {
+        $this->actingAs($this->user)->get(route('seo.sites.keyword-map', $this->site))
+            ->assertOk()->assertSee(route('seo.sites.keyword-map.rows.edit', [$this->site, $this->row]), false)->assertSee('Add a page');
+        $this->actingAs($this->user)->get(route('seo.sites.keyword-map.rows.edit', [$this->site, $this->row]))
+            ->assertOk()->assertSee('drain cleaning')->assertSee('Aim for 50 to 60');
+
+        $this->actingAs($this->user)->put(route('seo.sites.keyword-map.rows.update', [$this->site, $this->row]), ($this->form)([
+            'proposed_title' => 'Drain Cleaning in Austin, Same Day | Acme Plumbing',
+            'secondary_keywords' => "Clogged Drain\nsewer cleaning; hydro jetting",
+            'schema_types' => 'Service, FAQPage',
+            'ship_status' => 'live',
+            'excluded' => '0',
+        ]))->assertRedirect(route('seo.sites.keyword-map', $this->site))->assertSessionHas('status');
+
+        $row = $this->row->fresh();
+        expect($row->proposed_title)->toStartWith('Drain Cleaning in Austin')
+            ->and(array_column($row->secondary_keywords, 'keyword'))->toBe(['clogged drain', 'sewer cleaning', 'hydro jetting'])
+            ->and($row->schema_types)->toBe(['Service', 'FAQPage'])
+            ->and($row->ship_status)->toBe('live')
+            ->and($row->shipped_on->toDateString())->toBe('2026-11-11');
+    });
+
+    it('refuses an em dash and an edit based on an older version, saving nothing', function () {
+        $this->actingAs($this->user)->put(route('seo.sites.keyword-map.rows.update', [$this->site, $this->row]), ($this->form)(['proposed_meta' => 'Fast — friendly']))
+            ->assertSessionHasErrors('row');
+
+        // Claude (or a colleague) saves the row in the meantime.
+        $this->travel(2)->minutes();
+        app(KeywordMapService::class)->updateRow($this->row->fresh(), ['notes' => 'theirs'], null);
+
+        $this->actingAs($this->user)->put(route('seo.sites.keyword-map.rows.update', [$this->site, $this->row]), ($this->form)(['notes' => 'mine']))
+            ->assertRedirect(route('seo.sites.keyword-map.rows.edit', [$this->site, $this->row]))
+            ->assertSessionHasErrors('row');
+
+        expect($this->row->fresh()->notes)->toBe('theirs')->and($this->row->fresh()->proposed_meta)->toBeNull();
+    });
+
+    it('adds a page, and will not edit an older version or another site\'s row', function () {
+        $this->actingAs($this->user)->get(route('seo.sites.keyword-map.rows.create', $this->site))->assertOk()->assertSee('Add to the map');
+        $this->actingAs($this->user)->post(route('seo.sites.keyword-map.rows.store', $this->site), ['ship_status' => 'not_started'])->assertSessionHasErrors('page_name');
+        $this->actingAs($this->user)->post(route('seo.sites.keyword-map.rows.store', $this->site), ['page_name' => 'Leaks', 'url' => '/leaks/', 'primary_keyword' => 'Leak Repair', 'ship_status' => 'planned_new', 'is_new_page' => '1'])
+            ->assertRedirect(route('seo.sites.keyword-map', $this->site));
+        expect(KeywordMapRow::query()->where('primary_keyword', 'leak repair')->sole()->is_new_page)->toBeTrue();
+
+        $other = Site::factory()->create(['domain' => 'other.com']);
+        $this->actingAs($this->user)->get(route('seo.sites.keyword-map.rows.edit', [$other, $this->row]))->assertNotFound();
+        $this->actingAs($this->user)->put(route('seo.sites.keyword-map.rows.update', [$other, $this->row]), ($this->form)(['notes' => 'x']))->assertNotFound();
+
+        app(KeywordMapService::class)->newVersion($this->site, 'Next');
+        $this->actingAs($this->user)->get(route('seo.sites.keyword-map.rows.edit', [$this->site, $this->row]))->assertRedirect()->assertSessionHas('warning');
+        $this->actingAs($this->user)->put(route('seo.sites.keyword-map.rows.update', [$this->site, $this->row]), ($this->form)(['notes' => 'x']))->assertSessionHasErrors('row');
+        expect($this->row->fresh()->notes)->toBeNull();
+    });
+});

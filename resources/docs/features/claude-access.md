@@ -33,10 +33,15 @@ Claude can ask Control for an SEO client's numbers instead of someone reading th
 | `seo_keyword_map_update` | Start a new dated version, edit or add rows, or fill figures from stored keyword data. Cannot delete rows, type in figures, or overwrite a row someone else changed. | Yes |
 | `seo_domain_overview` | How many keywords a site and its named competitors rank for, month by month, with top 3, top 10 and estimated traffic. | No |
 | `seo_ranked_keywords` | The stored list of keywords a domain ranks for, with filters for position, text, page and volume. | No |
-| `seo_domain_research_fetch` | Buys a domain's ranking-keyword count (about 1 cent), its ranked-keyword list (about 13 cents for 1,000) or its search competitors (about 2 cents). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
+| `seo_domain_research_fetch` | Buys, for one domain: its ranking-keyword count, its ranked-keyword list, its search competitors, its backlink totals or its referring domains (1 to 13 cents each). Gives the price first; buys only with the cost the person agreed to. | Yes, and spends |
 | `seo_competitors` | The competitors named on a site's profile and the domains discovered to rank for the same keywords. | No |
 | `seo_keyword_gap` | Compares a site with up to 5 competitors from stored keyword lists: missing, untapped, weak, strong, shared and unique keywords. | No |
 | `seo_keyword_ideas` | Keyword ideas from seed keywords (same topics, phrase suggestions or related searches), each with volume, difficulty, CPC and intent. Lists and re-reads stored idea lists for free; a new list costs about 13 cents per 1,000 and is priced first. | Only when buying a new list |
+| `seo_site_audit` | A site's technical audit from its latest stored crawl: score, issues worst first with what to do, the pages behind one issue, and what changed since the crawl before. | No |
+| `seo_site_audit_run` | Starts a crawl of a site (500 pages and about 8 cents at most by default). Gives the most it can cost first; starts only with the cost the person agreed to. | Yes, and spends |
+| `seo_backlinks` | Backlink totals month by month for a site and its named competitors, and the domains linking to the site, with filters for new, lost and high spam score. | No |
+| `seo_ai_visibility` | How often a site is mentioned or cited when ChatGPT, Gemini and Google AI Mode are asked its tracked prompts, per engine, against named competitors and by week; or the stored answers for one prompt. | No |
+| `seo_ai_prompts_update` | Start tracking AI visibility prompts, or pause or resume them. Adding is a recurring cost, so Claude asks first and reports the monthly estimate. Cannot delete prompts or history. | Yes, and adds recurring spend |
 
 ## Connecting claude.ai and Cowork
 
