@@ -9,7 +9,13 @@
 > [`seo-dataforseo-full-scope.md`](./seo-dataforseo-full-scope.md). **The "$2 to $19 a month" cost
 > and the short timeline in the full plan were written for the narrow scope and no longer hold.**
 >
-> **Status (2026-11-12).** Checked on 2026-11-12 by three independent reviews (against the code,
+> **Status (2026-11-24).** Build steps 1 to 8 are built on the `feature/seo` branch: everything in
+> the parts table below except Local, ship verification and the report blocks. None of the
+> DataForSEO features has been run against the live API yet; the go-live checklist is in
+> [the SEO feature doc](../resources/docs/features/seo.md#going-live-from-merge-to-working). The
+> table and the "still to do" list below were brought up to date on 2026-11-24.
+>
+> **Earlier status (2026-11-12).** Checked on 2026-11-12 by three independent reviews (against the code,
 > against the full plan, and for gaps between the parts); their 25 corrections are applied below.
 > This is a short map of the whole SEO suite: what each part does, how the parts connect, what is
 > built, and what order the rest goes in. Start here. The detail (file lists, table columns, test
@@ -132,19 +138,19 @@ Three rules hold the whole thing together:
 | **The agency's report and keyword-map workflows changed to call the tools** | The actual removal of the hand work | **Not part of the repo: each agency's own Claude skills or prompts** |
 | DataForSEO connection, spend ledger, caps per feature, task runner, settings card | The plumbing every paid feature uses | Built 2026-11-12 (build step 1). Not yet run against the live API |
 | Keyword metrics and its two tools | Stored volume, difficulty, CPC, intent; quote, then buy; 30-day cache; city volume | Built 2026-11-12 (build step 2). Not yet run against the live API |
-| Keyword maps | Imported from each client's sheet, edited through Claude, checked on every edit | Not built (Phase 2) |
-| Page audit | Reads a live page's title, meta, H1s, schema and word count | Not built (Phase 2) |
-| Sheets import and export | Reads the existing map; writes new dated tabs in the existing format | Not built (Phase 2) |
+| Keyword maps | Imported from CSV, kept as dated versions, edited through Claude or on the page, checked on every edit | Built (build step 4) |
+| Page audit | Reads a live page's title, meta, H1s, schema and word count | Built (build step 4) |
+| Sheets import and export | Reads the existing map; writes new dated tabs in the existing format | CSV import and download built. Writing to Google Sheets not built |
 | Nicer site page, `/seo` columns, site widget, GA4 property picker | Tiles, chart, top pages and queries | Not built (Phase 1b, optional) |
-| In-app map editor | For editing maps without Claude | Not built (Phase 2b, optional) |
+| In-app map editor | For editing maps without Claude | Built: edit and add rows on the Keyword map page |
 | Ship verification and drop alerts | Checks daily that shipped titles and metas are live; weekly alert when a target page drops | Not built (Phase 3) |
-| Report wording and Client Reports section | House wording for numbers; a "Search performance" section in client reports | Not built (Phase 4) |
-| **Position Tracking** | Nightly or weekly Google rank for each tracked keyword, competitors on the same keywords, visibility and share of voice | **Not built. Required. Large** |
-| **Ranking-keyword count, competitor research, keyword gap, keyword ideas** | What a site and its competitors rank for | **Not built. Required. Medium** |
-| **Site Audit** | Crawls a client's site, lists problems by severity, tracks the trend | **Not built. Required. Large** |
-| **Backlinks** | Monthly summary, new and lost links, referring domains, gap against competitors | **Not built. Required. Medium** |
-| **AI Visibility** | Weekly checks of tracked prompts in ChatGPT, Gemini and Google AI Mode; AI Overview presence | **Not built. Required. Medium to large** |
-| **Local** | Map-rank grid, reading reviews, profile changes (DataForSEO); replies, posts, insights (Google); listing sync (a vendor) | **Not built. Required. Large, partly outside the code** |
+| Report wording and Client Reports section | House wording for numbers; a "Search performance" section in client reports | Not built (Phase 4, build step 11) |
+| **Position Tracking** | Weekly or daily Google rank for each tracked keyword, competitors on the same keywords, AI Overview flag | Built (build step 3). Not yet run against the live API. Visibility, share of voice and the rank history import are not built |
+| **Ranking-keyword count, competitor research, keyword gap, keyword ideas** | What a site and its competitors rank for | Built (build step 5). Not yet run against the live API |
+| **Site Audit** | Crawls a client's site, lists problems by severity, tracks the trend | Built (build step 6). Not yet run against the live API |
+| **Backlinks** | Monthly summary, new and lost referring domains, gap against competitors | Built (build step 8). Not yet run against the live API. Anchors and the disavow file are not built |
+| **AI Visibility** | Weekly checks of tracked prompts in ChatGPT, Gemini and Google AI Mode; AI Overview presence | Built (build step 7). Not yet run against the live API |
+| **Local** | Map-rank grid, reading reviews, profile changes (DataForSEO); replies, posts, insights (Google); listing sync (a vendor) | **Not built (build steps 9 and 10). Required. Large, partly outside the code** |
 | Bing | Only if a client needs it | Not planned |
 
 **"Built" means finished and tested on the `feature/seo` branch.** It is not merged or released
@@ -288,10 +294,8 @@ Not steps of their own, but owed. Each is small.
 
 | Item | What is missing today | What done looks like |
 |---|---|---|
-| **Before-and-after log for edits made on the pages** | Changes made through Claude's tools are written to `action_logs` with who made them and the before and after values. The same changes made in the back end are not logged: keyword map rows (edit, add, hide), tracked keywords (add, pause, delete), competitors, the SEO profile, spending caps and rank tracking settings. | Every one of those writes a row through the same `AuditLog` helper (no site on the row, actor `user:{id}`, before and after values), so a change can be traced and undone by hand whichever way it was made. |
 | Keyword map export to Google Sheets | Only CSV download exists. | New dated tabs written to the client's sheet; needs the `spreadsheets` scope and one reconnect of the Google account. |
 | Rank history import | Tracking starts from the first check in Control. | A CSV of exported rank history imported as a separately labelled series. Needs one real export file to build against. |
-| Browse and filter stored research in the back end | The Research page shows the top 25 keywords and only the "missing" gap group. | A full ranked-keyword list with filters, and every gap group. |
 
 ## Money and safety rails
 

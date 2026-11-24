@@ -26,6 +26,9 @@ use Modules\Seo\Research\KeywordGap;
  */
 class ResearchController extends Controller
 {
+    /** Rows shown on the gap page: the biggest by volume. Filters reach the rest. */
+    private const GAP_ROWS = 500;
+
     public function show(Site $site, KeywordGap $gap, DataForSeoClient $client): View
     {
         $profile = SiteProfile::query()->where('site_id', $site->id)->first();
@@ -129,6 +132,38 @@ class ResearchController extends Controller
             'keywords' => $query->orderBy($column, $direction)->orderBy('keyword')->paginate(100)->withQueryString(),
             'filters' => $validated + ['sort' => 'traffic'],
             'listPrice' => DomainResearch::rankedCost(DomainResearch::MAX_KEYWORDS),
+        ]);
+    }
+
+    /** One keyword gap group in full, with filters. Worked out from stored lists; buys nothing. */
+    public function gap(Request $request, Site $site, KeywordGap $gap): View
+    {
+        $validated = $request->validate([
+            'group' => ['nullable', 'string', 'in:'.implode(',', array_keys(KeywordGap::SEGMENTS))],
+            'contains' => ['nullable', 'string', 'max:100'],
+            'min_volume' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $profile = SiteProfile::query()->where('site_id', $site->id)->first();
+        $named = array_values(array_filter((array) ($profile->competitors ?? []), 'is_string'));
+        $group = $validated['group'] ?? 'missing';
+
+        return view('seo::sites.research-gap', [
+            'site' => $site,
+            'group' => $group,
+            'groups' => KeywordGap::SEGMENTS,
+            'named' => $named,
+            'gap' => $named !== [] ? $gap->compare(
+                DomainResearch::domain((string) $site->domain),
+                $named,
+                Market::forProfile($profile),
+                $group,
+                self::GAP_ROWS,
+                (int) ($validated['min_volume'] ?? 0),
+                $validated['contains'] ?? null,
+            ) : null,
+            'filters' => $validated,
+            'limit' => self::GAP_ROWS,
         ]);
     }
 

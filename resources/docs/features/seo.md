@@ -306,6 +306,23 @@ Claude does this through `seo_keyword_ideas`: it gives the price first and buys 
 
 From there, **See and filter the full list** (or the keyword count beside any domain) opens every stored keyword for the client or a competitor, with filters for position, words in the keyword, the ranking page and volume, and quick links for the top 3, page one and page two.
 
+Each keyword gap group on the page (missing, untapped, weak, strong, shared, unique) opens its keywords at `/seo/sites/{site}/research/gap`: volume, difficulty, intent, the client's position and each compared competitor's, with filters for words in the keyword and minimum volume. It shows the 500 keywords with the most searches in the group and is worked out from the stored lists, so it costs nothing.
+
+## What is logged
+
+Every SEO change a person makes is written to Control's action log with who made it and the before and after values, so it can be traced and put back by hand. That holds whether the change was made on a page or through a Claude tool; the row says which (`via` is `web` or `mcp`).
+
+| Change | Log type |
+|---|---|
+| Tracked keywords added, paused, resumed or deleted | `seo_tracked_keywords_updated` |
+| AI visibility prompts added, paused, resumed or deleted | `seo_ai_prompts_updated` |
+| Keyword map imported, new version, figures filled, rows added or edited | `seo_keyword_map_updated` |
+| A client added, its profile saved, its competitors changed | `seo_profile_updated` |
+| AI impressions typed in | `seo_ai_impressions_recorded` |
+| Spending caps, rank tracking, site audit, AI visibility and sync settings | `seo_settings_updated` |
+
+A form saved with nothing different writes no row, and an edit lists only the fields that changed. A deleted keyword or prompt takes its history with it; the log keeps what it was and how many stored checks went, not the checks themselves. These rows carry the domain but are not tied to the site, so they never appear in a client's own WordPress activity log.
+
 ## Keyword maps
 
 A keyword map says which page of a client's site targets which keyword, with the title and meta description proposed for it and how far the work has got. The rules live in one place (`KeywordMapService`) so the back end and Claude behave the same way.
@@ -326,7 +343,7 @@ Open a client from **SEO → Clients** and choose **Map** (`/seo/sites/{site}/ke
 - **Start a new dated version** before a new round of work, so last month's map stays as it was.
 - **Fill from stored data** puts volume, difficulty and CPC on every row Control already has figures for. It never spends; missing keywords are bought through Claude, on a quote a person approves.
 - **Download CSV** gives the fixed column layout, ready to paste into a client's sheet.
-- **Editing rows**: use **Edit** on a row or **Add a page**, or ask Claude (`seo_keyword_map_get`, `seo_keyword_map_update`). Both go through the same rules. The form counts title and description characters as you type, and if someone else saved the row while you were editing, your save is refused and their version is shown with what you typed kept in the boxes. Edits made through Claude are written to the action log with before and after values; edits made on the page are not logged yet.
+- **Editing rows**: use **Edit** on a row or **Add a page**, or ask Claude (`seo_keyword_map_get`, `seo_keyword_map_update`). Both go through the same rules. The form counts title and description characters as you type, and if someone else saved the row while you were editing, your save is refused and their version is shown with what you typed kept in the boxes. Edits are written to the action log with before and after values whichever way they are made (see [What is logged](#what-is-logged)).
 
 Writing straight to a Google Sheet is not built yet; use the CSV download.
 

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Feature;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\TrackedKeyword;
 use Modules\Seo\Ranks\RankSettings;
 
@@ -18,7 +19,7 @@ use Modules\Seo\Ranks\RankSettings;
  */
 class DataForSeoSettingsController extends Controller
 {
-    public function updateBudget(Request $request, BudgetGuard $budget): RedirectResponse
+    public function updateBudget(Request $request, BudgetGuard $budget, AuditLog $audit): RedirectResponse
     {
         $rules = [
             'total_cap' => ['required', 'numeric', 'min:0', 'max:5000'],
@@ -31,11 +32,14 @@ class DataForSeoSettingsController extends Controller
 
         $validated = $request->validate($rules);
 
+        $before = $this->caps($budget);
         $budget->save([
             'caps' => $validated['caps'],
             'total_cap' => $validated['total_cap'],
             'person_allowance' => $validated['person_allowance'],
         ]);
+
+        $audit->page(AuditLog::SETTINGS_UPDATED, $request->user(), null, 'Changed the DataForSEO spending caps.', AuditLog::diff($before, $this->caps($budget)));
 
         $sum = array_sum(array_map('floatval', $validated['caps']));
         $message = 'Spending caps saved.';
@@ -48,14 +52,20 @@ class DataForSeoSettingsController extends Controller
     }
 
     /** How often and how deep ranks are checked: the two choices that set most of the bill. */
-    public function updateRankTracking(Request $request, RankSettings $settings): RedirectResponse
+    public function updateRankTracking(Request $request, RankSettings $settings, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'frequency' => ['required', 'string', 'in:'.implode(',', array_keys(RankSettings::FREQUENCIES))],
             'depth' => ['required', 'integer', 'in:'.implode(',', RankSettings::DEPTHS)],
         ]);
 
+        $before = ['frequency' => $settings->frequency(), 'depth' => $settings->depth()];
         $settings->save($validated['frequency'], (int) $validated['depth']);
+
+        $audit->page(AuditLog::SETTINGS_UPDATED, $request->user(), null, 'Changed the rank tracking settings.', AuditLog::diff(
+            ['rank_tracking' => $before],
+            ['rank_tracking' => ['frequency' => $settings->frequency(), 'depth' => $settings->depth()]],
+        ));
 
         $keywords = TrackedKeyword::query()->where('is_active', true)->count();
 
@@ -85,5 +95,20 @@ class DataForSeoSettingsController extends Controller
             $account['balance'] !== null ? sprintf(', balance $%.2f', $account['balance']) : '',
             $client->usesSandbox() ? ' This is the free sandbox: the data is sample data.' : '',
         ));
+    }
+
+    /**
+     * Every cap in dollars, keyed the way the log shows them.
+     *
+     * @return array<string, float>
+     */
+    private function caps(BudgetGuard $budget): array
+    {
+        $caps = ['total_cap' => $budget->totalCap(), 'person_allowance' => $budget->personAllowance()];
+        foreach (array_keys(Feature::ALL) as $feature) {
+            $caps["cap_{$feature}"] = $budget->featureCap($feature);
+        }
+
+        return $caps;
     }
 }

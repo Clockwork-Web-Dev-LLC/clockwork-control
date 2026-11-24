@@ -59,6 +59,7 @@ Route::middleware(['web', 'auth', 'active'])->group(function () {
 
     Route::get('/seo/sites/{site}/research', [ResearchController::class, 'show'])->name('seo.sites.research');
     Route::get('/seo/sites/{site}/research/keywords', [ResearchController::class, 'keywords'])->name('seo.sites.research.keywords');
+    Route::get('/seo/sites/{site}/research/gap', [ResearchController::class, 'gap'])->name('seo.sites.research.gap');
     Route::post('/seo/sites/{site}/research/buy', [ResearchController::class, 'buy'])->middleware('throttle:20,1')->name('seo.sites.research.buy');
 
     Route::get('/seo/sites/{site}/rankings', [RankingsController::class, 'show'])->name('seo.sites.rankings');

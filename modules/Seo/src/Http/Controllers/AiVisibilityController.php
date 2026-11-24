@@ -13,6 +13,7 @@ use Modules\Seo\Ai\AiVisibilityReport;
 use Modules\Seo\Ai\AiVisibilitySettings;
 use Modules\Seo\Ai\AiVisibilityTracker;
 use Modules\Seo\DataForSeo\DataForSeoClient;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\AiCheck;
 use Modules\Seo\Models\AiPrompt;
 use Modules\Seo\Models\SiteProfile;
@@ -52,7 +53,7 @@ class AiVisibilityController extends Controller
         ]);
     }
 
-    public function store(Request $request, Site $site, AiPrompts $prompts): RedirectResponse
+    public function store(Request $request, Site $site, AiPrompts $prompts, AuditLog $audit): RedirectResponse
     {
         if (! SiteProfile::query()->where('site_id', $site->id)->exists()) {
             return redirect()->route('seo.sites.profile', $site)->with('warning', 'Save an SEO profile for this site before tracking prompts.');
@@ -60,7 +61,15 @@ class AiVisibilityController extends Controller
 
         $validated = $request->validate(['prompts' => ['required', 'string', 'max:30000']]);
         $list = array_values(array_filter(array_map('trim', preg_split('/\R/u', $validated['prompts']) ?: [])));
+        $activeBefore = $this->activePrompts($site);
         $result = $prompts->add($site, $list, $request->user()?->id);
+
+        if ($result['added'] > 0) {
+            $audit->page(AuditLog::AI_PROMPTS_UPDATED, $request->user(), $site->domain, "Added {$result['added']} AI visibility prompts for {$site->domain}.", ['ai_prompts' => [
+                'before' => ['active' => $activeBefore],
+                'after' => ['active' => $this->activePrompts($site), 'action' => 'add', 'prompts' => array_slice($list, 0, 50)],
+            ]]);
+        }
 
         $message = sprintf('%d %s added.', $result['added'], $result['added'] === 1 ? 'prompt' : 'prompts');
         if ($result['existing'] > 0) {
@@ -79,7 +88,7 @@ class AiVisibilityController extends Controller
     }
 
     /** Pause or resume one prompt. A paused prompt keeps its history and costs nothing. */
-    public function toggle(Site $site, AiPrompt $prompt): RedirectResponse
+    public function toggle(Request $request, Site $site, AiPrompt $prompt, AuditLog $audit): RedirectResponse
     {
         abort_unless($prompt->site_id === $site->id, 404);
         $back = redirect()->route('seo.sites.ai-visibility', $site);
@@ -91,20 +100,36 @@ class AiVisibilityController extends Controller
 
         $prompt->forceFill(['is_active' => ! $prompt->is_active])->save();
 
+        $audit->page(AuditLog::AI_PROMPTS_UPDATED, $request->user(), $site->domain, ($prompt->is_active ? 'Resumed' : 'Paused')." an AI visibility prompt for {$site->domain}.", ['ai_prompts' => [
+            'before' => ['is_active' => ! $prompt->is_active],
+            'after' => ['is_active' => $prompt->is_active, 'action' => $prompt->is_active ? 'resume' : 'pause', 'prompt' => $prompt->prompt],
+        ]]);
+
         return $back->with('status', $prompt->is_active ? 'Prompt is being asked again.' : 'Prompt paused. Its history is kept.');
     }
 
     /** Remove a prompt and its stored answers for good. */
-    public function destroy(Site $site, AiPrompt $prompt): RedirectResponse
+    public function destroy(Request $request, Site $site, AiPrompt $prompt, AuditLog $audit): RedirectResponse
     {
         abort_unless($prompt->site_id === $site->id, 404);
+
+        $before = [
+            'prompt' => $prompt->prompt,
+            'is_active' => $prompt->is_active,
+            'stored_answers' => AiCheck::query()->where('prompt_id', $prompt->id)->count(),
+        ];
         $prompt->delete();
+
+        $audit->page(AuditLog::AI_PROMPTS_UPDATED, $request->user(), $site->domain, "Deleted an AI visibility prompt and its stored answers for {$site->domain}.", ['ai_prompts' => [
+            'before' => $before,
+            'after' => ['action' => 'delete'],
+        ]]);
 
         return redirect()->route('seo.sites.ai-visibility', $site)->with('status', 'Prompt and its stored answers were deleted.');
     }
 
     /** How often prompts are asked and of which engines: what AI visibility costs. */
-    public function updateSettings(Request $request, AiVisibilitySettings $settings): RedirectResponse
+    public function updateSettings(Request $request, AiVisibilitySettings $settings, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'frequency' => ['required', 'string', 'in:'.implode(',', array_keys(AiVisibilitySettings::FREQUENCIES))],
@@ -112,8 +137,14 @@ class AiVisibilityController extends Controller
             'engines.*' => ['string', 'in:'.implode(',', array_keys(AiEngines::ALL))],
         ]);
 
+        $before = ['frequency' => $settings->frequency(), 'engines' => $settings->engines()];
         $settings->save($validated['frequency'], $validated['engines'] ?? []);
         $prompts = AiPrompt::query()->where('is_active', true)->count();
+
+        $audit->page(AuditLog::SETTINGS_UPDATED, $request->user(), null, 'Changed the AI visibility settings.', AuditLog::diff(
+            ['ai_visibility' => $before],
+            ['ai_visibility' => ['frequency' => $settings->frequency(), 'engines' => $settings->engines()]],
+        ));
 
         return redirect()->route('seo.settings')->with('status', sprintf(
             'AI visibility set to %s on %s. With %d tracked %s that is about $%.2f a month.',
@@ -121,5 +152,10 @@ class AiVisibilityController extends Controller
             implode(', ', array_map([AiEngines::class, 'label'], $settings->engines())) ?: 'no engine',
             $prompts, $prompts === 1 ? 'prompt' : 'prompts', $settings->monthlyEstimate($prompts),
         ));
+    }
+
+    private function activePrompts(Site $site): int
+    {
+        return AiPrompt::query()->where('site_id', $site->id)->where('is_active', true)->count();
     }
 }

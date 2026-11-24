@@ -97,10 +97,11 @@
             </p>
             <div class="grid grid-cols-3 gap-2 mb-4 text-center" data-gap-counts>
                 @foreach ($gap['counts'] as $segment => $count)
-                    <div class="p-2 rounded border border-[var(--color-border-light)]" title="{{ $gapSegments[$segment] }}">
+                    <a href="{{ route('seo.sites.research.gap', [$site, 'group' => $segment]) }}" title="{{ $gapSegments[$segment] }}" data-gap-group="{{ $segment }}"
+                       class="block p-2 rounded border border-[var(--color-border-light)] hover:border-[var(--color-ink-muted)] transition-colors">
                         <div class="font-data text-lg font-semibold text-[var(--color-ink-strong)]">{{ number_format($count) }}</div>
                         <div class="text-xs text-[var(--color-ink-muted)]">{{ ucfirst($segment) }}</div>
-                    </div>
+                    </a>
                 @endforeach
             </div>
             @if ($gap['rows'] !== [])
@@ -113,7 +114,7 @@
                     </tbody>
                 </table>
             @endif
-            <p class="text-xs text-[var(--color-ink-soft)] mt-3">A gap is a lead to check: lists hold each domain's top 1,000 keywords, not all of them. Ask Claude for the other groups or the full list.</p>
+            <p class="text-xs text-[var(--color-ink-soft)] mt-3">A gap is a lead to check: lists hold each domain's top 1,000 keywords, not all of them. Open a group above for its keywords, or <a href="{{ route('seo.sites.research.gap', [$site, 'group' => 'missing']) }}" class="underline">see every missing keyword</a>.</p>
         @endif
     </x-card>
 

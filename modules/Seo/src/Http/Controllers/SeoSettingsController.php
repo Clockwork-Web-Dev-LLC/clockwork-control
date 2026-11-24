@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Ai\AiEngines;
 use Modules\Seo\Ai\AiVisibilitySettings;
 use Modules\Seo\Audit\SiteAuditSettings;
@@ -72,7 +73,7 @@ class SeoSettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request, SeoSettings $settings): RedirectResponse
+    public function update(Request $request, SeoSettings $settings, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'login_hint' => ['nullable', 'email', 'max:191'],
@@ -80,11 +81,15 @@ class SeoSettingsController extends Controller
             'ai_referrer_regex' => ['nullable', 'string', 'max:4096'],
         ]);
 
+        $current = fn () => ['login_hint' => $settings->loginHint(), 'final_after_days' => $settings->finalAfterDays(), 'ai_referrer_regex' => $settings->aiReferrerRegex()];
+        $before = $current();
         $settings->save([
             'login_hint' => $validated['login_hint'] ?? null,
             'final_after_days' => (int) $validated['final_after_days'],
             'ai_referrer_regex' => $validated['ai_referrer_regex'] ?? null,
         ]);
+
+        $audit->page(AuditLog::SETTINGS_UPDATED, $request->user(), null, 'Changed the SEO sync settings.', AuditLog::diff($before, $current()));
 
         return redirect()->route('seo.settings')->with('status', 'SEO settings saved.');
     }

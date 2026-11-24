@@ -12,6 +12,7 @@ use Illuminate\View\View;
 use InvalidArgumentException;
 use Modules\Core\ModuleStateResolver;
 use Modules\Seo\Keywords\Market;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
 use Modules\Seo\Models\SiteProfile;
@@ -99,7 +100,7 @@ class SeoClientsController extends Controller
         ]);
     }
 
-    public function store(Request $request, SiteProfileService $profiles, ModuleStateResolver $modules): RedirectResponse
+    public function store(Request $request, SiteProfileService $profiles, ModuleStateResolver $modules, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'domain' => ['required', 'string', 'max:255'],
@@ -156,7 +157,7 @@ class SeoClientsController extends Controller
         $gscSiteUrl = $this->blank($validated['gsc_site_url'] ?? null) ?? $this->matchingProperty($domain);
         $ga4 = $this->blank(preg_replace('/^properties\//', '', (string) ($validated['ga4_property_id'] ?? '')));
 
-        $profiles->save(new SiteProfile(['site_id' => $site->id]), [
+        $profiles->save($profile = new SiteProfile(['site_id' => $site->id]), [
             'gsc_site_url' => $gscSiteUrl,
             'gsc_permission_level' => $gscSiteUrl !== null
                 ? GoogleProperty::query()->where('kind', GoogleProperty::KIND_GSC)->where('property', $gscSiteUrl)->value('permission_level')
@@ -169,6 +170,11 @@ class SeoClientsController extends Controller
             'market_language_code' => $validated['market_language_code'] ?? Market::DEFAULT_LANGUAGE_CODE,
             'market_city' => $this->blank($validated['market_city'] ?? null),
         ], $request->user()?->id);
+
+        $audit->page(AuditLog::PROFILE_UPDATED, $request->user(), $site->domain, "Added {$site->domain} as an SEO client".($created ? ', and to Control as a monitored site' : '').'.', AuditLog::diff([], array_intersect_key(
+            $profile->attributesToArray(),
+            array_flip(['gsc_site_url', 'ga4_property_id', 'brand_terms', 'compare_yoy', 'is_enabled', 'market_location_code', 'market_language_code', 'market_city']),
+        )));
 
         $message = "{$site->domain} added as an SEO client.";
         if ($created) {

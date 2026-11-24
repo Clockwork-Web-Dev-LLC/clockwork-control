@@ -12,6 +12,7 @@ use Modules\Seo\Keywords\KeywordMetricsService;
 use Modules\Seo\Maps\KeywordMapCsv;
 use Modules\Seo\Maps\KeywordMapService;
 use Modules\Seo\Maps\StaleMapRowException;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\KeywordMap;
 use Modules\Seo\Models\KeywordMapRow;
 use Modules\Seo\Models\SiteProfile;
@@ -44,7 +45,7 @@ class KeywordMapController extends Controller
         ]);
     }
 
-    public function import(Request $request, Site $site, KeywordMapService $maps): RedirectResponse
+    public function import(Request $request, Site $site, KeywordMapService $maps, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'file' => ['nullable', 'file', 'max:2048', 'mimes:csv,txt'],
@@ -61,11 +62,19 @@ class KeywordMapController extends Controller
             $csv = mb_convert_encoding($csv, 'UTF-8', 'Windows-1252');
         }
 
+        $previous = $maps->current($site->id);
+
         try {
             $result = $maps->importCsv($site, $csv, $validated['name'] ?? null, $request->user()?->id);
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['file' => $e->getMessage()]);
         }
+
+        $map = $maps->current($site->id);
+        $audit->page(AuditLog::KEYWORD_MAP_UPDATED, $request->user(), $site->domain, "Imported a keyword map of {$result['rows']} pages for {$site->domain}.", ['keyword_map' => [
+            'before' => $this->version($previous),
+            'after' => ['action' => 'import', 'rows' => $result['rows']] + (array) $this->version($map),
+        ]]);
 
         $message = "Imported {$result['rows']} pages as the current map.";
         if ($result['needs_review'] > 0) {
@@ -81,17 +90,23 @@ class KeywordMapController extends Controller
         return redirect()->route('seo.sites.keyword-map', $site)->with('status', $message);
     }
 
-    public function newVersion(Request $request, Site $site, KeywordMapService $maps): RedirectResponse
+    public function newVersion(Request $request, Site $site, KeywordMapService $maps, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate(['name' => ['nullable', 'string', 'max:120']]);
+        $previous = $maps->current($site->id);
         $map = $maps->newVersion($site, $validated['name'] ?? null, $request->user()?->id);
+
+        $audit->page(AuditLog::KEYWORD_MAP_UPDATED, $request->user(), $site->domain, "Started keyword map version \"{$map->name}\" for {$site->domain}.", ['keyword_map' => [
+            'before' => $this->version($previous),
+            'after' => ['action' => 'new_version'] + (array) $this->version($map),
+        ]]);
 
         return redirect()->route('seo.sites.keyword-map', $site)
             ->with('status', "\"{$map->name}\" is now the current map. The previous version is kept, read-only.");
     }
 
     /** Fill figures from keyword data already bought. Spends nothing. */
-    public function fill(Site $site, KeywordMapService $maps): RedirectResponse
+    public function fill(Request $request, Site $site, KeywordMapService $maps, AuditLog $audit): RedirectResponse
     {
         $map = $maps->current($site->id);
         if ($map === null) {
@@ -99,6 +114,12 @@ class KeywordMapController extends Controller
         }
 
         $result = $maps->fillMetrics($map);
+
+        if ($result['filled'] > 0) {
+            $audit->page(AuditLog::KEYWORD_MAP_UPDATED, $request->user(), $site->domain, "Filled keyword figures on {$result['filled']} rows of \"{$map->name}\" for {$site->domain}.", ['keyword_map' => [
+                'before' => null, 'after' => ['version_id' => $map->id, 'filled' => $result['filled']],
+            ]]);
+        }
         $message = "Filled figures for {$result['filled']} pages from keyword data already bought.";
         if ($result['missing'] !== []) {
             $message .= ' '.count($result['missing']).' keywords have no stored figures yet; ask Claude to quote and buy them, then fill again.';
@@ -127,7 +148,7 @@ class KeywordMapController extends Controller
         return view('seo::sites.keyword-map-row', ['site' => $site, 'map' => $map, 'row' => new KeywordMapRow(['ship_status' => 'not_started'])]);
     }
 
-    public function storeRow(Request $request, Site $site, KeywordMapService $maps): RedirectResponse
+    public function storeRow(Request $request, Site $site, KeywordMapService $maps, AuditLog $audit): RedirectResponse
     {
         $map = $maps->current($site->id);
         if ($map === null) {
@@ -140,18 +161,25 @@ class KeywordMapController extends Controller
         }
 
         try {
-            $maps->addRow($map, $attributes);
+            $row = $maps->addRow($map, $attributes);
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['row' => $e->getMessage()]);
         }
 
+        $audit->page(AuditLog::KEYWORD_MAP_UPDATED, $request->user(), $site->domain, 'Added "'.($row->page_name ?? $row->url ?? 'row')."\" to keyword map \"{$map->name}\" for {$site->domain}.", ['rows' => [
+            'before' => [$row->id => null],
+            'after' => [$row->id => $this->rowValues($row, array_keys($attributes))],
+        ]]);
+
         return redirect()->route('seo.sites.keyword-map', $site)->with('status', 'Page added to the map.');
     }
 
-    public function updateRow(Request $request, Site $site, KeywordMapRow $row, KeywordMapService $maps): RedirectResponse
+    public function updateRow(Request $request, Site $site, KeywordMapRow $row, KeywordMapService $maps, AuditLog $audit): RedirectResponse
     {
-        $this->rowMap($site, $row);
+        $map = $this->rowMap($site, $row);
         $attributes = $this->rowInput($request);
+        // The form sends every field, so only the ones that really change are logged.
+        $before = $this->rowValues($row, KeywordMapService::EDITABLE);
 
         try {
             // The version the form was loaded with: if someone else (or
@@ -164,7 +192,37 @@ class KeywordMapController extends Controller
             return back()->withInput()->withErrors(['row' => $e->getMessage()]);
         }
 
+        $changes = AuditLog::diff($before, $this->rowValues($row, KeywordMapService::EDITABLE));
+        if ($changes !== []) {
+            $audit->page(AuditLog::KEYWORD_MAP_UPDATED, $request->user(), $site->domain, 'Edited "'.($row->page_name ?? $row->url ?? 'row')."\" in keyword map \"{$map->name}\" for {$site->domain}: ".implode(', ', array_keys($changes)).'.', ['rows' => [
+                'before' => [$row->id => array_map(fn (array $c) => $c['before'], $changes)],
+                'after' => [$row->id => array_map(fn (array $c) => $c['after'], $changes)],
+            ]]);
+        }
+
         return redirect()->route('seo.sites.keyword-map', $site)->with('status', 'Saved "'.($row->page_name ?? $row->url ?? 'row').'".');
+    }
+
+    /**
+     * A row's stored values for the log, dates as text.
+     *
+     * @param  list<string>  $fields
+     * @return array<string, mixed>
+     */
+    private function rowValues(KeywordMapRow $row, array $fields): array
+    {
+        $values = array_intersect_key($row->attributesToArray(), array_flip($fields));
+        if (array_key_exists('shipped_on', $values)) {
+            $values['shipped_on'] = $row->shipped_on?->toDateString();
+        }
+
+        return $values;
+    }
+
+    /** @return ?array{version_id: int, name: string} */
+    private function version(?KeywordMap $map): ?array
+    {
+        return $map !== null ? ['version_id' => $map->id, 'name' => $map->name] : null;
     }
 
     /** @return array<string, mixed> */

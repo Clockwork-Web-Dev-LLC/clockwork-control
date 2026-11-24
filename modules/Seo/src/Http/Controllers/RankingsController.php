@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\Keywords\Market;
+use Modules\Seo\Mcp\Support\AuditLog;
+use Modules\Seo\Models\RankCheck;
 use Modules\Seo\Models\SiteProfile;
 use Modules\Seo\Models\TrackedKeyword;
 use Modules\Seo\Ranks\RankReport;
@@ -44,7 +46,7 @@ class RankingsController extends Controller
         ]);
     }
 
-    public function store(Request $request, Site $site, TrackedKeywords $tracked): RedirectResponse
+    public function store(Request $request, Site $site, TrackedKeywords $tracked, AuditLog $audit): RedirectResponse
     {
         if (! SiteProfile::query()->where('site_id', $site->id)->exists()) {
             return redirect()->route('seo.sites.profile', $site)->with('warning', 'Save an SEO profile for this site before tracking keywords.');
@@ -58,7 +60,15 @@ class RankingsController extends Controller
         ]);
 
         $keywords = array_values(array_filter(array_map('trim', preg_split('/\R/u', $validated['keywords']) ?: [])));
+        $activeBefore = $this->activeKeywords($site);
         $result = $tracked->add($site, $keywords, $validated['devices'] ?? ['desktop'], $validated['city'] ?? null, $request->user()?->id);
+
+        if ($result['added'] > 0) {
+            $audit->page(AuditLog::TRACKED_KEYWORDS_UPDATED, $request->user(), $site->domain, "Added {$result['added']} tracked keyword rows for {$site->domain}.", ['tracked_keywords' => [
+                'before' => ['active' => $activeBefore],
+                'after' => ['active' => $this->activeKeywords($site), 'action' => 'add', 'keywords' => array_slice($keywords, 0, 200), 'devices' => $validated['devices'] ?? ['desktop'], 'city' => $validated['city'] ?? null],
+            ]]);
+        }
 
         $message = sprintf('%d %s added.', $result['added'], $result['added'] === 1 ? 'keyword' : 'keywords');
         if ($result['existing'] > 0) {
@@ -81,28 +91,44 @@ class RankingsController extends Controller
     }
 
     /** Pause or resume one keyword. A paused keyword keeps its history and costs nothing. */
-    public function toggle(Site $site, TrackedKeyword $keyword): RedirectResponse
+    public function toggle(Request $request, Site $site, TrackedKeyword $keyword, AuditLog $audit): RedirectResponse
     {
         abort_unless($keyword->site_id === $site->id, 404);
 
         $keyword->forceFill(['is_active' => ! $keyword->is_active])->save();
+
+        $audit->page(AuditLog::TRACKED_KEYWORDS_UPDATED, $request->user(), $site->domain, ($keyword->is_active ? 'Resumed' : 'Paused')." tracked keyword \"{$keyword->keyword}\" ({$keyword->device}) for {$site->domain}.", ['tracked_keywords' => [
+            'before' => ['is_active' => ! $keyword->is_active],
+            'after' => ['is_active' => $keyword->is_active, 'action' => $keyword->is_active ? 'resume' : 'pause'] + $this->describe($keyword),
+        ]]);
 
         return redirect()->route('seo.sites.rankings', $site)
             ->with('status', "\"{$keyword->keyword}\" is ".($keyword->is_active ? 'being tracked again.' : 'paused. Its history is kept.'));
     }
 
     /** Remove a keyword and its history for good. */
-    public function destroy(Site $site, TrackedKeyword $keyword): RedirectResponse
+    public function destroy(Request $request, Site $site, TrackedKeyword $keyword, AuditLog $audit): RedirectResponse
     {
         abort_unless($keyword->site_id === $site->id, 404);
 
         $name = $keyword->keyword;
+        // The history goes with the keyword and can't be rebuilt, so the
+        // log says how much of it there was.
+        $before = $this->describe($keyword) + [
+            'is_active' => $keyword->is_active,
+            'stored_checks' => RankCheck::query()->where('tracked_keyword_id', $keyword->id)->count(),
+        ];
         $keyword->delete();
+
+        $audit->page(AuditLog::TRACKED_KEYWORDS_UPDATED, $request->user(), $site->domain, "Deleted tracked keyword \"{$name}\" ({$keyword->device}) and its rank history for {$site->domain}.", ['tracked_keywords' => [
+            'before' => $before,
+            'after' => ['action' => 'delete'],
+        ]]);
 
         return redirect()->route('seo.sites.rankings', $site)->with('status', "\"{$name}\" and its rank history were deleted.");
     }
 
-    public function competitors(Request $request, Site $site): RedirectResponse
+    public function competitors(Request $request, Site $site, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate(['competitors' => ['nullable', 'string', 'max:2000']]);
 
@@ -112,10 +138,24 @@ class RankingsController extends Controller
         }
 
         $domains = TrackedKeywords::parseDomains($validated['competitors'] ?? null, $site->domain);
+        $before = array_values(array_filter((array) ($profile->competitors ?? []), 'is_string'));
         $profile->forceFill(['competitors' => $domains === [] ? null : $domains])->save();
+
+        $audit->page(AuditLog::PROFILE_UPDATED, $request->user(), $site->domain, "Updated the competitors for {$site->domain}.", AuditLog::diff(['competitors' => $before], ['competitors' => $domains]));
 
         return redirect()->route('seo.sites.rankings', $site)->with('status', $domains === []
             ? 'Competitors cleared.'
             : count($domains).' '.(count($domains) === 1 ? 'competitor' : 'competitors').' saved. Their positions are recorded from the next check on.');
+    }
+
+    private function activeKeywords(Site $site): int
+    {
+        return TrackedKeyword::query()->where('site_id', $site->id)->where('is_active', true)->count();
+    }
+
+    /** @return array{keyword: string, device: string, location: ?string} */
+    private function describe(TrackedKeyword $keyword): array
+    {
+        return ['keyword' => $keyword->keyword, 'device' => $keyword->device, 'location' => $keyword->location_name];
     }
 }

@@ -12,6 +12,7 @@ use InvalidArgumentException;
 use Modules\Seo\Jobs\RefreshGooglePropertiesJob;
 use Modules\Seo\Jobs\SyncSiteGoogleDataJob;
 use Modules\Seo\Keywords\Market;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\AiImpressionEntry;
 use Modules\Seo\Models\GoogleConnection;
 use Modules\Seo\Models\GoogleProperty;
@@ -58,7 +59,7 @@ class SiteProfileController extends Controller
         ]);
     }
 
-    public function update(Request $request, Site $site, SiteProfileService $service): RedirectResponse
+    public function update(Request $request, Site $site, SiteProfileService $service, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'gsc_site_url' => ['nullable', 'string', 'max:255'],
@@ -121,11 +122,24 @@ class SiteProfileController extends Controller
             ]);
         }
 
+        // What the person can set. The permission level is looked up, not typed.
+        $logged = array_values(array_diff(array_keys($attributes), ['gsc_permission_level']));
+        $before = $profile->exists ? array_intersect_key($profile->attributesToArray(), array_flip($logged)) : [];
+
         try {
             $result = $service->save($profile, $attributes, $request->user()?->id);
         } catch (InvalidArgumentException $e) {
             return back()->withInput()->withErrors(['brand_terms' => $e->getMessage()]);
         }
+
+        $changes = AuditLog::diff($before, array_intersect_key($profile->attributesToArray(), array_flip($logged)));
+        $audit->page(
+            AuditLog::PROFILE_UPDATED,
+            $request->user(),
+            $site->domain,
+            ($result['created'] ? 'Created' : 'Updated')." the SEO profile for {$site->domain}: ".implode(', ', array_keys($changes)).'.',
+            $changes,
+        );
 
         $message = match (true) {
             $result['created'] => 'Profile saved. Pulling 16 months of history in the background.',

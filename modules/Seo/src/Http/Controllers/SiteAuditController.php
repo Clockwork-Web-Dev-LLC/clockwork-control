@@ -14,6 +14,7 @@ use Modules\Seo\Audit\SiteAuditSettings;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Feature;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\DataForSeo\Pricing;
 use Modules\Seo\Models\SiteAudit;
 use Modules\Seo\Models\SiteProfile;
@@ -86,7 +87,7 @@ class SiteAuditController extends Controller
     }
 
     /** How often, how many pages and whether to render JavaScript: what a crawl costs. */
-    public function updateSettings(Request $request, SiteAuditSettings $settings): RedirectResponse
+    public function updateSettings(Request $request, SiteAuditSettings $settings, AuditLog $audit): RedirectResponse
     {
         $validated = $request->validate([
             'frequency' => ['required', 'string', 'in:'.implode(',', array_keys(SiteAuditSettings::FREQUENCIES))],
@@ -94,7 +95,11 @@ class SiteAuditController extends Controller
             'javascript' => ['nullable', 'boolean'],
         ]);
 
+        $current = fn () => ['frequency' => $settings->frequency(), 'max_pages' => $settings->maxPages(), 'javascript' => $settings->javascript()];
+        $before = $current();
         $settings->save($validated['frequency'], (int) $validated['max_pages'], $request->boolean('javascript'));
+
+        $audit->page(AuditLog::SETTINGS_UPDATED, $request->user(), null, 'Changed the site audit settings.', AuditLog::diff(['site_audit' => $before], ['site_audit' => $current()]));
         $clients = SiteProfile::query()->where('is_enabled', true)->count();
         $runs = ['off' => 0, 'weekly' => 4.35, 'monthly' => 1][$validated['frequency']];
 
