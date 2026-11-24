@@ -14,8 +14,8 @@ use Modules\Seo\Audit\SiteAuditSettings;
 use Modules\Seo\DataForSeo\BudgetGuard;
 use Modules\Seo\DataForSeo\DataForSeoClient;
 use Modules\Seo\DataForSeo\Feature;
-use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\DataForSeo\Pricing;
+use Modules\Seo\Mcp\Support\AuditLog;
 use Modules\Seo\Models\SiteAudit;
 use Modules\Seo\Models\SiteProfile;
 

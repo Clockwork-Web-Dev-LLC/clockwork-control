@@ -4,8 +4,11 @@ use App\Models\ActionLog;
 use App\Models\Site;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Modules\Seo\DataForSeo\BudgetGuard;
+use Modules\Seo\DataForSeo\Feature;
 use Modules\Seo\Models\AiPrompt;
 use Modules\Seo\Models\KeywordMapRow;
 use Modules\Seo\Models\RankCheck;
@@ -28,7 +31,7 @@ beforeEach(function () {
     $this->profile = SiteProfile::create(['site_id' => $this->site->id, 'is_enabled' => true, 'report_notes' => 'Old note']);
 });
 
-function seoLogs(string $type): Illuminate\Support\Collection
+function seoLogs(string $type): Collection
 {
     return ActionLog::query()->where('action_type', $type)->orderBy('id')->get();
 }
@@ -152,8 +155,8 @@ it('logs typed AI impressions with the value they replaced', function () {
 });
 
 it('logs spending caps and schedule settings an admin changes, with no site or domain', function () {
-    $caps = array_fill_keys(array_keys(Modules\Seo\DataForSeo\Feature::ALL), 5);
-    $budget = app(Modules\Seo\DataForSeo\BudgetGuard::class);
+    $caps = array_fill_keys(array_keys(Feature::ALL), 5);
+    $budget = app(BudgetGuard::class);
     $budget->save(['caps' => $caps, 'total_cap' => 100, 'person_allowance' => 10]);
 
     $this->actingAs($this->admin)->put(route('seo.dataforseo.budget'), ['caps' => ['research' => 12] + $caps, 'total_cap' => 150, 'person_allowance' => 10])
@@ -169,9 +172,10 @@ it('logs spending caps and schedule settings an admin changes, with no site or d
     expect($logs)->toHaveCount(5)
         ->and($logs->pluck('actor')->unique()->all())->toBe(["user:{$this->admin->id}"])
         ->and($logs->pluck('target')->unique()->all())->toBe([null])
-        ->and($logs[0]->details['changes'])->toBe([
-            'total_cap' => ['before' => 100.0, 'after' => 150.0],
-            'cap_research' => ['before' => 5.0, 'after' => 12.0],
+        // JSON drops the ".0", so these read back as whole numbers.
+        ->and($logs[0]->details['changes'])->toEqual([
+            'total_cap' => ['before' => 100, 'after' => 150],
+            'cap_research' => ['before' => 5, 'after' => 12],
         ])
         ->and($logs[1]->details['changes']['rank_tracking']['after'])->toBe(['frequency' => 'daily', 'depth' => 100])
         ->and($logs[2]->details['changes']['site_audit']['after'])->toBe(['frequency' => 'weekly', 'max_pages' => 1000, 'javascript' => true])
